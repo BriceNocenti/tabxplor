@@ -2,6 +2,14 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`options(tabxplor.kish_neff = TRUE)` now widens *every* weighted confidence interval.** Kish's
+  effective sample size `n_eff = (sum w)^2 / sum(w^2)` previously corrected only the mean CIs and the
+  whole-table tests; it now backs **all** weighted descriptive intervals — factor proportions and means
+  alike (cell, difference, ratio, and the `color = "OR"` significance) in `tab()` / `tab_num()`, and the
+  crude `empirical =` companions of `tab_reg()` — so unequal weights widen the intervals honestly. It
+  needs the microdata weights, so `tab_counts()` on pre-aggregated counts leaves them uncorrected; the
+  regression *model* CIs of `tab_reg()` are already fully design-based (`survey::svyglm`) and unaffected.
+  Off by default (byte-identical). The `tabxplor_fmt` record gains a 19th field, `n_eff`.
 * **`tab(common_totrow =)`** — with several `row_vars`, `tab()` now shows **one Total row per row
   variable by default**. Set `common_totrow = TRUE` to collapse the identical Total rows into a single
   shared Total, displayed in its own group after a blank separator (and bold when it is the reference

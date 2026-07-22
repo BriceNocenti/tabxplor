@@ -214,10 +214,12 @@ NULL
 #' metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
 #' Automatically added if needed for \code{color}.
 #'
-#' For a weighted table you can opt in to a more robust p-value:
-#' \code{options(tabxplor.kish_neff = TRUE)} switches the tests to a first-order \strong{Rao-Scott}
-#' correction (the chi-squared rescaled to Kish's effective sample size \code{(sum w)^2 / sum w^2},
-#' the F on per-group effective n); \code{test = "survey"} runs a fully \strong{design-based} test
+#' For a weighted table you can opt in to more robust uncertainty:
+#' \code{options(tabxplor.kish_neff = TRUE)} replaces the raw unweighted n with Kish's effective
+#' sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence interval} (see the
+#' \emph{Weighted confidence intervals} note below) \emph{and} switches the whole-table tests to a
+#' first-order \strong{Rao-Scott} correction (the chi-squared rescaled to \code{n_eff}, the F on
+#' per-group effective n). \code{test = "survey"} instead runs a fully \strong{design-based} test
 #' (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
 #' the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
 #' \code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
@@ -349,13 +351,19 @@ NULL
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
 #' @details
-#' \strong{Weighted confidence intervals.} With a weight (\code{wt}), a cell confidence interval is
-#' exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted proportion as if it
-#' came from \code{tot_n} independent Bernoulli trials. Under unequal weights this has no design effect,
-#' so the interval is \strong{too narrow}. Opt in to Kish's effective sample size with
-#' \code{options(tabxplor.kish_neff = TRUE)} for a design-adjusted \emph{n}, use \code{test = "survey"}
-#' for a fully design-based p-value, or reach for \code{\link{tab_reg}} (fully design-based) when the
-#' uncertainty must be exact.
+#' \strong{Weighted confidence intervals.} With a weight (\code{wt}), by default a cell confidence
+#' interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
+#' proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
+#' the same way). Under unequal weights this carries no design effect, so the default interval is
+#' \strong{too narrow}. Opt in to Kish's effective sample size with
+#' \code{options(tabxplor.kish_neff = TRUE)}: it replaces that raw n with \code{n_eff = (sum w)^2 /
+#' sum(w^2)} in \strong{all} the descriptive intervals -- factor proportions and means alike (cell,
+#' difference, ratio, and the \code{color = "OR"} significance) -- and in the crude \code{empirical =}
+#' companions of \code{\link{tab_reg}}, so unequal weights widen the intervals honestly. This is a
+#' single-stage approximation (it needs the microdata weights, so \code{\link{tab_counts}} on
+#' pre-aggregated counts cannot apply it, and it is not valid for clustered designs). Use
+#' \code{test = "survey"} for a fully design-based p-value, or reach for \code{\link{tab_reg}} (whose
+#' \emph{model} standard errors are always design-based) when the uncertainty must be exact.
 #'
 #' @inheritSection tab_ci Significance stars
 #'
@@ -3263,7 +3271,7 @@ fmt_materialize_col <- function(frame, meta) do.call(new_fmt, c(frame, meta))
 #   is_fmt  : logical over the data columns (rebuild order + fmt/factor split).
 #   factors : the non-fmt columns, passed through WHOLE (length-nrow, own attrs kept).
 #   fmt     : named list, one entry per fmt column = list(frame, meta) -- frame = as.list(vec_data())
-#             (the 18 raw fields, exact types), meta = the fmt_col_attrs read by exact name.
+#             (the 19 raw fields, exact types), meta = the fmt_col_attrs read by exact name.
 #   attrs   : attributes(tab) VERBATIM (class / names / row.names / subtext / test / groups).
 # fmt_wrap(carrier) is the exact inverse: materialize each fmt column via the single
 # fmt_materialize_col() seam, pass the factor columns through, restore `attrs` wholesale.
@@ -3293,7 +3301,7 @@ fmt_wrap <- function(carrier) {
 }
 
 # fmt_stack_frames() -- Phase 9b-6 (Boundary B): ROW-BIND fmt columns on PLAIN field-frames. `frames`
-# is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 18 raw fields);
+# is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 19 raw fields);
 # concat field-by-field with vctrs::vec_c (type-stable, so L1 holds: int+int -> int, NA_integer_ vs
 # NA_real_ preserved) and materialize ONCE via the fmt_materialize_col() seam with the supplied `meta`
 # (the fmt_col_attrs). This replaces a vec_rbind over the tabxplor_fmt RECORDS (which casts +
@@ -3717,9 +3725,15 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # shared finest-grain aggregate `.fine` (built once in tab_many) for this pair. Both feed the
   # SAME dcast below, so everything downstream is byte-identical. Fused runs only when col_var is a
   # factor and there is no col_var/row_var overlap (both guaranteed by tab_many).
+  # Last Phase s: Kish's effective sample size for the weighted factor CIs (opt-in). Σw² is a per-cell
+  # sufficient statistic accumulated ONLY on the microdata `use_raw` scan (pre-aggregated `.fine` data
+  # has no per-observation weights, so it is genuinely unrecoverable there -> n_eff stays NA -> the CI
+  # falls back to the raw unweighted base tot_n). Gated on weighted + kish so the default is untouched.
+  kish <- length(wt) != 0 && isTRUE(getOption("tabxplor.kish_neff", FALSE))
   if (use_raw) {
     long <- data[, list(n  = .N,
-                        wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
+                        wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()},
+                        w2 = if(kish) { sum(eval(wt)^2, na.rm = TRUE) } else {double()}),
                  keyby = eval(c(tab_row_names2, "col_var"))]
   } else {
     ocv  <- as.character(col_var)
@@ -3731,13 +3745,23 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     if (ocv != "col_var") data.table::setnames(long, ocv, "col_var")
   }
 
+  # Last Phase s: Σw² is produced only on the microdata scan under kish (the `.fine`/counts path cannot
+  # produce it, and the unweighted scan carries an EMPTY `w2` column like the empty `wn`, so a bare
+  # `"w2" %in% names` would be a false positive). Gate on kish AND actual presence.
+  has_w2 <- kish && "w2" %in% names(long)
+
   tabs <-
     data.table::dcast(
       long,
       formula = ... ~ col_var,
-      value.var = if (length(wt) != 0) {c("n", "wn")} else {"n"},
+      value.var = if (has_w2) {c("n", "wn", "w2")} else if (length(wt) != 0) {c("n", "wn")} else {"n"},
       fill = 0
     )
+
+  # Last Phase s: when Σw² is NOT a value.var (kish off, or the .fine path), the empty scratch `w2`
+  # column leaks into the dcast as a constant id column -- exactly like the empty `wn` does when
+  # unweighted (dropped a few lines below). Drop it so it never reaches the output.
+  if (!has_w2 && "w2" %in% names(tabs)) tabs[, "w2" := NULL]
 
 
   if (any(col_var_in_row_var)) {
@@ -3753,10 +3777,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   }
 
 
-  na_cols <- names(tabs) %in% c("n_NA", "wn_NA", "NA")
+  na_cols <- names(tabs) %in% c("n_NA", "wn_NA", "w2_NA", "NA")
   if (any(na_cols)) {
     if (na == "drop") {
-      suppressWarnings(tabs[, `:=`(n_NA = NULL, wn_NA = NULL, `NA` = NULL)])
+      suppressWarnings(tabs[, `:=`(n_NA = NULL, wn_NA = NULL, w2_NA = NULL, `NA` = NULL)])
     } else {
       data.table::setcolorder(tabs, c(names(tabs)[!na_cols], names(tabs)[na_cols]))
     }
@@ -3844,6 +3868,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     text_vars <- !purrr::map_lgl(tabs, is.numeric)
     n_index  <- stringi::stri_detect_regex(names(tabs), "^n_")  | text_vars
     wn_index <- stringi::stri_detect_regex(names(tabs), "^wn_") | text_vars
+    w2_index <- stringi::stri_detect_regex(names(tabs), "^w2_") | text_vars
 
     text_vars <- text_vars[text_vars]
 
@@ -3854,9 +3879,18 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 
     tabs_wn[, (names(tabs_wn)) := purrr::map(.SD, as.double)]
 
+    # Last Phase s: the per-cell Σw² wide table (present only on the microdata scan), reshaped like
+    # tabs_wn and rolled up for the "col" total identically (Σw² is additive across a partition, like Σw).
+    if (has_w2) {
+      tabs_w2 <- data.table::setnames(tabs[, w2_index, with = FALSE],
+                                      function(.x) stringi::stri_replace_first_regex(.x, "^w2_", ""))
+      tabs_w2[, (names(tabs_w2)) := purrr::map(.SD, as.double)]
+    }
+
     if ("col" %in% tot) {
       tabs_n [, "Total" := as.integer(rowSums(tabs_n[, -names(text_vars), with = FALSE] ))] #Problems if not integer.
       tabs_wn[, "Total" := rowSums(tabs_wn[, -names(text_vars), with = FALSE])]
+      if (has_w2) tabs_w2[, "Total" := rowSums(tabs_w2[, -names(text_vars), with = FALSE])]
     }
 
   }
@@ -3877,9 +3911,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     # for exact statistics (retires detect_totcols() on built tables, decisions §2, §11). Byte-
     # identical to the former per-cell path (dev/benchmarks/phase9d_leaf_math_parity.R).
     res_e     <- leaf_wide_pct(tabs_n, if (length(wt) == 0) NULL else tabs_wn,
-                               pct, as.character(tab_vars), cols)
+                               pct, as.character(tab_vars), cols,
+                               tabs_w2 = if (has_w2) tabs_w2 else NULL)
     tabs_pct  <- res_e$pct
     tabs_totn <- res_e$tot_n
+    # Last Phase s: the per-cell effective base n (Kish n_eff of the % base), NULL/absent unless kish.
+    if (!is.null(res_e$n_eff)) tabs_neff <- res_e$n_eff
 
 
     #Differences and odds ratio
@@ -3897,7 +3934,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
         tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp, OR = OR,
         color = color, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
         row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
-        tabs_totn = if (or_want_ci) tabs_totn else NULL, conf_level = conf_level, stars = stars
+        tabs_totn = if (or_want_ci) tabs_totn else NULL,
+        # Last Phase s: the OR colour interval honours Kish n_eff too (opt-in), so color = "OR"
+        # significance/stars on a weighted crosstab widen consistently with the % CI brackets.
+        tabs_neff = if (or_want_ci && kish && exists("tabs_neff", inherits = FALSE)) tabs_neff else NULL,
+        conf_level = conf_level, stars = stars
       )
       tabs_diff <- ref_res$diff
       tabs_mean <- ref_res$ratio
@@ -3926,6 +3967,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) tabs_or_ci_sup[, names(text_vars) := NULL]
   if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) tabs_or_pvalue[, names(text_vars) := NULL]
   if (exists("tabs_totn", rlang::current_env(), inherits = F)) tabs_totn[, names(text_vars) := NULL]
+  if (exists("tabs_neff", rlang::current_env(), inherits = F)) tabs_neff[, names(text_vars) := NULL]
   #if (exists("tabs_ci"  , rlang::current_env(), inherits = F)) tabs_ci  [, names(text_vars) := NULL]
 
   totcol_vector <- names(tabs_n) == "Total"
@@ -3986,7 +4028,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
          if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) },
          if (exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)) { tabs_or_ci_inf } else { list(NA_reals) },
          if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) { tabs_or_ci_sup } else { list(NA_reals) },
-         if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) { tabs_or_pvalue } else { list(NA_reals) }
+         if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) { tabs_or_pvalue } else { list(NA_reals) },
+         if (exists("tabs_neff", rlang::current_env(), inherits = F)) { tabs_neff } else { list(NA_reals) }
     ) |>
     # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
     # fmt_materialize_col() (== the former inline new_fmt, byte-identical). pmap_dfc is KEPT so the
@@ -4003,7 +4046,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
           n         = as.integer(a[[1]]), display = display_1, digits = digits_v,
           wn        = a[[2]], pct = a[[3]], mean = NA_reals, diff = a[[4]], ratio = a[[5]],
           ctr       = NA_reals, var = NA_reals, ci_inf = a[[11]], ci_sup = a[[12]],
-          pvalue    = a[[13]], or = a[[7]], tot_n = a[[10]],
+          pvalue    = a[[13]], or = a[[7]], tot_n = a[[10]], n_eff = a[[14]],
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
           type      = type_1, comp_all = comp_1, ref = ref_1,
@@ -4076,7 +4119,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 # Byte-identical to the former per-cell path (dev/benchmarks/phase9d_leaf_math_parity.R).
 #' @keywords internal
 #' @noRd
-leaf_wide_pct <- function(tabs_n, tabs_wn, pct, tab_vars, cols) {
+leaf_wide_pct <- function(tabs_n, tabs_wn, pct, tab_vars, cols, tabs_w2 = NULL) {
   nm <- names(cols); n <- nrow(tabs_n); k <- length(nm)
   grp <- if (length(tab_vars) == 0) rep(1L, n) else {
     key <- do.call(paste, c(lapply(tab_vars, function(v) as.character(tabs_n[[v]])), sep = "\r"))
@@ -4093,13 +4136,21 @@ leaf_wide_pct <- function(tabs_n, tabs_wn, pct, tab_vars, cols) {
     "all_tabs" = matrix(M[n,        "Total"], n, k))
   P <- M_pct / Dmat(M_pct); P[is.na(P)] <- 0
   Tn <- Dmat(M_totn)
+  # Last Phase s: the effective base n = (Σw over the % base)^2 / (Σw^2 over the same base), broadcast
+  # by the SAME Dmat selector as tot_n. M_pct is already the weighted-count matrix (tabs_wn). Only when
+  # tabs_w2 is supplied (kish opt-in + weighted); non-finite (empty base) -> NA so the CI falls to tot_n.
+  Ne <- if (!is.null(tabs_w2)) {
+    M_w2 <- as.matrix(tabs_w2[, nm, with = FALSE]) * 1.0
+    ne <- Dmat(M_pct)^2 / Dmat(M_w2); ne[!is.finite(ne)] <- NA_real_; ne
+  } else NULL
   wb <- function(src, M2) {
     dt <- data.table::copy(src)
     dt[, (nm) := lapply(seq_len(k), function(j) M2[, j])]
     dt
   }
   list(pct   = wb(if (!is.null(tabs_wn)) tabs_wn else tabs_n, P),
-       tot_n = wb(tabs_n, Tn))
+       tot_n = wb(tabs_n, Tn),
+       n_eff = if (!is.null(Ne)) wb(tabs_n, Ne) else NULL)
 }
 
 
@@ -4162,7 +4213,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 #' @noRd
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
-                                tabs_totn = NULL, conf_level = 0.95, stars = FALSE) {
+                                tabs_totn = NULL, tabs_neff = NULL, conf_level = 0.95, stars = FALSE) {
   # Phase 9d: the reference arithmetic (diff = cell - ref, ratio = cell / ref, rr / or) runs on a
   # plain numeric matrix via base-R sweep instead of the former per-cell data.table `:=` +
   # purrr::map_if -- byte-identical, ~100x faster on the isolated block (proven across 648 shapes:
@@ -4327,6 +4378,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       exists("ref_col_idx", inherits = FALSE) && exists("ra", inherits = FALSE) &&
       !is.null(refrows) && any(!is.na(ref_col_idx))) {
     N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
+    # Last Phase s: swap in the effective base (Kish n_eff) where it is finite (opt-in); off-kish
+    # tabs_neff is NULL -> N is the unweighted base, byte-identical.
+    if (!is.null(tabs_neff)) {
+      Ne <- as.matrix(tabs_neff[, nm, with = FALSE]) * 1.0
+      N[is.finite(Ne)] <- Ne[is.finite(Ne)]
+    }
     PN <- P * N
     A  <- PN                                         # a = level j, this row      (positive cell)
     B  <- PN[, ref_col_idx, drop = FALSE]            # b = reference level, this row  (negative cell)
@@ -4669,6 +4726,10 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
 
+  # Last Phase s: Kish n_eff applies to the weighted mean CIs (already) AND is now surfaced into the
+  # per-cell `n_eff` FIELD (kish-only, so the field is NA otherwise -- symmetric with the factor side).
+  # Function-scoped so the reshape region can read it even when ci == "no".
+  kish_neff_on <- length(wt) != 0 && isTRUE(getOption("tabxplor.kish_neff", FALSE))
 
 
 
@@ -4892,8 +4953,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
       # Effective sample size per cell for the CI/test (§14): Kish n_eff = wn^2 / Sigma(w^2)
       # when opted in, else the unweighted count. The DISPLAYED `n` field stays the real count;
-      # only the inference uses this. (Factor-side Kish is deferred -- open item.)
-      kish <- isTRUE(getOption("tabxplor.kish_neff", FALSE))
+      # only the inference uses this. Last Phase s: the same n_eff is also surfaced into the `n_eff`
+      # field below (kish-only), and the factor side now honours Kish too (leaf_wide_pct).
+      kish <- kish_neff_on
       for (v in cvs) {
         data.table::set(
           tabs, j = paste0(v, "_en"),
@@ -4953,7 +5015,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
         data.table::set(tabs, j = paste0(v, "_pvalue"), value = res$pvalue)
       }
 
-      data.table::set(tabs, j = paste0(cvs, "_en"), value = NULL)
+      # Last Phase s: keep the per-cell effective n (`_en`) when kish is on, so it can be surfaced into
+      # the `n_eff` field at the reshape below; drop it otherwise (unchanged behaviour off-kish).
+      if (!kish_neff_on) data.table::set(tabs, j = paste0(cvs, "_en"), value = NULL)
       if (ci == "diff")
         data.table::set(tabs, j = paste0(rep(cvs, each = 3L),
                                          c("_refm", "_refv", "_refn")), value = NULL)
@@ -5047,6 +5111,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   tabs_ci_inf <- reshape_suffix("_ci_inf")
   tabs_ci_sup <- reshape_suffix("_ci_sup")
   tabs_pvalue <- reshape_suffix("_pvalue")
+  # Last Phase s: surface the kept per-cell effective n into the n_eff field (kish-only; selected by
+  # EXACT scratch names to avoid the reshape-by-suffix collision the WARNING above flags, then dropped).
+  tabs_neff <-
+    if (kish_neff_on && all(paste0(as.character(col_vars), "_en") %in% names(tabs))) {
+      data.table::setnames(tabs[, paste0(as.character(col_vars), "_en"), with = FALSE],
+                           as.character(col_vars))
+    } else { list(NA_reals) }
 
   tabs_text <- tabs[, text_vars, with = FALSE]
 
@@ -5064,7 +5135,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   tabs <-
     list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, as.character(col_vars),
-         digits, tabs_ratio, tabs_ci_inf, tabs_pvalue) |>
+         digits, tabs_ratio, tabs_ci_inf, tabs_pvalue, tabs_neff) |>
     # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
     # fmt_materialize_col() (== the former inline new_fmt, byte-identical). The digits mean-magnitude
     # floor stays per-column (reads this column's means ..3). Phase 3a: real asymmetric CI bounds +
@@ -5085,7 +5156,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           n         = a[[1]], display = display_1, digits = digits_col,
           wn        = a[[2]], pct = NA_reals, mean = a[[3]], diff = a[[5]], ratio = a[[9]],
           ctr       = NA_reals, var = a[[4]], ci_inf = a[[10]], ci_sup = a[[6]],
-          pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals,
+          pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals, n_eff = a[[12]],
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
           # 14v-ii: a ratio-scale mean interval is stored as ci_type = "ratio" (neutral 1), so
@@ -5410,17 +5481,23 @@ tab_ci <- function(tabs,
       rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
       # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
       # reference cell so its own CI is not computed.
+      # Last Phase s: the CI base is the effective n (Kish n_eff) when populated, else the raw base --
+      # coalesce(NA, raw) == raw, so this is byte-identical off-kish; on-kish n_eff < n widens the CI.
       x_n[[nm]] <- dplyr::if_else(
         rtona, NA_integer_,
-        switch(tp, "col" = get_tot_n(col), "row" = get_tot_n(col), "mean" = get_n(col)))
+        switch(tp,
+               "col"  = dplyr::coalesce(get_n_eff(col), get_tot_n(col)),
+               "row"  = dplyr::coalesce(get_n_eff(col), get_tot_n(col)),
+               "mean" = dplyr::coalesce(get_n_eff(col), as.double(get_n(col)))))
       if (nm %in% diff_cols) {
         if (ci[[nm]] == "diff_col") {
           rcol        <- tabs[[as.character(ref_cols[[nm]])]]  # the reference COLUMN (its own base)
           ref[[nm]]   <- get_pct(rcol)
-          ref_n[[nm]] <- get_tot_n(rcol)[group_last_pos(is_totrow(col))]
+          ref_n[[nm]] <- dplyr::coalesce(get_n_eff(rcol), get_tot_n(rcol))[group_last_pos(is_totrow(col))]
         } else {                                               # diff_row: the reference ROW cell
           ref[[nm]]   <- if (tp == "mean") get_mean(col)[rp] else get_pct(col)[rp]
-          ref_n[[nm]] <- if (tp == "mean") get_n(col)[rp]     else get_tot_n(col)[rp]
+          ref_n[[nm]] <- if (tp == "mean") dplyr::coalesce(get_n_eff(col), as.double(get_n(col)))[rp]
+                         else               dplyr::coalesce(get_n_eff(col), get_tot_n(col))[rp]
         }
         if (nm %in% mean_cols) ref_var[[nm]] <- get_var(col)[rp]
       }

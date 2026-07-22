@@ -71,30 +71,30 @@ You can pass **several row and column variables at once**.
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-`levels = "first"` keeps only the first level of each column factor, which is handy to display many binary factors/survey questions with multiple answers, all at once, in a compact way :
+`levels = "first"` keeps only the first level of each column factor, which is handy to display many binary factors, like survey questions with multiple answers, all at once, in a compact way :
 
 ```{r, echo = TRUE}
-tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", cleannames = TRUE)
+tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", na = "drop", cleannames = TRUE)
 ```
 
 A few other everyday arguments: `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
 
 ## Weights
 
-The argument `wt =` adds a weight variable
+The argument `wt =` adds a survey weight. Every percentage and mean is then **weighted**, while the sample size behind the confidence intervals stays the real, **unweighted** number of cases — the honest default basis for uncertainty.
 
 ```{r, echo=TRUE, eval=FALSE}
 data(hdv2003, package = "questionr")
 tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
 ```
 
-Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
-
+Under **unequal** weights that default interval carries no design effect, so it runs a little too narrow. Kish's *effective sample size* fixes this : it counts each observation by how much it really contributes, `n_eff = (sum of w)² / (sum of w²)` (always at most the real *n*), and uses `n_eff` in place of the raw *n*. Turn it on and every weighted confidence interval in the table — proportions and means alike — widens honestly:
 
 ```{r, echo=TRUE, eval=FALSE}
 options(tabxplor.kish_neff = TRUE)
 ```
 
+This is a simple single-stage approximation (it needs the individual weights, so it is not available for tables built from pre-aggregated counts). A **fully design-based** result — clusters, strata, exact standard errors — is available for Chi2 pvalues (factors) and ANOVA F pvalues (numeric column variables) only with `test = "survey"` and the related arguments (see the `test =` argument) : confidence intervals are not covered. See the [survey](https://CRAN.R-project.org/package=survey) package for more informations about survey design. `tab_reg()` regressions tables with weights always use design-effect for standard errors (`vignette("tabxplor-reg")`), but the base version only use Kish's effective sample size.
 
 
 ## Sub-tables
@@ -113,7 +113,7 @@ tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 
 ## colors: reading helpers
 
-This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
+One you the main purposes of `tabxplor` is to provide a full palette of color helpers for data exploration. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff")
@@ -122,7 +122,7 @@ tab(gss_simple, race, party3, pct = "row", color = "diff")
 `color = TRUE` picks a sensible scheme automatically for each column type (both differences and ratio for percentages, only ratios for means, …), check which one in the legend:
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, c(marital, partyid), pct = "row", color = TRUE)
+tab(gss_simple, rincome, c(party3, marital), pct = "row", color = TRUE)
 ```
 
 Numeric columns are colored the same way, on their **means** (here, hours of TV per day by income):
@@ -131,7 +131,7 @@ Numeric columns are colored the same way, on their **means** (here, hours of TV 
 tab(gss_simple, rincome, tvhours, color = "diff")
 ```
 
-**Which cell is the reference?** By default each cell is compared to its Total. Two useful alternatives:
+**Which cell is the reference for comparison ?** By default each cell is compared to the relevant Total (Total row for row percentages and Total column for column percentages) to highlight over-representations and under-representations. Two useful alternatives:
 
 - `ref = 1` compares each row to the **first row** — perfect for reading an evolution over time or an ordinal factor.
 - with sub-tables, `comp = "all"` compares against the **overall** Total instead of each sub-table's own Total.
@@ -140,7 +140,11 @@ tab(gss_simple, rincome, tvhours, color = "diff")
 tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 ```
 
-Color thresholds and the palette are set **once for the whole session** with `set_color_breaks()` and `set_color_palette()` — not to repeat on every table.
+```{r, echo = TRUE}
+tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, comp="all")
+```
+
+Color thresholds and the palette can be customised : set them **once for the whole session** with `set_color_breaks()` and `set_color_palette()`.
 
 ## colors that respect significance
 
@@ -214,7 +218,7 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
-**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` is not applied to confidence intervals : only whole tables pvalues (Chi2, ANOVA F).
+**A note on weights.** With a weight (`wt =`), every estimate is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is then exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` (see [Weights](#weights)) to widen *every* interval honestly and switch the whole-table tests to a Rao–Scott correction.
 
 ## Exporting
 

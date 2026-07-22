@@ -68,12 +68,19 @@ shows N + p-value + effect size.}
 \item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
 \code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
 one-line form the console uses). The console itself is always terse.}
-\item{\code{tabxplor.kish_neff}}{\code{FALSE} (default): use Kish's effective sample size
-\verb{(sum w)^2 / sum w^2} for the weighted confidence intervals / significance. When \code{TRUE} it also
-switches the whole-table tests (\code{test = TRUE}) to a first-order Rao-Scott correction -- the factor
-chi-square rescaled to \code{n_eff}, the numeric F on per-group \code{n_eff}. For a full design-based test
-(clusters / strata), use \code{test = "survey"} with \verb{wt =}/\verb{strata =}/\verb{ids =}, or pass a
-\code{survey::svydesign} as \code{data}.}
+\item{\code{tabxplor.kish_neff}}{\code{FALSE} by default (weighted estimate, raw unweighted n). Set to
+\code{TRUE} to replace that raw n with Kish's effective sample size \verb{n_eff = (sum w)^2 / sum(w^2)}
+in \strong{every weighted descriptive confidence interval} -- factor proportions \emph{and}
+means (cell, difference, ratio and the \code{color = "OR"} significance) in \code{\link[=tab]{tab()}} / \code{\link[=tab_num]{tab_num()}} /
+\code{\link[=tab_counts]{tab_counts()}}, and the crude \verb{empirical =} companions of \code{\link[=tab_reg]{tab_reg()}}. Under unequal weights
+\code{n_eff < n}, so the intervals widen honestly (they otherwise carry no design effect and run too
+narrow). It also switches the whole-table tests (\code{test = TRUE}) to a first-order Rao-Scott
+correction -- the factor chi-square rescaled to \code{n_eff}, the numeric F on per-group \code{n_eff}.
+This is a single-stage unequal-weight approximation, not a design-based analysis: it needs the
+microdata weights, so \code{\link[=tab_counts]{tab_counts()}} on pre-aggregated counts cannot apply it. The regression
+\emph{model} CIs of \code{\link[=tab_reg]{tab_reg()}} are already fully design-based (\code{survey::svyglm}) and are
+unaffected. For a full design-based whole-table test (clusters / strata) use \code{test = "survey"}
+with \verb{wt =}/\verb{strata =}/\verb{ids =}, or pass a \code{survey::svydesign} as \code{data}.}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
 overrides it.}

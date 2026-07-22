@@ -83,6 +83,12 @@
 #                      to an in-cell `{pct} (n={n})` composite on the Total column (decision 1). All
 #                      of this is materialised byte-identically at EXPORT (proven: build+materialize
 #                      == the pre-Increment-2 built table), so tab_xl / export-parity are unchanged.
+#
+# Last Phase s (Kish n_eff -> all descriptive CIs): adds a 19th per-cell field `n_eff` (the
+#   effective sample size used for a cell's CI). This changes the vctrs RECORD SHAPE, so ALL
+#   *.rds are regenerated once + the fmt-contract snapshot; the ONLY per-cell delta is the added
+#   all-NA `n_eff` column (kish is OFF by default, so the field is NA and tab_ci coalesces to the
+#   raw base -> CI bounds byte-identical). The DISPLAY _snaps are UNTOUCHED (n_eff is non-displayed).
 # ===========================================================================================
 
 cases <- golden_cases()

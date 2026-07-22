@@ -56,6 +56,7 @@ fmt(
   pvalue = rep(NA_real_, length(n)),
   or = rep(NA_real_, length(n)),
   tot_n = rep(NA_real_, length(n)),
+  n_eff = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
@@ -206,6 +207,11 @@ as a double vector the length of \code{n}.}
 \item{tot_n}{The cell's own (unweighted) percentage base, as a double vector the length
 of \code{n}.}
 
+\item{n_eff}{The effective sample size used for this cell's confidence interval:
+Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on
+weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
+A double vector the length of \code{n}. Non-displayed.}
+
 \item{in_totrow}{\code{TRUE} when the cell is part of a total row}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
@@ -339,10 +345,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 18 fields :
+\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 19 fields :
 \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-\code{pvalue}, \code{or}, \code{tot_n},
+\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff},
 \code{in_totrow},  \code{in_tottab},
 \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them

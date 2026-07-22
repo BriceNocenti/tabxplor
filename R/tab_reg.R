@@ -1047,6 +1047,15 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
   w  <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   yv <- data[[dependent]]
   bin <- family == "binomial"
+  # Last Phase s: the crude companion CIs honour Kish n_eff like tab()'s descriptive CIs (opt-in +
+  # weighted). We carry a SEPARATE effective-n (`n_ci`) for the interval; the displayed `n` stays the
+  # raw unweighted count. Off-kish/unweighted n_ci == the raw count -> byte-identical.
+  kish <- !is.null(wt) && isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  neff_or_n <- function(wsum, w2, raw) {
+    if (!kish) return(as.double(raw))
+    ne <- wsum^2 / w2
+    if (is.finite(ne)) ne else as.double(raw)
+  }
   # A 0/1 numeric outcome is fit as the labelled factor c("Not <dep>", "<dep>") with positive_level =
   # "<dep>" (reg_prep_binary). reg_empirical sees the RAW data, so mirror that recode -- else
   # as.character(0/1) never matches the label and the crude base is silently 0 (pre-14v-ii bug).
@@ -1061,7 +1070,9 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
       m <- ok & x == l
       if (bin) {
         wpos <- sum(w[m & pos]); wneg <- sum(w[m & !pos])
-        list(base = wpos / (wpos + wneg), ratio_raw = wpos / wneg, var = NA_real_, n = sum(m))
+        n_ci <- neff_or_n(wpos + wneg, sum(w[m]^2), sum(m))
+        list(base = wpos / (wpos + wneg), ratio_raw = wpos / wneg, var = NA_real_,
+             n = sum(m), n_ci = n_ci)
       } else {
         n1 <- sum(m); wn <- sum(w[m]); s1 <- sum(w[m] * ynum[m]); s2 <- sum(w[m] * ynum[m]^2)
         mean_l <- s1 / wn
@@ -1070,7 +1081,8 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
         var_l  <- if (family %in% c("gaussian", "poisson", "quasipoisson")) {
           if (is.null(wt)) (s2 - s1^2 / n1) / (n1 - 1) else round(s2 / wn - (s1 / wn)^2, 10)
         } else NA_real_
-        list(base = mean_l, ratio_raw = mean_l, var = var_l, n = n1)
+        list(base = mean_l, ratio_raw = mean_l, var = var_l,
+             n = n1, n_ci = neff_or_n(wn, sum(w[m]^2), n1))
       }
     })
     ref <- per[[1]]
@@ -1083,7 +1095,9 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
       emp_ratio = purrr::map_dbl(per, ~ .$ratio_raw / ref$ratio_raw),
       emp_var   = purrr::map_dbl(per, "var"),
       emp_n     = purrr::map_int(per, ~ as.integer(.$n)),
-      emp_ref_base = ref$base, emp_ref_var = ref$var, emp_ref_n = as.integer(ref$n)
+      emp_n_ci  = purrr::map_dbl(per, "n_ci"),
+      emp_ref_base = ref$base, emp_ref_var = ref$var, emp_ref_n = as.integer(ref$n),
+      emp_ref_n_ci = ref$n_ci
     )
   })
 }
@@ -1143,6 +1157,9 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   base <- emp$emp_base[mi]; diffv <- emp$emp_diff[mi]; ratio <- emp$emp_ratio[mi]
   varv <- emp$emp_var[mi];  nv    <- emp$emp_n[mi]
   rb   <- emp$emp_ref_base[mi]; rv <- emp$emp_ref_var[mi]; rn <- emp$emp_ref_n[mi]
+  # Last Phase s: the CI base is the effective n (Kish n_eff, opt-in) -- off-kish it equals the raw
+  # count, so the intervals are byte-identical. The displayed n/tot_n fields keep the raw count `nv`.
+  nv_ci <- emp$emp_n_ci[mi]; rn_ci <- emp$emp_ref_n_ci[mi]
   # a reference level has no CI/test against itself (like the model column's zeroed reference).
   na_ref <- function(ci) { ci$inf[refrows] <- NA_real_; ci$sup[refrows] <- NA_real_
                            ci$pvalue[refrows] <- NA_real_; ci }
@@ -1160,7 +1177,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   two <- function(a, b) stats::setNames(list(a$col, b$col), c(a$shape$nm, b$shape$nm))
 
   if (family == "binomial") {
-    rd <- na_ref(ci_prop_diff(base, nv, rb, rn, conf_level = conf_level,          # crude risk-difference
+    rd <- na_ref(ci_prop_diff(base, nv_ci, rb, rn_ci, conf_level = conf_level,    # crude risk-difference
                               method = fam$method_diff, want_p = TRUE))
     rd_fields <- list(pct = base, diff = diffv, n = nv, tot_n = nv,
                       ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue)
@@ -1168,7 +1185,8 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     if (effect == "ame")               # the AME shows a difference, not an OR -> crude risk-difference
       return(two(list(col = base_col, shape = fam$base),
                  list(col = emp_col(fam$ame, rd_fields), shape = fam$ame)))
-    or_ci <- na_ref(ci_or(base * nv, (1 - base) * nv, rb * rn, (1 - rb) * rn,      # Woolf log-OR Wald
+    or_ci <- na_ref(ci_or(base * nv_ci, (1 - base) * nv_ci,                        # Woolf log-OR Wald
+                          rb * rn_ci, (1 - rb) * rn_ci,
                           conf_level = conf_level, want_p = TRUE))
     if (do_exp) {
       eff_col <- emp_col(fam$or, list(or = ratio, n = nv, ci_inf = or_ci$inf,
@@ -1183,10 +1201,10 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   }
 
   if (family == "gaussian") {
-    cell <- ci_pivot(base, sqrt(varv / nv), df = nv - 1, conf_level = conf_level, want_p = FALSE)
+    cell <- ci_pivot(base, sqrt(varv / nv_ci), df = nv_ci - 1, conf_level = conf_level, want_p = FALSE)
     base_col <- emp_col(fam$base, list(mean = base, var = varv, n = nv, tot_n = nv,
                                        ci_inf = cell$inf, ci_sup = cell$sup))
-    md <- na_ref(ci_mean_diff2(base, varv, nv, rb, rv, rn, method = fam$method_mean_diff,  # pooled t = OLS
+    md <- na_ref(ci_mean_diff2(base, varv, nv_ci, rb, rv, rn_ci, method = fam$method_mean_diff,  # pooled t = OLS
                                conf_level = conf_level, want_p = TRUE))
     eff_col <- emp_col(fam$diff, list(diff = diffv, var = rep(var_y, n_rows), n = nv,
                                       ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue))
@@ -1195,7 +1213,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
 
   if (fam_key == "poisson") {
     # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives BOTH columns.
-    rr <- na_ref(ci_mean_ratio(base, varv, nv, rb, rv, rn, method = fam$method_mean_ratio,
+    rr <- na_ref(ci_mean_ratio(base, varv, nv_ci, rb, rv, rn_ci, method = fam$method_mean_ratio,
                                conf_level = conf_level, want_p = TRUE))
     base_col <- emp_col(fam$base, list(mean = base, ratio = ratio, n = nv, tot_n = nv,
                                        ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue))
@@ -1224,21 +1242,26 @@ reg_empirical_tips <- function(data, fac_preds, dependent, wt, conf_level = 0.95
   w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   yv   <- as.factor(data[[dependent]])
   cats <- levels(forcats::fct_drop(yv))
+  # Last Phase s: the crude tooltip CIs honour Kish n_eff too (opt-in); `n` stays the raw count.
+  kish <- !is.null(wt) && isTRUE(getOption("tabxplor.kish_neff", FALSE))
   purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
     ok <- !is.na(x) & !is.na(yv) & !is.na(w)
     lv <- levels(forcats::fct_drop(as.factor(x[ok])))
     grid <- purrr::map_dfr(lv, function(l) {
       m  <- ok & x == l; wl <- sum(w[m])
+      ne <- if (kish) wl^2 / sum(w[m]^2) else NA_real_
       tibble::tibble(level = l, category = cats, n = sum(m),
+                     n_ci = if (is.finite(ne)) ne else as.double(sum(m)),
                      prop = purrr::map_dbl(cats, ~ sum(w[m & yv == .x]) / wl))
     })
     ref_p <- stats::setNames(grid$prop[grid$level == lv[1]], grid$category[grid$level == lv[1]])
     ref_n <- grid$n[grid$level == lv[1]][1]
+    ref_n_ci <- grid$n_ci[grid$level == lv[1]][1]
     grid$diff <- grid$prop - ref_p[grid$category]
     grid$var  <- p
-    pw <- ci_wilson(grid$prop, grid$n, conf_level = conf_level)                  # crude % cell CI
-    dd <- ci_prop_diff(grid$prop, grid$n, ref_p[grid$category], ref_n,           # crude diff CI
+    pw <- ci_wilson(grid$prop, grid$n_ci, conf_level = conf_level)               # crude % cell CI
+    dd <- ci_prop_diff(grid$prop, grid$n_ci, ref_p[grid$category], ref_n_ci,     # crude diff CI
                        conf_level = conf_level, method = "newcombe", want_p = FALSE)
     grid$prop_inf <- pw$inf; grid$prop_sup <- pw$sup
     grid$diff_inf <- dd$inf; grid$diff_sup <- dd$sup
@@ -2431,7 +2454,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   dependent, all predictors and any design variable), so crude and adjusted are directly comparable
 #'   and not confounded by differing missingness (reproduce it with [dplyr::filter()] + [tab()] on the
 #'   same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
-#'   ignored (with a message). Default `FALSE`.
+#'   ignored (with a message). These crude companion CIs are descriptive, so on weighted data they
+#'   honour `options(tabxplor.kish_neff = TRUE)` (Kish's effective sample size) exactly like [tab()];
+#'   the model column's own CI is always design-based (`survey::svyglm`) and unaffected. Default
+#'   `FALSE`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test

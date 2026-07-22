@@ -65,12 +65,19 @@
 #'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
 #'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
 #'     one-line form the console uses). The console itself is always terse.}
-#'   \item{`tabxplor.kish_neff`}{`FALSE` (default): use Kish's effective sample size
-#'     `(sum w)^2 / sum w^2` for the weighted confidence intervals / significance. When `TRUE` it also
-#'     switches the whole-table tests (`test = TRUE`) to a first-order Rao-Scott correction -- the factor
-#'     chi-square rescaled to `n_eff`, the numeric F on per-group `n_eff`. For a full design-based test
-#'     (clusters / strata), use `test = "survey"` with `wt =`/`strata =`/`ids =`, or pass a
-#'     \code{survey::svydesign} as `data`.}
+#'   \item{`tabxplor.kish_neff`}{`FALSE` by default (weighted estimate, raw unweighted n). Set to
+#'     `TRUE` to replace that raw n with Kish's effective sample size `n_eff = (sum w)^2 / sum(w^2)`
+#'     in \strong{every weighted descriptive confidence interval} -- factor proportions \emph{and}
+#'     means (cell, difference, ratio and the `color = "OR"` significance) in [tab()] / [tab_num()] /
+#'     [tab_counts()], and the crude `empirical =` companions of [tab_reg()]. Under unequal weights
+#'     `n_eff < n`, so the intervals widen honestly (they otherwise carry no design effect and run too
+#'     narrow). It also switches the whole-table tests (`test = TRUE`) to a first-order Rao-Scott
+#'     correction -- the factor chi-square rescaled to `n_eff`, the numeric F on per-group `n_eff`.
+#'     This is a single-stage unequal-weight approximation, not a design-based analysis: it needs the
+#'     microdata weights, so [tab_counts()] on pre-aggregated counts cannot apply it. The regression
+#'     \emph{model} CIs of [tab_reg()] are already fully design-based (\code{survey::svyglm}) and are
+#'     unaffected. For a full design-based whole-table test (clusters / strata) use `test = "survey"`
+#'     with `wt =`/`strata =`/`ids =`, or pass a \code{survey::svydesign} as `data`.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it.}

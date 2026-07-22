@@ -478,8 +478,17 @@ and the `tab_xl` numFmt fold) pass `stars = TRUE`, while tooltip / character-cas
 default `FALSE`, so stars never leak onto secondary fields. When shown, `format()` **right-pads** each
 value cell's star field to the column-max width so numbers stay aligned. `pvalue` feeds ONLY the stars
 (colour significance reads the bounds), so not storing it when stars are off changes nothing else.
-Kish `n_eff` opt-in for numeric CIs via `options("tabxplor.kish_neff")` (needs the `Σw²` accumulator,
-added to the numeric scan only when opted in).
+Kish `n_eff` opt-in (`options("tabxplor.kish_neff")`) backs **every weighted descriptive CI** (Last
+Phase s): factor proportions AND means (cell/diff/ratio + the `color = "OR"` interval) in
+`tab()`/`tab_num()`, and `tab_reg()`'s `empirical =` companions. It rides the **19th fmt field
+`n_eff`** = the effective sample size used for a cell's CI; the CI base is
+`coalesce(get_n_eff, tot_n/n)`, so off-kish (`n_eff` NA) it is byte-identical. `Σw²` is accumulated
+only when opted in — on the FACTOR count scan (`plain_core`'s `w2` dcast → `leaf_wide_pct` broadcasts
+`(Σw_base)²/(Σw²_base)`) and the numeric scan (`num_moment_scan`'s `_w2` → `num_core`'s `_en`). It
+needs the microdata weights, so `tab_counts()` on pre-aggregated counts leaves `n_eff` NA and falls
+back to the raw base. `tab_reg()`'s empirical CIs pass a separate effective-n into the `ci_*` engines
+(no field; the displayed `n` stays the raw count); the model CIs are design-based (`svyglm`) and
+untouched.
 
 Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with the `$ci` field extraction);
 `get_ci_moe()` = larger arm for the `± moe` display; `fmt(ci=)` stores absolute symmetric bounds

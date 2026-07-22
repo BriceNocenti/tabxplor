@@ -41,7 +41,7 @@ jmvtabreg(
   export_format = "excel",
   exportExcel = FALSE,
   export_dir = "~/Documents",
-  export_filename = "Regression",
+  export_filename = "Reg_model",
   resetPath = FALSE,
   xl_replace = FALSE
 )
@@ -160,13 +160,12 @@ button label follows the format).}
 to override; a leading \code{~} there expands to your home folder.}
 
 \item{export_filename}{The bare file name, with NO extension (the chosen
-format adds it). Illegal characters are removed automatically. Blank saves
-as "Table".}
+format adds it).}
 
 \item{resetPath}{Reset the folder and file name to their defaults (your
 Documents folder and "Regression").}
 
-\item{xl_replace}{.}
+\item{xl_replace}{"Set to \code{TRUE} to overwrite an existing file."}
 }
 \value{
 A results object containing:

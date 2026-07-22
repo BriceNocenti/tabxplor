@@ -127,7 +127,10 @@ is computed on \strong{exactly the same complete-case population as the model} (
 dependent, all predictors and any design variable), so crude and adjusted are directly comparable
 and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
 same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
-ignored (with a message). Default \code{FALSE}.
+ignored (with a message). These crude companion CIs are descriptive, so on weighted data they
+honour \code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size) exactly like \code{\link[=tab]{tab()}};
+the model column's own CI is always design-based (\code{survey::svyglm}) and unaffected. Default
+\code{FALSE}.
 }}
 
 \item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the

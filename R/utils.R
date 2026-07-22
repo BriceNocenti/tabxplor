@@ -109,8 +109,10 @@ tx_getOption <- function(names, default = NULL) {
   options("tabxplor.signif_labels" = c("*", "**", "***"))
 
   # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2 for the
-  # weighted CIs/tests. Last Phase j extends it to the FACTOR chi2 + the numeric F table tests
-  # (first-order Rao-Scott rescale), not only the per-cell mean CI. A design-based test is `test="survey"`.
+  # weighted CIs/tests. Last Phase s made it uniform: n_eff now backs EVERY weighted descriptive CI --
+  # factor proportions (tab_ci) AND means (num_core) AND the color="OR" interval AND tab_reg's empirical
+  # companions -- plus the whole-table chi2/F tests (Last Phase j, first-order Rao-Scott). It needs the
+  # microdata weights (tab_counts on pre-aggregated counts cannot apply it). Full design test: `test="survey"`.
   options("tabxplor.kish_neff"     = FALSE)
 
   # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,

@@ -22,6 +22,7 @@ new_fmt(
   pvalue = rep(NA_real_, length(n)),
   or = rep(NA_real_, length(n)),
   tot_n = rep(NA_real_, length(n)),
+  n_eff = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),

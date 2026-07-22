@@ -948,7 +948,14 @@ boundary cases only), so nothing is lost by not computing a separate score test.
   default. **Kish n_eff opt-in** via `options("tabxplor.kish_neff" = TRUE)` for the **numeric** CIs:
   G1's `Σw²` accumulator is added to the weighted numeric scan **only when opted in** (byte-identical
   + zero-cost default), rolled up additively, and `n_eff = wn²/w2` replaces n in the mean CI.
-  **Factor-side Kish is deferred** (no per-cell `Σw²` on the count path — open item).
+  ~~**Factor-side Kish is deferred** (no per-cell `Σw²` on the count path — open item).~~
+  **DONE — Last Phase s:** the factor-side open item is closed. A `w2` dcast on the microdata
+  `plain_core` scan (opt-in only) + `leaf_wide_pct` broadcasting `(Σw_base)²/(Σw²_base)` feeds a new
+  **19th fmt field `n_eff`**, which `tab_ci` consumes as `coalesce(get_n_eff, tot_n/n)` for the cell,
+  diff and `color = "OR"` intervals (byte-identical off-kish). `num_core` surfaces its `_en` into the
+  same field. So `kish_neff` now backs **all** weighted descriptive CIs (proportions + means) and
+  `tab_reg()`'s `empirical =` companions (separate effective-n into the `ci_*` engines, no field). The
+  `.fine`/`tab_counts` path cannot recover `Σw²` → `n_eff` stays NA → raw base (documented, correct).
 - **Scope:** proportions + means only. **Empirical OR** (bounds, log-OR Wald p, 1/OR display) is
   **deferred to the tab_logit phase** (Q3 refined: not 3b). Whole-table **chi2** vectorisation + the
   `chi2`→`test` attribute rename + ANOVA/F stay **Phase 3b**.

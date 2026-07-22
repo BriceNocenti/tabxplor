@@ -206,7 +206,7 @@ tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
            col_name = "race", pct = "row")
 ```
 
-Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.
+Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. (Kish's effective sample size, `options(tabxplor.kish_neff = TRUE)`, needs the individual weights, which pre-aggregated counts no longer carry, so it does not apply here — the CIs use the unweighted N as shown.) When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.
 
 ## Pivoting a grouped table into columns
 

@@ -70,10 +70,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 18 fields :
+#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 19 fields :
 #' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 #' \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-#' \code{pvalue}, \code{or}, \code{tot_n},
+#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff},
 #' \code{in_totrow},  \code{in_tottab},
 #' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 #' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
@@ -135,6 +135,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'   as a double vector the length of \code{n}.
 #' @param tot_n The cell's own (unweighted) percentage base, as a double vector the length
 #' of \code{n}.
+#' @param n_eff The effective sample size used for this cell's confidence interval:
+#' Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on
+#' weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
+#' A double vector the length of \code{n}. Non-displayed.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
@@ -294,6 +298,7 @@ fmt <- function(n         = integer(),
                 pvalue    = rep(NA_real_, length(n)),
                 or        = rep(NA_real_, length(n)),
                 tot_n     = rep(NA_real_, length(n)),
+                n_eff     = rep(NA_real_, length(n)),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
@@ -333,6 +338,9 @@ fmt <- function(n         = integer(),
   pvalue  <- vctrs::vec_recycle(vctrs::vec_cast(pvalue , double())   , size = max_size)
   or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
   tot_n   <- vctrs::vec_recycle(vctrs::vec_cast(tot_n  , double())   , size = max_size)
+  # Last Phase s: the effective sample size used for this cell's CI (Kish n_eff when opted in,
+  # else NA -> tab_ci/num_core fall back to the raw unweighted base). Non-displayed, CI-only.
+  n_eff   <- vctrs::vec_recycle(vctrs::vec_cast(n_eff  , double())   , size = max_size)
 
   # Phase 3a: the public `ci` arg is a symmetric half-width; store it as ABSOLUTE bounds
   # around the estimate the interval is centred on (the difference for diff-type CIs, the mean
@@ -368,6 +376,7 @@ fmt <- function(n         = integer(),
           wn = wn, pct = pct,  mean = mean,
           diff = diff, ratio = ratio, ctr = ctr, var = var,
           ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
+          n_eff = n_eff,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -1264,6 +1273,7 @@ new_fmt <- function(n         = integer(),
                     pvalue    = rep(NA_real_, length(n)),
                     or        = rep(NA_real_, length(n)),
                     tot_n     = rep(NA_real_, length(n)),
+                    n_eff     = rep(NA_real_, length(n)),
 
                     in_totrow = rep(FALSE   , length(n)),
                     in_tottab = rep(FALSE   , length(n)),
@@ -1324,7 +1334,7 @@ new_fmt <- function(n         = integer(),
          wn = wn, pct = pct, mean = mean,
          diff = diff, ratio = ratio, ctr = ctr, var = var,
          ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or,
-         tot_n = tot_n,
+         tot_n = tot_n, n_eff = n_eff,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
@@ -1336,14 +1346,14 @@ new_fmt <- function(n         = integer(),
   #vec_data() return the tibble with all fields
 }
 
-# The 18 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
+# The 19 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
 # DERIVED rather than hand-maintained. (Defect: model_family became a 10th attribute in Phase 15e but
 # was never added to the hand-written fmt_col_attrs -> it was silently dropped on every carrier
 # round-trip / bind.) Adding a FIELD updates this vector (the /vctrs-field checklist forces it);
 # adding an ATTRIBUTE (a new_fmt() formal that is not a field) needs NO change here -- it appears in
 # fmt_col_attrs automatically. Order follows the new_rcrd() list() above; do NOT reorder.
 fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
-                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n",
+                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff",
                      "in_totrow", "in_tottab", "in_refrow")
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
@@ -1501,6 +1511,12 @@ get_or     <- fmt_field_factory("or")
 #' @keywords internal
 # @export
 get_tot_n  <- fmt_field_factory("tot_n")
+
+# @describeIn fmt get the "n_eff" field (the effective sample size used for this cell's CI:
+# Kish n_eff when opted in, else NA -> the CI falls back to the raw unweighted base)
+#' @keywords internal
+# @export
+get_n_eff  <- fmt_field_factory("n_eff")
 
 # get_tot_wn(): the cell's OWN WEIGHTED percentage base. This is NOT a stored field -- it is
 # recovered as wn / pct (pct is stored at full precision; only display is rounded), mirroring the
@@ -1755,6 +1771,10 @@ set_or      <- fmt_set_field_factory("or"     , cast = double()   )
 #' @keywords internal
 # @export
 set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
+# @describeIn fmt set the "n_eff" field (the effective sample size used for this cell's CI)
+#' @keywords internal
+# @export
+set_n_eff   <- fmt_set_field_factory("n_eff"  , cast = double()   )
 
 
 
@@ -4099,6 +4119,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           pvalue    = get_pvalue  (x),
           or        = get_or      (x),
           tot_n     = get_tot_n   (x),
+          n_eff     = get_n_eff   (x),
 
           in_totrow = is_totrow   (x),
           in_refrow = is_refrow   (x),
@@ -4304,6 +4325,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       pvalue  = rep_NA_real,
       or      = rep_NA_real,
       tot_n   = rep_NA_real,
+      n_eff   = rep_NA_real,
 
       # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
       # arguably it should follow x alone (x - a non-total y should probably stay total).
@@ -4343,6 +4365,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       pvalue = rep_NA_real,
       or     = rep_NA_real,
       tot_n  = rep_NA_real,
+      n_eff  = rep_NA_real,
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
@@ -4428,6 +4451,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          pvalue = NA_real_,
                          or     = NA_real_,
                          tot_n  = NA_real_,
+                         n_eff  = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
@@ -4462,6 +4486,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           pvalue  = NA_real_,
                           or      = NA_real_,
                           tot_n   = NA_real_,
+                          n_eff   = NA_real_,
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,

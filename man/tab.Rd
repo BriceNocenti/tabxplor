@@ -144,10 +144,12 @@ factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-val
 metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
 Automatically added if needed for \code{color}.
 
-For a weighted table you can opt in to a more robust p-value:
-\code{options(tabxplor.kish_neff = TRUE)} switches the tests to a first-order \strong{Rao-Scott}
-correction (the chi-squared rescaled to Kish's effective sample size \code{(sum w)^2 / sum w^2},
-the F on per-group effective n); \code{test = "survey"} runs a fully \strong{design-based} test
+For a weighted table you can opt in to more robust uncertainty:
+\code{options(tabxplor.kish_neff = TRUE)} replaces the raw unweighted n with Kish's effective
+sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence interval} (see the
+\emph{Weighted confidence intervals} note below) \emph{and} switches the whole-table tests to a
+first-order \strong{Rao-Scott} correction (the chi-squared rescaled to \code{n_eff}, the F on
+per-group effective n). \code{test = "survey"} instead runs a fully \strong{design-based} test
 (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
 the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
 \code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
@@ -419,13 +421,19 @@ documented on \code{\link[=tab_ci]{tab_ci()}}.
 The package-wide display, color and statistics defaults are \code{options()}, listed at
 \link{tabxplor-options}. \code{tab()} is a friendly wrapper around the more powerful \code{\link[=tab_many]{tab_many()}}.
 
-\strong{Weighted confidence intervals.} With a weight (\code{wt}), a cell confidence interval is
-exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted proportion as if it
-came from \code{tot_n} independent Bernoulli trials. Under unequal weights this has no design effect,
-so the interval is \strong{too narrow}. Opt in to Kish's effective sample size with
-\code{options(tabxplor.kish_neff = TRUE)} for a design-adjusted \emph{n}, use \code{test = "survey"}
-for a fully design-based p-value, or reach for \code{\link{tab_reg}} (fully design-based) when the
-uncertainty must be exact.
+\strong{Weighted confidence intervals.} With a weight (\code{wt}), by default a cell confidence
+interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
+proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
+the same way). Under unequal weights this carries no design effect, so the default interval is
+\strong{too narrow}. Opt in to Kish's effective sample size with
+\code{options(tabxplor.kish_neff = TRUE)}: it replaces that raw n with \code{n_eff = (sum w)^2 /
+sum(w^2)} in \strong{all} the descriptive intervals -- factor proportions and means alike (cell,
+difference, ratio, and the \code{color = "OR"} significance) -- and in the crude \code{empirical =}
+companions of \code{\link{tab_reg}}, so unequal weights widen the intervals honestly. This is a
+single-stage approximation (it needs the microdata weights, so \code{\link{tab_counts}} on
+pre-aggregated counts cannot apply it, and it is not valid for clustered designs). Use
+\code{test = "survey"} for a fully design-based p-value, or reach for \code{\link{tab_reg}} (whose
+\emph{model} standard errors are always design-based) when the uncertainty must be exact.
 }
 \section{Significance stars}{
 
