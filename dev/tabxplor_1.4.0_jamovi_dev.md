@@ -1450,3 +1450,47 @@ default to `""` (blank, show a "(your Documents)" placeholder) OR treat `"~/Docu
 `"auto"` as a sentinel routed through `export_documents_dir()`. Keep the always-`dir.create` in
 `jmvtab_export()`. This lands in `R/jmvtab-export.R` (+ the `.a.yaml` default + the two JS reset
 handlers) as the next step; then `jmvtest` is removed (detectors + tests stay).
+
+## Phase o — UI bug corrections (2026-07-22)
+
+Four defects, root-caused by three parallel search agents; two maintainer hypotheses corrected.
+
+### Excel export crash — the older bundled openxlsx2, NOT the cache
+
+The maintainer suspected the cache produced a subtly-different table. It does not: a jamovi-built table
+is byte-equivalent to a fresh `tab()`/`tab_reg()`. The real cause is a **version drift** in openxlsx2
+(same one the `xlb_na_argname()` shim already documents). `xl_coalesce()` (`R/tab-xl-backend.R`) packs
+non-contiguous cells that share a style/numFmt into ONE comma-joined multi-area `dims` (e.g.
+`"C7:E8,F4:F8"`) — the efficient shared-style path. A **current** openxlsx2 accepts multi-area dims; the
+**older build bundled inside jamovi** has a single-range validator that rejects the comma with exactly
+`"dims must be something like A1 or A1:B2."`. Comma dims only appear on richer tables (a significance
+row, counts, add_n — precisely what the jamovi UI builds), so minimal plain-R tests on a newer openxlsx2
+never hit it.
+
+Fix: `xlb_dims_each(dims, f)` splits a comma dims and calls `f` per single range; `xlb_numfmt()` and the
+new `xlb_set_cell_style()` (which `xl_apply_styles` + the span-row style now route through) emit one
+rectangle at a time. Semantically identical (same code/style over each sub-rectangle), works on both
+openxlsx2 versions, and is ONE package-level fix — no jamovi-only branch, no no-cache export path.
+
+### Model-comparison freeze — the raw-fit store in `$state`
+
+Confirmed cache/state. In comparison mode the reref digest fast-path is off (`tab_reg`'s `reref` needs
+`compare == "none"`), so the cache holds only the raw fits (~10 MB each: model frame + qr). Once
+persisted into `cache_state$state` they re-serialize on **every** UI round-trip — 4 models ≈ 40 MB →
+freeze; the staged early-return never cleared them. Fix: `jmvtab_reg_build(..., use_cache = TRUE)`
+fits with `.fit_cache = NULL` and returns `store = NULL` when FALSE; `jmvtabreg.b.R` `.run()` sets
+`use_cache = !staged` and `if (staged) cache_state$setState(NULL)` (the one line that stops the leak).
+The cache is worthless in comparison mode anyway (every Run recomputes); a single model restores it.
+
+### UI polish (inert until `prepare()` + rebuild)
+
+- **Export separator**: the former `<hr>` Label rendered as literal text (jamovi Labels escape
+  block-level HTML). Removed from both `.u.yaml`; a real border-top is drawn by `styleExportSep()` in
+  each `js/*.js` (walks from the Export button to its `margin: large` container — the same ancestor
+  `bottomAlignInRow` uses).
+- **Collapse-box bottom line**: `injectTabxCss()` gains `padding-bottom` on collapse-box body candidate
+  selectors (a wrong one no-ops, per the existing pattern).
+- **Run-comparison button**: `styleRunCompareBtn()` (mirrors `styleResetBtn`) — material grey/black
+  button + a blank line below.
+- No `.a.yaml` change → `.h.R` untouched, no cache-schema bump. The collapse-box-body and export-block
+  ancestor selectors are best-guess and need a live-DOM confirmation on rebuild.

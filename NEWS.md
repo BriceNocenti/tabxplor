@@ -746,6 +746,15 @@
   name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
+* **Excel export from the jamovi modules no longer fails** with *"dims must be something like A1 or
+  A1:B2."*. The older openxlsx2 bundled inside jamovi rejects the multi-area cell ranges tabxplor uses
+  to style non-contiguous cells efficiently (rich tables with a significance row, counts, etc.); each
+  such range is now applied one rectangle at a time, which works on both the bundled and the current
+  openxlsx2. (Plain `tab()`/`tab_reg()` Excel export was unaffected on a recent openxlsx2.)
+* **The jamovi Regressions module no longer freezes when comparing several models.** In model-comparison
+  mode the heavy per-model fits are no longer kept in the analysis state (where they were re-serialized
+  on every interaction); the comparison recomputes only when you click *Run comparison* / export, and
+  returning to a single model restores the normal fit cache.
 * **A predictor dropped from one model in a `tab_reg()` comparison keeps its reference-row in bold.**
   When comparing predictor subsets, a reference level of a predictor present in some models but not
   others is now bold in the leftmost column of every model (its reference-row flag is a fact of the

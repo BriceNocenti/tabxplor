@@ -660,9 +660,8 @@ children:
             events:
               creating: ./jmvtab::subtextCtrl_creating
               updated: ./jmvtab::subtextCtrl_updated
-  # Phase h: a horizontal rule sets the (outside-the-collapse-hierarchy) Export block apart.
-  - type: Label
-    label: "<hr style='border:none;border-top:1px solid rgba(0,0,0,0.18);margin:10px 0 4px'>"
+  # Phase o: the rule that sets the (outside-the-collapse-hierarchy) Export block apart is drawn by
+  # js/jmvtab.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw text.
   - type: LayoutBox
     margin: large
     stretchFactor: 1

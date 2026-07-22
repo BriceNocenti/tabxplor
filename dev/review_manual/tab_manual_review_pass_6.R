@@ -28,7 +28,7 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = 
 #     or numeric columns if there are there ? The aim would be no match the borders of other exports.
 
 
-
+tab(gss_simple, col_vars = c(race, rincome))
 
 
 

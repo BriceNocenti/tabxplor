@@ -40,6 +40,13 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       cur_sig <- jmvtab_reg_compare_sig(opts)
       cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
 
+      # Phase o: the fit cache is only useful for a SINGLE model (the reref digest fast-path). In staged
+      # comparison mode it just holds raw fits (~10 MB each) that re-serialize into $state on every UI
+      # round-trip -> the freeze. Drop it entirely here (the single most important line) so it stops
+      # persisting; the trigger path below then builds without a cache. Reverting to one model starts a
+      # fresh cache on the next run (the digest fast-path re-engages).
+      if (staged) self$results$cache_state$setState(NULL)
+
       if (staged && !trigger) {
         if (!is.null(cst) && identical(cst$sig, cur_sig)) {
           self$results$html_table$setContent(cst$html)  # unchanged / just-computed -> re-serve
@@ -49,12 +56,12 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         return(invisible())
       }
 
-      store <- self$results$cache_state$state          # NULL on the first run
+      store <- if (staged) NULL else self$results$cache_state$state   # NULL on the first / staged run
       # Flush queued option changes BEFORE the (potentially heavy) fit so a newer edit supersedes this
       # run instead of piling up -- the jmvcore remedy for UI stutter. Guarded for the non-jamovi harness.
       try(private$.checkpoint(), silent = TRUE)
-      built <- jmvtab_reg_build(data, opts, store)
-      self$results$cache_state$setState(built$store)   # persist the fit digests / raw fits
+      built <- jmvtab_reg_build(data, opts, store, use_cache = !staged)
+      self$results$cache_state$setState(if (staged) NULL else built$store)  # persist the fit digests (single model only)
       tabs  <- built$tabs
 
       if (is.null(tabs)) {

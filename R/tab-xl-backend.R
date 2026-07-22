@@ -10,6 +10,8 @@
 #     openxlsx2 calls than a wb_add_* per aspect (the openxlsx2 "shared styles" fast path). numFmt is
 #     the one exception, applied as a grouped wb_add_numfmt pass that MERGES onto the composed xf.
 #   - xl_runs/xl_coalesce are pure base-R (A1 math reimplemented, no openxlsx2), unit-testable alone.
+#   - xl_coalesce emits a comma-joined MULTI-area dims; the older jamovi-bundled openxlsx2 rejects those,
+#     so xlb_dims_each splits every dims to single ranges at the emit boundary (see its DESIGN note).
 #   - openxlsx2 TRAPS, each cost a session to diagnose:
 #     * create_font() defaults `scheme = "minor"` = "this IS the theme's body font" -> Excel resolves
 #       the font from the WORKBOOK THEME (set via set_base_font -> font_text = Condensed), IGNORING the
@@ -151,9 +153,26 @@ xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) 
   invisible(wb)
 }
 
+# DESIGN: xl_coalesce() packs non-contiguous same-style cells into ONE multi-area `dims` joined with a
+# comma (e.g. "C7:E8,F4:F8") -- efficient, and accepted by a current openxlsx2. But the OLDER openxlsx2
+# bundled inside jamovi (same build the xlb_na_argname shim above works around) has a single-range dims
+# validator that rejects a comma with exactly "dims must be something like A1 or A1:B2." -- the
+# Excel-export crash. So split at the CALL boundary: every engine call gets one contiguous range, which
+# is semantically identical (the same code/style over each sub-rectangle) and works on BOTH openxlsx2
+# versions. Keep xl_coalesce's packing (fewest calls) upstream; only the emit is per-range.
+xlb_dims_each <- function(dims, f) {
+  if (length(dims) != 1L || is.na(dims) || !nzchar(dims)) return(invisible(NULL))
+  for (part in strsplit(dims, ",", fixed = TRUE)[[1]]) if (nzchar(part)) f(part)
+  invisible(NULL)
+}
+
 # numFmt is applied as a grouped merging pass (it merges onto the precomposed xf, cross-aspect).
 xlb_numfmt <- function(wb, sheet, dims, code)
-  wb$add_numfmt(sheet = sheet, dims = dims, numfmt = code)
+  xlb_dims_each(dims, function(d) wb$add_numfmt(sheet = sheet, dims = d, numfmt = code))
+
+# apply a precomposed style id over a (possibly multi-area) dims -- one set_cell_style per range.
+xlb_set_cell_style <- function(wb, sheet, dims, style)
+  xlb_dims_each(dims, function(d) wb$set_cell_style(sheet = sheet, dims = d, style = style))
 
 # Phase 13c-iii: merge a horizontal cell range (the col_var spanning-name header).
 xlb_merge <- function(wb, sheet, dims)

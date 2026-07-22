@@ -36,47 +36,6 @@ rather than informative ones. There is one **silent-correctness trap** in raw `t
 
 ## 2. Confirmed bugs
 
-### 2.1 MAJOR — a factor with a real `NA` *level* crashes print/format/every export
-
-A table built from a factor that carries `NA` as an actual level (not merely `NA` values) **builds
-successfully** but then **throws on `print()`, `format()`, and consequently every exporter**.
-
-```r
-library(tabxplor); library(dplyr)
-d <- tibble(r = factor(c("a","b",NA), exclude = NULL), c = factor(c("x","y","x")))
-t <- tab(d, r, c)          # builds fine
-format(t)                  # Error: NAs are not allowed in subscripted assignments
-print(t)                   # same
-tab_md(t); tab_kable(t)    # same (all go through format)
-```
-
-- **Observed**: `Error in out[ok & tot] <- ... : NAs are not allowed in subscripted assignments`.
-- **Expected**: either drop/relabel the `NA` level at build (as `na = "keep"` does for `NA` *values*,
-  which works fine — see §5), or render it. A validly-built table must be printable.
-- **Root cause**: `pillar_shaft.tabxplor_fmt()` at `R/fmt_class.R:2486` —
-  `out[ok & tot] <- cli::style_bold(out[ok & tot])`. When a row label is `NA`, the total-row detection
-  mask `tot` contains `NA`, so `ok & tot` is `NA` and the subscripted assignment aborts.
-- **Fix direction**: coerce the total-row mask with `tot & !is.na(tot)` (or `%in% TRUE`) before
-  indexing; or normalise an `NA` factor level to a visible label (e.g. `"NA"`/the `na` text) during
-  `tab_prepare()`. Note `exclude = NULL` factors are the common way `haven`/imported data arrives, so
-  this is reachable from real data, not only synthetic.
-
-### 2.2 MINOR/MAJOR — logical and Date `col_var` produce an obscure internal error
-
-```r
-tab(tibble(r = factor(rep(c("a","b"),50)), lg = rep(c(TRUE,FALSE),50)), r, lg)
-# Error in UseMethod(): no applicable method for 'n_groups' applied to an object of class "NULL"
-tab(tibble(r = factor(rep(c("a","b"),50)), dt = rep(as.Date("2020-01-01")+0:1,50)), r, dt)
-# same obscure error
-```
-
-- **Observed**: a cryptic `n_groups`/`NULL` error deep in the pipeline.
-- **Expected**: an informative "`col_var` must be a factor, character or numeric — got `logical`/`Date`"
-  message, **or** support them (a logical is a perfectly natural 2-level cross-tab variable, and
-  `tab_plain()` called directly *does* accept a logical `col_var` — see §6 — so `tab()` is
-  inconsistent with its own leaf).
-- **Impact**: low frequency, but the error gives the user no idea what to fix.
-
 ---
 
 ## 3. Design / statistical concerns (defensible, but worth a decision or a doc line)

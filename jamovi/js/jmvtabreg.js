@@ -76,6 +76,9 @@ var applyWtEnables = function(ui) {
 // the file name (width: large) collapses fully. Only the two export boxes use these width classes.
 // Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
 // box class differs across jamovi builds, so several candidates are targeted; a wrong one simply no-ops.
+// Phase o: also add an empty line at the BOTTOM of each collapse box (a blank line only while the box is
+// expanded), so a collapsed pane reads clearly apart from the next. The box CONTENT element's class
+// differs across jamovi builds, so several candidates carry the padding; a wrong one simply no-ops.
 var injectTabxCss = function() {
     if (document.getElementById("tabx-css")) return;
     var s = document.createElement("style");
@@ -83,8 +86,41 @@ var injectTabxCss = function() {
     s.textContent =
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
         "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
-        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}";
+        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}" +
+        ".silky-options-collapse-box-body,.silky-collapse-box-body,.jmv-options-collapsebox-body," +
+        ".silky-options-collapse-box .silky-layout-content{padding-bottom:12px;}";
     document.head.appendChild(s);
+};
+
+// Phase o: the Export block sits OUTSIDE the collapse hierarchy. The former <hr> was a jamovi Label
+// whose raw HTML jamovi escaped -> it showed as literal "<hr ...>" text. Draw the rule properly instead:
+// walk up from the Export button to its `margin: large` block container (same ancestor bottomAlignInRow
+// targets) and give it a border-top. Full-width, real rule, no raw text. Idempotent (a plain style set).
+var styleExportSep = function(ui) {
+    var c = ui.exportExcel;
+    if (!c || !c.$el || !c.$el[0]) return;
+    var node = c.$el[0], guard = 0;
+    while (node && guard++ < 16) {
+        if (node.classList && node.classList.contains("silky-control-margin-large")) {
+            node.style.borderTop  = "1px solid rgba(0,0,0,0.18)";
+            node.style.marginTop  = "10px";
+            node.style.paddingTop = "8px";
+            return;
+        }
+        node = node.parentElement;
+    }
+};
+
+// Phase o: give the "Run comparison" action a material grey button (black text on light grey) so it
+// reads as a distinct, deliberate step, plus a blank line below it (the empty line the maintainer asked
+// for at the bottom of the box). Same reach-the-<button> pattern as styleResetBtn; re-applied each
+// onUpdate because jamovi re-renders drop inline styles.
+var styleRunCompareBtn = function(ui) {
+    var c = ui.run_compare;
+    if (!c || !c.$el || !c.$el[0]) return;
+    var btn = c.$el[0].querySelector("button") || c.$el[0];
+    btn.style.cssText += ";background:#e0e0e0;color:#000;border:1px solid rgba(0,0,0,0.2);" +
+                         "border-radius:3px;box-shadow:none;padding:4px 12px;margin-bottom:8px;cursor:pointer;";
 };
 
 // Push a control to the BOTTOM of its (taller) row: walk up to its row-item cell (the one whose grid is a
@@ -113,6 +149,8 @@ var onUpdate = function(ui) {
     renderSubtext(ui);
     renderExt(ui);
     styleResetBtn(ui);
+    styleExportSep(ui);                      // Phase o: thin rule above the (out-of-hierarchy) Export block
+    styleRunCompareBtn(ui);                  // Phase o: material grey Run-comparison button
     bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);

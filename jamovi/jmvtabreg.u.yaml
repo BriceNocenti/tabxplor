@@ -366,11 +366,9 @@ children:
           - type: CheckBox
             name: nest
 
-  # Phase h: the Export block sits OUTSIDE the collapse hierarchy, so a horizontal rule sets it apart
-  # from the panes above (jamovi Labels render inline HTML -- the same path <b>/<i> use).
-  - type: Label
-    label: "<hr style='border:none;border-top:1px solid rgba(0,0,0,0.18);margin:10px 0 4px'>"
-
+  # Phase o: the Export block sits OUTSIDE the collapse hierarchy. The separating rule is drawn by
+  # js/jmvtabreg.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw
+  # escaped text, which jamovi Labels do to block-level HTML.
   - type: LayoutBox
     margin: large
     stretchFactor: 1

@@ -208,6 +208,21 @@ test_that("a predictor-subset list == tab_reg() model comparison", {
   expect_identical(reg_render(built), reg_render(direct))
 })
 
+test_that("Phase o: use_cache = FALSE builds the same table but persists NO store (the freeze fix)", {
+  gss  <- gss_reg()
+  mods <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
+  o    <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+
+  cached   <- quiet(jmvtab_reg_build(gss, o, NULL, use_cache = TRUE))
+  uncached <- quiet(jmvtab_reg_build(gss, o, NULL, use_cache = FALSE))
+
+  # identical user-visible table -- bypassing the cache changes nothing but what is stored
+  expect_identical(reg_render(uncached$tabs), reg_render(cached$tabs))
+  # the ~10 MB-per-model raw fits are NOT persisted -> nothing heavy re-serializes into $state
+  expect_null(uncached$store)
+  expect_false(is.null(cached$store))
+})
+
 test_that("compare = baseline adds a comparison footer row", {
   gss <- gss_reg()
   o   <- reg_opts(predictors = list(small = c("race", "age"),

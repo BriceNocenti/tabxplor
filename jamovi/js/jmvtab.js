@@ -93,8 +93,28 @@ var injectTabxCss = function() {
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
         // file-name box (width: large): collapse its floor fully so it takes only its stretch share.
         "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
-        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}";
+        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}" +
+        // Phase o: a blank line at the bottom INSIDE each expanded box (candidates -- a wrong one no-ops).
+        ".silky-options-collapse-box-body,.silky-collapse-box-body,.jmv-options-collapsebox-body," +
+        ".silky-options-collapse-box .silky-layout-content{padding-bottom:12px;}";
     document.head.appendChild(s);
+};
+
+// Phase o: draw the rule above the (out-of-hierarchy) Export block via a border-top on its `margin:
+// large` container, replacing a former <hr> Label jamovi rendered as raw escaped text.
+var styleExportSep = function(ui) {
+    var c = ui.exportExcel;
+    if (!c || !c.$el || !c.$el[0]) return;
+    var node = c.$el[0], guard = 0;
+    while (node && guard++ < 16) {
+        if (node.classList && node.classList.contains("silky-control-margin-large")) {
+            node.style.borderTop  = "1px solid rgba(0,0,0,0.18)";
+            node.style.marginTop  = "10px";
+            node.style.paddingTop = "8px";
+            return;
+        }
+        node = node.parentElement;
+    }
 };
 
 // Push a row-1/row-2 control to the BOTTOM of its (taller) row. jamovi renders each control as a grid
@@ -126,6 +146,7 @@ var onUpdate = function(ui) {
     renderSubtext(ui);
     renderExt(ui);
     styleResetBtn(ui);
+    styleExportSep(ui);                      // Phase o: thin rule above the (out-of-hierarchy) Export block
     bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
     bottomAlignInRow(ui, "xl_replace");      // Replace checkbox -> bottom of row 1
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row

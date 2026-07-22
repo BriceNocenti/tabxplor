@@ -124,6 +124,9 @@ R/
 ├── tab-xl-backend.R (~110 L) Phase 10h openxlsx2 backend: plumbing xlb_* engine wrappers (in-place R6
 │                              $, +xlb_merge) + the pure range coalescer (xl_runs/xl_coalesce -> fewest
 │                              multi-area dims). Styling-model notes (precompose + set_cell_style path).
+│                              Phase o: xlb_dims_each splits a comma multi-area dims to single ranges at
+│                              the emit (xlb_numfmt/xlb_set_cell_style) -- the OLDER jamovi-bundled
+│                              openxlsx2 rejects multi-area dims (the Excel-export crash).
 ├── tab_md.R         (~530 L) Markdown export: plain padded pipe table + (Phase 10f) pandoc colour
 │                              spans [<num>]{.p3} (aligned) via tab_export_prep; md_span_attr/
 │                              md_color_cell (13d: slot classes via tx_slot_class, no `.n` neutral --
@@ -1157,7 +1160,7 @@ Export to Excel with default parameters in Jamovi still fails (html and md works
    "Export failed: ℹ In index: 1.
    Caused by error:
    ! Invalid input: dims must be something like A1 or A1:B2."
-- Excel exports work well with tab() and tab_reg(), so it looks like a jamovi problem : maybe due to cache system, the data is somehow different than a regular tab() and tab_reg() table ? Would it be a good idea to call `tab()` and `tab_reg()` directly (no cache system used) for Excel export only (mardkdown too ? html not necessarily since it’s also the base jamovi result already computed ?), but on the df modified by jamovi UI (like : new ref) ? Would it be sound and reliable ? If not , can you think about others ways to fix the Excel export in Jamovi ? 
+- Excel exports work well with tab() and tab_reg(), so it looks like a jamovi problem : maybe due to cache system, the data is somehow different than a regular tab() and tab_reg() table ? Would it be a good idea to call `tab()` and `tab_reg()` directly (no cache system used) for Excel export only (mardkdown too ? html not necessarily since it’s also the base jamovi result already computed ?), but on the df modified by jamovi UI (like : new ref) ? Would it be sound and reliable ? If not , can you think about others ways to fix the Excel export in Jamovi ?
 
 Horizontal rule before Export appear as raw html in the UI, it’s written : "<hr style=...>" Fix it, use empty line if needed : one empty line before subset, one empty line before Export block. 
 
@@ -1191,6 +1194,64 @@ family = "binomial", # empirical = TRUE,
 ) 
 ```
 
+**DONE (2026-07-22).** Full suite green (FAIL 0, WARN 0, PASS 4109, SKIP 4 = the usual Suggests/benchmark opt-ins), **zero golden/snapshot churn** — the R fixes are backend plumbing + one new arg; the jamovi YAML/JS edits are inert until the maintainer's `prepare()` + rebuild. Three Explore agents root-caused each item; two maintainer hypotheses were corrected (below).
+- **Excel export crash — NOT the cache.** A jamovi-built table is byte-equivalent to a fresh `tab()`/`tab_reg()` (verified). Real cause: `xl_coalesce()` packs non-contiguous same-style cells into a comma-joined MULTI-area `dims` (e.g. `"C7:E8,F4:F8"`) that the OLDER openxlsx2 bundled in jamovi rejects with exactly that message (a current openxlsx2 accepts it — why plain R "worked"). Fix: new `xlb_dims_each(dims, f)` splits a comma dims into single ranges at the emit boundary; `xlb_numfmt()` + the new `xlb_set_cell_style()` (which `xl_apply_styles` + the span-row style now route through) apply one rectangle at a time — semantically identical, works on both openxlsx2 versions, ONE package fix covering jmvtab + jmvtabreg + plain `tab(...,chi2=TRUE)`. A no-cache export path was **rejected** (fixes nothing, adds an ad hoc branch). Fixtures in `test-xl-backend.R` (split + a stub-wb reproducing the old single-range validator).
+- **Model-comparison freeze — IS the cache/state.** The raw fits (~10 MB/model) were persisted into `cache_state$state` and re-serialized by jamovi on EVERY UI round-trip (4 models ≈ 40 MB → freeze; the staged early-return never cleared it). In comparison mode the cache gives zero benefit (the reref digest fast-path is off for comparisons; every Run recomputes). Fix: `jmvtab_reg_build(..., use_cache = TRUE)` — when FALSE it fits with `.fit_cache = NULL` and returns `store = NULL`; `.run()` sets `use_cache = !staged`, and `if (staged) cache_state$setState(NULL)` drops the leak on every staged pass. Reverting to a single model starts a fresh cache (digest fast-path re-engages). The "staged / changed → click Run" banners are unchanged. Fixture in `test-jmvtabreg-cache.R` (identical table, `store = NULL`).
+- **jamovi UI (inert until rebuild).** The raw `<hr>` before Export (which jamovi rendered as literal text — Labels escape block-level HTML) is replaced by a real border-top drawn in `js/*.js` `styleExportSep()` (walks to the export block's `margin: large` container); the two `<hr>` Labels removed from the `.u.yaml`. `injectTabxCss()` gains a `padding-bottom` on collapse-box body candidates (empty line at the bottom of each expanded box). `styleRunCompareBtn()` (mirrors `styleResetBtn`) gives *Run comparison* a material grey/black button + a blank line below. No `.a.yaml` change → `.h.R` untouched, no schema bump. **Needs the maintainer's live-DOM pass** (the collapse-box body + export-block ancestor selectors are best-guess; wrong ones no-op).
+
+#### Last Phase p – bug corrections
+
+- ~~**OPEN (found Last Phase e, low impact):** `options(tabxplor.output_kable = TRUE)` + a **two-channel
+  colour** errors on the auto-print with *"no applicable method for 'mutate' ... tabxplor_kable"*.~~
+  **FIXED in Phase 17g**: the render ran INSIDE the build (`tab_assemble_output`), before
+  `finalize_color_spec`, which then `mutate()`d the returned kable. The render moved to `tab()`'s tail
+  (post-finalize), so it also shows the background channel. Fixture: `test-render-html.R`.
+- ~~**A pre-existing golden drift.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` had a `ci_sup` `NaN`
+   where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
+   feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two
+   goldens were regenerated with the rule-B mean CIs and no longer carry the NaN.
+
+
+##### 2.1 MAJOR — a factor with a real `NA` *level* crashes print/format/every export
+
+A table built from a factor that carries `NA` as an actual level (not merely `NA` values) **builds
+successfully** but then **throws on `print()`, `format()`, and consequently every exporter**.
+
+```r
+library(tabxplor); library(dplyr)
+d <- tibble(r = factor(c("a","b",NA), exclude = NULL), c = factor(c("x","y","x")))
+t <- tab(d, r, c)          # builds fine
+format(t)                  # Error: NAs are not allowed in subscripted assignments
+print(t)                   # same
+tab_md(t); tab_kable(t)    # same (all go through format)
+```
+
+- **Observed**: `Error in out[ok & tot] <- ... : NAs are not allowed in subscripted assignments`.
+- **Expected**: either drop/relabel the `NA` level at build (as `na = "keep"` does for `NA` *values*,
+  which works fine — see §5), or render it. A validly-built table must be printable.
+- **Root cause**: `pillar_shaft.tabxplor_fmt()` at `R/fmt_class.R:2486` —
+  `out[ok & tot] <- cli::style_bold(out[ok & tot])`. When a row label is `NA`, the total-row detection
+  mask `tot` contains `NA`, so `ok & tot` is `NA` and the subscripted assignment aborts.
+- **Fix direction**: coerce the total-row mask with `tot & !is.na(tot)` (or `%in% TRUE`) before
+  indexing; or normalise an `NA` factor level to a visible label (e.g. `"NA"`/the `na` text) during
+  `tab_prepare()`. Note `exclude = NULL` factors are the common way `haven`/imported data arrives, so
+  this is reachable from real data, not only synthetic.
+
+##### 2.2 MINOR/MAJOR — logical and Date `col_var` produce an obscure internal error
+
+```r
+tab(tibble(r = factor(rep(c("a","b"),50)), lg = rep(c(TRUE,FALSE),50)), r, lg)
+# Error in UseMethod(): no applicable method for 'n_groups' applied to an object of class "NULL"
+tab(tibble(r = factor(rep(c("a","b"),50)), dt = rep(as.Date("2020-01-01")+0:1,50)), r, dt)
+# same obscure error
+```
+
+- **Observed**: a cryptic `n_groups`/`NULL` error deep in the pipeline.
+- **Expected**: an informative "`col_var` must be a factor, character or numeric — got `logical`/`Date`"
+  message, **or** support them (a logical is a perfectly natural 2-level cross-tab variable, and
+  `tab_plain()` called directly *does* accept a logical `col_var` — see §6 — so `tab()` is
+  inconsistent with its own leaf).
+- **Impact**: low frequency, but the error gives the user no idea what to fix.
 
 
 #### Last Phase w – NEWS.md simplification
@@ -1222,19 +1283,6 @@ I want the master github branch to get rid of `dev/` and other not user-facing f
 ### Reference — bugs, benchmarks, perf
 
 Fixed bugs recorded in `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`
-
-#### Open bugs
-
-- ~~**OPEN (found Last Phase e, low impact):** `options(tabxplor.output_kable = TRUE)` + a **two-channel
-  colour** errors on the auto-print with *"no applicable method for 'mutate' ... tabxplor_kable"*.~~
-  **FIXED in Phase 17g**: the render ran INSIDE the build (`tab_assemble_output`), before
-  `finalize_color_spec`, which then `mutate()`d the returned kable. The render moved to `tab()`'s tail
-  (post-finalize), so it also shows the background channel. Fixture: `test-render-html.R`.
-- ~~**A pre-existing golden drift.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` had a `ci_sup` `NaN`
-   where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
-   feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two
-   goldens were regenerated with the rule-B mean CIs and no longer carry the NaN.
-
 
 
 #### Benchmarks (`dev/benchmarks/`)

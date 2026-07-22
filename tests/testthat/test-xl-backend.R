@@ -29,6 +29,43 @@ test_that("xl_coalesce covers exactly the target cells", {
   expect_identical(xl_coalesce(cols, rows), "C3:G10")
 })
 
+test_that("xlb_dims_each splits a multi-area dims into single ranges", {
+  # Phase o: xl_coalesce emits comma-joined multi-area dims (e.g. "C7:E8,F4:F8"); the older jamovi-
+  # bundled openxlsx2 rejects those. xlb_dims_each fans them out to single A1:B2 ranges at the emit.
+  got <- character(0)
+  xlb_dims_each("A1:B2,C3:D4", function(d) got <<- c(got, d))
+  expect_identical(got, c("A1:B2", "C3:D4"))
+
+  # a single range passes through as one call
+  got <- character(0)
+  xlb_dims_each("C3:G10", function(d) got <<- c(got, d))
+  expect_identical(got, "C3:G10")
+
+  # NA / empty / non-scalar -> no call at all (the "nothing to style" path)
+  got <- character(0)
+  xlb_dims_each(NA_character_, function(d) got <<- c(got, d))
+  xlb_dims_each("",            function(d) got <<- c(got, d))
+  xlb_dims_each(character(0),  function(d) got <<- c(got, d))
+  expect_identical(got, character(0))
+})
+
+test_that("xlb_set_cell_style / xlb_numfmt survive the OLDER openxlsx2 single-range dims validator", {
+  # Reproduce the jamovi-bundled openxlsx2 (the Excel-export crash): a `dims` with a comma raises
+  # "dims must be something like A1 or A1:B2.". A stub wb whose engine methods enforce that rule fails
+  # WITHOUT the xlb_dims_each split and passes WITH it (each single range applied in turn).
+  seen <- list(style = character(0), numfmt = character(0))
+  reject_multi <- function(dims) if (grepl(",", dims, fixed = TRUE))
+    stop("Invalid input: dims must be something like A1 or A1:B2.")
+  wb <- new.env()
+  wb$set_cell_style <- function(sheet, dims, style) { reject_multi(dims); seen$style  <<- c(seen$style,  dims) }
+  wb$add_numfmt     <- function(sheet, dims, numfmt) { reject_multi(dims); seen$numfmt <<- c(seen$numfmt, dims) }
+
+  expect_no_error(xlb_set_cell_style(wb, "s", "A1:B2,C3:D4", 7L))
+  expect_no_error(xlb_numfmt(wb, "s", "C7:E8,F4:F8", "0.0%"))
+  expect_identical(seen$style,  c("A1:B2", "C3:D4"))
+  expect_identical(seen$numfmt, c("C7:E8", "F4:F8"))
+})
+
 
 # ---- sheet-name sanitisation -----------------------------------------------------------------
 

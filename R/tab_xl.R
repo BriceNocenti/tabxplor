@@ -812,7 +812,7 @@ xl_apply_styles <- function(wb, s, styles, reg) {
       if (nzchar(r$av)) r$av else "",
       if (isTRUE(r$aw)) "1" else "",
       if (r$ar != 0L) as.character(r$ar) else "")
-    wb$set_cell_style(sheet = s, dims = r$dims, style = xf)
+    xlb_set_cell_style(wb, s, r$dims, xf)
   }
   invisible(wb)
 }
@@ -872,8 +872,7 @@ xl_write_table <- function(wb, plan, o, reg) {
     span_wrap <- if (any(grepl("<br>", plan$header_runs$labels, fixed = TRUE))) "1" else ""
     xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
                     0L, 0L, 0L, 0L, "center", "", span_wrap, "")
-    wb$set_cell_style(sheet = s, style = xf,
-                      dims = paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)))
+    xlb_set_cell_style(wb, s, paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)), xf)
   }
 
   # --- number formats: one shared code over the fewest coalesced ranges (merges onto the xf) ---

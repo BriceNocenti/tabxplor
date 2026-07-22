@@ -231,8 +231,13 @@ jmvtab_reg_dep_trials <- function(depTrials, dep, data) {
 # passes partial selections mid-interaction) yield a NULL table -> the backend renders a friendly hint.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_build <- function(data, opts, store = NULL) {
-  cache_env <- jmvreg_cache_env(store)
+jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
+  # DESIGN (Phase o): in a model COMPARISON the cache is worthless -- the reref digest fast-path is off
+  # for comparisons (tab_reg's `reref` needs compare=="none"), so it only ever holds the RAW fits
+  # (~10 MB each). Once persisted into cache_state$state they re-serialize on every UI round-trip -> the
+  # freeze at 4 models (~40 MB). use_cache=FALSE (set by the backend in staged mode) fits without a cache
+  # env and returns store=NULL, so nothing heavy is stored/serialized. Single-model use keeps the cache.
+  cache_env <- jmvreg_cache_env(if (use_cache) store else NULL)
 
   nz  <- function(x) if (length(x) && nzchar(as.character(x)[[1]])) as.character(x) else NULL
   dep   <- nz(opts$dependent)
@@ -300,9 +305,9 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     baseline     = opts$baseline,
     multiplier   = jmvtab_reg_mult_vector(opts$multiplicator),   # tab_reg skips mnl/ordinal specs per-spec
     trials       = tri_arg,
-    .fit_cache   = cache_env
+    .fit_cache   = if (use_cache) cache_env else NULL
   )
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)
-  list(tabs = tabs, store = cache_env$store, hits = cache_env$hits)
+  list(tabs = tabs, store = if (use_cache) cache_env$store else NULL, hits = cache_env$hits)
 }
