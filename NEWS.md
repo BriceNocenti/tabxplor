@@ -2,6 +2,13 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **French translation of everything printed on a table.** All rendered legends, footers and summaries
+  now translate to French — the colour legend, the significance-stars and weighting footer lines, the
+  confidence-interval method names, the `test = TRUE` p-value / effect-size row labels and regression
+  GOF stats, and the regression `Model:` line (family + estimand). Set the language with
+  `options(tabxplor.lang = "fr")`, the per-export `lang = "fr"` argument, or a French R/OS locale (the
+  default `"auto"`). English output is unchanged. Argument NAMES stay English by design. (Help pages and
+  vignettes remain English for now; a bilingual pkgdown website scaffold is in place.)
 * **`options(tabxplor.kish_neff = TRUE)` now widens *every* weighted confidence interval.** Kish's
   effective sample size `n_eff = (sum w)^2 / sum(w^2)` previously corrected only the mean CIs and the
   whole-table tests; it now backs **all** weighted descriptive intervals — factor proportions and means

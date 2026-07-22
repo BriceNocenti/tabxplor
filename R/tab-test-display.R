@@ -131,10 +131,11 @@ pvalue_line_fmt <- function(p, label = NA_character_) {
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
 # Last Phase j: the robust variants name their method (Kish n_eff / Rao-Scott survey design).
 test_cell_label <- function(test) {
+  # Last Phase w: mostly notation + proper names (Welch/Kish/Rao-Scott), kept; "survey" translates.
   switch(test,
          "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F",
          "chi2_kish" = "Chi2, Kish", "chi2_svy" = "Chi2, Rao-Scott",
-         "F_kish" = "F, Kish", "F_svy" = "F, survey",
+         "F_kish" = "F, Kish", "F_svy" = gettext("F, survey"),
          NA_character_)
 }
 
@@ -144,29 +145,32 @@ test_cell_label <- function(test) {
 # numeric side "Welch F" / "ANOVA F"; a single robust suffix "; Kish" (n_eff rescale) or "; survey-design"
 # (Rao-Scott / svyglm). Examples: "pvalue (Chi2)", "pvalue (Chi2, Welch F)", "pvalue (ANOVA F)",
 # "pvalue (Chi2, Welch F; Kish)", "pvalue (Chi2, Welch F; survey-design)".
+# Last Phase w: the prose is translatable (gettext, ambient locale). Notation ("Chi2", "F") is kept;
+# proper names ("Welch", "Fisher", "Kish", "Rao-Scott") stay as-is. English is byte-identical.
 test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
   tests <- unique(tests[!is.na(tests)])
   fac   <- tests[tests %in% c("chi2", "chi2_kish", "chi2_svy")]
   num   <- tests[tests %in% c("F_welch", "F_classic", "F_kish", "F_svy")]
   parts <- character(0)
   # a weak chi2 (smallest expected count < 5) with no exact companion keeps a " !" validity caveat.
-  if (length(fac)) parts <- c(parts, if (used_exact) "Fisher" else if (weak) "Chi2 !" else "Chi2")
-  if (length(num)) parts <- c(parts, if (any(num == "F_classic")) "ANOVA F" else "Welch F")
-  if (!length(parts)) return("pvalue")
-  robust <- if      (any(tests %in% c("chi2_kish", "F_kish"))) "; Kish"
-            else if (any(tests %in% c("chi2_svy",  "F_svy")))  "; survey-design"
+  if (length(fac)) parts <- c(parts, if (used_exact) gettext("Fisher") else if (weak) gettext("Chi2 !") else gettext("Chi2"))
+  if (length(num)) parts <- c(parts, if (any(num == "F_classic")) gettext("ANOVA F") else gettext("Welch F"))
+  if (!length(parts)) return(gettext("pvalue"))
+  robust <- if      (any(tests %in% c("chi2_kish", "F_kish"))) gettext("; Kish")
+            else if (any(tests %in% c("chi2_svy",  "F_svy")))  gettext("; survey-design")
             else                                               ""
-  paste0("pvalue (", paste(parts, collapse = ", "), robust, ")")
+  enc2utf8(gettextf("pvalue (%s%s)", paste(parts, collapse = ", "), robust))
 }
 
 # Last Phase m: the effect-size ROW NAME = the measure(s) present, so no separate "effect size" text is
 # needed. Cramer's V (larger factor tables) / phi (2x2) / eta^2 (numeric ANOVA); mixed -> "Cramer's V, eta2".
 test_es_measure <- function(es_types) {
   es_types <- unique(es_types[!is.na(es_types)])
-  if (!length(es_types)) return("effect size")
+  if (!length(es_types)) return(gettext("effect size"))
+  # Last Phase w: "Cramer's V" translates ("V de Cramer"); phi/eta2 are notation, kept.
   lbl <- vapply(es_types, function(t)
-    switch(t, "cramer_v" = "Cram\u00e9r's V", "phi" = "phi", "eta2" = "eta2", t), character(1))
-  paste(unique(lbl), collapse = ", ")
+    switch(t, "cramer_v" = gettext("Cram\u00e9r's V"), "phi" = "phi", "eta2" = "eta2", t), character(1))
+  enc2utf8(paste(unique(lbl), collapse = ", "))
 }
 
 # --- Regression model-summary footer (Phase 12f) -----------------------------------------------------
@@ -175,29 +179,32 @@ test_es_measure <- function(es_types) {
 # same `test` attribute drives both. One entry per footer stat: its row label + how the cell renders.
 # kind "gof" -> a plain number (the "gof" display token reading `statistic`); kind "pvalue" -> a p-value
 # cell. `digits` applies to gof cells. Order here = the display / fallback order.
+# Last Phase w: GOF row labels are translatable (gettext, ambient locale). Notation (N/F/R2/AIC/BIC and
+# the named pseudo-R2s) stays; the "vs null/baseline/previous" prose + "Adjusted R2"/"Residual SD"/
+# "Brant PO test"/"Dispersion" translate. English is byte-identical (gettext returns the msgid).
 reg_footer_spec <- function() list(
-  n                    = list(label = "N",                    kind = "gof",    digits = 0L),
-  lr_null              = list(label = "LR vs null",           kind = "pvalue"),
-  wald_null            = list(label = "Wald vs null",         kind = "pvalue"),
-  f_model              = list(label = "F",                    kind = "pvalue"),
-  r2                   = list(label = "R2",              kind = "gof",   digits = 3L),
-  r2_adj               = list(label = "Adjusted R2",     kind = "gof",   digits = 3L),
-  mcfadden_r2          = list(label = "McFadden R2",     kind = "gof",   digits = 3L),
-  nagelkerke_r2        = list(label = "Nagelkerke R2",   kind = "gof",   digits = 3L),
-  cox_snell_r2         = list(label = "Cox-Snell R2",    kind = "gof",   digits = 3L),
-  sigma                = list(label = "Residual SD",          kind = "gof",   digits = 2L),
-  aic                  = list(label = "AIC",                  kind = "gof",   digits = 0L),
-  bic                  = list(label = "BIC",                  kind = "gof",   digits = 0L),
-  dispersion           = list(label = "Dispersion",           kind = "gof",   digits = 2L),
-  brant_po             = list(label = "Brant PO test",         kind = "pvalue"),
-  compare_baseline     = list(label = "LR vs baseline",       kind = "pvalue"),
-  compare_baseline_f   = list(label = "F vs baseline",        kind = "pvalue"),
-  compare_baseline_wald = list(label = "Wald vs baseline",    kind = "pvalue"),
-  compare_baseline_aic = list(label = "Delta-AIC vs baseline", kind = "gof",  digits = 0L),
-  compare_seq          = list(label = "LR vs previous",       kind = "pvalue"),
-  compare_seq_f        = list(label = "F vs previous",        kind = "pvalue"),
-  compare_seq_wald     = list(label = "Wald vs previous",     kind = "pvalue"),
-  compare_seq_aic      = list(label = "Delta-AIC vs previous", kind = "gof",  digits = 0L)
+  n                    = list(label = gettext("N"),                     kind = "gof",    digits = 0L),
+  lr_null              = list(label = gettext("LR vs null"),            kind = "pvalue"),
+  wald_null            = list(label = gettext("Wald vs null"),          kind = "pvalue"),
+  f_model              = list(label = gettext("F"),                     kind = "pvalue"),
+  r2                   = list(label = gettext("R2"),               kind = "gof",   digits = 3L),
+  r2_adj               = list(label = gettext("Adjusted R2"),      kind = "gof",   digits = 3L),
+  mcfadden_r2          = list(label = gettext("McFadden R2"),      kind = "gof",   digits = 3L),
+  nagelkerke_r2        = list(label = gettext("Nagelkerke R2"),    kind = "gof",   digits = 3L),
+  cox_snell_r2         = list(label = gettext("Cox-Snell R2"),     kind = "gof",   digits = 3L),
+  sigma                = list(label = gettext("Residual SD"),           kind = "gof",   digits = 2L),
+  aic                  = list(label = gettext("AIC"),                   kind = "gof",   digits = 0L),
+  bic                  = list(label = gettext("BIC"),                   kind = "gof",   digits = 0L),
+  dispersion           = list(label = gettext("Dispersion"),            kind = "gof",   digits = 2L),
+  brant_po             = list(label = gettext("Brant PO test"),          kind = "pvalue"),
+  compare_baseline     = list(label = gettext("LR vs baseline"),        kind = "pvalue"),
+  compare_baseline_f   = list(label = gettext("F vs baseline"),         kind = "pvalue"),
+  compare_baseline_wald = list(label = gettext("Wald vs baseline"),     kind = "pvalue"),
+  compare_baseline_aic = list(label = gettext("Delta-AIC vs baseline"),  kind = "gof",  digits = 0L),
+  compare_seq          = list(label = gettext("LR vs previous"),        kind = "pvalue"),
+  compare_seq_f        = list(label = gettext("F vs previous"),         kind = "pvalue"),
+  compare_seq_wald     = list(label = gettext("Wald vs previous"),      kind = "pvalue"),
+  compare_seq_aic      = list(label = gettext("Delta-AIC vs previous"),  kind = "gof",  digits = 0L)
 )
 reg_footer_test_types <- function() names(reg_footer_spec())
 reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))

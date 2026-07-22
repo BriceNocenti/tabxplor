@@ -2092,8 +2092,8 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   out_diff <- if (any(ok_diff | ref_grp)) {
     dplyr::case_when(
-      ref_grp ~ "ref",
-      ok_diff ~ paste0("diff: ", tip_num(set_display(x, "diff"))),
+      ref_grp ~ gettext("ref"),
+      ok_diff ~ paste0(gettext("diff"), ": ", tip_num(set_display(x, "diff"))),
       TRUE    ~ ""
     )
   } else blank
@@ -2109,7 +2109,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     std <- get_diff(x) / suppressWarnings(sqrt(get_ref_var(x)))
     std[!is.finite(std)] <- NA_real_
     dplyr::if_else(ok_std & !is.na(std),
-                   paste0("std diff: ", sprintf("%+.2f", std), "sd"), "")
+                   paste0(gettext("std diff"), ": ", sprintf("%+.2f", std), "sd"), "")
   } else blank
 
   ci_type  <- get_ci_type(x)
@@ -2176,7 +2176,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   cond_ctr <- !is.na(get_ctr(x)) & !(get_ctr(x) == Inf) & comparable
   out_ctr <- if (any(cond_ctr)) {
     mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
-    ctr_start <- dplyr::if_else(mctr, "mean_ctr: ", "contrib: ")
+    ctr_start <- dplyr::if_else(mctr, paste0(gettext("mean_ctr"), ": "), paste0(gettext("contrib"), ": "))
     dplyr::if_else(cond_ctr,
                    paste0(ctr_start, tip_num(set_display(x, "ctr")) |> stringi::stri_replace_first_regex("^-", "")),
                    "")
@@ -2205,7 +2205,11 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # Phase 14r (L6): the GOF / blank footer cells carry model-fit numbers in fields never meant to be
   # compared (e.g. AIC 63 785 lives in `diff` -> a nonsense "diff: +6378526%"). No tooltip for them.
   out[disp %in% c("gof", "blank")] <- ""
-  out
+  # Last Phase w: the field-name labels (ref/diff/ci/OR/n/sd/...) are gettext'd. This builder runs at
+  # HTML render, NOT under with_legend_lang(), so they follow the AMBIENT locale (a French-locale user
+  # gets French tooltips automatically; the per-call lang= override reaches the footer, not tooltips).
+  # enc2utf8 keeps the French accents (e.g. "réf.") well-formed. English is byte-identical.
+  enc2utf8(out)
 }
 
 

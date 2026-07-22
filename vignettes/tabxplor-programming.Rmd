@@ -58,7 +58,7 @@ tabs$Married$pct
 
 ## The fields of a cell
 
-A `tabxplor_fmt` cell carries **18 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:
+A `tabxplor_fmt` cell carries **19 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:
 
 | Field | Meaning |
 |:------|:--------|
@@ -74,6 +74,7 @@ A `tabxplor_fmt` cell carries **18 fields** (many are `NA` when the relevant qua
 | `ctr`       | contribution to the chi-squared (`color = "contrib"`) |
 | `var`       | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n`     | the cell's own base — the count its percentage is computed on |
+| `n_eff`     | effective sample size used for the CI, with `options(tabxplor.kish_neff = TRUE)` |
 | `digits`    | number of decimals to display (per cell) |
 | `display`   | which field is shown (per cell) |
 | `in_totrow`, `in_tottab`, `in_refrow` | is the cell in a total row / total table / reference row (logical) |
@@ -192,18 +193,18 @@ The commonest input is a **tidy counts** data frame (one row per combination, th
 
 ```{r}
 counts <- dplyr::count(gss_simple, marital, race)
-tab_counts(counts, marital, race, counts = n, pct = "row")
-# identical to tab(gss_simple, marital, race, pct = "row")
+tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
+# identical to tab(gss_simple, marital, race, pct = "row", color = "diff")
 ```
 
 It also melts a `table()` / `xtabs()` / matrix automatically, and reads a **wide** frame (one column per column-variable level) via `cols =` / `col_name =`:
 
 ```{r, eval = FALSE}
-tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row")
+tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "diff")
 
 wide <- tidyr::pivot_wider(counts, names_from = race, values_from = n)
 tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
-           col_name = "race", pct = "row")
+           col_name = "race", pct = "row", color = "diff")
 ```
 
 Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. (Kish's effective sample size, `options(tabxplor.kish_neff = TRUE)`, needs the individual weights, which pre-aggregated counts no longer carry, so it does not apply here — the CIs use the unweighted N as shown.) When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.

@@ -130,7 +130,7 @@ NULL
 #'   value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
 #'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 #'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-#'   \code{"\{diff\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
+#'   \code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
 #'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
 #'   \emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
 #'   shorthand for its single-field template, so \code{display = "ci"} is the same as

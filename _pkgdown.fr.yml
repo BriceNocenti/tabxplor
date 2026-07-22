@@ -1,0 +1,117 @@
+# _pkgdown.fr.yml -- French build of the tabxplor pkgdown site (Last Phase w).
+# Built into docs/fr/ by dev/build_site_bilingual.R, alongside the English site at docs/.
+# `lang: fr` localises pkgdown's own UI (search box, "Source", "On this page"...). The FUNCTION
+# reference PAGES stay English (R has no bilingual .Rd; see the roadmap: help-page translation was
+# declined). The French ARTICLES (translated vignettes) land with the deferred vignette phase and slot
+# into `articles:` below -- until then this site's narrative content is English.
+
+url: https://bricenocenti.github.io/tabxplor/fr/
+destination: docs/fr
+
+template:
+  bootstrap: 5
+  lang: fr
+
+navbar:
+  structure:
+    right: [lang, search, github]
+  components:
+    lang:
+      text: EN
+      href: ../index.html
+
+reference:
+- title: Tableaux croisés
+  desc: >
+    Créer et personnaliser des tableaux croisés. Les échelles de couleur et les palettes se règlent
+    avec `set_color_breaks()`, `set_color_palette()` et `set_color_style()`
+    (documentés sur la page `tab_many()`).
+  contents:
+  - tab
+  - tab_many
+  - tab_num
+  - tab_plain
+  - tab_counts
+
+- title: Construire un tableau étape par étape
+  desc: Le pipeline derrière `tab_many()` ; chaque étape est exportée et utilisable seule.
+  contents:
+  - tab_prepare
+  - tab_pct
+  - tab_tot
+  - tab_totaltab
+  - tab_ci
+  - tab_chi2
+
+- title: Tableaux de régression
+  desc: Des tableaux d'effets de modèle qui se comportent comme un tableau croisé.
+  contents:
+  - tab_reg
+  - tab_logit
+  - multi_logit
+  - or_plot
+  - lm_plots
+
+- title: Remodeler et combiner
+  contents:
+  - tab_spread
+  - tab_compact
+  - tab_transpose
+  - complete_partial_totals
+
+- title: Exporter
+  desc: Envoyer un tableau terminé vers HTML, Markdown, Excel ou un graphique.
+  contents:
+  - tab_kable
+  - tab_md
+  - tab_xl
+  - tab_plot
+  - tab_export
+  - tab_css
+  - tab_md_css
+  - kable_tabxplor_style
+
+- title: Le type de cellule fmt
+  desc: >
+    L'enregistrement vctrs `tabxplor_fmt` et ses accesseurs de champ / attribut, ainsi que les
+    prédicats de structure (lignes de total, tableaux d'ensemble, lignes et colonnes de référence).
+  contents:
+  - fmt
+  - new_tab
+  - fmt_get_color_code
+
+- title: Options et données
+  contents:
+  - tabxplor-options
+  - gss_cat_data_formatting
+
+- title: Jamovi
+  contents:
+  - jmvtab
+  - jmvtabreg
+
+- title: Autres fonctions utiles
+  contents:
+  - fct_recode_helper
+  - score_from_lv1
+  - tab_get_wrapped_dimensions
+  - tab_wrap_text
+  - tab_parallel_stop
+  - "%>%"
+
+- title: interne
+  desc: >
+    Méthodes S3 (pour que les verbes dplyr, l'affichage et l'arithmétique conservent les classes
+    tabxplor) et fonctions internes. Ne font pas partie du flux de travail public.
+  contents:
+  - matches("\\.")
+  - has_keyword("internal")
+
+# Les articles français (vignettes traduites) seront ajoutés ici lors de la phase dédiée aux vignettes.
+articles:
+- title: Pour commencer
+  navbar: ~
+  contents:
+  - tabxplor
+  - tabxplor-reg
+  - tabxplor-programming

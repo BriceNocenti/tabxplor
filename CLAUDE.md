@@ -1363,7 +1363,7 @@ markdown export still have a few problems on their own pandoc/quarto html render
 `R/tab-css.R` — Last Phase r: explicit md table LEFT edge (symmetric to the right edge; the Phase-m nbsp fill had removed the accidental one); the html top edge is `> thead > tr:first-child > *:not(.tx-span)` so a col_var names row floats (no top border); `tx-bb` now also matches `td.tx-bb` (cell-scoped bottom to close the rowspanned var-name column).
 `R/tab-render-html.R` — Last Phase r: the bottom-reaching rowspanned label cell is tagged `tx-bb` (closes the vertical var-name column's bottom-left corner).
 
-#### Last Phase s – Kish neff verification
+#### Last Phase s – Kish neff for all CI
 
 The current documentation say contradictory things about kish_neff, and I can’t remember exactly what was done : 
 - In `tab()`, with `wt = ` survey weights provided (but no full survey design), is `options(tabxplor.kish_neff = TRUE)` actually used in the calculation of **all** confidence intervals (for factors, for means, and all of them) ?
@@ -1388,6 +1388,35 @@ All legends should be carefully translated to French. What other strings should 
 - Could the package documentation (?`tab`, ?`tab_reg`, etc.) be translated for French users ?
 - Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?
 - Could the vignettes be fully translated to french ?
+
+**DONE (2026-07-22), Part A (runtime strings) complete + Part B (bilingual site) scaffolded.** Full suite
+green (FAIL 0, PASS 4214, SKIP 4 = the usual opt-ins), **zero golden/snapshot churn** — English is
+byte-identical everywhere (`gettext("X")` returns the msgid under the en locale); French activates only
+under `lang="fr"` / a French locale. **Scope decided with maintainer:** translate everything printed on a
+table (legends + all display labels), NOT `?help` pages (declined — R has no bilingual `.Rd`), errors stay
+English; vignettes/README French drafts DEFERRED (become the site's articles); bilingual site YES.
+- **Runtime translation.** The colour-legend/footer i18n machine already existed (gettext domain
+  `R-tabxplor`, `lang=` threaded through every exporter, `with_legend_lang()`, FR typography); this phase
+  (a) **filled `po/R-fr.po`** (124 strings, careful FR terminology, thin-space/decimal-comma typography)
+  and (b) **extended gettext** to the rest of the below-table surface: regression wording
+  (`reg_family_display_name`/`reg_model_note`/`reg_model_line[s]`/`reg_title`, `R/tab_reg.R` — full
+  `gettextf` templates, `reg_model_lines(x, lang)` under `with_legend_lang`; notation OR/IRR/β kept), the
+  `test=TRUE` summary + GOF labels (`test_pvalue_descriptor`/`test_es_measure`/`reg_footer_spec`,
+  `R/tab-test-display.R`, ambient locale) and HTML tooltips (word labels in `tab_kable_print_tooltip`,
+  ambient locale; pure notation left English). The `fmt_class.R:3775` footer call passes `lg`.
+- **Two i18n gotchas fixed** (both in `dev/update_translations.R`, the sanctioned extract→normalise→
+  merge→compile workflow): the **dynamically** gettext'd MEASURES words ("difference"/"ratio"/
+  "contribution to Chi2") are kept extractable by a dead-code `if (FALSE) c(gettext(...))` anchor beside
+  `legend_measure_word()`; and potools' `\uXXXX` escapes (from the ASCII-source rule) are normalised to
+  real UTF-8 so the `.mo` key matches R's runtime `gettext`. New `tests/testthat/test-i18n-fr.R` locks FR
+  rendering + the English-untouched guard; `dev/french_glossary.md` records the terminology.
+- **Bilingual pkgdown scaffold** (Part B): `_pkgdown.fr.yml` (`lang: fr`, translated navbar + reference
+  group titles/desc, EN↔FR switcher) + `dev/build_site_bilingual.R`. Reference PAGES stay English (help
+  not translated); **French articles = the deferred vignettes** (consider `babeldown` there), so the FR
+  site's narrative is English-under-a-French-shell until the vignette phase lands.
+- **Deferred to a follow-up (w-ii):** French vignettes + README, and the polished French site content.
+  Known first-draft rough spots (reg caption English colon, comparison-title FR plural) documented in
+  `dev/french_glossary.md` for maintainer review.
 
 
 #### Last Phase x — Jamovi UI French translation

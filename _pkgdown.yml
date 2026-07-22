@@ -3,6 +3,15 @@ url: https://bricenocenti.github.io/tabxplor/
 template:
   bootstrap: 5
 
+# Last Phase w: language switcher -> the French site built from _pkgdown.fr.yml into docs/fr/.
+navbar:
+  structure:
+    right: [lang, search, github]
+  components:
+    lang:
+      text: FR
+      href: fr/index.html
+
 reference:
 - title: Cross-tables
   desc: >

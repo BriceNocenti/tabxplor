@@ -164,27 +164,35 @@ gss_simple |>
   tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
-On **small samples** a big-looking percentage can rest on a handful of respondents. `n_min =` is a purely visual filter, applied last: it hides cells whose (unweighted) base is below the threshold and drops a row entirely when its largest base falls short — Total rows/columns, the count column and the test line are always kept, and nothing is recomputed. Here the two rarest religions (fewer than 200 respondents) drop out:
+On **small samples** a big-looking percentage can rest on a handful of respondents. `n_min =` is a purely visual filter, applied last: it hides cells whose (unweighted) base is below the threshold and drops a row entirely when its largest base falls short. Here the rarest religions drop out:
 
 ```{r, echo = TRUE}
-tab(gss_simple, relig, race, pct = "row", n_min = 200)
+tab(gss_simple, relig, race, pct = "row", n_min = 400)
 ```
 
-`guaranteed_effect` and `n_min` are complementary: the first handles *statistical* uncertainty (thin cells lose their colour on their own), the second handles *presentational* small bases (it removes the noisy cells from view).
+An alternative is to keep the small rows and cols but group them all in a "Other" level : 
+
+```{r, echo = TRUE}
+tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
+```
+
+
 
 ## Confidence intervals, tests and contributions
 
-Print confidence intervals for each cell with `ci = "cell"` : 
+Print confidence intervals for the percentage or mean of each cell with `ci = "cell"` : 
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", ci = "cell") # by default, conf_level = 0.95
 ```
 
-Print the confidence intervals of the difference with a reference, used to calculate significance (if 0 belongs to the confidence interval, the cell is not significantly different from the reference, here the Total row) : 
+Print the confidence intervals of the **difference** with a reference, used to calculate significance (if 0 belongs to the confidence interval, the cell is not significantly different from the reference, here the Total row) : 
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect", display = "{ci}")
+  tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect", 
+      display = "{pct} {ci}"
+  )
 ```
 
 Add significance stars with `stars = TRUE`. They tell the same story than confidence intervals of the difference with the reference, but for different confidence levels (99%, 95%, 90%) :
@@ -192,7 +200,7 @@ Add significance stars with `stars = TRUE`. They tell the same story than confid
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", display = "ci", stars = TRUE)
+  tab(race, party3, pct = "row", display = "{pct} {ci}", stars = TRUE)
 ```
 
 **Show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
@@ -209,7 +217,7 @@ The first field in the template is the *primary* one — the value Excel keeps a
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
 
-`color = "contrib"` colors cells by their **contribution to the Chi-squared** — the cells that would stand out in a correspondence analysis (here, being Black is statistically associated with *Never married* and *Separated*):
+`color = "contrib"` colors cells by their **contribution to the Chi-squared** — the cells that would stand out in a correspondence analysis :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, color = "contrib")
@@ -218,34 +226,32 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
-**A note on weights.** With a weight (`wt =`), every estimate is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is then exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` (see [Weights](#weights)) to widen *every* interval honestly and switch the whole-table tests to a Rao–Scott correction.
+**A note on weights.** With a weight (`wt =`), every proportion or mean is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of observations. Under unequal weights it carries no design effect, so it runs a little too narrow : opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` (see [Weights](#weights)) to widen every interval honestly and switch the whole-table Chi2 tests to a Rao–Scott correction.
 
 ## Exporting
 
 A finished table exports with its colors to Excel, HTML or Markdown:
 
 ```{r, echo = TRUE, eval = FALSE}
-t <- tab(gss_simple, race, party3, pct = "row", color = "diff")
-tab_xl(t, path = "table.xlsx")   # Excel, with colors
-tab_kable(t)                     # HTML (for RStudio Viewer / R Markdown / Quarto)
-tab_md(t)                        # Markdown (with pandoc color spans)
+tabs <- tab(gss_simple, race, party3, pct = "row", color = "diff")
+tab_export(tabs) # default : html table (RStudio Viewer, .Rmd/.qmd, etc.)
+tab_export(tabs, format = "xl", path = "table") # Excel export 
+tab_export(tabs, format = "md", path = "table") # flat markdown file (pipes tables)
 ```
 
-`tab_export()` is a single entry point over all four — pick the format (and, optionally, a file `path`). Two options are worth knowing:
+Two options are worth knowing:
 
 - `theme = "auto"` lets an HTML or Markdown export **follow the reader's light/dark mode** (it flips live). For the console, `set_color_palette(theme = "auto")` detects the editor (RStudio, Positron, etc.) and picks the matching palette — it is applied automatically when the package loads.
 
 ```{r, echo = TRUE, eval = FALSE}
-tab_export(t, format = "xl", path = "table.xlsx")  # one entry point for "xl"/"kable"/"md"/"plot"
-tab_kable(t, theme = "auto")                       # HTML that follows the reader's light/dark mode
-tab_md(t, lang = "fr")                             # French colour legend and footers
+tab_export(tabs, theme = "auto") # HTML that follows the reader's light/dark modes
 ```
 
-- **Column percentages with several row variables** read better transposed (row variables side by side as columns). Ask the exporter to do it with `transpose = TRUE` — no separate object needed (this supersedes the old `tab_transpose()`):
+- Since numeric variables can only be passed in columns, some complex layout with numeric variables in rows need to transpose the table during export using `transpose = TRUE` :
 
 ```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, c(marital, relig), race, pct = "col") |>
-  tab_kable(transpose = TRUE)   # also tab_xl(transpose = TRUE) / tab_md(transpose = TRUE)
+tab(gss_simple, party3, c(race, relig, tvhours), pct = "row") |>
+  tab_export(transpose = TRUE)
 ```
 
 - **One stylesheet for a whole document.** In an `.Rmd`/`.qmd` report, `tab_css()` writes the colour CSS once and every later `tab_kable()` emits only classes, so a single `theme` — including `"auto"`, which follows the reader's light/dark mode — styles every table at once:
@@ -255,7 +261,7 @@ options(tabxplor.tab_kable_css = FALSE)
 tab_css(theme = "auto")   # emit once, near the top of the document
 ```
 
-  Nothing is written inline on a cell, so any look is overridable with plain CSS afterwards (column widths, fonts…); see `?tab_css` for the role classes (`.tx-rv`, `.tx-tot`, `.tx-num`).
+Nothing is written inline on a cell, so any look is overridable with plain CSS afterwards (column widths, fonts…); see `?tab_css` for the role classes (`.tx-rv`, `.tx-tot`, `.tx-num`).
 
 ## Working with the result
 
@@ -267,14 +273,12 @@ tab(gss_simple, race, marital, pct = "row") |>
   arrange(desc(Married))
 ```
 
-**Titling and annotating.** `subtext =` prints one or more legend lines under a table (a data source, a note). `set_caption()` gives a table a **title that survives a dplyr pipeline** — it is stored in the table's metadata, so it is still there after you `filter()`, `arrange()` or reshape, and every exporter (`tab_kable()`, `tab_xl()`, `tab_md()`) uses it as the table title:
+**Titling and annotating.** `subtext =` prints one or more legend lines under a table (a data source, a note). `set_caption()` gives a table a **title that survives a dplyr pipeline**, and every exporter uses it as the table title:
 
-```{r, echo = TRUE}
+```{r, echo = TRUE, eval = FALSE}
 tab(gss_simple, race, marital, pct = "row", subtext = "Source: GSS, 2000-2014") |>
-  set_caption("Marital status by race")
+  set_caption("Custom title")
 ```
-
-The caption is invisible in the console (it is meant for exports); read it back with `get_caption()`.
 
 
 ## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
@@ -352,7 +356,7 @@ tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signi
 
 ## A point-and-click interface (jamovi)
 
-Everything above is also available **without writing R code**, through a [jamovi](https://www.jamovi.org/download) module. jamovi is a free, open-source statistical spreadsheet: install it, open the modules menu (the **`+`** at the top-right), choose **jamovi library**, and install *tabxplor*. It adds a **Crosstables** analysis — and a **Regressions** analysis powered by `tab_reg()` — with the same coloured, exportable tables, driven entirely by menus. Handy for teaching, or for colleagues who do not use R.
+Everything above is also available **without writing R code**, through a [jamovi](https://www.jamovi.org/download) module. jamovi is a free, open-source statistical software : install it, open the modules menu (the **`+`** at the top-right), choose **jamovi library**, and install *tabxplor*. It adds a **Crosstables** analysis — and a **Regressions** analysis powered by `tab_reg()` — with the same coloured, exportable tables, driven entirely by menus. Handy for teaching, or for colleagues who do not use R.
 
 ## Where to go next
 

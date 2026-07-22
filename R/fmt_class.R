@@ -3269,6 +3269,11 @@ legend_measure_word <- function(measure, is_std, eff_word, lang) {
   if (is.null(m)) return(measure)
   if (isTRUE(m$word_i18n)) gettext(m$word) else m$word
 }
+# Last Phase w: potools extracts translatable strings by STATIC analysis, so the dynamic gettext(m$word)
+# above is invisible to it. This dead-code anchor lists the MEASURES$word literals (word_i18n = TRUE) so
+# they land in the .pot and are compiled into the .mo -- runtime lookup then matches. Keep in sync with
+# MEASURES; it is never executed.
+if (FALSE) c(gettext("difference"), gettext("ratio"), gettext("contribution to Chi2"))
 
 legend_ucfirst <- function(s) {
   if (!nzchar(s)) return(s)
@@ -3772,7 +3777,7 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   push <- function(tokens, role) if (length(tokens))
     streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
-  for (rl in reg_model_lines(x)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")   # NOT translated (per family)
+  for (rl in reg_model_lines(x, lg)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")  # Last Phase w: translated per family
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
   # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
   sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")

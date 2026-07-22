@@ -202,15 +202,17 @@ reg_effect_word <- function(family, do_exp, effect = "coefficient", at = "averag
 
 # Phase 14w: the human name of the model family, shared by the reg title/caption and the "Model:" footer
 # line (reg_model_line). do_exp/effect do not change the NAME (the estimand phrase carries that detail).
+# Last Phase w: translatable (gettext). Every caller runs it inside a with_legend_lang() context
+# (reg_model_lines / reg_title), so the LANGUAGE env is already set when these gettext() lookups fire.
 reg_family_display_name <- function(family) {
   switch(family,
-    "gaussian"     = "linear regression",
-    "binomial"     = "logistic regression",
-    "poisson"      = "Poisson regression",
-    "quasipoisson" = "quasi-Poisson regression",
-    "multinomial"  = "multinomial logistic regression",
-    "ordinal"      = "ordinal logistic regression",
-    "regression")
+    "gaussian"     = gettext("linear regression"),
+    "binomial"     = gettext("logistic regression"),
+    "poisson"      = gettext("Poisson regression"),
+    "quasipoisson" = gettext("quasi-Poisson regression"),
+    "multinomial"  = gettext("multinomial logistic regression"),
+    "ordinal"      = gettext("ordinal logistic regression"),
+    gettext("regression"))
 }
 
 # Phase 14w: the short model tag used for Excel sheet names ("logit_<dep>_<pred>...").
@@ -228,34 +230,34 @@ reg_family_short <- function(family) {
 # The ESTIMAND phrase (lower-case fragment, never NULL) -- WHAT the numbers are. Composed into the
 # "Model: <family>. <estimand>." footer line by reg_model_line(). effect="ame" and the multinomial
 # "at reference" profile get their own phrasing; otherwise it is the coefficient/exp scale per family.
+# Last Phase w: translatable (gettext); runs inside a with_legend_lang() context (see reg_model_lines /
+# reg_title). Notation (OR/IRR/beta) lives in reg_effect_word, kept English; only this prose translates.
 reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average") {
   if (effect == "ame") {
     prob  <- family %in% c("binomial", "multinomial", "ordinal")
     where <- if (at == "reference")
-      " at the reference profile (other predictors held at their reference level / mean)"
-    else " (sample-averaged)"
+      gettext(" at the reference profile (other predictors held at their reference level / mean)")
+    else gettext(" (sample-averaged)")
     return(if (prob)
-      paste0("marginal effects on the probability scale (percentage points)", where,
-             "; each cell shows the effect vs the reference level and, in parentheses, the adjusted ",
-             "predicted probability")
+      paste0(gettext("marginal effects on the probability scale (percentage points)"), where,
+             gettext("; each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability"))
     else
-      paste0("marginal effects on the response scale", where))
+      paste0(gettext("marginal effects on the response scale"), where))
   }
   if (at == "reference" && family == "multinomial") {
-    return(paste0("odds ratios of each outcome category versus the rest, at the reference profile ",
-                  "(other predictors held at their reference level / mean); profile-conditional"))
+    return(gettext("odds ratios of each outcome category versus the rest, at the reference profile (other predictors held at their reference level / mean); profile-conditional"))
   }
   switch(family,
-    "gaussian"     = "coefficients (mean difference vs the reference category)",
-    "binomial"     = if (do_exp) "odds ratios (vs the reference category)"
-                     else        "log-odds coefficients (vs the reference category)",
+    "gaussian"     = gettext("coefficients (mean difference vs the reference category)"),
+    "binomial"     = if (do_exp) gettext("odds ratios (vs the reference category)")
+                     else        gettext("log-odds coefficients (vs the reference category)"),
     "poisson"      = ,
-    "quasipoisson" = if (do_exp) "incidence-rate ratios (vs the reference category)"
-                     else        "log-rate coefficients (vs the reference category)",
-    "multinomial"  = if (do_exp) "odds ratios (each category vs the reference)"
-                     else        "log-odds coefficients (each category vs the reference)",
-    "ordinal"      = if (do_exp) "cumulative odds ratios (proportional-odds model)"
-                     else        "proportional-odds model (log-odds coefficients)",
+    "quasipoisson" = if (do_exp) gettext("incidence-rate ratios (vs the reference category)")
+                     else        gettext("log-rate coefficients (vs the reference category)"),
+    "multinomial"  = if (do_exp) gettext("odds ratios (each category vs the reference)")
+                     else        gettext("log-odds coefficients (each category vs the reference)"),
+    "ordinal"      = if (do_exp) gettext("cumulative odds ratios (proportional-odds model)")
+                     else        gettext("proportional-odds model (log-odds coefficients)"),
     "")
 }
 
@@ -263,64 +265,83 @@ reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average
 # so it can be ordered BEFORE the colour legend (item 2). For a model comparison the caption is not shown
 # in the console, so the dependent + (binomial) reference level are named here too (item 4). NULL when the
 # table is not a regression (get_reg_meta -> NULL).
+# Last Phase w: the prose is translatable (gettext); called only from reg_model_lines(), which sets the
+# LANGUAGE env via with_legend_lang(). enc2utf8 for the French accents (matches tab_weight_line et al.).
 reg_model_line <- function(meta) {
   if (is.null(meta)) return(NULL)
   fam <- reg_family_display_name(meta$family)
   est <- reg_model_note(meta$family, meta$do_exp, meta$effect, meta$at)
+  # `who` carries no leading space (gettext msgids must not have edge whitespace -- xgettext strips it);
+  # the space + full punctuation live in the outer gettextf template, so French controls "Modele : ... ; ."
   who <- if (isTRUE(meta$comparison)) {
     pl <- meta$positive_level[[1]]
-    if (!is.na(pl)) paste0(" of ", meta$dependent[[1]], " ('", pl, "')")
-    else            paste0(" of ", meta$dependent[[1]])
+    w  <- if (!is.na(pl)) gettextf("of %s ('%s')", meta$dependent[[1]], pl)
+          else            gettextf("of %s", meta$dependent[[1]])
+    paste0(" ", w)
   } else ""
-  paste0("Model: ", fam, who, if (nzchar(est)) paste0("; ", est) else "", ".")
+  line <- if (nzchar(est)) gettextf("Model: %s%s; %s.", fam, who, est)
+          else            gettextf("Model: %s%s.", fam, who)
+  enc2utf8(line)
 }
 
 # Phase 15e: the "Model:" footer line(s). A homogeneous table returns the single reg_model_line (byte-
 # identical). A mixed-family table returns ONE line per distinct outcome family present, each prefixed by
 # the outcomes it covers (legend_name_list), so every estimand is described without inventing a single
 # false family for the whole table. `x` is the table (reads its `reg_meta`). Returns a character vector.
-reg_model_lines <- function(x) {
+# Last Phase w: `lang` selects the footer language (NULL -> options(tabxplor.lang)/locale). The whole
+# composition runs under with_legend_lang() so every nested gettext() (family name, estimand, "Model:")
+# resolves to that language; English is byte-identical (gettext returns the msgid under the en locale).
+reg_model_lines <- function(x, lang = NULL) {
   meta <- get_reg_meta(x)
   if (is.null(meta)) return(character(0))
-  fams <- meta$families; if (is.null(fams)) fams <- meta$family
-  uf   <- unique(fams)
-  if (length(uf) <= 1L) { rl <- reg_model_line(meta); return(if (is.null(rl)) character(0) else rl) }
-  deps <- meta$dependent
-  vapply(uf, function(fm) {
-    grp   <- deps[fams == fm]
-    fname <- reg_family_display_name(fm)
-    dox   <- isTRUE(meta$exponentiate) && fm != "gaussian"
-    est   <- reg_model_note(fm, dox, meta$effect, meta$at)
-    paste0("Model (", legend_name_list(grp), "): ", fname,
-           if (nzchar(est)) paste0("; ", est) else "", ".")
-  }, character(1), USE.NAMES = FALSE)
+  with_legend_lang(lang, function(lg) {
+    fams <- meta$families; if (is.null(fams)) fams <- meta$family
+    uf   <- unique(fams)
+    if (length(uf) <= 1L) { rl <- reg_model_line(meta); return(if (is.null(rl)) character(0) else rl) }
+    deps <- meta$dependent
+    vapply(uf, function(fm) {
+      grp   <- deps[fams == fm]
+      fname <- reg_family_display_name(fm)
+      dox   <- isTRUE(meta$exponentiate) && fm != "gaussian"
+      est   <- reg_model_note(fm, dox, meta$effect, meta$at)
+      enc2utf8(if (nzchar(est)) gettextf("Model (%s): %s; %s.", legend_name_list(grp), fname, est)
+               else            gettextf("Model (%s): %s.", legend_name_list(grp), fname))
+    }, character(1), USE.NAMES = FALSE)
+  })
 }
 
 # Phase 14w: the reg table's TITLE / caption (Excel title + sheet, md/kable caption). Single model:
 # "<Family>: <dep> by <p1>, <p2> +N more". Comparison: "<Family>s (models comparison): <dep>, '<ref>'
 # (<effect>)" -- the reference level + effect that would otherwise be written nowhere (item 4).
-reg_title <- function(meta, max = 2) {
+# Last Phase w: the caption prose is translatable (gettext), resolved under with_legend_lang(). `lang`
+# NULL follows options(tabxplor.lang)/locale (so a French-locale user gets a French caption with no arg
+# threading through the export prep); English is byte-identical. The comparison "s ..." plural suffix is
+# gettext'd as a whole fragment so English keeps its exact "regressions" wording -- French refines it in
+# the catalogue if desired. Notation (eff_word: OR/IRR/beta) stays English.
+reg_title <- function(meta, max = 2, lang = NULL) {
   if (is.null(meta)) return(NA_character_)
   # Phase 15e: a mixed-family table has no single family -> a generic caption ("Regression models").
   fams <- meta$families; if (is.null(fams)) fams <- meta$family
   mixed <- length(unique(fams)) > 1L
-  fam <- reg_family_display_name(meta$family)
-  Fam <- if (mixed) "Regression models"
-         else paste0(toupper(substr(fam, 1, 1)), substr(fam, 2, nchar(fam)))
-  dep <- tab_title_names(meta$dependent, max)
-  tabbed <- if (!is.null(meta$split_var)) paste0(" (tabbed by ", meta$split_var, ")") else ""
-  if (mixed) return(paste0(Fam, ": ", dep,
-                           { preds <- tab_title_names(meta$predictors, max)
-                             if (nzchar(preds)) paste0(" by ", preds) else "" }, tabbed))
-  if (isTRUE(meta$comparison)) {
-    pl  <- meta$positive_level[[1]]
-    dref <- if (!is.na(pl)) paste0(dep, ", '", pl, "' (", meta$eff_word, ")")
-            else            paste0(dep, " (", meta$eff_word, ")")
-    paste0(Fam, "s (models comparison): ", dref, tabbed)
-  } else {
-    preds <- tab_title_names(meta$predictors, max)
-    paste0(Fam, ": ", dep, if (nzchar(preds)) paste0(" by ", preds) else "", tabbed)
-  }
+  with_legend_lang(lang, function(lg) {
+    fam <- reg_family_display_name(meta$family)
+    Fam <- if (mixed) gettext("Regression models")
+           else paste0(toupper(substr(fam, 1, 1)), substr(fam, 2, nchar(fam)))
+    dep <- tab_title_names(meta$dependent, max)
+    # edge whitespace stays OUT of gettext msgids (xgettext strips it); the leading space is added here.
+    tabbed <- if (!is.null(meta$split_var)) paste0(" ", gettextf("(tabbed by %s)", meta$split_var)) else ""
+    by_of  <- function(preds) if (nzchar(preds)) paste0(" ", gettextf("by %s", preds)) else ""
+    if (mixed) return(enc2utf8(paste0(Fam, ": ", dep, by_of(tab_title_names(meta$predictors, max)), tabbed)))
+    if (isTRUE(meta$comparison)) {
+      pl  <- meta$positive_level[[1]]
+      dref <- if (!is.na(pl)) paste0(dep, ", '", pl, "' (", meta$eff_word, ")")
+              else            paste0(dep, " (", meta$eff_word, ")")
+      enc2utf8(gettextf("%s (models comparison): %s", paste0(Fam, "s"), paste0(dref, tabbed)))
+    } else {
+      preds <- tab_title_names(meta$predictors, max)
+      enc2utf8(paste0(Fam, ": ", dep, by_of(preds), tabbed))
+    }
+  })
 }
 
 # Phase 14w (item 1): a compact Excel sheet name for a reg table -- "<short>_<dep>_<pred>..." (e.g.
