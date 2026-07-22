@@ -1,16 +1,23 @@
 # PURPOSE: tab_counts() -- the "from-the-middle" constructor. Build a full tabxplor_tab (pct,
 #          diff, CI, chi2, colors, totals) from ALREADY-AGGREGATED counts instead of microdata.
-# ROLE: A public sibling of tab(). It normalises the supported input shapes (long tidy counts,
-#       wide count matrix / data.frame, a table/xtabs/matrix object, frequencies + base N) to the
-#       canonical count-aggregate and routes them through the SAME core as tab(): tab_plain()'s
-#       `.fine` pre-aggregate entry (the scan-fusion path, locked byte-for-byte by
-#       test-fuse-parity.R) + the shared finalize (tab_chi2 / tab_ci / tab_add_n_pct /
-#       tab_pvalue_lines). No math is forked.
+# ROLE: A public sibling of tab(), and the THINNEST wrapper it can be -- "tab() with the first steps
+#       already done". It normalises the supported input shapes (long tidy counts, wide count matrix /
+#       data.frame, a table/xtabs/matrix object, frequencies + base N) to the canonical count-aggregate
+#       and routes them through the SAME core as tab(): tab_plain()'s `.fine` pre-aggregate entry (the
+#       scan-fusion path, locked byte-for-byte by test-fuse-parity.R) + the shared finalize (tab_chi2 /
+#       tab_ci / tab_add_n_pct / tab_pvalue_lines). It ALSO shares tab()'s colour boundary
+#       (normalize_color_spec at the front) and its finalize_color_tail() at the back, so every modern
+#       colour form (TRUE / two-channel / per-type / color_signif / ratio), `display` and a per-table
+#       `color_breaks` behave EXACTLY as in tab(). No math is forked.
 # KEY CONSTRAINTS:
 #   - Require a real unweighted `n`; weighted input carries BOTH a real unweighted count and a
 #     weighted count (weighted estimate + unweighted n -- decisions doc §14). Input whose counts
 #     are not real (fractional / weighted-only) disables CI/chi2 with a warning.
 #   - Feeding the same data as microdata vs as counts must give an IDENTICAL fmt table.
+#   - It starts PAST the microdata prep (tab_prepare_pop), so the tab() arguments resolved there are
+#     not offered: level selection (levels = "first"/"auto"), rare-level lumping (other_if_less_than),
+#     na = "drop_all"/"common_base", survey design. cleannames is the exception -- a pure relabel run
+#     on the aggregate keys (tab_counts_normalize), byte-identical to tab()'s pre-aggregate strip.
 # See: CLAUDE.md > 1.4.0 roadmap > Phase 4; dev/tabxplor_1.4.0_decisions.md §20.
 
 # === SECTION: helpers ================================================================
@@ -115,8 +122,13 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
 # keyed data.table `[tab_cols..., row_col, col_col, n, (wn)]` (the exact `.fine` shape tab_plain
 # rolls up). `n` is the real UNWEIGHTED count (integer); `wn` the weighted count (double) when
 # weighted. Duplicate keys are summed. `has_real_n` is FALSE when the supplied counts are not whole
-# numbers (fractional / weighted-only) -- the boundary that disables CI/chi2.
-tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col) {
+# numbers (fractional / weighted-only) -- the boundary that disables CI/chi2. `cleannames` (Phase p)
+# strips the cleannames regex off the key levels HERE (pre-aggregate) via the SAME
+# tab_cleannames_relabel() the microdata path runs in tab_prepare(): a relabel commutes with the count
+# sum (relabel-then-sum == tab()'s sum-then-relabel) and the keyby re-aggregation merges any collapsed
+# level -- byte-identical to tab(cleannames = TRUE); no forked relabel.
+tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col,
+                                 cleannames = FALSE) {
   keys <- c(tab_cols, row_col, col_col)
   miss <- setdiff(c(keys, n_col, wn_col), names(data))
   if (length(miss) > 0)
@@ -134,6 +146,10 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
   # use -- keep existing factor levels, else first-appearance order (matches tab_plain's L2399).
   for (k in keys) if (!is.factor(d[[k]]))
     data.table::set(d, j = k, value = forcats::as_factor(d[[k]]))
+
+  # cleannames strip on the (now-factor) keys, pre-aggregate -- reuse the microdata helper so there is
+  # no forked relabel; the keyby sum below re-merges any level a strip collapses. No-op when off.
+  if (isTRUE(cleannames)) d <- data.table::as.data.table(tab_cleannames_relabel(d, keys))
 
   if (is.null(wn_col)) {
     fine <- d[, list(n = as.integer(round(sum(as.numeric(get(n_col)), na.rm = TRUE)))),
@@ -203,8 +219,16 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' @param base For `input = "pct"`: the column holding each row's sample size N.
 #' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
 #'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,OR,test,na,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,totaltab,totaltab_name,tot,total_names,add_n,add_pct,subtext,digits
-#'   Same meaning as in [tab()].
+#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,method_ratio,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars,names_prefix,names_sort
+#'   Same meaning as in [tab()]. `color` accepts every form [tab()] does (`FALSE` / `TRUE` /
+#'   a measure / `c(text, background)` / `list(pct =, mean =)`). Only `na = "keep"` / `"drop"` are
+#'   available (`"drop_all"` / `"common_base"` need the microdata). The [tab()] arguments that pick or
+#'   collapse levels *during the microdata prep* — which `tab_counts()` starts past — are not offered:
+#'   `levels = "first"` / `"auto"` (keeping a subset of levels), `other_if_less_than` / `other_level`
+#'   (lumping rare levels counts individual observations); build from microdata with [tab()] for those.
+#'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); the survey
+#'   design `ids`/`strata`/`fpc`/`nest`; `method_mean_diff`/`method_mean_ratio` (a counts table has no
+#'   numeric column); `parallel`; `output_list`; `sup_cols`.
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0 (see [tab()]).
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
@@ -225,15 +249,19 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'            col_name = "race", pct = "row")
 tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        cols, col_name = "variable", base, input = c("counts", "pct"),
-                       pct = "no", color = "no", OR = "no", test = FALSE,
-                       na = "keep",
+                       pct = "no", color = "no", color_signif = "ignore",
+                       OR = "no", test = FALSE,
+                       na = "keep", cleannames = NULL,
                        ref = "auto", ref2 = "first", comp = "tab",
                        ci = "no", conf_level = 0.95, stars = NULL,
                        method_cell = "wilson", method_diff = "newcombe",
+                       method_ratio = "katz",
                        totaltab = "line", totaltab_name = "Ensemble",
                        tot = c("row", "col"), total_names = "Total",
-                       add_n = TRUE, add_pct = FALSE,
-                       subtext = "", digits = 0,
+                       add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
+                       subtext = "", digits = 0, n_min = 0, display = NULL,
+                       color_breaks = NULL,
+                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                        chi2 = lifecycle::deprecated()) {
 
   # Phase 14a: `chi2` renamed `test` (see tab()) -- kept working, one soft nudge.
@@ -243,13 +271,15 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   }
 
   input <- rlang::arg_match(input)
-  vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(color, size = 1)
-  vctrs::vec_assert(ref, size = 1); vctrs::vec_assert(na, size = 1)
+  vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(na, size = 1)
+  # `color` is NOT size-1-asserted (like tab()): it accepts FALSE/TRUE/scalar/c(text, background)/
+  # a per-type list -- parsed by normalize_color_spec() below.
   # Phase 6g (S3): na = "common_base" is microdata-only -- it fixes the population from who is
-  # NA on the row_var/first col_var, which pre-aggregated counts cannot reconstruct.
-  if (identical(na, "common_base")) {
+  # NA on the row_var/first col_var, which pre-aggregated counts cannot reconstruct. na = "drop_all"
+  # (drop every row missing on ANY variable) is likewise a whole-DB row drop with no meaning on counts.
+  if (identical(na, "common_base") || identical(na, "drop_all")) {
     cli::cli_abort(c(
-      "{.code na = \"common_base\"} is only available in {.fn tab} (from microdata).",
+      "{.code na = {na}} is only available in {.fn tab} (from microdata).",
       "i" = "Pre-aggregated counts cannot reconstruct who was missing; use {.val keep} or {.val drop}."
     ))
   }
@@ -257,6 +287,12 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
   total_names <- vctrs::vec_recycle(total_names, 2)
+  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames") else cleannames
+
+  # Phase 5: parse `color` (+ `color_signif`) once, exactly as tab()/tab_many() do: the engine runs
+  # on the legacy string ($legacy) + the significance policy ($signif) + the ratio-CI flag, then
+  # finalize_color_tail() sets the final two-channel colour attributes on the built table.
+  color_spec <- normalize_color_spec(color, color_signif)
 
   # -- resolve the input SHAPE to canonical long tidy counts, then to the aggregate (the one
   #    validation boundary) --
@@ -268,7 +304,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     base      = rlang::enquo(base),     col_name  = col_name, input = input)
 
   norm       <- tab_counts_normalize(resh$data, resh$row_var, resh$col_var, resh$tab_vars,
-                                      resh$n_col, resh$wn_col)
+                                      resh$n_col, resh$wn_col, cleannames = cleannames)
   fine       <- norm$fine
   weighted   <- norm$weighted
   has_real_n <- norm$has_real_n
@@ -301,13 +337,12 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   totrow <- "row" %in% tot
   totcol <- if ("col" %in% tot) "last" else "no"
 
-  # Phase 17e: the same typed new_ctx() constructor tab_build() uses. tab_counts() sets only the fields
-  # it needs and inherits the rest (n_min/parallel/cache_env/defer_level_merge/levels_order/...) from the
-  # ONE defaults list -- the former hand-built ctx-literal duplication is gone. Notes kept:
-  # Phase 14a/b -- tab_counts() takes only the LEGACY colour strings, so `color_signif` is always
-  # "ignore" and `color_ratio_ci` FALSE (a legacy string can never name the ratio measure, so no ratio
-  # CI is built). 14v-ii -- the ratio/mean CI methods are inert here but ci_settings expects them, so
-  # the package defaults (new_ctx's) apply.
+  # Phase 17e: the same typed new_ctx() constructor tab_build() uses. tab_counts() sets the fields it
+  # needs and inherits the rest (parallel/cache_env/defer_level_merge/levels_order/method_mean_* -- the
+  # mean CI methods are numeric-only and inert on a counts table, but ci_settings expects them) from the
+  # ONE defaults list. Colour rides the parsed spec, exactly as tab() does (R/tab.R): the legacy string,
+  # the significance policy, and color_pct_text_is_ratio() (whether the reader's pct channel IS the
+  # ratio measure -> it owns the stored interval).
   ctx <- new_ctx(
     data = data_skel, with_filter = FALSE,
     row_vars_quo = rlang::quo(!!row_var), col_vars_quo = rlang::quo(!!col_var),
@@ -315,27 +350,35 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                    else rlang::quo(c(!!!rlang::syms(tab_vars))),
     wt_quo = if (weighted) rlang::quo(wn) else rlang::quo(NULL),
     na_drop_all_quo = rlang::quo(NULL),
-    pct = pct, color = color, color_signif = "ignore", color_ratio_ci = FALSE,
+    pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
+    color_ratio_ci = color_pct_text_is_ratio(color_spec),
     OR = OR, chi2 = test,
     na = na, levels = "all",
-    cleannames = FALSE, output = "single",
-    other_if_less_than = 0, other_level = "Others",
+    cleannames = cleannames, output = "single",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
-    method_cell = method_cell, method_diff = method_diff,
+    method_cell = method_cell, method_diff = method_diff, method_ratio = method_ratio,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
-    total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
-    subtext = subtext, by_table = FALSE
+    total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
+    digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,
+    spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort
   )
 
   ctx <- tab_setup(ctx)
 
-  # Set the single-pair population/level metadata (no `levels` arg -> keep all; no NA-drop beyond
-  # the `na` policy) and inject the count aggregate as the fused tier-1 (tab_plain(.fine=) adopts it).
+  # Set the single-pair population/level metadata (levels = "all" -> lv1 FALSE / no level removal;
+  # no NA-drop beyond the `na` policy) and inject the count aggregate as the fused tier-1 (tab_plain
+  # (.fine=) adopts it). levels = "first"/"auto" would need remove_levels computed in the bypassed
+  # tab_prepare_pop, so tab_counts keeps all levels (see the header KEY CONSTRAINTS).
   ctx <- ctx_update(ctx, list(
     na_text = list(ctx$na), na_num = list(ctx$na),
     lv1 = FALSE, remove_levels = NULL,
     fine_num = NULL, fine_fused = fine
   ))
 
-  tab_build_tables(ctx)
+  result <- tab_build_tables(ctx)
+
+  # The shared wrapper tail (finalize colour spec -> display recipe -> per-table breaks), identical to
+  # tab()/tab_many() -> a modern colour (TRUE / two-channel / per-type / color_signif / ratio), a
+  # `display` recipe and a per-table `color_breaks` override are all applied here, on the built table.
+  finalize_color_tail(result, color_spec, color_breaks, display)
 }

@@ -548,7 +548,7 @@ Coloring is decomposed into three orthogonal per-column choices: **measure** (`d
 
 Every consumer maps `(text_slot, bg_slot)` to colour the same way: `pillar_shaft.tabxplor_fmt()` (console, the reference two-channel consumer), `fmt_get_color_code()` (single-channel, the golden), the shared `fmt_channel_codes()` helper (text + bg hex, used by `tab_kable`/`tab_plot`/`tab_xl`), and `tab_color_legend()` (which reads the same scales, so legend and cells never disagree). The old combined strings (`"diff_ci"`/`"after_ci"`/`"ci"`) are decoded to `(measure = "diff", policy)` ONCE at the argument / storage boundary by `color_decode_legacy()` (in `normalize_color_spec()`, and in `tab_ci()` for the deprecated step path) — the engine never re-parses them, and `"ci"` folds into `after_ci` (the old `single0` one-shade mode is retired).
 
-The `color`/`color_signif` **arguments** are parsed by `normalize_color_spec()` + `finalize_color_spec()` (`R/tab.R`), called by `tab()` and `tab_num()` (not yet `tab_many()` — Phase 6).
+The `color`/`color_signif` **arguments** are parsed once at the front by `normalize_color_spec()` (`R/tab.R`); the built table is then finalised by the shared **`finalize_color_tail(result, color_spec, color_breaks, display)`** — `finalize_color_spec()` → `tab_apply_display()` → `set_color_breaks_attr()` — the ONE wrapper tail `tab()`, `tab_many()`, `tab_num()` and `tab_counts()` all run (so none can drift; `tab()` keeps its later `output_kable` / `as_tabxplor_tabs` steps).
 
 **Colour legend (Phase 13b, `R/fmt_class.R`).** `tab_color_legend(x, medium = c("console","html","md","runs","plain"), style = c("terse","prose"), lang=)` builds the legend as `legend_specs(x)` (per col_var group: measure/breaks/ref/method/policy/shade names + regression effect word) → `legend_tokens_terse`/`_prose` (a **token stream**: plain-text | coloured break-word tokens) → `legend_render_line(medium)` (console ANSI via `cli` / inline html span / md pandoc span / plain / **`"runs"`** = the token stream returned unrendered as `list(text, color, bold)`). Console = terse, exports = prose; the break-word colours come from the same 8-slot palette the cells use, so they can't disagree.
 
@@ -980,20 +980,27 @@ The main API file. Contains:
 ### R/tab-counts.R (~360 lines) — from-the-middle constructor (Phase 4)
 
 `tab_counts()` (exported) builds a `tabxplor_tab` from already-aggregated counts, byte-identical to the
-microdata `tab()`. It does **not** re-implement the pipeline: it normalises the input and reuses
-`tab_plain()`'s `.fine` pre-aggregate entry + the shared finalize.
+microdata `tab()`. It is the **thinnest wrapper it can be** — "`tab()` with the first steps already done":
+it normalises the input to the `.fine` aggregate and reuses the SAME engine + the SAME colour boundary /
+finalize tail, forking no math.
 
 - `tab_counts_reshape()` — dispatch on input shape → canonical long tidy counts. `table`/`xtabs`/`matrix`
   (melt via `as.data.frame.table`; bare matrix coerced with `as.table`); wide `data.frame` (`pivot_longer(cols)`);
   frequencies + base N (`input="pct"`: `largest_remainder(freq × base)` per row); long tidy (as-is).
-- `tab_counts_normalize()` — aggregate to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]`;
+- `tab_counts_normalize(…, cleannames)` — aggregate to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]`;
   **drop `n==0` cells** so the aggregate is structurally identical to microdata's `.N`-per-observed-key
   (empty cells are recreated by `dcast(fill=0)`). Sets `weighted` and `has_real_n` (integrality of the counts).
-- `tab_counts()` — validation + colour resolution (the SHARED `tab_resolve_settings()`, Phase 7b), then
-  `tab_plain(…, .fine = fine)` → `tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap (`test` attribute) →
-  `tab_pvalue_lines`. Base-less input (non-integer counts) disables CI/chi2 with a message. Weighted =
-  real unweighted `n` + weighted `wn` (§14). It passes `totrow = NULL` so the `contrib → totrow` forcing
-  is skipped (totals are driven through its own `tot`).
+  `cleannames = TRUE` strips the cleannames regex off the key levels HERE via the SAME `tab_cleannames_relabel()`
+  the microdata path runs pre-aggregate (a relabel commutes with the count sum → byte-identical; the keyby
+  re-aggregation merges any collapsed level).
+- `tab_counts()` — `normalize_color_spec()` at the front (so every modern `color` form works), then the
+  same typed `new_ctx()` → `tab_setup()` (arg resolution incl. the SHARED `tab_resolve_settings()` colour
+  cascade + `tot` → totrow/totcol) → inject `fine` as `fine_fused` → `tab_build_tables()`, then the shared
+  `finalize_color_tail(result, color_spec, color_breaks, display)`. Base-less input (non-integer counts)
+  disables CI/chi2 with a message. Weighted = real unweighted `n` + weighted `wn` (§14). It starts PAST the
+  microdata prep (`tab_prepare_pop`), so the `tab()` arguments resolved there are not offered
+  (`levels = "first"`/`"auto"`, `other_if_less_than`, `na = "drop_all"`/`"common_base"`, survey design,
+  `wt` — use `wt_counts`); `cleannames` is the exception (applied on the aggregate keys, above).
 
 ### R/tab-resolve.R (~180 lines) — the argument-overwrite cascade (Phase 7b)
 

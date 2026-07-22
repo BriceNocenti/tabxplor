@@ -698,17 +698,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # returns `result` before the paint; jmvtab_build() owns the same normalize/finalize pair.
   if (isTRUE(.return_armed)) return(result)
 
-  # Phase 5: set the final two-channel color + significance-policy attributes (per column type
-  # for color = TRUE). Plain scalar colors pass through untouched.
-  result <- finalize_color_spec(result, color_spec)
-
-  # Phase 10i-A: opt-in composite display recipe (e.g. `display = "pct (n)"` or `"{pct} (n={n})"`)
-  # written into the display FIELD of value cells; NULL (default) leaves the plain single-field display.
-  result <- tab_apply_display(result, display)
-
-  # Phase 13a: a per-table color_breaks override, stored as a table attribute (set LAST so no earlier
-  # step strips it; installed transiently at render). NULL (default) -> the global breaks apply.
-  result <- set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  # The shared wrapper tail (finalize colour spec -> display recipe -> per-table breaks). Same three
+  # steps in tab_many()/tab_num()/tab_counts(); see finalize_color_tail() below.
+  result <- finalize_color_tail(result, color_spec, color_breaks, display)
 
   # Phase 17g: the `tabxplor.output_kable` convenience render runs HERE -- AFTER colour finalisation,
   # tab_apply_display and the color_breaks attr -- because tab_kable() consumes the FINALISED table via
@@ -723,6 +715,20 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   as_tabxplor_tabs(result)
 }
 
+
+# The shared wrapper tail every public entry point runs after the engine returns the PRE-finalise
+# table: set the two-channel colour + significance-policy attributes (finalize_color_spec), apply the
+# opt-in composite display recipe (tab_apply_display, a no-op on NULL), then store the per-table
+# color_breaks override LAST (set_color_breaks_attr, so no earlier step strips it). Extracted so
+# tab()/tab_many()/tab_num()/tab_counts() cannot drift. Callers keep their own trailing steps
+# (tab()'s output_kable / as_tabxplor_tabs; tab_num()'s df||num early return).
+#' @keywords internal
+#' @noRd
+finalize_color_tail <- function(result, color_spec, color_breaks = NULL, display = NULL) {
+  result <- finalize_color_spec(result, color_spec)
+  result <- tab_apply_display(result, display)
+  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+}
 
 # Phase 10i-A: apply an opt-in COMPOSITE display recipe (curated sugar "pct (n)"/"n (pct)"/"pct_n",
 # or a raw "{pct} (n={n})" template) to a built table (single tab, grouped tab, or a list of tabs).
@@ -1300,8 +1306,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
   )
-  result <- finalize_color_spec(result, color_spec)
-  result <- set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  result <- finalize_color_tail(result, color_spec, color_breaks)
   # Phase 13c-iv: wrap the multi-table list (tab_many keeps its list-default) so it auto-prints.
   as_tabxplor_tabs(result)
 }
@@ -4625,10 +4630,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # Phase 17f: df/num returns plain numbers (no fmt), so skip the colour finalise entirely.
   if (df || num) return(result)
 
-  # Phase 5: set the final two-channel colour / significance-policy attributes (a no-op for a
-  # plain scalar colour passed straight through, e.g. when tab_many() drives tab_num()).
-  result <- finalize_color_spec(result, color_spec)
-  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  # The shared wrapper tail (a no-op finalise for a plain scalar colour passed straight through, e.g.
+  # when tab_many() drives tab_num()). tab_num() has no `display` recipe -> the tail's is a no-op.
+  finalize_color_tail(result, color_spec, color_breaks)
 }
 
 

@@ -461,46 +461,46 @@ msgstr "effets marginaux sur l'échelle de probabilité (points de pourcentage)"
 msgid ""
 "; each cell shows the effect vs the reference level and, in parentheses, the "
 "adjusted predicted probability"
-msgstr " ; chaque case indique l'effet p. r. à la modalité de référence et, entre parenthèses, la probabilité prédite ajustée"
+msgstr " ; chaque case indique l'effet par rapport à la modalité de référence et, entre parenthèses, la probabilité prédite ajustée"
 
 #: tab_reg.R:245
 msgid "marginal effects on the response scale"
-msgstr "effets marginaux sur l'échelle de réponse"
+msgstr "effets marginaux"
 
 #: tab_reg.R:248
 msgid ""
 "odds ratios of each outcome category versus the rest, at the reference "
 "profile (other predictors held at their reference level / mean); profile-"
 "conditional"
-msgstr "rapports de cotes de chaque modalité de la variable expliquée p. r. au reste, au profil de référence (les autres prédicteurs fixés à leur modalité de référence / moyenne) ; conditionnel au profil"
+msgstr "rapports de cotes de chaque modalité de la variable expliquée par rapport au reste, au profil de référence (les autres prédicteurs fixés à leur modalité de référence / moyenne) ; conditionnel au profil"
 
 #: tab_reg.R:251
 msgid "coefficients (mean difference vs the reference category)"
-msgstr "coefficients (différence de moyenne p. r. à la modalité de référence)"
+msgstr "coefficients (différence de moyenne par rapport à la modalité de référence)"
 
 #: tab_reg.R:252
 msgid "odds ratios (vs the reference category)"
-msgstr "rapports de cotes (p. r. à la modalité de référence)"
+msgstr "rapports de cotes (par rapport à la modalité de référence)"
 
 #: tab_reg.R:253
 msgid "log-odds coefficients (vs the reference category)"
-msgstr "coefficients log-cotes (p. r. à la modalité de référence)"
+msgstr "coefficients log-cotes (par rapport à la modalité de référence)"
 
 #: tab_reg.R:255
 msgid "incidence-rate ratios (vs the reference category)"
-msgstr "rapports de taux d'incidence (p. r. à la modalité de référence)"
+msgstr "rapports de taux d'incidence (par rapport à la modalité de référence)"
 
 #: tab_reg.R:256
 msgid "log-rate coefficients (vs the reference category)"
-msgstr "coefficients log-taux (p. r. à la modalité de référence)"
+msgstr "coefficients log-taux (par rapport à la modalité de référence)"
 
 #: tab_reg.R:257
 msgid "odds ratios (each category vs the reference)"
-msgstr "rapports de cotes (chaque modalité p. r. à la référence)"
+msgstr "rapports de cotes (chaque modalité par rapport à la référence)"
 
 #: tab_reg.R:258
 msgid "log-odds coefficients (each category vs the reference)"
-msgstr "coefficients log-cotes (chaque modalité p. r. à la référence)"
+msgstr "coefficients log-cotes (chaque modalité par rapport à la référence)"
 
 #: tab_reg.R:259
 msgid "cumulative odds ratios (proportional-odds model)"

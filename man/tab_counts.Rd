@@ -17,9 +17,11 @@ tab_counts(
   input = c("counts", "pct"),
   pct = "no",
   color = "no",
+  color_signif = "ignore",
   OR = "no",
   test = FALSE,
   na = "keep",
+  cleannames = NULL,
   ref = "auto",
   ref2 = "first",
   comp = "tab",
@@ -28,14 +30,22 @@ tab_counts(
   stars = NULL,
   method_cell = "wilson",
   method_diff = "newcombe",
+  method_ratio = "katz",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
   total_names = "Total",
   add_n = TRUE,
   add_pct = FALSE,
+  common_totrow = FALSE,
   subtext = "",
   digits = 0,
+  n_min = 0,
+  display = NULL,
+  color_breaks = NULL,
+  spread_vars = character(),
+  names_prefix = NULL,
+  names_sort = FALSE,
   chi2 = lifecycle::deprecated()
 )
 }
@@ -66,7 +76,15 @@ holding the \code{col_var} levels.}
 \item{input}{\code{"counts"} (default) or \code{"pct"} (with \code{cols} and \code{base}: the level columns hold
 frequencies, and counts are rebuilt from them and \code{base}).}
 
-\item{pct, color, OR, test, na, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, totaltab, totaltab_name, tot, total_names, add_n, add_pct, subtext, digits}{Same meaning as in \code{\link[=tab]{tab()}}.}
+\item{pct, color, color_signif, OR, test, na, cleannames, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, method_ratio, totaltab, totaltab_name, tot, total_names, add_n, add_pct, common_totrow, subtext, digits, n_min, display, color_breaks, spread_vars, names_prefix, names_sort}{Same meaning as in \code{\link[=tab]{tab()}}. \code{color} accepts every form \code{\link[=tab]{tab()}} does (\code{FALSE} / \code{TRUE} /
+a measure / \code{c(text, background)} / \code{list(pct =, mean =)}). Only \code{na = "keep"} / \code{"drop"} are
+available (\code{"drop_all"} / \code{"common_base"} need the microdata). The \code{\link[=tab]{tab()}} arguments that pick or
+collapse levels \emph{during the microdata prep} — which \code{tab_counts()} starts past — are not offered:
+\code{levels = "first"} / \code{"auto"} (keeping a subset of levels), \code{other_if_less_than} / \code{other_level}
+(lumping rare levels counts individual observations); build from microdata with \code{\link[=tab]{tab()}} for those.
+Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{wt_counts}); the survey
+design \code{ids}/\code{strata}/\code{fpc}/\code{nest}; \code{method_mean_diff}/\code{method_mean_ratio} (a counts table has no
+numeric column); \code{parallel}; \code{output_list}; \code{sup_cols}.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 1.4.0 (see \code{\link[=tab]{tab()}}).}
 }

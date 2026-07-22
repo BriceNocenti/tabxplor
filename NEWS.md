@@ -2,6 +2,14 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`tab_counts()` now matches `tab()`'s colour and argument surface.** Building a coloured table from
+  pre-aggregated counts — `tab_counts(counts, ..., color = TRUE)` — used to error; it now accepts every
+  `color` form `tab()` does (`TRUE` / a measure / two-channel `c(text, background)` / per-type
+  `list(pct =, mean =)`), plus `color_signif`, `color_breaks`, `display`, `cleannames`, `n_min`,
+  `common_totrow`, `method_ratio` and `spread_vars` / `names_prefix` / `names_sort`. The result stays
+  byte-identical to the `tab()` table built from the underlying microdata. Arguments resolved during the
+  microdata prep that `tab_counts()` starts past are not offered (`levels = "first"`/`"auto"`,
+  `other_if_less_than`, `na = "drop_all"`/`"common_base"`, the survey design, `wt` — use `wt_counts`).
 * **French translation of everything printed on a table.** All rendered legends, footers and summaries
   now translate to French — the colour legend, the significance-stars and weighting footer lines, the
   confidence-interval method names, the `test = TRUE` p-value / effect-size row labels and regression
