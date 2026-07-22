@@ -41,6 +41,73 @@ testthat::test_that("resolveExportPath(dir, filename, ext): folder + bare name +
   testthat::expect_match(basename(p7), "^Name\\.xlsx$")
 })
 
+# --- Export-folder detection & diagnostics (Last Phase o) ---------------------------------
+# The doc_* / fb_* detectors + export_writable/export_write_test + the candidate tables are the seed
+# of the eventual export_documents_dir() rewrite, so they stay after jmvtest is removed. They must
+# NEVER error on any OS (off-platform methods return NA), and the read-only probes never write a file.
+
+testthat::test_that("every Documents / fallback detector returns a single path or NA and never errors", {
+  detectors <- list(
+    doc_win_powershell, doc_win_reg_shell, doc_win_reg_usershell, doc_win_regexe,
+    doc_win_onedrive, doc_xdg, doc_xdg_file, doc_wsl_mnt, doc_home_documents,
+    fb_home, fb_desktop, fb_downloads, fb_cwd, fb_tempdir
+  )
+  for (f in detectors) {
+    v <- testthat::expect_no_error(f())
+    testthat::expect_true(is.character(v) && length(v) == 1L)     # a single path or NA_character_
+  }
+  # the baseline home/Documents and the tempdir fallback are always concrete (non-NA)
+  testthat::expect_false(is.na(doc_home_documents()))
+  testthat::expect_false(is.na(fb_tempdir()))
+})
+
+testthat::test_that("export_writable(): existing+writable is TRUE, nonexistent / NA / '' are FALSE", {
+  testthat::expect_true(export_writable(tempdir()))
+  testthat::expect_false(export_writable(file.path(tempdir(), "no_such_dir_xyz_tabxplor")))
+  testthat::expect_false(export_writable(NA_character_))
+  testthat::expect_false(export_writable(""))
+})
+
+testthat::test_that("export_write_test() writes a .md file and reports the path; a bad folder fails cleanly", {
+  d <- file.path(tempdir(), "tabxplor_jmvtest_probe")
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  r <- export_write_test(d, "unit_probe", note = "method: unit test")
+  testthat::expect_true(r$ok)
+  testthat::expect_true(file.exists(r$path))
+  testthat::expect_match(r$path, "unit_probe\\.md$")
+  testthat::expect_true(any(grepl("tabxplor export folder test", readLines(r$path))))
+
+  bad <- export_write_test("/proc/tabxplor_nope/sub", "x")   # can't create -> ok=FALSE, no throw
+  testthat::expect_false(bad$ok)
+  testthat::expect_false(is.na(bad$error))
+})
+
+testthat::test_that("candidate tables have the right shape (>= 5 rows, method/dir/exists/writable) + a CURRENT row", {
+  docs <- export_doc_candidates()
+  testthat::expect_named(docs, c("method", "dir", "exists", "writable"))
+  testthat::expect_gte(nrow(docs), 5L)
+  testthat::expect_true(is.logical(docs$exists) && is.logical(docs$writable))
+  testthat::expect_true(any(startsWith(docs$method, "CURRENT")))     # today's behaviour, side by side
+  testthat::expect_true(any(nzchar(docs$dir)))                       # at least the baseline resolves
+
+  fb <- export_fallback_candidates()
+  testthat::expect_named(fb, c("method", "dir", "exists", "writable"))
+  testthat::expect_gte(nrow(fb), 5L)
+  testthat::expect_true(fb$writable[fb$method == "tempdir()"])       # the universal safety net
+})
+
+testthat::test_that("export_env_probe() + export_probe_html() build a named report and HTML tables", {
+  env <- export_env_probe()
+  testthat::expect_true(is.character(env) && !is.null(names(env)))
+  testthat::expect_true(all(c("OS.type", "WSL", "export_home_dir()") %in% names(env)))
+
+  testthat::expect_match(export_probe_html(env, "Env"), "<table")
+  testthat::expect_match(export_probe_html(export_doc_candidates(), "Docs"), "<table")
+  testthat::expect_match(export_probe_html(env, "Env"), "<h3")                 # the title renders
+  # HTML-escaping: a "<" in a value never leaks as a raw tag
+  testthat::expect_false(grepl("<script", export_probe_html(c(a = "<script>"))))
+})
+
 testthat::test_that("jmvtab_export gives a friendly error when the folder can't be created", {
   # a path under a location we can't write to -> a clear, actionable message (not a raw connection error)
   bad <- "/proc/tabxplor_nope/sub/Table.md"

@@ -1,0 +1,24 @@
+---
+name:  jmvtest
+title: Export folder test
+jrs:   '1.1'
+
+items:
+
+    - name: environment
+      title: Environment
+      type: Html
+
+    - name: documents
+      title: Documents-detection methods
+      type: Html
+
+    - name: fallbacks
+      title: Fallback save locations
+      type: Html
+
+    - name: write_results
+      title: Write results
+      type: Html
+
+...

@@ -1134,16 +1134,27 @@ Carefully study the manual review made by the maintainer at `dev/review_manual/t
 - **md→HTML borders (`tab_md.R` + `tab-css.R`, keep the pipe table).** Styled md fills blanked label / span-row / header cells with U+00A0 so ONLY the real spacer columns stay `:empty` (kills the span-row stray borders + the ragged left edge). `tab-css.R` gains div-aware top/bottom/right edge rules. The spacer set `sep_after` (was `new_col_var`) adds interior boundaries in styled mode (levels|numbers, numbers|Total) — the span row now routes through `md_insert_col_sep` like the body, so every vertical lines up.
 
 
-#### Last phase n — Jamovi UI bug corrections
+#### Last phase n — Jamovi UI default export folder tests
+
+Default export path still can’t detect my real Windows Documents folder, an creates "USER/Documents". Same on WSL : it creates "~/Documents" (is this folder absolutely standard but just not present in my WSL ?) I think the R in Electron session is locked, can’t read Windows registry, etc.
+
+ Please think about how, from inside jamovi, we can find a reliable solution, or a good fallback. How does `SummaryTable::resolveExportPath()` do at the first place, where do it writes exports ? Then, create a new jmvtest analysis, and experiment with at least 5 different solutions to make it work, and 5 fallback solutions of where to save it if it’s not possible to reliable find the real documents folder. Use a simple text saved as a .md file, not Excel or table needed here. Also add buttons to test intermediary results and features, and I’ll give you the real world results back. I can test live on Windows + Ubuntu in WSL2, but it shall work on Mac OS too.
+
+**DONE (2026-07-22), diagnostic delivered — awaits the maintainer's real-world results before the fix lands.** R-side suite green (FAIL 0, WARN 0, PASS 4128, SKIP 4), zero golden/snapshot churn; the new `jmvtest` jamovi analysis is INERT until the maintainer runs `jmvtools::prepare()` + rebuilds.
+- **Premise corrections (both wrong in the ask):** there is NO `SummaryTable` package anywhere — the only `resolveExportPath()` is tabxplor's own. jamovi never resolves paths in R; a normal module returns result objects and the app saves them, resolving `{{Documents}}` once in a native C++ `Dirs` class (`SHGetKnownFolderPath` on Windows, `xdg-user-dir DOCUMENTS` on Linux). tabxplor writes files ITSELF, bypassing `Dirs`, hence the R reimplementation. Also root-caused: `export_documents_dir()`'s registry resolver is DEAD in the default case — the `"~/Documents"` default is non-blank, so `resolveExportPath` skips it and `~` expands to `C:\Users\<x>\Documents` (blind to a D:\Documents redirect).
+- **The diagnostic** (`jmvtest`, menu tabxplor ▸ Diagnostics; the 5 hand files + `R/jmvtest.b.R`, registered in `0000.yaml`): four Html panels (Environment / Documents-detection methods / Fallback save locations / Write results) + two Action buttons that PERSIST a plain `.md` per candidate so the maintainer finds which one lands in the real Documents. Read-only panels probe with `file.access` (never litter); writes are `.md`-only via `export_write_test()` (no Excel — isolates the Phase-o serialization bug).
+- **Detectors** (all in `R/jmvtab-export.R`, guarded, never error, the seed of the eventual `export_documents_dir()` rewrite): 9 Documents methods (powershell `GetFolderPath('MyDocuments')` [+wslpath], registry Shell / User Shell Folders, reg.exe, OneDrive, xdg-user-dir, user-dirs.dirs, WSL cmd.exe+wslpath, home/Documents baseline) + a CURRENT-behaviour row; 5 fallbacks (home / Desktop / Downloads / getwd / tempdir). Permanent tests in `test-jmvtab-export.R`.
+- **Diagnostic-only** (maintainer decision): the live resolver is UNTOUCHED — the panel shows today's output beside every candidate. **Temporary** (maintainer decision): once the winning method is reported it folds into `export_documents_dir()` and `jmvtest` (+ its generated `.h.R`) is removed; the detectors + tests stay.
+- **Maintainer step**: `Sys.unsetenv("ELECTRON_RUN_AS_NODE")` → `jmvtools::prepare()` (generates `R/jmvtest.h.R`) → `document()` → `install(home='flatpak')`; add Diagnostics, click "Write to every candidate", report which `.md` reached the real Documents on Windows + WSL (+ mac).
+
+
+#### Last phase o — Jamovi UI bug corrections
 
 Export to Excel with default parameters in Jamovi still fails (html and md works), Windows-side **and** Linux-side (WSL):
    "Export failed: ℹ In index: 1.
    Caused by error:
    ! Invalid input: dims must be something like A1 or A1:B2."
 - Excel exports work well with tab() and tab_reg(), so it looks like a jamovi problem : maybe due to cache system, the data is somehow different than a regular tab() and tab_reg() table ? Would it be possible to 
-
-Default export path still can’t detect my real Windows Documents folder, an creates "USER/Documents". Same on WSL : it creates "~/Documents" (is this folder absolutely standard but just not present in my WSL ?)
-- I think the R in Electron session is locked, can’t read Windows registry, etc. Please think about how, from inside jamovi, we can find any. How does `SummaryTable::resolveExportPath()` do at the first place, where do it writes exports ?
 
 Horizontal rule before Export appear as raw html in the UI, it’s written : "<hr style=...>" Fix it, use empty line if needed : one empty line before subset, one empty line before Export block. 
 
@@ -1176,9 +1187,6 @@ predictors = list(
 family = "binomial", # empirical = TRUE, 
 ) 
 ```
-
-still freezes very often : I can’t reproduce the pattern for freeze, but I think just selecting or selecting out predictors too fast may make it freeze (sometimes it doesn’t even feel fast : like it click "+" to add three models, they add, then I select out a level, waiting for 5 sec and not more loading between each action, and it still freezes ; sometime it’s total freeze that require jamovi restart, sometimes it’s still possible to remove the analysis and redo, but this one feels random). Please do thorought web searches about jamovi freeze problems, and help me diagnose the cause and find a solution. Maybe the model comparison panel needs a kind of Ok button : since it’s an heavy operation that have no meaning to be redone every second, maybe the right UI is maybe "the user pick its models, then click the button to start analysis", actually bypassing jamovi UI live display for this one. Once the models to compare are picked, changes in other buttons in the UI keeps them, removing a variable in variable selection remove it in all models then relaunch (maybe guard this one in another way since it had been a source of freeze with model comparison in the past ?), etc. What other guards against jamovi freeze ?
-- There’s a R side problem too : for a row variable/predictor selection in all models the reference catogory is in bold in the firt "levels" column, with is the right behaviour ; but when the predictor have been selected out in any model, the bold dissapear ; I think it’s just because empty parts of the table doesn’t properly keep the `in_refrow` field, and mess with reference row detection.
 
 
 

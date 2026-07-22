@@ -1,0 +1,47 @@
+---
+name:  jmvtest
+title: Export folder test
+menuGroup: tabxplor
+version: '1.0.0'
+jas: '1.2'
+weightsSupport: 'none'
+# A THROWAWAY diagnostic (Last Phase o): probe many ways to find the real Documents folder and write a
+# plain .md test file to each, so the maintainer can report from real Windows / WSL / macOS machines
+# which method lands where. Removed once the winning method is folded into export_documents_dir().
+
+options:
+    - name: data
+      type: Data
+      description:
+          R: >
+           A data.frame (unused; the diagnostic needs no variables and runs as soon as it is added).
+
+    - name: test_name
+      title: "Test file name"
+      type: String
+      default: "tabxplor_export_test"
+      description:
+          R: >
+           The bare name (no extension) of the .md test file written by the buttons.
+
+    - name: test_dir
+      title: "Extra folder to test (optional)"
+      type: String
+      default: ""
+      description:
+          R: >
+           An optional extra folder to also try writing the test file into (blank = ignore).
+
+    - name: write_detected
+      title: "Write test file to detected Documents"
+      type: Action
+      description:
+        R: "Press to write the .md test file to the best-detected Documents folder."
+
+    - name: write_all
+      title: "Write a test file to every candidate"
+      type: Action
+      description:
+        R: "Press to write a distinct .md test file into every detection + fallback candidate folder."
+
+...

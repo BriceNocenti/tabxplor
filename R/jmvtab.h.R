@@ -17,8 +17,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             chi2 = FALSE,
             anova = "welch",
             test_robust = "classic",
-            strata = NULL,
-            ids = NULL,
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
@@ -150,25 +148,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 test_robust,
                 options=list(
                     "classic",
-                    "kish",
-                    "survey"),
+                    "kish"),
                 default="classic")
-            private$..strata <- jmvcore::OptionVariable$new(
-                "strata",
-                strata,
-                default=NULL,
-                permitted=list(
-                    "factor",
-                    "id",
-                    "numeric"))
-            private$..ids <- jmvcore::OptionVariable$new(
-                "ids",
-                ids,
-                default=NULL,
-                permitted=list(
-                    "factor",
-                    "id",
-                    "numeric"))
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -411,8 +392,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..chi2)
             self$.addOption(private$..anova)
             self$.addOption(private$..test_robust)
-            self$.addOption(private$..strata)
-            self$.addOption(private$..ids)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
@@ -459,8 +438,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         chi2 = function() private$..chi2$value,
         anova = function() private$..anova$value,
         test_robust = function() private$..test_robust$value,
-        strata = function() private$..strata$value,
-        ids = function() private$..ids$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
@@ -506,8 +483,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..chi2 = NA,
         ..anova = NA,
         ..test_robust = NA,
-        ..strata = NA,
-        ..ids = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
@@ -644,12 +619,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   classic pooled F.
 #' @param test_robust For a weighted table, a more robust p-value: "classic"
 #'   (unweighted chi2 / Welch F); "kish" (first-order Rao-Scott rescale to the
-#'   effective sample size); "survey" (a design-based survey::svychisq / svyglm
-#'   F using the weight + optional strata/ids).
-#' @param strata Optional stratification variable for the survey-design test
-#'   (test = "survey").
-#' @param ids Optional cluster-id variable for the survey-design test (test =
-#'   "survey").
+#'   effective sample size).
 #' @param na The policy to adopt with missing values. It must be a single
 #'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
 #'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
@@ -783,8 +753,6 @@ jmvtab <- function(
     chi2 = FALSE,
     anova = "welch",
     test_robust = "classic",
-    strata = NULL,
-    ids = NULL,
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
@@ -826,17 +794,13 @@ jmvtab <- function(
     if ( ! missing(col_vars)) col_vars <- jmvcore::resolveQuo(jmvcore::enquo(col_vars))
     if ( ! missing(tab_vars)) tab_vars <- jmvcore::resolveQuo(jmvcore::enquo(tab_vars))
     if ( ! missing(wt)) wt <- jmvcore::resolveQuo(jmvcore::enquo(wt))
-    if ( ! missing(strata)) strata <- jmvcore::resolveQuo(jmvcore::enquo(strata))
-    if ( ! missing(ids)) ids <- jmvcore::resolveQuo(jmvcore::enquo(ids))
     if (missing(data))
         data <- jmvcore::marshalData(
             parent.frame(),
             `if`( ! missing(row_vars), row_vars, NULL),
             `if`( ! missing(col_vars), col_vars, NULL),
             `if`( ! missing(tab_vars), tab_vars, NULL),
-            `if`( ! missing(wt), wt, NULL),
-            `if`( ! missing(strata), strata, NULL),
-            `if`( ! missing(ids), ids, NULL))
+            `if`( ! missing(wt), wt, NULL))
 
     for (v in tab_vars) if (v %in% names(data)) data[[v]] <- as.factor(data[[v]])
 
@@ -852,8 +816,6 @@ jmvtab <- function(
         chi2 = chi2,
         anova = anova,
         test_robust = test_robust,
-        strata = strata,
-        ids = ids,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,

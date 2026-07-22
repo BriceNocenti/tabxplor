@@ -1,5 +1,5 @@
 
-# Manual reviews pass 5 ----
+# Manual reviews pass 6 ----
 
 library(devtools)
 load_all()
@@ -12,53 +12,12 @@ gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and fir
 
 ### exports and display tests  ---- 
 
-tab(gss_simple, c(race, rincome, relig), party3, pct = "row",  na = "drop_all", 
-   color = TRUE, color_signif = "grey_non_signif", ref = c("tot", 1, 1), common_totrow = TRUE
-) 
-# # A tabxplor tab: 16 × 11
-# # Groups:         row_var [3]
-#    row_var levels            Democrat `Independent, other` Republican 
-#    <fct>   <fct>               <row%>               <row%>     <row%> 
-#  1 race    White                  39%                  20%        41% 
-#  2 race    Black                  77%                  15%         8% 
-#  3 race    Other                  51%                  29%        19% 
-#
-# ...
-#
-#  8 relig   Protestant             42%                  16%        42% 
-# ...
-# 15 relig   None                   50%                  31%        19% 
-# 16 relig   Total                  45%                  20%        34% 
-#
-# - When there is only one total row for several row_vars, it’s currently displayed as if it was
-#   belonging to the last row_variable only, here relig : I want this shared Total row to appear in it’s own
-#   row_var group after a blank line in console and md (where there are no horizontal borders to differenciate the total)
-#   like between normal "tab_vars" groups. What would be the better way, code it as a totaltable, how to call the "row_var" 
-#   here for consistency, just "Total", something else ?
-# - Also, here, since the common Total row belongs to relig, when I choose Total as reference for the first row_vars, but 
-#   "1" for the last relig row_vars, the shared Total does not appear in bold like it should be (to highlight it’s the 
-#   reference for at least one row variable, here race). 
-# - In want "common_totrow" to be an opt-in argument : default (FALSE) should return to the "one Total row per row_vars" behaviour
-
-
-tab(gss_simple, c(race, rincome, relig), c(party3, marital, tvhours), pct = "col", na = "drop", 
-   color = TRUE, color_signif = "grey_non_signif", ref = c("tot", 1, 1),
-) 
-# - Is there a reliable way to have ref vectorised on row_vars with pct="row", but 
-#   vectorised on col_vars with pct="col", for the user to choose ? Since there can
-#   be numeric variables among col_vars, it should be robust : if the vector is the length 
-#   of the number of factors rows vars it should work, if the vector is the length of all 
-#   col_vars including numeric variables the corresponding items should go for the reference
-#   of the numeric vars (which here is orthogonal : first row, total row, etc.) 
-# - With pct="col", the "n" row numbers now appear in bold : go to plain font weight.
-
-
 
 # tab_md 
 tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 ) |> 
-  tab_export("md", css = TRUE)
+  tab_export("md")
 # - markdown formatting itself is readable, well and aligned (dev/review_manual/tab_md_test_4.md`)
 # - html rendering still have problems (look at `dev/review_manual/tab_md_test_4.htm` ) : 
 #   - The first row with variables names have many unwanted borders
