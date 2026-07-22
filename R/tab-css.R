@@ -298,6 +298,15 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,",
            ".tabxplor-tab table > thead > tr > *:last-child{",
            "border-right-style:solid;border-right-width:1px;}"),
+    # Last Phase r: the LEFT edge, symmetric to the right edge above. Before Phase m the leftmost
+    # column's cells were `:empty` and caught the border-LEFT spacer rule -- an ACCIDENTAL left edge.
+    # Phase m's U+00A0 fill made them non-empty (killing the "ragged" edge), which also removed the
+    # only thing drawing the table's left side -> the first column had no left border at all. Draw it
+    # explicitly here (independent of cell emptiness); `:has(td:not(:empty))` skips the all-blank
+    # separator rows exactly like the right edge. Interior verticals stay the :empty spacer columns.
+    paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:first-child,",
+           ".tabxplor-tab table > thead > tr > *:first-child{",
+           "border-left-style:solid;border-left-width:1px;}"),
     # Phase g (A5): the md footer is a paragraph after the table INSIDE the `.tabxplor-tab` div (the html
     # engine puts its footer in <tfoot>, styled above). `.tabxplor-tab p` is md-only by selector -- the
     # html engine's `.tabxplor-tab` IS the <table> and has no descendant <p>.
@@ -311,7 +320,12 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # DIRECT child of `.tabxplor-tab` (true only when `.tabxplor-tab` IS the <table>; in md it wraps a
     # nested <table>, so this never matches there and md keeps its own chrome). (0,2,2) out-specifies the
     # `thead th` border-top-width:0 (0,1,2). Longhands only -- the border-colour contract (no shorthand).
-    paste0(".tabxplor-tab > thead > tr:first-child > *{",
+    # Last Phase r: the col_var spanning-NAME row (all cells `.tx-span`) must FLOAT above the grid --
+    # no top border boxing the variable names, closed only by the `.tx-span` border-BOTTOM below them.
+    # `*:not(.tx-span)` draws the top edge ONLY when the first thead row is a level-header row (no span
+    # present, e.g. a single col_var / span-dropped table); a names row gets none. This deliberately
+    # narrows Phase 15d's universal top edge, per the maintainer's display review.
+    paste0(".tabxplor-tab > thead > tr:first-child > *:not(.tx-span){",
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
@@ -357,7 +371,12 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # WARNING: `tx-bb` (1px) and `tx-bb2` (2px) have IDENTICAL specificity (0,3,1), so a row carrying
     # both -- the last row of a row_var block -- is decided by SOURCE ORDER here: tx-bb2 comes second
     # and wins, which is the intended thicker rule. Do not reorder this pair.
-    ".tabxplor-tab tr.tx-bb>*{border-bottom-style:solid;border-bottom-width:1px;}",
+    # Last Phase r: `td.tx-bb` is the CELL-scoped twin of the row rule. A rowspanned label cell (a
+    # merged table's vertical row-var name) is anchored in its block's FIRST row, so `tr.tx-bb>*`
+    # (last-row direct children) never reaches the one that covers the table bottom -> the bottom-left
+    # corner was left open. render_kable_html() tags that single cell `tx-bb` to close it at 1px (the
+    # cell is not a direct child of the tx-bb2 bottom row, so it stays 1px, not 2px -- as asked).
+    ".tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}",
     ".tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}",
     # Phase 14j: the footnote (subtext + colour legend) must not SIZE the table. Its cell spans every
     # column, and its prose is ~330 characters on one line, so its max-content dwarfed the data's --

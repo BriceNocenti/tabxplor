@@ -540,7 +540,7 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 name="cache_state",
                 title="",
                 width=1080,
-                height=0,
+                height=1,
                 renderFun=".plot"))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(

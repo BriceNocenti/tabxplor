@@ -1,6 +1,6 @@
 ---
 name:  jmvtabreg
-title: Regressions
+title: Regression models
 jrs:   '1.1'
 
 items:
@@ -16,7 +16,7 @@ items:
       title: ""
       type: Image
       width: 1080
-      height: 0
+      height: 1
       renderFun: .plot
 
     # Phase h: persists the last COMPUTED comparison (signature + rendered HTML) across engine resets,
@@ -26,6 +26,6 @@ items:
       title: ""
       type: Image
       width: 1080
-      height: 0
+      height: 1
       renderFun: .plot
 ...

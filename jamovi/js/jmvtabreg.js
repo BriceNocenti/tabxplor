@@ -75,10 +75,13 @@ var applyWtEnables = function(ui) {
 // dropped on jamovi re-renders). Folder keeps a 260px minimum so it stays the wider box (tune to taste);
 // the file name (width: large) collapses fully. Only the two export boxes use these width classes.
 // Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
-// box class differs across jamovi builds, so several candidates are targeted; a wrong one simply no-ops.
-// Phase o: also add an empty line at the BOTTOM of each collapse box (a blank line only while the box is
-// expanded), so a collapsed pane reads clearly apart from the next. The box CONTENT element's class
-// differs across jamovi builds, so several candidates carry the padding; a wrong one simply no-ops.
+// box. Last Phase r: the empty line at the BOTTOM of each collapse box (blank only while EXPANDED, so a
+// collapsed pane stays compact and reads clearly apart from the next). The live jamovi collapse box is
+// `.jmv-collapse-view` and its collapsed state is `.view-colapsed` (jamovi's spelling) -- confirmed
+// against dev/jamovi/dev_console_live_capture/.../analysisui-*.css. The former guessed classes
+// (.silky-options-collapse-box*, .jmv-options-collapsebox*, .silky-layout-content) matched NOTHING in
+// the DOM, which is why earlier attempts never showed. `padding-bottom` sits inside the box border;
+// `:not(.view-colapsed)` drops it when collapsed.
 var injectTabxCss = function() {
     if (document.getElementById("tabx-css")) return;
     var s = document.createElement("style");
@@ -86,9 +89,7 @@ var injectTabxCss = function() {
     s.textContent =
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
         "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
-        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}" +
-        ".silky-options-collapse-box-body,.silky-collapse-box-body,.jmv-options-collapsebox-body," +
-        ".silky-options-collapse-box .silky-layout-content{padding-bottom:12px;}";
+        ".jmv-collapse-view:not(.view-colapsed){padding-bottom:10px;}";
     document.head.appendChild(s);
 };
 
@@ -111,16 +112,15 @@ var styleExportSep = function(ui) {
     }
 };
 
-// Phase o: give the "Run comparison" action a material grey button (black text on light grey) so it
-// reads as a distinct, deliberate step, plus a blank line below it (the empty line the maintainer asked
-// for at the bottom of the box). Same reach-the-<button> pattern as styleResetBtn; re-applied each
-// onUpdate because jamovi re-renders drop inline styles.
+// Last Phase r: the "Run comparison" action matches the Export button -- jamovi's DEFAULT ActionButton
+// look (theme-correct blue background, white bold text), so we DON'T recolour it (the Phase-o material
+// grey is dropped). Only keep the blank line below it (the empty line the maintainer asked for at the
+// bottom of the box). Re-applied each onUpdate because jamovi re-renders drop inline styles.
 var styleRunCompareBtn = function(ui) {
     var c = ui.run_compare;
     if (!c || !c.$el || !c.$el[0]) return;
     var btn = c.$el[0].querySelector("button") || c.$el[0];
-    btn.style.cssText += ";background:#e0e0e0;color:#000;border:1px solid rgba(0,0,0,0.2);" +
-                         "border-radius:3px;box-shadow:none;padding:4px 12px;margin-bottom:8px;cursor:pointer;";
+    btn.style.marginBottom = "8px";
 };
 
 // Push a control to the BOTTOM of its (taller) row: walk up to its row-item cell (the one whose grid is a
@@ -150,7 +150,7 @@ var onUpdate = function(ui) {
     renderExt(ui);
     styleResetBtn(ui);
     styleExportSep(ui);                      // Phase o: thin rule above the (out-of-hierarchy) Export block
-    styleRunCompareBtn(ui);                  // Phase o: material grey Run-comparison button
+    styleRunCompareBtn(ui);                  // Last Phase r: default (Export-look) button + blank line
     bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
@@ -182,7 +182,7 @@ var TABX = {
     refNote: "opacity:0.6;font-style:italic;",
     hint:    "padding:8px;opacity:0.65;font-style:italic;",
     // model-builder cards (one per model) + the numeric-predictor scaling input
-    cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:66%;min-width:320px;box-sizing:border-box;",
+    cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:100%;min-width:320px;box-sizing:border-box;",
     cardHead: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
     cardBase: "display:inline-flex;align-items:center;gap:3px;font-size:0.85em;opacity:0.8;white-space:nowrap;cursor:pointer;",
     cardName: "flex:1 1 auto;min-width:0;box-sizing:border-box;padding:2px 6px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;font-weight:600;",

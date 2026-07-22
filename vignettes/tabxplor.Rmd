@@ -77,12 +77,24 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", cleannames = TRUE)
 ```
 
-A few other everyday arguments: `wt =` for a weight variable, `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
+A few other everyday arguments: `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
+
+## Weights
+
+The argument `wt =` adds a weight variable
 
 ```{r, echo=TRUE, eval=FALSE}
 data(hdv2003, package = "questionr")
 tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
 ```
+
+Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
+
+
+```{r, echo=TRUE, eval=FALSE}
+options(tabxplor.kish_neff = TRUE)
+```
+
 
 
 ## Sub-tables
@@ -202,8 +214,7 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
-**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
-
+**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` is not applied to confidence intervals : only whole tables pvalues (Chi2, ANOVA F).
 
 ## Exporting
 

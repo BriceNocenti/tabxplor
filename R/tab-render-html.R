@@ -416,6 +416,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     if (is.null(run) || is.na(j)) next
     vert <- cl %in% names(roles$var_name_col) & run$span > 1L
     cls  <- paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""))
+    # Last Phase r: a rowspanned label cell is anchored in its block's FIRST row, so the per-row
+    # `tr.tx-bb>*` bottom rule never reaches the one covering the table's LAST row -> open bottom-left
+    # corner. Tag that single cell `tx-bb` (the cell-scoped 1px rule in R/tab-css.R) to close it.
+    if (any(run$show)) {
+      last_i <- max(which(run$show))
+      if (last_i + run$span[last_i] - 1L >= n_row) cls[last_i] <- paste(cls[last_i], "tx-bb")
+    }
     td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
                    html_escape_br(cells[[j]]), '</td>')
     td[!run$show] <- ""

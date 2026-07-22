@@ -1359,7 +1359,14 @@ markdown export still have a few problems on their own pandoc/quarto html render
 `jmvtab` and `jmvtabreg` UI :
 - Add an empty line at the bottom of each collapsable box elements from the main outline of the jamovi options UI ("Percentages, colors and tests", "Levels and missing values", "Model", etc. ; if it was attempted in the last improvements, it dit not appear in Jamovi)
 
+#### Last Phase s – Kish neff verification
 
+The current documentation say contradictory things about kish_neff, and I can’t remember exactly what was done : 
+- In `tab()`, with `wt = ` survey weights provided (but no full survey design), is `options(tabxplor.kish_neff = TRUE)` actually used in the calculation of **all** confidence intervals (for factors, for means, and all of them) ? 
+- In `tab_reg()`, is `options(tabxplor.kish_neff = TRUE)` used not only for weighted models, but also for their observed counterpart’s confidence intervals using `empirical = TRUE` ?
+- In `tab_reg()`, are **all** the selected kind of models handling well `options(tabxplor.kish_neff = TRUE)` ? A real full survey design ? 
+
+Please enquire, then modify documentation and architecture documents to state it clearly, then state it in a concise way in introduction vignette (`tab()`) and regression vignette in a "Weights" section. It should start very clearly and understandably for beginners, explaining base wt, then only kish neff (explaining clearly what is it / what it does for beginners), then very rapidly full survey design (refering to survey:: for more). 
 
 #### Last Phase w – tabxplor R french translation
 

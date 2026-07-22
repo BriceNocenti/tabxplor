@@ -42,7 +42,7 @@ items:
       title: ""
       type: Image
       width: 1080
-      height: 0
+      height: 1
       renderFun: .plot
 
     # - name: freqs

@@ -751,6 +751,12 @@
   name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
+* **Table borders now close cleanly in the html and markdown exports.** In the custom html export, the
+  vertical row-variable-name column (several `row_vars`) gained its missing bottom border, and the
+  column-variable names now float above the grid with no top border boxing them. In the markdown export,
+  the table's left edge is drawn again (it had gone missing on the variable-name column). The jamovi UI
+  also got a polish pass: the model-comparison boxes fill the available width, the *Run comparison* button
+  matches the Export button, and each collapsable options box now has a blank line at its bottom.
 * **Excel export from the jamovi modules no longer fails** with *"xml import unsuccessful"*. Significance
   stars, in-cell test labels, the standard-deviation sigma and the ratio multiply-sign were folded into
   the Excel number-format codes wrapped in double-quotes (`0.0%"***"`); the older openxlsx2 bundled inside

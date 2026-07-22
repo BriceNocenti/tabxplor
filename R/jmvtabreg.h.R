@@ -41,7 +41,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             export_format = "excel",
             exportExcel = FALSE,
             export_dir = "~/Documents",
-            export_filename = "Regression",
+            export_filename = "Reg_model",
             resetPath = FALSE,
             xl_replace = FALSE, ...) {
 
@@ -312,7 +312,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..export_filename <- jmvcore::OptionString$new(
                 "export_filename",
                 export_filename,
-                default="Regression")
+                default="Reg_model")
             private$..resetPath <- jmvcore::OptionAction$new(
                 "resetPath",
                 resetPath)
@@ -453,7 +453,7 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             super$initialize(
                 options=options,
                 name="",
-                title="Regressions")
+                title="Regression models")
             self$add(jmvcore::Html$new(
                 options=options,
                 name="html_table",
@@ -463,14 +463,14 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 name="cache_state",
                 title="",
                 width=1080,
-                height=0,
+                height=1,
                 renderFun=".plot"))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="compare_state",
                 title="",
                 width=1080,
-                height=0,
+                height=1,
                 renderFun=".plot"))}))
 
 jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
@@ -574,8 +574,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{D:\Documents} or network Documents included). Type any other folder
 #'   to override; a leading \code{~} there expands to your home folder.
 #' @param export_filename The bare file name, with NO extension (the chosen
-#'   format adds it). Illegal characters are removed automatically. Blank saves
-#'   as "Table".
+#'   format adds it).
 #' @param resetPath Reset the folder and file name to their defaults (your
 #'   Documents folder and "Regression").
 #' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
@@ -624,7 +623,7 @@ jmvtabreg <- function(
     export_format = "excel",
     exportExcel = FALSE,
     export_dir = "~/Documents",
-    export_filename = "Regression",
+    export_filename = "Reg_model",
     resetPath = FALSE,
     xl_replace = FALSE) {
 

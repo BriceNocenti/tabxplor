@@ -81,8 +81,11 @@ var renderSubtext = function(ui) {
 // persistent <style> because jamovi re-renders controls and drops INLINE styles (the reason the old
 // per-onUpdate inline widening never stuck). Only the two export boxes use `width: largest`, so the
 // selector is effectively scoped to them.
-// Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
-// box class differs across jamovi builds, so several candidates are targeted; a wrong one simply no-ops.
+// Last Phase r: a blank line at the bottom INSIDE each EXPANDED collapse box (compact when collapsed).
+// The live jamovi box is `.jmv-collapse-view`, collapsed state `.view-colapsed` (jamovi's spelling) --
+// confirmed against dev/jamovi/dev_console_live_capture/.../analysisui-*.css. The former guessed classes
+// (.silky-options-collapse-box*, .jmv-options-collapsebox*, .silky-layout-content) matched NOTHING, which
+// is why the empty line never appeared. Kept in sync with jmvtabreg.js's injectTabxCss.
 var injectTabxCss = function() {
     if (document.getElementById("tabx-css")) return;
     var s = document.createElement("style");
@@ -93,10 +96,7 @@ var injectTabxCss = function() {
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
         // file-name box (width: large): collapse its floor fully so it takes only its stretch share.
         "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
-        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}" +
-        // Phase o: a blank line at the bottom INSIDE each expanded box (candidates -- a wrong one no-ops).
-        ".silky-options-collapse-box-body,.silky-collapse-box-body,.jmv-options-collapsebox-body," +
-        ".silky-options-collapse-box .silky-layout-content{padding-bottom:12px;}";
+        ".jmv-collapse-view:not(.view-colapsed){padding-bottom:10px;}";
     document.head.appendChild(s);
 };
 

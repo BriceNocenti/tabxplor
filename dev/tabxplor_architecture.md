@@ -740,8 +740,12 @@ A list renders table-after-table (both engines; Phase 14d: it is never merged).
 class** resolved by `tab_css()`: `tx-r`/`tx-l` (align), `tx-num` (numbers: nowrap + the number font --
 proportional DejaVu Sans by default, but a MONOSPACE stack when the table shows stars, via the
 `tx-has-stars` class on the `<table>`; Phase 14m-ii, `options("tabxplor.tab_kable_num_font" / "_stars")`),
-`tx-br`/`tx-bl` (borders), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row rules), `tx-span` (the col_var
-header), `tx-pill` (a background), `tx-lbl`/`tx-vname` (a variable name spanning its block, Phase 14i),
+`tx-br`/`tx-bl` (borders), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row rules — Last Phase r: `tx-bb`
+also matches `td.tx-bb`, the CELL-scoped twin used to close the ONE rowspanned label cell that covers
+the table bottom, which the per-row rule can't reach), `tx-span` (the col_var header — Last Phase r:
+the whole-table top edge is `> thead > tr:first-child > *:not(.tx-span)`, so a span/names row FLOATS
+with no top border, closed only by the `.tx-span` border-bottom below it; a level-header-first row still
+gets the top edge), `tx-pill` (a background), `tx-lbl`/`tx-vname` (a variable name spanning its block, Phase 14i),
 `tx-foot` (the footnote, Phase 14j), plus the colour slots (`.p*`/`.m*` on the `<td>`, `.o*`/`.u*` on
 the pill span). `tx-tot`/`tx-rv` are emitted with **no rule of their own** since 14j: their min-widths
 were deleted (the browser content-sizes every column, so a floor could only be too big), and they
@@ -823,7 +827,11 @@ follow, and they are the ones to keep:
   (levels|numbers, numbers|Total) for a STYLED table, so the CSS `:empty`-spacer → border-left rule draws
   the same vertical rules the html/xl exports do. Styled tables also fill every blanked label / span /
   header cell with U+00A0 (not ""), so ONLY the real spacer columns stay `:empty` (no stray borders on
-  the variable-name row, no ragged left edge); `tab-css.R` adds div-aware top/bottom/right table edges;
+  the variable-name row); `tab-css.R` adds div-aware top/bottom/**left**/right table edges. Last Phase r:
+  the U+00A0 fill removed the *accidental* left edge (it used to come from the first column's `:empty`
+  cells catching the `td:empty` spacer rule), so the left edge is now drawn EXPLICITLY by a rule
+  symmetric to the right edge (`> tr:has(td:not(:empty)) > *:first-child` + `> thead > tr > *:first-child`,
+  border-left) — independent of cell emptiness;
 - a `|` in a label is escaped (label columns only — fmt cells are package-formatted numbers).
 
 **Padding aligns the VISIBLE end, not the raw one.** Markup (`[`, `**`) occupies raw columns but

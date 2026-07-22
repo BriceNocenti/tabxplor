@@ -414,11 +414,10 @@ options:
     - name: export_filename
       title: "/"
       type: String
-      default: "Regression"
+      default: "Reg_model"
       description:
           R: >
-           The bare file name, with NO extension (the chosen format adds it). Illegal characters are
-           removed automatically. Blank saves as "Table".
+           The bare file name, with NO extension (the chosen format adds it).
 
     - name: resetPath
       title: "Reset to defaults"
