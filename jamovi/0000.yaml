@@ -34,14 +34,6 @@ analyses:
     category: analyses
     usesNative: true
     minApp: 1.0.8
-  - title: Export folder test
-    name: jmvtest
-    ns: tabxplor
-    menuGroup: tabxplor
-    menuTitle: Export folder test
-    category: analyses
-    usesNative: true
-    minApp: 1.0.8
 usesNative: true
 minApp: 1.0.8
 

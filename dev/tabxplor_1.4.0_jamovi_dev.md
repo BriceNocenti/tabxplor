@@ -1343,3 +1343,110 @@ multi-fit stores) touches the byte-locked reref/AME path → flagged for a live-
 **Not fixable from tabxplor.** The `DOMNodeInserted` / `addRange()` console warnings come from jamovi's
 own Electron/Chromium option-UI framework (compiled `uijs`). The `conf_level` up/down 0.01 stepper is not
 a native jamovi control (plain number box kept, per the maintainer's decision).
+
+---
+
+## Phase o — Export-folder detection: real-world results (2026-07-22)
+
+The throwaway `jmvtest` (menu tabxplor > Diagnostics; `R/jmvtest.b.R` + detectors in
+`R/jmvtab-export.R`) was run live in jamovi on **Windows 11** (jamovi 2.7.37.0, bundled R 4.5.0) and
+**WSL2 Ubuntu flatpak** (jamovi 2.7.36.0, bundled R 4.5.0). Both wrote a `.md` into every writable
+candidate; the maintainer confirmed which files landed in the real Documents.
+
+### What actually happened
+
+- **Windows** — files landed in `D:\Documents` (the redirected real Documents), from the
+  `registry Shell Folders\Personal` method and from the "detected Documents" button.
+- **WSL flatpak** — the file landed in `/home/dev1/Documents` (the Linux side; the flatpak sandbox
+  has no `/mnt`, no `powershell.exe`/`cmd.exe`/`wslpath`, so the Windows `D:\Documents` is
+  unreachable — the Linux home is the only sane target, reachable from Windows via
+  `\\wsl.localhost\...`).
+
+### Windows detection table (jamovi 2.7.37 bundled R)
+
+| method                                 | dir                        | exists | writable |
+|----------------------------------------|----------------------------|:------:|:--------:|
+| powershell GetFolderPath(MyDocuments)  | (empty)                    |   -    |    -     |
+| **registry Shell Folders\Personal**    | **D:\Documents**           | TRUE   | **TRUE** |
+| registry User Shell Folders\Personal   | D:\Documents               | TRUE   | TRUE     |
+| reg.exe query Shell Folders            | D:\Documents               | TRUE   | TRUE     |
+| OneDrive env + \Documents              | (unset)                    |   -    |    -     |
+| home/Documents (naive baseline)        | C:/Users/Brice/Documents   | FALSE  | FALSE    |
+| CURRENT resolveExportPath("~/Documents") | C:/Users/Brice/Documents | FALSE  | FALSE    |
+
+Recommended (auto): **registry Shell Folders\Personal -> D:\Documents**. Decisive env facts:
+
+- `which powershell.exe` = **(not found)** — PowerShell is NOT on the bundled R's PATH, so the
+  "strongest" `GetFolderPath` method is UNAVAILABLE in a real jamovi. `reg.exe` and `cmd.exe` ARE
+  present (`C:\WINDOWS\SYSTEM32\...`). So on Windows the winner is `utils::readRegistry` (no
+  subprocess), with `reg.exe` as the subprocess fallback.
+- `HOME` = `C:/Rtools/home/builder`, `path.expand("~")` = `C:/Rtools/home/builder` (!). The
+  file-header claim that "bundled R's `path.expand('~')` -> Documents" is FALSE for 2.7.37 — here `~`
+  is the Rtools builder home. We already sidestep this: `export_home_dir()` uses `fs::path_home()` =
+  `USERPROFILE` = `C:/Users/Brice`, so `~/Documents` expands to `C:/Users/Brice/Documents` (the
+  CURRENT row) — correct expansion, wrong folder (the real one is on D:).
+- `getwd()` = `C:/Program Files/jamovi 2.7.37.0/bin` and is **not writable** (the one write that
+  FAILED, "cannot open the connection"). `getwd()` is a useless fallback; `tempdir()` is the reliable
+  safety net.
+
+### WSL/Linux detection table (flatpak)
+
+| method                    | dir                  | exists | writable |
+|---------------------------|----------------------|:------:|:--------:|
+| xdg-user-dir DOCUMENTS    | /home/dev1           | TRUE   | TRUE     |
+| home/Documents (baseline) | /home/dev1/Documents | FALSE* | (created)|
+| powershell / reg / wslpath | (not found)         |   -    |    -     |
+
+`*` `/home/dev1/Documents` did not pre-exist; the write CREATED it. `xdg-user-dir` IS installed
+(`/usr/bin/xdg-user-dir`) but this distro has no `~/.config/user-dirs.dirs`, so it falls back to
+echoing `$HOME` (`/home/dev1`, NOT a Documents subfolder) — which is why "Recommended" wrongly points
+at the home root. `getwd()` = `/app/bin` (read-only sandbox), `tempdir()` = `/var/tmp`.
+
+### The two questions answered
+
+- **Is `~/Documents` the normal Documents on every Ubuntu?** (The real Linux user base is normal
+  **desktop or server Ubuntu**, NOT WSL — the flatpak-in-WSL run above is only the dev test box, and
+  its no-`/mnt`, no-interop sandbox is the harshest case, not the typical one.) `~/Documents` is the
+  freedesktop/XDG *default* (`XDG_DOCUMENTS_DIR="$HOME/Documents"`), created by the `xdg-user-dirs`
+  package at first graphical login on a normal Ubuntu **desktop** — there `xdg-user-dir DOCUMENTS`
+  returns `/home/<user>/Documents`, which exists, and is the winning method. But it is **not
+  guaranteed**: on **server** / minimal / container / (this) WSL install `xdg-user-dirs` often never
+  ran, so `user-dirs.dirs` is absent, `~/Documents` does not exist, and `xdg-user-dir` returns bare
+  `$HOME`. Folder names can also be localized by `xdg-user-dirs-update` (French keeps "Documents", but
+  e.g. Downloads -> "Téléchargements") — so never hardcode the name; take whatever `xdg-user-dir`
+  returns. Robust rule: trust `xdg-user-dir` ONLY when it returns a real subfolder (`!= $HOME`);
+  otherwise use `$HOME/Documents` and **create it** (correct on desktop, server, and WSL alike).
+- **University / managed Windows robustness.** Folder Redirection / roaming profiles (GPO) push
+  Documents to a UNC network share; the resolved absolute path is written into
+  `Shell Folders\Personal` — exactly the value the registry method reads. So registry-first is the
+  *correct* choice for managed machines too (it returns the network path). The only added risk is an
+  offline share (`exists`/`writable` FALSE) -> the fix must validate and fall back.
+
+### Recommended `export_documents_dir()` rewrite (the follow-up fix)
+
+Mirror jamovi's own native `Dirs`, per OS, validate, and always create/fall back:
+
+```text
+Windows:
+  1. readRegistry HKCU ...\Shell Folders     -> Personal   (redirect + UNC honoured)   [PROVEN]
+  2. reg.exe query ...\Shell Folders /v Personal            (subprocess, if readRegistry blocked)
+  3. readRegistry HKCU ...\User Shell Folders -> Personal + %VAR% expand
+     -> take the first whose dir EXISTS or is creatable+writable; else
+  4. USERPROFILE\Documents (create)                         [do NOT use PowerShell: absent from PATH]
+macOS:
+     $HOME/Documents (create)                               [always the right place]
+Linux (normal desktop/server Ubuntu is the base case; WSL is just the harshest one):
+  1. xdg-user-dir DOCUMENTS        -> use ONLY if != $HOME and creatable+writable   [desktop winner]
+  2. ~/.config/user-dirs.dirs XDG_DOCUMENTS_DIR  (same != $HOME test)
+  3. else $HOME/Documents (create)          [server/minimal/WSL: xdg falls back to $HOME, so create]
+Universal safety net:
+     if the chosen dir can't be created/written -> tempdir(), and SAY the resolved path in the Notice.
+```
+
+Plus the **routing fix** (the actual live bug): `resolveExportPath()` only calls
+`export_documents_dir()` when the folder box is BLANK, but the default is the non-blank `"~/Documents"`,
+so the resolver is skipped and the wrong `C:/Users/Brice/Documents` wins. Fix: change the `export_dir`
+default to `""` (blank, show a "(your Documents)" placeholder) OR treat `"~/Documents"` / `"~"` /
+`"auto"` as a sentinel routed through `export_documents_dir()`. Keep the always-`dir.create` in
+`jmvtab_export()`. This lands in `R/jmvtab-export.R` (+ the `.a.yaml` default + the two JS reset
+handlers) as the next step; then `jmvtest` is removed (detectors + tests stay).

@@ -10,6 +10,10 @@
 #   - `ELECTRON_RUN_AS_NODE` must be UNSET before install() (Positron/Claude Code export it).
 #   - `jmvtools::check()` proves nothing (never reaches Electron); trust install() + the
 #     landed-module verify, not the check.
+#   - DLL LOCK: install() leaves jamovi engine processes running that memory-map the module's DLLs;
+#     the next build then can't overwrite them ("Permission denied ...\marginaleffects.dll"). We kill
+#     jamovi processes (by exe path) + delete the stale module dir BEFORE install and kill again AFTER
+#     (CFG$stop_jamovi / clean_module). A fresh R session does NOT clear these OS processes.
 # See: dev/tabxplor_1.4.0_jamovi_dev.md section 3.1-3.6 ; CLAUDE.md "Jamovi module development".
 #
 # USAGE (on Windows 11, R 4.6.1):
@@ -52,7 +56,13 @@ CFG <- list(
   skip_deps  = FALSE,        # TRUE = assume deps are already present, skip install_deps
 
   # --- housekeeping ------------------------------------------------------------------
-  keep_clone = TRUE          # keep the temp clone so you can inspect / re-run; FALSE deletes it
+  keep_clone   = TRUE,       # keep the temp clone so you can inspect / re-run; FALSE deletes it
+  use_pak      = TRUE,       # STAGE 3: install R deps with pak (robust vs base install.packages);
+                             #   auto-falls back to devtools::install_deps() when pak is absent.
+  stop_jamovi  = TRUE,       # STAGE 4 + cleanup: kill lingering jamovi/engine processes that lock
+                             #   module DLLs -- the recurring "Permission denied ... .dll" cause.
+  clean_module = TRUE        # STAGE 4: delete the stale installed tabxplor module dir before install
+                             #   so there is no locked DLL to overwrite (also clears a half-install).
 )
 
 # === Small logging + failure helpers ================================================
@@ -68,6 +78,84 @@ need_pkg <- function(pkg) {
     die("Required package '", pkg, "' is not installed in this R.\n",
         "     Install it first, e.g.:  install.packages(\"", pkg, "\")")
   }
+}
+
+# === Jamovi process + stale-module helpers (THE DLL-lock fix) =======================
+# WHY: jmvtools::install() spawns a headless jamovi (server + engine workers). On Windows those
+# engine processes LOAD the module's compiled DLLs (marginaleffects.dll, VGAM.dll, ...) and do NOT
+# reliably exit. The next build's install-from-file then cannot OVERWRITE a memory-mapped DLL ->
+# "PermissionError: [Errno 13] Permission denied: ...\modules\tabxplor\R\marginaleffects\libs\x64\
+# marginaleffects.dll". A fresh R session does NOT help -- these are separate OS processes. So we
+# kill them BEFORE and AFTER install, and delete the stale installed module dir first (nothing to
+# overwrite = no lock). Killing by EXECUTABLE PATH under the jamovi / %APPDATA%\jamovi roots is
+# name-agnostic (catches jamovi.exe, the engine, its bundled R) and never hits this R -- its exe is
+# not under those roots, and we exclude our own PID.
+
+jamovi_module_roots <- function(jamovi_home) {
+  home_user <- Sys.getenv("USERPROFILE", unset = path.expand("~"))
+  unique(c(
+    file.path(home_user, "AppData", "Local",   "jamovi", "modules"),
+    file.path(home_user, "AppData", "Roaming", "jamovi", "modules"),
+    file.path(home_user, ".jamovi", "modules"),
+    file.path(Sys.getenv("LOCALAPPDATA", ""), "jamovi", "modules"),
+    file.path(Sys.getenv("APPDATA", ""),      "jamovi", "modules"),
+    file.path(dirname(jamovi_home), "modules"),
+    file.path(jamovi_home, "modules")
+  ))
+}
+
+# Kill every process whose executable lives under the jamovi install or %APPDATA%\jamovi (plus the
+# jamovi-server python), excluding THIS R process. Path-scoped so it can't touch Positron/Rterm.
+stop_jamovi_processes <- function(jamovi_home) {
+  if (.Platform$OS.type != "windows") return(invisible())
+  ps1 <- tempfile(fileext = ".ps1")
+  writeLines(c(
+    "param([int]$self, [string]$jhome)",
+    "$prefixes = @($jhome, \"$env:APPDATA\\jamovi\", \"$env:LOCALAPPDATA\\jamovi\") |",
+    "  Where-Object { $_ -and $_.Length -gt 0 }",
+    "$killed = @()",
+    "Get-CimInstance Win32_Process | ForEach-Object {",
+    "  $p = $_",
+    "  if ($p.ProcessId -eq $self -or -not $p.ExecutablePath) { return }",
+    "  foreach ($pre in $prefixes) {",
+    "    if ($p.ExecutablePath.ToLower().StartsWith($pre.ToLower())) {",
+    "      try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop",
+    "            $killed += \"$($p.ProcessId) $($p.Name)\" } catch {}",
+    "      break",
+    "    }",
+    "  }",
+    "}",
+    "Get-CimInstance Win32_Process | Where-Object {",
+    "  $_.ProcessId -ne $self -and $_.Name -eq 'python.exe' -and $_.CommandLine -like '*jamovi*'",
+    "} | ForEach-Object {",
+    "  try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop",
+    "        $killed += \"$($_.ProcessId) python(jamovi)\" } catch {} }",
+    "if ($killed.Count) { 'killed: ' + ($killed -join '; ') } else { 'none running' }"
+  ), ps1)
+  out <- tryCatch(
+    system2("powershell",
+            c("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", shQuote(ps1),
+              "-self", Sys.getpid(), "-jhome", shQuote(jamovi_home)),
+            stdout = TRUE, stderr = TRUE),
+    error = function(e) paste("powershell unavailable:", conditionMessage(e)))
+  unlink(ps1)
+  step(paste0("stop jamovi processes: ", paste(out, collapse = " ")))
+  Sys.sleep(2)   # give Windows a moment to release the DLL handles
+  invisible()
+}
+
+# Delete the stale installed <root>/tabxplor module dir(s), so install-from-file writes into a clean
+# folder (no locked DLL to overwrite, and a prior half-install can't poison jamovi's module scan).
+remove_installed_module <- function(jamovi_home, name = "tabxplor") {
+  for (root in jamovi_module_roots(jamovi_home)) {
+    d <- file.path(root, name)
+    if (dir.exists(d)) {
+      suppressWarnings(unlink(d, recursive = TRUE, force = TRUE))
+      step(paste0(if (!dir.exists(d)) "removed stale module: "
+                  else "could NOT fully remove (still locked -- kill processes first?): ", d))
+    }
+  }
+  invisible()
 }
 
 # === STAGE 0: environment sanity ====================================================
@@ -187,16 +275,28 @@ banner("STAGE 3/5  Dependencies")
 if (CFG$skip_deps) {
   step("skip_deps=TRUE -> not installing dependencies.")
 } else {
-  step(paste0("install_deps(dependencies = ", format(CFG$dep_which), ") ..."))
-  devtools::install_deps(clone_dir, dependencies = CFG$dep_which,
-                         repos = CFG$cran_repo, upgrade = "never")
+  use_pak <- isTRUE(CFG$use_pak) && requireNamespace("pak", quietly = TRUE)
+  if (isTRUE(CFG$use_pak) && !use_pak)
+    step("pak requested but not installed -> falling back to devtools::install_deps().")
+
+  if (use_pak) {
+    # pak stages into a private lib and swaps atomically -> more robust than base install.packages
+    # against locked/loaded DLLs, and gives clearer errors. Installs the hard deps (Imports/LinkingTo).
+    step("pak::local_install_deps() ...")
+    pak::local_install_deps(root = clone_dir, upgrade = FALSE, ask = FALSE)
+  } else {
+    step(paste0("install_deps(dependencies = ", format(CFG$dep_which), ") ..."))
+    devtools::install_deps(clone_dir, dependencies = CFG$dep_which,
+                           repos = CFG$cran_repo, upgrade = "never")
+  }
 
   # jmvcore (and any EXTRA_DEPS) are Suggests but needed by the jamovi backend at build/run.
   missing_extra <- CFG$extra_deps[!vapply(CFG$extra_deps, requireNamespace,
                                           logical(1), quietly = TRUE)]
   if (length(missing_extra)) {
     step(paste0("Installing extra deps: ", paste(missing_extra, collapse = ", ")))
-    utils::install.packages(missing_extra, repos = CFG$cran_repo)
+    if (use_pak) pak::pkg_install(missing_extra, upgrade = FALSE, ask = FALSE)
+    else         utils::install.packages(missing_extra, repos = CFG$cran_repo)
   }
   step("Dependencies ready.")
 }
@@ -219,6 +319,12 @@ check_out <- tryCatch(utils::capture.output(jmvtools::check(home = jamovi_home))
                       error = function(e) paste("check() errored:", conditionMessage(e)))
 step(paste0("jmvtools::check(): ", paste(check_out, collapse = " | ")))
 
+# Pre-install: kill lingering jamovi engines (they lock the module DLLs) and delete the stale
+# installed module, so install-from-file has nothing locked to overwrite (the DLL-lock fix). Close
+# the jamovi Desktop app too if it is open -- it holds engines that this catches by path.
+if (isTRUE(CFG$stop_jamovi))  stop_jamovi_processes(jamovi_home)
+if (isTRUE(CFG$clean_module)) remove_installed_module(jamovi_home)
+
 step("jmvtools::install() -- this builds + installs the .jmo (~2 min) ...")
 build_ok <- tryCatch({
   jmvtools::install(clone_dir, home = jamovi_home)
@@ -239,15 +345,7 @@ suppressWarnings(tryCatch(devtools::load_all(clone_dir, quiet = TRUE),
 banner("STAGE 5/5  Verify install")
 
 # Best-effort scan of the Windows jamovi module roots for the installed tabxplor module.
-home_user <- Sys.getenv("USERPROFILE", unset = path.expand("~"))
-module_roots <- unique(c(
-  file.path(home_user, "AppData", "Local", "jamovi", "modules"),
-  file.path(home_user, "AppData", "Roaming", "jamovi", "modules"),
-  file.path(home_user, ".jamovi", "modules"),
-  file.path(Sys.getenv("LOCALAPPDATA", ""), "jamovi", "modules"),
-  file.path(dirname(jamovi_home), "modules"),
-  file.path(jamovi_home, "modules")
-))
+module_roots <- jamovi_module_roots(jamovi_home)
 module_roots <- module_roots[nzchar(module_roots) & dir.exists(module_roots)]
 
 yaml_path <- NULL
@@ -288,6 +386,10 @@ overall <- build_ok && verify_ok
 cat("  build_ok  : ", build_ok,  "\n",
     "  verify_ok : ", verify_ok, "\n",
     "  OVERALL   : ", if (overall) "PASS" else "FAIL", "\n", sep = "")
+
+# Kill the jamovi engines install() may have left running, so the NEXT build starts with no DLL
+# locked (this is the recurring-failure fix: a lingering engine locks the DLL for the following run).
+if (isTRUE(CFG$stop_jamovi)) stop_jamovi_processes(jamovi_home)
 
 if (CFG$keep_clone) {
   cat("\n  Temp clone kept at:\n    ", clone_dir, "\n",

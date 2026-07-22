@@ -407,8 +407,9 @@ options:
       default: "~/Documents"
       description:
           R: >
-           The folder to save the exported file in. `~` expands to your home folder. Blank saves to
-           your Documents.
+           The folder to save the exported file in. Blank or `~/Documents` auto-detects your real
+           Documents folder (a redirected `D:\Documents` or network Documents included). Type any
+           other folder to override; a leading `~` there expands to your home folder.
 
     - name: export_filename
       title: "Save to (file name)"

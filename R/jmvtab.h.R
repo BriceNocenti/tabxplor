@@ -724,9 +724,10 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   (\code{.html}) or Markdown (\code{.md}).
 #' @param exportExcel Press to export the table to the chosen format (the
 #'   button label follows the format).
-#' @param export_dir The folder to save the exported file in. \code{~} expands
-#'   to your home folder (resolved to your real Documents folder inside jamovi's
-#'   bundled R). Blank saves to your Documents.
+#' @param export_dir The folder to save the exported file in. Blank or
+#'   \code{~/Documents} auto-detects your real Documents folder (a redirected
+#'   \code{D:\Documents} or network Documents included). Type any other folder
+#'   to override; a leading \code{~} there expands to your home folder.
 #' @param export_filename The bare file name, with NO extension (the chosen
 #'   format adds it). Illegal characters are removed automatically. Blank saves
 #'   as "Table".

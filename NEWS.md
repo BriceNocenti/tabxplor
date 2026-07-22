@@ -975,6 +975,11 @@
   empty total block and failed reordering by the tab variable.
 
 ## Bug fixes
+* **jamovi export now saves to your real Documents folder.** The default export path is resolved
+  per-OS from the actual known folder — a redirected `D:\Documents` or a network/roaming Documents on
+  Windows (via the registry), the desktop `~/Documents` on Linux (via `xdg-user-dir`, created if
+  missing), `~/Documents` on macOS — instead of always writing to `C:/Users/<you>/Documents` (which
+  often does not exist). It validates the folder and falls back to a writable location if needed.
 * **`tab_reg(exponentiate = FALSE)` no longer bolds every cell** on a binomial + `empirical = TRUE`
   table (only the reference rows and the model-fit footer are bold, as for the other families).
 * **Regression colour legend/subtext drops the `[dependent]` disambiguation bracket** in exports

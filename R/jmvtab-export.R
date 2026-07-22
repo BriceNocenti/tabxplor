@@ -2,10 +2,10 @@
 #          to Excel / HTML / Markdown, and resolve a user-typed FOLDER + FILENAME robustly inside
 #          Jamovi's Electron-locked engine. Phase 17i also parks here the SHARED R6 backend helpers
 #          (jmv_backend_*) that both module orchestrators (jmvtab.b.R / jmvtabreg.b.R) delegate to.
-#          Last Phase o adds the Documents-folder DETECTORS (doc_* / fb_* / export_writable /
-#          export_write_test / export_*_candidates / export_env_probe) driving the throwaway `jmvtest`
-#          diagnostic (R/jmvtest.b.R) -- the detectors are the seed of the eventual
-#          export_documents_dir() rewrite and stay; the panel/HTML glue goes with jmvtest.
+#          Last Phase o: export_documents_dir() is now a robust per-OS known-folder resolver (registry
+#          on Windows, xdg-or-$HOME/Documents on Linux, $HOME/Documents on macOS), backed by the doc_*
+#          detectors below, and the "~/Documents"/"~"/"auto" default routes THROUGH it. The wider
+#          jmvtest diagnostic toolkit that drove the experiment is archived in dev/jamovi/jmvtest.b.R.
 # ROLE: Engine-free, session-free helpers so the export logic is unit-testable without a live
 #       jamovi session. jmvtab.b.R detects the export click, resolves the path, and calls
 #       jmvtab_export(); the click is a boolean read (§5.3) and the result is reported via a Notice.
@@ -45,30 +45,46 @@ export_expand_winenv <- function(p) {
   p
 }
 
-# The default export folder: the user's Documents.
-# DESIGN: on Windows a REDIRECTED Documents (e.g. D:\Documents) is invisible to <home>/Documents --
-# the locked jamovi Electron R only sees USERPROFILE=C:\Users\<x>, so it wrongly created
-# C:\Users\<x>\Documents. Read the resolved known-folder path from the registry instead: the
-# `Shell Folders\Personal` value holds the already-expanded absolute path (redirects honoured), with
-# `User Shell Folders\Personal` (env-token form) then <home>/Documents as fallbacks. Off Windows,
-# <home>/Documents is correct (jamovi's ~ already IS Documents, so we build from home, not
-# path.expand(), to avoid a Documents/Documents double -- §14.3).
+# The default export folder: the user's real Documents, resolved robustly per-OS. jamovi writes files
+# from R (bypassing jamovi's native `Dirs`), so we mirror `Dirs` here. Returns a directory that is
+# EXISTS+writable, else one whose PARENT is writable (jmvtab_export() creates it), else tempdir() --
+# never errors, never returns NA. Proven live 2026-07-22 (see dev/tabxplor_1.4.0_jamovi_dev.md § Phase o).
+# DESIGN:
+#   Windows -- readRegistry `Shell Folders\Personal` = the resolved known-folder path: honours a
+#     D:\Documents redirect AND a university GPO folder-redirection UNC path (the redirected absolute
+#     path is exactly what that value holds). Fallbacks: `reg.exe query` (if readRegistry is blocked in
+#     the locked engine), then `User Shell Folders\Personal`, then USERPROFILE\Documents. NOT PowerShell
+#     -- powershell.exe is absent from the bundled R's PATH (the live test proved GetFolderPath empty).
+#   macOS   -- $HOME/Documents (always the right place, non-redirectable).
+#   Linux   -- xdg-user-dir DOCUMENTS / ~/.config/user-dirs.dirs, but ONLY when it names a real
+#     SUBfolder (!= $HOME): on a normal Ubuntu DESKTOP it returns ~/Documents (the winner); on
+#     server / minimal / container / WSL it echoes bare $HOME (xdg-user-dirs never ran) -- there we use
+#     $HOME/Documents and CREATE it. Folder names may be localized, so we never hardcode "Documents".
 #' @keywords internal
 #' @noRd
 export_documents_dir <- function() {
-  fallback <- file.path(export_home_dir(), "Documents")
-  if (.Platform$OS.type != "windows") return(fallback)
-  read_personal <- function(subkey) tryCatch({
-    reg <- utils::readRegistry(
-      file.path("Software", "Microsoft", "Windows", "CurrentVersion", "Explorer", subkey,
-                fsep = "\\"),
-      hive = "HCU", maxdepth = 1L)
-    p <- reg[["Personal"]]
-    if (is.character(p) && length(p) && nzchar(p[1])) export_expand_winenv(p[1]) else NA_character_
-  }, error = function(e) NA_character_)
-  doc <- read_personal("Shell Folders")
-  if (is.na(doc)) doc <- read_personal("User Shell Folders")
-  if (is.na(doc) || !nzchar(doc)) fallback else doc
+  tryCatch({
+    home      <- export_home_dir()
+    home_docs <- file.path(home, "Documents")
+    # An xdg result counts only when it is a genuine subfolder, not a bare $HOME echo (unconfigured distro).
+    xdg_sub <- function(f) {
+      d <- f()
+      if (!is.na(d) && !identical(normalizePath(d,    mustWork = FALSE),
+                                  normalizePath(home, mustWork = FALSE))) d else NA_character_
+    }
+    cands <- if (.Platform$OS.type == "windows") {
+      c(doc_win_reg_shell(), doc_win_regexe(), doc_win_reg_usershell(), home_docs)
+    } else if (identical(Sys.info()[["sysname"]], "Darwin")) {
+      home_docs
+    } else {
+      c(xdg_sub(doc_xdg), xdg_sub(doc_xdg_file), home_docs)
+    }
+    cands <- unique(cands[!is.na(cands) & nzchar(cands)])
+
+    for (d in cands) if (export_writable(d))          return(d)  # 1) exists + writable
+    for (d in cands) if (export_writable(dirname(d))) return(d)  # 2) creatable (parent writable)
+    if (export_writable(dirname(home_docs))) home_docs else tempdir()   # 3) universal safety net
+  }, error = function(e) tempdir())
 }
 
 # Expand a leading ~ to the OS home with substring() (NOT sub(): USERPROFILE holds backslashes sub()
@@ -107,33 +123,35 @@ export_sanitize_filename <- function(name) {
 }
 
 # Resolve a user-typed FOLDER + bare FILENAME + the format's extension into one absolute file path.
-# Blank folder -> Documents; blank / all-illegal filename -> "Table"; the `ext` (from the chosen
-# format) is always authoritative. Never touches the filesystem.
+# The default option value "~/Documents" (and blank, "~", "auto") is a SENTINEL meaning "my Documents"
+# -> the redirect-aware export_documents_dir() (else it would naively expand to <home>/Documents and
+# miss a D:\Documents redirect -- the live bug). Any OTHER typed path is respected; a leading ~ on a
+# real path (e.g. ~/Desktop) still expands to the OS home. blank / all-illegal filename -> "Table";
+# the `ext` (from the chosen format) is always authoritative. Never touches the filesystem.
 #' @keywords internal
 #' @noRd
 resolveExportPath <- function(dir, filename, ext = "xlsx") {
   dir  <- export_unwrap(dir)
   base <- export_sanitize_filename(filename)
 
-  if (!nzchar(dir))  dir  <- export_documents_dir()
-  dir <- export_expand_home(dir)
+  if (!nzchar(dir) || tolower(dir) %in% c("~", "~/documents", "auto"))
+    dir <- export_documents_dir()
+  else
+    dir <- export_expand_home(dir)
   if (!nzchar(base)) base <- "Table"
 
   normalizePath(file.path(dir, paste0(base, ".", ext)), mustWork = FALSE)
 }
 
 
-# === Export-folder detection & diagnostics (Last Phase o) ==================================
-# A throwaway jamovi analysis (`jmvtest`, R/jmvtest.b.R) probes MANY ways to find the user's real
-# Documents folder and writes a plain .md test file to each, so the maintainer can report -- from
-# real Windows / WSL / macOS machines -- which method lands where (the default "~/Documents" resolves
-# to C:\Users\<x>\Documents, missing a D:\Documents redirect; and to a non-existent ~/Documents on a
-# fresh WSL distro). jamovi never resolves paths in R -- its native `Dirs` does (SHGetKnownFolderPath
-# on Windows, xdg-user-dir DOCUMENTS on Linux); tabxplor writes files itself, so these mirror `Dirs`.
-# DESIGN: the doc_* / fb_* detectors + export_writable() + export_write_test() + export_*_candidates()
-# are the SEED of the eventual export_documents_dir() rewrite and STAY when jmvtest is removed;
-# export_env_probe() / export_probe_html() are panel glue that goes with it. Every detector is guarded
-# (tryCatch) and returns a single clean path or NA -- none error, whatever the OS.
+# === Documents-folder detectors (support export_documents_dir(); Last Phase o) =============
+# The per-OS known-folder detectors export_documents_dir() composes, chosen from the live jmvtest
+# experiment (see dev/tabxplor_1.4.0_jamovi_dev.md § Phase o). jamovi never resolves paths in R -- its
+# native `Dirs` does (SHGetKnownFolderPath on Windows, xdg-user-dir DOCUMENTS on Linux) -- and tabxplor
+# writes files itself, so these mirror `Dirs`. Every detector is guarded (tryCatch) and returns a
+# single clean path or NA -- none error, whatever the OS. (The wider diagnostic toolkit that also drove
+# jmvtest -- powershell/onedrive/wsl detectors, fallback probes, HTML panels -- is archived with the
+# retired analysis in dev/jamovi/jmvtest.b.R.)
 
 # Running under WSL (a Linux binary on the Windows kernel)? Gates the Windows-interop detectors.
 #' @keywords internal
@@ -164,25 +182,10 @@ export_wsl_to_unix <- function(p) {
   if (is.na(q)) p else q
 }
 
-# --- Documents detectors (>= 5; the strongest first) --------------------------------------
-
-# PowerShell [Environment]::GetFolderPath('MyDocuments') -- the redirection-aware known-folder API
-# (a D:\Documents move is honoured). Reachable from bundled Windows R AND from WSL (powershell.exe is
-# on the WSL PATH); the WSL result (X:\...) is wslpath-converted. Empty when the folder is absent.
-#' @keywords internal
-#' @noRd
-doc_win_powershell <- function() tryCatch({
-  ps <- Sys.which("powershell.exe"); if (!nzchar(ps)) ps <- Sys.which("pwsh")
-  if (!nzchar(ps)) return(NA_character_)
-  out <- suppressWarnings(system2(
-    ps, c("-NoProfile", "-NonInteractive", "-Command",
-          shQuote("[Environment]::GetFolderPath('MyDocuments')")),
-    stdout = TRUE, stderr = FALSE))
-  export_wsl_to_unix(export_norm1(out))
-}, error = function(e) NA_character_)
+# --- Documents detectors used by export_documents_dir() -----------------------------------
 
 # Registry HCU ...\Explorer\Shell Folders -> Personal (the already-expanded absolute path, redirects
-# honoured). What export_documents_dir() uses today; Windows only.
+# honoured). The Windows primary; Windows only.
 #' @keywords internal
 #' @noRd
 doc_win_reg_shell <- function() {
@@ -227,17 +230,6 @@ doc_win_regexe <- function() tryCatch({
   export_wsl_to_unix(export_norm1(export_expand_winenv(val)))
 }, error = function(e) NA_character_)
 
-# OneDrive Known-Folder-Move: the OneDrive* env root + \Documents (common on Windows 11).
-#' @keywords internal
-#' @noRd
-doc_win_onedrive <- function() {
-  for (v in c("OneDrive", "OneDriveConsumer", "OneDriveCommercial")) {
-    od <- Sys.getenv(v)
-    if (nzchar(od)) return(export_wsl_to_unix(export_norm1(file.path(od, "Documents"))))
-  }
-  NA_character_
-}
-
 # xdg-user-dir DOCUMENTS -- the freedesktop way; what jamovi's own native `Dirs` uses on Linux.
 #' @keywords internal
 #' @noRd
@@ -259,192 +251,21 @@ doc_xdg_file <- function() tryCatch({
   export_norm1(gsub("$HOME", export_home_dir(), val, fixed = TRUE))
 }, error = function(e) NA_character_)
 
-# WSL -> the Windows USERPROFILE via cmd.exe, wslpath-converted, + \Documents (only when /mnt is
-# visible inside the distro / flatpak).
-#' @keywords internal
-#' @noRd
-doc_wsl_mnt <- function() {
-  if (!export_is_wsl()) return(NA_character_)
-  tryCatch({
-    cm <- Sys.which("cmd.exe"); if (!nzchar(cm)) return(NA_character_)
-    up <- export_norm1(suppressWarnings(
-      system2(cm, c("/c", "echo", "%USERPROFILE%"), stdout = TRUE, stderr = FALSE)))
-    if (is.na(up) || !grepl("^[A-Za-z]:", up)) return(NA_character_)
-    up <- export_wsl_to_unix(up)
-    if (is.na(up)) NA_character_ else export_norm1(file.path(up, "Documents"))
-  }, error = function(e) NA_character_)
-}
-
-# home/Documents -- the naive baseline (= today's default behaviour, blind to any redirect).
+# home/Documents -- the last-resort candidate (built from the OS home, blind to any redirect; used
+# only when every OS-native detector above yields nothing).
 #' @keywords internal
 #' @noRd
 doc_home_documents <- function() export_norm1(file.path(export_home_dir(), "Documents"))
 
-# --- Fallback save locations (>= 5; tempdir is the universal safety net) -------------------
-#' @keywords internal
-#' @noRd
-fb_home      <- function() export_norm1(export_home_dir())
-#' @keywords internal
-#' @noRd
-fb_desktop   <- function() export_norm1(file.path(export_home_dir(), "Desktop"))
-#' @keywords internal
-#' @noRd
-fb_downloads <- function() export_norm1(file.path(export_home_dir(), "Downloads"))
-#' @keywords internal
-#' @noRd
-fb_cwd       <- function() export_norm1(getwd())
-#' @keywords internal
-#' @noRd
-fb_tempdir   <- function() export_norm1(tempdir())
+# --- Writability probe --------------------------------------------------------------------
 
-# --- Probes, writes, tables ---------------------------------------------------------------
-
-# TRUE when `dir` exists and is writable, checked WITHOUT creating anything (file.access mode 2) -- so
-# the read-only panels never litter. The buttons use export_write_test() for real, persisting writes.
+# TRUE when `dir` exists and is writable, checked WITHOUT creating anything (file.access mode 2).
 #' @keywords internal
 #' @noRd
 export_writable <- function(dir) {
   if (length(dir) != 1L || is.na(dir) || !nzchar(dir)) return(FALSE)
   isTRUE(dir.exists(dir) && file.access(dir, mode = 2L) == 0L)
 }
-
-# Actually write a plain .md test file into `dir` (creating the folder if needed). Returns
-# list(ok, path, error). PERSISTS the file on purpose -- the maintainer finds it in the file manager
-# to learn which candidate mapped to their real Documents.
-#' @keywords internal
-#' @noRd
-export_write_test <- function(dir, name, note = NULL) {
-  path <- NA_character_
-  tryCatch({
-    if (length(dir) != 1L || is.na(dir) || !nzchar(dir)) stop("no folder", call. = FALSE)
-    if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-    base <- export_sanitize_filename(name); if (!nzchar(base)) base <- "tabxplor_export_test"
-    path <- normalizePath(file.path(dir, paste0(base, ".md")), mustWork = FALSE)
-    body <- c("# tabxplor export folder test", "",
-              paste0("Written: ", format(Sys.time())),
-              paste0("Target folder: ", dir),
-              paste0("Resolved path: ", path))
-    if (!is.null(note)) body <- c(body, "", note)
-    # suppressWarnings: an unwritable target makes file() WARN ("cannot open file") then error -- the
-    # error is what we want (caught below); the warning is incidental noise the backend must not leak.
-    suppressWarnings(writeLines(enc2utf8(body), path, useBytes = TRUE))
-    list(ok = TRUE, path = path, error = NA_character_)
-  }, error = function(e) list(ok = FALSE, path = path, error = conditionMessage(e)))
-}
-
-# One row per method: method label, resolved dir, exists?, writable?. `builders` is a named list of
-# 0-arg detectors; append the `current` row (what resolveExportPath() produces for today's default).
-#' @keywords internal
-#' @noRd
-export_candidate_df <- function(builders, add_current = FALSE) {
-  rows <- lapply(names(builders), function(nm) {
-    d <- tryCatch(builders[[nm]](), error = function(e) NA_character_)
-    ok_dir <- !is.na(d) && nzchar(d)
-    data.frame(method = nm, dir = if (ok_dir) d else "",
-               exists = ok_dir && dir.exists(d), writable = export_writable(d),
-               stringsAsFactors = FALSE)
-  })
-  if (add_current) {
-    cur <- tryCatch(resolveExportPath("~/Documents", "tabxplor_export_test", "md"),
-                    error = function(e) NA_character_)
-    cur_dir <- if (is.na(cur)) "" else dirname(cur)
-    rows[[length(rows) + 1L]] <- data.frame(
-      method = "CURRENT resolveExportPath(\"~/Documents\")", dir = cur_dir,
-      exists = nzchar(cur_dir) && dir.exists(cur_dir), writable = export_writable(cur_dir),
-      stringsAsFactors = FALSE)
-  }
-  do.call(rbind, rows)
-}
-
-# The Documents-detection candidate table (>= 5 methods + the current-behaviour row).
-#' @keywords internal
-#' @noRd
-export_doc_candidates <- function() export_candidate_df(list(
-  "powershell GetFolderPath(MyDocuments)" = doc_win_powershell,
-  "registry Shell Folders\\Personal"      = doc_win_reg_shell,
-  "registry User Shell Folders\\Personal" = doc_win_reg_usershell,
-  "reg.exe query Shell Folders"           = doc_win_regexe,
-  "OneDrive env + \\Documents"            = doc_win_onedrive,
-  "xdg-user-dir DOCUMENTS"                = doc_xdg,
-  "user-dirs.dirs XDG_DOCUMENTS_DIR"      = doc_xdg_file,
-  "WSL cmd.exe USERPROFILE + wslpath"     = doc_wsl_mnt,
-  "home/Documents (naive baseline)"       = doc_home_documents
-), add_current = TRUE)
-
-# The fallback save-location candidate table (>= 5).
-#' @keywords internal
-#' @noRd
-export_fallback_candidates <- function() export_candidate_df(list(
-  "home"           = fb_home,
-  "home/Desktop"   = fb_desktop,
-  "home/Downloads" = fb_downloads,
-  "getwd()"        = fb_cwd,
-  "tempdir()"      = fb_tempdir
-))
-
-# The environment facts for the diagnostic's first panel (a named character vector).
-#' @keywords internal
-#' @noRd
-export_env_probe <- function() {
-  si    <- tryCatch(Sys.info(), error = function(e) character())
-  sig   <- function(k) if (length(si) && k %in% names(si)) unname(si[[k]]) else ""
-  getv  <- function(v) { x <- Sys.getenv(v); if (nzchar(x)) x else "(unset)" }
-  which1 <- function(cmd) { x <- Sys.which(cmd); if (nzchar(x)) unname(x) else "(not found)" }
-  ph <- if (requireNamespace("fs", quietly = TRUE))
-    tryCatch(as.character(fs::path_home()), error = function(e) "(error)") else "(fs absent)"
-  c("R version"            = R.version.string,
-    "OS.type"              = .Platform$OS.type,
-    "sysname"              = sig("sysname"),
-    "release"              = sig("release"),
-    "user"                 = sig("user"),
-    "nodename"             = sig("nodename"),
-    "WSL"                  = if (export_is_wsl()) "yes" else "no",
-    "WSL_DISTRO_NAME"      = getv("WSL_DISTRO_NAME"),
-    "USERPROFILE"          = getv("USERPROFILE"),
-    "HOME"                 = getv("HOME"),
-    "HOMEDRIVE"            = getv("HOMEDRIVE"),
-    "HOMEPATH"             = getv("HOMEPATH"),
-    "OneDrive"             = getv("OneDrive"),
-    "XDG_DOCUMENTS_DIR"    = getv("XDG_DOCUMENTS_DIR"),
-    "TEMP"                 = getv("TEMP"),
-    "TMP"                  = getv("TMP"),
-    "fs::path_home()"      = ph,
-    "path.expand(\"~\")"   = path.expand("~"),
-    "export_home_dir()"    = export_home_dir(),
-    "getwd()"              = getwd(),
-    "tempdir()"            = tempdir(),
-    "which powershell.exe" = which1("powershell.exe"),
-    "which cmd.exe"        = which1("cmd.exe"),
-    "which wslpath"        = which1("wslpath"),
-    "which xdg-user-dir"   = which1("xdg-user-dir"),
-    "which reg.exe"        = which1("reg.exe"))
-}
-
-# Render an env-probe named vector OR a candidate data.frame to a simple HTML block for a jmvtest panel.
-#' @keywords internal
-#' @noRd
-export_probe_html <- function(x, title = NULL) {
-  esc <- function(s) { s <- as.character(s); s[is.na(s)] <- ""
-    s <- gsub("&", "&amp;", s, fixed = TRUE); s <- gsub("<", "&lt;", s, fixed = TRUE)
-    gsub(">", "&gt;", s, fixed = TRUE) }
-  head <- if (is.null(title)) "" else paste0("<h3 style='margin:8px 0 2px'>", esc(title), "</h3>")
-  if (is.data.frame(x)) {
-    th <- paste0("<th style='text-align:left;padding:2px 10px;border-bottom:1px solid #ccc'>",
-                 esc(names(x)), "</th>", collapse = "")
-    tr <- vapply(seq_len(nrow(x)), function(i) paste0("<tr>",
-      paste0("<td style='padding:2px 10px;font-family:monospace;white-space:nowrap'>",
-             esc(unlist(x[i, ], use.names = FALSE)), "</td>", collapse = ""), "</tr>"), character(1))
-    body <- paste0("<table style='border-collapse:collapse'><tr>", th, "</tr>",
-                   paste0(tr, collapse = ""), "</table>")
-  } else {
-    tr <- paste0("<tr><td style='padding:1px 10px'>", esc(names(x)),
-                 "</td><td style='padding:1px 10px;font-family:monospace'>", esc(unname(x)),
-                 "</td></tr>")
-    body <- paste0("<table style='border-collapse:collapse'>", paste0(tr, collapse = ""), "</table>")
-  }
-  paste0(head, body)
-}
-
 
 # Render a built tab (or list of tabs) to a self-contained HTML string via the Phase 10e home-built
 # html engine (inline CSS in a <style> block), so the file opens in any browser with no external
