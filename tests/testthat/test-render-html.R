@@ -55,9 +55,10 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
     testthat::expect_length(body, 1L)
     testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
   }
-  # Last Phase j: the default "summary" test rows are statistic + effect size + p-value (3 extra).
+  # Last Phase m: the default "summary" test rows are p-value + effect size (2 extra; the statistic row
+  # was dropped).
   bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "kableExtra"))))
-  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 3L)
+  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 2L)
 
   # colouring reaches the cells, and only when asked for. kableExtra bakes colour INLINE (it carries
   # no stylesheet of ours), which is also why its theme shows in the markup -- both are the opposite
@@ -523,9 +524,9 @@ testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cel
 testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
   h <- rh_strip_style(as.character(
     tab_kable(tab(gss, c(race, marital), relig, pct = "row"), engine = "html", css = FALSE)))
-  # one cell per block, spanning it -- not one per row. Phase 14n collapses the redundant race Total
-  # (race is the FIRST block; the shared Total is kept under the LAST block, marital), so race spans 3.
-  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="3">race</td>')
+  # one cell per block, spanning it -- not one per row. Last Phase m: common_totrow defaults FALSE, so
+  # each block keeps its OWN Total row -> race spans 4 (3 data + Total), marital spans 7 (6 data + Total).
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
   testthat::expect_length(gregexpr(">race</td>", h, fixed = TRUE)[[1]], 1L)
   testthat::expect_length(gregexpr("rowspan", h)[[1]], 2L)

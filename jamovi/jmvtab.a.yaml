@@ -179,7 +179,7 @@ options:
             }
 
     - name: chi2
-      title: "Add statistical test"
+      title: "Add statistical test/effect size"
       type: Bool
       default: false
       description:
@@ -203,39 +203,18 @@ options:
            Welch's F (default, does not assume equal variances) or the classic pooled F.
 
     - name: test_robust
-      title: "test = <i>(robustness of the p-value)</i>"
+      title: "Type of p-value"
       type: List
       options:
         - title: "classic"
           name:  classic
         - title: "Kish n_eff <i>(weighted)</i>"
           name:  kish
-        - title: "survey design"
-          name:  survey
       default: classic
       description:
           R: >
            For a weighted table, a more robust p-value: "classic" (unweighted chi2 / Welch F);
-           "kish" (first-order Rao-Scott rescale to the effective sample size); "survey" (a
-           design-based survey::svychisq / svyglm F using the weight + optional strata/ids).
-
-    - name: strata
-      title: "strata = <i>(survey)</i>"
-      type: Variable
-      default:
-      permitted: [ factor, id, numeric ]
-      description:
-          R: >
-           Optional stratification variable for the survey-design test (test = "survey").
-
-    - name: ids
-      title: "ids = <i>(survey clusters)</i>"
-      type: Variable
-      default:
-      permitted: [ factor, id, numeric ]
-      description:
-          R: >
-           Optional cluster-id variable for the survey-design test (test = "survey").
+           "kish" (first-order Rao-Scott rescale to the effective sample size).
 
 
 # Missing values and levels
@@ -707,7 +686,7 @@ options:
            an integer vector the same length as \code{col_vars}.
 
     - name: n_min
-      title: <b>n_min = <i>(hide rows/cols with small counts)</i></b>
+      title: <b>n_min = <i>(hide rows/cols with small n)</i></b>
       type: Integer
       min: 0
       default: 0

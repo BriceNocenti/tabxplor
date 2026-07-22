@@ -306,6 +306,10 @@ NULL
 #' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
 #' variable (for `pct = "row"`) or a row with the frequencies of the column variable
 #' (for  `pct = "col"`).
+#' @param common_totrow With several \code{row_vars}, `FALSE` (the default) shows one Total row per
+#' row variable. Set to `TRUE` to collapse the identical Total rows into a single shared Total,
+#' displayed in its own group after a blank-line separator (bold when the total is the reference for
+#' at least one row variable). Genuinely different totals (e.g. under `na = "drop"`) are never merged.
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param output_list Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 #'  merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
@@ -441,7 +445,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
-                add_n = TRUE, add_pct = FALSE,
+                add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
                 subtext = "", digits = 0, n_min = 0, display = NULL,
                 color_breaks = NULL,
                 output_list = FALSE, parallel = NULL,
@@ -632,6 +636,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            output = if (isTRUE(output_list)) "list" else "single", #pvalue_line = pvalue_line,
            other_if_less_than = other_if_less_than, other_level = other_level,
            totaltab = totaltab, totaltab_name = totaltab_name,
+           common_totrow = common_totrow,
            totrow = "row" %in% tot,
            # Phase 6e (§6): exactly ONE total column by default. With several main col_vars the
            # per-col_var totals are redundant (all equal each row's base for row%, and the
@@ -1141,6 +1146,8 @@ finalize_one_col <- function(col, spec) {
 #' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
 #' variable (for `pct = "row"`) or a row with the frequencies of the column variable
 #' (for  `pct = "col"`).
+#' @param common_totrow With several \code{row_vars}, `FALSE` (the default) shows one Total row per
+#' row variable; `TRUE` collapses the identical Total rows into a single shared Total in its own group.
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param compact With several `row_vars`, set to `TRUE` to bind all tables
 #' in a single `tabxplor_tab` (`FALSE` by default). The `tabxplor.compact` option has been
@@ -1211,7 +1218,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      method_mean_ratio = "robust",
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
-                     add_n = TRUE, add_pct = FALSE,
+                     add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
                      digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
                      color_breaks = NULL,
                      parallel = NULL,
@@ -1270,7 +1277,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
     totaltab = totaltab, totaltab_name = totaltab_name,
     totrow = totrow, totcol = totcol, total_names = total_names,
-    add_n = add_n, add_pct = add_pct, digits = digits, subtext = subtext, n_min = n_min,
+    add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
+    digits = digits, subtext = subtext, n_min = n_min,
     parallel = parallel,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
@@ -1322,7 +1330,7 @@ new_ctx <- function(...) {
     method_cell = "wilson", method_diff = "newcombe", method_ratio = "katz",
     method_mean_diff = "welch", method_mean_ratio = "robust",
     totaltab = "line", totaltab_name = "Ensemble", totrow = TRUE, totcol = "last",
-    total_names = "Total", add_n = TRUE, add_pct = FALSE, digits = 0,
+    total_names = "Total", add_n = TRUE, add_pct = FALSE, common_totrow = FALSE, digits = 0,
     subtext = "", n_min = 0, by_table = FALSE, parallel = NULL,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
@@ -1381,7 +1389,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       method_mean_ratio = "robust",
                       totaltab = "line", totaltab_name = "Ensemble",
                       totrow = TRUE, totcol = "last", total_names = "Total",
-                      add_n = TRUE, add_pct = FALSE,
+                      add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
                       digits = 0, subtext = "", n_min = 0,
                       parallel = NULL,
                       .by_table = FALSE,
@@ -1427,7 +1435,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     method_cell = method_cell, method_diff = method_diff, method_ratio = method_ratio,
     method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
-    total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
+    total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
+    digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
     parallel = parallel,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
@@ -1642,16 +1651,25 @@ tab_setup <- function(ctx) {
   pct_flat      <- unlist(pct)
   col_regime    <- any(pct_flat == "col") && !any(pct_flat == "row")
   ref_by_colvar <- NULL
-  if (col_regime && !is.null(names(ref)) && any(nzchar(names(ref))) &&
-      any(names(ref) %in% as.character(col_vars))) {
+  named_colvar   <- !is.null(names(ref)) && any(nzchar(names(ref))) &&
+                    any(names(ref) %in% as.character(col_vars))
+  # Last Phase m (§Q2): under a col% regime `ref` is vectorised over COL_VARS -- a NAMED-by-col_var
+  # vector (Phase 7g-iii), OR an unnamed positional vector whose length matches #col_vars. Each item
+  # then selects a reference COLUMN for a factor col_var and a reference ROW for a numeric (mean)
+  # col_var (orthogonal), routed through `ref_vect`. A per-ROW_VAR *row* reference stays meaningless
+  # under col%, so any OTHER multi-element ref still collapses to a single column reference (+ message).
+  positional_colvar <- col_regime && is.null(names(ref)) && length(ref) > 1 &&
+                       length(ref) == length(col_vars)
+  if (col_regime && (named_colvar || positional_colvar)) {
     ref_by_colvar <- resolve_ref_vector(ref, as.character(col_vars), what = "col_var")
     ref <- "auto"   # scalar unset: tab_num / settings / the row% path behave as no per-row ref
   }
   ref_is_vector <- length(ref) > 1
   ref         <- resolve_ref_vector(ref, as.character(row_vars))
   if (ref_is_vector && col_regime) {
-    cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is a single column ",
-                                   "reference: the per-row_var reference is collapsed to its first value.")))
+    cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is vectorised over the ",
+                                   "col_vars (length {length(col_vars)}); this ref did not match, so it ",
+                                   "is collapsed to a single column reference (its first value).")))
     ref <- vctrs::vec_recycle(ref[1], nrowvars)
   }
   ref2        <- vctrs::vec_recycle(ref2    , nrowvars)
@@ -2124,7 +2142,15 @@ tab_transform <- function(ctx) {
     num_digits   <- vctrs::vec_recycle(vctrs::vec_cast(digits[col_vars_num], integer()),
                                        length(num_col_syms))
     total_names2 <- vctrs::vec_recycle(total_names, 2)
-    r_num <- num_resolve(color_num, ref, ci, dplyr::if_else(totrow, "row", "no"),
+    # Last Phase m: under pct = "col" a numeric col_var takes its POSITIONAL reference ROW from ref_vect
+    # (byte-identical to the scalar `ref` when no per-col_var ref is set -- ref_vect is then its broadcast).
+    # num_core is one call for all numeric col_vars, so a mix of differing numeric refs uses the first.
+    ref_num_vec <- unlist(ref_vect, use.names = FALSE)[col_vars_num]
+    ref_num     <- if (length(ref_num_vec)) ref_num_vec[[1]] else ref
+    if (length(unique(ref_num_vec)) > 1L)
+      cli::cli_inform(c("i" = paste0("Several numeric col_vars with different references: the first ",
+                                     "({.val {ref_num}}) applies to all mean columns.")))
+    r_num <- num_resolve(color_num, ref_num, ci, dplyr::if_else(totrow, "row", "no"),
                          comp[1], totaltab, rv, num_col_syms, tv_syms)
     tabs_num <- num_core(
       data, rv, num_col_syms, tv_syms, wt_sym,
@@ -2336,8 +2362,17 @@ tab_assemble_tables <- function(ctx) {
   # does not exist and silently DROP the real `n` column (the <=1.3.1 regression).
   fmt_here        <- purrr::map_lgl(tab, is_fmt)
   has_real_colvar <- any(fmt_here & get_col_var(tab) != "no_col_var")
+  # Last Phase m: `common_totrow` collapses a several-row_vars table's redundant per-block Total rows into
+  # ONE shared Total shown in its own group (default FALSE = one Total per row_var). `common_totrow_ref`
+  # records whether ANY row_var used the total as its reference (ref = "tot"), so the shared Total renders
+  # bold (it is a reading anchor for at least one variable).
   render_extras <- list(add_n  = isTRUE(add_n)  && has_real_colvar,
                         add_pct = isTRUE(add_pct) && has_real_colvar)
+  # Stored ONLY when opted in, so a default table's render_extras (and every golden) is byte-unchanged.
+  if (isTRUE(common_totrow)) {
+    render_extras$common_totrow     <- TRUE
+    render_extras$common_totrow_ref <- any(ref == "tot")
+  }
   # Phase 13b / 14v-ii: record which CI method / confidence level was actually used, so
   # tab_color_legend() can name it (only meaningful when a CI was computed; harmless otherwise -- absent
   # settings fall back). 14v-ii adds the numeric + ratio methods (welch/student, robust/quasi/poisson,

@@ -3645,6 +3645,13 @@ legend_streams <- function(x, style, lang) {
       show_this   <- show_global || mixed
       name_by_col <- mixed || any(cv_lines[cvs] > 1)
       spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
+      # Last Phase m: a multi-dependent regression column carries a trailing " [dep]" disambiguation
+      # bracket in its NAME ("Model_OR [married]") for console clash-avoidance. The col_var span row
+      # already names the outcome, so the legend strips the bracket (same regex as the header strip,
+      # tab-export-prep.R). Gated to reg groups (columns carry a role) so a level label that happens to
+      # end in "[...]" is untouched.
+      if (any(nzchar(purrr::map_chr(g, "role"))))
+        spec$col_names <- sub(" \\[[^]]*\\]$", "", spec$col_names)
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
     })

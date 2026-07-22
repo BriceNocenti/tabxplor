@@ -42,6 +42,7 @@ tab(
   total_names = "Total",
   add_n = TRUE,
   add_pct = FALSE,
+  common_totrow = FALSE,
   subtext = "",
   digits = 0,
   n_min = 0,
@@ -299,6 +300,11 @@ column or row with unweighted counts (\code{n}).}
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
 (for  \code{pct = "col"}).}
+
+\item{common_totrow}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
+row variable. Set to \code{TRUE} to collapse the identical Total rows into a single shared Total,
+displayed in its own group after a blank-line separator (bold when the total is the reference for
+at least one row variable). Genuinely different totals (e.g. under \code{na = "drop"}) are never merged.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 

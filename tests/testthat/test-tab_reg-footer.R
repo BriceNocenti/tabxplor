@@ -184,11 +184,13 @@ test_that("a crosstab p-value cell embeds its test label ('(Chi2)')", {
   expect_true(any(grepl("\\(Chi2", md)))                 # "(Chi2)" or "(Chi2 !)" (Phase 16a weak flag)
 })
 
-test_that("a mixed factor/mean table labels each p-value cell by its own test", {
+test_that("a mixed factor/mean table names both tests in the p-value row (Last Phase m)", {
   ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", test = TRUE)
-  md <- tab_md(ct, print = FALSE)
-  expect_true(any(grepl("\\(Chi2", md)))                 # the factor col_var ("(Chi2)" / "(Chi2 !)")
-  expect_true(any(grepl("\\(F", md)))                    # the mean col_var (ANOVA F)
+  # a styled md (the non-significant p-value cell is coloured) uses U+00A0 in labels -> normalise.
+  md <- gsub(intToUtf8(160L), " ", tab_md(ct, print = FALSE), fixed = TRUE)
+  # the test type is now stated ONCE in the p-value row name, not per cell: "pvalue (Chi2, Welch F)"
+  expect_true(any(grepl("pvalue \\(Chi2", md)))          # the factor test
+  expect_true(any(grepl("Welch F", md)))                 # the mean test (Welch ANOVA F)
 })
 
 # ---- Phase 14q: readability -----------------------------------------------------------------

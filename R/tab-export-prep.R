@@ -95,6 +95,12 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
 
   list(
     ref_alltot = ref_alltot,
+    # The row-anchor signal for the shared bold-row set: a cell anchors a row when it is a
+    # reference/total (`ref_alltot`) OR a regression reference CATEGORY (`in_refrow`, which a
+    # totals-free reg column carries but ref_alltot misses). For crosstabs is_refrow is a subset of
+    # ref_alltot, so `anchor == ref_alltot` there (byte-identical). Kept SEPARATE from `keep_black`
+    # (which prep_one_table later overrides on footer rows) so tab_bold_rows reads the pure signal.
+    anchor     = keep_black,
     ref_cells  = ref_cells,
     text_hex   = text_hex,
     bg_hex     = bg_hex,
@@ -120,18 +126,22 @@ ann_ref <- function(a) {
 }
 
 
-# The shared bold-row set (block D): a row is bold iff it is a reference/total cell in EVERY
-# DISCRIMINATING column (a column that is all-reference or all-non-reference says nothing about which
-# ROWS are references, so it is dropped first). Reuses the already-computed `ref_alltot` masks.
-# `md_style = TRUE` reproduces tab_md's empty-set guard (integer(0) when no discriminating column);
-# `FALSE` reproduces tab_kable/tab_plot's `rowSums == ncol` on the reduced frame (which flags ALL
-# rows when 0 columns survive -- the historical edge, preserved for byte-identity).
+# The shared bold-row set (block D): a row is bold iff it is a reference/total ANCHOR in EVERY
+# DISCRIMINATING column (a column that is all-anchor or all-non-anchor says nothing about which ROWS
+# are references, so it is dropped first). The per-column signal is `anchor = ref_alltot | is_refrow`
+# (fmt_col_ann) -- the SAME signal the per-cell keep_black uses -- so a totals-free regression table
+# (whose ref_alltot is empty but whose reference CATEGORIES carry in_refrow) still bolds its reference
+# rows. For crosstabs is_refrow is a subset of ref_alltot, so this is byte-identical there.
+# WARNING (Last Phase m): when NO column discriminates the result is integer(0) (no anchor rows) --
+# universally, not just for md. The old `rowSums == ncol` edge flagged EVERY row when 0 columns
+# survived; that bolted the whole table on a binomial exponentiate=FALSE + empirical reg (all columns
+# non-discriminating on ref_alltot). Reference rows now stay bold via the in_refrow signal instead.
 #' @keywords internal
-tab_bold_rows <- function(ref_alltot_list, md_style = FALSE) {
-  if (length(ref_alltot_list) == 0) return(integer(0))
-  refref <- as.data.frame(ref_alltot_list)
+tab_bold_rows <- function(anchor_list) {
+  if (length(anchor_list) == 0) return(integer(0))
+  refref <- as.data.frame(anchor_list)
   keep   <- purrr::map_lgl(refref, ~ any(.) & !all(.))
-  if (md_style && !any(keep)) return(integer(0))
+  if (!any(keep)) return(integer(0))
   refref <- refref[, keep, drop = FALSE]
   which(rowSums(refref) == ncol(refref))
 }
@@ -455,16 +465,28 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     })
   }
 
-  # --- bold rows + bold cols (block D), reusing ann$ref_alltot ---
+  # --- bold rows + bold cols (block D), reusing ann$anchor / ann$ref_alltot ---
   ref_alltot_list <- purrr::map(ann, "ref_alltot")
   bold_rows <- if ("bold" %in% compute) {
-    tab_bold_rows(ref_alltot_list, md_style = identical(backend, "md"))
+    tab_bold_rows(purrr::map(ann, "anchor"))
   } else integer(0)
   # Phase 14q: footer rows' LABEL cells (row-var / level columns) bold too, matching the value cells.
   if ("bold" %in% compute && any(footer_rows)) bold_rows <- union(bold_rows, which(footer_rows))
   bold_cols <- if ("bold" %in% compute && length(ref_alltot_list) > 0) {
     names(which(purrr::map_lgl(ref_alltot_list, all)))
   } else character(0)
+
+  # Last Phase m: the pct = "col" "n" (count) ROW is minted from the sub-table Total row, so its cell in
+  # the total COLUMN (a column ATTRIBUTE, not clearable per cell) falls into the all_totals anchor and
+  # renders bold. It is a base-count row, not a reading anchor -> force plain weight, keyed on the stored
+  # `n` role (17c), in both the whole-row set and the per-cell ann the html/md engines read.
+  if ("bold" %in% compute) {
+    n_rows <- which(tab_row_roles(tab) == "n")
+    if (length(n_rows)) {
+      ann       <- purrr::map(ann, function(a) { a$bold[n_rows] <- FALSE; a })
+      bold_rows <- setdiff(bold_rows, n_rows)
+    }
+  }
 
   range_totcol <- if ("range" %in% compute) {
     tab_totcol_range(tab, fmt_cols, col_var_map, totcols)

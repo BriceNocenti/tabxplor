@@ -60,9 +60,11 @@ to \code{"light"}.}
 \item{\code{tabxplor.anova}}{which one-way ANOVA F is shown for mean columns: \code{"welch"} (default,
 robust) or \code{"classic"} (pooled variance). Both are always stored in the \code{test} attribute.}
 \item{\code{tabxplor.test_lines}}{how many crosstab test rows the exporters (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_html]{tab_html()}},
-\code{\link[=tab_xl]{tab_xl()}}) append: \code{"summary"} (default: statistic + effect size + p-value), \code{"stat"} (statistic
-+ p-value), or \code{"pvalue"} (the single p-value row). N is never added -- it is already shown by
-\code{add_n}. The console summary block always shows the full N / statistic / effect-size / p-value table.}
+\code{\link[=tab_xl]{tab_xl()}}) append: \code{"summary"} (default: p-value + effect size), \code{"all"} (+ the raw statistic),
+\code{"stat"} (p-value + statistic), or \code{"pvalue"} (the single p-value row). The p-value row name states
+the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+V, eta2"). N is never added -- it is already shown by \code{add_n}. The console summary block always
+shows N + p-value + effect size.}
 \item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
 \code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
 one-line form the console uses). The console itself is always terse.}

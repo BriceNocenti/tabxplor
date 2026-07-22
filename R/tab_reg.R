@@ -1843,12 +1843,29 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level) {
 # shown there); html / Excel get the two-line span + borders.
 #' @keywords internal
 reg_spread_models <- function(t, split_var, sl) {
-  s <- tab_spread(t, !!rlang::sym(split_var))
+  s    <- tab_spread(t, !!rlang::sym(split_var))
+  test <- get_test(s)                                  # carried through tab_spread untouched
+  # First spread fmt column of each split level (= the column its GOF footer keys under, mirroring the
+  # single-column non-split placement); also rewrite every spread column's col_var for legend/borders.
+  col_of_group <- stats::setNames(rep(NA_character_, length(sl)), sl)
   for (nm in names(s)[vapply(s, is_fmt, logical(1))]) {
     matches <- sl[vapply(sl, function(g) nm == g || endsWith(nm, paste0("_", g)), logical(1))]
     if (!length(matches)) next
     g <- matches[which.max(nchar(matches))]            # longest match disambiguates nested levels
     s[[nm]] <- set_col_var(s[[nm]], paste0(g, "<br>", get_col_var(s[[nm]])))
+    if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
+  }
+  # Last Phase m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
+  # column via `row_var = level`); tab_spread pivots only the data, so the footer materialisers saw
+  # is_split = TRUE (tripled) and matched cells by a col_var that no longer exists (empty). Re-key each
+  # group's GOF rows onto that group's spread column NAME and clear `row_var` -> ONE block, each cell
+  # placed under its subpopulation's column (like the single-column non-split footer).
+  if (!is.null(test) && nrow(test) > 0 && !is.null(test$row_var) && any(nzchar(test$row_var))) {
+    g_col <- col_of_group[test$row_var]
+    test  <- test[!is.na(g_col), , drop = FALSE]
+    test$col_var <- unname(g_col[!is.na(g_col)])
+    test$row_var <- ""
+    s <- set_test(s, test)
   }
   s
 }

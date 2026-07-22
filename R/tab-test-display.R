@@ -138,6 +138,37 @@ test_cell_label <- function(test) {
          NA_character_)
 }
 
+# Last Phase m: the p-value ROW NAME (was the in-cell "(Chi2, Kish)" suffix -- moved out of the cell so a
+# mixed factor/numeric row no longer wastes width, and the table-level test type is stated ONCE). Names
+# the test(s) used across the group's columns: factor side "Chi2" (or "Fisher" when the exact test ran),
+# numeric side "Welch F" / "ANOVA F"; a single robust suffix "; Kish" (n_eff rescale) or "; survey-design"
+# (Rao-Scott / svyglm). Examples: "pvalue (Chi2)", "pvalue (Chi2, Welch F)", "pvalue (ANOVA F)",
+# "pvalue (Chi2, Welch F; Kish)", "pvalue (Chi2, Welch F; survey-design)".
+test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
+  tests <- unique(tests[!is.na(tests)])
+  fac   <- tests[tests %in% c("chi2", "chi2_kish", "chi2_svy")]
+  num   <- tests[tests %in% c("F_welch", "F_classic", "F_kish", "F_svy")]
+  parts <- character(0)
+  # a weak chi2 (smallest expected count < 5) with no exact companion keeps a " !" validity caveat.
+  if (length(fac)) parts <- c(parts, if (used_exact) "Fisher" else if (weak) "Chi2 !" else "Chi2")
+  if (length(num)) parts <- c(parts, if (any(num == "F_classic")) "ANOVA F" else "Welch F")
+  if (!length(parts)) return("pvalue")
+  robust <- if      (any(tests %in% c("chi2_kish", "F_kish"))) "; Kish"
+            else if (any(tests %in% c("chi2_svy",  "F_svy")))  "; survey-design"
+            else                                               ""
+  paste0("pvalue (", paste(parts, collapse = ", "), robust, ")")
+}
+
+# Last Phase m: the effect-size ROW NAME = the measure(s) present, so no separate "effect size" text is
+# needed. Cramer's V (larger factor tables) / phi (2x2) / eta^2 (numeric ANOVA); mixed -> "Cramer's V, eta2".
+test_es_measure <- function(es_types) {
+  es_types <- unique(es_types[!is.na(es_types)])
+  if (!length(es_types)) return("effect size")
+  lbl <- vapply(es_types, function(t)
+    switch(t, "cramer_v" = "Cram\u00e9r's V", "phi" = "phi", "eta2" = "eta2", t), character(1))
+  paste(unique(lbl), collapse = ", ")
+}
+
 # --- Regression model-summary footer (Phase 12f) -----------------------------------------------------
 # GOF stats travel in the whole-table `test` attribute with reg-specific discriminators (built by
 # reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R), DISJOINT from the crosstab "chi2"/"F_*" so the
@@ -251,30 +282,29 @@ test_grid_crosstab <- function(x, test_tbl) {
 
     # per value col: the source test row (there is exactly one displayed test per col_var here)
     idx  <- match(value_cols, sub$col_var)
-    stat <- test_fmt_stat(sub$statistic[idx], sub$df1[idx], sub$df2[idx])
     n    <- vapply(sub$n[idx], test_fmt_num, character(1), digits = 0L)
     # effect size: columns may be absent on a degraded / older `test` attribute -> NA vector.
     es_v  <- if (!is.null(sub[["effect_size"]])) sub$effect_size[idx] else rep(NA_real_, length(idx))
     es_ty <- if (!is.null(sub[["es_type"]]))     sub$es_type[idx]     else rep(NA_character_, length(idx))
     es    <- test_fmt_es(es_v, es_ty)
-    # a weak chi2 shows its Fisher-exact p (labelled "(Fisher)") in place of the flagged chi2 one
+    # a weak chi2 shows its Fisher-exact p in place of the flagged chi2 one; the test TYPE label now lives
+    # in the row name (test_pvalue_descriptor), not the cell -- so the cell is the bare p-value.
     p_exact <- if (!is.null(sub[["pvalue_exact"]])) sub$pvalue_exact[idx] else rep(NA_real_, length(idx))
     p_show  <- ifelse(!is.na(p_exact), p_exact, sub$pvalue[idx])
-    plab <- vapply(seq_along(idx), function(k) {
-      if (is.na(idx[k])) return("")
-      if (!is.na(p_exact[k])) "(Fisher)"
-      else test_pvalue_label(sub$test[idx[k]], sub$min_e[idx[k]])
-    }, character(1))
     pval <- test_fmt_pvalue(p_show)
-    pcell <- ifelse(is.na(pval), "", trimws(paste0(pval, " ", plab)))
+    pcell <- ifelse(is.na(pval), "", pval)
     nonsig <- test_is_nonsig(p_show)
 
+    # Last Phase m: no "statistic" row (ambiguous once effect size shares the block); order = p-value then
+    # effect size; the test type moves into the p-value row NAME, the measure into the effect-size row NAME.
+    weak   <- any(!is.na(sub$min_e[idx]) & sub$min_e[idx] < test_weak_min_e & is.na(p_exact))
+    p_lab  <- test_pvalue_descriptor(sub$test[idx[!is.na(idx)]], any(!is.na(p_exact)), weak)
+    es_lab <- test_es_measure(es_ty[!is.na(idx)])
     rows <- c(
-      list(list(label = "N",         cells = ifelse(is.na(n),    "", n),    nonsig = rep(FALSE, length(idx)))),
-      list(list(label = "statistic", cells = ifelse(is.na(stat), "", stat), nonsig = rep(FALSE, length(idx)))),
+      list(list(label = "N",    cells = ifelse(is.na(n), "", n), nonsig = rep(FALSE, length(idx)))),
+      list(list(label = p_lab,  cells = pcell,                   nonsig = nonsig)),
       if (any(!is.na(es)))
-        list(list(label = "effect size", cells = ifelse(is.na(es), "", es), nonsig = rep(FALSE, length(idx)))),
-      list(list(label = "pvalue",    cells = pcell,                         nonsig = nonsig))
+        list(list(label = es_lab, cells = ifelse(is.na(es), "", es), nonsig = rep(FALSE, length(idx))))
     )
     list(label_lines = label_lines, rows = rows)
   })

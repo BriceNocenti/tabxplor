@@ -1097,7 +1097,7 @@ Then, we should also think what to add, minimally, in jmvtab, UI for these new f
 **DONE (2026-07-21).** Full suite green (FAIL 0, PASS 3939 — +24 from the new `test-effect-size-survey.R` parity file, SKIP 5). The classic path is BYTE-IDENTICAL: a script proved the 36 structural goldens differ ONLY by the 3 new `test` columns (`effect_size`/`es_type`/`pvalue_exact`, body untouched); the only conscious snapshot moves are `render-html.md` (the summary gained a statistic + effect-size row) + 3 hardcoded display assertions. Design in `dev/tabxplor_1.4.0_decisions.md` §51.
 - **Effect sizes** ride each omnibus row as two columns: `agg_chi2` emits Cramér's V (uncorrected chi2) / phi (2×2), `agg_anova` emits η² = SSB/SST. Rendered as an "effect size" line (console grid + export summary; `test_fmt_es`). **Fisher** (`agg_fisher`, size/N-guarded) on small weak factor tables (`min_e < 5`), stored as `pvalue_exact` ON the chi2 row (no row-count change) and shown only when the EXACT test ran (a large table's simulated fallback is dropped → keeps the chi2 + `!` flag).
 - **Robust p-value ladder** (opt-in, all on the `test` attribute): `options(tabxplor.kish_neff = TRUE)` → `chi2_kish`/`F_kish` (first-order Rao-Scott n_eff rescale); `test = "survey"` (+ new `ids`/`strata`/`fpc`/`nest` args, or a `survey::svydesign` as `data`) → `chi2_svy`/`F_svy` (`survey::svychisq` / `svyglm`+`regTermTest`, matches the survey package to 1e-6). New `R/survey-design.R` = the shared `svy_*` design helpers (tab_reg's `reg_*` now delegate, byte-identical) + `tab_robust_overlay()` (runs in `tab_assemble_tables` where `ctx$data` lives; the ONE test path reading the microdata, per-table, documented complete-case caveat).
-- **Export default** `tabxplor.test_lines` `"pvalue"` → `"summary"` (statistic + effect size + p-value). **jamovi** gained a `test_robust` selector + `strata`/`ids` (`.a.yaml`/`.u.yaml`/`.b.R`), `JMVTAB_CACHE_SCHEMA` 6→7 — INERT until the maintainer's `prepare()` + a live pass.
+- **Export default** `tabxplor.test_lines` `"pvalue"` → `"summary"` (statistic + effect size + p-value). **jamovi** gained a `test_robust` selector + `strata`/`ids` (`.a.yaml`/`.u.yaml`/`.b.R`), 
 
 #### Last Phase k — last new features 2, labelled-data
 
@@ -1111,7 +1111,7 @@ Add full support for **labelled-data (haven/labelled) interop** :
 - **Variable labels → export names (opt-in, display-only).** `capture_var_labels()` reads each var's `label` attr BEFORE conversion strips it; the map rides `ctx`/`shared` into **`meta$vars$var_labels`** (`new_vars_attr()` gains the field, stored only when non-empty → absent-when-unset, unioned across a `tab_compact()` merge). New option `tabxplor.var_labels` (default FALSE) → `var_label_display()` (R/tab-export-prep.R) swaps the col-var span, the single-row_var header, and the merged `row_var` column values (+ the transpose mirror). Structure keeps canonical names → `select()`/references by name still work; the console always shows names. Covers `tab()`/`tab_num`/`tab_counts`/`tab_reg`.
 - New `tests/testthat/test-labelled.R` (fixtures built with base `structure(codes, labels=, label=)`, no haven). man/tabxplor-options.Rd regenerated; NAMESPACE unchanged (helpers internal).
 
-#### Last Phase k — last new features 3, handling of missing table-level attributes
+#### Last Phase k2 — last new features 3, handling of missing table-level attributes
 
 Would it be possible to ensure the tables does not error when table-level attributes are missing, but only remove the behaviours that can’t be computed (all tabxplor_fmt fields or column attributes stay required, since they are more solid) ?
 Would it be possible to ensure nothing will error if a tabxplor_tab is converted to a normal tibble, still doing what can be done with tabxplor_fmt columns metadata and fields data in a somewhat degraded mode ? What would the user really lost (summary stats only in tab(), much more in tab_reg() ? ) ? Maybe just a friendly message in that case, for the user to know it may have remove table attributes or table class in his pipeline ?
@@ -1122,19 +1122,76 @@ Would it be possible to ensure nothing will error if a tabxplor_tab is converted
 - **The "friendly message" the note floated was declined** (maintainer chose silent degrade). Its one honest limitation is documented, not worked around: a bare `print()` on a *fully class-stripped* `tbl_df` runs dplyr's own printer, which our S3 methods can't intercept — the fmt columns still render via `pillar`, but the footer/summary only reappears once the object next passes through a tabxplor function/export. The once-per-session throttle for `tab_degrade_inform` (the existing "not a tabxplor table" note) was tried then **reverted** — it broke the `test-edge-cases.R` degrade-message loops that assert the note fires each render. `R/tab.R` change is comment-only; docs updated (NEWS, architecture § Render-time degrade, this file).
 
 
+#### Last Phase m — another maintainer’s manual review
+
+Carefully study the manual review made by the maintainer at `dev/review_manual/tab_manual_review_pass_5.R`. The problems to resolve, decisions taken by the maintainer and new features to implement are all inside the maintainer’s R `#` comments. Do not forget **any** of them.
+
+**DONE (2026-07-22).** Full suite green (FAIL 0, PASS 4074, SKIP 4 = the usual Suggests/benchmark opt-ins). Eight items; the classic path is byte-identical (built goldens unchanged — `common_totrow`'s `render_extras` fields are stored ONLY when opted in), the conscious snapshot regens are `_snaps/golden.md` (md interior-spacer verticals + the 3 new CSS edge rules) and `_snaps/render-html.md` (Item 7 summary rows). New fixtures in `tests/testthat/test-review-pass5.R` (one per fix, failing-first).
+- **`common_totrow` (new `tab()`/`tab_many()` arg, default FALSE).** Default now shows **one Total row per row_var**; `TRUE` collapses to a single shared Total in its **own group** (a blank `row_var` sentinel → the group-separator machinery detaches it; level stays "Total"), **bold** when any row_var used `ref = "tot"`. Stored in `render_extras$common_totrow`/`_ref` (only when TRUE → zero golden churn); the `collapse_totals` materialize spec (`tab_classes.R`) is now gated on it and `tab_collapse_total_rows(ref_bold=)` does the group-reassign + `in_refrow` set. The old always-collapse default is gone (a display-only change; `test-display-extras.R` opts in).
+- **`ref` positional over col_vars under `pct = "col"`** (`tab_setup`): an unnamed vector of length #col_vars maps per col_var (factor→ref column via `ref_by_colvar`/`ref_vect`, numeric→ref row via `ref_vect[col_vars_num]` into `num_core`); byte-identical when unset (broadcast). The `n` (count) row under pct="col" renders plain (a role-"n"-aware bold override in `prep_one_table`; `totcol` is a column attr, not clearable per-cell).
+- **Summary display (Item 7).** Crosstab `test=TRUE` rows are now **p-value then effect size** (statistic dropped from the default); the test type moves into the p-value row NAME (`test_pvalue_descriptor`: "pvalue (Chi2, Welch F; Kish)", "Fisher"/" !" flags) and the measure into the effect-size row NAME (`test_es_measure`: "Cramér's V, eta2") — both shared by the console grid (`tab-test-display.R`) and the export rows (`tab_pvalue_lines`); the cell is now the bare p (no in-cell "(Chi2)"). `tabxplor.test_lines` gains "all" (adds statistic back).
+- **tab_reg fixes.** `tab_bold_rows` keys on `ref_alltot | is_refrow` (new `ann$anchor`) and returns `integer(0)` on zero discriminating columns — killing the binomial `exponentiate=FALSE`+`empirical` all-bold edge (crosstabs byte-identical, `is_refrow ⊆ ref_alltot`). The colour legend strips the multi-dependent `[dep]` bracket for reg groups (`legend_streams`, `fmt_class.R`). `reg_spread_models` re-keys the `test` tibble onto the spread columns + clears `row_var` → one non-empty GOF block (was tripled/empty).
+- **md→HTML borders (`tab_md.R` + `tab-css.R`, keep the pipe table).** Styled md fills blanked label / span-row / header cells with U+00A0 so ONLY the real spacer columns stay `:empty` (kills the span-row stray borders + the ragged left edge). `tab-css.R` gains div-aware top/bottom/right edge rules. The spacer set `sep_after` (was `new_col_var`) adds interior boundaries in styled mode (levels|numbers, numbers|Total) — the span row now routes through `md_insert_col_sep` like the body, so every vertical lines up.
+
+
+#### Last phase n — Jamovi UI bug corrections
+
+Export to Excel with default parameters in Jamovi still fails (html and md works), Windows-side **and** Linux-side (WSL):
+   "Export failed: ℹ In index: 1.
+   Caused by error:
+   ! Invalid input: dims must be something like A1 or A1:B2."
+- Excel exports work well with tab() and tab_reg(), so it looks like a jamovi problem : maybe due to cache system, the data is somehow different than a regular tab() and tab_reg() table ? Would it be possible to 
+
+Default export path still can’t detect my real Windows Documents folder, an creates "USER/Documents". Same on WSL : it creates "~/Documents" (is this folder absolutely standard but just not present in my WSL ?)
+- I think the R in Electron session is locked, can’t read Windows registry, etc. Please think about how, from inside jamovi, we can find any. How does `SummaryTable::resolveExportPath()` do at the first place, where do it writes exports ?
+
+Horizontal rule before Export appear as raw html in the UI, it’s written : "<hr style=...>" Fix it, use empty line if needed : one empty line before subset, one empty line before Export block. 
+
+Add an empty line at the bottom of each collapsable box elements that form the main outline of the jamovi options UI.
+
+
+`Model comparison / predictors subset` :
+- The "Run comparaison" changes nothing for the freeze problem (see above). Sometimes it works, sometimes it freezes, see R code below. So it may definitely be a cache problem, which is difficult to reproduce in R jmvtabreg since each button click build cache. Diagnose thoroughly. How to resolve this one ? Maybe not using the cache system when the user enters the "model comparison" mode, since it become useless (all models calculated at Run button click) ? In any cases, the moment the user go back to just one model, it should reverse to the normal cache system (it’s ok if it’s a new cache and the old cache is not here anymore). A difficult question is what to do if the user have ran the comparison between 4 models, and change options elsewhere in the UI (references, display, ame, empirical, etc. ) : if it’s a cache problem it will still crash. So any change should drop the cache and print the "Model comparison staged. Click Run comparison to compute the table" message, and if the user want cache system back it can just remove all models in comparison ?
+- I want the "Run comparison" button to be with black text and grey background (the right grey for a good material design depending on jamovi options UI background colors ; it should be visible yet integrated with other elements). An empty line is needed after it (like at the end of each main outline collapsable boxes).
+
+```r
+# Working on jamovi live UI
+tab_reg(gss_simple, dependent = "married", 
+predictors = list(
+  model1 = c("race"), 
+  model2 = c("race", "rincome"), 
+  model3 = c("race", "rincome", "relig")#, 
+),
+family = "binomial", # empirical = TRUE, 
+) 
+
+# Always freezing on jamovi live UI
+tab_reg(gss_simple, dependent = "married", 
+predictors = list(
+  model1 = c("race"), 
+  model2 = c("race", "rincome"), 
+  model3 = c("race", "rincome", "relig"), 
+  model4 = c("race", "rincome", "relig", "age")#, 
+),
+family = "binomial", # empirical = TRUE, 
+) 
+```
+
+still freezes very often : I can’t reproduce the pattern for freeze, but I think just selecting or selecting out predictors too fast may make it freeze (sometimes it doesn’t even feel fast : like it click "+" to add three models, they add, then I select out a level, waiting for 5 sec and not more loading between each action, and it still freezes ; sometime it’s total freeze that require jamovi restart, sometimes it’s still possible to remove the analysis and redo, but this one feels random). Please do thorought web searches about jamovi freeze problems, and help me diagnose the cause and find a solution. Maybe the model comparison panel needs a kind of Ok button : since it’s an heavy operation that have no meaning to be redone every second, maybe the right UI is maybe "the user pick its models, then click the button to start analysis", actually bypassing jamovi UI live display for this one. Once the models to compare are picked, changes in other buttons in the UI keeps them, removing a variable in variable selection remove it in all models then relaunch (maybe guard this one in another way since it had been a source of freeze with model comparison in the past ?), etc. What other guards against jamovi freeze ?
+- There’s a R side problem too : for a row variable/predictor selection in all models the reference catogory is in bold in the firt "levels" column, with is the right behaviour ; but when the predictor have been selected out in any model, the bold dissapear ; I think it’s just because empty parts of the table doesn’t properly keep the `in_refrow` field, and mess with reference row detection.
 
 
 
-#### Phase 15g — Jamovi UI French translation
-
-#### Last Phase x – NEWS.md simplification
+#### Last Phase w – NEWS.md simplification
 
 
-#### Last Phase y – tabxplor R french translation
+#### Last Phase x – tabxplor R french translation
 
 All legends should be carefully translated to French.
 Could the package documentation be translated for French users ? Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?  
 What other strings should be translated in French ?
+
+#### Last Phase y — Jamovi UI French translation
 
 #### Last Phase z – github PR and CRAN release
 

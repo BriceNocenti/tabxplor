@@ -46,6 +46,7 @@ tab_many(
   total_names = "Total",
   add_n = TRUE,
   add_pct = FALSE,
+  common_totrow = FALSE,
   digits = 0,
   subtext = "",
   n_min = 0,
@@ -298,6 +299,9 @@ column or row with unweighted counts (\code{n}).}
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
 (for  \code{pct = "col"}).}
+
+\item{common_totrow}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
+row variable; \code{TRUE} collapses the identical Total rows into a single shared Total in its own group.}
 
 \item{digits}{The number of digits to print, as a single integer, or an integer vector
 the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}

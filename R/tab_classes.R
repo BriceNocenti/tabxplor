@@ -1271,7 +1271,8 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
   # add_n `n` COLUMN is built ONLY for xl (text folds directly, no throwaway), and collapse_totals is a
   # declared display slice reading the stored roles.
   re  <- get_render_extras(tab)
-  ctx <- list(add_n = isTRUE(re$add_n), add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue))
+  ctx <- list(add_n = isTRUE(re$add_n), add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
+              common_totrow = isTRUE(re$common_totrow), common_totrow_ref = isTRUE(re$common_totrow_ref))
   tab_materialize(tab, backend, ctx)
 }
 
@@ -1317,12 +1318,14 @@ materialize_specs <- function() list(
          if (is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
          tab
        }),
-  # Phase 14n: collapse the redundant per-block Total rows of a compacted several-row_vars table (a
-  # display slice needing the "as displayed" equality). Run LAST, so every role recomputes on the
-  # collapsed table; the core tab() object keeps every total row (nrow unchanged).
+  # Phase 14n / Last Phase m: collapse the redundant per-block Total rows of a compacted several-row_vars
+  # table into ONE shared Total, shown in its OWN group (a display slice needing the "as displayed"
+  # equality). OPT-IN via `common_totrow` (default FALSE = one Total per row_var, no collapse). Run LAST,
+  # so every role recomputes on the collapsed table; the core tab() object keeps every total row.
   list(kind = "collapse_totals",
-       when  = function(tab, backend, ctx) TRUE,
-       apply = function(tab, backend, ctx) tab_collapse_total_rows(tab))
+       when  = function(tab, backend, ctx) isTRUE(ctx$common_totrow),
+       apply = function(tab, backend, ctx)
+         tab_collapse_total_rows(tab, ref_bold = isTRUE(ctx$common_totrow_ref)))
 )
 
 # add_n / add_pct spec apply. Reuses tab_add_n_pct() (byte-identical field construction; its grouped
@@ -1379,7 +1382,7 @@ mat_sd_twin <- function(tab) {
 # row, so comparing the Total row alone would silently collapse col% tables with a genuinely different N.
 #' @keywords internal
 #' @noRd
-tab_collapse_total_rows <- function(tab) {
+tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   if (!isTRUE(get_vars_attr(tab)$compacted)) return(tab)   # single row_var / tab_vars: untouched
   is_tot <- is_totrow(tab)
   tot    <- which(is_tot)
@@ -1430,6 +1433,31 @@ tab_collapse_total_rows <- function(tab) {
   out  <- tab[keep, ]                                       # global indices -> class/attrs/grouping kept
   rr   <- get_row_roles_raw(tab)                            # slice the row-role vector with the rows
   if (!is.null(rr) && length(rr) == n_row) out <- set_row_roles(out, rr[keep])
+
+  # Last Phase m: the shared Total gets its OWN group (a blank row_var, its level stays "Total") after a
+  # blank-line separator -- not tucked under the last row_var. Reassign the surviving total block (Total
+  # row + its trailing n/row_pct rows) to a distinct blank sentinel in the grouping column and regroup, so
+  # the render-time separator (group_indices) sees it. When the total is a reference for some row_var
+  # (ref = "tot" -> ref_bold), mark the Total row bold (in_refrow -- the shared bold anchor signal).
+  surv_pos <- match(blocks[[length(blocks)]], keep)
+  surv_pos <- surv_pos[!is.na(surv_pos)]
+  grp_col  <- dplyr::group_vars(out)
+  if (length(surv_pos) && length(grp_col) >= 1L && grp_col[1] %in% names(out)) {
+    gc <- grp_col[1]
+    if (is.factor(out[[gc]]) && !"" %in% levels(out[[gc]]))
+      levels(out[[gc]]) <- c(levels(out[[gc]]), "")
+    out[[gc]][surv_pos] <- ""                              # blank row_var -> its own group (Q1)
+    out <- dplyr::group_by(out, dplyr::across(tidyselect::all_of(grp_col)))
+    if (isTRUE(ref_bold)) {
+      tot_pos <- surv_pos[[1]]                             # first block row = the Total row
+      for (nm in fmt_nms) {
+        v  <- out[[nm]]
+        fr <- vctrs::field(v, "in_refrow"); fr[tot_pos] <- TRUE
+        vctrs::field(v, "in_refrow") <- fr
+        out[[nm]] <- v
+      }
+    }
+  }
   out
 }
 
@@ -1472,15 +1500,17 @@ tab_pvalue_lines <- function(tabs) {
   if (nrow(disp) == 0) return(tabs)
 
   # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
-  # GOF footer). Always the p-value row; `tabxplor.test_lines = "stat"` prepends a statistic row. The
-  # p-value cell embeds the test label ("Chi2" / "F, Welch"), flagged "!" for a weak chi2 (min_e < 5).
-  # Last Phase j: "summary" (the new default) = statistic + effect size + p-value; "all" = same;
-  # "stat" = statistic + p-value; "pvalue" = p-value only. The console grid always shows the full block.
+  # GOF footer). Last Phase m: rows in display ORDER = p-value, then effect size; the STATISTIC row is
+  # gone from the default (ambiguous once effect size shares the block) -- it returns only under
+  # `tabxplor.test_lines = "stat"`/"all". The test TYPE ("Chi2, Welch F; Kish") and the effect-size
+  # MEASURE ("Cramér's V, eta2") move into the row NAMES (per group, via the descriptors), so the p-value
+  # CELL is now the bare p (no in-cell "(Chi2)" suffix). Modes: "summary" (default) = p-value + effect
+  # size; "all" = + statistic; "stat" = p-value + statistic; "pvalue" = p-value only.
   mode       <- getOption("tabxplor.test_lines", "summary")
-  add_stat   <- mode %in% c("stat", "all", "summary")
+  add_stat   <- mode %in% c("stat", "all")
   add_es     <- mode %in% c("all", "summary")
-  row_labels <- c(if (add_stat) "statistic", if (add_es) "effect size", "pvalue")
-  K          <- length(row_labels)
+  row_keys   <- c("pvalue", if (add_es) "effect size", if (add_stat) "statistic")
+  K          <- length(row_keys)
 
   # group id per existing row + per displayed-test row (the disc-key tuple; "" when ungrouped)
   gid <- function(df) if (length(disc))
@@ -1488,12 +1518,22 @@ tab_pvalue_lines <- function(tabs) {
     else rep("", nrow(df))
   grp_of      <- gid(tabs)
   disp$.grp   <- gid(disp)
-  # a weak chi2 with a Fisher-exact companion (Last Phase j): show the exact p, label it "Fisher".
+  # a weak chi2 with a Fisher-exact companion (Last Phase j): show the exact p (labelled "Fisher" in the
+  # row-name descriptor now, not the cell).
   has_exact   <- if (!is.null(disp[["pvalue_exact"]])) !is.na(disp$pvalue_exact) else rep(FALSE, nrow(disp))
   disp$.pshow <- if (any(has_exact)) ifelse(has_exact, disp$pvalue_exact, disp$pvalue) else disp$pvalue
-  disp$.label <- ifelse(has_exact, "Fisher",
-                        purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak))
   key         <- paste(disp$col_var, disp$.grp, sep = "\r")
+  # per-group row NAME for each row key (the test type / measure descriptor, computed from that group's
+  # displayed tests -- one row per subtable can carry a different mix of factor/numeric col_vars).
+  row_label_for <- function(key, g) {
+    ing <- disp$.grp == g
+    d   <- disp[ing, , drop = FALSE]
+    weak <- !is.null(d[["min_e"]]) && any(!is.na(d$min_e) & d$min_e < 5 & !has_exact[ing])
+    switch(key,
+           "pvalue"      = test_pvalue_descriptor(d$test, any(has_exact[ing]), isTRUE(weak)),
+           "effect size" = if (!is.null(d[["es_type"]])) test_es_measure(d$es_type) else "effect size",
+           "statistic"   = "statistic")
+  }
 
   # the per-column fill for a non-value / no-test-here position: the column's first display token with
   # n = NA (byte-identical to the pre-16a masked fill, locked by test-golden / export-parity).
@@ -1507,16 +1547,17 @@ tab_pvalue_lines <- function(tabs) {
     cv <- col_to_cv[[nm]]
     r <- disp[key == paste(cv, g, sep = "\r"), , drop = FALSE]
     if (nrow(r) == 0) return(fill_cell(nm))               # this col_var has no displayed test in group g
-    if (identical(rl, "pvalue")) pvalue_line_fmt(r$.pshow[1], label = r$.label[1])
+    if (identical(rl, "pvalue")) pvalue_line_fmt(r$.pshow[1])  # bare p (test type names the row now)
     else if (identical(rl, "effect size")) {
       v <- if (!is.null(r[["effect_size"]])) r$effect_size[1] else NA_real_
       if (is.na(v)) reg_blank_cell() else reg_gof_cell(v, 2L)  # bare number; column type tells V from eta2
     }
     else                         stat_line_fmt(r$statistic[1])
   }
-  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_labels, one_cell, nm = nm, g = g))
+  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_keys, one_cell, nm = nm, g = g))
   nonfmt_val <- function(nm, g) {
-    if (nm == row_var) return(row_labels)                 # the row-label column: "statistic" / "pvalue"
+    # the row-label column: the per-group test-type / effect-size descriptors (Last Phase m)
+    if (nm == row_var) return(vapply(row_keys, row_label_for, character(1), g = g))
     i <- match(nm, disc)                                  # a grouping column: its group level
     if (!is.na(i)) return(rep(strsplit(g, "\r", fixed = TRUE)[[1]][i], K))
     rep(NA_character_, K)
@@ -1527,7 +1568,7 @@ tab_pvalue_lines <- function(tabs) {
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr,
     footer_groups = unique(disp$.grp),   # only subtables with a displayed test get a p-value row
-    row_role = function(g) dplyr::if_else(row_labels == "pvalue", "pvalue", "gof"))  # "statistic" row -> gof
+    row_role = function(g) dplyr::if_else(row_keys == "pvalue", "pvalue", "gof"))  # es/statistic row -> gof
 }
 
 # Phase 12f: materialise the regression GOF footer as appended rows (one row per stat, a "Model fit"

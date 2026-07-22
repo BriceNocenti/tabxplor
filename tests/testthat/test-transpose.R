@@ -107,8 +107,10 @@ testthat::test_that("numeric cells keep their OWN colour on transpose (the findi
   testthat::expect_identical(mism, 0L)
 })
 
-testthat::test_that("ONE Total column, no Total_<var> suffix (finding 8 + 14n collapse)", {
-  t  <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop")
+testthat::test_that("ONE Total column, no Total_<var> suffix (finding 8 + common_totrow collapse)", {
+  # Last Phase m: the single-Total-column transpose use case opts into the shared Total (common_totrow).
+  t  <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop",
+            common_totrow = TRUE)
   md <- tab_md(t, transpose = TRUE, print = FALSE, color = FALSE)
   testthat::expect_false(grepl("Total_", md, fixed = TRUE))
   rd <- tx_prep(t, color = FALSE)

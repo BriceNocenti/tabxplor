@@ -285,15 +285,15 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
   # scaffolding column) because the prep dropped `vars$row_vars`.
   # Phase 14l: and the DEPENDENT axis leads -- this is pct="row", so the col_var comes first.
   testthat::expect_equal(as.character(d[1, 1]), "relig by race, marital")
-  # one merge per block, in column A. Phase 14n collapses the redundant race Total (race is the FIRST
-  # block; the shared Total is kept under the LAST block, marital), so race spans A4:A6 and marital A7:A13.
+  # one merge per block, in column A. Last Phase m: common_totrow defaults FALSE, so each block keeps its
+  # OWN Total row -> race spans A4:A7 (3 data + Total) and marital spans A8:A14 (6 data + Total).
   merges <- paste(wb$worksheets[[1]]$mergeCells, collapse = " ")
-  testthat::expect_match(merges, 'ref="A4:A6"', fixed = TRUE)
-  testthat::expect_match(merges, 'ref="A7:A13"', fixed = TRUE)
+  testthat::expect_match(merges, 'ref="A4:A7"', fixed = TRUE)
+  testthat::expect_match(merges, 'ref="A8:A14"', fixed = TRUE)
   # the name is written once per block, not on every row (Excel keeps only a merge's top-left value,
   # so a repeat below it would be an invisible ghost the user finds again on unmerging)
   testthat::expect_equal(as.character(d[4:13, 1]),
-                         c("race", rep(NA, 2), "marital", rep(NA, 6)))
+                         c("race", rep(NA, 3), "marital", rep(NA, 5)))
   # rotated 90 degrees, and the column narrowed to match (that is what the rotation buys)
   testthat::expect_true(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
   testthat::expect_match(paste(unlist(wb$worksheets[[1]]$cols_attr), collapse = " "),

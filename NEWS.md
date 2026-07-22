@@ -2,6 +2,19 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`tab(common_totrow =)`** — with several `row_vars`, `tab()` now shows **one Total row per row
+  variable by default**. Set `common_totrow = TRUE` to collapse the identical Total rows into a single
+  shared Total, displayed in its own group after a blank separator (and bold when it is the reference
+  for at least one row variable).
+* **`ref` vectorised over col_vars under `pct = "col"`.** An unnamed `ref` vector as long as the
+  `col_vars` now maps positionally to them: a factor column takes a reference **column**, a numeric
+  (mean) column a reference **row** (e.g. `ref = c("tot", 1, 1)`). Named-by-col_var refs keep working;
+  `pct = "row"` still maps `ref` over the `row_vars`.
+* **Clearer `test = TRUE` summary.** The per-table summary now shows the **p-value first, then the
+  effect size** (the raw statistic row is dropped from the default). The test used is named in the
+  p-value row (`pvalue (Chi2, Welch F; Kish)`) and the measure in the effect-size row (`Cramer's V,
+  eta2`), instead of a cramped in-cell `(Chi2)` label. `options(tabxplor.test_lines = "all")` restores
+  the statistic row.
 * **Labelled-data (`haven`/`labelled`) support**, with no new dependency. When a variable carries value
   labels (its `labels` attribute) and every observed value is labelled, `tab()`, `tab_num()`,
   `tab_counts()` and `tab_reg()` now use those labels as the factor levels (an incomplete-labelled
@@ -962,6 +975,16 @@
   empty total block and failed reordering by the tab variable.
 
 ## Bug fixes
+* **`tab_reg(exponentiate = FALSE)` no longer bolds every cell** on a binomial + `empirical = TRUE`
+  table (only the reference rows and the model-fit footer are bold, as for the other families).
+* **Regression colour legend/subtext drops the `[dependent]` disambiguation bracket** in exports
+  (markdown / html / Excel); the console keeps it on the column headers, where it avoids name clashes.
+* **`tab_reg(split_var =, spread_models = TRUE)` with a single dependent** now shows one model-fit
+  summary block, spread across the sub-population columns (it was tripled and empty).
+* **The `pct = "col"` count (`n`) row renders in plain weight**, not bold.
+* **Markdown → HTML export borders** (`tab_md(css = TRUE)`): the stray borders on the variable-name
+  row and the ragged left edge are gone, and the table now draws top, bottom, right and interior
+  vertical rules matching the other exports.
 * A **p-value row now turns red under `color_signif = "grey_non_signif"`** (and
   `"guaranteed_effect"`) when the test is not significant (p > alpha), the same warning colour it has
   always shown by default. It previously stayed uncoloured under those policies. P-value cells also no

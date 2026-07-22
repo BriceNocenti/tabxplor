@@ -57,9 +57,11 @@
 #'   \item{`tabxplor.anova`}{which one-way ANOVA F is shown for mean columns: `"welch"` (default,
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
 #'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_html()],
-#'     [tab_xl()]) append: `"summary"` (default: statistic + effect size + p-value), `"stat"` (statistic
-#'     + p-value), or `"pvalue"` (the single p-value row). N is never added -- it is already shown by
-#'     `add_n`. The console summary block always shows the full N / statistic / effect-size / p-value table.}
+#'     [tab_xl()]) append: `"summary"` (default: p-value + effect size), `"all"` (+ the raw statistic),
+#'     `"stat"` (p-value + statistic), or `"pvalue"` (the single p-value row). The p-value row name states
+#'     the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+#'     V, eta2"). N is never added -- it is already shown by `add_n`. The console summary block always
+#'     shows N + p-value + effect size.}
 #'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
 #'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
 #'     one-line form the console uses). The console itself is always terse.}

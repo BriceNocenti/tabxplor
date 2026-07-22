@@ -123,24 +123,32 @@ children:
       - type: LayoutBox
         margin: large
         children:
-          - type: Label
-            label: compare = <i>(nested-model LR / F test)</i>
+          - type: LayoutBox
+            cell: { column: 0, row: 0 }
+            stretchFactor: 1
             children:
-              - type: ComboBox
-                name: compare
-                events:
-                  change: ./jmvtabreg::onChange_compare
-          - type: Label
-            label: na = <i>(missing values)</i>
+              - type: Label
+                label: compare = <i>(nested-model LR / F test)</i>
+                children:
+                  - type: ComboBox
+                    name: compare
+                    events:
+                      change: ./jmvtabreg::onChange_compare
+          - type: LayoutBox
+            cell: { column: 1, row: 0 }
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: na_1
-                optionName: na
-                optionPart: drop_by_model
-              - type: RadioButton
-                name: na_2
-                optionName: na
-                optionPart: drop_all_models
+              - type: Label
+                label: na = <i>(missing values)</i>
+                children:
+                  - type: RadioButton
+                    name: na_1
+                    optionName: na
+                    optionPart: drop_by_model
+                  - type: RadioButton
+                    name: na_2
+                    optionName: na
+                    optionPart: drop_all_models
       # Phase h: with >=2 models the table computes only on this click (no live refit while picking).
       - type: LayoutBox
         margin: large

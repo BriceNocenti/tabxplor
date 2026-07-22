@@ -89,7 +89,11 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
   framework in `R/tab-test-display.R` (Phase 16a). Three shared layers, each used by both crosstab and
   regression: (1) CONTENT — `test_display_rows()`, `test_cell_label_weak()` (label + `min_e < 5` weak
   flag), the `test_fmt_*` formatters and the fmt-cell builders (`pvalue_line_fmt` / `reg_gof_cell` /
-  `stat_line_fmt`) + `reg_footer_spec()`; (2) CONSOLE — `test_summary_grid()` → a backend-free grid,
+  `stat_line_fmt`) + `reg_footer_spec()`. Last Phase m: the crosstab summary is **p-value then effect
+  size** (no statistic by default; `tabxplor.test_lines = "all"` adds it back); the test type is named in
+  the p-value ROW (`test_pvalue_descriptor` → "pvalue (Chi2, Welch F; Kish)"/"Fisher"/" !") and the
+  measure in the effect-size ROW (`test_es_measure` → "Cramér's V, eta2"), so the cell is the bare p (no
+  in-cell "(Chi2)"); (2) CONSOLE — `test_summary_grid()` → a backend-free grid,
   `test_render_console()` → the GFM block; (3) EXPORT — `tab_append_footer()`, the ONE fmt-frame append
   engine behind BOTH inline-row appenders (`tab_pvalue_lines()` / `reg_footer_lines()`, in
   `R/tab_classes.R` next to `tab_materialize_extras`, now thin arm-specific configs over it — a crosstab
@@ -809,9 +813,17 @@ markdown *string*. `test-tab_md.R` now renders through pandoc (`skip_if` pandoc 
 follow, and they are the ones to keep:
 
 - the col_var name is a **body row** (italic, first cell of its group, **one cell per column** — a
-  merged cell desyncs the row's count and pandoc shifts the data); `col_var_names = FALSE` drops it;
+  merged cell desyncs the row's count and pandoc shifts the data); `col_var_names = FALSE` drops it.
+  Last Phase m: it now builds a per-column cell vector and routes through `md_insert_col_sep(sep_after)`
+  like the body, so its spacer columns line up with theirs (was a hand-assembled line that only knew the
+  col_var-group spacers);
 - the thin spacer column between col_vars needs `-` on the **delimiter** row (`md_insert_col_sep(fill=)`;
-  one helper builds all four row types, so the fill is a parameter);
+  one helper builds all four row types, so the fill is a parameter). Last Phase m: the spacer set is
+  `sep_after` — `new_col_var` (col_var groups) for a plain table, PLUS the interior boundaries
+  (levels|numbers, numbers|Total) for a STYLED table, so the CSS `:empty`-spacer → border-left rule draws
+  the same vertical rules the html/xl exports do. Styled tables also fill every blanked label / span /
+  header cell with U+00A0 (not ""), so ONLY the real spacer columns stay `:empty` (no stray borders on
+  the variable-name row, no ragged left edge); `tab-css.R` adds div-aware top/bottom/right table edges;
 - a `|` in a label is escaped (label columns only — fmt cells are package-formatted numbers).
 
 **Padding aligns the VISIBLE end, not the raw one.** Markup (`[`, `**`) occupies raw columns but

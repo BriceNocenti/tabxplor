@@ -282,6 +282,22 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     paste0(".tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,",
            ".tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{",
            "border-left-style:solid;border-left-width:1px;}"),
+    # Last Phase m: the whole-table TOP and BOTTOM edges, md-only BY SELECTOR (they need a `table`
+    # DESCENDANT of `.tabxplor-tab` -- the pandoc div>table; the html engine's `.tabxplor-tab` IS the
+    # table with no nested one -> its edges come from `> thead`/`tr.tx-bb` instead). Longhands only (the
+    # no-shorthand border-colour contract). (0,2,3) beats `thead th`'s border-top-width:0 (0,1,2).
+    paste0(".tabxplor-tab table > thead > tr:first-child > *{",
+           "border-top-style:solid;border-top-width:1px;}"),
+    paste0(".tabxplor-tab table > tbody > tr:last-child > *{",
+           "border-bottom-style:solid;border-bottom-width:1px;}"),
+    # Last Phase m: the right edge of the table (the grand Total / last numeric column) -- md has no
+    # column-AFTER-the-last to make a spacer of, so a border-right on each content row's last cell draws
+    # it. `:has(td:not(:empty))` skips the blank separator rows (no stray right tick). Matches the html
+    # engine's tx-br on the final column. The interior verticals (levels|numbers, numbers|Total, col_var
+    # groups) are the :empty spacer columns md inserts, handled by the border-left rule above.
+    paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,",
+           ".tabxplor-tab table > thead > tr > *:last-child{",
+           "border-right-style:solid;border-right-width:1px;}"),
     # Phase g (A5): the md footer is a paragraph after the table INSIDE the `.tabxplor-tab` div (the html
     # engine puts its footer in <tfoot>, styled above). `.tabxplor-tab p` is md-only by selector -- the
     # html engine's `.tabxplor-tab` IS the <table> and has no descendant <p>.

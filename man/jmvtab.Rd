@@ -16,6 +16,9 @@ jmvtab(
   color_signif = "ignore",
   chi2 = FALSE,
   anova = "welch",
+  test_robust = "classic",
+  strata = NULL,
+  ids = NULL,
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
@@ -112,6 +115,17 @@ their contribution to variance.}
 \item{anova}{Which F statistic to display for numeric column variables when
 the test is on: Welch's F (default, does not assume equal variances) or the
 classic pooled F.}
+
+\item{test_robust}{For a weighted table, a more robust p-value: "classic"
+(unweighted chi2 / Welch F); "kish" (first-order Rao-Scott rescale to the
+effective sample size); "survey" (a design-based survey::svychisq / svyglm
+F using the weight + optional strata/ids).}
+
+\item{strata}{Optional stratification variable for the survey-design test
+(test = "survey").}
+
+\item{ids}{Optional cluster-id variable for the survey-design test (test =
+"survey").}
 
 \item{na}{The policy to adopt with missing values. It must be a single
 string.  \itemize{    \item \code{na = "keep"}: by default, prints

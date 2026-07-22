@@ -68,15 +68,19 @@ test_that("estimate_display prob/ame degrade to 'ci' for non-binomial (message)"
 
 # ---- Excel in-cell test label ----------------------------------------------------------------
 
-test_that("Excel folds the in-cell test label into the numFmt literal", {
+test_that("Excel names the test in the p-value row label, not the numFmt (Last Phase m)", {
   skip_if_not_installed("openxlsx2")
   d  <- reg_data()
   ct <- suppressWarnings(tab(d, race, marital, pct = "row", test = TRUE))
   f  <- tempfile(fileext = ".xlsx")
   tab_xl(ct, path = f, replace = TRUE)
   tmp <- tempfile(); dir.create(tmp); utils::unzip(f, exdir = tmp)
+  # the test type moved OUT of the cell numFmt and INTO the row label (a text cell)
   sx  <- paste(readLines(file.path(tmp, "xl", "styles.xml"), warn = FALSE), collapse = "")
-  expect_match(sx, "Chi2")                               # "0.00%\" (Chi2)\"" landed in the numFmt
+  expect_no_match(sx, "Chi2")                            # no longer folded into a numFmt literal
+  xmls <- list.files(tmp, pattern = "\\.xml$", recursive = TRUE, full.names = TRUE)
+  all_xml <- paste(unlist(lapply(xmls, readLines, warn = FALSE)), collapse = "")
+  expect_match(all_xml, "pvalue \\(Chi2")               # the p-value row name (text) states the test
 })
 
 # ---- split_var export footer -----------------------------------------------------------------

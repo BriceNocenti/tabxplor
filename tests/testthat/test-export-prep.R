@@ -137,15 +137,14 @@ testthat::test_that("list_method keeps a non-mergeable list as N tables; else it
 
 # === SECTION: tab_bold_rows edge (md vs kable style) =========================
 
-testthat::test_that("tab_bold_rows: no discriminating column -> md integer(0), kable all rows", {
-  # all-FALSE (no reference) columns -> not discriminating
+testthat::test_that("tab_bold_rows: no discriminating column -> integer(0) (no anchor rows)", {
+  # Last Phase m: the anchor signal is `ref_alltot | is_refrow`; zero discriminating columns -> NO anchor
+  # rows (universally, was: md integer(0) but kable ALL rows -- the binomial exp=FALSE all-bold bug).
   none <- list(c(FALSE, FALSE, FALSE), c(FALSE, FALSE, FALSE))
-  testthat::expect_identical(tabxplor:::tab_bold_rows(none, md_style = TRUE), integer(0))
-  testthat::expect_identical(tabxplor:::tab_bold_rows(none, md_style = FALSE), 1:3)
-  # a normal discriminating column -> both agree
+  testthat::expect_identical(tabxplor:::tab_bold_rows(none), integer(0))
+  # a normal discriminating column -> the anchor row
   disc <- list(c(FALSE, FALSE, TRUE), c(FALSE, FALSE, TRUE))
-  testthat::expect_identical(tabxplor:::tab_bold_rows(disc, md_style = TRUE), 3L)
-  testthat::expect_identical(tabxplor:::tab_bold_rows(disc, md_style = FALSE), 3L)
+  testthat::expect_identical(tabxplor:::tab_bold_rows(disc), 3L)
 })
 
 # === SECTION: tab_totcol_range (block B, inert in Part 1) ====================

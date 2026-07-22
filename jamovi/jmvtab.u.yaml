@@ -198,7 +198,7 @@ children:
         children:
           - type: Label
             label: >-
-              <b>test = <i>(Statistical test: Chi2 for categorical; ANOVA F for
+              <b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for
               numeric)</i></b>
           - type: LayoutBox
             margin: none
@@ -207,7 +207,7 @@ children:
                 cell:
                   column: 0
                   row: 0
-                stretchFactor: 2
+                stretchFactor: 1
                 children:
                   - type: CheckBox
                     name: chi2
@@ -215,31 +215,22 @@ children:
                 cell:
                   column: 1
                   row: 0
-                stretchFactor: 3
+                stretchFactor: 1
                 children:
                   - type: ComboBox
                     name: anova
                     label: ANOVA F
                     enable: (chi2)
-          - type: LayoutBox
-            margin: none
-            children:
-              - type: ComboBox
-                name: test_robust
-                label: "test ="
-                enable: (chi2)
-              - type: VariablesListBox
-                name: strata
-                label: "strata ="
-                maxItemCount: 1
-                isTarget: true
-                enable: (chi2)
-              - type: VariablesListBox
-                name: ids
-                label: "ids ="
-                maxItemCount: 1
-                isTarget: true
-                enable: (chi2)
+              - type: LayoutBox
+                cell:
+                  column: 0
+                  row: 1
+                stretchFactor: 0
+                children:
+                  - type: ComboBox
+                    name: test_robust
+                    label: "Type de pvalue"
+                    enable: (chi2)
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -307,7 +298,7 @@ children:
             stretchFactor: 1
             children:
               - type: TextBox
-                name: other_if_less_than
+                name: n_min
                 format: number
           - type: LayoutBox
             margin: none
@@ -318,16 +309,7 @@ children:
             children:
               - type: CheckBox
                 name: cleannames
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 0
-              row: 2
-            stretchFactor: 1
-            children:
-              - type: TextBox
-                name: n_min
-                format: number
+
       - type: LayoutBox
         cell:
           column: 0
@@ -345,6 +327,12 @@ children:
                 events:
                   creating: ./jmvtab::levelOrderCtrl_creating
                   updated: ./jmvtab::levelOrderCtrl_updated
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: TextBox
+            name: other_if_less_than
+            format: number
   - type: CollapseBox
     label: <b>References (points of comparison)</b>
     stretchFactor: 1

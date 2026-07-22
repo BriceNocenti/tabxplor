@@ -325,18 +325,45 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # a column that otherwise holds level labels, marks the cell as a variable NAME. tab_var cells stay
   # plain -- their values ARE levels ("Male"), not names. Done BEFORE the width pass, so the markup is
   # measured; the column is left-aligned, so the padding needs no arithmetic.
+  # `styled` (computed here, ahead of the label blanking that needs it): a coloured table, or the caller
+  # asked for the stylesheet. In a styled table (rendered to html) a blanked continuation LABEL cell must
+  # be a non-breaking space, NOT "" -- an :empty <td> makes the CSS col_var-separator rule misfire (the
+  # "ragged" leftmost border that appears only on continuation rows; Last Phase m). Plain tables keep "".
+  do_color <- md_has_color(rd, color)
+  styled   <- do_color || isTRUE(css)
+  blank_lbl <- if (styled) "\u00a0" else ""
   for (cl in names(label_cols)) {
     idx <- which(names(cell_data) == cl)
     if (length(idx) != 1) next
     show <- label_runs[[cl]]$show
-    cell_data[[idx]][!show] <- ""
+    cell_data[[idx]][!show] <- blank_lbl
     if (cl %in% names(var_name_col)) {
-      nz <- show & nzchar(cell_data[[idx]]) & !is.na(cell_data[[idx]])
+      nz <- show & nzchar(cell_data[[idx]]) & !is.na(cell_data[[idx]]) & cell_data[[idx]] != blank_lbl
       cell_data[[idx]][nz] <- paste0("*", cell_data[[idx]][nz], "*")
     }
   }
 
   is_right <- fmt_mask  # named logical: TRUE for fmt (right-aligned) columns
+
+  # Last Phase m: the spacer-column set. Plain / unstyled tables keep ONLY the col_var-group spacers
+  # (new_col_var). A STYLED table adds thin spacer columns at the interior boundaries the other exports
+  # draw as vertical rules -- between the levels column and the first number, between the last number and
+  # the grand Total column, and to the right of the Total column -- reusing the same :empty spacer ->
+  # CSS border-left mechanism (so no per-column class is needed). `md_insert_col_sep` inserts a spacer
+  # AFTER each index in `sep_after`; `has_sep` enables it (was `has_multi_col_vars`, now any spacer).
+  sep_after <- new_col_var
+  if (styled) {
+    fmt_idx   <- which(unname(fmt_mask))
+    tot_idx   <- rd$roles$totcols
+    extra     <- integer(0)
+    if (length(fmt_idx)) {
+      first_fmt <- min(fmt_idx)
+      if (first_fmt > 1L) extra <- c(extra, first_fmt - 1L)        # levels | first number
+    }
+    if (length(tot_idx)) extra <- c(extra, min(tot_idx) - 1L, max(tot_idx))  # numbers|Total, right of Total
+    sep_after <- sort(unique(c(new_col_var, extra[extra >= 1L])))
+  }
+  has_sep <- length(sep_after) > 0L
 
   # Blank out the label columns' header names (they label sub-tables, not real columns). The `""`
   # sentinel in names(cell_data) is what drives `col_names` at Step 7. Phase 14i: `tab_vars` ->
@@ -353,12 +380,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # the per-cell "{.class}" string (fmt columns only; "" = no span).
   # Phase 13d: the class is a pure function of the palette slot the engine already assigned, so no
   # per-column plan/palette lookup is needed here at all -- and the names match tab_kable()'s <td>
-  # classes, both styled by the one tab_css() stylesheet.
-  do_color <- md_has_color(rd, color)
-  # Phase 14m-iii: a STYLED table (coloured, or the caller asked for the stylesheet) gets the pandoc
-  # chrome -- blank-row separators the stylesheet collapses to 1px rules (Steps 12/13) instead of the
-  # raw-text dash rows. A plain table (`!styled`) keeps the dash rows so its GFM output is byte-clean.
-  styled   <- do_color || isTRUE(css)
+  # classes, both styled by the one tab_css() stylesheet. `do_color` / `styled` are computed above (the
+  # label blanking needs `styled`); the col_var-name span row's blanks get the same nbsp treatment (Step 8).
   # Phase g (A7): in a styled table (pandoc renders it to html), spaces in a multi-word LEVEL / label
   # name ("Never married", "Strong republican") let the host wrap it mid-name. Replace them with a
   # non-breaking space so the label holds on one line up to the wrap_rows truncation limit. nchar is
@@ -389,7 +412,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Phase 13c-iii: the level-header row uses the suffix-stripped labels (the col_var name is now written
   # in the span row above), keeping the tab_var headers blanked (names(cell_data) == "" for tab_vars).
   col_names <- cvh$clean
-  col_names[names(cell_data) == ""] <- ""
+  col_names[names(cell_data) == ""] <- if (styled) "\u00a0" else ""  # nbsp: the blank row_var/tab_var header
+  # cell must not be :empty in a styled table, else the thead col_var-separator rule draws a stray left
+  # border on it (part of the "first row has many unwanted borders"). Spacer headers stay ASCII (:empty).
 
   # For each cell, compute the raw text width
   cell_widths <- matrix(0L, nrow = n_rows, ncol = n_cols)
@@ -488,28 +513,20 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     # column (a pipe row must keep the table's cell count or pandoc shifts the data). A long name simply
     # overflows its own cell: the row is deliberately not pipe-ALIGNED, because padding to it would
     # widen every column below it.
+    # Last Phase m: build the span row as a PER-COLUMN cell vector (the name in the first cell of its
+    # run, nbsp-padded blanks elsewhere), then route it through md_insert_col_sep(sep_after) exactly like
+    # the body -- so the spacer columns (col_var groups + the interior levels/Total boundaries) line up
+    # across every row. (Was a hand-assembled line that only knew the col_var-group spacers.)
     runs <- tab_header_runs(cvh$label)
-    header_parts <- character(0)
-    col_start <- 1L
+    span_cells <- md_pad_blank(col_width, styled)
+    col_start  <- 1L
     for (r in seq_along(runs$labels)) {
-      lbl   <- runs$labels[r]
-      span  <- runs$spans[r]
-      j_end <- col_start + span - 1L
-      if (nzchar(lbl)) {
-        nm_cell <- paste0(" *", lbl, "*")
-        header_parts <- c(header_parts,
-                          stringi::stri_pad(nm_cell, col_width[col_start], side = "right"))
-        if (span > 1L)
-          header_parts <- c(header_parts, strrep(" ", col_width[(col_start + 1L):j_end]))
-        # separator column between real col_var groups (multi col_var only)
-        if (j_end %in% new_col_var && j_end < n_cols) header_parts <- c(header_parts, " ")
-      } else {
-        # non-grouped columns (row var / total / count): one empty cell each, matching column width
-        header_parts <- c(header_parts, strrep(" ", col_width[col_start:j_end]))
-      }
-      col_start <- j_end + 1L
+      if (nzchar(runs$labels[r]))
+        span_cells[col_start] <- stringi::stri_pad(paste0(" *", runs$labels[r], "*"),
+                                                   col_width[col_start], side = "right")
+      col_start <- col_start + runs$spans[r]
     }
-    col_var_header_line <- paste0("|", paste(header_parts, collapse = "|"), "|")
+    col_var_header_line <- md_insert_col_sep(span_cells, sep_after, n_cols, has_sep)
   }
 
   # --- Step 9: Build level-names header row ---
@@ -525,7 +542,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   # Insert separator columns between col_var groups
-  header_line <- md_insert_col_sep(header_cells, new_col_var, n_cols, has_multi_col_vars)
+  header_line <- md_insert_col_sep(header_cells, sep_after, n_cols, has_sep)
 
   # --- Step 10: Build alignment separator ---
   sep_cells <- character(n_cols)
@@ -537,7 +554,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       paste0(":", dashes)
     }
   }
-  sep_line <- md_insert_col_sep(sep_cells, new_col_var, n_cols, has_multi_col_vars, fill = "-")
+  sep_line <- md_insert_col_sep(sep_cells, sep_after, n_cols, has_sep, fill = "-")
 
   # --- Step 11: Build body rows ---
   body_lines <- character(n_rows)
@@ -556,8 +573,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                                   is_right[j], bold_j, split_at)
       }
     }
-    body_lines[i] <- md_insert_col_sep(row_cells, new_col_var, n_cols,
-                                        has_multi_col_vars)
+    body_lines[i] <- md_insert_col_sep(row_cells, sep_after, n_cols,
+                                        has_sep)
   }
 
   # --- Step 12: Insert sub-table separators ---
@@ -566,13 +583,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     # the render) that tab_css() collapses to a 1px border-top -- a theme-aware rule with NO dash marker
     # in the raw markdown. The PLAIN path keeps the dash row, so its GFM/text output stays byte-clean.
     if (styled) {
-      sep_row <- md_blank_row(col_width, new_col_var, n_cols, has_multi_col_vars)
+      sep_row <- md_blank_row(col_width, sep_after, n_cols, has_sep)
     } else {
       dash_cells <- character(n_cols)
       for (j in seq_len(n_cols)) {
         dash_cells[j] <- paste0(" ", strrep("-", col_width[j] - 2L), " ")
       }
-      sep_row <- md_insert_col_sep(dash_cells, new_col_var, n_cols, has_multi_col_vars)
+      sep_row <- md_insert_col_sep(dash_cells, sep_after, n_cols, has_sep)
     }
 
     # Insert separators after the appropriate rows
@@ -595,7 +612,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # 1px border-top under it (the "rule under the name" the maintainer asked for), theme-aware, with no
   # dash in the raw markdown. Only when the name row exists (var_names may have dropped it).
   name_underline <- if (styled && !is.null(col_var_header_line)) {
-    md_blank_row(col_width, new_col_var, n_cols, has_multi_col_vars)
+    md_blank_row(col_width, sep_after, n_cols, has_sep)
   } else NULL
   all_lines <- c(header_line, sep_line, col_var_header_line, name_underline, body_lines)
 
@@ -642,6 +659,13 @@ md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars, fi
 #' @keywords internal
 md_blank_row <- function(col_width, new_col_var, n_cols, has_multi_col_vars) {
   md_insert_col_sep(strrep(" ", col_width), new_col_var, n_cols, has_multi_col_vars)
+}
+
+# Last Phase m: a width-padded blank cell that is NOT :empty (a leading non-breaking space) for STYLED
+# tables, so the CSS col_var-separator rule fires only on the true ASCII spacer columns -- used for the
+# nearly-blank col_var-name span row. Plain tables keep ASCII spaces (byte-clean GFM). Vectorised.
+md_pad_blank <- function(widths, styled) {
+  if (styled) stringi::stri_pad("\u00a0", widths, side = "right") else strrep(" ", widths)
 }
 
 

@@ -22,15 +22,19 @@ test_that("test_fmt_pvalue / stat / num / is_nonsig / weak-label format as speci
 
 # === the display grid ===============================================================================
 
-test_that("crosstab grid: col_vars are columns, row_vars are groups, N/statistic/effect-size/pvalue rows", {
+test_that("crosstab grid: col_vars are columns, row_vars are groups, N/pvalue/effect-size rows", {
   t <- tab(gss, c(race, relig), c(party3, tvhours), pct = "row", test = TRUE)
   g <- test_summary_grid(t)
   expect_equal(g$stat_header, "Tests")
   expect_setequal(g$value_headers, c("party3", "tvhours"))
   expect_length(g$groups, 2L)                              # race, relig
   expect_equal(g$groups[[1]]$label_lines[[1]], "race")
-  expect_equal(vapply(g$groups[[1]]$rows, `[[`, character(1), "label"),
-               c("N", "statistic", "effect size", "pvalue"))
+  # Last Phase m: no statistic row; order = N, p-value, effect size; the test type / measure name the rows
+  labs <- vapply(g$groups[[1]]$rows, `[[`, character(1), "label")
+  expect_equal(labs[[1]], "N")
+  expect_match(labs[[2]], "^pvalue \\(Chi2, Welch F")      # both factor + numeric col_vars
+  expect_match(labs[[3]], "eta2")                          # Cramer's V + eta2 (measure names)
+  expect_false(any(labs == "statistic"))
 })
 
 test_that("comp='tab' adds a tab_var column; comp='all' collapses the group label to row x tabvars", {
@@ -71,7 +75,7 @@ test_that("console renderer emits an aligned GFM pipe table with the weak-test f
   expect_true(any(grepl("^\\|.*party3", out)))           # a header row naming the col_var
   expect_true(any(grepl("^\\|:-", out)))                 # the GFM alignment row
   expect_true(any(grepl("pvalue", out)))
-  expect_true(any(grepl("\\(Chi2 !\\)", out)))           # weak flag rendered
+  expect_true(any(grepl("Chi2 !", out)))                 # weak flag rendered (now in the p-value row name)
   # every rendered row is the same visible width (aligned)
   body <- out[grepl("^\\|", out)]
   expect_equal(length(unique(nchar(body))), 1L)
@@ -86,26 +90,31 @@ test_that("console renderer colours a non-significant p-value red (cli)", {
   # if the F test is non-significant, the p-value cell carries an ANSI red escape
   g <- test_summary_grid(t)
   nonsig <- any(vapply(g$groups, function(gr)
-    any(gr$rows[[3]]$nonsig), logical(1)))
+    any(gr$rows[[2]]$nonsig), logical(1)))                # rows[[2]] = the p-value row (Last Phase m order)
   if (nonsig) expect_match(out, "\033\\[")               # an ANSI escape is present
 })
 
 # === exports: default unchanged, test_lines='stat' adds a statistic row =============================
 
-test_that("export default = summary (statistic + effect size + p-value); test_lines='pvalue' = p only", {
-  # Last Phase j: the export default is "summary" -- statistic + effect size + p-value rows.
+test_that("export default = summary (p-value + effect size, no statistic); test_lines toggles", {
+  # Last Phase m: the export default "summary" = p-value + effect size (the statistic row is gone); the
+  # test type names the p-value row ("pvalue (Chi2)") and the measure names the effect-size row.
   # The styled md renders the label's inner space as U+00A0 (no wrap), so normalise it (as elsewhere).
   nb <- function(x) gsub(intToUtf8(160L), " ", paste(x, collapse = "\n"), fixed = TRUE)
   t  <- tab(gss, relig, party3, pct = "row", test = TRUE)
   md <- nb(tab_md(t, print = FALSE))
-  expect_true(grepl("pvalue", md))
-  expect_true(grepl("statistic", md))
-  expect_true(grepl("effect size", md))
+  expect_true(grepl("pvalue \\(Chi2", md))                # p-value row names the test
+  expect_false(grepl("statistic", md))                    # no statistic row by default
+  expect_true(grepl("Cram|phi|eta2", md))                 # effect-size row names the measure
 
   withr::local_options(tabxplor.test_lines = "pvalue")
   md2 <- nb(tab_md(t, print = FALSE))
   expect_true(grepl("pvalue",    md2))
-  expect_false(grepl("statistic", md2))
+  expect_false(grepl("Cram|phi|eta2", md2))               # effect-size row gone in "pvalue" mode
+
+  withr::local_options(tabxplor.test_lines = "all")
+  md3 <- nb(tab_md(t, print = FALSE))
+  expect_true(grepl("statistic", md3))                    # statistic returns only on explicit opt-in
 })
 
 # === split_var appears in the html/Excel export =====================================================
