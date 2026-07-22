@@ -91,8 +91,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # survey design vars. All land in the tier-3 base key (structural, not `reapplied`) -> a toggle
         # rebuilds; the robust overlay recomputes the omnibus p from the microdata (jmvtab-cache §Kish).
         test_robust  = self$options$test_robust,
-        strata       = self$options$strata,
-        ids          = self$options$ids,
         na           = self$options$na,
         levels       = self$options$lvs,             # option named `lvs` (jmvcore has a levels() method)
         # Phase 7g-iii: the reference-level picker (refLevels) drives `ref`, keyed by the ACTIVE axis
@@ -111,8 +109,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         stars        = self$options$stars,
         method_cell  = self$options$method_cell,
         method_diff  = self$options$method_diff,
-        # Phase 15c: the three additional CI expert methods (mean-diff / mean-ratio / prop-rate ratio).
-        method_ratio      = self$options$method_ratio,
+         method_ratio      = self$options$method_ratio,
         method_mean_diff  = self$options$method_mean_diff,
         method_mean_ratio = self$options$method_mean_ratio,
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
