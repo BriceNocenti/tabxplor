@@ -11,8 +11,10 @@
 #     goes through the unguarded xlb_* wrappers or xl_apply_styles' create_*/set_cell_style compose.
 #   - Export-Parity: tab_xl writes the RAW get_num() value; Excel formats it via the per-cell codes
 #     from format(x, syntax = "excel") (fmt_class.R excel_numfmt_code) -- the single display source of
-#     truth. Significance stars are folded into the numFmt code (0.0%"***"), gated by the SAME option
-#     as the text path (getOption("tabxplor.stars")), so the cell stays a real number.
+#     truth. Significance stars are folded into the numFmt code (0.0%\*\*\*), gated by the SAME option
+#     as the text path (getOption("tabxplor.stars")), so the cell stays a real number. numFmt literals
+#     (stars / label / sigma / multiply) are backslash-escaped via xl_numfmt_literal() -- NEVER double-
+#     quote-wrapped, which crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
 #   - Shared-style fast path: each cell's FULL style (font+fill+border+alignment) is precomposed and
 #     applied ONCE by id (set_cell_style) over the fewest coalesced multi-area dims (xl_coalesce) --
 #     far fewer + cheaper openxlsx2 calls than a wb_add_* per aspect. numFmt merges on afterwards.
@@ -473,7 +475,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   }
 
   # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
-  # stars into the numFmt literal (0.0%"***"), keeping the cell a real number; a "TEXT"-coded column
+  # stars into the numFmt literal (0.0%\*\*\*), keeping the cell a real number; a "TEXT"-coded column
   # (ci / OR) is written as a string with Excel's "@" text format; NA codes stay General. Stars are
   # STORAGE-driven (get_stars() is "" when no pvalue was stored). When any cell is starred, pad EVERY
   # value cell's star literal to the column-max width so numbers stay aligned in the column.
@@ -498,7 +500,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       # formatC() padded with ASCII spaces, half a digit wide in the proportional font Excel renders.
       w      <- max(nchar(st[val]))
       st_pad <- stringi::stri_pad(st, w, side = "right", pad = fig_space) # glyphs left, pad right
-      code[val] <- paste0(code[val], '"', st_pad[val], '"')
+      # WARNING: backslash-escape the star literal (xl_numfmt_literal), NEVER double-quote-wrap it -- a raw
+      # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
+      code[val] <- paste0(code[val], xl_numfmt_literal(st_pad[val]))
     }
     # Phase 12h: fold an in-cell TEST LABEL ("{pvalue} (Chi2)") into the numFmt literal so Excel shows
     # "2.9% (Chi2)" (crosstab chi2/F p-value rows + reg-footer p-value rows), instead of the bare number
@@ -510,11 +514,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     has_lbl <- !is.na(disp) & disp != lbl & !grepl("{", lbl, fixed = TRUE) & nzchar(trimws(lbl))
     if (any(has_lbl & val)) {
       m <- has_lbl & val
-      code[m] <- paste0(code[m], '"', lbl[m], '"')
+      code[m] <- paste0(code[m], xl_numfmt_literal(lbl[m]))   # backslash-escaped, not quote-wrapped
     }
     # Phase 13c-v: the mean's sd twin column (display "var") gets a leading sigma so Excel reads "s2.5".
     vmask <- disp == "var" & val
-    if (any(vmask)) code[vmask] <- paste0('"', sigma_sign, '"', code[vmask])
+    if (any(vmask)) code[vmask] <- paste0(xl_numfmt_literal(sigma_sign), code[vmask])
     code[!is.na(code) & code == "TEXT"] <- "@"
     tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code)
   }) else tibble::tibble(col = integer(), row = integer(), code = character())

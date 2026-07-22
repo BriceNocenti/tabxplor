@@ -120,7 +120,11 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   ccol <- fmt(n = 1L, ctr = 0.05, type = "row", display = "ctr", digits = 1L)
   testthat::expect_equal(format(ccol, syntax = "excel")[[1]], "+0.0%;-0.0%")
   rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 1L)
-  testthat::expect_match(format(rcol, syntax = "excel")[[1]], '^"[^"]+"#,##0.0$')
+  # Phase q: the leading multiply sign is BACKSLASH-escaped (\×#,##0.0), not double-quote-wrapped -- a raw
+  # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
+  rr <- format(rcol, syntax = "excel")[[1]]
+  testthat::expect_false(grepl('"', rr, fixed = TRUE))
+  testthat::expect_match(rr, "^\\\\.#,##0\\.0$")
 
   # pct_ci (ci = "cell") -> TEXT (the value+CI string is pre-formatted; a documented limitation)
   ci <- tab(gss, marital, race, pct = "row", ci = "cell")

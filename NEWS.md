@@ -751,6 +751,13 @@
   name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
+* **Excel export from the jamovi modules no longer fails** with *"xml import unsuccessful"*. Significance
+  stars, in-cell test labels, the standard-deviation sigma and the ratio multiply-sign were folded into
+  the Excel number-format codes wrapped in double-quotes (`0.0%"***"`); the older openxlsx2 bundled inside
+  jamovi does not escape that quote inside the format code, so it produced invalid XML (crashing Windows-
+  side export; a current openxlsx2 escaped it, so plain `tab()`/`tab_reg()` export was unaffected). These
+  literals are now backslash-escaped (`0.0%\*\*\*`), which is valid on every openxlsx2 version and renders
+  identically in Excel.
 * **Excel export from the jamovi modules no longer fails** with *"dims must be something like A1 or
   A1:B2."*. The older openxlsx2 bundled inside jamovi rejects the multi-area cell ranges tabxplor uses
   to style non-contiguous cells efficiently (rich tables with a significance row, counts, etc.); each

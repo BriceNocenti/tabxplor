@@ -128,7 +128,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: compare = <i>(nested-model LR / F test)</i>
+                label: compare = <i>(nested-model LR/F test)</i>
                 children:
                   - type: ComboBox
                     name: compare
@@ -366,9 +366,8 @@ children:
           - type: CheckBox
             name: nest
 
-  # Phase o: the Export block sits OUTSIDE the collapse hierarchy. The separating rule is drawn by
-  # js/jmvtabreg.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw
-  # escaped text, which jamovi Labels do to block-level HTML.
+  # Phase o: the rule that sets the (outside-the-collapse-hierarchy) Export block apart is drawn by
+  # js/jmvtab.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw text.
   - type: LayoutBox
     margin: large
     stretchFactor: 1
@@ -452,4 +451,5 @@ children:
             label: default path
             events:
               change: ./jmvtabreg::resetPath_changed
+
 

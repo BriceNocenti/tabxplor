@@ -1775,6 +1775,15 @@ print_num <- function(num, digits) {
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
 
+# Excel embeds LITERAL text in a numFmt code either as "text" OR by backslash-escaping each character
+# (\t\e\x\t) -- both render identically. The quote form breaks the OLDER openxlsx2 bundled by jamovi
+# (Windows-side): it does not XML-escape the " inside formatCode="...", so its own read_xml round-trip
+# rejects the malformed fragment ("xml import unsuccessful", the Excel-export crash). Backslash escaping
+# leaves no " in the attribute, so it is XML-safe on every openxlsx2 version. Every star / sigma / label /
+# multiply-sign literal folded into a numFmt code MUST go through this.
+# WARNING: never reintroduce a raw " into a numFmt formatCode. Vectorised; "" and NA pass through.
+xl_numfmt_literal <- function(s) gsub("(.)", "\\\\\\1", s, perl = TRUE)
+
 # Excel number-format code per cell -- the tab_xl() bypass, folded here so format() is the ONE
 # display source of truth (Phase 10g). `format(x, syntax = "excel")` returns these codes instead
 # of rendered strings; tab_xl() writes the raw get_num() value and hands display to Excel's engine.
@@ -1817,12 +1826,14 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
   res <- dplyr::if_else(isci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
   # Phase 13c-v: an explicit +/- sign for diff/contrib cells (a signed difference reads clearer), and a
   # leading multiply sign for ratio cells (kept a real, editable number). Skip TEXT / power-of-ten (NA)
-  # codes. `+0.0%;-0.0%` = positive shows "+", negative shows "-"; `"x"#,##0.0` = "x2.0".
+  # codes. `+0.0%;-0.0%` = positive shows "+", negative shows "-"; `\×#,##0.0` = "×2.0".
+  # WARNING: the multiply sign is backslash-escaped (xl_numfmt_literal), NOT double-quote-wrapped -- a raw
+  # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
   can <- !is.na(res) & res != "TEXT"
   s2  <- can & sgn
   res[s2] <- paste0("+", res[s2], ";-", res[s2])
   r2  <- can & rat
-  res[r2] <- paste0('"', mult_sign, '"', res[r2])
+  res[r2] <- paste0(xl_numfmt_literal(mult_sign), res[r2])
   out[ok] <- res
   out
 }

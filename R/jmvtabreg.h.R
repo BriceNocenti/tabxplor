@@ -578,7 +578,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   as "Table".
 #' @param resetPath Reset the folder and file name to their defaults (your
 #'   Documents folder and "Regression").
-#' @param xl_replace .
+#' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr

@@ -1162,10 +1162,9 @@ Export to Excel with default parameters in Jamovi still fails (html and md works
    ! Invalid input: dims must be something like A1 or A1:B2."
 - Excel exports work well with tab() and tab_reg(), so it looks like a jamovi problem : maybe due to cache system, the data is somehow different than a regular tab() and tab_reg() table ? Would it be a good idea to call `tab()` and `tab_reg()` directly (no cache system used) for Excel export only (mardkdown too ? html not necessarily since it’s also the base jamovi result already computed ?), but on the df modified by jamovi UI (like : new ref) ? Would it be sound and reliable ? If not , can you think about others ways to fix the Excel export in Jamovi ?
 
-Horizontal rule before Export appear as raw html in the UI, it’s written : "<hr style=...>" Fix it, use empty line if needed : one empty line before subset, one empty line before Export block. 
+Horizontal rule before Export appear as raw html in the UI, it’s written : "<hr style=...>" Fix it, use empty line if needed : one empty line before subset, one empty line before Export block.
 
 Add an empty line at the bottom of each collapsable box elements that form the main outline of the jamovi options UI.
-
 
 `Model comparison / predictors subset` :
 - The "Run comparaison" changes nothing for the freeze problem (see above). Sometimes it works, sometimes it freezes, see R code below. So it may definitely be a cache problem, which is difficult to reproduce in R jmvtabreg since each button click build cache. Diagnose thoroughly. How to resolve this one ? Maybe not using the cache system when the user enters the "model comparison" mode, since it become useless (all models calculated at Run button click) ? In any cases, the moment the user go back to just one model, it should reverse to the normal cache system (it’s ok if it’s a new cache and the old cache is not here anymore). A difficult question is what to do if the user have ran the comparison between 4 models, and change options elsewhere in the UI (references, display, ame, empirical, etc. ) : if it’s a cache problem it will still crash. So any change should drop the cache and print the "Model comparison staged. Click Run comparison to compute the table" message, and if the user want cache system back it can just remove all models in comparison ?
@@ -1306,23 +1305,43 @@ On jamovi, html and md exports work. But Excel still fails, with a new error mes
    Caused by error:
    ! xml import unsuccessful"
 
+**DONE (2026-07-22), Excel export only (per maintainer: the `<hr>` is resolved on the rebuilt version,
+the Run-button styling moves to Phase r, the model-comparison freeze is out of scope).** Full suite green
+(FAIL 0, PASS 4139, SKIP 4), **zero golden/snapshot churn** — the fix only changes `syntax="excel"` numFmt
+literals (Excel workbooks are not textually snapshotted; rendering is identical).
+- **Root cause (reproduced locally on the jamovi-bundled openxlsx2 1.15).** The failing call is
+  `wb$add_numfmt()` via the numFmt `pwalk` at `tab_xl.R:883`. tabxplor folded stars / in-cell test labels /
+  the sd sigma / the ratio multiply-sign into the numFmt `formatCode` wrapped in RAW DOUBLE-QUOTES
+  (`0.0%"***"`, `"×"#,##0.0`). openxlsx2 writes that verbatim into a `<numFmt formatCode="…"/>` XML
+  ATTRIBUTE; the older bundled build does not escape the embedded `"`, so its own `read_xml` round-trip
+  rejects the malformed fragment (`xml import unsuccessful`). Windows-only because the current WSL openxlsx2
+  (1.28) escapes it. **Not the cache** — the same in-memory `tabs` feeds HTML/MD/Excel (byte-identical
+  carrier), so calling `tab()` without the cache would emit the same code.
+- **Fix.** New `xl_numfmt_literal()` (fmt_class.R, beside `excel_numfmt_code`) backslash-escapes each
+  character of a literal (`\*\*\*`, `\×`, `\σ`) — XML-safe on EVERY openxlsx2 version (no `"` in the
+  attribute), renders identically in Excel. Replaced the 4 double-quote-wrapping sites (stars/label/sigma
+  in `tab_xl.R`, multiply-sign in `fmt_class.R`); the bare `±` was already unquoted. Fixtures:
+  `test-xl-backend.R` (helper + ratio-code no-quote), `test-tab_xl.R` (source codes carry no `"`),
+  `test-export-parity.R` (ratio code is `\×#,##0.0`).
+
 #### Last Phase r – last display fixes
 
 Custom html table export still have little details to fix :
 - With several row_vars, the result print the row_vars names in the leftmost column vertically : but this new column lacks a bottom border so the whole table looks not-well-closed. This bottom border should be the same linewidth that the rest of the table bottom border.
-- Remove the upper border above variable names in all situations. With several col_vars, even in tab_reg with empirical = TRUE and several dependent vars, ensure there are never left and right borders between col_vars names (since )
+- Remove the upper border above variable names in all situations. With several col_vars, even in tab_reg with empirical = TRUE and several dependent vars, ensure there are never left and right borders between col_vars names (since without top border here, they would look very bad).
 
 markdown export still have a few problems on their own pandoc/quarto html rendering :
 - (look at `dev/review_manual/tab_md_test_4.htm` ; code was `tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop_all", color = TRUE, color_signif = "grey_non_signif", ref = 1) |> tab_export("md")`)
 - The first row, with variables names (here : "partx3", "marital"), have right and left borders in each cells, but should be like the rest of the table (vertical borders between different col_vars only, and at start/end)
 - On rows with a row variable name (here : "race", "rincome", "relig"), the leftmost border dissapears just for this cell, which makes the whole table bad looking not-closed. How to fix it ? If style code simplification is needed here for reliability, do it.
 
-jmvtabreg UI :
-- "Model comparison" : currently the model boxes created with "+" (to set model name and choose predictors of each model) do not take all the horizontal space available at it’s right on jamovi option pane. It would really be better if it dis, specially when there are many predictors.
-- "Run comparison" button with text in bold + a bit darker grey for background, for the button to be visually striking (with still enough constrast for the text to stay readable).
+`jmvtabreg` UI :
+- "Model comparison" : currently the model boxes created with "+" (to set model name and choose predictors of each model) do not take all the horizontal space available at their right on jamovi option pane. It would really be better if it dis, specially when there are many predictors.
+- "Run comparison" button should be more visually striking : let’s get it back to the same look than the Export button, with white text in bold over blue background.
 
-jmvtab and jmvtabreg UI :
-- Add an empty line at the bottom of each collapsable box elements that form the main outline of the jamovi options UI (if it was attempted in the last improvements, it dit not appear in Jamovi)
+`jmvtab` and `jmvtabreg` UI :
+- Add an empty line at the bottom of each collapsable box elements from the main outline of the jamovi options UI ("Percentages, colors and tests", "Levels and missing values", "Model", etc. ; if it was attempted in the last improvements, it dit not appear in Jamovi)
+
 
 
 #### Last Phase w – tabxplor R french translation

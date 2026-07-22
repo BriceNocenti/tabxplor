@@ -96,6 +96,12 @@ testthat::test_that("tab_xl folds significance stars into the numFmt code", {
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   codes <- openxlsx2::wb_load(p)$styles_mgr$styles$numFmts
   testthat::expect_true(any(grepl("\\*", codes)))                 # a code carries the star literal
+  # Phase q: the star literal is backslash-escaped (0.0%\*\*\*), NEVER double-quote-wrapped. A raw " inside
+  # formatCode="..." is unescaped by the older jamovi-bundled openxlsx2 -> its read_xml round-trip fails
+  # with "xml import unsuccessful" (the Windows-side Excel-export crash). Assert on the SOURCE codes (the
+  # reloaded XML has attribute-delimiter quotes): no numFmt code carries a raw ".
+  src <- unlist(lapply(tb, function(col) if (is_fmt(col)) format(col, syntax = "excel")))
+  testthat::expect_false(any(grepl('"', src, fixed = TRUE)))
 
   # a table built without stars stores no pvalue -> no star literal
   tb2 <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",

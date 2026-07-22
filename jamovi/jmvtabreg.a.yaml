@@ -384,7 +384,7 @@ options:
 
 # ============================ Export ============================
     - name: export_format
-      title: Export format
+      title: Format
       type: List
       options:
         - title: Excel
@@ -402,7 +402,7 @@ options:
         R: "Press to export the table to the chosen format (the button label follows the format)."
 
     - name: export_dir
-      title: "Folder"
+      title: "Path:"
       type: String
       default: "~/Documents"
       description:
@@ -412,7 +412,7 @@ options:
            other folder to override; a leading `~` there expands to your home folder.
 
     - name: export_filename
-      title: "Save to (file name)"
+      title: "/"
       type: String
       default: "Regression"
       description:
@@ -427,7 +427,13 @@ options:
         R: "Reset the folder and file name to their defaults (your Documents folder and \"Regression\")."
 
     - name: xl_replace
-      title: "Replace existing file"
+      title: ""
       type: Bool
       default: false
+      description:
+          R: >
+           "Set to `TRUE` to overwrite an existing file."
 ...
+
+
+

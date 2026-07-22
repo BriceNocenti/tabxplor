@@ -66,6 +66,23 @@ test_that("xlb_set_cell_style / xlb_numfmt survive the OLDER openxlsx2 single-ra
   expect_identical(seen$numfmt, c("C7:E8", "F4:F8"))
 })
 
+test_that("numFmt literals are backslash-escaped, never double-quote-wrapped (Phase q)", {
+  # A raw " inside <numFmt formatCode="..."/> is left unescaped by the older jamovi-bundled openxlsx2,
+  # so its own read_xml round-trip rejects the fragment ("xml import unsuccessful") -- the Windows-side
+  # Excel-export crash. xl_numfmt_literal() escapes each character with a backslash instead (XML-safe on
+  # every openxlsx2 version, identical Excel rendering).
+  mult <- "\u00d7"                                             # the multiply sign
+  expect_identical(xl_numfmt_literal("***"), "\\*\\*\\*")
+  expect_identical(xl_numfmt_literal(mult), paste0("\\", mult))
+  expect_identical(xl_numfmt_literal(""), "")                  # empty passes through
+  expect_false(grepl('"', xl_numfmt_literal(" (Chi2)")))       # never emits a quote
+
+  # the ratio code path (excel_numfmt_code ratio = TRUE) folds the multiply sign -> no raw quote
+  code <- excel_numfmt_code(digits = 1L, pct = FALSE, ci = FALSE, text = FALSE, ratio = TRUE)
+  expect_false(grepl('"', code))
+  expect_true(grepl(mult, code, fixed = TRUE))
+})
+
 
 # ---- sheet-name sanitisation -----------------------------------------------------------------
 
