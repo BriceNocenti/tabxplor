@@ -17,8 +17,6 @@ jmvtab(
   chi2 = FALSE,
   anova = "welch",
   test_robust = "classic",
-  strata = NULL,
-  ids = NULL,
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
@@ -118,14 +116,7 @@ classic pooled F.}
 
 \item{test_robust}{For a weighted table, a more robust p-value: "classic"
 (unweighted chi2 / Welch F); "kish" (first-order Rao-Scott rescale to the
-effective sample size); "survey" (a design-based survey::svychisq / svyglm
-F using the weight + optional strata/ids).}
-
-\item{strata}{Optional stratification variable for the survey-design test
-(test = "survey").}
-
-\item{ids}{Optional cluster-id variable for the survey-design test (test =
-"survey").}
+effective sample size).}
 
 \item{na}{The policy to adopt with missing values. It must be a single
 string.  \itemize{    \item \code{na = "keep"}: by default, prints
@@ -262,9 +253,10 @@ row/column and the p-value line are always kept. Recomputes nothing.}
 \item{exportExcel}{Press to export the table to the chosen format (the
 button label follows the format).}
 
-\item{export_dir}{The folder to save the exported file in. \code{~} expands
-to your home folder (resolved to your real Documents folder inside jamovi's
-bundled R). Blank saves to your Documents.}
+\item{export_dir}{The folder to save the exported file in. Blank or
+\code{~/Documents} auto-detects your real Documents folder (a redirected
+\code{D:\Documents} or network Documents included). Type any other folder
+to override; a leading \code{~} there expands to your home folder.}
 
 \item{export_filename}{The bare file name, with NO extension (the chosen
 format adds it). Illegal characters are removed automatically. Blank saves

@@ -154,8 +154,10 @@ weight.}
 \item{exportExcel}{Press to export the table to the chosen format (the
 button label follows the format).}
 
-\item{export_dir}{The folder to save the exported file in. \code{~} expands
-to your home folder. Blank saves to your Documents.}
+\item{export_dir}{The folder to save the exported file in. Blank or
+\code{~/Documents} auto-detects your real Documents folder (a redirected
+\code{D:\Documents} or network Documents included). Type any other folder
+to override; a leading \code{~} there expands to your home folder.}
 
 \item{export_filename}{The bare file name, with NO extension (the chosen
 format adds it). Illegal characters are removed automatically. Blank saves

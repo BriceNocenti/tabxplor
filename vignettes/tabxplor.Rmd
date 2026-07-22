@@ -202,7 +202,7 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
-**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
+**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. A weighted cell interval is exactly `Wilson(weighted p, unweighted n)`, as if the weighted proportion came from that many independent trials; under unequal weights it carries no design effect, so it runs **a little too narrow**. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
 
 
 ## Exporting

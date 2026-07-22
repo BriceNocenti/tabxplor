@@ -348,6 +348,15 @@ NULL
 #' All default off; not for direct use.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
+#' @details
+#' \strong{Weighted confidence intervals.} With a weight (\code{wt}), a cell confidence interval is
+#' exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted proportion as if it
+#' came from \code{tot_n} independent Bernoulli trials. Under unequal weights this has no design effect,
+#' so the interval is \strong{too narrow}. Opt in to Kish's effective sample size with
+#' \code{options(tabxplor.kish_neff = TRUE)} for a design-adjusted \emph{n}, use \code{test = "survey"}
+#' for a fully design-based p-value, or reach for \code{\link{tab_reg}} (fully design-based) when the
+#' uncertainty must be exact.
+#'
 #' @inheritSection tab_ci Significance stars
 #'
 #' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
@@ -1593,6 +1602,35 @@ tab_setup <- function(ctx) {
   var_labels <- capture_var_labels(data, sel_vars)
   data       <- data |> tab_apply_val_labels(sel_vars)
 
+  # Last Phase p (Bug A): an NA factor *level* (a factor built with `exclude = NULL`) is a real
+  # category whose label is NA. Convert it to an NA *value* on every selected factor, so the existing
+  # `na=` machinery handles it uniformly (na="drop" drops the row, na="keep" relabels it to "NA")
+  # instead of the NA poisoning the total-row mask and crashing print/format/every export. A factor
+  # with no NA level is untouched -> byte-identical.
+  for (v in sel_vars) {
+    if (is.factor(data[[v]]) && anyNA(levels(data[[v]])))
+      data[[v]] <- forcats::fct_na_level_to_value(data[[v]])
+  }
+
+  # Last Phase p (Bug B): a logical col_var is a natural 2-level cross-tab variable (tab_plain already
+  # accepts it), but the numeric-vs-factor/character classification below covers neither logical nor
+  # Date -- both masks stay FALSE, tab_transform builds nothing, and tab_restore -> n_groups(NULL)
+  # crashes. Coerce a logical col_var to a factor (routes through plain_core, matching tab_plain), and
+  # abort cleanly for any genuinely unsupported col_var type (Date/POSIXct/list/...).
+  for (p in pos_col_vars) {
+    nm <- names(data)[[p]]
+    v  <- data[[p]]
+    if (is.logical(v)) {
+      data[[nm]] <- forcats::as_factor(v)
+    } else if (!is.numeric(v) && !is.factor(v) && !is.character(v)) {
+      cli::cli_abort(c(
+        "Column variable {.val {nm}} must be a factor, character or numeric.",
+        "x" = "Got a {.cls {class(v)}} column.",
+        "i" = "Convert it first \u2014 bin a date or continuous variable into groups, or use {.code as.factor()}."
+      ))
+    }
+  }
+
   # DESIGN: extract by POSITION with `[[` (not `data[pos_col_vars]`): `df[<int vector>]` is column-
   # subsetting on a data.frame/tibble but ROW-subsetting on a data.table, which silently mis-classified
   # col_vars (-> NA col_var -> tab_num eval_select crash) on a data.table input. `data[[<int>]]` is
@@ -1617,6 +1655,19 @@ tab_setup <- function(ctx) {
     cli::cli_abort(c(
       "The weight variable {.val {as.character(wt)}} is also used as a row, column or tab variable.",
       "i" = "A weight cannot be a table variable at the same time \u2014 pick a different weight column."
+    ))
+  }
+  # Last Phase p bug-fix: a variable used BOTH as a tab_var and as a row/col var used to surface a
+  # cryptic tidyselect ("Element `x` doesn't exist") or data.table ("assign to the same column twice")
+  # error. Mirror the weight-collision guard above with an actionable message.
+  tab_dup <- intersect(as.character(tab_vars),
+                       c(as.character(row_vars), as.character(col_vars)))
+  if (length(tab_dup) != 0L) {
+    cli::cli_abort(c(
+      "{cli::qty(tab_dup)}The variable{?s} {.val {tab_dup}} {?is/are} used both as a tab variable \\
+       and as a row or column variable.",
+      "i" = "A variable cannot be a tab variable and a row/column variable at the same time \u2014 \\
+             pick a different variable for one of the two roles."
     ))
   }
   # print(tab_vars) ; print(row_var) ; print(wt) ; print(col_vars)
@@ -1958,6 +2009,15 @@ tab_prepare_pop <- function(ctx) {
   if (length(wt) != 0) {
     zero_weight <- dplyr::pull(data, !!wt)
     zero_weight <- is.na(zero_weight) | zero_weight == 0
+    # Last Phase p bug-fix: when EVERY row has a zero/NA weight, the empty frame used to surface the
+    # generic "data is of length 0" downstream, never mentioning weights. Abort with a weight-aware
+    # message here instead.
+    if (nrow(data) != 0L && all(zero_weight)) {
+      cli::cli_abort(c(
+        "Every row has a zero or missing weight ({.val {as.character(wt)}}) \u2014 nothing to tabulate.",
+        "i" = "Check the weight variable {.val {as.character(wt)}} for all-zero or all-NA values."
+      ))
+    }
     if (any(zero_weight)) {
       rlang::inform(paste0(sum(zero_weight), " rows with zero or NA weights were removed"))
       data <- data |> dplyr::filter(!zero_weight)
@@ -5011,7 +5071,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # per-cell significance (mean CIs symmetric around the estimate, stored as absolute bounds).
     purrr::pmap_dfc(function(...) {
       a <- list(...)
-      m <- max(a[[3]], na.rm = TRUE)
+      # Last Phase p bug-fix: an all-NA numeric col_var makes every mean NA, so max(., na.rm=TRUE)
+      # leaks a base "no non-missing arguments to max" warning and returns -Inf. Suppress + coerce a
+      # non-finite result to 0 (-> the m<=1 branch keeps the digits sane).
+      m <- suppressWarnings(max(a[[3]], na.rm = TRUE))
+      if (!is.finite(m)) m <- 0
       digits_col <-
         if      (m <= 1 ) vec_recycle(max(a[[8]], 2L), length(a[[1]]))
         else if (m <= 10) vec_recycle(max(a[[8]], 1L), length(a[[1]]))
@@ -6129,13 +6193,16 @@ as_df_merge_rownames <- function(tabs, row_var) {
 # from the built table (`totrow` = a "Total" row_var level; `tottab` = every tab_var == "Total").
 #' @keywords internal
 leaf_totrow_tottab <- function(tabs, row_var, tab_vars) {
-  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
+  # DESIGN: `%in%` not `==` so an NA row/tab label (a real NA *level*) yields FALSE, never NA. An NA
+  # in in_totrow/in_tottab would poison is_totrow()/get_reference()/is_refrow() and crash the
+  # `out[mask] <-` assignments in pillar_shaft/format (Last Phase p, Bug A). Mirrors replace_na below.
+  totrow_vector <- dplyr::pull(tabs, !!row_var) %in% "Total"
   tottab_vector <- if (length(tab_vars) == 0) {
     rep(FALSE, nrow(tabs))
   } else {
     dplyr::transmute(tabs, tottab = dplyr::if_all(
       tidyselect::all_of(as.character(tab_vars)),
-      ~ . == "Total"
+      ~ . %in% "Total"
     )) |>
       tibble::deframe()
   }
@@ -6342,7 +6409,12 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
   if (!is.null(nms) && any(nzchar(nms))) {
     unknown <- setdiff(nms[nzchar(nms)], row_vars_chr)
     if (length(unknown)) {
-      cli::cli_warn("{.arg ref} name{?s} {.val {unknown}} match no {what} and {?is/are} ignored.")
+      # DESIGN: every {?} marker must resolve to the SAME quantity, else cli aborts with a raw
+      # "Multiple quantities for pluralization". Pin them all to length(unknown) via cli::qty().
+      cli::cli_warn(paste0(
+        "{cli::qty(unknown)}Unknown {.arg ref} name{?s} {.val {unknown}}: ",
+        "{cli::qty(unknown)}{?it matches/they match} no {what} and {cli::qty(unknown)}{?is/are} ignored."
+      ))
     }
     out  <- rlang::set_names(rep("auto", n), row_vars_chr)
     keep <- intersect(nms, row_vars_chr)

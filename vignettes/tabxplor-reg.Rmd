@@ -202,7 +202,7 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals.
+An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals. Concretely: with an over-dispersed outcome, `family = "poisson"` returns CIs and p-values **identical to `family = "quasipoisson"`** and emits a warning saying so (the footer reports the dispersion); at equidispersion (≈ 1) the scaling is a no-op and the result matches a plain `glm(family = poisson)` — so a comparison to a hand-fit Poisson `glm` never surprises you.
 
 In the case of a poisson regression, the **empirical/observed counterpart of the model’s exponentiated coefficient** for a categorical predictor is the **ratio of means** : here, the ratio of average TV hours compared to the reference level.
 

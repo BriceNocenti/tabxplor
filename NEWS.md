@@ -568,6 +568,11 @@
   `tab_counts()`, `tab_spread()` and `score_from_lv1()`; the regression vignette adds `split_var=` and
   grouped-binomial `trials=`. All three now mention the jamovi point-and-click module. `score_from_lv1()`
   gains a fuller help page and a test.
+* **Two clarifications on uncertainty.** `?tab` and the intro vignette now note that a weighted cell
+  confidence interval is `Wilson(weighted p, unweighted n)` and so runs a little too narrow under
+  unequal weights (no design effect). `?tab_reg` and the regression vignette now note that an
+  over-dispersed `family = "poisson"` fit returns intervals identical to `"quasipoisson"` (and warns to
+  say so), matching a plain `glm(poisson)` only at equidispersion.
 
 ## Internal
 * **Unified colour-legend + footer system.** The colour legend, the test/GOF summary and the three
@@ -984,6 +989,20 @@
   empty total block and failed reordering by the tab variable.
 
 ## Bug fixes
+* **A factor carrying `NA` as a real *level*** (built with `factor(..., exclude = NULL)`, common in
+  imported data) no longer crashes `print()` / `format()` / any export. The `NA` level is now handled
+  by `na =` like any other missing value (`na = "drop"` drops it, `na = "keep"` shows it as a real
+  `"NA"` category).
+* **A logical `col_var` is now accepted** (a natural 2-level cross-tab, matching `tab_plain()`); a
+  `Date`/`POSIXct` or other unsupported column now gives a clear "must be a factor, character or
+  numeric" error instead of a cryptic internal one.
+* **Clearer error messages** for three previously obscure inputs: an unknown *named* `ref`
+  (`ref = c(badname = "x")`) warns naming the unknown variable(s) instead of a raw pluralization
+  error; a variable used as both a `tab_var` and a row/column variable aborts with an actionable
+  message; and an all-zero / all-`NA` weight aborts naming the weight rather than a generic
+  "data is of length 0".
+* **No more stray base-R warning** ("no non-missing arguments to max") when a numeric column is
+  entirely `NA`.
 * **jamovi export now saves to your real Documents folder.** The default export path is resolved
   per-OS from the actual known folder — a redirected `D:\Documents` or a network/roaming Documents on
   Windows (via the registry), the desktop `~/Documents` on Linux (via `xdg-user-dir`, created if

@@ -182,7 +182,7 @@ options:
       options:
         - { title: "none",                      name: none }
         - { title: "vs a baseline model",       name: baseline }
-        - { title: "sequential (vs previous)",  name: sequential }
+        - { title: "sequential (vs prev.)",     name: sequential }
       default: none
       description:
           R: >

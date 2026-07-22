@@ -2352,6 +2352,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   (e.g. `c(income = "poisson", satisfied = "binomial")`), sets one family per outcome. Mixed
 #'   families work only with a character `predictors` (one model per outcome); a `predictors` list
 #'   (model comparison) is single-outcome, hence single-family.
+#'
+#'   \strong{Over-dispersed counts.} An unweighted `"poisson"` fit auto-scales its standard errors by
+#'   the square root of the Pearson dispersion, so with an over-dispersed outcome (dispersion clearly
+#'   above 1) its CIs and p-values are **identical to `"quasipoisson"`**, and it **warns** to say so
+#'   (the footer reports the dispersion). At equidispersion (\eqn{\approx}1) the scaling is a no-op and
+#'   the result matches a standard `glm(family = poisson)` z-interval — so a user comparing to a
+#'   hand-fit Poisson `glm` is not surprised by wider intervals.
 #' @param wt Optional. Name of a weight column (character). Switches to design-based survey estimation
 #'   ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw population weights
 #'   are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.

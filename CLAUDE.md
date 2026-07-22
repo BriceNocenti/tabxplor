@@ -1210,7 +1210,26 @@ family = "binomial", # empirical = TRUE,
    where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
    feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two
    goldens were regenerated with the rule-B mean CIs and no longer carry the NaN.
+- **Bad named-`ref` name → cli internal error.** A `ref = c(badname = "x")` on `tab_many` surfaces
+   *"Multiple quantities for pluralization"* (a raw `cli` pluralisation failure) instead of a message
+   about the unknown variable name.
+- **`row_var` also listed in `tab_vars` → obscure `tidyselect` error** ("Element `marital` doesn't
+   exist") rather than "a variable cannot be both a row and a tab variable" (the weight-collision case
+   *does* get a clean message — mirror it).
+- **All-zero / all-`NA`-weight tables → generic** *"data is of length 0 (possibly after filter or
+   na = 'drop_all')"*. Correct outcome (nothing to tabulate) but the message never mentions weights;
+   a user who passed `wt` with all zeros won't connect it.
+- **Leaked base-R warning on an all-`NA` numeric column**: `tab(..., <all-NA numeric>)` emits
+   *"no non-missing arguments to max; returning -Inf"* from base R instead of a handled message.
 
+Add a quick word in documentation (more readable than the following paragraphs to beginners/more quick when its for experts), about two aspects in vignettes  :
+- A weighted cell CI is exactly `Wilson(weighted p, unweighted n = tot_n)`. This treats the
+weighted proportion as if it came from `tot_n` independent Bernoulli trials, so under unequal weights
+the interval is **too narrow** (no design effect). Also add a quick note to `?tab` near the weighting
+paragraph.
+- With an overdispersed count outcome (Pearson dispersion 2.04), a `family = "poisson"` fit returns CIs/p-values **identical to `family = "quasipoisson"`** (SEs scaled by
+`√dispersion`), and it **emits a warning saying exactly that**. At equidispersion (≈1.0) it matches a
+standard `glm(poisson)` z-CI. Make se sure the R-side `?tab_reg` and regression vignette documents it (the jamovi side already intends it per Last-Phase-h notes), so a user comparing to a hand-fit `glm` isn't surprised.
 
 ##### 2.1 MAJOR — a factor with a real `NA` *level* crashes print/format/every export
 
@@ -1253,17 +1272,70 @@ tab(tibble(r = factor(rep(c("a","b"),50)), dt = rep(as.Date("2020-01-01")+0:1,50
   inconsistent with its own leaf).
 - **Impact**: low frequency, but the error gives the user no idea what to fix.
 
+**DONE (2026-07-22).** Full suite green (FAIL 0, WARN 0, PASS 4126, SKIP 4 = the usual Suggests/benchmark
+opt-ins), **zero golden/snapshot churn** — every fix fires only on the degenerate input it repairs, so
+non-degenerate tables are byte-identical. New fixtures in `tests/testthat/test-edge-cases.R` (one per
+fix, failing-first). All six defects live in the shared `tab()`/`tab_many()` path (both funnel through
+`tab_build` → `tab_setup`).
+- **Bug A (NA factor *level*)** — routed through `na=` at ONE boundary: `tab_setup()` maps
+  `forcats::fct_na_level_to_value()` over the selected factor columns (an NA *level* becomes an NA
+  *value*, so `na="drop"` drops it / `na="keep"` relabels it `"NA"` via the existing machinery; a factor
+  with no NA level is untouched → byte-identical). Defense-in-depth: `leaf_totrow_tottab()` uses
+  `%in% "Total"` not `== "Total"` so `in_totrow`/`in_tottab` are always pure logical (no NA to poison
+  `is_totrow`/`get_reference`/`is_refrow` and crash the `out[mask] <-` assignments in pillar_shaft/format).
+- **Bug B (logical/Date col_var)** — `tab_setup()` coerces a logical col_var to a factor before the
+  numeric-vs-text classification (routes through `plain_core`, matching `tab_plain`), and aborts cleanly
+  for any col_var that is still neither numeric nor factor/character (Date/POSIXct/list/…).
+- **Clearer messages** — `resolve_ref_vector()`'s unknown-named-`ref` warning now pins every cli `{?}`
+  marker to `length(unknown)` via `cli::qty()` (no more "Multiple quantities for pluralization"); a new
+  guard in `tab_setup()` mirrors the weight-collision abort for a variable used as both a tab_var and a
+  row/col var; `tab_prepare_pop()` aborts naming the weight when every row is zero/NA-weighted.
+- **Warning leak** — `num_core()` wraps the digits-`max()` in `suppressWarnings()` + coerces a non-finite
+  result to 0 (all-NA numeric col_var).
+- **Docs** — `?tab` + intro vignette: a weighted cell CI is `Wilson(weighted p, unweighted n)`, too
+  narrow under unequal weights. `?tab_reg` + reg vignette: over-dispersed `family="poisson"` == quasi
+  (warns), == `glm(poisson)` only at equidispersion.
 
-#### Last Phase w – NEWS.md simplification
+
+#### Last Phase q – jamovi Excel export still fails
+
+On jamovi, html and md exports work. But Excel still fails, with a new error message this time (tell me if and how I shall give you debug feedback, or if needed createa debug jmvexceltest analysis to test things and I can paste you back the results) :
+   "Export failed: ℹ In index: 1.
+   Caused by error in `pmap()`:
+   ℹ In index: 1.
+   Caused by error:
+   ! xml import unsuccessful"
+
+#### Last Phase r – last display fixes
+
+Custom html table export still have little details to fix :
+- With several row_vars, the result print the row_vars names in the leftmost column vertically : but this new column lacks a bottom border so the whole table looks not-well-closed. This bottom border should be the same linewidth that the rest of the table bottom border.
+- Remove the upper border above variable names in all situations. With several col_vars, even in tab_reg with empirical = TRUE and several dependent vars, ensure there are never left and right borders between col_vars names (since )
+
+markdown export still have a few problems on their own pandoc/quarto html rendering :
+- (look at `dev/review_manual/tab_md_test_4.htm` ; code was `tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop_all", color = TRUE, color_signif = "grey_non_signif", ref = 1) |> tab_export("md")`)
+- The first row, with variables names (here : "partx3", "marital"), have right and left borders in each cells, but should be like the rest of the table (vertical borders between different col_vars only, and at start/end)
+- On rows with a row variable name (here : "race", "rincome", "relig"), the leftmost border dissapears just for this cell, which makes the whole table bad looking not-closed. How to fix it ? If style code simplification is needed here for reliability, do it.
+
+jmvtabreg UI :
+- "Model comparison" : currently the model boxes created with "+" (to set model name and choose predictors of each model) do not take all the horizontal space available at it’s right on jamovi option pane. It would really be better if it dis, specially when there are many predictors.
+- "Run comparison" button with text in bold + a bit darker grey for background, for the button to be visually striking (with still enough constrast for the text to stay readable).
+
+jmvtab and jmvtabreg UI :
+- Add an empty line at the bottom of each collapsable box elements that form the main outline of the jamovi options UI (if it was attempted in the last improvements, it dit not appear in Jamovi)
 
 
-#### Last Phase x – tabxplor R french translation
+#### Last Phase w – tabxplor R french translation
 
 All legends should be carefully translated to French.
 Could the package documentation be translated for French users ? Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?  
 What other strings should be translated in French ?
 
-#### Last Phase y — Jamovi UI French translation
+#### Last Phase x — Jamovi UI French translation
+
+
+#### Last Phase y – NEWS.md simplification
+
 
 #### Last Phase z – github PR and CRAN release
 

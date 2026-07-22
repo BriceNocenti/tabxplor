@@ -418,6 +418,14 @@ documented on \code{\link[=tab_ci]{tab_ci()}}.
 }
 The package-wide display, color and statistics defaults are \code{options()}, listed at
 \link{tabxplor-options}. \code{tab()} is a friendly wrapper around the more powerful \code{\link[=tab_many]{tab_many()}}.
+
+\strong{Weighted confidence intervals.} With a weight (\code{wt}), a cell confidence interval is
+exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted proportion as if it
+came from \code{tot_n} independent Bernoulli trials. Under unequal weights this has no design effect,
+so the interval is \strong{too narrow}. Opt in to Kish's effective sample size with
+\code{options(tabxplor.kish_neff = TRUE)} for a design-adjusted \emph{n}, use \code{test = "survey"}
+for a fully design-based p-value, or reach for \code{\link{tab_reg}} (fully design-based) when the
+uncertainty must be exact.
 }
 \section{Significance stars}{
 

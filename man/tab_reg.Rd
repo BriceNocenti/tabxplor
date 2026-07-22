@@ -73,7 +73,14 @@ count stays ambiguous and must be named (for that outcome only). Set it explicit
 dependent; a \strong{vector} aligned to \code{dependent}, or a \strong{named} vector keyed by dependent
 (e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed
 families work only with a character \code{predictors} (one model per outcome); a \code{predictors} list
-(model comparison) is single-outcome, hence single-family.}
+(model comparison) is single-outcome, hence single-family.
+
+\strong{Over-dispersed counts.} An unweighted \code{"poisson"} fit auto-scales its standard errors by
+the square root of the Pearson dispersion, so with an over-dispersed outcome (dispersion clearly
+above 1) its CIs and p-values are \strong{identical to \code{"quasipoisson"}}, and it \strong{warns} to say so
+(the footer reports the dispersion). At equidispersion (\eqn{\approx}1) the scaling is a no-op and
+the result matches a standard \code{glm(family = poisson)} z-interval — so a user comparing to a
+hand-fit Poisson \code{glm} is not surprised by wider intervals.}
 
 \item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
 native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal

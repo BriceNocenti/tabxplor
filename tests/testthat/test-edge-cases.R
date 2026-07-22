@@ -441,3 +441,107 @@ testthat::test_that("a weight used as a table variable errors clearly", {
   testthat::expect_error(tab(d, grp, wt, val, wt = wt), "also used as a row, column or tab variable")
   testthat::expect_error(tab(d, wt, val, wt = wt),      "also used as a row, column or tab variable")
 })
+
+# === SECTION: Last Phase p -- bug corrections ================================
+
+# Fix 1: a bad NAMED ref surfaces a clean warning naming the unknown variable(s),
+# not the raw cli "Multiple quantities for pluralization" internal error.
+testthat::test_that("an unknown named ref warns cleanly and falls back to auto", {
+  gss <- forcats::gss_cat
+  testthat::expect_warning(
+    r1 <- tab(gss, marital, race, ref = c(badname = "x")),
+    "Unknown .*ref.* name.*badname"
+  )
+  testthat::expect_s3_class(r1, "tabxplor_tab")
+  # plural form must also render (both quantities pinned to length(unknown))
+  testthat::expect_warning(
+    tab(gss, marital, race, ref = c(bad1 = "x", bad2 = "y")),
+    "match no row_var and are ignored"
+  )
+})
+
+# Fix 2: a variable used as BOTH a tab_var and a row/col var aborts with a clear
+# message (mirroring the weight-collision guard), not an obscure tidyselect error.
+testthat::test_that("a variable used as tab_var and row/col var errors clearly", {
+  gss <- forcats::gss_cat
+  testthat::expect_error(
+    tab(gss, marital, race, tab_vars = marital),
+    "both as a tab variable and as a row or column variable"
+  )
+  testthat::expect_error(
+    tab(gss, marital, race, tab_vars = race),
+    "both as a tab variable and as a row or column variable"
+  )
+})
+
+# A variable crossed with ITSELF (same var as row and col) must work and give a
+# diagonal -- the building block of a Burt table for MCA. This is a legitimate use,
+# NOT a collision (the tab_var guard above must not catch it). The leaf duplicates
+# the shared column internally (<var>_colvarbis) and restores the name.
+testthat::test_that("a variable crossed with itself gives a diagonal (Burt table)", {
+  d <- tibble::tibble(x = factor(rep(c("a", "b", "c"), 20)),
+                      y = factor(rep(c("p", "q"), 30)))
+  diag_t <- tab(d, x, x, pct = "no")
+  testthat::expect_s3_class(diag_t, "tabxplor_tab")
+  # the x-by-x block is diagonal: level i vs level j is the count only when i == j
+  lv <- c("a", "b", "c")
+  m  <- vapply(lv, function(j) get_n(diag_t[[j]])[seq_along(lv)], double(length(lv)))
+  testthat::expect_equal(diag(m), rep(20, 3))                 # diagonal = counts
+  testthat::expect_equal(sum(m) - sum(diag(m)), 0)            # off-diagonal all 0
+
+  # a full Burt table: c(v1, v2) x c(v1, v2) builds without error (diagonal blocks
+  # on the self-crossings, real cross-tabs off-diagonal) and exports.
+  burt <- tab(d, c(x, y), c(x, y), pct = "no")
+  testthat::expect_s3_class(burt, "tabxplor_grouped_tab")
+  testthat::expect_no_error(tab_md(burt))
+})
+
+# Fix 3: an all-zero / all-NA weight aborts naming the weight, not the generic
+# "data is of length 0".
+testthat::test_that("all-zero or all-NA weights error naming the weight", {
+  d <- tibble::tibble(r = factor(rep(c("a", "b"), 5)),
+                      c = factor(rep(c("x", "y"), 5)), w = 0)
+  testthat::expect_error(tab(d, r, c, wt = w), "zero or missing weight")
+  d_na <- dplyr::mutate(d, w = NA_real_)
+  testthat::expect_error(tab(d_na, r, c, wt = w), "zero or missing weight")
+})
+
+# Fix 4: an all-NA numeric col_var builds without leaking the base-R
+# "no non-missing arguments to max" warning.
+testthat::test_that("an all-NA numeric col_var builds without a max() warning", {
+  d <- tibble::tibble(r = factor(rep(c("a", "b"), 10)), x = NA_real_)
+  testthat::expect_no_warning(res <- tab_num(d, r, x))
+  testthat::expect_s3_class(res, "tabxplor_tab")
+})
+
+# Bug A: a factor carrying a real NA *level* (exclude = NULL) builds AND prints /
+# formats / exports; the NA level is routed through `na=` (na="keep" -> "NA" row,
+# na="drop" -> dropped).
+testthat::test_that("a factor with a real NA level prints and respects na=", {
+  d <- tibble::tibble(r = factor(c("a", "b", NA), exclude = NULL),
+                      c = factor(c("x", "y", "x")))
+  keep <- tab(d, r, c, na = "keep")
+  testthat::expect_no_error(format(keep))
+  testthat::expect_true("NA" %in% as.character(keep$r))          # NA level shown as "NA"
+  drop <- tab(d, r, c, na = "drop")
+  testthat::expect_false("NA" %in% as.character(drop$r))         # NA row dropped
+  # the colored + bold crash sites (pillar_shaft / format masked assignments)
+  withr::local_options(tabxplor.console_bold = TRUE)
+  col <- tab(d, r, c, pct = "row", color = "diff", na = "keep")
+  testthat::expect_no_error(format(col))
+  testthat::expect_no_error(tab_md(col))
+})
+
+# Bug B: a logical col_var is accepted (matches tab_plain: FALSE/TRUE levels); a
+# Date (or other unsupported) col_var aborts with a clear type message.
+testthat::test_that("a logical col_var works and a Date col_var errors clearly", {
+  d <- tibble::tibble(r = factor(rep(c("a", "b"), 50)),
+                      lg = rep(c(TRUE, FALSE), 50))
+  res <- tab(d, r, lg)
+  testthat::expect_s3_class(res, "tabxplor_tab")
+  testthat::expect_true(all(c("FALSE", "TRUE") %in% names(res)))  # parity with tab_plain
+  dd <- tibble::tibble(r = factor(rep(c("a", "b"), 50)),
+                       dt = rep(as.Date("2020-01-01") + 0:1, 50))
+  testthat::expect_error(tab(dd, r, dt),
+                         "must be a factor, character or numeric")
+})
