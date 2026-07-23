@@ -1,4 +1,4 @@
-# PURPOSE: The tabxplor 1.4.0 aggregate-core -- sufficient-statistics aggregation and the
+# PURPOSE: The tabxplor 2.0.0 aggregate-core -- sufficient-statistics aggregation and the
 #          pure transforms that turn it into fmt fields. This is the single computation core
 #          that both tab_plain() (factors) and tab_num() (numerics) route through, replacing
 #          the historical duplicated inline data.table math.
@@ -9,9 +9,9 @@
 # KEY CONSTRAINTS:
 #   - data.table non-standard evaluation: keep aggregations GForce-friendly (bare per-column
 #     sums), never re-scan N rows for a quantity the aggregate already carries.
-#   - Byte-identity: the derived statistics must reproduce the pre-1.4.0 definitions EXACTLY
+#   - Byte-identity: the derived statistics must reproduce the pre-2.0.0 definitions EXACTLY
 #     (waldo tolerance for the .rds golden, exact for the rounded tab_md snapshots).
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 2; dev/tabxplor_1.4.0_decisions.md (G1, §14).
+# See: CLAUDE.md > 2.0.0 roadmap > Phase 2; dev/tabxplor_2.0.0_decisions.md (G1, §14).
 
 # === SECTION: numeric sufficient statistics ==========================================
 
@@ -23,7 +23,7 @@
 #   <v>_wn  weighted count of non-missing values (weighted)  (= sum(w * !is.na(x)))
 #   <v>_s1  first moment sum   Sigma[w] x                     (= sum([w *] x,   na.rm))
 #   <v>_s2  second moment sum  Sigma[w] x^2                   (= sum([w *] x^2, na.rm))
-# It adds <v>_mean and <v>_var and removes <v>_s1 / <v>_s2, matching the pre-1.4.0
+# It adds <v>_mean and <v>_var and removes <v>_s1 / <v>_s2, matching the pre-2.0.0
 # definitions bit-for-bit (up to floating-point) so the single moment-sum pass replaces the
 # old weighted.var() double-scan (which recomputed weighted.mean() per group) without
 # changing output:
@@ -34,7 +34,7 @@
 #
 # WARNING: the unweighted-vs-weighted variance asymmetry (sample n-1 vs ML /Sigma-w) is
 # INTENTIONAL here -- it reproduces the historical stats::var vs weighted.var split. Unifying
-# it is deferred to Phase 3 (weighted inference). See dev/tabxplor_1.4.0_decisions.md §14.
+# it is deferred to Phase 3 (weighted inference). See dev/tabxplor_2.0.0_decisions.md §14.
 #
 # NUMERICS: this is the one-pass "sum of squares" form (var = s2/.. - mean^2), so a single
 # grouped scan yields both mean and variance (the whole point -- the old two-pass code
@@ -99,7 +99,7 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
 }
 
 # num_moment_scan() -- the single O(N) moment-sum scan (the numeric aggregate MATH). Kept in ONE
-# place (1.4.0 keystone: no duplicated aggregate math) and shared verbatim by tab_num()'s
+# place (2.0.0 keystone: no duplicated aggregate math) and shared verbatim by tab_num()'s
 # table-by-table path and by tab_aggregate_num() (the Phase 7d producer). Given a prepped
 # data.table `data` (columns = `tab_row_names` keys + numeric `col_vars` [+ `wt`]; integer/factor
 # col_vars already coerced to numeric) it returns, per numeric col_var `v`, the sufficient moment
@@ -163,7 +163,7 @@ num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
 
            # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective n
            # (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted path is
-           # byte-identical and pays nothing. See dev/tabxplor_1.4.0_decisions.md §14.
+           # byte-identical and pays nothing. See dev/tabxplor_2.0.0_decisions.md §14.
            if (kish)
              purrr::set_names(purrr::map_if(.SD,
                                             names(.SD) != wt_name,
@@ -257,7 +257,7 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 # vectorised bisection on z (its bounds are monotone in z). `pvalue = NA` for cell intervals
 # (H0: p=0 / mu=0 is not meaningful) and when `want_p = FALSE` (stars opted out -> one eval).
 # Validated against DescTools/prop.test/t.test in dev/verify_ci_inclusion.R.
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 3a; dev/tabxplor_1.4.0_decisions.md §20.
+# See: CLAUDE.md > 2.0.0 roadmap > Phase 3a; dev/tabxplor_2.0.0_decisions.md §20.
 
 # The normal quantile (z-score) for a two-sided confidence level -- the engine's z for the
 # Wilson/Newcombe/Wald intervals below. (Moved here from tab.R in Phase 17a: it belongs beside its
@@ -489,7 +489,7 @@ ci_or <- function(a, b, c, d, conf_level = 0.95, want_p = TRUE) {
 #   - Welch's F must match stats::oneway.test(var.equal = FALSE); classic F must match
 #     oneway.test(var.equal = TRUE). The F follows §14 (weighted group means/variances +
 #     unweighted n) -- on unweighted data it reduces to oneway.test, which the parity test pins.
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 3b; dev/tabxplor_1.4.0_decisions.md §24, §16, §14.
+# See: CLAUDE.md > 2.0.0 roadmap > Phase 3b; dev/tabxplor_2.0.0_decisions.md §24, §16, §14.
 
 # agg_chi2() -- Pearson chi2 decomposition for every table at once. Inputs are equal-length
 # vectors describing one cell each: `table_id` (which table), `row_id`/`col_id` (the cell's

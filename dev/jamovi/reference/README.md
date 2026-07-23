@@ -1,11 +1,11 @@
 # dev/jamovi/reference — vendored jamovi module examples
 
 Real, unmodified source files from public jamovi modules, downloaded 2026-07-08 as
-copyable reference for tabxplor's Jamovi module work (1.4.0 Phase 8, Phase 10).
+copyable reference for tabxplor's Jamovi module work (2.0.0 Phase 8, Phase 10).
 
 These are **read-only study material**, not part of the package (the whole `dev/`
 tree is `.Rbuildignore`'d via `^dev$`). Re-fetch from the URLs below for byte-exact
-updates. The narrative that explains every file is `dev/tabxplor_1.4.0_jamovi_dev.md`.
+updates. The narrative that explains every file is `dev/tabxplor_2.0.0_jamovi_dev.md`.
 
 ## Why each file is here
 

@@ -488,7 +488,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #'   deliberate choice. `"auto"` emits every rule four times (a light base, the OS media query, then
 #'   both toggle directions), which is also what lets [tab_kable()]'s own Viewer page force the
 #'   editor's theme -- see its `theme` argument.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see [tab()]).
 #' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,
 #'   the greys) -- what `tab_kable(engine = "html")` needs. `FALSE` emits the colour classes only, which
@@ -504,7 +504,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
 tab_css <- function(theme = NULL, color_type = lifecycle::deprecated(), chrome = TRUE,
                     style_tag = TRUE, file = NULL) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_css(color_type)")
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_css(color_type)")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
   css <- tx_css_render(tx_css_rules(chrome = chrome), o$theme, chrome = chrome)
   if (isTRUE(style_tag)) css <- paste0("<style>\n", css, "\n</style>")

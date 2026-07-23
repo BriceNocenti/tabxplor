@@ -402,9 +402,9 @@ Heavy paths cache the raw fit (refit on a reference change).
 
     Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
-> **This is the *current* pipeline. 1.4.0 rewrites it around a single
+> **This is the *current* pipeline. 2.0.0 rewrites it around a single
 > aggregate-core** (see roadmap § Keystone +
-> `dev/tabxplor_1.4.0_decisions.md`): the step chain
+> `dev/tabxplor_2.0.0_decisions.md`): the step chain
 > `tab_pct → tab_ci → tab_chi2 → …` collapses into one core, and
 > `tab_pct`/`tab_tot`/`tab_ci`/`tab_chi2` become superseded thin
 > wrappers.
@@ -431,7 +431,7 @@ of levels. Do not move the level-drop above chi2/ci.
 | Options as config | All defaults set in `.onLoad()` in `utils.R`. Users override via [`options()`](https://rdrr.io/r/base/options.html). Functions read with [`getOption()`](https://rdrr.io/r/base/options.html). |
 | Suggests-only guards | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai`, `kableExtra` are in Suggests. Every call must be guarded with [`requireNamespace()`](https://rdrr.io/r/base/ns-load.html) or equivalent (tab_xl’s ONE guard is in [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md); `R/tab-xl-backend.R` wrappers are unguarded; `kableExtra`’s two entry points — `render_kable_html()` engine dispatch + [`kable_tabxplor_style()`](https://bricenocenti.github.io/tabxplor/reference/kable_tabxplor_style.md) — are guarded, the default `html` engine never touches it). |
 | Color break mirroring | [`set_color_breaks()`](https://bricenocenti.github.io/tabxplor/reference/tab_many.md) takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value \> 1 triggers ratio comparison instead of difference (the “\*2 rule”). |
-| Mean-diff asymmetry | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean “+15% above reference”. This asymmetry propagates into `color_formula()` and [`format.tabxplor_fmt()`](https://bricenocenti.github.io/tabxplor/reference/format.tabxplor_fmt.md). **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
+| Mean-diff asymmetry | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean “+15% above reference”. This asymmetry propagates into `color_formula()` and [`format.tabxplor_fmt()`](https://bricenocenti.github.io/tabxplor/reference/format.tabxplor_fmt.md). **(2.0.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
 | tab_reg | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -\> `diff`+type=“coef”+display=“coef”+ci_type=“diff”; multiplicative OR/IRR/cumOR -\> `or`+type=“row”+ci_type=“or”. No new fmt fields/attributes: `type` gains value “coef”, `display` gains token “coef”, the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12e: orthogonal `effect="ame"` (marginaleffects) + `at="reference"` profile axis. 12f: model-summary footer + compare= in the `test` attr. 12g: SURVEY designs — `wt=`/`ids=`/`strata=`/`fpc=`/`nest=` + a prebuilt survey.design/svyrep.design as `data`; reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (OR^k); `empirical_OR` (crude %/OR beside model OR, binary). No new fmt fields; new Suggests svyVGAM. |
 
 ------------------------------------------------------------------------
@@ -441,7 +441,7 @@ of levels. Do not move the level-drop above chi2/ci.
 ### Type System
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **19 per-cell
-  fields** (was 15 before v1.4.0 Phase 1a, 18 through Last Phase s which
+  fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which
   added **`n_eff`** = the effective sample size used for a cell’s CI:
   Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data,
   else NA → the CI falls back to the raw unweighted base; non-displayed,
@@ -485,7 +485,7 @@ of levels. Do not move the level-drop above chi2/ci.
 - **`tabxplor_tab`**: tibble subclass via
   [`tibble::new_tibble()`](https://tibble.tidyverse.org/reference/new_tibble.html)
   with **3 top-level table attributes** (Phase 17b merged the six
-  1.4.0-new attrs into one `meta` list): `subtext` (legend text,
+  2.0.0-new attrs into one `meta` list): `subtext` (legend text,
   CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of
   the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase
   j added `effect_size`/`es_type`/`pvalue_exact` columns + the
@@ -571,7 +571,7 @@ string: matched against row labels - `comp="tab"` compares within each
 subtable; `comp="all"` compares against the total table
 
 Note: `ref` is **reinterpreted by `pct`** — a reference **row** under
-`pct="row"`/means, a reference **column** under `pct="col"`. 1.4.0 makes
+`pct="row"`/means, a reference **column** under `pct="col"`. 2.0.0 makes
 `ref` a per-row_var named vector (row%/means only) and stores each
 cell’s own base as `tot_n` — see decisions doc §2, §4.
 
@@ -590,7 +590,7 @@ cell’s own base as `tot_n` — see decisions doc §2, §4.
     in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`.
     Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means “twice the
     reference” (ratio mode). Mirrored for negative. Mean breaks:
-    `c(1.15, 1.5, 2, 4)` — always ratios. *(1.4.0 §18 adds
+    `c(1.15, 1.5, 2, 4)` — always ratios. *(2.0.0 §18 adds
     `mean_diff_breaks` `c(0.2, 0.5, 0.8, 1.2)` — sd-standardized
     differences for the numeric diff mode, Phase 5.)*
 3.  **Selection** (the Phase-5 `findInterval` engine in `fmt_class.R`:
@@ -806,7 +806,7 @@ this, not the code. Symptoms + rules:
 
 ## Jamovi module development
 
-tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will
+tabxplor currently use jamovi `2.6.44.0` (solid). Version 2.0.0 will
 also be tested on jamovi current “solid” version `2.7.37` afterwards
 (Phase 7i confirmed 2.7.37 ✓).
 
@@ -894,7 +894,7 @@ exported jamovi “results” panel scripts (where the actual table appears)
 To **capture new html** in the dev console, **ask the maintainer
 whenever you need**.
 
-Look at `dev/tabxplor_1.4.0_jamovi_dev.md` and `@dev/jamovi/` for
+Look at `dev/tabxplor_2.0.0_jamovi_dev.md` and `@dev/jamovi/` for
 detailed informations.
 
 ------------------------------------------------------------------------
@@ -918,16 +918,16 @@ depth. Read it whenever needed and keep it up-to-date.
 
 ------------------------------------------------------------------------
 
-## tabxplor version 1.4.0 roadmap : the current goal
+## tabxplor version 2.0.0 roadmap : the current goal
 
-Currently implementing tabxplor 1.4.0 (2.0.0 only if breaking changes
+Currently implementing tabxplor 2.0.0 (2.0.0 only if breaking changes
 land). **Update the sections below at the end of every work session.**
 
 Phases already implemented can be found in
-`dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md` Only phases not yet finished
+`dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` Only phases not yet finished
 appear below.
 
-### The aim of 1.4.0 — read first, it governs every decision
+### The aim of 2.0.0 — read first, it governs every decision
 
 This version exists to **refactor and simplify
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)/[`tab_many()`](https://bricenocenti.github.io/tabxplor/reference/tab_many.md)**
@@ -960,10 +960,10 @@ should read, in order:
 
 1.  **This roadmap** — the phase your task belongs to, its bullets, and
     its pointers
-2.  **`dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`** – the detailed
+2.  **`dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** – the detailed
     report of all the **already implemented phases of the roadmap**.  
-3.  **`dev/tabxplor_1.4.0_decisions.md`** – the **new architecture
-    decisions** taken for version 1.4.0. Some parts of the file may be
+3.  **`dev/tabxplor_2.0.0_decisions.md`** – the **new architecture
+    decisions** taken for version 2.0.0. Some parts of the file may be
     outdated :
 4.  **`dev/tabxplor_architecture.md`** — architecture guide (type
     system, pipeline, compaction loss, exporters). It describes the
@@ -972,7 +972,7 @@ should read, in order:
 5.  **Top of this CLAUDE.md** — Repository Map, Global Architecture, Key
     Constraints, Design Decisions.
 
-**Other long-form 1.4.0 docs live in `dev/` (all `.Rbuildignore`’d),
+**Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`’d),
 never inline here — read the matching ones before you start:** -
 `dev/benchmarks/` — performance harness + saved results (documented
 under *Reference \> Benchmarks*). Read/run when a phase touches perf
@@ -994,9 +994,9 @@ under *Reference \> Benchmarks*). Read/run when a phase touches perf
 
 ------------------------------------------------------------------------
 
-### tabxplor Phase 17 — ecosystem integration roadmap (end of v1.4.0)
+### tabxplor Phase 17 — ecosystem integration roadmap (end of v2.0.0)
 
-This is the plan of plans for the last development stretch of v1.4.0,
+This is the plan of plans for the last development stretch of v2.0.0,
 implementing `dev/tabxplor_ecosystem_simplification.md` (the six-audit
 design analysis, reviewed and decided by the maintainer on 2026-07-20).
 Phases group the tasks that need the same systemic understanding of the
@@ -1044,7 +1044,7 @@ not to add features. Every session must hold these as hard rules:
     same rule “kept in sync” by comment — derive both consumers from one
     source, or group by the rendered output itself (the 16e lesson).
 6.  **Public API stays retro-compatible; internals are free.** The
-    1.4.0-new, never-released surface (constructor formals, new args,
+    2.0.0-new, never-released surface (constructor formals, new args,
     new options) is still free to change — **that freedom ends at the
     CRAN release**, which is why Phase 17 runs now.
 7.  **A claimed fix ships with the fixture that fails without it.**
@@ -1068,7 +1068,7 @@ not to add features. Every session must hold these as hard rules:
 
 | Decision | Ruling |
 |----|----|
-| `meta` merge of the five 1.4.0-new table attrs | **Yes, merge now** (Phase 17b) |
+| `meta` merge of the five 2.0.0-new table attrs | **Yes, merge now** (Phase 17b) |
 | Role model (row/col kinds, honest pvalue cells, reg column role) | **Yes, now**, before the French phase (17c) |
 | `tabxplor.output_kable` | **Keep** (used in .Rmd/.qmd); **fix** its KNOWN-BUG instead of retiring (17g) |
 | kableExtra engine + `kable_tabxplor_style` + `always_add_css_in_tab_kable` | **Keep as legacy** — no kill, no deletion; fix stale comments, degrade gracefully without kableExtra (17g) |
@@ -1157,7 +1157,7 @@ designed invalidation.
 - **Start of session**: read this roadmap’s phase entry, the analysis
   sections it points to, and the listed code regions (use parallel
   search agents for the audit refresh — line refs below WILL have
-  drifted). Read `dev/tabxplor_1.4.0_decisions.md` for any §-referenced
+  drifted). Read `dev/tabxplor_2.0.0_decisions.md` for any §-referenced
   settled decision you touch.
 - **Verification**: full suite green after each phase (the CLAUDE.md §
   Testing recipe). Byte-identical phases: zero golden/snapshot churn
@@ -1169,7 +1169,7 @@ designed invalidation.
   until the maintainer’s `prepare()`.
 - **End of session**: the § last-step documentation discipline; append
   the phase’s DONE summary under its entry (the maintainer archives to
-  `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`); accumulate NEWS.md
+  `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`); accumulate NEWS.md
   entries for user-facing changes (Phase g trims later).
 - **If a phase runs long**: split at its marked seam into `-i`/`-ii`
   sessions rather than rushing the tail.
@@ -1268,7 +1268,7 @@ to “the fmt_col_attrs”.
 
 **Goal**: finalize the public constructor surface before it freezes at
 release. `new_tab(tabs, subtext, test, meta)` with ONE `meta` list
-replacing the five 1.4.0-new scalar formals; `color_breaks` joins it;
+replacing the five 2.0.0-new scalar formals; `color_breaks` joins it;
 `caption` and build-time `vars` complete the metadata.
 
 Read first: analysis §5.6.4 (+ maintainer ruling “merge now”), §8;
@@ -1317,7 +1317,7 @@ consciously regenerated — a script proved for all 36 cases that the ONLY
 delta is the reshape (body/subtext/test byte-identical AND the new
 `meta` == the old separate attrs). - **Constructor.**
 `new_tab(tabs, subtext, test, meta)` (+ deprecated `chi2` alias) — the
-five 1.4.0-new formals collapsed to ONE `meta` list;
+five 2.0.0-new formals collapsed to ONE `meta` list;
 drop-NULL-then-attach keeps “absent when unset” (all-NULL meta → no
 attribute). `new_grouped_tab` mirrors it. Roxygen folded to one
 `@param meta`. - **Accessors.** `get_meta()`/`set_meta_field()` (NULL
@@ -1695,7 +1695,7 @@ live `tab_spread`/`tab_ci` (`get_test`/`test=`); the PUBLIC alias
 normal table and pull
 [`get_num()`](https://bricenocenti.github.io/tabxplor/reference/fmt.md)
 per cell at the very end (shared `leaf_extract_raw`), deleting the 3
-pre-1.4.0 `weighted.mean` N-scans + the count-only dcast + both early
+pre-2.0.0 `weighted.mean` N-scans + the count-only dcast + both early
 returns (~90 L). **Intended semantics change** (tests only assert class;
 undocumented details): a FACTOR table with `pct = "row"` + df/num now
 returns the displayed percentages, not counts (`df=TRUE` still defaults
@@ -1979,7 +1979,7 @@ the post-17 architecture with no trace of the removed machinery.
 Read first: analysis §5.6.5, §8; `?tabxplor-options`, `.onLoad`,
 `dev/tabxplor_architecture.md`.
 
-1.  **Options pass (1.4.0-new names only)**: `kable_css` →
+1.  **Options pass (2.0.0-new names only)**: `kable_css` →
     `tab_kable_css` (alias kept); `console_theme`/`export_theme` aliases
     for the two non-parallel theme options (old names keep working);
     `jmv_full_hash` seeded + documented (done in 17i — verify);
@@ -2387,7 +2387,7 @@ I want to change the way Chi2 et Welch pvalue are calculated for
 in that matter. Please, **design a sound infrastructure for a minimal
 opt-in survey design pvalues**, for chi2, and if possible it’s
 equivalent for ANOVA F / numeric variables. Do not hesisate to do web
-searches. Write your design in `dev/tabxplor_1.4.0_decisions.md`. The
+searches. Write your design in `dev/tabxplor_2.0.0_decisions.md`. The
 AskUserQuestions, plan and implement. - I don’t want to go full survey
 design for all tabxplor calculations including all types of ci, etc.,
 but I would at least want to have **a opt-in more robust pvalue with
@@ -2432,7 +2432,7 @@ ONLY by the 3 new `test` columns
 (`effect_size`/`es_type`/`pvalue_exact`, body untouched); the only
 conscious snapshot moves are `render-html.md` (the summary gained a
 statistic + effect-size row) + 3 hardcoded display assertions. Design in
-`dev/tabxplor_1.4.0_decisions.md` §51. - **Effect sizes** ride each
+`dev/tabxplor_2.0.0_decisions.md` §51. - **Effect sizes** ride each
 omnibus row as two columns: `agg_chi2` emits Cramér’s V (uncorrected
 chi2) / phi (2×2), `agg_anova` emits η² = SSB/SST. Rendered as an
 “effect size” line (console grid + export summary; `test_fmt_es`).
@@ -2640,7 +2640,7 @@ on Windows + Ubuntu in WSL2, but it shall work on Mac OS too.
 archived.** Full R suite green (FAIL 0, WARN 0, PASS 4099, SKIP 4), zero
 golden/snapshot churn. - **Real-world results (Windows 11 jamovi
 2.7.37 + WSL flatpak 2.7.36; full tables in
-`dev/tabxplor_1.4.0_jamovi_dev.md` § Phase o).** Windows winner =
+`dev/tabxplor_2.0.0_jamovi_dev.md` § Phase o).** Windows winner =
 **`registry Shell Folders\Personal`** -\> `D:\Documents` (redirect
 honoured; **PowerShell is NOT on the bundled R’s PATH** so
 `GetFolderPath` is unavailable; the same registry value carries a
@@ -3272,7 +3272,7 @@ maintainer’s hand review.
 
 #### Last Phase y – NEWS.md simplification
 
-`NEWS.md` `# tabxplor 1.4.0 (in development)` section have accumulated
+`NEWS.md` `# tabxplor 2.0.0 (in development)` section have accumulated
 all dev history of the new version, must most of it is really not
 user-facing and irrevelant (and already in other dev documentation). A
 **drastic** reduction is needed here, no dev details **at all**,
@@ -3307,13 +3307,13 @@ simplicity and reliability ?
 
 ### Reference — bugs, benchmarks, perf
 
-Fixed bugs recorded in `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`
+Fixed bugs recorded in `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`
 
 #### Benchmarks (`dev/benchmarks/`)
 
 The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`’d).
 Per the scope decision, save every phase’s before/after runs under
-`dev/benchmarks/results_1.4.0/`.
+`dev/benchmarks/results_2.0.0/`.
 
 ⚠ **Every committed baseline below was measured on WINDOWS/NTFS. Dev is
 now WSL2 Ubuntu on ext4 — do NOT diff a WSL2 run against them.**
@@ -3336,7 +3336,7 @@ conclusion, and note the platform in the file when you do.
 `gen_big_df.R` is tracked). The first `run_bench.R` therefore
 **regenerates the fixture first** — expect a long, one-off build, not a
 hang. The 13 loose `dev/benchmarks/results_*.csv` WERE copied;
-`results_1.4.0/` is tracked.
+`results_2.0.0/` is tracked.
 
 - `run_bench.R` — heavy 8M-row
   [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
@@ -3388,8 +3388,8 @@ After verification passes, always :
 1.  Ensure the file-header docstring/comment of any modified module is
     still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next
     to changed logic.
-2.  Keep the tabxplor version 1.4.0 roadmap in CLAUDE.md and
-    `dev/tabxplor_1.4.0_decisions.md` up-to-date as you build it or
+2.  Keep the tabxplor version 2.0.0 roadmap in CLAUDE.md and
+    `dev/tabxplor_2.0.0_decisions.md` up-to-date as you build it or
     implement it.
 3.  Update `dev/tabxplor_architecture.md` whenever you modify the
     package structure for real (add modules, rename functions, change
@@ -3402,7 +3402,7 @@ After verification passes, always :
     prompt, since the details are already in
     `dev/tabxplor_architecture.md`. When there is nothing to change,
     skip it. Maintainer will move done phases to
-    `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md` himself.
+    `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
 5.  `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new
     arguments and arguments changes, deprecations, and important bugs
     fixes. Keep it minimalistic and no bullshit. Do not edit it when

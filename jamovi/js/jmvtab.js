@@ -1,6 +1,6 @@
 // Custom UI events for the jmvtab (Crosstables) analysis.
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep
-// it lean. See dev/tabxplor_1.4.0_jamovi_dev.md (§12 ref picker, §14 export) for the events API.
+// it lean. See dev/tabxplor_2.0.0_jamovi_dev.md (§12 ref picker, §14 export) for the events API.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered

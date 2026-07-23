@@ -61,7 +61,7 @@ line (its break-words in the same pandoc classes as the cells) above the subtext
 \code{\link{tab_css}}, since the span \emph{class names} are palette- and theme-independent. \code{theme}
 accepts \code{"auto"} (follow the reader's colour scheme).}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only

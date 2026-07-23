@@ -1,6 +1,6 @@
-# tabxplor 1.4.0 — Jamovi module development technical guide
+# tabxplor 2.0.0 — Jamovi module development technical guide
 
-Written 2026-07-08. The reference for redesigning tabxplor's Jamovi module (1.4.0 Phase 8)
+Written 2026-07-08. The reference for redesigning tabxplor's Jamovi module (2.0.0 Phase 8)
 and integrating `tab_logit` (Phase 10). Jamovi module development is a multi-layer stack in
 two languages with sparse, recently-reorganised docs; past attempts (manual and AI-assisted)
 failed for lack of a mental model and a way to see what the code actually produces at
@@ -778,7 +778,7 @@ Vendored live examples: `dev/jamovi/reference/jmv-logregbin/` (Level + LevelSele
 ## 12. Feature 1 — per-variable reference-level picker
 
 Goal: under `pct="row"`/means, choose the reference row (level) of each `row_var`; under
-`pct="col"`, the reference column of the chosen `col_var`. Maps onto the 1.4.0 decision that
+`pct="col"`, the reference column of the chosen `col_var`. Maps onto the 2.0.0 decision that
 `ref` becomes a per-row_var named vector. The widget is jmv's binomial-logistic `refLevels`
 (vendored: `dev/jamovi/reference/jmv-logregbin/`).
 
@@ -1130,7 +1130,7 @@ Constraints to design around, now grounded in the protocol (§5.3) and results m
   + In `.b.R`, branch on *what changed*. jmvcore exposes changed options
     (`self$options$changed` / the `changed` list); when only display options changed
     (`display`, `digits`, `wrap_*`, `ci_print`, colours), **reuse a cached aggregate** and only
-    re-render — drive the 1.4.0 aggregate-core + per-transform subfunctions at
+    re-render — drive the 2.0.0 aggregate-core + per-transform subfunctions at
     cache-appropriate granularity (never fork the math).
   + Persist the cache in Jamovi `state` (`image$setState()`/`$state`, analysis `state`), keyed
     on the aggregate-defining options, not R globals.

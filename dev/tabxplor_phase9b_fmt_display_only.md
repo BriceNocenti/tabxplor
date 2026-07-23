@@ -1,7 +1,7 @@
 #### Phase 9b — `tabxplor_fmt` as display-only, materialized at the end
 
-Feasibility analysis + implementation record for the 1.4.0 roadmap's Phase 9b. Read
-`dev/tabxplor_1.4.0_decisions.md` §27 (the fmt-build cost finding) and §29 (the fresh profile
+Feasibility analysis + implementation record for the 2.0.0 roadmap's Phase 9b. Read
+`dev/tabxplor_2.0.0_decisions.md` §27 (the fmt-build cost finding) and §29 (the fresh profile
 + "Finding 4 is the lever") first — this doc is the detailed follow-through on that lever.
 
 ##### 1. Grounding — where the time actually is
@@ -164,7 +164,7 @@ a range, not a promise. **The §5 spike confirmed the recoverable share is ~30-4
 path** (`vec_restore` reconstruction alone is 29.7 % of the build; the build-once floor is a
 negligible ~0.5 %; record ops are 54.5× slower than plain). Above the 25 % bar → proceed to 9b-3.
 
-Risk: 9b-3 is the single largest byte-identity surface in 1.4.0 (7 named landmines, touches
+Risk: 9b-3 is the single largest byte-identity surface in 2.0.0 (7 named landmines, touches
 `tab_plain`/`tab_num`/`tab_ci`/`tab_chi2`/`tab_assemble_tables`/`tab_add_n_pct`/`tab_compact` +
 the jmvtab cache). It is worth it *only* as a golden-gated, multi-session, one-sub-phase-at-a-time
 effort. If the 9b-2 spike shows <25 % recoverable, stop and keep only 9b-1.
@@ -192,7 +192,7 @@ effort. If the 9b-2 spike shows <25 % recoverable, stop and keep only 9b-1.
 ##### 5. Phase 9b-2 — the measurement (2026-07-11): GO for 9b-3, fold in the writers
 
 Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R` (throwaway, **no `R/*.R` change**); full record
-`dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt`. `forcats::gss_cat`, 5 row_vars × the four
+`dev/benchmarks/results_2.0.0/phase9b2_decomposition.txt`. `forcats::gss_cat`, 5 row_vars × the four
 representative shapes; `output_list=TRUE` isolates the no-merge per-row_var build.
 
 Why re-scoped: the design's 9b-2 ("plain-field writers, leaf still materializes") recovers ~0 on the
@@ -238,7 +238,7 @@ build a per-column `frame`+`meta` and route through it at the SAME materializati
 golden regeneration; common per-table build 0.2648 vs baseline 0.2644 s (noise). This establishes
 the single materialization point every later increment defers.
 
-**Corrected cost model (profiling — `dev/benchmarks/results_1.4.0/phase9b3_profile.txt`).** The §5
+**Corrected cost model (profiling — `dev/benchmarks/results_2.0.0/phase9b3_profile.txt`).** The §5
 decomposition was right that ~30% is recoverable record reconstruction, but the plan's *localization*
 was wrong. Real-pipeline Rprof of the common build:
 
@@ -268,7 +268,7 @@ green (1364/0), NO golden regen; verified byte-identical vs the old methods acro
 mixed/chi2 tables + both `partial` modes. A `vapply`-for-`map` swap on the other per-column scans
 (`is_totcol`/`get_type`/`get_col_var`) was tried and **reverted** — no measurable gain (their cost is
 S3 dispatch / call-count, which the carrier addresses, not the `purrr` wrapper).
-`dev/benchmarks/results_1.4.0/phase9b3_pass2.txt`.
+`dev/benchmarks/results_2.0.0/phase9b3_pass2.txt`.
 
 **Pass 3 (2026-07-11) — `tab_pvalue_lines` masked-fill (byte-identical, the big one: ~25-34%).** After
 pass 2 a fresh line-profile pinned **`tab_pvalue_lines` at ~34% of the per-table build** (`chi2=TRUE`
@@ -283,7 +283,7 @@ like the former `if_else(...) |> vec_restore(.)` (attributes verified preserved;
 `get_display`). **Cumulative baseline→pass3: common merged 1.58→1.17 (−26%) / per-table 0.264→0.174
 (−34%); ci −25%; contrib −26%; numeric neutral (no p-value line).** Full suite green (1364/0), no golden
 regen; verified byte-identical vs the old block on grouped + ungrouped tables.
-`dev/benchmarks/results_1.4.0/phase9b3_pass3.txt`.
+`dev/benchmarks/results_2.0.0/phase9b3_pass3.txt`.
 
 **Pass 4 (2026-07-11) — `new_test_tibble` memoization (byte-identical, ~3-6% common build).** A
 post-pass-3 line-profile: the empty-placeholder `test` tibble (`new_test_tibble()`, `R/tab_classes.R`)
@@ -294,7 +294,7 @@ produced); full suite green (1364/0), no golden regen. Modest (`common` per-tabl
 remaining tab_pvalue_lines cost (`bind_rows`+`map2_df(vec_restore)` adding the p-value row, ~9% total)
 is the vctrs **record combine** (ptype2/cast per column), which is inherent to the fmt type and only
 removed by the deferred-materialization carrier (the carrier core, Phases 9b-4→9b-7), not an in-place tweak.
-`dev/benchmarks/results_1.4.0/phase9b3_pass4.txt`.
+`dev/benchmarks/results_2.0.0/phase9b3_pass4.txt`.
 
 **NOTE (2026-07-11):** the pass-3 commit `7d08a77` carried a concurrently-committed **broken color
 palette** (`c()` arg 11 empty → `load_all` fails). Restored `R/tab_classes.R` to the pre-edit palette
@@ -377,7 +377,7 @@ byte-identical **no-op** `fmt_wrap(fmt_unwrap(tabs_text))` is inserted in `tab_t
 `vec_data → new_fmt` preserves storage types); **L5** N/A here (the derived-display/digits are already
 in the fields being round-tripped, not recomputed). Bench (gss_cat 5×3, merged): the no-op adds +0.08 s
 (+6.9%) — the temporary second materialization of each row_var's factor table, recovered by 9b-5
-(`dev/benchmarks/results_1.4.0/phase9b4_carrier.txt`).
+(`dev/benchmarks/results_2.0.0/phase9b4_carrier.txt`).
 
 **Phase 9b-5 — DONE, 2026-07-11 (byte-identical, full suite green FAIL 0 | PASS 1354, NO golden regen).**
 Both increments landed: `tab_chi2()` (increment 1) + `tab_ci()` (increment 2 — bulleted last). A
@@ -398,7 +398,7 @@ Both increments landed: `tab_chi2()` (increment 1) + `tab_ci()` (increment 2 —
   moves the per-cell `var`/`ctr` + `comp_all`/contrib-`color` writes from the pre-9b-5 **~6 successive
   `mutate(across(where(is_fmt), set_*))` passes** (each a full fmt reconstruction) to **ONE**
   `mutate(across())` over **plain-precomputed vectors**. **Result: contrib per-table 0.2963 → 0.1747
-  (−41 %, 1.7×) and ~30 % less memory** (`dev/benchmarks/results_1.4.0/phase9b5_chi2.txt`);
+  (−41 %, 1.7×) and ~30 % less memory** (`dev/benchmarks/results_2.0.0/phase9b5_chi2.txt`);
   common/ci/numeric flat.
 - **Approach note (deviation from "shared carrier engine over `fmt_unwrap`/`fmt_wrap`").** The write
   path is NOT a carrier round-trip but a **precompute-then-single-write**: read the fields plainly
@@ -463,7 +463,7 @@ the cross-source attribute reconcile.
   `n=NA` — subsuming the masked fill), sliced to the arranged order, materialized with **tabs' OWN meta**
   (the old `vec_restore(., tabs)` discarded the added row's attrs → no reconcile). Runs in BOTH the
   merged and per-table paths. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, memory
-  51→45 MB; numeric ~flat.** `dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`.
+  51→45 MB; numeric ~flat.** `dev/benchmarks/results_2.0.0/phase9b6_boundaryB.txt`.
 
 Locked: full suite FAIL 0 + NO golden regen; a **12-shape git-stash `identical()` A/B** (common /
 colpct / mixed / weighted / ci / per-row_var-ref [L3] / contrib / add_n / list-path / tab_vars-grouped /
@@ -519,7 +519,7 @@ The original step-A/step-B design (kept for history):
   cost. The one that changes the whole shape.
 + **Q2 — carrier-join (L2) vs materialize-around-the-cheap-join** (9b-4 step B): lean the latter (join
   is 0.9%).
-+ **Q3 — is the carrier worth it now?** It is the **largest byte-identity surface in 1.4.0** for
++ **Q3 — is the carrier worth it now?** It is the **largest byte-identity surface in 2.0.0** for
   another ~20-45%, and the value is **back-loaded** (9b-4 = low-payoff infrastructure; **9b-5 is the
   win**). Weigh vs pausing 9b at passes 2-4 (already banked ~26% cheaply) and landing the carrier with
   Phase 10.
@@ -529,7 +529,7 @@ The original step-A/step-B design (kept for history):
 Each phase's gate: `devtools::test()` FAIL 0 + NO golden regen (`test-golden`/`test-fmt-contract`/
 `test-color-golden`/`test-calculations`/`test-fuse-parity`/`test-num-fuse-parity`/`test-carve-parity`/
 `test-jmvtab-cache`/`test-parallel-parity`), plus a before/after benchmark into
-`dev/benchmarks/results_1.4.0/`.
+`dev/benchmarks/results_2.0.0/`.
 
 ##### 8. Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (2026-07-11: DONE, byte-identical)
 
@@ -572,7 +572,7 @@ Three byte-identity findings the A/B (reref ON vs a fresh rebuild) surfaced:
 - **`color = "auto" + ci = "diff"`** resolves to `after_ci` (a ref-dependent CI colour `color="no"`
   would not reproduce) — excluded → rebuild. `color="diff"/"ratio"` always give `color_ci="no"` (safe).
 
-**Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change reref is **~4.5x** (small
+**Result** (`dev/benchmarks/results_2.0.0/phase9b7_reref.txt`): a ref change reref is **~4.5x** (small
 table, 20 vs 90 ms) / **~3.0x** (grouped 3-col_var, 120 vs 365 ms) faster than the rebuild; the
 exact-hit re-paint is unregressed. Locked by `test-jmvtab-cache.R` (12 eligible reref shapes == rebuild
 + a plain-tab() anchor + second-ref exact hit + 7 fallback shapes rebuild + $state round-trip). Still

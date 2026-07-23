@@ -1,6 +1,6 @@
 Phase 10e BASELINE (pre-rework) -- tab_kable render
 R 4.5.1 | 2026-07-12 09:47:04
-kableExtra 1.4.0
+kableExtra 2.0.0
 
            operation median_s mem_mb
          kable_small   0.1167    7.1

@@ -112,7 +112,7 @@ tab(
 - sup_cols:
 
   **\[deprecated\]** Supplementary columns variables, with only the
-  first level printed. Deprecated in 1.4.0: pass these columns in
+  first level printed. Deprecated in 2.0.0: pass these columns in
   `col_vars` and set `levels = "first"` instead (`col_vars` already
   accepts several variables).
 
@@ -559,7 +559,7 @@ tab(
 
 - chi2:
 
-  **\[deprecated\]** Renamed to `test` in 1.4.0: the test is a
+  **\[deprecated\]** Renamed to `test` in 2.0.0: the test is a
   Chi-squared only for factors (numeric `col_vars` get Welch's F), so
   the old name was misleading. Still works.
 
@@ -984,7 +984,7 @@ tab(data2, year, marital, race, subtext = gss2, pct = "row",
 
 # Differences with the total, except if their confidences intervals are superior to them:
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
-#> Warning: The `color = "diff_ci"` mode was deprecated in tabxplor 1.4.0.
+#> Warning: The `color = "diff_ci"` mode was deprecated in tabxplor 2.0.0.
 #> ℹ Please use `color = "diff"` with the `color_signif` argument instead.
 #> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married
@@ -999,7 +999,7 @@ tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_c
 
 # Same differences, minus their confidence intervals:
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
-#> Warning: The `color = "after_ci"` mode was deprecated in tabxplor 1.4.0.
+#> Warning: The `color = "after_ci"` mode was deprecated in tabxplor 2.0.0.
 #> ℹ Please use `color = "diff"` with the `color_signif` argument instead.
 #> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married

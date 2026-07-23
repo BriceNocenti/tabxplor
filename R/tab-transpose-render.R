@@ -17,7 +17,7 @@
 #     `n` ROW, matching a native pct = "col" table) and 14n has already collapsed the redundant Total
 #     rows to one (-> one Total column, no `Total_<var>` suffix). The Excel-only `<var>_sd` sibling is
 #     DROPPED here (the mean cell folds its sigma back in via special_formatting).
-# See: dev/tabxplor_1.4.0_decisions.md S46.
+# See: dev/tabxplor_2.0.0_decisions.md S46.
 
 # === SECTION: the model flip =========================================================================
 

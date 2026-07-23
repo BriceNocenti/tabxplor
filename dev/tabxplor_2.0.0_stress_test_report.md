@@ -1,4 +1,4 @@
-# tabxplor 1.4.0 — stress-test report
+# tabxplor 2.0.0 — stress-test report
 
 Date: 2026-07-22
 Tested commit: `033f94e` ("Last Phase k — last new features 2, labelled-data"), clean worktree.
@@ -246,7 +246,7 @@ During the sweep several apparent failures traced to the test harness, not the p
 
 1. **Fix §2.1** (NA-factor-level print crash) — small, and it is reachable from imported data.
 2. **Turn §2.2 and the §4 obscure errors into informative messages** — mechanical, high user-experience
-   payoff, matches the 1.4.0 "informative validation" standard already present elsewhere.
+   payoff, matches the 2.0.0 "informative validation" standard already present elsewhere.
 3. **Decide §3.1** (fmt-arithmetic staleness): document, propagate, or `NA`-out.
 4. **Add one doc line each for §3.2 (weighted CI design effect) and §3.3 (poisson overdispersion)** so
    the two deliberate statistical choices are visible to R users, not only jamovi.

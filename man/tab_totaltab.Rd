@@ -33,7 +33,7 @@ be detected using \code{\link{is_tottab}}.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-Superseded (1.4.0): the total table is built directly by the \code{totaltab} argument of
+Superseded (2.0.0): the total table is built directly by the \code{totaltab} argument of
 \code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}}. \code{tab_totaltab()} still works on an existing tab.
 }
 \examples{

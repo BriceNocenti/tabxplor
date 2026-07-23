@@ -1,5 +1,5 @@
 # PURPOSE: Lock the parity between tabxplor's two non-unified display paths.
-# ROLE: Guardrail for the 1.4.0 "unify the exporter prep function" workstream (#4 / Phase 10g).
+# ROLE: Guardrail for the 2.0.0 "unify the exporter prep function" workstream (#4 / Phase 10g).
 # KEY CONSTRAINTS:
 #   - format.tabxplor_fmt() is the source of truth for tab_md() / tab_kable() / console.
 #   - tab_xl() writes the RAW get_num() value and lets Excel format it via the codes from

@@ -9,7 +9,7 @@
 #     incl. mirai daemons, then resolves the newer nanonext). future.apply/parallel need no nanonext.
 #   - Windows has no fork(): every worker is a separate process; the df must reach it (serialize once
 #     into persistent workers, or per task). setDTthreads(1) in workers avoids oversubscription.
-# See: CLAUDE.md § 1.4.0 roadmap > Phase 6b research.
+# See: CLAUDE.md § 2.0.0 roadmap > Phase 6b research.
 
 suppressWarnings(suppressMessages({
   library(data.table)

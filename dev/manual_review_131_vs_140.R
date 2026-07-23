@@ -1,27 +1,27 @@
 # PURPOSE: Phase 12 (roadmap "Manual reviews") — build two MIRROR Excel workbooks, one from CRAN
-#          tabxplor 1.3.1 and one from the 1.4.0 dev source, with IDENTICAL sheet names, so the
-#          maintainer can eyeball statistical results side-by-side and confirm 1.4.0 reproduces the
+#          tabxplor 1.3.1 and one from the 2.0.0 dev source, with IDENTICAL sheet names, so the
+#          maintainer can eyeball statistical results side-by-side and confirm 2.0.0 reproduces the
 #          published 1.3.1 numbers (and see the *intended* changes: numeric diff -> real difference,
 #          the new `ratio` mode, add_n in-cell, display-only p-value rows, ...).
 #
 # ROLE: dev-only review harness (NOT a package test). Uses the maintainer's real weighted survey
 #       `pc18`; per the maintainer, pc18 must NEVER enter tests/. Run it TWICE (see USAGE).
 #
-# USAGE (two isolated processes — 1.3.1 is installed, 1.4.0 is the uninstalled dev source):
+# USAGE (two isolated processes — 1.3.1 is installed, 2.0.0 is the uninstalled dev source):
 #   Rscript dev/manual_review_131_vs_140.R installed   # -> dev/review_manual/review_tabxplor_1.3.1.xlsx
-#   Rscript dev/manual_review_131_vs_140.R dev          # -> dev/review_manual/review_tabxplor_1.4.0-dev.xlsx
+#   Rscript dev/manual_review_131_vs_140.R dev          # -> dev/review_manual/review_tabxplor_2.0.0-dev.xlsx
 #
 # KEY CONSTRAINTS / cross-version mechanics (all probed, 2026-07-13):
 #   - 1.3.1 `tab()` takes ONE col_var (ensym); the merged factor+numeric table there needs
-#     `tab_many(..., compact = TRUE)`. 1.4.0 `tab()` merges several col_vars natively. -> `build()`.
+#     `tab_many(..., compact = TRUE)`. 2.0.0 `tab()` merges several col_vars natively. -> `build()`.
 #   - Version is detected by FEATURE (`color_signif` in formals(tab)), because the dev DESCRIPTION
 #     still reads 1.3.1(.9000).
-#   - `color_signif` (1.4.0) folds into the old `color` string for 1.3.1:
+#   - `color_signif` (2.0.0) folds into the old `color` string for 1.3.1:
 #         diff + ignore           -> "diff"
 #         diff + grey_non_signif  -> "diff_ci"
 #         diff + color_all_signif -> "after_ci"
 #         ratio                   -> "diff"   (1.3.1 numeric "diff" IS the multiplicative ratio)
-#   - 1.3.1 default `method_diff = "ac"` (Agresti-Caffo); 1.4.0 default is "newcombe" -> the greying
+#   - 1.3.1 default `method_diff = "ac"` (Agresti-Caffo); 2.0.0 default is "newcombe" -> the greying
 #     cases pass method_diff = "ac" so both sides invert the SAME interval.
 #   - The "field" table (2nd per sheet) = the SAME table with `set_display()` switched to the relevant
 #     vctrs field (diff / ratio / ctr / ci). set_display + integer `sheets=` (one case = one sheet,
@@ -42,9 +42,9 @@ suppressWarnings(suppressMessages({
   if (MODE == "dev") devtools::load_all(PKG_ROOT, quiet = TRUE) else library(tabxplor)
 }))
 
-# reliable 1.4.0 discriminator (dev version string is still 1.3.1.9000)
+# reliable 2.0.0 discriminator (dev version string is still 1.3.1.9000)
 IS_DEV  <- "color_signif" %in% names(formals(tab))
-VER_LAB <- if (IS_DEV) "1.4.0-dev" else as.character(utils::packageVersion("tabxplor"))
+VER_LAB <- if (IS_DEV) "2.0.0-dev" else as.character(utils::packageVersion("tabxplor"))
 cat(sprintf("\n== tabxplor %s  (mode=%s, is_dev=%s) ==\n", VER_LAB, MODE, IS_DEV))
 
 is_fmt      <- getFromNamespace("is_fmt", "tabxplor")
@@ -80,7 +80,7 @@ CFG <- list(
 # =================================================================================================
 # 2. Version-aware builders.
 # =================================================================================================
-# Fold the 1.4.0 (color, color_signif) pair into the 1.3.1 `color` string.
+# Fold the 2.0.0 (color, color_signif) pair into the 1.3.1 `color` string.
 color_131 <- function(color, color_signif) {
   if (is.null(color)) return("no")
   if (color == "ratio") return("diff")
@@ -90,7 +90,7 @@ color_131 <- function(color, color_signif) {
   color                                  # "no", "contrib", (unused) ci-modes
 }
 
-# Build one merged table. `sc` = scalar tab() args in 1.4.0 vocabulary; translated for 1.3.1.
+# Build one merged table. `sc` = scalar tab() args in 2.0.0 vocabulary; translated for 1.3.1.
 build <- function(cfg, sc, use_tab = FALSE, use_wt = FALSE) {
   data <- dplyr::filter(pc18, !is.na(.data[[cfg$wt]]))     # isolate this weight-group's rows
   s <- sc
@@ -118,19 +118,19 @@ show_field <- function(tabs, token) {
 
 # =================================================================================================
 # 3. Review cases. `field` may be a single token (both versions) or c(dev=, ref=) when they differ.
-#    sc uses 1.4.0 names; `cfg` names a CFG entry.
+#    sc uses 2.0.0 names; `cfg` names a CFG entry.
 # =================================================================================================
 mk <- function(key, cfg, sc, tab = FALSE, wt = FALSE, field = "diff", desc = key)
   list(key = key, cfg = cfg, sc = sc, tab = tab, wt = wt, field = field, desc = desc)
 
 CASES <- list(
   mk("01 base_diff",    "num",  list(pct = "row", color = "diff"),
-     field = "diff", desc = "pct=row, color=diff (numeric diff CHANGED in 1.4.0)"),
+     field = "diff", desc = "pct=row, color=diff (numeric diff CHANGED in 2.0.0)"),
   mk("02 tabv_diff",    "num",  list(pct = "row", color = "diff"), tab = TRUE, wt = TRUE,
      field = "diff", desc = "tab_vars, wt, pct=row, color=diff"),
   mk("03 tabv_ratio",   "num",  list(pct = "row", color = "ratio"), tab = TRUE, wt = TRUE,
      field = c(dev = "ratio", ref = "diff"),
-     desc = "tab_vars, wt, pct=row, color=ratio (1.4.0) vs former diff (1.3.1) — numeric col should MATCH"),
+     desc = "tab_vars, wt, pct=row, color=ratio (2.0.0) vs former diff (1.3.1) — numeric col should MATCH"),
   mk("04 tabv_coldiff", "num",  list(pct = "col", color = "diff"), tab = TRUE, wt = TRUE,
      field = "diff", desc = "tab_vars, wt, pct=col, color=diff"),
   mk("05 tabv_contrib", "num",  list(pct = "row", color = "contrib", comp = "all", chi2 = TRUE),

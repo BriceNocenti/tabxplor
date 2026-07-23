@@ -64,13 +64,13 @@
 #' @param subtext A character vector to print legend lines under the table.
 #' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
 #' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
-#' in tabxplor 1.4.0.
+#' in tabxplor 2.0.0.
 #' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
 #' @param meta The table's metadata, as a single named list gathering (all optional, \code{NULL}
 #' when unset):
 #' \itemize{
 #'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-#'   \code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are materialised at
+#'   \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 #'   print/export time from this attribute rather than baked into the table.
 #'   \item \code{ci_settings} -- display-only metadata for the colour legend,
 #'   \code{list(conf_level =, method_cell =, method_diff =, ...)}: which confidence level and
@@ -101,12 +101,12 @@ new_tab <-
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
 
-    # Soft-deprecated `chi2` arg (renamed `test` in 1.4.0): if supplied, it feeds `test`.
+    # Soft-deprecated `chi2` arg (renamed `test` in 2.0.0): if supplied, it feeds `test`.
     if (!is.null(chi2)) test <- chi2
 
     out <- tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
                               nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
-    # Phase 17b: every 1.4.0-new table attribute (render_extras / ci_settings / vars / empirical_tips /
+    # Phase 17b: every 2.0.0-new table attribute (render_extras / ci_settings / vars / empirical_tips /
     # reg_meta / color_breaks) is now ONE `meta` named list -- one formal, one attribute, one tab_attrs()
     # line, one bind reconcile (was six of each). Sub-fields left NULL are dropped, so a table given
     # nothing carries no `meta` attribute at all (raw tab_plain / hand-built / older objects stay clean).
@@ -130,7 +130,7 @@ new_grouped_tab <-
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
 
-    # Soft-deprecated `chi2` arg (renamed `test` in 1.4.0): if supplied, it feeds `test`.
+    # Soft-deprecated `chi2` arg (renamed `test` in 2.0.0): if supplied, it feeds `test`.
     if (!is.null(chi2)) test <- chi2
 
     new_tab(tabs, groups = groups,
@@ -156,9 +156,9 @@ get_subtext <- purrr::attr_getter("subtext")
 
 # Phase 3b: the whole-table test results (Chi2 for factor col_vars, ANOVA F for mean col_vars,
 # future tests) live in the `test` table attribute -- a TIDY tibble, one row per
-# (subtable x col_var x test-type). Renamed from the pre-1.4.0 `chi2` attribute (§16/§17: the old
-# `chi2` attribute is an accepted break -- 1.4.0 tabs are re-created from code, never deserialized).
-# get_chi2() is kept as a working back-compat ALIAS so pre-1.4.0 user code that CALLS it still runs.
+# (subtable x col_var x test-type). Renamed from the pre-2.0.0 `chi2` attribute (§16/§17: the old
+# `chi2` attribute is an accepted break -- 2.0.0 tabs are re-created from code, never deserialized).
+# get_chi2() is kept as a working back-compat ALIAS so pre-2.0.0 user code that CALLS it still runs.
 get_test <- function(x) attr(x, "test", exact = TRUE)
 get_chi2 <- function(x) get_test(x)
 
@@ -169,7 +169,7 @@ set_test <- function(x, test) {
   x
 }
 
-# Phase 17b: the `meta` table attribute -- ONE named list gathering every 1.4.0-new table attribute
+# Phase 17b: the `meta` table attribute -- ONE named list gathering every 2.0.0-new table attribute
 # (render_extras / ci_settings / vars / empirical_tips / reg_meta / color_breaks). get_meta() returns
 # NULL when absent, so every get_meta(x)[["field"]] yields NULL exactly like the old attr_getter did.
 get_meta <- function(x) attr(x, "meta", exact = TRUE)
@@ -301,7 +301,7 @@ default_ci_settings <- function() {
 # === SECTION: the ONE table-attribute carry (Phase 14d / 17b) ======================================
 # Every table-level attribute is listed HERE, once. Before this, each of the ~34 dplyr S3 methods /
 # vctrs reconcilers named all of them by hand, so each attribute paid the same ~34-site edit; a table
-# that lost an attribute lost it silently, in one verb only. Phase 17b collapsed the six 1.4.0-new
+# that lost an attribute lost it silently, in one verb only. Phase 17b collapsed the six 2.0.0-new
 # attrs into ONE `meta` list, so tab_attrs() now carries just THREE things.
 # WARNING: `test` is ROW-BOUND (one row per subtable x col_var), so a bind must vec_rbind it -- that
 # is why the vctrs reconcilers still name it explicitly and only take tab_attrs() for the rest.
@@ -372,7 +372,7 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
   # `nrow` guard: pct="col" add_n/add_pct is a ROW (name not a column) -> fall through to NextMethod.
   if (is.null(hyd) || !name %in% names(hyd) || nrow(hyd) != nrow(x)) return(NULL)
   lifecycle::deprecate_soft(
-    "1.4.0", I(paste0("`$", name, "` on a tabxplor tab")),
+    "2.0.0", I(paste0("`$", name, "` on a tabxplor tab")),
     details = c(
       paste0("The `", name, "` column is now added only at display; it is reconstructed here from ",
              "the Total column and will stop being reconstructed in a future version."),
@@ -699,7 +699,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 #' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
@@ -713,7 +713,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' \code{"auto"} needs `engine = "html"` (kableExtra's themes are baked at render time); asking it of
 #' the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
 #' i.e. \code{"light"} -- a dark table is always a deliberate choice.
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0: exports are always
 #' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param css `engine = "html"` only: inline the stylesheet with the table, so the output is
 #' self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` in a many-table
@@ -790,7 +790,7 @@ tab_html <- function(tabs,
                      whitespace_only = TRUE,
                      engine = NULL, css = NULL,
                      ...) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_html(color_type)")
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_html(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: the theme/color/color_legend preamble is the shared resolver. `html_24_bit` is inert
@@ -943,7 +943,7 @@ kable_tabxplor_style <- function(tabs,
                                  whitespace_only = TRUE, # unbreakable_spaces = TRUE,
                                  subtext = "",
                                  ...) {
-  lifecycle::deprecate_soft("1.4.0", "kable_tabxplor_style()", "tab_html()")
+  lifecycle::deprecate_soft("2.0.0", "kable_tabxplor_style()", "tab_html()")
 
   # kableExtra is now Suggests-only; this superseded renderer is the only public entry point that
   # still requires it (tab_html(engine = "html") does not).
@@ -1651,17 +1651,17 @@ reg_footer_lines <- function(tabs) {
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (1.4.0): `tab_plot()` renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
+#' Superseded (2.0.0): `tab_plot()` renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
 #' display is limited and it is no longer actively developed. It keeps working and is retained for a
 #' future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
 #' \code{\link{tab_xl}} (Excel).
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0: exports are always
 #' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param color Set to \code{FALSE} to render the table without colours (monochrome).
 #' @param color_legend Print colors legend below the table ?
@@ -1697,7 +1697,7 @@ tab_plot <- function(tabs,
                      var_names = NULL,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_plot(color_type)")
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_plot(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
@@ -3437,11 +3437,11 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
 #' is inert (exports are always 24-bit).
 #' @param custom_palette `r lifecycle::badge("deprecated")` A former 10/11-slot palette; its 4
 #' over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0 (exports are always 24-bit).
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0 (exports are always 24-bit).
 #' @export
 set_color_style <- function(type = c("text", "bg"), theme = NULL,
                             html_24_bit = NULL, custom_palette = NULL) {
-  lifecycle::deprecate_soft("1.4.0", "set_color_style()", "set_color_palette()")
+  lifecycle::deprecate_soft("2.0.0", "set_color_style()", "set_color_palette()")
   # Phase 14l: the `tabxplor.color_style_type` option is deprecated (it never chose a family; it
   # repointed the text channel into the fill palette). `type` stays LOAD-BEARING below -- it routes
   # `custom_palette` to the text vs background slot -- but it no longer writes the option.
@@ -3485,7 +3485,7 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
   opt_type <- getOption("tabxplor.color_style_type")
   if (!is.null(opt_type) && !identical(opt_type, "text")) {
     lifecycle::deprecate_warn(
-      "1.4.0", I('The option "tabxplor.color_style_type"'),
+      "2.0.0", I('The option "tabxplor.color_style_type"'),
       details = 'The colour CHANNEL is chosen by `color = c(text, background)` (see `?tab`).')
   }
   theme <- if (is.null(theme)) tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme")) else theme
@@ -3530,7 +3530,7 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
 #   - std    : mean_diff only -- TRUE colors the sd-standardized difference (Glass's delta),
 #              FALSE colors the raw difference in data units.
 # The findInterval engine (fmt_color_plan/fmt_color_slots) reads this shape directly.
-# See: dev/new_colors_UI.md ; CLAUDE.md > 1.4.0 roadmap > Phase 13a.
+# See: dev/new_colors_UI.md ; CLAUDE.md > 2.0.0 roadmap > Phase 13a.
 
 # Default intensity-slot selection for k thresholds on one side, mapped into the 4 palette
 # intensities. Fewer than 4 breaks drop the 2nd intensity first, then the 4th, then the 1st,
@@ -3710,7 +3710,7 @@ set_color_breaks <- function(breaks = NULL, ...) {
   # new scales (pct_breaks splits <=1 -> pct_diff, >1 -> pct_ratio) with a soft-deprecation.
   old_args <- intersect(names(dots), c("pct_breaks", "mean_breaks", "contrib_breaks"))
   if (length(old_args)) {
-    lifecycle::deprecate_soft("1.4.0", I(paste0("set_color_breaks(", old_args[1], ")")),
+    lifecycle::deprecate_soft("2.0.0", I(paste0("set_color_breaks(", old_args[1], ")")),
                               with = I("set_color_breaks(pct_diff = , pct_ratio = , mean_ratio = , contrib = )"))
     if (!is.null(dots$pct_breaks)) {
       pb <- dots$pct_breaks

@@ -356,7 +356,7 @@ when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes oth
 \code{"all"} to get the signed / reciprocal thresholds the engine compares against
 (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for multiplicative ones).}
 
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0 (exports are always 24-bit).}
+\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0 (exports are always 24-bit).}
 
 \item{custom_palette}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} A former 10/11-slot palette; its 4
 over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.}
@@ -410,7 +410,7 @@ of these.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-Superseded (1.4.0) by \code{\link[=tab]{tab()}}, the unified entry point (it accepts several row_vars /
+Superseded (2.0.0) by \code{\link[=tab]{tab()}}, the unified entry point (it accepts several row_vars /
 col_vars). \code{tab_many()} keeps working and keeps its historical list return for >=2 row_vars
 (tab() merges them by default; pass \code{output_list = TRUE} for a list).
 

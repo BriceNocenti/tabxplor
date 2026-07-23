@@ -2,7 +2,7 @@
 
 **\[deprecated\]**
 
-`tab_transpose()` is **soft-deprecated** since tabxplor 1.4.0. It flips
+`tab_transpose()` is **soft-deprecated** since tabxplor 2.0.0. It flips
 the *object* (the `tabxplor_fmt` fields), which cannot carry a
 transposed column's mixed cell types, so a table with several row
 variables or numeric columns transposes incorrectly (numeric cells

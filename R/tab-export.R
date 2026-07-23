@@ -4,7 +4,7 @@
 # ROLE: Phase 10j. A thin dispatcher: it forwards the canonical shared options + `...` to the chosen
 #       exporter, which resolves them (resolve_export_opts). The four named exporters stay exported and
 #       idiomatic (`x |> tab_kable()`); tab_export() is the one-entry alternative for `format = ` code.
-# See: dev/tabxplor_phase10_exporters.md (Phase 10j), CLAUDE.md > 1.4.0 roadmap > Phase 10j.
+# See: dev/tabxplor_phase10_exporters.md (Phase 10j), CLAUDE.md > 2.0.0 roadmap > Phase 10j.
 
 #' Export a tabxplor table to Excel, HTML, Markdown, or a plot
 #'
@@ -26,9 +26,9 @@
 #'   \code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 #'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0 (exports are always 24-bit).
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0 (exports are always 24-bit).
 #' @param color Set to \code{FALSE} to render without colours (monochrome).
 #' @param color_legend Print the colour legend with the subtext
 #'   (\code{"kable"}/\code{"md"}/\code{"xl"}/\code{"plot"}).
@@ -59,7 +59,7 @@ tab_export <- function(x, format = c("html", "md", "xl", "plot"), path = NULL,
   format <- match.arg(format)
   # Phase 14l: `color_type` is deprecated -- warn ONCE here and never forward it, so the child
   # exporter (which also has the sentinel) does not warn a second time.
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_export(color_type)")
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_export(color_type)")
   switch(
     format,
     html = {

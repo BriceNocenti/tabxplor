@@ -7,7 +7,7 @@
 # KEY CONSTRAINTS:
 #   - Baseline is tests/testthat/benchmark_baseline.csv (ships with the tests, unlike dev/benchmarks/).
 #     Regenerate it with dev/make_benchmark_baseline.R.
-# See: helper-benchmark.R, dev/make_benchmark_baseline.R, CLAUDE.md > 1.4.0 roadmap.
+# See: helper-benchmark.R, dev/make_benchmark_baseline.R, CLAUDE.md > 2.0.0 roadmap.
 
 testthat::test_that("small tab() pipeline timings (informational, never fails)", {
   testthat::skip_on_cran()

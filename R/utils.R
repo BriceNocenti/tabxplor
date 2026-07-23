@@ -201,7 +201,7 @@ tx_getOption <- function(names, default = NULL) {
   # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
   # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
   # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).
-  # See R/tab-parallel.R + dev/tabxplor_1.4.0_decisions.md 26.
+  # See R/tab-parallel.R + dev/tabxplor_2.0.0_decisions.md 26.
   options("tabxplor.parallel"     = FALSE)
   options("tabxplor.parallel_min" = 2L)
 

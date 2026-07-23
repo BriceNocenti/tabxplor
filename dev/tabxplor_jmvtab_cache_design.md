@@ -9,9 +9,9 @@
 > - `dev/tabxplor_argument_computation_map.md` — the Phase 7b argument ↔ computation map. This design is
 >   its child: it turns the map's §3/§7 invalidation classification into a concrete cache and
 >   **supersedes** the map's §7 "cache classification (seeds Phase 7c)".
-> - `dev/tabxplor_1.4.0_decisions.md` — settled 1.4.0 architecture (esp. §2 `tot_n`, §11 cache-stability,
+> - `dev/tabxplor_2.0.0_decisions.md` — settled 2.0.0 architecture (esp. §2 `tot_n`, §11 cache-stability,
 >   §14/§20 inference).
-> - `dev/tabxplor_1.4.0_jamovi_dev.md` — jamovi module dev insights (state, `clearWith`, render model).
+> - `dev/tabxplor_2.0.0_jamovi_dev.md` — jamovi module dev insights (state, `clearWith`, render model).
 >
 > STATUS (2026-07-09, Phase 7c): design settled. No product code changes here — the refactor it
 > prescribes is Phase 7d; the module rewrite that consumes it is Phase 7e.
@@ -30,7 +30,7 @@ must it recompute?** It defines the cache tiers, their keys and values, what is 
 the jamovi framework hosts it, and the compute-function seams Phase 7d must carve to make the tiers
 callable.
 
-Two constraints from the jamovi runtime shape everything (grounded in `tabxplor_1.4.0_jamovi_dev.md` and
+Two constraints from the jamovi runtime shape everything (grounded in `tabxplor_2.0.0_jamovi_dev.md` and
 jmvcore introspection):
 
 - **`.run()` always re-runs in full.** There is no "which option changed" accessor in R

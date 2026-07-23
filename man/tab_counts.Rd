@@ -86,7 +86,7 @@ Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{
 design \code{ids}/\code{strata}/\code{fpc}/\code{nest}; \code{method_mean_diff}/\code{method_mean_ratio} (a counts table has no
 numeric column); \code{parallel}; \code{output_list}; \code{sup_cols}.}
 
-\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 1.4.0 (see \code{\link[=tab]{tab()}}).}
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0 (see \code{\link[=tab]{tab()}}).}
 }
 \value{
 A \code{tabxplor_tab} (or \code{tabxplor_grouped_tab} when \code{tab_vars} are provided).

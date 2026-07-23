@@ -11,7 +11,7 @@
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals.
 #   - Export (Excel / HTML / Markdown) reuses R/jmvtab-export.R (resolveExportPath / jmvtab_export).
-# See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 15b.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 15b.
 
 # @rdname jamovi
 jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(

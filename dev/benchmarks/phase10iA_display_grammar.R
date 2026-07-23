@@ -1,7 +1,7 @@
 # Phase 10i-A -- does the display {} grammar slow the display/export pipeline "for nothing"?
 # Measures format()/get_num()/print()/tab_kable()/tab_md()/tab_xl() on NO-composite tables (the cost
 # every normal table now pays for the display_primary() gate), plus a composite table (informational).
-# Run A/B via git stash (see the runner in the header of results_1.4.0/phase10iA_*.txt):
+# Run A/B via git stash (see the runner in the header of results_2.0.0/phase10iA_*.txt):
 #   Rscript dev/benchmarks/phase10iA_display_grammar.R
 # Uses only PUBLIC API + system.time, so it runs identically on the pre-10i-A baseline and after.
 

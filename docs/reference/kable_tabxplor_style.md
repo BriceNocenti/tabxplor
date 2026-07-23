@@ -102,7 +102,7 @@ tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
                        column1 = c(1, 2, 3),
                        column2 = c(4, 5, 6)                    )
 if (requireNamespace("kableExtra", quietly = TRUE)) kable_tabxplor_style(tabs)
-#> Warning: `kable_tabxplor_style()` was deprecated in tabxplor 1.4.0.
+#> Warning: `kable_tabxplor_style()` was deprecated in tabxplor 2.0.0.
 #> ℹ Please use `tab_html()` instead.
 #> <style type="text/css">/* Kable tables*/
 #>   .lightable-classic caption {

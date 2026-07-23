@@ -82,7 +82,7 @@
 #'   \item \code{"auto"}: subsequent tables with the same column vars are printed on the
 #'    same sheets
 #' }
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #'
 #' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
@@ -127,16 +127,16 @@ tab_xl <-
     if (length(replace) == 0) replace <- length(path) != 0
 
     # Phase 17g: the long-inert `n_min` / `hide_near_zero` / `conditional_format` args were removed
-    # before the 1.4.0 CRAN freeze (they never did anything: n_min moved to tab(n_min=), near-zero
+    # before the 2.0.0 CRAN freeze (they never did anything: n_min moved to tab(n_min=), near-zero
     # greying was dropped, and Excel conditional formatting was never implemented). Passing them now
     # errors "unused argument" -- accepted per the Phase 17 §Settled decisions ruling.
 
     # Phase 10j: `print_color_legend` renamed to `color_legend` (unified across exporters).
     if (lifecycle::is_present(print_color_legend)) {
-      lifecycle::deprecate_soft("1.4.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
+      lifecycle::deprecate_soft("2.0.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
       color_legend <- print_color_legend
     }
-    if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_xl(color_type)")
+    if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_xl(color_type)")
     # Shared option resolver (theme/color/color_legend/transpose). Phase 10j makes tab_xl theme-aware:
     # the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is inert
     # (Phase 13a): Excel is always 24-bit.
@@ -315,7 +315,7 @@ tab_xl <-
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
     # tab_xl_plan_one() carries no workbook and is side-effect-free; the workbook is assembled serially
     # from the plans below. (Parallelising the plan build was measured NOT worth it -- the openxlsx2
-    # WRITE dominates the time and is inherently serial; see dev/benchmarks/results_1.4.0/phase10h_*.)
+    # WRITE dominates the time and is inherently serial; see dev/benchmarks/results_2.0.0/phase10h_*.)
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
            bold_rows = purrr::map(rd, "bold_rows"),

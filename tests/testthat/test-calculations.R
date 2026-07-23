@@ -292,7 +292,7 @@ testthat::test_that("tab_num means match base R mean()", {
 
 testthat::test_that("tab_num variance matches stats::var() (sample, n-1 denominator)", {
   # DESIGN: Unweighted tab_num reports the sample (Bessel-corrected, n-1) variance; weighted
-  # tab_num reports the ML (population, Sigma-w denominator) variance. Since 1.4.0 both are
+  # tab_num reports the ML (population, Sigma-w denominator) variance. Since 2.0.0 both are
   # derived from moment sums by num_derive_stats() (was: stats::var() / weighted.var()).
   tabs <- tab_num(sw, sex, height, na = "drop")
   sex_levels <- levels(sw$sex)
@@ -312,7 +312,7 @@ testthat::test_that("tab_num variance matches stats::var() (sample, n-1 denomina
   }
 })
 
-# Since 1.4.0 (Phase 2) the numeric `diff` field is a real DIFFERENCE (mean - ref_mean) and the
+# Since 2.0.0 (Phase 2) the numeric `diff` field is a real DIFFERENCE (mean - ref_mean) and the
 # cell/reference RATIO moved to the new `ratio` field (was the old numeric-`diff` overload).
 testthat::test_that("mean diff is a difference and mean ratio is a ratio (Phase 2 flip)", {
   tabs <- tab_num(sw, sex, height, na = "drop")
@@ -343,7 +343,7 @@ testthat::test_that("mean diff is a difference and mean ratio is a ratio (Phase 
 
 # === SECTION: Weighted variance ===============================================
 
-# Since 1.4.0 (Phase 2) the weighted variance is derived from moment sums by
+# Since 2.0.0 (Phase 2) the weighted variance is derived from moment sums by
 # num_derive_stats() (R/tab-agg.R), which replaced the old weighted.var() helper (and its
 # weighted.mean double-scan). These tests pin the SAME definitions on the new implementation:
 # weighted = ML (population, Sigma-w denominator); unweighted = sample (n-1) like stats::var().

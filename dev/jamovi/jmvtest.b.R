@@ -14,7 +14,7 @@
 #       export_unwrap / export_sanitize_filename / resolveExportPath / jmv_backend_notice); the
 #       diagnostic-only helpers it also needs are defined below (they were removed from the package when
 #       the analysis was retired, so they travel with it).
-# See: CLAUDE.md > 1.4.0 roadmap > Last Phase o ; dev/tabxplor_1.4.0_jamovi_dev.md § Phase o.
+# See: CLAUDE.md > 2.0.0 roadmap > Last Phase o ; dev/tabxplor_2.0.0_jamovi_dev.md § Phase o.
 
 # === Diagnostic-only helpers (removed from R/jmvtab-export.R with the analysis) ============
 

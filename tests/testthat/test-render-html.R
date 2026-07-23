@@ -33,7 +33,7 @@ rh_titles <- function(h) {                       # non-empty tooltip contents
 # Phase 14e made "html" the DEFAULT engine, so every call here pins engine = "kableExtra"
 # explicitly -- otherwise this whole section would silently assert against the other engine.
 # WARNING: do NOT snapshot this engine's bytes. Its cells come from kableExtra::cell_spec(), whose
-# output is version-unstable -- 1.4.0 -> 1.4.1 moved the rgba alpha (255 -> 1), dropped leading
+# output is version-unstable -- 2.0.0 -> 1.4.1 moved the rgba alpha (255 -> 1), dropped leading
 # padding and (text_spec) leaked a stray `class="TRUE"`. Byte-snapshotting it made CI red on all 5
 # platforms for a change tabxplor did not make, and put kableExtra's release schedule in charge of
 # our test suite. We do not own that HTML, so we assert the parts we DO own -- the cells, the

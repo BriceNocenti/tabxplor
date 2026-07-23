@@ -17,7 +17,7 @@
 # Deterministic (forcats::gss_cat + fixed options, no RNG). Uses bench::mark when available
 # (median wall + MB), else system.time. Rprof at a fine interval over an accumulation loop gives
 # auditable self-time attribution; the raw top-N by.self rows are printed so the bucketing is
-# checkable. Compose dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt from this output.
+# checkable. Compose dev/benchmarks/results_2.0.0/phase9b2_decomposition.txt from this output.
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))

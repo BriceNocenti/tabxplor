@@ -11,14 +11,14 @@
 > `html_24_bit`/`set_color_style`); a per-table `color_breaks=` argument exists. The sections below are
 > kept as historical intent.
 >
-> SINGLE STARTING POINT for implementing the redesigned colour/breaks framework (tabxplor 1.4.0,
+> SINGLE STARTING POINT for implementing the redesigned colour/breaks framework (tabxplor 2.0.0,
 > "Phase 5"). This file is self-contained: a fresh session should be able to implement from it alone.
 > It records the WHY, the settled architecture, the full user-facing API, the statistics, the
 > engine, the computation plan, phasing, and every remaining micro-choice / white-elephant flag.
 >
 > Companion (history + deeper rationale, NOT required reading): `dev/design_new_colors_UI_decision_process.md`
 > (the layered decision log that led here — sections 3 = statistical audit, 12-14 = the design debate).
-> Governing statistics already implemented in Phase 3a: `dev/tabxplor_1.4.0_decisions.md` §12/§14/§20.
+> Governing statistics already implemented in Phase 3a: `dev/tabxplor_2.0.0_decisions.md` §12/§14/§20.
 > Skills to use while implementing: `/color-mode` (the colour pipeline) and `/vctrs-field` (widening
 > the existing `color` attribute to hold up to two values — text, background).
 >
@@ -533,7 +533,7 @@ section once listed as TODO are now DONE (audited Phase 7b — the code was ahea
 - **Step 6 — Delete dead code; docs** (`@param color`/`color_signif`, `devtools::document()`, NEWS,
   `/color-mode` skill, `dev/tabxplor_architecture.md`).
 
-Each step: golden + parity green; before/after benchmarks to `dev/benchmarks/results_1.4.0/`.
+Each step: golden + parity green; before/after benchmarks to `dev/benchmarks/results_2.0.0/`.
 
 Benchmarks: micro `fmt_color_channels(col)` vs the old chain on tall single columns (500 / 5,000 rows,
 all measures, `bench::mark` time + `mem_alloc`); wide-table column scaling; end-to-end coloured
@@ -638,4 +638,4 @@ the full safety net.
 - Tests — `tests/testthat/test-golden.R` + `helper-golden.R` (add the Step-0 colour net),
   `test-tab.R` (`expect_color`), `test-exports.R`, `test-calculations.R`.
 - History/rationale — `dev/design_new_colors_UI_decision_process.md` (esp. §3 audit, §12-14 debate);
-  `dev/tabxplor_1.4.0_decisions.md` §3/§7/§12/§14/§18/§20/§24.
+  `dev/tabxplor_2.0.0_decisions.md` §3/§7/§12/§14/§18/§20/§24.

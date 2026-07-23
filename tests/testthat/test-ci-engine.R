@@ -7,7 +7,7 @@
 #   - Newcombe / AC / Wald    -> DescTools::BinomDiffCI(): these p-values invert a confidence
 #     interval that has no standalone "p-value function", so they are checked by DUALITY -- the
 #     p we return is exactly the level at which DescTools' independent interval touches zero.
-# See: dev/tabxplor_1.4.0_decisions.md §20; dev/verify_ci_inclusion.R.
+# See: dev/tabxplor_2.0.0_decisions.md §20; dev/verify_ci_inclusion.R.
 
 # === SECTION: pivot p-values vs stats::t.test (exact) =================================
 

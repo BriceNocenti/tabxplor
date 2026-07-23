@@ -2,7 +2,7 @@
 
 **\[superseded\]**
 
-Superseded (1.4.0): percentages, differences and ratios are computed
+Superseded (2.0.0): percentages, differences and ratios are computed
 directly by
 [`tab()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab.md) /
 [`tab_plain()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab_plain.md)

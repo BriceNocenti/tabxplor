@@ -5,7 +5,7 @@
 #   - Every case must be DETERMINISTIC (no Sys.time / unseeded random).
 #   - Adding/removing a case is fine; CHANGING an existing case's call means its golden
 #     output legitimately changes -> regenerate consciously (see CLAUDE.md golden protocol).
-# See: CLAUDE.md > 1.4.0 roadmap > Golden regeneration protocol.
+# See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 
 # Small synthetic frame for weighting + controlled, DIFFERING NA patterns across two
 # col_vars (h vs k). This is the motivating fixture for the future `tot_n` field: with

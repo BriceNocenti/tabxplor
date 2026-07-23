@@ -68,7 +68,7 @@
 #     `levels` stays the row_var; console footer is group-aware, export footer skipped for splits).
 #     `multiplier` (c(var=k)) scales a continuous predictor's native coef by k before CI/exp (OR^k),
 #     p unchanged.
-# See: CLAUDE.md Phase 12c-12g ; dev/tabxplor_1.4.0_decisions.md S37.
+# See: CLAUDE.md Phase 12c-12g ; dev/tabxplor_2.0.0_decisions.md S37.
 
 # === Internal engine ================================================================
 

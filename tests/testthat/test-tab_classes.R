@@ -118,7 +118,7 @@ testthat::test_that("[<- and [[<- preserves class tabxplor_grouped_tab", {
 
 
 # --- Data-driven verb-coverage registry ----------------------------------------------------
-# Extensible guardrail for the 1.4.0 refactors (esp. the tab()/tab_many() merge): each verb is
+# Extensible guardrail for the 2.0.0 refactors (esp. the tab()/tab_many() merge): each verb is
 # checked to preserve BOTH tab classes. A failure names the exact verb whose class-preserving
 # S3 method is missing/broken. To add a new verb, append one closure here (works identically
 # for a flat and a grouped tab) -- see the `/dplyr-method` skill. Complements the explicit
@@ -153,7 +153,7 @@ for (vname in names(verb_coverage)) {
 }
 
 
-# --- Table-attribute survival + class up/down-grade (1.4.0 tab()/tab_many() merge net) -------
+# --- Table-attribute survival + class up/down-grade (2.0.0 tab()/tab_many() merge net) -------
 # The blocks above check only that the tab CLASS survives a verb; they do NOT check the two
 # table-level attributes: `subtext` (the legend) and `chi2` (the test-results tibble that
 # Phase 3 renames to `test`). A verb method could silently reset either to its new_tab()

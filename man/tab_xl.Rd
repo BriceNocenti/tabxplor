@@ -88,7 +88,7 @@ be named here. Set the options to a font you know is installed.}
 \item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 for a black table with white text (the colours follow the theme).}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{html_24_bit}{Kept for a uniform exporter signature; inert for Excel (always 24-bit).}

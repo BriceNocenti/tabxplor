@@ -18,7 +18,7 @@
 #     the OS home (fs::path_home() / USERPROFILE / HOME), NOT path.expand()/sub() (§5.2 / §14.3 bug).
 #   - `fs` (Suggests) makes path_home / path_sanitize / dir_create cross-platform-robust; every use is
 #     guarded with a base-R fallback so export never HARD-depends on it.
-# See: dev/tabxplor_1.4.0_jamovi_dev.md §14 ; CLAUDE.md > 1.4.0 roadmap > Phase 7g / Phase 15c.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md §14 ; CLAUDE.md > 2.0.0 roadmap > Phase 7g / Phase 15c.
 
 # The OS home folder. fs::path_home() reads USERPROFILE (Windows) / HOME (Unix) via libuv -- more
 # robust than either env var alone; fall back to the env vars when `fs` is absent.
@@ -49,7 +49,7 @@ export_expand_winenv <- function(p) {
 # The default export folder: the user's real Documents, resolved robustly per-OS. jamovi writes files
 # from R (bypassing jamovi's native `Dirs`), so we mirror `Dirs` here. Returns a directory that is
 # EXISTS+writable, else one whose PARENT is writable (jmvtab_export() creates it), else tempdir() --
-# never errors, never returns NA. Proven live 2026-07-22 (see dev/tabxplor_1.4.0_jamovi_dev.md § Phase o).
+# never errors, never returns NA. Proven live 2026-07-22 (see dev/tabxplor_2.0.0_jamovi_dev.md § Phase o).
 # DESIGN:
 #   Windows -- readRegistry `Shell Folders\Personal` = the resolved known-folder path: honours a
 #     D:\Documents redirect AND a university GPO folder-redirection UNC path (the redirected absolute
@@ -180,7 +180,7 @@ export_status_html <- function(text, ok = TRUE) {
 
 # === Documents-folder detectors (support export_documents_dir(); Last Phase o) =============
 # The per-OS known-folder detectors export_documents_dir() composes, chosen from the live jmvtest
-# experiment (see dev/tabxplor_1.4.0_jamovi_dev.md § Phase o). jamovi never resolves paths in R -- its
+# experiment (see dev/tabxplor_2.0.0_jamovi_dev.md § Phase o). jamovi never resolves paths in R -- its
 # native `Dirs` does (SHGetKnownFolderPath on Windows, xdg-user-dir DOCUMENTS on Linux) -- and tabxplor
 # writes files itself, so these mirror `Dirs`. Every detector is guarded (tryCatch) and returns a
 # single clean path or NA -- none error, whatever the OS. (The wider diagnostic toolkit that also drove

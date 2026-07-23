@@ -19,7 +19,7 @@
 #   - Byte-identical to tab(cleannames = FALSE, levels via defer_level_merge) -- locked by
 #     test-jmvtab-cache.R. First cut: exact-grain keying (grain-superset rollup deferred), simple
 #     byte-bounded LRU (byte-precise accounting deferred).
-# See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 1.4.0 roadmap > Phase 7e.
+# See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 2.0.0 roadmap > Phase 7e.
 
 
 # === Cache kernel (shared by the jmvtab crosstab store AND the jmvtabreg fit store) =========
@@ -525,7 +525,7 @@ jmv_apply_display <- function(tabs, opts) {
 # tab() exactly (integer/double col_var -> mean). jamovi hands a nominal/ordinal integer to the
 # module ALREADY factored (levels "0".."24"), losing its numeric type -- so `tvhours` would wrongly
 # become one column per value. A col_var that is numeric, or a factor whose levels ALL parse as
-# numbers, is treated as numeric. CAVEAT (documented, dev/tabxplor_1.4.0_jamovi_dev.md): a genuinely
+# numbers, is treated as numeric. CAVEAT (documented, dev/tabxplor_2.0.0_jamovi_dev.md): a genuinely
 # categorical numeric CODE (e.g. region 1-5) also becomes a mean -- relabel such levels to non-numeric
 # text in jamovi, or mark the variable Continuous, to control it. Only col_vars are touched (row/tab
 # vars are always categorical axes).

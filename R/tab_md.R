@@ -38,7 +38,7 @@
 #'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
 #'   \code{\link{tab_css}}, since the span *class names* are palette- and theme-independent. `theme`
 #'   accepts `"auto"` (follow the reader's colour scheme).
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param caption Optional table caption, rendered as a pandoc caption line `: caption` (captions only
 #'   the first table of a list).
@@ -101,19 +101,19 @@ tab_md <- function(tabs,
                    print = TRUE,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated()) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_md(color_type)")
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_md(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
   if (lifecycle::is_present(title)) {
-    lifecycle::deprecate_soft("1.4.0", "tab_md(title)", "tab_md(caption)")
+    lifecycle::deprecate_soft("2.0.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
   }
   # Phase 14i: `col_var_names` (md-only) generalised to the shared `var_names`, which also governs the
   # row-variable name and is honoured by every exporter. FALSE = drop the col side of whatever
   # `var_names` asks for, so the two compose rather than fight.
   if (lifecycle::is_present(col_var_names)) {
-    lifecycle::deprecate_soft("1.4.0", "tab_md(col_var_names)", "tab_md(var_names)")
+    lifecycle::deprecate_soft("2.0.0", "tab_md(col_var_names)", "tab_md(var_names)")
     if (!isTRUE(col_var_names)) {
       var_names <- resolve_export_opts(var_names = var_names)$var_names
       var_names <- if (identical(var_names, "cols")) "none" else

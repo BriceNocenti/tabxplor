@@ -1,5 +1,5 @@
 
-# tabxplor 1.4.0
+# tabxplor 2.0.0
 
 ## New features
 

@@ -2,7 +2,7 @@
 #          "core" table (no `n` / `col_pct` column, no p-value rows) carrying the intent (the
 #          `render_extras` attribute + the kept `test` attribute); tab_materialize_extras() re-creates
 #          the extras at display, byte-identically to the pre-migration built table.
-# See: CLAUDE.md Phase 10i-B ; dev/tabxplor_1.4.0_decisions.md §34.
+# See: CLAUDE.md Phase 10i-B ; dev/tabxplor_2.0.0_decisions.md §34.
 
 gss <- forcats::gss_cat
 

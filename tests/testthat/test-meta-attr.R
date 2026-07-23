@@ -1,4 +1,4 @@
-# PURPOSE: Phase 17b -- the `meta` table-attribute merge. Locks the six 1.4.0-new table attrs
+# PURPOSE: Phase 17b -- the `meta` table-attribute merge. Locks the six 2.0.0-new table attrs
 #          (render_extras / ci_settings / vars / empirical_tips / reg_meta / color_breaks) into ONE
 #          `meta` list, its dplyr-carry, its bind reconcile, the "absent when unset" invariant, and the
 #          new set_caption()/get_caption() surface. Each assertion is non-vacuous.

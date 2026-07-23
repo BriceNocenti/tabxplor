@@ -1,20 +1,20 @@
-# tabxplor 1.4.0 — Phase 10: Unified exporter prep & display (architecture)
+# tabxplor 2.0.0 — Phase 10: Unified exporter prep & display (architecture)
 
 <!--
 PURPOSE: The single, self-contained design brief for Phase 10 (exporter unification + display rework).
 ROLE: Governs the Phase 10c→10g implementation. Expands CLAUDE.md roadmap "Phase 10" and
-      dev/tabxplor_1.4.0_decisions.md §7, §8, §10, §21, §22, §23, §33.
+      dev/tabxplor_2.0.0_decisions.md §7, §8, §10, §21, §22, §23, §33.
 KEY CONSTRAINTS:
   - Public exporter args are back-compat-LIGHT: old args soft-deprecate, never hard-error.
   - tabxplor_fmt FIELD contract (users read via $/mutate) unchanged; one new optional ATTRIBUTE only.
   - Display byte-identity is golden/parity-locked at every step (test-golden.R, _snaps/, test-export-parity.R).
   - Stay on openxlsx v1 (the openxlsx2 swap is Phase 11), behind a narrow backend seam.
-See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
+See: CLAUDE.md § "Phase 10", dev/tabxplor_2.0.0_decisions.md §33 (the decision record).
 -->
 
 Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE; 10h DONE; 10i DONE; 10j-A DONE
 (2026-07-12).** 10a decision settled (below); this document is the 10b deliverable and governs
-10d→10j. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
+10d→10j. Read this first, then the matching `dev/tabxplor_2.0.0_decisions.md` sections and
 `dev/tabxplor_architecture.md` "Export System".
 
 ⚠ **Phase 14i extended the prep** (2026-07-17): the render-model gained `vars$row_vars` /
@@ -42,7 +42,7 @@ found to be at floor — see decisions §35). Three byte-identical increments:
   already data.table); landed only the clean `is_a_mean` direct-`get_type` read (~3.15 % whole-call,
   simplification), abandoned the `chi2_compute_test` marshalling rewrite (~6 %, not a simplification). Build
   is at its floor. Also fixed the `contrib`+`comp="all"` colour crash (three render bugs). Detail:
-  `dev/benchmarks/results_1.4.0/phase10j_tests.txt`, decisions §35.
+  `dev/benchmarks/results_2.0.0/phase10j_tests.txt`, decisions §35.
 
 **10h — Excel engine migration (openxlsx → openxlsx2), DONE (2026-07-12).** Maintainer chose a
 **full clean migration** over §9's dual-backend seam: `tab_xl()` rewritten on **openxlsx2 only**;
@@ -209,7 +209,7 @@ structural regen only for the new `display_spec` attribute):**
   `.ref = list(cells =, all_totals =)` (masks derived ONCE, memoized when `NULL`) + the hot `dplyr::if_else`
   → base `ifelse` + `str_detect("^-")` → `startsWith`. **Bonus lever (not in the plan):** the unconditional
   `x$var` (`$.tabxplor_fmt` → `dplyr::pull`, ~28 % of `format()` self-time) → `get_var(x)`. Net `format()`
-  ~2× faster on the exporter path (`dev/benchmarks/results_1.4.0/phase10c_profile.txt`). **`numfmt()` →
+  ~2× faster on the exporter path (`dev/benchmarks/results_2.0.0/phase10c_profile.txt`). **`numfmt()` →
   `format(syntax="excel")` DEFERRED to 10g** (atomic removal, no duplicate-source-of-truth window).
 - **§4 robust detection + graceful degrade.** New `tab_render_vars()` (`R/tab.R`) + `tab_degrade_inform()`;
   the print methods route `row_var` through it, and `tab_kable`/`tab_md`/`tab_plot`/`tab_xl` gained a

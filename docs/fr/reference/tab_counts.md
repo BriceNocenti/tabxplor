@@ -165,7 +165,7 @@ tab_counts(
 
 - chi2:
 
-  **\[deprecated\]** Renamed to `test` in 1.4.0 (see
+  **\[deprecated\]** Renamed to `test` in 2.0.0 (see
   [`tab()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab.md)).
 
 ## Value

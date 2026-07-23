@@ -5,7 +5,7 @@ paths: ["R/fmt_class.R", "R/tab_classes.R", "R/tab.R"]
 allowed-tools: Read, Grep, Edit
 ---
 
-Since 1.4.0 coloring is decomposed into **three orthogonal axes** feeding **one vectorised
+Since 2.0.0 coloring is decomposed into **three orthogonal axes** feeding **one vectorised
 `findInterval` engine**. The `color` GRAMMAR (Phase 13a): **position picks the channel** (1st value
 -> text, 2nd -> background), **names pick the column type** (`pct` / `mean`).
 

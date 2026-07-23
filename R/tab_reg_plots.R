@@ -6,7 +6,7 @@
 #   - ggplot2 + gridExtra are Suggests -> every entry point guards with requireNamespace().
 #   - or_plot() reads the fmt fields (get_or / get_ci_inf / get_ci_sup / get_stars / get_n / get_pct), so
 #     it stays in sync with the console/exports for free; it never re-fits a model.
-# See: CLAUDE.md 1.4.0 roadmap > Phase 12h.
+# See: CLAUDE.md 2.0.0 roadmap > Phase 12h.
 
 # Guard the Suggests packages a plot needs, with an install hint.
 reg_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {

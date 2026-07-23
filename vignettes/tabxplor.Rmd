@@ -107,7 +107,7 @@ tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 
 When you pass several **row variables** *without* `tab_vars`, `tab()` merges the mirror tables into a single table by default. `output_list = TRUE` returns instead a **list with one table per row variable** (with `tab_vars`, the result is always a list):
 
-```{r, echo = TRUE}
+```{r, echo = TRUE, eval = FALSE}
 tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 ```
 

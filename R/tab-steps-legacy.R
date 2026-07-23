@@ -1,6 +1,6 @@
 # PURPOSE: The superseded dplyr-era step functions tab_pct()/tab_tot()/tab_totaltab() + their
 #   trio-exclusive formula helpers pct_formula()/diff_formula().
-# ROLE: Quarantined here in Phase 17f (item 5) out of tab.R's live pipeline. These are the pre-1.4.0
+# ROLE: Quarantined here in Phase 17f (item 5) out of tab.R's live pipeline. These are the pre-2.0.0
 #   step-by-step API: exported + soft-deprecated (superseded badge), still working on an existing tab,
 #   but OFF the tab()/tab_many() aggregate-core path (the math is now inline in the leaves).
 # KEY CONSTRAINTS:
@@ -16,7 +16,7 @@
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (1.4.0): the total table is built directly by the `totaltab` argument of
+#' Superseded (2.0.0): the total table is built directly by the `totaltab` argument of
 #' [tab()] / [tab_plain()] / [tab_num()]. `tab_totaltab()` still works on an existing tab.
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
@@ -157,7 +157,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (1.4.0): totals are built directly by [tab()] / [tab_plain()] / [tab_num()] (a
+#' Superseded (2.0.0): totals are built directly by [tab()] / [tab_plain()] / [tab_num()] (a
 #' total row is always computed, one total column shown). `tab_tot()` still works on an
 #' existing tab.
 #'
@@ -379,7 +379,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (1.4.0): percentages, differences and ratios are computed directly by
+#' Superseded (2.0.0): percentages, differences and ratios are computed directly by
 #' [tab()] / [tab_plain()] via the `pct` / `ref` arguments. `tab_pct()` still works on an
 #' existing tab.
 #'

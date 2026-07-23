@@ -24,7 +24,7 @@
 #     NA-count is NOT caught -> can serve a STALE fit after a data edit; best-effort, self-heals on the
 #     next structural change). Escape hatch for the paranoid: options(tabxplor.jmv_full_hash = TRUE)
 #     forces a full-value column hash (slower, exact) in BOTH modules -- see ?tabxplor-options.
-# See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 15b/17i.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 15b/17i.
 
 
 # === Constants + config ====================================================================

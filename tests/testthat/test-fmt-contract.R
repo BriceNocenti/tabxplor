@@ -1,6 +1,6 @@
 # PURPOSE: Lock the tabxplor_fmt vctrs record contract (fields + attributes) and its
 #          serialization stability, so any change to the record shape fails loudly.
-# ROLE: Retro-compatibility guardrail for the 1.4.0 internal refactors. Locks the Phase 1a
+# ROLE: Retro-compatibility guardrail for the 2.0.0 internal refactors. Locks the Phase 1a
 #       18-field baseline (was 15: +pvalue +tot_n +ci_inf +ci_sup, rr->ratio, dropped ci);
 #       Last Phase s added `n_eff` (-> 19): the effective sample size used for a cell's CI
 #       (Kish n_eff when opted in, else NA -> the CI falls back to the raw unweighted base).
@@ -10,7 +10,7 @@
 #   - The hardcoded vectors below ARE the contract (the 19-field baseline). `ci` is no
 #     longer a stored field: it is derived from the `ci_inf`/`ci_sup` bounds by get_ci()
 #     (bounds-shim), and the public `fmt(ci=)` arg maps a symmetric half-width onto them.
-# See: CLAUDE.md > 1.4.0 roadmap (Phase 1) and Design Decisions > Type System.
+# See: CLAUDE.md > 2.0.0 roadmap (Phase 1) and Design Decisions > Type System.
 
 # The 19 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
 fmt_contract_fields <- c(

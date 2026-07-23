@@ -1,6 +1,6 @@
 # tabxplor ecosystem simplification — design analysis and propositions (2026-07-20)
 
-This document is the end-of-1.4.0 design review the maintainer asked for: where the package is still missing integration, where code is duplicated, which attributes to simplify or add, which complexities are not worth their cost, and which white elephants to remove. It was produced by six parallel deep audits (fmt/colour/legend; the tab() build pipeline; the export stack; tab_reg + jamovi; classes/attributes/options; vignettes + dev history), every claim grepped or read in source, and the four most load-bearing defect claims re-verified by hand. It deliberately puts backward compatibility aside first (§2–§7), then reinstates it in the sequencing (§9): several propositions are **free only before the 1.4.0 CRAN release** and become deprecation projects the day after.
+This document is the end-of-2.0.0 design review the maintainer asked for: where the package is still missing integration, where code is duplicated, which attributes to simplify or add, which complexities are not worth their cost, and which white elephants to remove. It was produced by six parallel deep audits (fmt/colour/legend; the tab() build pipeline; the export stack; tab_reg + jamovi; classes/attributes/options; vignettes + dev history), every claim grepped or read in source, and the four most load-bearing defect claims re-verified by hand. It deliberately puts backward compatibility aside first (§2–§7), then reinstates it in the sequencing (§9): several propositions are **free only before the 2.0.0 CRAN release** and become deprecation projects the day after.
 
 How to read: §1 grounds everything in real use. §2 names the five cross-cutting disease patterns. §3 lists concrete defects found during the audit (fix these regardless of any redesign). §4 is the single most important proposition — the missing key. §5 details propositions per subsystem. §6 is the honest white-elephant list. §7 is what NOT to do. §8 answers the maintainer's attribute questions directly. §9 sequences everything against the CRAN freeze and the French phase.
 
@@ -23,7 +23,7 @@ The subsystem audits converge on five patterns. Every concrete proposition in §
 
 ### 2.1 Roles are still guessed, not stored — the missing key
 
-1.4.0 stored *statistical* metadata beautifully (18 fields, 10 column attributes, 8 table attributes). What it never stored is **role** metadata — "what is this row/column/cell *for*" — so a dozen sites reverse-engineer roles from rendered strings:
+2.0.0 stored *statistical* metadata beautifully (18 fields, 10 column attributes, 8 table attributes). What it never stored is **role** metadata — "what is this row/column/cell *for*" — so a dozen sites reverse-engineer roles from rendered strings:
 
 - Synthetic rows (n, row_pct, pvalue, gof) are recognised by **English label whitelists** in three places: `tab-export-prep.R:410-416` (with its own WARNING that jamovi's gettext labels silently break it), `tab_classes.R:1347` (`tab_collapse_total_rows`), `tab-transpose-render.R:181,187`.
 - Regression columns are classified emp-vs-model by `startsWith(cn, "Emp.")` in the legend (`fmt_class.R:3583, 3171`) — a renamed column silently flips the legend wording.
@@ -35,7 +35,7 @@ This is the pattern that will collide head-on with **Last Phase h (French transl
 
 ### 2.2 One-model subsystems that stop halfway
 
-1.4.0's best moves were "one source of truth + dumb renderers" (`tab_export_prep`, `format(syntax = "excel")`, `tab_footer_streams`, the legend MEASURES table, `tab_append_footer`). But each stopped short of its own logic:
+2.0.0's best moves were "one source of truth + dumb renderers" (`tab_export_prep`, `format(syntax = "excel")`, `tab_footer_streams`, the legend MEASURES table, `tab_append_footer`). But each stopped short of its own logic:
 
 - The **render model is roles-only**: every backend still calls `format()` itself with a hand-coherent flag set, re-derives headers (md hand-rolls its own spanning-run loop at `tab_md.R:473-505` while three backends consume the shared `tab_header_runs()`), and re-implements slot→hex three times (`ann`, `tab_xl.R:324-326`, `tab-css.R:169-177`).
 - The **colour plan does not read MEASURES**: measure facts exist twice — as legend data (`MEASURES`, `fmt_class.R:3020`) and as 11 switch arms inside `fmt_color_plan` (`fmt_class.R:2712-2890`).
@@ -116,7 +116,7 @@ Each ranked list is ordered by impact ÷ churn. "Byte-identical target" means go
 5. **Quarantine the superseded trio** — move `tab_pct`/`tab_tot`/`tab_totaltab` + `pct_formula`/`diff_formula` + their repair machinery (~650 L) to `R/tab-steps-legacy.R`; retire the internal `chi2 =` constructor alias and `get_chi2()` reads (10 sites). Exports unchanged; tab.R drops below ~5000 L and its live pipeline becomes readable end-to-end.
 6. **Shared leaf tails** — the verbatim totals-renaming tail, `tab_var_1lv` wrap, totrow/tottab derivation, and the six-copy placeholder-injection idiom extracted once for both leaves (~150 L).
 7. **Type the ctx** — a constructor giving every field a default kills the 39 `exists()` guards and encodes `ctx_update`'s NULL rule in the helper instead of comments. Fold into whichever of 2/4 lands first.
-8. **Soft-deprecate `tab_num(df=, num=)`** — the escape hatch keeps three copies of the pre-1.4.0 `weighted.mean` N-scan alive (~90 L) for 4 assertion lines of test usage. A post-hoc converter reading fmt fields serves the same need.
+8. **Soft-deprecate `tab_num(df=, num=)`** — the escape hatch keeps three copies of the pre-2.0.0 `weighted.mean` N-scan alive (~90 L) for 4 assertion lines of test usage. A post-hoc converter reading fmt fields serves the same need.
 
 ### 5.2 fmt / colour / legend (fmt_class.R)
 
@@ -158,8 +158,8 @@ Each ranked list is ordered by impact ÷ churn. "Byte-identical target" means go
 1. **Adopt `tab_restore()` in the six hand-rolled restore blocks** (select/rename/rename_with/relocate/summarise/arrange) — ~35 L, removes the one place a future attribute can be forgotten.
 2. **Unify the grouped/plain bind reconcile** (defect 4) — make `gtab_cast`/`gtab_ptype2` use `tab_bind_attrs`.
 3. **Decide `color_breaks` carry before release** (defect 7) — either one line in `tab_attrs()` + a `new_tab()` formal (public → now-or-never) or loud documentation in `?tab`.
-4. **The `meta` merge — a genuinely open now-or-never call.** CRAN 1.3.1's `new_tab()` is `(tabs, subtext, chi2, ...)`; the five 1.4.0-new scalar attrs (`render_extras`, `ci_settings`, `vars`, `empirical_tips`, `reg_meta`) are unreleased formals. Merging them into one `meta` list is ~80 real code sites of mechanical churn — payable **only now**; after release the 8-formal constructor is frozen forever. **Maintainer’s decision : merge now.**
-5. **Option namespace pass on 1.4.0-new names only** — `kable_css` → `tab_kable_css` (alias kept), consider `console_theme`/`export_theme` aliases for the two non-parallel theme options, seed-or-delete the unseeded `jmv_full_hash`, let `always_add_css_in_tab_kable` die with `kable_tabxplor_style`, retire `output_kable` (defect 8).
+4. **The `meta` merge — a genuinely open now-or-never call.** CRAN 1.3.1's `new_tab()` is `(tabs, subtext, chi2, ...)`; the five 2.0.0-new scalar attrs (`render_extras`, `ci_settings`, `vars`, `empirical_tips`, `reg_meta`) are unreleased formals. Merging them into one `meta` list is ~80 real code sites of mechanical churn — payable **only now**; after release the 8-formal constructor is frozen forever. **Maintainer’s decision : merge now.**
+5. **Option namespace pass on 2.0.0-new names only** — `kable_css` → `tab_kable_css` (alias kept), consider `console_theme`/`export_theme` aliases for the two non-parallel theme options, seed-or-delete the unseeded `jmv_full_hash`, let `always_add_css_in_tab_kable` die with `kable_tabxplor_style`, retire `output_kable` (defect 8).
 6. **Keep the S3-per-verb model** — the empirical dispatch probe (dplyr 1.2.1) shows the reconstruct trio covers mutate/filter/slice/distinct/arrange and the *plain* class needs no methods at all, but grouped select/rename/relocate/summarise/ungroup genuinely require their explicit methods. The redundancy is in the bodies (fixed by 1), not the registrations.
 
 ---
@@ -207,7 +207,7 @@ The other half of the white-elephant story is the **cold-but-good** list (§1): 
 
 ## 8. Direct answers to the maintainer's attribute questions
 
-**Table-level attributes to simplify:** the five 1.4.0-new scalars are individually justified, but their *constructor surface* is the thing to decide now (§5.6.4 `meta` merge — now or never). `test` earns its place (the one attr needing `vec_rbind`); `ci_settings` should stop being hand-mirrored from `tab()`'s formals and instead be derived from the same fact rows the CI engine uses (§5.4.3). The internal `chi2 =` alias should finally die (§5.1.5). `color_breaks` must either join `tab_attrs()` or be loudly documented (§5.6.3).
+**Table-level attributes to simplify:** the five 2.0.0-new scalars are individually justified, but their *constructor surface* is the thing to decide now (§5.6.4 `meta` merge — now or never). `test` earns its place (the one attr needing `vec_rbind`); `ci_settings` should stop being hand-mirrored from `tab()`'s formals and instead be derived from the same fact rows the CI engine uses (§5.4.3). The internal `chi2 =` alias should finally die (§5.1.5). `color_breaks` must either join `tab_attrs()` or be loudly documented (§5.6.3).
 
 **Column-level attributes to add:** `role` (`"model"/"emp"`) for reg columns (§4.3) — added together with deriving `fmt_col_attrs` from one source so the addition is structurally safe. Nothing else: the audit looked for more and found the existing 10 sufficient once roles exist.
 

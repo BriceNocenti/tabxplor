@@ -35,7 +35,7 @@ or \code{\link{tab_plain}}.}
 
 \item{test}{A tidy tibble storing whole-table test results (Chi2 for factor columns,
 ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
-in tabxplor 1.4.0.}
+in tabxplor 2.0.0.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
@@ -43,7 +43,7 @@ in tabxplor 1.4.0.}
 when unset):
 \itemize{
 \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-\code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are materialised at
+\code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 print/export time from this attribute rather than baked into the table.
 \item \code{ci_settings} -- display-only metadata for the colour legend,
 \code{list(conf_level =, method_cell =, method_diff =, ...)}: which confidence level and

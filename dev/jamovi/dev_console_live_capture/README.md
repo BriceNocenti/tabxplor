@@ -4,7 +4,7 @@ Dev-console (F10 DevTools) capture of a running **Jamovi 2.6.44.0** with **tabxp
 loaded and a basic crosstab open. It is the ground-truth runtime: the served/compiled module,
 the framework bundles, and the rendered app HTML. Captured by the maintainer 2026-07-08.
 
-**The analysis of these files is written up in `dev/tabxplor_1.4.0_jamovi_dev.md` §5–§7**
+**The analysis of these files is written up in `dev/tabxplor_2.0.0_jamovi_dev.md` §5–§7**
 (runtime architecture, analysis-UI framework, results renderer). Read that, not the minified
 bundles — the bundles are for re-grepping specific string literals only (never `cat` them;
 lines run 50k–325k chars).

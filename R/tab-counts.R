@@ -18,7 +18,7 @@
 #     not offered: level selection (levels = "first"/"auto"), rare-level lumping (other_if_less_than),
 #     na = "drop_all"/"common_base", survey design. cleannames is the exception -- a pure relabel run
 #     on the aggregate keys (tab_counts_normalize), byte-identical to tab()'s pre-aggregate strip.
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 4; dev/tabxplor_1.4.0_decisions.md §20.
+# See: CLAUDE.md > 2.0.0 roadmap > Phase 4; dev/tabxplor_2.0.0_decisions.md §20.
 
 # === SECTION: helpers ================================================================
 
@@ -229,7 +229,7 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); the survey
 #'   design `ids`/`strata`/`fpc`/`nest`; `method_mean_diff`/`method_mean_ratio` (a counts table has no
 #'   numeric column); `parallel`; `output_list`; `sup_cols`.
-#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0 (see [tab()]).
+#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0 (see [tab()]).
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
 #' @export
@@ -266,7 +266,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
 
   # Phase 14a: `chi2` renamed `test` (see tab()) -- kept working, one soft nudge.
   if (lifecycle::is_present(chi2)) {
-    lifecycle::deprecate_soft("1.4.0", "tab_counts(chi2 = )", "tab_counts(test = )")
+    lifecycle::deprecate_soft("2.0.0", "tab_counts(chi2 = )", "tab_counts(test = )")
     test <- chi2
   }
 

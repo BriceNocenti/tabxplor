@@ -2,7 +2,7 @@
 
 **\[superseded\]**
 
-Superseded (1.4.0): `tab_plot()` renders a tabxplor table as a ggpubr
+Superseded (2.0.0): `tab_plot()` renders a tabxplor table as a ggpubr
 image, but its display is limited and it is no longer actively
 developed. It keeps working and is retained for a future redesign;
 prefer
@@ -48,14 +48,14 @@ tab_plot(
 
 - color_type:
 
-  **\[deprecated\]** Inert since 1.4.0: the text channel always uses the
+  **\[deprecated\]** Inert since 2.0.0: the text channel always uses the
   text palette. The colour CHANNEL is chosen by
   `color = c(text, background)` (see
   [`tab`](https://bricenocenti.github.io/tabxplor/reference/tab.md)).
 
 - html_24_bit:
 
-  **\[deprecated\]** Inert since 1.4.0: exports are always 24-bit (the
+  **\[deprecated\]** Inert since 2.0.0: exports are always 24-bit (the
   OKLCH palettes). Kept only so old calls do not error.
 
 - color:

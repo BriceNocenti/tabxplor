@@ -1,7 +1,7 @@
 # tab_many() performance profile — findings and improvement map
 
 Profiling study of `tab_many()` (and its `tab_plain()` / `tab_num()` workers) on a small and a
-large dataset, done to steer the tabxplor 1.4.0 performance work. Every number below comes from the
+large dataset, done to steer the tabxplor 2.0.0 performance work. Every number below comes from the
 runs described in the *Methodology* section and is reproducible from the scripts noted in the
 appendix. Dates are absolute: this study was run on 2026-07-01.
 
@@ -204,7 +204,7 @@ Ordered by expected payoff for the *common* case (many modest tables), which is 
   are cloned from `tabs_pct`; compute in place or only when the corresponding output is requested
   (e.g. skip `tabs_mean` unless the "*2" ratio rule can fire). Minor wall-clock, real GC relief.
 
-## Other findings relevant to 1.4.0
+## Other findings relevant to 2.0.0
 
 - **Bug (WS5): `tab_num(..., <tab_vars>, ci = "cell")` — FIXED (Phase 6e, golden-locked).** Was
   reproduced on `gss_cat` for both `comp` modes (`setorderv(tabs_tot, ...)` couldn't find the tab_var

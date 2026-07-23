@@ -37,7 +37,7 @@ A \code{tibble} of class \code{tab}. Total rows can then be detected using
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-Superseded (1.4.0): totals are built directly by \code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}} (a
+Superseded (2.0.0): totals are built directly by \code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}} (a
 total row is always computed, one total column shown). \code{tab_tot()} still works on an
 existing tab.
 }

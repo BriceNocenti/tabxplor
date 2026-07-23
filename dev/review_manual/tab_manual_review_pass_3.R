@@ -109,7 +109,7 @@ tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), fa
 # "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:95:1:
 # ! `empirical` is only available for a single binary logistic outcome (coefficient effect).
 # ℹ It shows the descriptive crude odds ratio / percentage beside the model odds ratio."
-# - Replace `empirical` argument with `empirical` (no soft-deprecated : new function in 1.4.0) ;
+# - Replace `empirical` argument with `empirical` (no soft-deprecated : new function in 2.0.0) ;
 #   for  effect = "ame", which prints both modelised difference from reference level (AME ; MER too) 
 #   and modelised/adjusted percentage (predicted probability). 
 #   What would be the right empirical comparison, base percentage + empirical diff ? 

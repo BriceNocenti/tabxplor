@@ -2,7 +2,7 @@
 
 **\[superseded\]**
 
-Superseded (1.4.0) by
+Superseded (2.0.0) by
 [`tab()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab.md),
 the unified entry point (it accepts several row_vars / col_vars).
 `tab_many()` keeps working and keeps its historical list return for \>=2
@@ -550,7 +550,7 @@ get_color_breaks(brk, type = c("positive", "all"))
 
 - html_24_bit:
 
-  **\[deprecated\]** Inert since 1.4.0 (exports are always 24-bit).
+  **\[deprecated\]** Inert since 2.0.0 (exports are always 24-bit).
 
 - custom_palette:
 

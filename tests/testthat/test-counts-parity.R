@@ -2,7 +2,7 @@
 #          one tab() builds from the underlying microdata, whenever the count `n` is real. The
 #          counts are produced from the SAME microdata via dplyr::count() (unweighted) or
 #          count()+summarise (weighted, real n + weighted wn), so any divergence is a real bug.
-# See: R/tab-counts.R; CLAUDE.md > 1.4.0 roadmap > Phase 4; decisions doc §20.
+# See: R/tab-counts.R; CLAUDE.md > 2.0.0 roadmap > Phase 4; decisions doc §20.
 
 # gss_cat + a deterministic weight + deterministic NAs (mirrors test-fuse-parity.R's make_gss()).
 counts_gss <- function() {

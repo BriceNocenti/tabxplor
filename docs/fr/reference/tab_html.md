@@ -90,14 +90,14 @@ tab_kable(
 
 - color_type:
 
-  **\[deprecated\]** Inert since 1.4.0: the text channel always uses the
+  **\[deprecated\]** Inert since 2.0.0: the text channel always uses the
   text palette. The colour CHANNEL is chosen by
   `color = c(text, background)` (see
   [`tab`](https://bricenocenti.github.io/tabxplor/fr/reference/tab.md)).
 
 - html_24_bit:
 
-  **\[deprecated\]** Inert since 1.4.0: exports are always 24-bit (the
+  **\[deprecated\]** Inert since 2.0.0: exports are always 24-bit (the
   OKLCH palettes). Kept only so old calls do not error.
 
 - color:

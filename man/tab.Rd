@@ -79,7 +79,7 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
 \item{sup_cols}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Supplementary columns variables, with
-only the first level printed. Deprecated in 1.4.0: pass these columns in \code{col_vars} and
+only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
 set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).}
 
 \item{pct}{The type of percentages to calculate :
@@ -362,7 +362,7 @@ given: a string prefixed to each new column name, and whether to sort the new co
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 1.4.0: the test is a
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0: the test is a
 Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 misleading. Still works.}
 

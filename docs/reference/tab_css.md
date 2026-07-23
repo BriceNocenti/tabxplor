@@ -33,7 +33,7 @@ tab_css(
 
 - color_type:
 
-  **\[deprecated\]** Inert since 1.4.0: the text channel always uses the
+  **\[deprecated\]** Inert since 2.0.0: the text channel always uses the
   text palette. The colour CHANNEL is chosen by
   `color = c(text, background)` (see
   [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)).

@@ -1,6 +1,6 @@
-# tabxplor 1.4.0 — settled design decisions (grounded)
+# tabxplor 2.0.0 — settled design decisions (grounded)
 
-Detailed rationale behind the phase bullets in `CLAUDE.md` (§ 1.4.0 roadmap). CLAUDE.md holds the
+Detailed rationale behind the phase bullets in `CLAUDE.md` (§ 2.0.0 roadmap). CLAUDE.md holds the
 **concise** decisions; **this file holds the grounding** (code `file:line` + statistics) so a fresh
 session can implement without re-deriving it. Written 2026-07; all decision questions resolved 2026-07-07.
 
@@ -11,7 +11,7 @@ CLAUDE.md and this file both cite "§9", "§12", … — so **do not renumber th
 
 ## Aim (this governs every decision below)
 
-1.4.0 = **refactor and simplify `tab()`/`tab_many()`**: strip the white-elephant flexibility that
+2.0.0 = **refactor and simplify `tab()`/`tab_many()`**: strip the white-elephant flexibility that
 real-world data analysis never uses, and **redesign the `tabxplor_fmt` vctrs-field architecture** (one
 combined pass) to fit the simpler, faster model. Hard rule: the **public API stays retro-compatible**
 (user-facing functions, their arguments, and the `tabxplor_fmt` fields users read with `$`/`mutate()`),
@@ -25,7 +25,7 @@ below is one such simplification; none exists to add flexibility.
 
 **Resolved** (2026-07-07) — the four decisions that fixed the Phase 1 field set:
 
-- **Q1 — deprecation posture** → soft-deprecate, **stay 1.4.0**; the one accepted break is numeric `$diff`
+- **Q1 — deprecation posture** → soft-deprecate, **stay 2.0.0**; the one accepted break is numeric `$diff`
   ratio→difference (§3, §6).
 - **Q2 — per-cell significance** → store a **`pvalue`** field (§1, §12).
 - **Q3 — ratio field** → **rename the unused `rr` → `ratio`** (§3, §9).
@@ -63,7 +63,7 @@ below is one such simplification; none exists to add flexibility.
   **exactly, incl. Yates continuity correction on 2×2** — today's path calls it with defaults
   ([tab.R:5290](../R/tab.R#L5290)), so golden locks that behaviour; the planned "p equals `chisq.test`"
   parity test (CLAUDE.md Phase 3) enforces it. A `correct=` passthrough is a possible future knob, not
-  1.4.0. → removed from *Still open*.
+  2.0.0. → removed from *Still open*.
 
 **Resolved** (2026-07-07, review session 4) — inference pins + precision closures from the deep review:
 
@@ -685,7 +685,7 @@ The exact return type by `row_vars` × `tab_vars` × `output_list`:
 
 Grounded: today's unwrap collapses a length-1 list to a bare tab ([tab.R:1540](../R/tab.R#L1540)); the
 per-element class is `new_grouped_tab` when grouping vars exist, else `new_tab`
-([tab.R:1498-1505](../R/tab.R#L1498)). 1.4.0 keeps that machinery. The table above is the **new unified
+([tab.R:1498-1505](../R/tab.R#L1498)). 2.0.0 keeps that machinery. The table above is the **new unified
 `tab()`** behaviour; `≥2 row_vars, no tab_vars, output_list=FALSE` **merges by default** (was a list;
 `compact` merged). Exporters consume all shapes via the base method (single tab) + list method (§8).
 
@@ -735,7 +735,7 @@ group means/variances + unweighted `n`, so the omnibus tests the numbers the tab
 with the per-cell Welch-t stars. The **one exception is chi2**: fully unweighted (counts *and* n), to
 match `chisq.test()` exactly (G2). On weighted tables the chi2 can therefore disagree with the visible
 weighted percentages (and with the weighted-estimate stars) — a documented asymmetry, the price of exact
-legacy parity; a weighted (Rao-Scott-style) chi2 is out of 1.4.0 scope.
+legacy parity; a weighted (Rao-Scott-style) chi2 is out of 2.0.0 scope.
 
 This rule is implemented once, in the aggregate-core transform that fills `ci_inf`/`ci_sup`/`pvalue`
 (Phase 3), vectorised from the sufficient-statistics aggregate (G1) — never per-cell `prop.test`/`t.test`.
@@ -848,7 +848,7 @@ accepted. Listed here so each is signed off consciously (not discovered post-rel
 | Changing the **CI confidence level on a built table** now needs a re-run (§1)         | post-hoc `conf_level` tweakers                                                                                                       | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. Same for toggling Kish `n_eff` (§14) — it changes bounds *and* `pvalue`. |
 | `attr(x, "chi2")` **renamed `test`** (§16, Q11)                                       | code reading the table attribute                                                                                                     | Rare usage; one attribute, one name — no dual-mirror divergence risk under dplyr verbs; NEWS line. Whole-table tests (chi2 + new ANOVA/F) live under `test` with a discriminator column.                                                                              |
 | Numeric `color="diff"` **changes meaning** (§3, §18, Q9)                              | calls passing `color="diff"` on mean columns                                                                                         | Was ratio-coloring (`mean_breaks`); now colors the sd-standardized difference (Glass's Δ, `mean_diff_breaks`). The old behaviour is exactly `color="ratio"`. Pct-column coloring unchanged.                                                                           |
-| Old **serialized** tabs (`.rds` from ≤1.3.1) unreadable by 1.4.0 accessors (§9, Q10)  | nobody in practice — tabs are exported (Excel/HTML/md) or re-created from their R code, never saved as `.rds` (maintainer-confirmed) | No upgrade shim (permanent complexity for a non-use-case); NEWS line says "rebuild with `tab()`".                                                                                                                                                                     |
+| Old **serialized** tabs (`.rds` from ≤1.3.1) unreadable by 2.0.0 accessors (§9, Q10)  | nobody in practice — tabs are exported (Excel/HTML/md) or re-created from their R code, never saved as `.rds` (maintainer-confirmed) | No upgrade shim (permanent complexity for a non-use-case); NEWS line says "rebuild with `tab()`".                                                                                                                                                                     |
 
 **Explicitly NOT broken (guardrails held):** `tab_many()`'s **list return type** for `≥2 row_vars` (Q7,
 §13) — preserved; pct `$diff`, `$pct`, `$n`, `$wn` and the other user-read fields — unchanged; every
@@ -857,7 +857,7 @@ public function/argument — kept (soft-deprecated at most).
 **Explicitly out of scope (document, don't "fix"):** **multiple comparisons.** Stars decorate every cell,
 so a large table runs many tests — tabxplor applies **no** correction (standard for exploratory crosstabs).
 State this once in the CI/stars documentation so it is a conscious choice, not an omission; a
-Bonferroni/BH option is a possible future `to think about`, not 1.4.0.
+Bonferroni/BH option is a possible future `to think about`, not 2.0.0.
 
 ---
 
@@ -973,7 +973,7 @@ boundary cases only), so nothing is lost by not computing a separate score test.
   proportion-CI into `tab_plain()` gains nothing, and `tab_ci()` must keep a **field-based** engine
   regardless (it has to work standalone on a built table that carries only `fmt` fields, no counts
   data.table) — computing it *also* in `tab_plain()`'s counts domain would duplicate the Wilson/
-  Newcombe math held to byte-parity, the very thing 1.4.0 removes. The clean end state (keystone:
+  Newcombe math held to byte-parity, the very thing 2.0.0 removes. The clean end state (keystone:
   `aggregate → [pct | diff | CI | chi2 | totals] → fmt`) has ONE CI transform for both types; it
   arrives when `tab_plain`/`tab_num` are refactored into shared aggregate-core subfunctions — i.e.
   the **Phase 4 factor-path reorg** (driven/validated by `as_tab_counts()`, per §Phasing) and the
@@ -1051,7 +1051,7 @@ build the ~11 palette styles + the `st_digits*` set **once** and reuse — which
 path was slow enough that the diff/ratio colors are hard cell styles, not CF — [tab_xl.R:150-267](../R/tab_xl.R#L150)
 is the commented-out CF attempt). Pin a small styled-write benchmark (a big `compact=TRUE` table, colors on)
 on **both** engines before committing Phase 11; if openxlsx2 loses, Phase 11 legitimately slips to a 1.4.x
-follow-up (or is dropped) — it does not block 1.4.0. This matches §8's "may ship in a 1.4.x follow-up".
+follow-up (or is dropped) — it does not block 2.0.0. This matches §8's "may ship in a 1.4.x follow-up".
 
 Sources: openxlsx2 styled-write slowness — JanMarvin/openxlsx2 issue #356
 <https://github.com/JanMarvin/openxlsx2/issues/356> ; "if you need speed go writexl" — discussion #1281
@@ -1284,7 +1284,7 @@ now, recovering the attribute-rendered block later).
 Verified against `stats::chisq.test()` (incl. Yates) and `stats::oneway.test(var.equal = FALSE/TRUE)` in
 `tests/testthat/test-calculations.R` (statistic, both dfs, and p to floating-point). Golden regenerated
 (attr rename + var/ctr on non-contrib). **Suite green (950).** **Perf: chi2 ~2.5× faster** (gss_cat 9-tab
-2.60 → 1.03 s chi2 share; whole call 3.07 → 1.48 s — `dev/benchmarks/results_1.4.0/phase3b_chi2_anova.txt`);
+2.60 → 1.03 s chi2 share; whole call 3.07 → 1.48 s — `dev/benchmarks/results_2.0.0/phase3b_chi2_anova.txt`);
 the tidy rewrite also fixed a pre-existing `tab_pvalue_lines` crash when a col_var name overlapped a row_var
 name.
 
@@ -1375,7 +1375,7 @@ does **not** overlap (each table is built once, not re-toggled), so parallelism 
 redundant with the core refactor. Grounded PoC below; scripts `dev/benchmarks/parallel_poc_micro.R`
 (Layer A, mechanics) + `parallel_poc_tab.R` (Layer B, real tables) + `parallel_poc_survey.R` (survey-range
 confirmation) + `parallel_poc_mirai_dispatcher.R`; runs in
-`dev/benchmarks/results_1.4.0/phase6b_{micro,tab,survey,mirai_dispatcher}.txt`.
+`dev/benchmarks/results_2.0.0/phase6b_{micro,tab,survey,mirai_dispatcher}.txt`.
 
 ### Method / caveats
 
@@ -1647,7 +1647,7 @@ multi-axis call (harmless today only because `OR = "no"` and `all()` collapses i
 ### Finding 2 — do NOT fork a second `tab()` core; collapse the shared one to an OUTER MAP (Phase 8 already proved it safe)
 
 The roadmap's phrasing ("keep `tab_many` on `tab_build`, rewrite `tab` simpler") invites forking a second,
-simpler core for `tab()`. **Reject that** — it re-creates exactly the duplicated math 1.4.0 exists to
+simpler core for `tab()`. **Reject that** — it re-creates exactly the duplicated math 2.0.0 exists to
 delete (the keystone: one core, reuse don't fork). The right move achieves the same simplicity without a
 fork: **make the row_var axis a genuine outer `map`, not internal vectorisation.** Resolve the per-row_var
 arg-sets ONCE at the top, then map a **scalar-over-row_vars** core over them:
@@ -1742,7 +1742,7 @@ fmt cost is almost entirely *redundant reconstruction*. Recoverable ~**30-48 %**
 bar) → **GO**; larger for CI (+28 %)/contrib (+64 %) and at big-table/warm-jmvtab scale (§27); numeric-only
 tables gain ~nothing (cost = the data.table scan). Decision: **fold the plain writers into 9b-3**, not a
 separate committable rung (they are a subset of the carrier win). Record:
-`dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt`; analysis `…phase9b_fmt_display_only.md` §5.
+`dev/benchmarks/results_2.0.0/phase9b2_decomposition.txt`; analysis `…phase9b_fmt_display_only.md` §5.
 
 ### Cleanup surfaced (fold into whichever Phase 9 work touches the file)
 
@@ -1876,7 +1876,7 @@ Ranked by value/risk. Only the first was implemented in 9c (maintainer scoping):
 1. **Compact L3 reconcile → base-R (IMPLEMENTED).** `vec_ptype2.tabxplor_fmt.tabxplor_fmt` picked each
    reconciled attribute with `dplyr::if_else` ×9; replaced with base-R `if/else`. **3.1× per call**
    (micro: 1039 → 335 µs), and since this method drives **every** `c()`/`vec_c()`/bind/group over fmt
-   columns, the win generalises. Clean A/B (`dev/benchmarks/results_1.4.0/phase9c_ptype2_and_fusion.txt`):
+   columns, the win generalises. Clean A/B (`dev/benchmarks/results_2.0.0/phase9c_ptype2_and_fusion.txt`):
    the default **merged call −7 % (0.760 → 0.705 s)** — the merge marginal 0.046 → ~0 — and a user
    **`c()` of two fmt columns 1.8×** (1.60 → 0.88 ms). Byte-identical (full suite FAIL 0, no golden
    regen). **Landmine**: `same_comp` CAN be NA (a count column's `comp_all` = NA bound with a pct
@@ -1942,7 +1942,7 @@ Region D (the `rowSums` Total column) stays as-is (already matrix, and must run 
 in the matrix). `calculate_refrows()` / `diff_index()` unchanged (they return indices/logicals).
 
 **Verified**: full suite **FAIL 0 / PASS 1400, NO golden regen**; the PoC 648/648 `identical()`.
-**End-to-end (`dev/benchmarks/results_1.4.0/phase9d_{before,after,poc}.txt`):** no-tab_vars fixtures
+**End-to-end (`dev/benchmarks/results_2.0.0/phase9d_{before,after,poc}.txt`):** no-tab_vars fixtures
 common **−11 %** / ci **−7.4 %** per-row_var build (carried by E+F); **git-stash A/B with tab_vars**
 (where B/C's `map2` multiplier bites): 1 tab_var **−20 %**, 2 tab_vars × 2 col_vars **−51 %**. contrib
 (no ref, `pct="no"` → E/F skipped) and numeric (untouched) stay flat, as expected. Both gated blocks
@@ -1950,16 +1950,16 @@ clear ≥5 %.
 
 ---
 
-## 32. Cumulative 1.3.1 → 1.4.0 benchmark + base/parallel stacking (2026-07-11)
+## 32. Cumulative 1.3.1 → 2.0.0 benchmark + base/parallel stacking (2026-07-11)
 
-Direct A/B of the CRAN release **tabxplor 1.3.1** (installed, `library()`) vs the **1.4.0-dev** source
+Direct A/B of the CRAN release **tabxplor 1.3.1** (installed, `library()`) vs the **2.0.0-dev** source
 (`load_all`), same machine (Ryzen 7 5800X, 8/16 cores), R 4.5.1, `median(system.time())`. API bridge:
-1.3.1 merges via `tab_many(..., compact = TRUE)`, 1.4.0 via `tab(...)`; `tab_num()` identical in both.
-Raw file: `dev/benchmarks/results_1.4.0/cumulative_1.3.1_vs_1.4.0.txt`.
+1.3.1 merges via `tab_many(..., compact = TRUE)`, 2.0.0 via `tab(...)`; `tab_num()` identical in both.
+Raw file: `dev/benchmarks/results_2.0.0/cumulative_1.3.1_vs_2.0.0.txt`.
 
 ### The four use cases
 
-| use case (fixture)                                                                                | 1.3.1  | 1.4.0  | cumulative |
+| use case (fixture)                                                                                | 1.3.1  | 2.0.0  | cumulative |
 |---------------------------------------------------------------------------------------------------|--------|--------|------------|
 | **Many factor tables, merged** (gss_cat 21k, 5 rv × 3 cv = 15 tables, pct row, colour diff, chi2) | 1.78 s | 0.59 s | **3.0×**   |
 | **Many factor tables, list** (same)                                                               | 1.27 s | 0.61 s | **2.1×**   |
@@ -1978,9 +1978,9 @@ Same fixture (43k rows, **8 factor row_vars × 2 col_vars**, chi2, list output),
 | build                            | time            | gain                                   |
 |----------------------------------|-----------------|----------------------------------------|
 | 1.3.1 serial                     | 1.39 s          | baseline                               |
-| 1.4.0 serial                     | 0.72 s          | base **1.93×**                         |
-| 1.4.0 parallel W=8 (warm pool)   | 0.27 s          | parallel **2.67×** (over 1.4.0 serial) |
-| **total 1.3.1 → 1.4.0 parallel** | **1.39 → 0.27** | **5.15× = 1.93 × 2.67**                |
+| 2.0.0 serial                     | 0.72 s          | base **1.93×**                         |
+| 2.0.0 parallel W=8 (warm pool)   | 0.27 s          | parallel **2.67×** (over 2.0.0 serial) |
+| **total 1.3.1 → 2.0.0 parallel** | **1.39 → 0.27** | **5.15× = 1.93 × 2.67**                |
 
 **They stack cleanly (the product is exact).** The two levers are **orthogonal**: base improvements
 shrink the per-table O(cells) work; `parallel=` runs the (now cheaper) per-`row_var` tables concurrently
@@ -1989,14 +1989,14 @@ on the mirai pool. So the parallel multiplier applies on top of the base multipl
 **Caveat (Amdahl + fixed cost):** parallel carries a fixed overhead — cold pool warm ~1 s, ship the data
 once, serialise the finished tables back, and the main-side merge/pvalue/unwrap stays serial. So the
 2.67× is realised for **many tables + a warm/reused pool**; for a few tables or trivially cheap
-per-table work the multiplier shrinks toward 1 (the §26 verdict). The faster 1.4.0 serial makes the
+per-table work the multiplier shrinks toward 1 (the §26 verdict). The faster 2.0.0 serial makes the
 serial merge a relatively larger share, which is why the measured parallel efficiency here (2.67× at 8
 workers) does not reach a theoretical 8× — but it still stacks multiplicatively with the base gain.
 
 ### Honest scoping — the numeric case
 
 On **typical** survey numerics (low-cardinality `age`/`tvhours` by categorical groups) the mean-table
-wall-time is **~unchanged** 1.3.1 → 1.4.0. The large documented numeric win (Phase 2: `tab_num` **5.6×**
+wall-time is **~unchanged** 1.3.1 → 2.0.0. The large documented numeric win (Phase 2: `tab_num` **5.6×**
 unweighted / **8.3×** weighted, **6–11×** less allocation — `before_phase2_8M.csv` vs `after_rollup_8M.csv`)
 was on a **heavier continuous-numeric** synthetic 8M fixture (`gen_big_df`) that stressed the old
 `weighted.var` double-scan. The moment-sum core's **allocation-churn** reduction holds regardless, but the
@@ -2050,7 +2050,7 @@ side), **S3** (tab()'s NA semantics) and **S4** (`tab_spread`/`tab_compact` fate
 reach them. The
 public API
 (user-facing functions, their arguments, the `tabxplor_fmt` fields) stays retro-compatible throughout;
-only the internals are re-cut. That is the whole of 1.4.0.
+only the internals are re-cut. That is the whole of 2.0.0.
 
 ---
 
@@ -2115,7 +2115,7 @@ prep-helpers to their consumer:** `numfmt()` → `format(syntax="excel")` moves 
 no duplicate-source-of-truth window); `tab_totcol_range()` → **10d** (built next to its wiring);
 label-capture-in-build → **10e** (only `tab_kable` consumes it). So 10c shipped: `get_reference()` boolean
 rewrite; `format()`/`pillar_shaft` `.ref` memoization + `if_else`→base + the **`x$var`→`get_var(x)`
-~28 % lever** (not in the plan — surfaced by the re-profile, `dev/benchmarks/results_1.4.0/phase10c_profile.txt`,
+~28 % lever** (not in the plan — surfaced by the re-profile, `dev/benchmarks/results_2.0.0/phase10c_profile.txt`,
 `format()` ~2×); `tab_render_vars()` + graceful degrade guards + `tab_get_vars()` hardening +
 `test-edge-cases.R`; `display_spec` (§6, 9→10 attr, `tab(display=)` / `set_display_spec()`). The re-profile
 also confirmed the §23 stale ranking: `format()`'s residual cost is now all `stringr`/`stringi` (a future
@@ -2185,7 +2185,7 @@ for the console and every non-`na` caller; `tab_kable`/`tab_md` pass `na=""` →
 source. Retires tab_kable's `interactive()`-gated `str_replace_all(">NA</span>", …)` (byte-identical in
 the always-CSS default; the only visible change is the rare non-CSS batch case where NA used to leak).
 
-**Perf** (`dev/benchmarks/results_1.4.0/phase10e_{baseline,after}.txt`, gss_cat): cheap tooltips 0.50→
+**Perf** (`dev/benchmarks/results_2.0.0/phase10e_{baseline,after}.txt`, gss_cat): cheap tooltips 0.50→
 0.36 s (−29%) on the kableExtra big table; html engine 0.16 s (3.1× vs baseline, mem 8.5→1.3 MB), 0.072 s
 w/o tooltips. The html engine WITH tooltips (0.16 s) beats the old jamovi kableExtra path WITHOUT them
 (0.22 s), so jamovi can regain interactive tooltips cheaply (left OFF pending a live check). jamovi
@@ -2370,7 +2370,7 @@ emits the "core" table only.**
 - **End-of-Phase-B perf gate (mandatory)** — a **`git stash` A/B benchmark against the current version**
   must confirm the impact is **at least neutral**, measuring **build-table vs display/export performance
   SEPARATELY** (work MOVES from build to display: the build must get faster/neutral, the display must not
-  regress net; spot-check jmvtab live). Save to `dev/benchmarks/results_1.4.0/`.
+  regress net; spot-check jmvtab live). Save to `dev/benchmarks/results_2.0.0/`.
 
 ### Caveats (honest)
 
@@ -2416,7 +2416,7 @@ byte-identical to Phase 10c's `"pct (n)"`.
   `or_pct` are KEPT as pipeline-set rendering modes: they use integrated CI/OR rendering (centered
   bracket, shared/forced digits, `ref:` decorations) that `{}` cannot express, and are never
   user-typed — so no user-facing inconsistency (empirically confirmed).
-- **Benchmark verdict — Solution 2, ship as-is** (`dev/benchmarks/results_1.4.0/phase10iA_display_grammar.txt`;
+- **Benchmark verdict — Solution 2, ship as-is** (`dev/benchmarks/results_2.0.0/phase10iA_display_grammar.txt`;
   git-stash A/B). On no-composite tables the whole display/export pipeline is UNCHANGED
   (build/print/tab_md/tab_kable/tab_xl no measurable diff); the gate is ~11 ns/cell (one fixed grepl).
   Only an isolated `format()` of a 200k-cell column moved ~3% (within `system.time` noise). No
@@ -2493,7 +2493,7 @@ pays nothing; only a genuine COLUMN reconstruction applies (pct="col" add_n was 
 tidy-select NSE (a bare `NextMethod()` — and even `substitute()` — broke `pull(tabs, <col>)`).
 
 **Verification:** full suite green (**1815**; new `test-display-extras.R`). Perf gate (git-stash A/B,
-build vs display separately, `dev/benchmarks/results_1.4.0/phase10iB_display_only.txt`): BUILD 0.350 →
+build vs display separately, `dev/benchmarks/results_2.0.0/phase10iB_display_only.txt`): BUILD 0.350 →
 0.330 s (−6 %), DISPLAY 0.320 → 0.350 s (+9 %), NET neutral — work moves build → display as designed
 (the jmvtab cached build is now cheaper). **Golden regen (conscious):** ALL `_golden/*.rds` (add_n/add_pct
 cols + pct="col" rows removed, `render_extras` gained), `c_or` colour (its pct="col" add_n row), and the
@@ -2507,7 +2507,7 @@ simplification) is optional / open.
 
 ### Grounding — the build is at its floor
 
-A fresh read of the code + `dev/benchmarks/results_1.4.0/` + §29-§31 confirms: `tab()` build arg/axis
+A fresh read of the code + `dev/benchmarks/results_2.0.0/` + §29-§31 confirms: `tab()` build arg/axis
 resolution is ~0.2 %; the field-frame carrier banked the big wins; the mutable-DT / core-fork /
 carrier-join routes are closed; ~99 % of build is O(cells) fmt work. Excel write is openxlsx2-bound
 (~92 %, parallel-immune, at floor after 10h). jmvtab live is render-bound (10c already 2×'d `format()`).
@@ -2561,7 +2561,7 @@ tabxplor_phase10_exporters.md` (10j-A Status).
 
 ### Phase 10j-B IMPLEMENTED (2026-07-13) — PARTIAL GO; build at its floor confirmed
 
-PoC-gated (B-i), then a scoped rewrite (B-ii). Full numbers + scripts: `dev/benchmarks/results_1.4.0/
+PoC-gated (B-i), then a scoped rewrite (B-ii). Full numbers + scripts: `dev/benchmarks/results_2.0.0/
 phase10j_tests.txt`. The honest reframing of §30's "~22 %": the whole-table test path IS 26 %, but on the
 tables that cost time the **`agg_chi2` engine dominates** `chi2_compute_test` (73 % on chunky many-subtable
 shapes; already data.table, not a target) — the recoverable marshalling is much smaller than the coarse
@@ -2661,7 +2661,7 @@ of the pre-package draft** + **two maintainer AskUserQuestion rounds** that sett
 code changes in 12b** — it governs 12c (tests), 12d (rewrite), 12e (jamovi UI). **No back-compat** on the
 regression functions (the maintainer's explicit licence to redesign the API radically).
 
-The governing aim (mirrors the 1.4.0 aim): **reuse the existing fmt / `test`-attribute machinery, not fork
+The governing aim (mirrors the 2.0.0 aim): **reuse the existing fmt / `test`-attribute machinery, not fork
 it** — the fmt record already carries an additive shape (`display="diff"`, `ci_type="diff"`, neutral 0) and a
 multiplicative shape (`display="or"`, `ci_type="or"`, neutral 1, `1/x` reciprocal), which are exactly the
 gaussian-β and OR/IRR shapes, so the unified engine needs **near-zero new field plumbing** (verified against
@@ -3312,8 +3312,8 @@ chrome `.g1`/`.g2` (the two greys) + `.tabxplor-tab`. A reference cell gets **no
 - **DELETED**: `html_style_block()` (static, hard-coded `#212121`/`#fff`), `md_break_class()`,
   `md_slot_class_map()`, `md_css_rules()`, `md_css_block()`, the `.n` md neutral, the legend token's
   `cls` field (derivable), and `tab_kable_join()`'s dead `theme` param.
-- **`tab_md_css(dark_mode=)` deleted, not deprecated** — `tab_md_css()` is new in unreleased 1.4.0, so
-  `deprecate_soft("1.4.0", ...)` would have deprecated an argument in the version introducing it.
+- **`tab_md_css(dark_mode=)` deleted, not deprecated** — `tab_md_css()` is new in unreleased 2.0.0, so
+  `deprecate_soft("2.0.0", ...)` would have deprecated an argument in the version introducing it.
   `tab_md_css()` survives as a thin wrapper on `tab_css(chrome = FALSE)`.
 
 ### The `"auto"` cascade — 4 layers, ORDER is the contract
@@ -4066,7 +4066,7 @@ tab_md borders/compactness (§43), 14m-ii = fonts (this section, §44), with the
 
 The maintainer replaced §44's "numbers are always monospace" with a more straightforward rule, after
 finding a monospace font too wide/ugly for ordinary tables: **numbers stay proportional DejaVu Sans
-(as before 1.4.0); they switch to monospace (default Cascadia Mono) ONLY when the table actually shows
+(as before 2.0.0); they switch to monospace (default Cascadia Mono) ONLY when the table actually shows
 significance stars** — the one case where a proportional `*` (narrower than a digit) breaks alignment.
 
 - **The trigger**: `roles$has_stars` — computed once per table in `prep_one_table()` (R/tab-export-prep.R)
@@ -4820,7 +4820,7 @@ always showed the full block. Conscious snapshot regen (render-html + the golden
 `tab_reg` delegates via thin wrappers (byte-identical; `svy_design_formula` now `as.character()`-coerces
 a bare symbol, since tab()'s resolved weight is a symbol — identity for tab_reg's char/formula inputs).
 
-**Supersedes** §14's "a weighted (Rao-Scott-style) chi2 is out of 1.4.0 scope" — now an opt-in.
+**Supersedes** §14's "a weighted (Rao-Scott-style) chi2 is out of 2.0.0 scope" — now an opt-in.
 
 ### Not in scope (documented)
 

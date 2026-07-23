@@ -3,8 +3,8 @@
 # ROLE: Unlike the §26 PoC (parallel_poc_survey.R, an EXTERNAL hand-dispatched loop), this drives the
 #       shipped tab_pmap() seam: ONE tab() call whose per-row_var build fans out over a mirai pool.
 # USAGE: source("dev/benchmarks/run_parallel.R")  (.Rbuildignore'd; dev-only).
-#        Save output with:  Rscript dev/benchmarks/run_parallel.R > dev/benchmarks/results_1.4.0/phase8_survey.txt
-# See: CLAUDE.md Phase 8, dev/tabxplor_1.4.0_decisions.md §26.
+#        Save output with:  Rscript dev/benchmarks/run_parallel.R > dev/benchmarks/results_2.0.0/phase8_survey.txt
+# See: CLAUDE.md Phase 8, dev/tabxplor_2.0.0_decisions.md §26.
 
 PKG <- "d:/Statistiques/github/tabxplor"
 suppressWarnings(suppressMessages(devtools::load_all(PKG, quiet = TRUE)))

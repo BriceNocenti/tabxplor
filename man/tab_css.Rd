@@ -20,7 +20,7 @@ deliberate choice. \code{"auto"} emits every rule four times (a light base, the 
 both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
 editor's theme -- see its \code{theme} argument.}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).}
 
 \item{chrome}{When \code{TRUE} (default) also style the table itself (font/background/border colours,

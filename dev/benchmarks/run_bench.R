@@ -26,7 +26,7 @@ big_ops <- list(
   tab_ci         = function() tab(big, region, response, pct = "row", ci = "cell"),
   tab_chi2       = function() tab(big, region, response, pct = "row", chi2 = TRUE),
   tab_num_mean   = function() tab_num(big, region, c(score, income), response, comp = "all"),
-  # Weighted numeric: exercises the tab_num weighted-variance path (the pre-1.4.0 weighted.var
+  # Weighted numeric: exercises the tab_num weighted-variance path (the pre-2.0.0 weighted.var
   # double-scan) + the two extra total-row/total-table N-scans -> the Phase 2a headline win.
   tab_num_w      = function() tab_num(big, region, c(score, income), response, wt = weight, comp = "all"),
   tab_many_multi = function() tab_many(big, region, c(response, age_grp), pct = "row"),

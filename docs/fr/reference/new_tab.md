@@ -48,7 +48,7 @@ new_grouped_tab(
   A tidy tibble storing whole-table test results (Chi2 for factor
   columns, ANOVA F for mean columns), filled by
   [`tab_chi2`](https://bricenocenti.github.io/tabxplor/fr/reference/tab_chi2.md).
-  Renamed from `chi2` in tabxplor 1.4.0.
+  Renamed from `chi2` in tabxplor 2.0.0.
 
 - chi2:
 
@@ -60,7 +60,7 @@ new_grouped_tab(
   `NULL` when unset):
 
   - `render_extras` – display-only intent for the `add_n` / `add_pct`
-    extras, `list(add_n =, add_pct =)`. Since tabxplor 1.4.0 those
+    extras, `list(add_n =, add_pct =)`. Since tabxplor 2.0.0 those
     rows/columns are materialised at print/export time from this
     attribute rather than baked into the table.
 

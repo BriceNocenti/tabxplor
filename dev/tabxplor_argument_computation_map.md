@@ -11,7 +11,7 @@
 >   5-tier cache); read it for the jmvtab live-UI cache.
 > - `dev/new_colors_UI.md` — the colour/breaks framework (measure × channel × significance). §6 of
 >   THIS file audits that its §8/§12 computation matrices match the code.
-> - `dev/tabxplor_1.4.0_decisions.md` — the settled 1.4.0 architecture decisions (§2 `tot_n`, §5
+> - `dev/tabxplor_2.0.0_decisions.md` — the settled 2.0.0 architecture decisions (§2 `tot_n`, §5
 >   globalised row-axis, §7 col%+means, §12/§14/§20 inference).
 > - `dev/tabxplor_architecture.md` — the current pipeline / type system / exporters.
 >
@@ -381,7 +381,7 @@ finest-grain aggregate (`tab_build()` fused path, off by default) is the reusabl
   blocked, and making them type-aware would need imperative `.js` reading `measureType`. `color_signif`
   policies re-gated `pct:row||pct:col` → `(!(color:no))`; `stars`/`conf_level`/`add_n`/`add_pct` gates
   added; `totaltab`/`comp` greyed on empty `tab_vars` (imperative). CI is a re-paint, not an auto-toggle
-  (see CLAUDE.md Phase 7h + `dev/tabxplor_1.4.0_jamovi_dev.md` §6.9).
+  (see CLAUDE.md Phase 7h + `dev/tabxplor_2.0.0_jamovi_dev.md` §6.9).
 - **W2** (`new_colors_UI.md`): `color = TRUE` resolves numerics to `ratio` on the TEXT channel (diff
   off) — confirm this is what Jamovi `auto` should compute.
 - **W5**: colouring the Jamovi HTML render (pandoc spans / kableExtra) is still open; the current

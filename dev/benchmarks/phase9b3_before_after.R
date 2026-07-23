@@ -3,7 +3,7 @@
 #          numeric), merged + output_list, median wall + MB. Run on the pre-9b-3 source to make the
 #          "before" file, then re-run after each step. Same fixtures as phase9b2_fmt_cost_decomp.R.
 # USAGE:   Rscript dev/benchmarks/phase9b3_before_after.R <label>
-#          -> prints a table; compose dev/benchmarks/results_1.4.0/phase9b3_<label>.txt from it.
+#          -> prints a table; compose dev/benchmarks/results_2.0.0/phase9b3_<label>.txt from it.
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
 source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()

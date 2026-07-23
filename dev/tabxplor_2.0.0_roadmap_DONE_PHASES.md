@@ -30,13 +30,13 @@ Why it is the keystone — it simultaneously (a) kills the duplicated pct/total 
 #### The decisions
 
 - **Output shape**: `output_list` (default `FALSE`) replaces `compact`; `compact` deprecated (arg), `tabxplor.compact` option removed. Compact-loss analysis persisted in `dev/tabxplor_architecture.md` ("Compaction: what is lost when tables are bound"). Verdict: single-table default only gives up per-row_var flexibility real analysis never uses (divergent color/ref/ci-type on the *same column*); each-variable-vs-own-total is preserved. When `tab_vars` present, compaction can't merge → keep multi-table regardless.
-- **Field surgery = one combined pass** (before the core rewrite) → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed on `$`/`get_ci()` from the bounds; `fmt(ci=)` arg kept); numeric `diff` becomes a difference; `mean`-overload removed. CI is stored as asymmetric **bounds** (the single upper-half-width + symmetric bracket is wrong for Wilson/AC proportions; means exact); OR CIs move off their sidecar into the fields. **Per-cell significance is a stored `pvalue`** (Q2 — three star levels can't come from one CI level, and are undefined from bounds for asymmetric proportions/OR; decisions §12): factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical `OR` = log-OR Wald, logit = model p. Do NOT pre-add se/z/coef (tab_logit never displays them). After this pass tab_logit needs no further field surgery. Detail: `dev/tabxplor_1.4.0_decisions.md` §1-3, §12.
+- **Field surgery = one combined pass** (before the core rewrite) → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed on `$`/`get_ci()` from the bounds; `fmt(ci=)` arg kept); numeric `diff` becomes a difference; `mean`-overload removed. CI is stored as asymmetric **bounds** (the single upper-half-width + symmetric bracket is wrong for Wilson/AC proportions; means exact); OR CIs move off their sidecar into the fields. **Per-cell significance is a stored `pvalue`** (Q2 — three star levels can't come from one CI level, and are undefined from bounds for asymmetric proportions/OR; decisions §12): factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical `OR` = log-OR Wald, logit = model p. Do NOT pre-add se/z/coef (tab_logit never displays them). After this pass tab_logit needs no further field surgery. Detail: `dev/tabxplor_2.0.0_decisions.md` §1-3, §12.
 - **From-the-middle constructor** (`as_tab_counts()`): support long tidy counts, wide count matrix, frequencies+base N. Validate once at the boundary → same core. Require real unweighted `n`; warn/disable CI/chi2 on frequency-only input.
-- **Order**: 0 finish safety net → 1 combined field pass → 2 aggregate core + math unification → 3 CI/chi2 onto aggregate (headline perf) → 4 counts constructor → 5 color diff/ratio split → 6 tab()→tab_many() merge + output_list → 7 unified exporter prep (on openxlsx v1) → 8 Jamovi caching → 9 Excel engine swap openxlsx→openxlsx2 (isolated; may slip to a 1.4.x follow-up). Each phase: golden/parity green + **save before/after benchmarks** (`dev/benchmarks/results_1.4.0/`).
+- **Order**: 0 finish safety net → 1 combined field pass → 2 aggregate core + math unification → 3 CI/chi2 onto aggregate (headline perf) → 4 counts constructor → 5 color diff/ratio split → 6 tab()→tab_many() merge + output_list → 7 unified exporter prep (on openxlsx v1) → 8 Jamovi caching → 9 Excel engine swap openxlsx→openxlsx2 (isolated; may slip to a 1.4.x follow-up). Each phase: golden/parity green + **save before/after benchmarks** (`dev/benchmarks/results_2.0.0/`).
 
 #### Resolved architecture decisions (2026-07)
 
-Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md`. Summary:
+Grounding (code refs + statistics + caveats) in `dev/tabxplor_2.0.0_decisions.md`. Summary:
 
 1. **fmt fields** (Phase 1, §1-3, §12) — one combined pass → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; rename unused `rr`→`ratio` (after `diff`); drop `ci` (recomputed from bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed.
 2. **CI = bounds + `pvalue`** (Phase 3, §1, §12) — store asymmetric `ci_inf`/`ci_sup`; the current upper-half-width + symmetric bracket mis-draws Wilson/AC proportion CIs (means exact). **Per-cell significance reads the stored `pvalue`** (three star levels need a real p, undefined from one CI level for asymmetric proportions), not the bounds; compact `± moe` shows the larger arm; tab_logit OR-CIs move into the fields (sidecar retired).
@@ -48,21 +48,21 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 8. **Deprecations** (Phase 6) — soft-deprecate singular `row_var`/`col_var` (only `row_vars`/`col_vars` remain); drop the `tabxplor.compact` option.
 9. **Class model** — keep the `tabxplor_tab`/`tabxplor_grouped_tab` split; `output_list = TRUE` container is a plain list for now. `/dplyr-method` if verbs change.
 
-**Review session 2 (2026-07-07)** — four consistency decisions from the roadmap review (detail: `dev/tabxplor_1.4.0_decisions.md` §14-17):
+**Review session 2 (2026-07-07)** — four consistency decisions from the roadmap review (detail: `dev/tabxplor_2.0.0_decisions.md` §14-17):
 
 10. **Weighted inference (Q5, §14)** — one rule for every CI/test: **weighted estimate + unweighted `n`** (for a 0/1 var, weighted-var + unweighted-n ≡ weighted-% + unweighted-n → proportions and means unified). Fixes the §12 self-contradiction. Caveat: anti-conservative under variable weights (`deff→1`); Kish `n_eff=(Σw)²/Σw²` a cheap opt-in (needs `Σw²`, G1). NOT full survey design.
 11. **CI ⇄ stars duality (Q6, §15)** — the bracket and the stars must be duals. Significance stars are opt-in; **when on**, `pvalue` = two-proportion **score test** and the stored diff interval switches **AC→Newcombe** (its score dual); `ci="cell"` already Wilson, means Welch-t, OR log-Wald (all duals). AC stays the no-stars default (less golden churn).
 12. **`tab_many()` return type (Q7, §13)** — **preserve the list-default** for the soft-deprecated `tab_many` alias; only the unified `tab()` merges by default. No silent return-type break.
 13. **Test-result placement (Q8, §16)** — whole-**table** test → table attribute (generalise `chi2`→`test` to also hold ANOVA/F); whole-**column** test → rows of the same `test` tibble keyed by col_var (Q15, review 4 — was: column attribute); per-**cell** significance → the `pvalue` field. Display: a p-value *row* for now; a future `!`-per-cell "weak-test" warning documented.
 
-**Review session 3 (2026-07-07)** — closures from the consistency review (detail: `dev/tabxplor_1.4.0_decisions.md` §15-18 + *Status*):
+**Review session 3 (2026-07-07)** — closures from the consistency review (detail: `dev/tabxplor_2.0.0_decisions.md` §15-18 + *Status*):
 
 14. **Numeric diff-color scale (Q9, §18)** — `color="diff"` on numeric columns colors the **sd-standardized** difference (Glass's Δ = `diff/sd_ref`, derived at color time from `diff` + the reference `var` — no new field); default breaks `c(0.2, 0.5, 0.8, 1.2)` as new `mean_diff_breaks`. `$diff` stays raw; `ratio` mode keeps `mean_breaks`; `diff_ci`/`after_ci` unaffected (diff vs its own CI is already unit-free).
 15. **Whole-table test slot (Q11, §16-17)** — **hard rename** of the `chi2` table attribute → `test` (constructor arg follows; one tibble holding chi2 + ANOVA/F with a discriminator column); `attr(x, "chi2")` → NULL is an accepted §17 break. Lands in Phase 3 with the chi2-leftovers cleanup.
 16. **Stars vs explicit method (Q12, §15)** — the AC→Newcombe switch is **default-sensitive**: only when `method_diff` was left default; an explicit method is respected + one-time message that bracket ⇄ stars are no longer exact duals.
 17. **G2 closed + serialization non-issue (§ *Status*, §17)** — vectorised chi2 must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (today's path calls it with defaults, `tab.R` ~L5290; golden locks it). Old serialized tabs are a non-issue (tabs are exported or re-created from code, never saved as `.rds`) — documented unsupported, no upgrade shim.
 
-**Review session 4 (2026-07-07)** — inference pins + precision closures from the deep review (detail: `dev/tabxplor_1.4.0_decisions.md` §14-16, §19 + *Status*):
+**Review session 4 (2026-07-07)** — inference pins + precision closures from the deep review (detail: `dev/tabxplor_2.0.0_decisions.md` §14-16, §19 + *Status*):
 
 18. **Omnibus F weighting (Q13, §14)** — the mean-table Welch F follows the §14 rule (weighted means/variances + unweighted `n`), testing the numbers the table displays; **chi2 stays fully unweighted** (G2 parity) — a documented asymmetry on weighted tables.
 19. **Mean CI quantile (Q14, §15)** — a second swap-under-stars pair: mean intervals keep today's `z` (`qnorm`, verified `tab.R` ~L5591) when stars are off, switch to **Welch-t** when stars are on — the dual of the Welch-t `pvalue`.
@@ -72,7 +72,7 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 
 ### Phase 0 — Safety net (done — 2026-07-07)
 
-Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe without this. The net is GREEN on the current 15-field baseline; it deliberately locks *current* behavior so every 1.4.0 change is a conscious regeneration (never a silent drift). No safety-net assertion should fail on the current source — the "what must change later" is the tripwire ledger, not a red test.
+Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe without this. The net is GREEN on the current 15-field baseline; it deliberately locks *current* behavior so every 2.0.0 change is a conscious regeneration (never a silent drift). No safety-net assertion should fail on the current source — the "what must change later" is the tripwire ledger, not a red test.
 
 - Retro-compat safety net: `test-fmt-contract.R` (locks the 15 fields + 8 attributes), `test-golden.R` (characterization matrix + `_golden/*.rds` + `_snaps/`), `test-export-parity.R` (format vs `tab_xl` display parity), `test-fuse-parity.R` (fused vs `.by_table`).
 - **dplyr-verb coverage** in `test-tab_classes.R` (44→93 tests): class preservation for ~10 verbs on both tab classes, PLUS table-attribute (`subtext`/`chi2`) survival across every verb, the `group_by` flat→grouped upgrade, the `lv1_group_vars()` auto-downgrade, and `group_split`. Fixtures use `tab_plain()|>tab_chi2()` (the real chi2-attr populator — `tab(chi2=TRUE)` does NOT fill it) + a sentinel `subtext`.
@@ -86,7 +86,7 @@ Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe witho
 
 ### Phase 1 — Combined fmt field-contract pass
 
-One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Split **1a** (contract: field defs + accessors + the `set_ci`/`get_ci` **bounds-shim** keeping display byte-identical; regenerate RDS golden fixtures once, `_snaps/` untouched; `test-fmt-contract.R` rewritten 15→18) / **1b** (writers, folded into Phases 2-3) — decisions doc § *Status* (Phasing). Detail + caveats + touch-list: `dev/tabxplor_1.4.0_decisions.md` §1-3, §9, §12. Skill: `/vctrs-field`.
+One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Split **1a** (contract: field defs + accessors + the `set_ci`/`get_ci` **bounds-shim** keeping display byte-identical; regenerate RDS golden fixtures once, `_snaps/` untouched; `test-fmt-contract.R` rewritten 15→18) / **1b** (writers, folded into Phases 2-3) — decisions doc § *Status* (Phasing). Detail + caveats + touch-list: `dev/tabxplor_2.0.0_decisions.md` §1-3, §9, §12. Skill: `/vctrs-field`.
 
 #### Done (Phase 1a — 2026-07-07)
 
@@ -117,9 +117,9 @@ Sub-phased (numeric first, per the review). Landed so far:
 - **Numeric moment-sum aggregate** (`R/tab-agg.R`, new): `tab_num()`'s three N-scans (main + total rows + total table) now compute **sufficient moment sums** (`n`, `wn`, `s1 = Σ[w]x`, `s2 = Σ[w]x²`, double-coerced to avoid integer overflow) instead of per-group `mean`/`stats::var`/`weighted.mean`/`weighted.var` closures; `num_derive_stats()` derives mean/var in one pass afterwards, reproducing the **unweighted sample (n-1)** vs **weighted ML (÷Σw)** split exactly (incl. the degenerate n≤1 / all-NA NaN→NA edges). `weighted.var()` deleted (its double scan is gone). Output byte-identical (golden within waldo tolerance; `_snaps/` unchanged). **8M bench: `tab_num` unweighted 1.09→0.53 s / 1752→864 MB; weighted 2.94→1.01 s / 7790→2169 MB.**
 - **Numeric `diff` → real difference** (§3, D3): the numeric `diff` field is now `cell_mean − ref_mean`; the ratio moved to the new `ratio` field; the color layer repoints numeric `"diff"`/`diff_ci`/`after_ci`/`ci` to read `ratio` (byte-identical coloring against `mean_breaks`). pct columns untouched. Numeric `diff` **display** (the rare `display="diff"`/diff-interval-on-means) deferred with the mean diff_ci display to Phase 5 (no golden exercises it). Golden regenerated consciously (only the numeric `.rds`).
 - **`tot_n` written (factor path)** + **`get_tot_wn()` accessor** (§2, §11): `tab_plain()` now stores each cell's OWN unweighted percentage base in the `tot_n` field (row / column / grand total per `pct`, `NA` for `pct="no"` counts and for mean cells), built from the unweighted `tabs_n` and broadcast (same denominators as the pct). Because `tab_plain()` runs per col_var, each col_var's `tot_n` is its own base (cross-col_var exactness is automatic). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (with a same-column total-cell fallback for empty cells; `$tot_wn` works). Built tables are now self-sufficient for their base — Phase 3 will retire `detect_totcols()` in `tab_ci`/`tab_chi2` in favour of these. Conscious golden regen: every factor pct `.rds` gains `tot_n` (only that field changed; `f_counts` unchanged; display `_snaps/` byte-identical).
-- **Safety net grown**: golden fixtures `f_selfcross` (`_colvarbis`), `totn_row_drop`, `n_mean_w` (weighted ML variance), `n_mean_sparse` (n≤1/all-NA edge), plus `n_mean_color` display snapshot (D3→Phase 5 tripwire); `num_derive_stats` + `tot_n`/`tot_wn` unit tests (the former replacing the deleted `weighted.var` tests). Full suite green (774). Benchmarks in `dev/benchmarks/results_1.4.0/`.
+- **Safety net grown**: golden fixtures `f_selfcross` (`_colvarbis`), `totn_row_drop`, `n_mean_w` (weighted ML variance), `n_mean_sparse` (n≤1/all-NA edge), plus `n_mean_color` display snapshot (D3→Phase 5 tripwire); `num_derive_stats` + `tot_n`/`tot_wn` unit tests (the former replacing the deleted `weighted.var` tests). Full suite green (774). Benchmarks in `dev/benchmarks/results_2.0.0/`.
 
-- **Totals rollup** (`num_rollup()`, R/tab-agg.R): `tab_num()`'s total-row and total-table blocks no longer re-scan N — they **sum the additive moment-sum columns of a captured `main_agg`** by each grouping key (`group_vars` subsets for total rows; `row_var` for the total table), relabeling collapsed keys `"Total"`. Byte-identical (golden + a direct-microdata computation check; new `n_mean_tottab` fixture locks the total-table path). **This removed the 2 extra N-scans**: on 8M rows `tab_num` unweighted 0.70→**0.20 s** / 864→**288 MB**, weighted 1.05→**0.35 s** / 2169→**718 MB**. **Combined Phase 2 vs the pre-1.4.0 baseline: `tab_num` ~5.6×/8.3× faster and ~6×/11× less memory (unweighted/weighted).**
+- **Totals rollup** (`num_rollup()`, R/tab-agg.R): `tab_num()`'s total-row and total-table blocks no longer re-scan N — they **sum the additive moment-sum columns of a captured `main_agg`** by each grouping key (`group_vars` subsets for total rows; `row_var` for the total table), relabeling collapsed keys `"Total"`. Byte-identical (golden + a direct-microdata computation check; new `n_mean_tottab` fixture locks the total-table path). **This removed the 2 extra N-scans**: on 8M rows `tab_num` unweighted 0.70→**0.20 s** / 864→**288 MB**, weighted 1.05→**0.35 s** / 2169→**718 MB**. **Combined Phase 2 vs the pre-2.0.0 baseline: `tab_num` ~5.6×/8.3× faster and ~6×/11× less memory (unweighted/weighted).**
 
 **Deferred out of Phase 2 (decided 2026-07-08):**
 - **Factor-path reorg** (extracting `tab_plain`'s pct/diff/OR/fmt-assembly into shared `wide_*`/`fmt_assemble_factor` helpers) → **moved to Phase 4**. Unlike the numeric path, `tab_plain`'s factor math is already the single live, GForce-optimal path, so the reorg is purely output-invariant with no benefit until a second consumer exists — Phase 4's `as_tab_counts()` is that consumer and should drive/validate the extracted interface (avoids premature abstraction + a risky 800-line refactor now).
@@ -138,7 +138,7 @@ Split into **3a (CI, DONE)** and **3b (chi2, remaining)**.
 
 #### Phase 3a — CI onto the aggregate, 2026-07-08 (Done)
 
-Proportion-CI vectorised onto a **closed-form engine** (`R/tab-agg.R`: `ci_pivot`/`ci_wilson`/`ci_newcombe`/`ci_prop_diff`/`ci_mean_diff2` + `newcombe_pvalue`) — the per-cell `DescTools` loop is gone (`DescTools` Imports→Suggests). `tab_ci()` (props) and `tab_num()` (means) both route through it. **Real asymmetric `ci_inf`/`ci_sup` bounds** (fixes the Wilson/AC symmetric-bracket bug); `format()` reads them directly; `get_ci()` = upper arm, `get_ci_moe()` = larger arm for `± moe`. **Significance = universal CI-inclusion** (the maintainer's refinement, **supersedes §12 score-test + §15 AC-swap** — see decisions §20): the stored per-cell `pvalue` is the inversion p of the *displayed* interval, so `get_stars()` never disagrees with the bracket, for any method. **Defaults: Wilson (cell), Newcombe method-10 (diff, new default), z/Welch-t (means)**; `stars` arg default `TRUE` (`ci="cell"`→NA); expert `method_cell`/`method_diff`. **Weighted = weighted estimate + unweighted n (§14)**; **Kish n_eff opt-in** for numeric CIs via `options("tabxplor.kish_neff")` (G1 `Σw²` accumulator added to the numeric scan only when opted in; factor-side Kish deferred). Empirical **OR deferred to the tab_logit phase** (not 3b). Golden regenerated: `f_ci_cell`/`f_ci_diff`/`f_color_afterci`/`n_mean_ci`. Full suite green (800); `tab_ci` no perf regression (`dev/benchmarks/results_1.4.0/phase3a_after.txt`). Empirical validation: `dev/verify_ci_inclusion.R`. **tab_xl stars deferred to Phase 7** (exporter unification).
+Proportion-CI vectorised onto a **closed-form engine** (`R/tab-agg.R`: `ci_pivot`/`ci_wilson`/`ci_newcombe`/`ci_prop_diff`/`ci_mean_diff2` + `newcombe_pvalue`) — the per-cell `DescTools` loop is gone (`DescTools` Imports→Suggests). `tab_ci()` (props) and `tab_num()` (means) both route through it. **Real asymmetric `ci_inf`/`ci_sup` bounds** (fixes the Wilson/AC symmetric-bracket bug); `format()` reads them directly; `get_ci()` = upper arm, `get_ci_moe()` = larger arm for `± moe`. **Significance = universal CI-inclusion** (the maintainer's refinement, **supersedes §12 score-test + §15 AC-swap** — see decisions §20): the stored per-cell `pvalue` is the inversion p of the *displayed* interval, so `get_stars()` never disagrees with the bracket, for any method. **Defaults: Wilson (cell), Newcombe method-10 (diff, new default), z/Welch-t (means)**; `stars` arg default `TRUE` (`ci="cell"`→NA); expert `method_cell`/`method_diff`. **Weighted = weighted estimate + unweighted n (§14)**; **Kish n_eff opt-in** for numeric CIs via `options("tabxplor.kish_neff")` (G1 `Σw²` accumulator added to the numeric scan only when opted in; factor-side Kish deferred). Empirical **OR deferred to the tab_logit phase** (not 3b). Golden regenerated: `f_ci_cell`/`f_ci_diff`/`f_color_afterci`/`n_mean_ci`. Full suite green (800); `tab_ci` no perf regression (`dev/benchmarks/results_2.0.0/phase3a_after.txt`). Empirical validation: `dev/verify_ci_inclusion.R`. **tab_xl stars deferred to Phase 7** (exporter unification).
 
 #### 3b — table-level tests: Chi2/ANOVA on the vectorised engine, 2026-07-08 (Done)
 
@@ -146,7 +146,7 @@ Proportion-CI vectorised onto a **closed-form engine** (`R/tab-agg.R`: `ci_pivot
 
 **`chi2` attribute → tidy `test` attribute** (§16): one row per (subtable × col_var × test-type), cols `[tab_vars…] row_var col_var test statistic df1 df2 pvalue n variance min_e`. Back-compat: `get_test()` reads it and **falls back to the old `chi2` attr**; `get_chi2()` kept as a working alias; the `chi2=` constructor arg soft-deprecated → maps to `test`; `new_test_tibble()` is the empty placeholder. **Contrib only when needed**: the per-cell `ctr`/`var` write (kept `var_contrib` machinery) runs **only when `color=="contrib"`** (`calc="p"` on the common path) → non-contrib factor tables' `var`/`ctr` become NA (conscious golden change; the contrib path stays byte-identical). **`add_n=TRUE` fixed**: the test drops reserved add_n/add_pct rows (`row_var` "n"/"row_pct") and `all_col_vars` columns.
 
-Display: `tab_pvalue_lines()` bakes the p-value row from the tidy attribute (now for **means too**, F p-value); factor rows byte-identical (`_snaps` unchanged). `print_chi2()` rewritten to render the tidy attribute (chi2 + F) as a readable colored block. Golden regenerated (attr rename + var/ctr on non-contrib). **Suite green (950)**; parity locked in `test-calculations.R` (chi2 vs `chisq.test` incl. Yates; Welch/classic F vs `oneway.test`; add_n). **Perf: chi2 ~2.5× faster** (9-tab gss_cat 2.60→1.03 s; whole call 3.07→1.48 s — `dev/benchmarks/results_1.4.0/phase3b_chi2_anova.txt`); the tidy rewrite also fixed a pre-existing `tab_pvalue_lines` crash on overlapping row/col var names. Full record + ANOVA formulas: `dev/tabxplor_1.4.0_decisions.md` **§24** (§16, §14, §20).
+Display: `tab_pvalue_lines()` bakes the p-value row from the tidy attribute (now for **means too**, F p-value); factor rows byte-identical (`_snaps` unchanged). `print_chi2()` rewritten to render the tidy attribute (chi2 + F) as a readable colored block. Golden regenerated (attr rename + var/ctr on non-contrib). **Suite green (950)**; parity locked in `test-calculations.R` (chi2 vs `chisq.test` incl. Yates; Welch/classic F vs `oneway.test`; add_n). **Perf: chi2 ~2.5× faster** (9-tab gss_cat 2.60→1.03 s; whole call 3.07→1.48 s — `dev/benchmarks/results_2.0.0/phase3b_chi2_anova.txt`); the tidy rewrite also fixed a pre-existing `tab_pvalue_lines` crash on overlapping row/col var names. Full record + ANOVA formulas: `dev/tabxplor_2.0.0_decisions.md` **§24** (§16, §14, §20).
 
 #### 3b — deferred (not blocking)
 
@@ -212,7 +212,7 @@ Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-inv
   rerouted (the console + golden). **Factor `diff` byte-identical (text)**; numeric `diff` now Glass's
   Δ (`mean_diff` breaks); pct CI-gated modes fixed (asymmetric-interval upper-arm bug + the `ci`-mode
   crash); a contrib 0/0 p-value-row miscolor fixed. **48–1290× faster** than `keep_last_break`
-  (`dev/benchmarks/results_1.4.0/phase5_engine_micro.csv`). Old `fmt_color_selection`/`keep_last_break`/
+  (`dev/benchmarks/results_2.0.0/phase5_engine_micro.csv`). Old `fmt_color_selection`/`keep_last_break`/
   `select_in_color_style` kept ONLY for the exporters + `expect_color()` until Steps 5/6.
 - **Step 4a — ratio field repoint (§3).** pct/factor `ratio` field now holds the reference-relative
   RR `cell_pct/ref_pct` (the x2 driver, off the `mean` overload); `mean` keeps the value during the
@@ -279,7 +279,7 @@ Phase 5 is **COMPLETE**. Full suite green (**1085 tests, 0 failures**).
 - **W5 — coloured `tab_md`** (pandoc spans) still out of scope; `tab_md` stays monochrome.
 - Numeric `color="diff"` = Glass's Δ (does NOT auto-remap to `"ratio"`).
 
-Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
+Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_2.0.0_decisions.md` §7).
 
 #### To verify
 
@@ -322,7 +322,7 @@ Sub-phases 6a–6i, each golden byte-identical (conscious NEW fixtures only; no 
 
 Merge between `tab()` and `tab_many()`. Soft deprecate the `tab_many` alias to directly use `tab` alias from now on.
 
-`tab_many()` code becomes the base; `tab()` the new alias for it. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
+`tab_many()` code becomes the base; `tab()` the new alias for it. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("2.0.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_2.0.0_decisions.md`.
 
 - **Phase 5 leftover — wire the new `color`/`color_signif` forms into `tab_many()`** (done for `tab()`/`tab_num()` in Phase 5 via `normalize_color_spec`/`finalize_color_spec`). Deferred here because the new two-channel `color = c("diff","ratio")` collides with `tab_many()`'s per-row_var `color` vector (`tab.R` ~L841); the color-axis globalisation above resolves it. If a legacy per-row_var path is ever kept, the clean discriminator is that `"ratio"` was never a valid old color value. Move the parsing into the merged base so all three entry points share ONE parse site.
 
@@ -340,7 +340,7 @@ Use Jamovi states logic to avoid redoing calculations on each button change, wit
 
 **No back-compatibility needed at all on jmvtab and jamovi UI** : the aim is no create a fully new user-friendly fast UI.
 
-Look carefully at `dev/tabxplor_1.4.0_jamovi_dev.md` for detailed insights about jamovi module development.
+Look carefully at `dev/tabxplor_2.0.0_jamovi_dev.md` for detailed insights about jamovi module development.
 
 #### Phase 7a — Wire new colors UI and new tab() version into jmvtab for baseline
 
@@ -427,7 +427,7 @@ kept once — no fork) called by BOTH `tab_num()`'s raw path and the new **`tab_
 `tab_build()` builds `fine_num` **per row_var** (never fused across row_vars — H1) and passes it to
 `tab_num(.fine=)`; `.by_table = TRUE` forces the raw path. **Perf-neutral** (the scan is relocated, not
 doubled — default==`.by_table` at ratio 1.00 on 515k rows,
-`dev/benchmarks/results_1.4.0/phase7d_i_numeric_seam.txt`). **Byte-identical**: full suite green
+`dev/benchmarks/results_2.0.0/phase7d_i_numeric_seam.txt`). **Byte-identical**: full suite green
 (1116 pass, 0 fail), NO golden regeneration; new `test-num-fuse-parity.R` locks adopt-fine == inline
 scan across unweighted/weighted, na keep/drop, comp all, ci cell/diff, mixed factor+numeric, several
 row_vars, Kish `_w2` round-trip, and `.fine`-not-mutated. The `tab_num(<tab_vars>, ci="cell")`
@@ -450,7 +450,7 @@ stages**: single-pair ctx → `tab_setup()` (incl. tab()'s `tot`→totrow/totcol
 → `tab_assemble`, injecting its counts as the fused tier-1 — deleted the hand-inlined finalize; now
 byte-identical to `tab()` for EVERY `tot` (contrib now forces a total row like tab() — a documented
 convergence). **Byte-identical, perf-neutral** (48.3 vs 47.95 ms/call,
-`dev/benchmarks/results_1.4.0/phase7d_ii_carve.txt`): full suite green (1150 pass, 0 fail), NO golden
+`dev/benchmarks/results_2.0.0/phase7d_ii_carve.txt`): full suite green (1150 pass, 0 fail), NO golden
 regeneration. New `test-carve-parity.R` (stage composition == tab_build + the 7e seam contract) +
 `test-cache-keys.R` (the `$cache_keys` shape) + non-default `tot` cases in `test-counts-parity.R`.
 Pre-existing (NOT a carve regression): multi-row_var × multi-col_var + scalar `pct` errors "pct can't be
@@ -461,7 +461,7 @@ recycled" identically on the pre-carve code.
 
 Totally rewrite `jmvtab()` jamovi module code to implement the multi-level cache system designed in Phase 7c, using the modified functions implemented in Phase 7d if it was done. Use all the documentation create above carefully to design the most performant, reliable and user-friendly jamovi UI for live use.
 
-The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
+The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 2.0.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
 
 
 ##### Done (2026-07-10)
@@ -473,7 +473,7 @@ New **`R/jmvtab-cache.R`**: the content-addressed multi-tier live cache. The mod
 
 #### Phase 7f — Optimizing the O(cells) fmt build
 
-**Why (grounded, Phase 7e profiling — `dev/tabxplor_1.4.0_decisions.md` §27).** The Phase 7c cache persists tiers 1-2 (counts/moment scans + chi2/ANOVA) on the premise that everything below — the tier-3/4 **`fmt`-record assembly** (`pct`/`diff`/CI + `vctrs::new_rcrd` cells + colour) — is O(cells) and "too cheap to cache". The committed jmvtab benchmarks (`benchmark_jmvtab_ops()` small, `benchmark_jmvtab_big_ops()` big; baselines `tests/testthat/jmvtab_benchmark_baseline.csv` + `jmvtab_big_benchmark_baseline.csv`) disprove that **at real-world scale**:
+**Why (grounded, Phase 7e profiling — `dev/tabxplor_2.0.0_decisions.md` §27).** The Phase 7c cache persists tiers 1-2 (counts/moment scans + chi2/ANOVA) on the premise that everything below — the tier-3/4 **`fmt`-record assembly** (`pct`/`diff`/CI + `vctrs::new_rcrd` cells + colour) — is O(cells) and "too cheap to cache". The committed jmvtab benchmarks (`benchmark_jmvtab_ops()` small, `benchmark_jmvtab_big_ops()` big; baselines `tests/testthat/jmvtab_benchmark_baseline.csv` + `jmvtab_big_benchmark_baseline.csv`) disprove that **at real-world scale**:
 
 - Small table (1 row_var × 3 col_vars): warm build ~0.23 s, render ~0.28 s → **render dominates**.
 - Big table-of-tables (3 row_vars × 3 col_vars ≈ 9 pair-tables): warm build **~0.95–1.15 s**, render ~0.60 s → **the fmt BUILD dominates** (~1.5 s R, ~2 s in the Jamovi UI). The bottleneck flips with size.
@@ -574,7 +574,7 @@ maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running app, th
   no async swap can clobber an edit; the `updated` handler now re-renders only on a variable-set change or
   a jamovi `$el` re-render (detected via a `data-tabx-tree` root marker), never on a plain move. Also fixed
   a `setValue`-by-reference **aliasing** bug (`writeOrder` now stores `lv.slice()`). Variable names **bold**.
-- **General jamovi-UI technical findings** written to `dev/tabxplor_1.4.0_jamovi_dev.md` **§6.8**
+- **General jamovi-UI technical findings** written to `dev/tabxplor_2.0.0_jamovi_dev.md` **§6.8**
   (CustomControl/option/`hidden`/`updated`/async-swap/`requestData`/colors/keyboard) for future UI work.
 
 
@@ -625,7 +625,7 @@ Confirmation : jmvtab works well on jamovi 2.7.37
 
 ### Phase 8 – Parallelisation opt-in for the "many tables at once" survey workflow (DONE)
 
-Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_1.4.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_1.4.0/phase6b_*.txt`.
+Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_2.0.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_2.0.0/phase6b_*.txt`.
 - We should first choose only one parallelisation engine / package : either `mirai` or `parallel`. What would be the best choice for both performance and future-proofing ? Anyway the package should be in Suggest.
 - If workers setup step is needed, it should be done the first time parallelisation is used and reused afterwards.
 - ~~It should work on Windows / Linux / MAC, but for performance the main focus is Windows.~~ ⚠ **Superseded: dev + the primary run platform are now WSL2 Ubuntu.** It must still work on all three (CRAN), but see the WSL2 caveats below. `mirai` stays the right engine regardless — it is cross-platform, and a CRAN package cannot rely on `fork`.
@@ -674,7 +674,7 @@ The package have grown somewhat organically and I want you to review it for poss
 `tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it did not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Should we at the contrary keep internal functions, but a different one each time, just to be able to have internal arguments not passed in the public API ?
 - Now that we are near the end, and some functions and workflows have grown organically, can you see final simplifications of the table building workflow ? What would we need to give up to really make meaningful simplifications ? What would we need to give up to really improve performance to the next level ?
 
-##### Analysed (2026-07-11) — grounded verdict in `dev/tabxplor_1.4.0_decisions.md` §29
+##### Analysed (2026-07-11) — grounded verdict in `dev/tabxplor_2.0.0_decisions.md` §29
 
 Fresh profile (`tab(5 row_vars × 3 col_vars, pct="row", color="diff", chi2=TRUE)`, gss_cat):
 **arg resolution + the whole row/col-axis vectorisation = 0.2 %**; the O(cells) `tabxplor_fmt`
@@ -722,7 +722,7 @@ collapses to a cosmetic NSE-boundary extraction (thin wrapper forwarding every a
 ~800/940-line core) — poor risk/reward on the two most byte-sensitive functions. Kept `tab_plain`/`tab_num`
 whole; did the dead-code cleanup only. The `exists(…, inherits=FALSE)` guards are functional and left as-is.
 
-Byte-identical internal re-cut — re-shape the shared engine so it reads *prep once → map a scalar core over row_vars → merge*. **No public API / vctrs-field change** (§29: this needs no backward-compat sacrifice). Full detail + code anchors + the fresh profile: `dev/tabxplor_1.4.0_decisions.md` §29.
+Byte-identical internal re-cut — re-shape the shared engine so it reads *prep once → map a scalar core over row_vars → merge*. **No public API / vctrs-field change** (§29: this needs no backward-compat sacrifice). Full detail + code anchors + the fresh profile: `dev/tabxplor_2.0.0_decisions.md` §29.
 
 1. **Outer-map the row axis (Finding 2).** Pull the `purrr::map`/`pmap`-over-row_vars OUT of `tab_aggregate`/`tab_transform`/`tab_assemble_tables` into ONE outer map in `tab_build()`: resolve a list of per-row_var *scalar* arg-sets in `tab_setup`, then `map`/`pmap(build_one_table)`. Serial and parallel become one dispatch (`purrr::map` vs `mirai_map`) — collapse the branch split ([tab.R ~L1069-1085](R/tab.R#L1069)). **Retire `ctx_slice()` + `tabxplor_rowvar_fields`** (build each per-row_var ctx directly, not by slicing a vectorised one). `pct_vect`/`ref_vect` lose a nesting level (per-col_var only). **Fix the live latent bug** at [tab.R:1252](R/tab.R#L1252) (col-indexed `pct` `&` row-indexed `OR` → length-mismatch warning). `tab_many`'s per-row_var vectors keep working — they are how the resolver fills the arg-list (more flexibility, not less).
 - **Constraint:** preserve the jmvtab cache seam (the `jmv_cache_aggregate` hook in `tab_aggregate`, `jmv_cache_store_tests` after transform) and `tab_counts()`'s ctx-injection — both must still fire under the new structure (jmvtab is always serial; its per-pair cache is unaffected by a per-row_var outer loop). Re-validate `test-jmvtab-cache.R` + `test-counts-parity.R` + `test-carve-parity.R`.
@@ -743,15 +743,15 @@ Decisions taken : **tiered** (bank the safe merge win first, gate the big rewrit
 
 **Boundary (Q1 — settle before 9b-4).** *Where* is "the very end"? **Boundary A** = end of `tab_build_one` (before `tab_compact`), one materialize **per row_var** — recovers leaf-tail + join + ci/chi2 + assemble reconstruction (~20-25%); parallel-clean (workers return finished tabs); leaves `tab_compact` + `tab_pvalue_lines` (**~15%!**) record-based; landmines L1/L5/L6/L7. **Boundary B** = the true end (after `tab_pvalue_lines`), one materialize **per whole table** — also recovers compact's `vec_rbind` + the pvalue `bind_rows` (~35-45% total), at the cost of **L3** (attr reconcile) + **L4** (grouped `as_refrow`) on the carrier + the p-value row on the carrier + re-locking `test-parallel-parity`. Build toward A first (9b-4→9b-6); 9b-7 is the B-only extension.
 
-**Open questions (settle before committing carrier code):** **Q1** boundary A vs B. **Q2** carrier-join (L2) vs materialize-around-the-cheap-join (join is 0.9% → lean the latter, drops L2). **Q3** *worth it now?* — the **largest byte-identity surface in 1.4.0** for ~20-45%, value **back-loaded** (9b-4 is low-payoff infra; 9b-5 is the win); weigh vs pausing at passes 2-4. **Q4** sequence 9b-5 with **Phase 10** exporter-prep (same fmt read paths).
+**Open questions (settle before committing carrier code):** **Q1** boundary A vs B. **Q2** carrier-join (L2) vs materialize-around-the-cheap-join (join is 0.9% → lean the latter, drops L2). **Q3** *worth it now?* — the **largest byte-identity surface in 2.0.0** for ~20-45%, value **back-loaded** (9b-4 is low-payoff infra; 9b-5 is the win); weigh vs pausing at passes 2-4. **Q4** sequence 9b-5 with **Phase 10** exporter-prep (same fmt read paths).
 
 ##### Phase 9b-1 — surgical `tab_compact` merge fix (DONE)
 
-**9b-1 — surgical `tab_compact` merge fix (byte-identical).** The merge promoted totrow→refrow with `if_else(is_totrow & !any(is_refrow), as_refrow(.), .)` over each fmt column — a `vec_case_when` record round-trip (72 % of `tab_compact` per §29). Replaced by a direct `in_refrow` field write (new internal `promote_totrow_to_refrow()` in `R/tab_classes.R`, kept inside the per-sub-table `imap` so `any(in_refrow)` stays grouped per row_var). `as_refrow` only flips that field → byte-identical. **`tab_compact` 0.390→0.160 s (2.44×)** on the gss_cat 5×3 fixture; full merged call 1.78→1.55 s; `output_list` (no-merge) unchanged. Record: `dev/benchmarks/results_1.4.0/phase9b1_tab_compact.txt`.
+**9b-1 — surgical `tab_compact` merge fix (byte-identical).** The merge promoted totrow→refrow with `if_else(is_totrow & !any(is_refrow), as_refrow(.), .)` over each fmt column — a `vec_case_when` record round-trip (72 % of `tab_compact` per §29). Replaced by a direct `in_refrow` field write (new internal `promote_totrow_to_refrow()` in `R/tab_classes.R`, kept inside the per-sub-table `imap` so `any(in_refrow)` stays grouped per row_var). `as_refrow` only flips that field → byte-identical. **`tab_compact` 0.390→0.160 s (2.44×)** on the gss_cat 5×3 fixture; full merged call 1.78→1.55 s; `output_list` (no-merge) unchanged. Record: `dev/benchmarks/results_2.0.0/phase9b1_tab_compact.txt`.
 
 ##### Phase 9b-2 — measurement spike (DONE)
 
-Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R` decomposed the per-table build across the 4 shapes. **Verdict: GO for 9b-3.** On the common factor path ~**30 %** (`vec_restore` reconstruction) to ~**48 %** (+`vec_case_when`) of the build is recoverable; the **materialize-once floor is ~0.5 %** (1.4 ms/21 cols) and pushing records through ops is **54.5× slower** than plain — so the fmt cost is almost entirely redundant reconstruction. Numeric-only tables gain ~nothing (cost = the data.table scan; `tab_num` already materializes once). **Fold the writers into 9b-3** — not a separate committable rung. Record: `dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt`; full analysis `dev/tabxplor_phase9b_fmt_display_only.md` §5.
+Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R` decomposed the per-table build across the 4 shapes. **Verdict: GO for 9b-3.** On the common factor path ~**30 %** (`vec_restore` reconstruction) to ~**48 %** (+`vec_case_when`) of the build is recoverable; the **materialize-once floor is ~0.5 %** (1.4 ms/21 cols) and pushing records through ops is **54.5× slower** than plain — so the fmt cost is almost entirely redundant reconstruction. Numeric-only tables gain ~nothing (cost = the data.table scan; `tab_num` already materializes once). **Fold the writers into 9b-3** — not a separate committable rung. Record: `dev/benchmarks/results_2.0.0/phase9b2_decomposition.txt`; full analysis `dev/tabxplor_phase9b_fmt_display_only.md` §5.
 
 ##### Phase 9b-3 — in-place fmt-reconstruction wins (DONE)
 
@@ -763,7 +763,7 @@ The four **byte-identical, in-place** optimizations toward the "materialize `tab
 
 **Done (2026-07-11): pass 3 — `tab_pvalue_lines` masked-fill** (byte-identical, **the big one: ~25-34%**). A post-pass-2 line-profile pinned `tab_pvalue_lines` at **~34% of the per-table build** (`chi2=TRUE` adds a p-value row): the block filled the new row's empty cells with an `if_else` over EVERY fmt cell (the `$.tabxplor_fmt` `vec_proxy` pull + `mutate.tabxplor_fmt` round-trip + per-column `vec_restore` — the source of `vec_case_when` 20% + `mutate.tabxplor_fmt` 7% + much of `vec_restore` 33%). Replaced by a masked assignment `col[is.na(get_display(col))] <- fmt0(...)` (`R/tab_classes.R`), a no-op on columns with no empty cell. **Cumulative baseline→pass3: common merged −26% / per-table −34%; ci −25%; contrib −26%.** Full suite green, no golden regen. Doc §6.
 
-**Done (2026-07-11): pass 4 — `new_test_tibble` memoization** (byte-identical, modest ~3-6% common build). The empty-placeholder `test` tibble costs ~1.4 ms/call (`tibble()` validation), built several times per table; it's stateless → memoized (`R/tab_classes.R`, cached copy shared safely via R copy-on-modify). Full suite green, no golden regen. The remaining `tab_pvalue_lines` cost (`bind_rows`+`vec_restore` adding the p-value row) is the vctrs **record combine**, inherent to the fmt type — only the deferred-materialization carrier removes it (the carrier core, Phases 9b-4→9b-7). Doc §6. **Corrected cost model** (profiling, `dev/benchmarks/results_1.4.0/phase9b3_profile.txt` + doc §6): the col_var **join is cheap (0.9%) — NOT the target** (drop the L2 focus; keep the record `full_join`); the ~30% reconstruction is **pervasive `dplyr`-over-fmt**; the **#1 recoverable chunk is `tab_apply_tests`/`tab_chi2` at 20%** (repeated `is_totrow` scans + `dplyr`-over-fmt group-matching). **Revised staging** (doc §6, supersedes the join-first order): (1) `tab_chi2`/`tab_apply_tests` on plain fields with row/col masks computed once (the 20%, needs the carrier at the tests boundary); (2) defer the leaf materialization so the carrier reaches the tests; (3) `tab_assemble_tables`+`tab_add_n_pct` on the carrier, `fmt_wrap` at `tab_build_one` end. Landmines: L1 (types) + L5 (boundary) + L6 (ci/chi2) + L7 (add_n); **L2 dropped**, L3/L4 avoided. Full brief: `dev/tabxplor_phase9b_fmt_display_only.md` §6.
+**Done (2026-07-11): pass 4 — `new_test_tibble` memoization** (byte-identical, modest ~3-6% common build). The empty-placeholder `test` tibble costs ~1.4 ms/call (`tibble()` validation), built several times per table; it's stateless → memoized (`R/tab_classes.R`, cached copy shared safely via R copy-on-modify). Full suite green, no golden regen. The remaining `tab_pvalue_lines` cost (`bind_rows`+`vec_restore` adding the p-value row) is the vctrs **record combine**, inherent to the fmt type — only the deferred-materialization carrier removes it (the carrier core, Phases 9b-4→9b-7). Doc §6. **Corrected cost model** (profiling, `dev/benchmarks/results_2.0.0/phase9b3_profile.txt` + doc §6): the col_var **join is cheap (0.9%) — NOT the target** (drop the L2 focus; keep the record `full_join`); the ~30% reconstruction is **pervasive `dplyr`-over-fmt**; the **#1 recoverable chunk is `tab_apply_tests`/`tab_chi2` at 20%** (repeated `is_totrow` scans + `dplyr`-over-fmt group-matching). **Revised staging** (doc §6, supersedes the join-first order): (1) `tab_chi2`/`tab_apply_tests` on plain fields with row/col masks computed once (the 20%, needs the carrier at the tests boundary); (2) defer the leaf materialization so the carrier reaches the tests; (3) `tab_assemble_tables`+`tab_add_n_pct` on the carrier, `fmt_wrap` at `tab_build_one` end. Landmines: L1 (types) + L5 (boundary) + L6 (ci/chi2) + L7 (add_n); **L2 dropped**, L3/L4 avoided. Full brief: `dev/tabxplor_phase9b_fmt_display_only.md` §6.
 
 ##### Phase 9b-4 — carrier to the tests boundary (DONE)
 
@@ -773,14 +773,14 @@ Implemented as the **lean post-join round-trip** (maintainer decision, not the d
 
 Both increments landed byte-identical (full suite FAIL 0 | PASS 1354, NO golden regen; git-stash `identical()` A/B: 10 contrib + 21 ci shapes). All in `R/tab.R`. The reframing that governs it: the chi2 whole-table **TEST is NOT the cost** (a 40×15 A/B was 0.1000 == 0.1000 s; the §6 "20%" was the DEFAULT-`calc` contrib writes, not the pipeline `calc="p"` test) — the O(cells) fmt cost is the **WRITES**. Approach throughout = **precompute-then-single-write** (real setters over plain vectors, NOT a `fmt_unwrap`/`fmt_wrap` round-trip). Recurring landmines: writes are **per subtable / grouped** (old grouped mutates) → run ungrouped then restore grouping; and combining fmt via `dplyr::if_else` / a grouped-mutate **recombine** **materialises the `wn` field** (NA→n) → reproduced with `set_wn(get_wn())` for exactly the columns/paths where the old code did.
 
-- **Increment 1 — chi2** (`chi2_compute_test()` read-only test marshalling — no win, clarity + no-op removal; `chi2_write_contrib()` — the per-cell `var`/`ctr` + `comp_all`/contrib-`color`): **contrib per-table −41 % (1.7×), −30 % memory** (`dev/benchmarks/results_1.4.0/phase9b5_chi2.txt`). Dead `variances_by_group`/`cells_by_group` dropped.
+- **Increment 1 — chi2** (`chi2_compute_test()` read-only test marshalling — no win, clarity + no-op removal; `chi2_write_contrib()` — the per-cell `var`/`ctr` + `comp_all`/contrib-`color`): **contrib per-table −41 % (1.7×), −30 % memory** (`dev/benchmarks/results_2.0.0/phase9b5_chi2.txt`). Dead `variances_by_group`/`cells_by_group` dropped.
 - **Increment 2 — `tab_ci`** (net −58 lines): (a) the reference-row selection + `x_n`/`ref`/`ref_var`/`ref_n` (the grouped `ref_rows`/`ref_to_na` + ungrouped transmutes) → a plain loop with `group_last_pos(mask)` (per-subtable last-reference-row index) feeding the `ci_*` engine; (b) the CI write + `comp_all` + `visible` display → ONE ungroup/mutate/regroup; `ci_type`/`color` stays the positional `map2_df` (byte-identical, sidesteps the L-IDX quirk). **ci per-table −20 % (1.25×)** (`phase9b5_ci.txt`). Dead `tot_rows` dropped.
 
 Combined: the two WRITE-heavy paths (contrib −44 %, ci −20 % vs pre-9b-5) recovered; the READ paths (chi2 test, common `color="diff"`) flat.
 
 ##### Phase 9b-6 — Boundary B via local unwrap (DONE)
 
-**Re-scoped (maintainer, this session) from "step D / Boundary A" → "Boundary B via local unwrap".** Grounded finding: 9b-6-as-designed (carrier through `tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** (after 9b-5 everything inside `tab_build_one` is cheap: leaves materialize once; `tab_apply_tests` no longer reconstructs; `tab_assemble_tables` ~2 %; add_n on `pct="row"` adds one col; the join is 0.9 %). The real ~15-25 % was **Boundary B** — `tab_compact`'s `vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. Both were rewritten to row-bind on **plain field-frames via a LOCAL `fmt_unwrap`→wrap** (the 9b-5 pattern), so `tab_build_one` keeps returning **records** (no `test-parallel-parity` re-lock) and **9b-6+9b-7 collapse into this one deliverable** (Boundary A skipped). New primitive `fmt_stack_frames()` (`R/tab.R`). Increment 1 = `tab_compact` (`tab_stack_tables()`: `vec_ptype_common` reconcile = **L3**, promote_totrow folded onto the field frame = **L4**; ~neutral perf, byte-identical, scales with #row_vars). Increment 2 = `tab_pvalue_lines` (**the win**: fmt-free skeleton for row order + per-column field append, subsuming the pass-3 masked fill). Byte-identity key: the old `vec_cast` materialised `wn` (NA→n; `get_wn` is the only getter with a fallback) — reproduced via `fr$wn <- get_wn(col)`. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, mem 51→45 MB; numeric ~flat** (`dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`). Full suite FAIL 0, NO golden regen; 12-shape git-stash `identical()` A/B green (incl. per-row_var-ref L3, tab_vars-grouped pvalue, numeric ANOVA, list path). `fmt_unwrap`/`fmt_wrap` now load-bearing.
+**Re-scoped (maintainer, this session) from "step D / Boundary A" → "Boundary B via local unwrap".** Grounded finding: 9b-6-as-designed (carrier through `tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** (after 9b-5 everything inside `tab_build_one` is cheap: leaves materialize once; `tab_apply_tests` no longer reconstructs; `tab_assemble_tables` ~2 %; add_n on `pct="row"` adds one col; the join is 0.9 %). The real ~15-25 % was **Boundary B** — `tab_compact`'s `vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. Both were rewritten to row-bind on **plain field-frames via a LOCAL `fmt_unwrap`→wrap** (the 9b-5 pattern), so `tab_build_one` keeps returning **records** (no `test-parallel-parity` re-lock) and **9b-6+9b-7 collapse into this one deliverable** (Boundary A skipped). New primitive `fmt_stack_frames()` (`R/tab.R`). Increment 1 = `tab_compact` (`tab_stack_tables()`: `vec_ptype_common` reconcile = **L3**, promote_totrow folded onto the field frame = **L4**; ~neutral perf, byte-identical, scales with #row_vars). Increment 2 = `tab_pvalue_lines` (**the win**: fmt-free skeleton for row order + per-column field append, subsuming the pass-3 masked fill). Byte-identity key: the old `vec_cast` materialised `wn` (NA→n; `get_wn` is the only getter with a fallback) — reproduced via `fr$wn <- get_wn(col)`. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, mem 51→45 MB; numeric ~flat** (`dev/benchmarks/results_2.0.0/phase9b6_boundaryB.txt`). Full suite FAIL 0, NO golden regen; 12-shape git-stash `identical()` A/B green (incl. per-row_var-ref L3, tab_vars-grouped pvalue, numeric ANOVA, list path). `fmt_unwrap`/`fmt_wrap` now load-bearing.
 
 ##### Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (DONE)
 
@@ -788,12 +788,12 @@ Scoped up (maintainer) from the literal "carrier + re-paint" (which barely moves
 
 - **Increment 1 — tier-3 stores the CARRIER** (`list(carrier = jmv_carrier_unwrap(armed), tuple)` = plain field-frames via `fmt_unwrap`, not a live tab — aligns tier-3 with the tiers-1-2 discipline; schema 2→3). `jmv_reapply_digits` rewritten onto the carrier (drops the snapshot/restore trick; the single `fmt_wrap` absorbs its reconstruction). A/B caught L1: `set_digits` casts to integer but `new_fmt` does not → `vec_cast(new_d, integer())`.
 - **Increment 2 — `jmv_tab3_reref()`**: reconstruct `tabs_pct`+context from the carrier's ref-independent fields (data rows only) → `tab_apply_reference()` for diff/ratio → re-run the diff CI via `tab_ci()` on the DATA ROWS (p-value lines removed first — they'd drop one row/subtable) → copy CI back; p-value rows + table attrs (`test`/`groups`) verbatim. Gated by `jmv_tab3_rerefable` (only ref/ref2 differ, diff-armed, no OR) + `jmv_reref_shape_ok` (pct="row", one factor row_var, `!has_num_col`, levels="all", `!add_pct`, **comp="tab"** — comp="all" has a ref-DEPENDENT shape —, not auto+ci=diff); else the (fast, cached) rebuild.
-- **Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change is **~3–4.5× faster** (reref vs rebuild). Locked by `test-jmvtab-cache.R` (reref == rebuild across 12 shapes + tab() anchor + fallbacks + $state). Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
+- **Result** (`dev/benchmarks/results_2.0.0/phase9b7_reref.txt`): a ref change is **~3–4.5× faster** (reref vs rebuild). Locked by `test-jmvtab-cache.R` (reref == rebuild across 12 shapes + tab() anchor + fallbacks + $state). Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
 
 
 ##### Phase 9c — further simplifications ? (DONE)
 
-Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three questions, answered:
+Full analysis + fresh profile: `dev/tabxplor_2.0.0_decisions.md` §30. The three questions, answered:
 
 - **Pure data.table carrier for in-place `:=`? — NO, dropped (maintainer-confirmed).** A fresh profile
   (post-9b-7) shows the build is **N-INDEPENDENT** (215k rows ≈ 21k rows) and O(cells): the tables are
@@ -807,7 +807,7 @@ Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three
   call**; landmine: `same_comp` can be NA → `is.na()` first; `color` length ≤ 2 → `ifelse`). This drives
   every `c()`/bind/group over fmt AND is the compact merge's per-column reconcile: **merged call −7 %**
   (the merge marginal 0.046 → ~0 s), user `c()` of two fmt cols **1.8×**. Byte-identical (suite green,
-  no golden regen). `dev/benchmarks/results_1.4.0/phase9c_ptype2_and_fusion.txt`. The other levers
+  no golden regen). `dev/benchmarks/results_2.0.0/phase9c_ptype2_and_fusion.txt`. The other levers
   (per-leaf relabel ~5 %, `tab_apply_tests` marshalling ~22 %) were left; the big one (leaf-math ~30 %)
   is **Phase 9d** below.
 - **Feature given up for simplicity — the tab()-level scan-fusion, REMOVED.** `options(tabxplor.fuse_min_rows)`
@@ -831,14 +831,14 @@ sums. **DECISIVE trap**: B/C sum with base `sum()` per `split()` group, NOT `row
 accumulator drifts 1 ULP from the old `map(.SD, sum)` long-double → breaks `identical()`); `check.names =
 FALSE` for `$`/space value-cell names. Region D (the `rowSums` Total column) kept. **Perf**: no-tab_vars
 common −11 % / ci −7.4 % per-row_var build (E+F); git-stash A/B with tab_vars (B/C `map2` multiplier) 1
-tab_var −20 %, 2 tab_vars × 2 col_vars −51 %. Detail: `dev/tabxplor_1.4.0_decisions.md` §31.
+tab_var −20 %, 2 tab_vars × 2 col_vars −51 %. Detail: `dev/tabxplor_2.0.0_decisions.md` §31.
 
 
 
 
 ### Phase 10 — Unified exporter prep & display
 
-Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Full design brief: `dev/tabxplor_phase10_exporters.md`** (the single self-contained Phase 10 architecture doc — READ FIRST); decisions in `dev/tabxplor_1.4.0_decisions.md` §7-8, §10, §21-23, §33.
+Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Full design brief: `dev/tabxplor_phase10_exporters.md`** (the single self-contained Phase 10 architecture doc — READ FIRST); decisions in `dev/tabxplor_2.0.0_decisions.md` §7-8, §10, §21-23, §33.
 - Make it the faster possible (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). Study the other performance gains made in Phase 9 and see if they can be of some use here too. If some features hurts speed, add an option to opt-out : for example in jamovi live UI where speed matters most.
 - **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container is needed for kable).
 - `tab_plot()` has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
@@ -854,9 +854,9 @@ New common features for all kind of exports
 
 **DECIDED: keep + optimize kableExtra first; a dependency-free home-built `<table>` renderer is Plan B.** Grounded (web + code): jamovi's results panel ignores `htmlDependencies` and won't reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids it), `tinytable`'s interactivity wouldn't fire live.
 
-⚠ **This section used to say jamovi "only honors inline CSS". That is true of `htmlDependencies` and was over-read into "no `<style>` tags" — RETRACTED in Phase 13d, from the capture, not inference.** `dev/jamovi/.../resultsview-*.js`: the Html element renders `e.html(r.content)` (jQuery, which inserts `<style>` as a live node), there is **no sanitizer** on that path (the `sanitize` hits are quill-delta-to-html, for the *annotation editor*; the `xss` hits are x86 mnemonics in a highlight.js keyword list), and jamovi itself does `this.$head.append('<style class="module-asset">'+t+'</style>')`. jamovi has its OWN stylesheet mechanism (`.module-asset`) and simply never processes htmltools deps. `html_style_block()`'s `border-collapse` has in fact been **load-bearing in jamovi since Phase 10e** — which is why the tables look right. Phase 13d moves cell colour into `<style>`-resolved classes and relies on this. The win comes from the shared prep (colours/refs derived ONCE), NA-hiding in prep, `tooltips=FALSE` (already Phase 7e), a "light" kableExtra path; the eventual home-built swap is isolated behind a `render_kable_html()` seam. The §23 profile's #1 lever (`fmt_color_selection`) is stale (deleted in Phase 5) → re-profile before ranking levers. Recorded in `dev/tabxplor_1.4.0_decisions.md` §33; full rationale in `dev/tabxplor_phase10_exporters.md` §10.
+⚠ **This section used to say jamovi "only honors inline CSS". That is true of `htmlDependencies` and was over-read into "no `<style>` tags" — RETRACTED in Phase 13d, from the capture, not inference.** `dev/jamovi/.../resultsview-*.js`: the Html element renders `e.html(r.content)` (jQuery, which inserts `<style>` as a live node), there is **no sanitizer** on that path (the `sanitize` hits are quill-delta-to-html, for the *annotation editor*; the `xss` hits are x86 mnemonics in a highlight.js keyword list), and jamovi itself does `this.$head.append('<style class="module-asset">'+t+'</style>')`. jamovi has its OWN stylesheet mechanism (`.module-asset`) and simply never processes htmltools deps. `html_style_block()`'s `border-collapse` has in fact been **load-bearing in jamovi since Phase 10e** — which is why the tables look right. Phase 13d moves cell colour into `<style>`-resolved classes and relies on this. The win comes from the shared prep (colours/refs derived ONCE), NA-hiding in prep, `tooltips=FALSE` (already Phase 7e), a "light" kableExtra path; the eventual home-built swap is isolated behind a `render_kable_html()` seam. The §23 profile's #1 lever (`fmt_color_selection`) is stale (deleted in Phase 5) → re-profile before ranking levers. Recorded in `dev/tabxplor_2.0.0_decisions.md` §33; full rationale in `dev/tabxplor_phase10_exporters.md` §10.
 
-We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Jamovi own built-in table thing was unusable and without colors, formatting, etc. in the past, I wonder if it’s still the case. Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ? What about the new types of tables Quarto tends to use nowadays ? Make web searches when needed, then write your detailed findings in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Jamovi own built-in table thing was unusable and without colors, formatting, etc. in the past, I wonder if it’s still the case. Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ? What about the new types of tables Quarto tends to use nowadays ? Make web searches when needed, then write your detailed findings in `dev\tabxplor_2.0.0_decisions.md` (respecting it’s internal style and logic).
 
 #### Phase 10b — study the right design and create a planned architecture document (DONE)
 
@@ -942,7 +942,7 @@ caveat flagged); **jamovi live render + `tab_html_string()`/`jmvtab_export()` sw
 (self-contained; dropped the lightable/cosmo `includeCSS` + `scroll_box` + class-strip → `tab_render_
 scrollbox()`; html export no longer needs kableExtra).
 
-**Perf** (gss_cat, `dev/benchmarks/results_1.4.0/phase10e_{baseline,after}.txt`): cheap tooltips cut the
+**Perf** (gss_cat, `dev/benchmarks/results_2.0.0/phase10e_{baseline,after}.txt`): cheap tooltips cut the
 kableExtra big-table render 0.50→0.36 s (−29%); the **html engine = 0.16 s (3.1× vs baseline, 5.8× less
 memory)**, 0.072 s without tooltips. The html engine WITH tooltips (0.16 s) beats the old jamovi
 kableExtra path WITHOUT tooltips (0.22 s). Full suite green (1601); no golden regen.
@@ -995,10 +995,10 @@ aggressive simplification is welcome.
 **Full clean migration** (maintainer decision, over the design doc's dual-backend seam): `tab_xl()` rewritten on **openxlsx2 only**; `openxlsx` dropped from Suggests, `openxlsx2` added; `jmvtab-export.R` guard swapped (it already routes through `tab_xl()`). Full suite green (**1748**, no golden regen); `test-export-parity.R` (value/code-path parity) + the numFmt-code lock unchanged and green.
 - **New `R/tab-xl-backend.R`**: ~14 thin `xlb_*` openxlsx2 wrappers (in-place R6 `$` methods) + **pure range coalescers** `xl_runs`/`xl_rect_dims`/`xl_coalesce` (base-R A1 math, unit-tested in `test-xl-backend.R`). The coalescers turn per-cell style targets into the fewest **multi-area `dims`** so each shared style is applied ONCE over the largest range (the perf lever the maintainer asked for; numFmt codes + colour slots each grouped + coalesced).
 - **`tab_xl.R` rewrite** (single-tab-first + list): orchestrator `tab_xl()` → pure per-table **`tab_xl_plan_one()`** (raw `get_num` values + numFmt codes + colour slots + a unified font plan + geometry — parallel-safe) → per-sheet writer **`xl_write_table()`** (issues the openxlsx2 calls). Sheet grouping (`sheets="auto"/"tabs"/"unique"` + start offsets) kept.
-- **Stars** folded into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`), cell stays a real number. **`transpose=`** (maps `tab_transpose()` before prep) wired. **`conditional_format=`** accepted but experimental (message + falls back to hard styles — deferred: CF can't reproduce field-derived colours without hidden helper columns, and the coalesced hard-style path is fast/exact/small). `n_min`/`hide_near_zero` stay accepted-but-inert. **NO `parallel=` on `tab_xl`** (a benchmark showed only ~1.09× — the openxlsx2 write is serial and dominates ~92%; Amdahl-capped, so removed; the plan builder is still pure and called serially via `purrr::pmap`). `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
+- **Stars** folded into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`), cell stays a real number. **`transpose=`** (maps `tab_transpose()` before prep) wired. **`conditional_format=`** accepted but experimental (message + falls back to hard styles — deferred: CF can't reproduce field-derived colours without hidden helper columns, and the coalesced hard-style path is fast/exact/small). `n_min`/`hide_near_zero` stay accepted-but-inert. **NO `parallel=` on `tab_xl`** (a benchmark showed only ~1.09× — the openxlsx2 write is serial and dominates ~92%; Amdahl-capped, so removed; the plan builder is still pure and called serially via `purrr::pmap`). `dev/benchmarks/results_2.0.0/phase10h_openxlsx2.txt`.
 - **openxlsx2 style findings** (probe-verified, in the backend header): `wb_add_*` **merge across aspects** automatically (== v1 `addStyle(stack=TRUE)`); **within an aspect** the default replaces, so borders pass `update=TRUE` (only drawn sides). `wb_add_font(update=)` is **buggy over large ranges** when the sheet has scattered cells → all font needs are aggregated per cell into ONE complete descriptor applied with `update=FALSE`; cross-aspect merge preserves numFmt/fill/border/alignment. Borders reject multi-area `dims` (fills accept it) → `xlb_border` applies per rectangle. `wb_add_data(na=NULL, apply_cell_style=FALSE)` → blank NA cells, raw numbers.
 - **Styles-manager write optimization (DONE, 2026-07-12)** — replaced the ~40 per-aspect `wb_add_*` passes with a **precompose**: `tab_xl_plan_one` builds a per-cell full-style grid (`xl_build_styles`: font+fill+border+alignment, borders painted onto 4 side matrices, alignment onto zone matrices), groups into the fewest DISTINCT styles; `xl_apply_styles` registers deduped fonts/fills/borders + a composed cell xf ONCE and applies by id with `set_cell_style` over each style's coalesced dims. numFmt stays a separate grouped `wb_add_numfmt` merging pass. **single 0.34→0.24 s (~1.4×), 12 tables 5.5→3.0 s (~1.8×)**; fidelity verified; suite green, no golden regen. The dropped per-aspect wrappers (`xlb_font/fill/border/align`) + `xl_rect_dims` were removed. Drove it: `set_cell_style` is 1.7× cheaper/call than `wb_add_font`; the profile pinned the cost in openxlsx2's per-call data.frame churn (`mapply`/`[.data.frame`/`read_xf`).
-- **Parallel-write-merge studied, NOT pursued** (maintainer chose styles-manager only): each worker builds its sheet in its own wb, main merges via `wb_clone_worksheet(from=)` — works only via a save→`wb_load`→clone workaround (clone fails on in-memory borders, the same openxlsx2 styles bug), ~2.5–3× for batches only, but dominated by the styles-manager win (which also helps single-table export) + adds mirai/temp-file/merge machinery. Detail: `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
+- **Parallel-write-merge studied, NOT pursued** (maintainer chose styles-manager only): each worker builds its sheet in its own wb, main merges via `wb_clone_worksheet(from=)` — works only via a save→`wb_load`→clone workaround (clone fails on in-memory borders, the same openxlsx2 styles bug), ~2.5–3× for batches only, but dominated by the styles-manager win (which also helps single-table export) + adds mirai/temp-file/merge machinery. Detail: `dev/benchmarks/results_2.0.0/phase10h_openxlsx2.txt`.
 
 
 #### Phase 10i – additional rows/columns and pvalue lines simplification ?
@@ -1013,7 +1013,7 @@ aggressive simplification is welcome.
   + pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
 - Since `add_n`, `add_pct` and pvalue_lines as actual rows and columns in the data were exceptions that added complexity to the pipeline, their removal at all steps before display/export calls for a **huge code simplication**.
 
-**DESIGN SETTLED (2026-07-12) — see `dev/tabxplor_1.4.0_decisions.md` §34 (the full findings + phasing).**
+**DESIGN SETTLED (2026-07-12) — see `dev/tabxplor_2.0.0_decisions.md` §34 (the full findings + phasing).**
 Verdict: worthwhile, not a white elephant. Decisions:
 1. **display-only** — the built tab omits the `n`/`col_pct` columns and p-value rows (kept only via `print()`/exporters); the `test` attribute is KEPT (stop dropping it); `tab_pvalue_lines()`/`tab_add_n_pct()` stay as on-demand materializers.
 2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate.
@@ -1034,7 +1034,7 @@ consumer (`get_num`/`set_num`, `format()` masks, `vec_ptype_abbr`/`vec_ptype_ful
 `tab_kable_print_tooltip`) resolves composites to the primary; Excel exports the primary automatically
 (no special-case). `tab(display=)` writes the template only on value cells where every field is non-NA →
 `"{pct} ({n})"` byte-identical to Phase 10c; count-only/pvalue/blank cells keep their token. Benchmark
-(`results_1.4.0/phase10iA_display_grammar.txt`): Solution 2 shipped, gate negligible (~11 ns/cell,
+(`results_2.0.0/phase10iA_display_grammar.txt`): Solution 2 shipped, gate negligible (~11 ns/cell,
 pipeline unchanged; sugar vs `{}` = one-time ~0.2 ms validation, no per-cell cost). Tests:
 `test-display-grammar.R` + `test-fmt_class.R` + `test-fmt-contract.R` 10→9 (+ snapshot); goldens
 regenerated (attr drop only). Full suite green.
@@ -1082,7 +1082,7 @@ robustness) + `arrange`'s guard. **Back-compat shim** (`$.tabxplor_tab` / `[[.ta
 core table reconstructs the column from the Total column (byte-identical) with a `lifecycle::deprecate_soft`
 — gated on `%in% names(x)` so the fast path is untouched; `pull` re-injects the quosure into
 `dplyr::pull(as_tibble(.data), !!vq)` to preserve tidy-select NSE (a bare NextMethod broke it). **Perf
-gate** (`dev/benchmarks/results_1.4.0/phase10iB_display_only.txt`): build −6 %, display +9 %, net neutral
+gate** (`dev/benchmarks/results_2.0.0/phase10iB_display_only.txt`): build −6 %, display +9 %, net neutral
 (work moves build→display; the jmvtab cached build is now cheaper). **Golden regen (conscious):** ALL
 `_golden/*.rds` (add_n/add_pct cols + pct=col rows removed, `render_extras` gained) + `c_or` colour + the
 `golden.md`/`render-html.md` display snapshots (add_n column → in-cell). Suite green (1815); `test-display-
@@ -1105,7 +1105,7 @@ Three byte-identical increments (no golden regen; suite 1827/0). New exported **
 
 ##### Phase 10j-B — build-perf lever: `tab_apply_tests` / `tab_chi2` marshalling (DONE — 2026-07-13)
 
-PoC-first (B-i), then a maintainer-scoped partial rewrite (B-ii). Full record + numbers: `dev/benchmarks/results_1.4.0/phase10j_tests.txt` (+ scripts `phase10j_profile.R` / `phase10j_probe.R` / `phase10j_tests_parity.R`).
+PoC-first (B-i), then a maintainer-scoped partial rewrite (B-ii). Full record + numbers: `dev/benchmarks/results_2.0.0/phase10j_tests.txt` (+ scripts `phase10j_profile.R` / `phase10j_probe.R` / `phase10j_tests_parity.R`).
 
 - **Profile** (fresh, gss_cat 4×3 factor chi2 fixture): the "~22 %" is real (26 %) but the honest decomposition reframes it — on the tables that cost time the **`agg_chi2` engine dominates** `chi2_compute_test` (73 % on chunky many-subtable shapes; already data.table, not a target). The single biggest CLEAN line was `is_a_mean` (4.6 % by.total) — a per-col_var `dplyr::select(ungroup(tabs))` reconstructing fmt columns just to read the scalar `type` attr.
 - **PoC** proved BOTH candidate rewrites **byte-identical (26/26 `identical()`)** across factor/mixed/mean × comp tab/all × 0-2 tab_vars × weighted × 2×2 Yates. Landmine: `agg_chi2`/`agg_anova` DROP degenerate subtables → the live `distinct+left_join` recovers them as NA rows; a byte-identical rewrite must re-implement that shape.
@@ -1119,9 +1119,9 @@ PoC-first (B-i), then a maintainer-scoped partial rewrite (B-ii). Full record + 
 
 ### Phase 11 – Manual reviews
 
-Final verification that statistical results are the same for tabxplor 1.3.1 (installed CRAN version) and tabxplor 1.4.0, with manual review of the maintainer. Create two Excel files in mirror, with one exact same sheet for each analysis, and in this sheet a first standard table with the revelant colors (often mostly pct display), and a second table with the relevant vctrs field (ex : contrib, chi2, etc.). Each time, the first col_vars is a factor and the second col_vars is a numeric variable. The use cases and calculations to review :
+Final verification that statistical results are the same for tabxplor 1.3.1 (installed CRAN version) and tabxplor 2.0.0, with manual review of the maintainer. Create two Excel files in mirror, with one exact same sheet for each analysis, and in this sheet a first standard table with the revelant colors (often mostly pct display), and a second table with the relevant vctrs field (ex : contrib, chi2, etc.). Each time, the first col_vars is a factor and the second col_vars is a numeric variable. The use cases and calculations to review :
 - `tab_vars = <x>, pct = "row", color = "diff"`  # diff of the numeric variable will be different
-- `tab_vars = <x>, pct = "row", color = "ratio"` # only 1.4.0, to compare with the former "diff" with numeric variable
+- `tab_vars = <x>, pct = "row", color = "ratio"` # only 2.0.0, to compare with the former "diff" with numeric variable
 - `tab_vars = <x>, pct = "col", color = "diff"`
 - `tab_vars = <x>, color = "contrib", comp = "all"`
 - `pct = "row", color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison
@@ -1133,7 +1133,7 @@ Final verification that statistical results are the same for tabxplor 1.3.1 (ins
 
 ### Phase 11a — style-name collision fixed
 
-The 1.4.0 review workbook degenerated on **every table after the first** (offset/missing borders, random
+The 2.0.0 review workbook degenerated on **every table after the first** (offset/missing borders, random
 font sizes, subtext shown bold+oversized+coloured, first-column level names wrongly bold, numeric colours
 absent). **One root cause**: `xl_apply_styles()` reset its name counter + font/fill/border caches **per
 table**, re-minting the style names `txf1`/`txl1`/`txb1`/`txx1` in openxlsx2's **workbook-global**
@@ -1153,7 +1153,7 @@ numeric-bypass limitation, **deferred** (contained fix: write `format(col)` for 
 ### Phase 12 — tab_logit integration and full redesign
 
 Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
-- logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
+- logit and regression models functions will be introduced in tabxplor 2.0.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
 
 #### Phase 12a – integrate current version in tabxplor framework cleanly (DONE)
 
@@ -1168,7 +1168,7 @@ The commented-out draft is now LIVE, clean, first-class tabxplor code (full suit
 regen; new `test-tab_logit.R` = 35 tests). Statistical behaviour unchanged (binary logit, 2-level only);
 this was a structural + fmt-field integration, not the 12b statistical redesign.
 
-- **Two foundational decisions settled (maintainer-approved; rationale in `dev/tabxplor_1.4.0_decisions.md` §36):**
+- **Two foundational decisions settled (maintainer-approved; rationale in `dev/tabxplor_2.0.0_decisions.md` §36):**
   (1) **Location = keep inside tabxplor** (no `regxplor` subpackage). (2) **Engine = direct `stats::glm` /
   `survey::svyglm` + `broom::tidy`** — the parsnip/workflows/hardhat/poissonreg stack + the `parsnip:::`
   `svglm2` engine were dropped (parsnip's glm engine only called `stats::glm`), so dropping it REMOVED deps;
@@ -1203,7 +1203,7 @@ this was a structural + fmt-field integration, not the 12b statistical redesign.
 
 #### Phase 12b – design choices and statistical framework (DONE)
 
-See details in `dev/tabxplor_1.4.0_decisions.md` §37.
+See details in `dev/tabxplor_2.0.0_decisions.md` §37.
 
  Grounded in 4 web-research passes + a git study of the pre-package draft + 2 maintainer decision rounds. Settled (built in 12d):
 - **Unified `tab_reg(data, dependent, predictors, family=, effect=, wt=)`** over ONE glm/lm/svyglm/multinom/polr engine; `predictors` = char vector (one model; `dependent` may be a vector → column per dependent) OR a named list (comparison mode → column per model). `tab_logit`/`multi_logit` kept as binomial wrappers (same UX). Effect per family, per-column label: gaussian → β (fmt `diff` shape, neutral 0), binomial → OR, poisson/negbin → IRR (fmt `or` shape, neutral 1); `exponentiate="nongaussian"` default. **fmt already carries both shapes → ~no new fields.**
@@ -1247,7 +1247,7 @@ The foundational rewrite: ONE internal engine (family dispatch) + the shared eff
 
 Both families added to the SAME engine, byte-identically reusing the OR/`or` fmt shape (no new fmt
 fields/attributes/tokens/color branches); full suite green (1949), NO golden regen. Detail:
-`dev/tabxplor_1.4.0_decisions.md` §37 "12d DONE".
+`dev/tabxplor_2.0.0_decisions.md` §37 "12d DONE".
 - **nominal ≥3 → ONE `nnet::multinom`** (`reg_fit_multinom`): `exp(β_j)` = "OR (j vs reference)" —
   `reg_build` splits the `y.level` tidy into **one OR column per non-reference category** (`"j vs ref:
   OR"`). Outcome baseline = the outcome factor's first level, set via `reference` keyed on the
@@ -1270,11 +1270,11 @@ The orthogonal `effect=` axis (`"coefficient"` default vs `"ame"`).
 
 ##### Phase 12e-i – sample-average AME + adjusted predictions (DONE — 2026-07-13)
 
-`tab_reg(effect = "ame")` shows the sample-average **marginal effect** with the adjusted **predicted probability** in parentheses, AME-first (`-8%*** (16%)`). **marginaleffects sole engine** (new gated Suggests): `reg_marginal()` wraps `avg_comparisons()`/`avg_predictions()` (RESPONSE scale, `newdata` = the fitted frame REQUIRED; factor AME keyed by `(var, level)` from the `"Level - Reference"` contrast label; `wts` = the weight column so a weighted AME is population-weighted, matching §14). `reg_marginal_column()` composes via the Phase-10i-A `{}` grammar (AME-first → stars ride the primary token natively, **no `fmt_class.R` change**): prob-scale (binomial/MNL/ordinal) → `type="row"` + `"{diff} ({pct})"` / reference `"({pct})"` / numeric `"diff"`; gaussian/poisson → raw `type="coef"` (+ `var`=var(Y)); Constant/out-of-model → `"blank"`. MNL/ordinal → **one AME column per outcome CATEGORY** (all levels). **No new fmt fields/attributes/tokens; `effect="coefficient"` byte-identical (no golden regen)**; full suite green (533 blocks). Parity locked vs marginaleffects per family + weighted svyglm (`test-tab_reg.R`). Detail: `dev/tabxplor_1.4.0_decisions.md` §37 "12e-i DONE".
+`tab_reg(effect = "ame")` shows the sample-average **marginal effect** with the adjusted **predicted probability** in parentheses, AME-first (`-8%*** (16%)`). **marginaleffects sole engine** (new gated Suggests): `reg_marginal()` wraps `avg_comparisons()`/`avg_predictions()` (RESPONSE scale, `newdata` = the fitted frame REQUIRED; factor AME keyed by `(var, level)` from the `"Level - Reference"` contrast label; `wts` = the weight column so a weighted AME is population-weighted, matching §14). `reg_marginal_column()` composes via the Phase-10i-A `{}` grammar (AME-first → stars ride the primary token natively, **no `fmt_class.R` change**): prob-scale (binomial/MNL/ordinal) → `type="row"` + `"{diff} ({pct})"` / reference `"({pct})"` / numeric `"diff"`; gaussian/poisson → raw `type="coef"` (+ `var`=var(Y)); Constant/out-of-model → `"blank"`. MNL/ordinal → **one AME column per outcome CATEGORY** (all levels). **No new fmt fields/attributes/tokens; `effect="coefficient"` byte-identical (no golden regen)**; full suite green (533 blocks). Parity locked vs marginaleffects per family + weighted svyglm (`test-tab_reg.R`). Detail: `dev/tabxplor_2.0.0_decisions.md` §37 "12e-i DONE".
 
 ##### Phase 12e-ii – opt-in marginal effect at reference (DONE — 2026-07-13)
 
-New `at = c("average", "reference")`. `at="reference"` evaluates at the **reference profile** (other predictors at their reference = factor first level / numeric mean) via `marginaleffects::datagrid()` → `comparisons()`/`predictions()` (single row, no averaging/weights): `effect="ame"` → the marginal effect at reference (**MER**, label AME→MER) + adjusted prediction there; **MNL** `effect="coefficient"` → the **"j vs rest" OR at the profile** (`comparison="lnor"` → exp, new `reg_marginal_column()` `shape="or"`, one `or` column per outcome category). `at` no-ops on ordinary coefficients (profile-independent → message). Maintainer forks: reference-level baseline (documented odd-baseline caveat); include j-vs-rest OR now. **No new fmt fields; `at="average"` byte-identical to 12e-i; no golden regen; full suite green.** Parity locked vs marginaleffects at the datagrid (`test-tab_reg.R`). Detail: `dev/tabxplor_1.4.0_decisions.md` §37 "12e-ii DONE". (Deferred: custom `newdata=`/"typical"-mode baseline; empirical j-vs-rest on `tab()`.)
+New `at = c("average", "reference")`. `at="reference"` evaluates at the **reference profile** (other predictors at their reference = factor first level / numeric mean) via `marginaleffects::datagrid()` → `comparisons()`/`predictions()` (single row, no averaging/weights): `effect="ame"` → the marginal effect at reference (**MER**, label AME→MER) + adjusted prediction there; **MNL** `effect="coefficient"` → the **"j vs rest" OR at the profile** (`comparison="lnor"` → exp, new `reg_marginal_column()` `shape="or"`, one `or` column per outcome category). `at` no-ops on ordinary coefficients (profile-independent → message). Maintainer forks: reference-level baseline (documented odd-baseline caveat); include j-vs-rest OR now. **No new fmt fields; `at="average"` byte-identical to 12e-i; no golden regen; full suite green.** Parity locked vs marginaleffects at the datagrid (`test-tab_reg.R`). Detail: `dev/tabxplor_2.0.0_decisions.md` §37 "12e-ii DONE". (Deferred: custom `newdata=`/"typical"-mode baseline; empirical j-vs-rest on `tab()`.)
 
 #### Phase 12f – unified model/test-summary footer + model comparison (DONE — 2026-07-14)
 
@@ -1291,7 +1291,7 @@ New `at = c("average", "reference")`. `at="reference"` evaluates at the **refere
 
 #### Phase 12g – survey design + reinstated companion features (DONE — 2026-07-14)
 
-Four increments, byte-identical for unweighted / no-new-arg calls (NO golden regen); full suite green (2194). New Suggests `svyVGAM`. Detail: `dev/tabxplor_1.4.0_decisions.md` §37 "12g DONE".
+Four increments, byte-identical for unweighted / no-new-arg calls (NO golden regen); full suite green (2194). New Suggests `svyVGAM`. Detail: `dev/tabxplor_2.0.0_decisions.md` §37 "12g DONE".
 - **12g-i survey designs**: `tab_reg(wt=, ids=, strata=, fpc=, nest=)` builds a `survey::svydesign` per model (`reg_make_design`); a **prebuilt `survey.design`/`svyrep.design` passed as `data`** is subset()'d per model (`reg_subset_design`/`reg_resolve_design`, `reg_relevel_design` for `reference`). `reg_svyglm_env()` binds `survey::svyglm` into the fit's formula env so `AIC.svyglm`/`anova.svyglm` work unattached (fixed a silent-NA-AIC bug + the length-3 `AIC.svyglm` vector via `reg_aic_value`). Reduced weighted glance = n / Wald-vs-null (`regTermTest`) / Nagelkerke (`psrsq`, + selectable `cox_snell_r2`) / Rao-Scott AIC; weighted comparison via `anova.svyglm` Wald (`compare_*_wald`).
 - **12g-ii weighted 3+ level**: guard lifted — ordinal → `survey::svyolr` (positive-weights hint on failure), nominal → `svyVGAM::svy_vglm`; both reuse OR/`or` shape; `effect="ame"`/MNL `at="reference"` refused for weighted. (`svyVGAM` MNL parity is skip-guarded — not on the Rscript libpath here.)
 - **12g-iii `split_var`**: the `tab_vars` analogue — `reg_build` recurses per group on a shared skeleton and stacks into a grouped_tab `(split_var, var)`; **`tab_spread(split_var)` works with NO `tab_spread` change** (split_var placed first → `levels` stays row_var); console footer group-aware, export footer skipped for splits.
@@ -1470,7 +1470,7 @@ Excel formattings :
 
 `theme` gains **`"auto"`** (follow the reader's OS **and** the host page's dark toggle) on
 `tab_kable`/`tab_md`/`tab_css`/`tab_export`; new `options(tabxplor.theme = "light")` +
-`options(tabxplor.kable_css = TRUE)`. Full record + landmines: `dev/tabxplor_1.4.0_decisions.md` **§38**.
+`options(tabxplor.kable_css = TRUE)`. Full record + landmines: `dev/tabxplor_2.0.0_decisions.md` **§38**.
 
 - **Why it was never a CSS job**: the html engine wrote `color:#hex` **inline on every `<td>`**, and an
   inline style beats any `@media` rule short of `!important`. Cells had to carry classes.
@@ -1527,7 +1527,7 @@ Native dark mode/light mode management for exported tables, specially html table
 #### Context : 14a to 14g
 
 `dev/review_manual/tab_manual_review_pass_1.R` is the maintainer's first hands-on review of tabxplor
-1.4.0 on real survey data (`pc18`). Its `#` comments are the spec. This plan turns them into phases.
+2.0.0 on real survey data (`pc18`). Its `#` comments are the spec. This plan turns them into phases.
 
 Nine defects were **reproduced and root-caused** during planning (not guessed) — several have causes
 neither the maintainer nor I had named, and three change the shape of the fix:
@@ -2031,7 +2031,7 @@ injected fixtures.
 #### Context : Phases 14h to 14o
 
 `dev/review_manual/tab_manual_review_pass_2.R` (+ the mid-session `tab_md_test_2.md`/`.htm`) is the
-maintainer's second hands-on review of 1.4.0 on real survey data. Its `#` comments are the spec. Phases
+maintainer's second hands-on review of 2.0.0 on real survey data. Its `#` comments are the spec. Phases
 14a–14g are committed; this plan turns pass 2 into phases 14h–14o, each a **fresh Claude Code session**.
 The three hard ones (14m, 14n, 14o) **start with a design step, not with code**.
 
@@ -2443,7 +2443,7 @@ starred plot now; reverts with `plot_num_font = ""`. (2) **Numbering tangle** : 
 
 #### Phase 14m-iii — `tab_md()`, pass 2 — (DONE)
 
-Full design + specificity math + the verified pandoc constraints: **`dev/tabxplor_1.4.0_decisions.md`
+Full design + specificity math + the verified pandoc constraints: **`dev/tabxplor_2.0.0_decisions.md`
 §43** (read first). Findings 9 (spacer/separator cells render as ugly `<td>`s / literal dashes) + 10 (the
 host draws a black border under every row) are ONE problem: `.tabxplor-tab` was built for the **html
 engine** (where `.tabxplor-tab` IS the `<table>` and WE draw every border via per-cell classes); in **md**
@@ -2612,7 +2612,7 @@ spurious numeric colour.
 #### Phase 14 pass-3 roadmap Context (Phases 14p–14u)
 
 `dev/review_manual/tab_manual_review_pass_3.R` is the maintainer's third hands-on review of tabxplor
-1.4.0 on real survey data (`pc18` / `ct13_reg`) plus `gss_cat`. Its `#` comments are the spec. Phases
+2.0.0 on real survey data (`pc18` / `ct13_reg`) plus `gss_cat`. Its `#` comments are the spec. Phases
 14a–14l are committed; 14m–14o are planned-but-unbuilt (design-first). This plan turns pass 3 into new
 phases **14p–14u** (the maintainer pastes them into the CLAUDE.md roadmap; each phase = a fresh Claude
 Code session; design-first phases start with a design task, not code).
@@ -2940,7 +2940,7 @@ fields (`/vctrs-field`). Do **after 14r** (correct AME + tooltip infra).
 **Design step (first, before code):**
 - **Statistical framework — what is the "empirical" analogue per family?** The rule (maintainer): the
   empirical value is the crude quantity that *is* the modelised quantity when there is a single predictor.
-  Web-research + settle, per family/effect (write the result into `dev/tabxplor_1.4.0_decisions.md` §37):
+  Web-research + settle, per family/effect (write the result into `dev/tabxplor_2.0.0_decisions.md` §37):
   + binomial coefficient → crude OR + crude % per level, diff from ref (today's `empirical_OR`).
   + binomial AME → observed % per level (predicted-prob analogue) + empirical diff from ref.
   + gaussian → mean per level of the predictor + diff of means from ref.
@@ -2955,7 +2955,7 @@ fields (`/vctrs-field`). Do **after 14r** (correct AME + tooltip infra).
   tooltips (the maintainer's explicit worry). Candidate: the `ratio` field (or a clearly-reserved reg
   slot) read only by a new tooltip fragment gated on a reg marker. Resolve with `/vctrs-field`; do NOT add
   a new fmt field if an unused one suffices.
-- **Rename** `empirical_OR` → `empirical` (hard rename, no soft-deprecate — new in 1.4.0). It becomes
+- **Rename** `empirical_OR` → `empirical` (hard rename, no soft-deprecate — new in 2.0.0). It becomes
   family/effect-general; drop the "single binary logistic (coefficient)" guard, replacing it with
   per-family/per-effect dispatch (columns vs tooltip). `trials` stays; the empirical binomial base is the
   weighted 2×2 as today.
@@ -2968,7 +2968,7 @@ carries the right value; `tab()` tooltips unaffected — assert a crosstab toolt
 feature (a rarely-read crude-vs-adjusted check on a crowded table). If the field hack proves fragile,
 make it opt-in or defer — surface this during the design step rather than forcing a hack.
 
-##### Done (partial) + DESIGN (2026-07-18) — full design in `dev/tabxplor_1.4.0_decisions.md` §45
+##### Done (partial) + DESIGN (2026-07-18) — full design in `dev/tabxplor_2.0.0_decisions.md` §45
 
 The tooltip field-hack IS fragile (proven, not guessed), so per the maintainer's own guidance the
 fragile parts are DEFERRED with a written design; the solid, colour-safe core landed. Full suite
@@ -3178,7 +3178,7 @@ By the way, there’s a bug to correct with `display = "ratio"` : it prints `n` 
 #### Phase 14v-ii — CI methods, over-dispersion, and empirical CIs
 
 
-**Read `dev/tabxplor_1.4.0_decisions.md` §48 first** — it holds the full design, the maintainer's
+**Read `dev/tabxplor_2.0.0_decisions.md` §48 first** — it holds the full design, the maintainer's
 settled choices, and the measured numbers that justify every default. This is the implementation brief.
 A follow-up to 14v (§47), fixing/completing the crude-vs-model CI relation. All defaults are the
 robust/heteroscedastic row (assumption-light, matching tab()'s existing Welch diff spirit); opt-ins
@@ -3446,7 +3446,7 @@ golden, no `render-html.md` (it has no mean cells and no grey_non_signif legend)
 
 #### Phase 15a – create Windows-side script to build and test .jmo files (DONE)
 
-Implemented as `dev/build_jmo_windows.R` — a single self-contained `Rscript` (run `Rscript dev/build_jmo_windows.R` on Windows 11 / R 4.6.1). It clones the current branch (default `v1.4.0`, overridable) into a throwaway temp folder, pins `jmvtools` to 2.7.26 + installs deps, `Sys.unsetenv`s `ELECTRON_RUN_AS_NODE`, runs `jmvtools::install(home='C:/Program Files/jamovi 2.7.37.0')` (auto-detected/overridable via `JAMOVI_HOME`), then verifies the landed module (version/rVersion/UI blob) and reports PASS/FAIL.
+Implemented as `dev/build_jmo_windows.R` — a single self-contained `Rscript` (run `Rscript dev/build_jmo_windows.R` on Windows 11 / R 4.6.1). It clones the current branch (default `v2.0.0`, overridable) into a throwaway temp folder, pins `jmvtools` to 2.7.26 + installs deps, `Sys.unsetenv`s `ELECTRON_RUN_AS_NODE`, runs `jmvtools::install(home='C:/Program Files/jamovi 2.7.37.0')` (auto-detected/overridable via `JAMOVI_HOME`), then verifies the landed module (version/rVersion/UI blob) and reports PASS/FAIL.
 
 ```r
 # To run the script and build the .jmo module out of WSL2, Windows-side
@@ -3821,7 +3821,7 @@ are dropped) — previously lost in exports (only `tab_md` kept it). Suite green
 per-cell builder / non-fmt labels); a `footer_groups` arg lets a crosstab skip subtables with no
 computable test. All `test`-display CONTENT helpers moved into that one module (test_display_rows /
 pvalue_line_fmt / test_cell_label / reg_footer_spec+siblings / the fmt-cell builders); dead
-`chi2`-attribute fallback dropped from `get_test()` (§17: 1.4.0 tabs are re-created, never
+`chi2`-attribute fallback dropped from `get_test()` (§17: 2.0.0 tabs are re-created, never
 deserialized). Byte-identical — full suite green, NO golden/snapshot regen. NOT done: making the
 display grid physically drive the export appender — assessed as a net complexity ADD (it would push
 export-placement plumbing into the console display model; the CONTENT is already shared via the helpers).
@@ -4072,7 +4072,7 @@ Package dependencies : are there Imports or Suggests that are used very little ?
 
 Are there Suggests that we should better add to Imports, since they are important for many functions ? Adding `broom::` in Imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold is CRAN currently giving a R CMD CHECK Note (do web searches) ?
 
-Among the new global options created in 1.4.0, are they all useful and clearly named and documentated ?
+Among the new global options created in 2.0.0, are they all useful and clearly named and documentated ?
 
 ##### DONE
 
@@ -4140,7 +4140,7 @@ How to further simplify tabxplor package framework ? Do four round of simplifica
 - How to further integrate the internal functions into a reliable and simple ecosystem aimed at global code simplification ?
 - What features and ad hoc parts of the code are white elephants, that could be removed and integrated in a common global framework without meaningful losses for the user ? What should we give up or modify to enable a global simplification of some functions and code ?
 - What are the missing attributes, at table-level, column-level or fmt_cell-level, that would be necessary for a more reliable and straighforward architecture, or that would be necessary for further simplifications of the code/of the arguments ? At the contrary, what are the attributes that seem ad hoc, unnecessary, adding useless complexity to the code, and how to remove or modify them for simplification ?
-- What new arguments of v 1.4.0 could be merged or redesigned for simplicty of use, consistency and clarify ?
+- What new arguments of v 2.0.0 could be merged or redesigned for simplicty of use, consistency and clarify ?
 
 ##### Last Phase c-i: internal-function ecosystem simplification (round 1) (DONE)
 
@@ -4194,7 +4194,7 @@ experimental `conditional_format` arg (maintainer may still build it) and the
 
 Full audit of the 18 fmt fields, 9 column attributes and 7 table attributes
 (usage mapped by grep across R/, NAMESPACE, tests/). Honest outcome: the
-1.4.0 combined field surgery already left the attribute set lean and correctly
+2.0.0 combined field surgery already left the attribute set lean and correctly
 placed -- there is NO safe, high-value structural consolidation left:
 - all 18 fmt fields are user contract ($/mutate) and none is vestigial;
 - all 9 column attributes have EXPORTED getters AND are required per-column
@@ -4216,7 +4216,7 @@ surfaced (which would otherwise mislead future attribute work):
 
 ##### Last Phase c-iiii: rename multiplicator -> multiplier; new-arg review (round 4) (DONE)
 
-Fourth simplification round: review the NEW v1.4.0 arguments for merge/rename
+Fourth simplification round: review the NEW v2.0.0 arguments for merge/rename
 BEFORE the CRAN freeze (they're never-released, so still free to change).
 
 The one outright naming defect: `multiplicator` is non-idiomatic English for
@@ -4247,7 +4247,7 @@ Simplify `tab()` and `tab_reg()` and other main functions documentation, to make
 - Would there be possibilities to nest some of the more complex argument in other functions ? For example, all the complex customisation things about ci refer to tab_ci(), with a link for the user to go further if he wants to ? All the complex things about color customisation somewhere else ? All the helpers set / get etc. somewhere else too, but with a ling to them somewhere in tab() page. What else could be grouped and put out of the main user-facing functions documentation ?
 - The order of the arguments matters, what comes first is / must be what really matters for base users/beginners (like variables, percentages, colors, etc.)
 
-Can you think about remaining possible simplifications of the arguments themselves, specially the new arguments introduced in v 1.4.0, since once they become public it will be difficult to modify them in next versions ? How could the main user-facing functions be more user-friendly ?
+Can you think about remaining possible simplifications of the arguments themselves, specially the new arguments introduced in v 2.0.0, since once they become public it will be difficult to modify them in next versions ? How could the main user-facing functions be more user-friendly ?
 
 The two flagship functions have huge argument lists (tab() alone documents 42
 params) that read as a terrifying wall to newcomers. Add a beginner on-ramp
@@ -4281,7 +4281,7 @@ the reorder was meant to provide.
 #### Last Phase e – Create meaningful and user-friendly vignettes (DONE)
 
 Each vignette must be user-friendly, understandable by novices for the base crosstables one and regression models one, while still having just enough technical detail for the experts to known exactly what important technical choices were done internally.
-- For each vignette, carefully study the dev history in `dev/tabxplor_1.4.0_decisions.md`, `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
+- For each vignette, carefully study the dev history in `dev/tabxplor_2.0.0_decisions.md`, `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
 - For real-world examples, use `gss_simple <- gss_cat_data_formatting()` (exported), which is classic `forcats::gss_cat` formatted with merged levels for cleaner tables, and first levels chosen to be used as references (for color helpers, regressions, etc.).
 
 ##### Last Phase e-i – rewrite the introductory vignette for beginners (DONE)
@@ -4290,7 +4290,7 @@ The current vignette should be the simple and useful basis for non-expert users,
 
 Something very close is what’s to be used for `README.Rmd` (never edit `README.md` manually). Or maybe do a much more concise introduction in the `README.Rmd`, presenting only the really interesting features of tabxplor for exploratory analysis (mostly colors helpers for crosstables, possibly taking significance into account, with at the end a last example of logistic regression with a meaningful comparaison of modelised quantities versus empirical/observed quantities) ?
 
-Rewrite vignettes/tabxplor.Rmd around the current 1.4.0 API and a beginner
+Rewrite vignettes/tabxplor.Rmd around the current 2.0.0 API and a beginner
 path. It used deprecated forms (sup_cols, chi2 =, color = "diff_ci"/"after_ci");
 now it uses col_vars + levels = "first", test =, and the color / color_signif
 split, on the shipped gss_simple = gss_cat_data_formatting() dataset (tidy
@@ -4342,7 +4342,7 @@ All the part about "programming with tabxplor" and its vctrs fields should come 
 
 New vignette vignettes/tabxplor-programming.Rmd (the vignette("tabxplor-
 programming") linked from the intro vignette), moving the vctrs-field material
-out of the README into its own page and updating + extending it for 1.4.0:
+out of the README into its own page and updating + extending it for 2.0.0:
 
 - what a tabxplor_fmt cell is (a vctrs record) and how it survives dplyr;
 - getting plain numbers out (get_num / format / the per-field getters);
@@ -4448,7 +4448,7 @@ Two byte-identical fixes (full suite green FAIL 0 / PASS 2070, NO golden regen).
 1. **`tab(parallel=)` crashed under `devtools::load_all()`** with `object 'tab_build_one' not found`
    whenever the call had **≥ 2 row_vars** (1 row_var stays serial below `parallel_min = 2`). Root cause:
    the mirai daemons bind the *installed* (stale) tabxplor namespace, which lacks `tab_build_one`; an
-   installed 1.4.0 works, but dev sessions don't. Fix ([R/tab-parallel.R](R/tab-parallel.R)): new
+   installed 2.0.0 works, but dev sessions don't. Fix ([R/tab-parallel.R](R/tab-parallel.R)): new
    `tab_dev_pkg_path()` (dev detected via the loaded namespace path + an `R/` source check) + a
    `tab_pool_ensure()` branch that `pkgload::load_all()`s the dev source on each freshly spawned daemon
    (once per pool, before dispatch). Inert once installed (`tab_dev_pkg_path()` → NULL). No manual pre-warm
@@ -4525,12 +4525,12 @@ Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE 
 
 ##### CI green-up (2026-07-15) — 3 causes, none R-version-related
 
-First GitHub Actions run of the 1.4.0 branch: **all 5 jobs red**. Diagnosis (each reproduced locally,
+First GitHub Actions run of the 2.0.0 branch: **all 5 jobs red**. Diagnosis (each reproduced locally,
 NOT guessed): devel/release/oldrel-1 fail **identically**, so R version is not a variable — the
 variables are a dependency version, a libc, and two wrong tests. Suite now green **in parallel, 225s
 -> 56s**.
 
-1. **kableExtra 1.4.0 (local) vs 1.4.1 (CRAN/CI)** — 7 `test-render-html` snapshot fails on ALL
+1. **kableExtra 2.0.0 (local) vs 1.4.1 (CRAN/CI)** — 7 `test-render-html` snapshot fails on ALL
    platforms. `text_spec`/`cell_spec` HTML changed (rgba alpha `255`->`1`, leading padding dropped,
    tile `border-radius` dropped, and `text_spec` leaks a stray `class="TRUE"` — an upstream
    regression, its `background_as_tile` default; **worth reporting to kableExtra**). Fix = **decouple,
@@ -4539,7 +4539,7 @@ variables are a dependency version, a libc, and two wrong tests. Suite now green
    on the "self-contained" html engine's path (its test claimed self-containment; it was false). The
    kableExtra-engine byte snapshot was **replaced by version-robust assertions** (geometry / colour
    on-off / theme / tooltips): we do not own that HTML, so we must not lock its bytes. Proven: html
-   engine output is now **byte-identical under 1.4.0 and 1.4.1**, so its snapshots regenerate safely
+   engine output is now **byte-identical under 2.0.0 and 1.4.1**, so its snapshots regenerate safely
    on either. `_snaps/render-html.md` regenerated (legend line only; all data rows unchanged).
 2. **glibc gettext cache — a REAL user-facing bug** (3 `test-color-legend` fails, **Linux only**;
    macOS/Windows passed). `tab_color_legend()` set `LANGUAGE` without flushing, so on Linux
@@ -4598,8 +4598,8 @@ that library: **0 errors / 0 warnings / 0 notes** on R 4.6.1 **and** on R-devel 
 
 Two of this section's own findings are settled by that, and both should be read as *retired*:
 
-- **The kableExtra 1.4.0-vs-1.4.1 split no longer exists locally.** The 7 snapshot fails came from the dev
-  box being on 1.4.0 while CI shipped 1.4.1; the dev box **is** on 1.4.1 now, and the decoupling fix (html
+- **The kableExtra 2.0.0-vs-1.4.1 split no longer exists locally.** The 7 snapshot fails came from the dev
+  box being on 2.0.0 while CI shipped 1.4.1; the dev box **is** on 1.4.1 now, and the decoupling fix (html
   engine emits its legend `<span>` inline; kableExtra output asserted on invariants, not bytes) is
   validated on it. ⚠ The upstream `text_spec` `class="TRUE"` regression is still worth reporting.
 - **The Linux-only gettext bug class is now reproducible on the dev machine.** This section records the

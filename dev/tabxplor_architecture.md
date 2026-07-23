@@ -71,7 +71,7 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
 `tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R` : it’s strenght is to work with normal `dplyr` workflows. It adds **three top-level attributes** beyond what a regular tibble carries — `subtext`, `test`, and a single **`meta`** list (Phase 17b gathered every other table attribute into it):
 
 - `subtext` (character vector): Legend lines printed below the table.
-- `test` (tidy tibble, 1.4.0 — renamed from `chi2`): whole-table test results, one row per
+- `test` (tidy tibble, 2.0.0 — renamed from `chi2`): whole-table test results, one row per
   (sub-table × col_var × test-type). Columns: `[tab_vars…]`, `row_var`, `col_var`, `test`
   (`"chi2"` / `"F_welch"` / `"F_classic"`; regression GOF reuses the same tibble with disjoint
   discriminators — `"n"`/`"lr_null"`/`"aic"`/… — keyed by fit column, split level in `row_var`),
@@ -127,7 +127,7 @@ sub-field (a `NULL` value removes it). The sub-fields:
   `row_vars` carries the **source** names, which differ on a merged table.
 
 Constructors: `new_tab(tabs, subtext, test, meta)` (the old `chi2 =` argument still works, mapped to
-`test`; Phase 17b replaced the five 1.4.0-new formals with the single `meta` list) and
+`test`; Phase 17b replaced the five 2.0.0-new formals with the single `meta` list) and
 `new_grouped_tab(tabs, groups, …)`.
 
 **Adding a `meta` sub-field** is one getter + (rarely) one producer line — never a constructor formal.
@@ -137,7 +137,7 @@ auto-downgrade) and `tab_bind_attrs(x, other)` reconciles a bind (the vctrs `pty
 `subtext` unions, the row-bound `test` rbinds, and `tab_meta_bind()` reconciles the `meta` sub-fields
 element-wise — x wins, other fills a `NULL`, except `color_breaks` which merges per named scale). Before
 Phase 14d each verb named every attribute by hand (~34-site edits, silent drops); Phase 17b collapsed
-the six 1.4.0-new attrs into `meta` so the carry list is now three lines total. The jamovi tier-3 carrier
+the six 2.0.0-new attrs into `meta` so the carry list is now three lines total. The jamovi tier-3 carrier
 stores `attributes(tab)` verbatim, so `meta` round-trips transparently (schema bumped to invalidate
 stores holding the old multi-attr shape).
 
@@ -174,7 +174,7 @@ This class requires a separate S3 method for **every dplyr verb** to preserve cl
 
 ## Calculation Pipeline
 
-Since Phase 6 (1.4.0) both public entry points are thin wrappers over the internal engine
+Since Phase 6 (2.0.0) both public entry points are thin wrappers over the internal engine
 `tab_build()` (`R/tab.R`). `tab()` and `tab_many()` differ only in the default output shape they pass
 (`tab()` merges >=2 row_vars; `tab_many()` keeps a list). `tab_build()` is a thin **five-stage
 pipeline** threading a `ctx` list (Phase 7d-ii); the stages match the jmvtab cache tiers so Phase 7e
@@ -356,7 +356,7 @@ Arguments vectorised over col_vars: `levels`, `digits`, `totcol`, `pct`.
 
 ### Compaction: what is lost when tables are bound (the `output_list` decision)
 
-By default `tab_many()` returns one table: the per-row_var results are bound vertically with `tab_compact()` (`R/tab_classes.R`), which stacks each variable's levels as rows (a `row_var` factor column marks the source) sharing the **same** `col_var` columns. A list of separate tables is available on demand (from 1.4.0, `output_list = TRUE`; the old `compact` argument is deprecated). This section documents exactly what compaction costs, so the single-table default is a conscious trade-off rather than a hidden one.
+By default `tab_many()` returns one table: the per-row_var results are bound vertically with `tab_compact()` (`R/tab_classes.R`), which stacks each variable's levels as rows (a `row_var` factor column marks the source) sharing the **same** `col_var` columns. A list of separate tables is available on demand (from 2.0.0, `output_list = TRUE`; the old `compact` argument is deprecated). This section documents exactly what compaction costs, so the single-table default is a conscious trade-off rather than a hidden one.
 
 The `fmt` record splits into per-cell **fields** and per-column **attributes** (see the Type System section). When blocks are row-bound, the two behave differently:
 
@@ -400,7 +400,7 @@ Since Phase 17f each leaf is a **public wrapper over a resolved-args core**, so 
 
 ### tab_num() — Numeric Column Variables
 
-When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. Since Phase 2 (1.4.0) each grouped `data.table` scan computes **sufficient moment sums** (`n`, weighted `n`, `Σ[w]x`, `Σ[w]x²`) in one pass; `num_derive_stats()` (`R/tab-agg.R`) then derives the mean and variance, reproducing the unweighted sample (n-1) vs weighted ML (÷Σw) definitions exactly. This removed the old `weighted.var()` double scan, and the total rows / total table are built as **roll-ups** of the additive moment-sum aggregate (`num_rollup()`) instead of two extra full-data scans. Net on 8M rows: `tab_num` ~5.6×/8.3× faster and ~6×/11× less memory (unweighted/weighted). The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`.
+When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. Since Phase 2 (2.0.0) each grouped `data.table` scan computes **sufficient moment sums** (`n`, weighted `n`, `Σ[w]x`, `Σ[w]x²`) in one pass; `num_derive_stats()` (`R/tab-agg.R`) then derives the mean and variance, reproducing the unweighted sample (n-1) vs weighted ML (÷Σw) definitions exactly. This removed the old `weighted.var()` double scan, and the total rows / total table are built as **roll-ups** of the additive moment-sum aggregate (`num_rollup()`) instead of two extra full-data scans. Net on 8M rows: `tab_num` ~5.6×/8.3× faster and ~6×/11× less memory (unweighted/weighted). The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`.
 
 Since Phase 7d-i, the moment scan itself lives in a shared `num_moment_scan()` (`R/tab-agg.R`) and `tab_num()` has the same aggregate-injection seam as `tab_plain()`: a `.fine` parameter (built by the tier-1 producer **`tab_aggregate_num()`**, `R/tab-agg.R`) plus `.by_table`. `tab_build()` builds one moment aggregate **per row_var** and hands it to `tab_num(.fine=)`, which `data.table::copy()`s it and skips the scan; `.by_table = TRUE` forces the table-by-table scan. This relocates the single O(N) scan out of `tab_num` (perf-neutral — no fork, no double scan) and makes the numeric tier-1 aggregate a first-class object the jmvtab cache (Phase 7e) will hold, mirroring the factor `.fine`.
 
@@ -678,7 +678,7 @@ Phase 10c reworked it for speed and flexibility (byte-identical, golden-locked):
   internally. The exporter prep (Phase 10d) passes them straight in.
 - The unconditional `x$var` (`$.tabxplor_fmt` → `dplyr::pull`) accessor was replaced by `get_var(x)`
   (the `vctrs::field` accessor) — it was ~28 % of `format()` self-time. Overall `format()` is ~2×
-  faster on the exporter path (`dev/benchmarks/results_1.4.0/phase10c_profile.txt`).
+  faster on the exporter path (`dev/benchmarks/results_2.0.0/phase10c_profile.txt`).
 - Opt-in COMPOSITE display via a per-cell `display`-FIELD `{}` template (e.g. `"{pct} (n={n})"`,
   Phase 10i-A) — parsed only here, gated by one fixed `grepl` so the common path is byte-identical when
   no cell is a composite. `get_num()`/`format()`/`vec_ptype_abbr`/tooltip resolve a composite cell to its
@@ -912,7 +912,7 @@ table below is a dev subset and lags it (e.g. it still lists the removed `color_
 old name, or a convenience alias — through the ONE resolver `tx_getOption(names, default)` (`R/utils.R`):
 the first name set (non-NULL) wins, with the seeded/canonical name passed LAST so a user's explicit
 legacy/alias value overrides the seeded default. Three synonym pairs exist: `tabxplor.tab_kable_css`
-(seeded; was `tabxplor.kable_css`, a 1.4.0-new name renamed to join the `tab_kable_*` family) and the
+(seeded; was `tabxplor.kable_css`, a 2.0.0-new name renamed to join the `tab_kable_*` family) and the
 two theme aliases `tabxplor.console_theme` → `tabxplor.color_style_theme` and `tabxplor.export_theme`
 → `tabxplor.theme` (both canonical names stay seeded/documented; `color_style_theme` is 1.3.1-public,
 so it is aliased, never renamed). Aliases are silent (no deprecation) and unseeded.

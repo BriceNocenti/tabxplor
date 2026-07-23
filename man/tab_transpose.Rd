@@ -19,7 +19,7 @@ A transposed \code{tabxplor_tab}.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-\code{tab_transpose()} is \strong{soft-deprecated} since tabxplor 1.4.0. It flips the \emph{object} (the
+\code{tab_transpose()} is \strong{soft-deprecated} since tabxplor 2.0.0. It flips the \emph{object} (the
 \code{tabxplor_fmt} fields), which cannot carry a transposed column's mixed cell types, so a table with
 several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
 duplicated total columns). Use the exporters' \code{transpose = TRUE} argument instead --- it flips the

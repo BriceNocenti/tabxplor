@@ -4,7 +4,7 @@
 #          analogue of test-num-fuse-parity.R.
 # NOTE (Phase 9c): the former tab()-level opt-in scan-fusion (`options(tabxplor.fuse_min_rows)` + the
 #       fused block in tab_aggregate()) was REMOVED -- it was a net-negative once the O(cells) build
-#       dominates (dev/tabxplor_1.4.0_decisions.md 30). The `.fine`/fine_for_pair()/use_raw seam in
+#       dominates (dev/tabxplor_2.0.0_decisions.md 30). The `.fine`/fine_for_pair()/use_raw seam in
 #       tab_plain() STAYS: it is now EXCLUSIVELY the jmvtab cache seam (jmv_cache_aggregate() injects a
 #       per-pair `.fine`; end-to-end == tab() is locked by test-jmvtab-cache.R). This test drives that
 #       seam DIRECTLY (build a valid `.fine`, feed tab_plain(.fine=)), so a regression is caught with a

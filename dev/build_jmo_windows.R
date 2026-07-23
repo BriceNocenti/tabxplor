@@ -14,12 +14,12 @@
 #     the next build then can't overwrite them ("Permission denied ...\marginaleffects.dll"). We kill
 #     jamovi processes (by exe path) + delete the stale module dir BEFORE install and kill again AFTER
 #     (CFG$stop_jamovi / clean_module). A fresh R session does NOT clear these OS processes.
-# See: dev/tabxplor_1.4.0_jamovi_dev.md section 3.1-3.6 ; CLAUDE.md "Jamovi module development".
+# See: dev/tabxplor_2.0.0_jamovi_dev.md section 3.1-3.6 ; CLAUDE.md "Jamovi module development".
 #
 # USAGE (on Windows 11, R 4.6.1):
 #   Rscript dev/build_jmo_windows.R
 #   Rscript dev/build_jmo_windows.R master                 # override the branch (positional)
-#   set TABXPLOR_BRANCH=v1.4.0 && Rscript dev/build_jmo_windows.R
+#   set TABXPLOR_BRANCH=v2.0.0 && Rscript dev/build_jmo_windows.R
 #   set JAMOVI_HOME=C:/Program Files/jamovi 2.7.37.0 && Rscript dev/build_jmo_windows.R
 #
 # NOTE: This script is authored in WSL but only runs on Windows. It is dev/-only (.Rbuildignore'd)
@@ -31,7 +31,7 @@ CFG <- list(
   # --- source to build ---------------------------------------------------------------
   repo_url = "https://github.com/BriceNocenti/tabxplor.git",
   # Branch: CLI arg 1 > env TABXPLOR_BRANCH > this default.
-  branch   = "v1.4.0",
+  branch   = "v2.0.0",
 
   # --- target jamovi -----------------------------------------------------------------
   # Windows jamovi install folder. Auto-detected under C:/Program Files/jamovi*, preferring

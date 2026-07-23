@@ -346,7 +346,7 @@ fmt <- function(n         = integer(),
   # around the estimate the interval is centred on (the difference for diff-type CIs, the mean
   # for cell means, the proportion otherwise), matching how tab_ci()/tab_num() now store real
   # asymmetric bounds. Explicit ci_inf/ci_sup win; get_ci() reads the half-width back as
-  # ci_sup - centre. See dev/tabxplor_1.4.0_decisions.md §1, §20.
+  # ci_sup - centre. See dev/tabxplor_2.0.0_decisions.md §1, §20.
   est_center <- dplyr::coalesce(
     if (ci_type %in% c("diff", "diff_row", "diff_col")) diff else
       if (type == "mean") mean else pct,
@@ -1812,7 +1812,7 @@ set_ci_sup  <- fmt_set_field_factory("ci_sup" , cast = double()   )
 # estimate the interval is centred on (ci_center()), so get_ci() reads the half-width back. The
 # Phase 3a writers (tab_ci()/tab_num()) store real asymmetric bounds directly via set_ci_inf/
 # set_ci_sup and do NOT use this; it is kept for back-compatible external callers. Its centring
-# is best-effort (needs ci_type/type already set). See dev/tabxplor_1.4.0_decisions.md §1, §20.
+# is best-effort (needs ci_type/type already set). See dev/tabxplor_2.0.0_decisions.md §1, §20.
 # @describeIn fmt set the confidence-interval half-width (stored as symmetric absolute bounds)
 #' @keywords internal
 # @export
@@ -4124,7 +4124,7 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
   # (~3x faster per call, byte-identical). This method drives EVERY c()/vec_c()/bind/group over fmt
   # columns -- the compact merge's per-column vec_ptype_common() reduce is the hottest caller (the
-  # entire tab() merge marginal, dev/tabxplor_1.4.0_decisions.md 30). WARNING: every same_* is a
+  # entire tab() merge marginal, dev/tabxplor_2.0.0_decisions.md 30). WARNING: every same_* is a
   # non-NA length-1 logical EXCEPT `same_comp` (comp_all is NA on count columns, so binding a count
   # with a pct column gives same_comp = NA -> dplyr::if_else returned NA; a bare `if (NA)` would
   # ERROR) -> it is checked with is.na() first. `color` is length <= 2 (§9.1) -> ifelse when 2.

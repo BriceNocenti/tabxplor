@@ -9,7 +9,7 @@
 #   - mirai needs nanonext >= 1.9.0 (see parallel_poc_micro.R header for the R_LIBS_USER temp-lib trick).
 #   - Persistent workers, df pre-loaded once, setDTthreads(1) per worker. setup_s (transfer + load_all) is
 #     reported SEPARATELY from batch_s, because the verdict differs for a fresh call vs reused workers.
-# See: CLAUDE.md § 1.4.0 roadmap > Phase 6b research.
+# See: CLAUDE.md § 2.0.0 roadmap > Phase 6b research.
 
 PKG <- "d:/Statistiques/github/tabxplor"
 suppressWarnings(suppressMessages(devtools::load_all(PKG, quiet = TRUE)))

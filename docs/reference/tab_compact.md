@@ -26,7 +26,7 @@ A `tabxplor_tab`
 forcats::gss_cat |>
   tab_many(c(race, rincome), marital, pct = "row", color = "diff") |>
   tab_compact()
-#> Warning: `tab_many()` was deprecated in tabxplor 1.4.0.
+#> Warning: `tab_many()` was deprecated in tabxplor 2.0.0.
 #> ℹ Please use `tab()` instead.
 #> ℹ tab() accepts several row_vars / col_vars. It merges >=2 row_vars into one
 #>   table by default; pass output_list = TRUE for a list (tab_many()'s old

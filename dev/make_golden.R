@@ -7,7 +7,7 @@
 # (e.g. `ref_n` making cross-col_var percentages exact). Afterwards:
 #   1. review `git diff tests/testthat/_golden/` and accept the changes deliberately;
 #   2. for display snapshots, run the tests then `testthat::snapshot_accept("golden")`.
-# See: CLAUDE.md > 1.4.0 roadmap > Golden regeneration protocol.
+# See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 
 pkg <- normalizePath(".", winslash = "/")
 devtools::load_all(pkg, quiet = TRUE)

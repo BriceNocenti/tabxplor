@@ -89,7 +89,7 @@ NULL
 #' Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
 #' @param sup_cols `r lifecycle::badge("deprecated")` Supplementary columns variables, with
-#' only the first level printed. Deprecated in 1.4.0: pass these columns in \code{col_vars} and
+#' only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
 #' set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).
 #' @param na The policy to adopt for missing values, as a single string :
 #'  \itemize{
@@ -233,7 +233,7 @@ NULL
 #' \code{test = "survey"} to build the design for the p-values: cluster ids (default \code{~1}, no
 #' clustering), strata, finite-population correction, and \code{nest} (are ids nested in strata).
 #' Ignored otherwise. Mirror the same arguments of \code{\link{tab_reg}}.
-#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0: the test is a
+#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0: the test is a
 #' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 #' misleading. Still works.
 #' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
@@ -481,7 +481,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # Phase 14a: `chi2` renamed `test` -- for a numeric col_var the whole-table test is Welch's F, not
   # a chi2 (Phase 3b), so the old name named only half of what it does.
   if (lifecycle::is_present(chi2)) {
-    lifecycle::deprecate_soft("1.4.0", "tab(chi2 = )", "tab(test = )")
+    lifecycle::deprecate_soft("2.0.0", "tab(chi2 = )", "tab(test = )")
     test <- chi2
   }
 
@@ -491,11 +491,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   .rv_dep <- rlang::enquo(row_var)
   .cv_dep <- rlang::enquo(col_var)
   row_var_quo <- if (!rlang::quo_is_missing(.rv_dep)) {
-    lifecycle::deprecate_soft("1.4.0", "tab(row_var = )", "tab(row_vars = )")
+    lifecycle::deprecate_soft("2.0.0", "tab(row_var = )", "tab(row_vars = )")
     .rv_dep
   } else rlang::enquo(row_vars)
   col_var_quo <- if (!rlang::quo_is_missing(.cv_dep)) {
-    lifecycle::deprecate_soft("1.4.0", "tab(col_var = )", "tab(col_vars = )")
+    lifecycle::deprecate_soft("2.0.0", "tab(col_var = )", "tab(col_vars = )")
     .cv_dep
   } else rlang::enquo(col_vars)
 
@@ -549,7 +549,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     sup_cols <- character()
   } else {
     lifecycle::deprecate_soft(
-      "1.4.0", "tab(sup_cols = )",
+      "2.0.0", "tab(sup_cols = )",
       details = "Pass these columns in `col_vars` and set `levels = \"first\"`."
     )
     sup_cols <- names(tidyselect::eval_select(sup_cols_quo, data))
@@ -799,7 +799,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   if (is.na(signif) || signif %in% c("", "no")) signif <- "ignore"
   # COMPAT (Phase 13a): the renamed policy value, wired through with a soft-deprecation.
   if (identical(signif, "color_all_signif")) {
-    lifecycle::deprecate_soft("1.4.0", I('color_signif = "color_all_signif"'),
+    lifecycle::deprecate_soft("2.0.0", I('color_signif = "color_all_signif"'),
                               with = I('color_signif = "guaranteed_effect"'),
                               user_env = rlang::caller_env(2))
     signif <- "guaranteed_effect"
@@ -826,7 +826,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
     if (!deprecate) return(invisible(NULL))
     if (text %in% c("diff_ci", "after_ci", "ci")) {
       lifecycle::deprecate_soft(
-        "1.4.0",
+        "2.0.0",
         I(paste0("The `color = \"", text, "\"` mode")),
         with = I("`color = \"diff\"` with the `color_signif` argument"),
         user_env = uenv)
@@ -878,7 +878,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   cnms <- names(color)
   if (!is.null(cnms) && length(setdiff(cnms[nzchar(cnms)], c("text", "background", "bg"))) == 0L &&
       any(cnms %in% c("text", "background", "bg"))) {
-    lifecycle::deprecate_soft("1.4.0", I('color = c(text = , background = )'),
+    lifecycle::deprecate_soft("2.0.0", I('color = c(text = , background = )'),
                               with = I('a positional color = c("diff", "ratio")'),
                               user_env = rlang::caller_env(2))
     cc   <- as.character(color)
@@ -994,7 +994,7 @@ finalize_one_col <- function(col, spec) {
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (1.4.0) by [tab()], the unified entry point (it accepts several row_vars /
+#' Superseded (2.0.0) by [tab()], the unified entry point (it accepts several row_vars /
 #' col_vars). `tab_many()` keeps working and keeps its historical list return for >=2 row_vars
 #' (tab() merges them by default; pass `output_list = TRUE` for a list).
 #'
@@ -1264,7 +1264,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   # Phase 6f: tab_many() is soft-deprecated in favour of the unified tab(). Silent for
   # same-package callers (e.g. the jmvtab module), so only direct external users are nudged.
   lifecycle::deprecate_soft(
-    "1.4.0", "tab_many()", "tab()",
+    "2.0.0", "tab_many()", "tab()",
     details = c(
       "i" = paste0("tab() accepts several row_vars / col_vars. It merges >=2 row_vars into one ",
                    "table by default; pass output_list = TRUE for a list (tab_many()'s old default).")
@@ -1283,13 +1283,13 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   # dplyr afterwards). Old totcol values ("each"/"no"/names) still work.
   if (!missing(totrow) && !all(as.logical(totrow))) {
     lifecycle::deprecate_soft(
-      "1.4.0", "tab_many(totrow = )",
+      "2.0.0", "tab_many(totrow = )",
       details = "A total row is always computed; drop it afterwards with `dplyr::filter(!is_totrow(.))`."
     )
   }
   if (!missing(totcol) && !identical(totcol, "last")) {
     lifecycle::deprecate_soft(
-      "1.4.0", "tab_many(totcol = )",
+      "2.0.0", "tab_many(totcol = )",
       details = "Exactly one total column is shown by default; move or drop columns with dplyr afterwards."
     )
   }
@@ -2154,7 +2154,7 @@ tab_aggregate <- function(ctx) {
   # Factor tier-1: NONE on the tab()/tab_many() path. The former opt-in shared-scan "fusion"
   # (`options(tabxplor.fuse_min_rows)`, off by default) was removed in Phase 9c: it was a NET NEGATIVE
   # once the O(cells) per-table build dominates (the survey-scale build is N-independent -- fusing the
-  # O(N) scan buys nothing; +1-7% when forced on) -- see dev/tabxplor_1.4.0_decisions.md 30. The
+  # O(N) scan buys nothing; +1-7% when forced on) -- see dev/tabxplor_2.0.0_decisions.md 30. The
   # `.fine`/`fine_for_pair()`/`use_raw` seam in tab_plain() STAYS: it is now EXCLUSIVELY the jmvtab
   # cache seam (jmv_cache_aggregate() injects a per-pair `fine_fused`; that path early-returns above),
   # locked by test-fuse-parity.R (direct factor `.fine` == raw scan) + test-jmvtab-cache.R.
@@ -2475,7 +2475,7 @@ tab_assemble_tables <- function(ctx) {
                              tab_vars = as.character(tab_vars),
                              wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
                              var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
-  # Phase 17b: the three 1.4.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
+  # Phase 17b: the three 2.0.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
   meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
@@ -2516,7 +2516,7 @@ tab_assemble_output <- function(ctx) {
   # DISPLAY -- as body rows by the exporters (tab_export_prep / tab_xl via tab_materialize_extras), and
   # as the summary block in the console (Phase 16a). This lets every reserved-"pvalue"-row
   # special-case downstream (n_min, jmvtab re-ref, ...) shrink, and keeps the built tab the "core"
-  # table (see dev/tabxplor_1.4.0_decisions.md §34).
+  # table (see dev/tabxplor_2.0.0_decisions.md §34).
 
   # Phase 7g: n_min small-base DISPLAY filter -- the last, pure-display step (drops rows/cols
   # whose base < n_min and blanks weak cells; recomputes nothing). See tab_apply_n_min().
@@ -2720,7 +2720,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 #' @description
 #' `r lifecycle::badge("deprecated")`
 #'
-#' `tab_transpose()` is **soft-deprecated** since tabxplor 1.4.0. It flips the *object* (the
+#' `tab_transpose()` is **soft-deprecated** since tabxplor 2.0.0. It flips the *object* (the
 #' `tabxplor_fmt` fields), which cannot carry a transposed column's mixed cell types, so a table with
 #' several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
 #' duplicated total columns). Use the exporters' `transpose = TRUE` argument instead --- it flips the
@@ -2749,7 +2749,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 #' }
 tab_transpose <- function(tabs, name = NULL) {
   lifecycle::deprecate_soft(
-    "1.4.0", "tab_transpose()",
+    "2.0.0", "tab_transpose()",
     details = 'Use the `transpose = TRUE` argument of tab_kable() / tab_md() / tab_xl() / tab_export().')
   if (!is.data.frame(tabs)) {
     cli::cli_abort("{.arg tabs} must be a {.pkg tabxplor} table.")
@@ -3923,7 +3923,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   if (pct != "no") {
     # Phase 9d: percentages + the tot_n base on a numeric matrix (base-R) via leaf_wide_pct(),
     # replacing the copy() + switch(pct) + purrr::map(.SD, ~ ./eval(sym("Total"))) per column.
-    # `tot_n` (Phase 2, 1.4.0) = each cell's OWN unweighted percentage base (row / column / grand
+    # `tot_n` (Phase 2, 2.0.0) = each cell's OWN unweighted percentage base (row / column / grand
     # total, per `pct`), BROADCAST from the UNWEIGHTED tabs_n so the built table is self-sufficient
     # for exact statistics (retires detect_totcols() on built tables, decisions §2, §11). Byte-
     # identical to the former per-cell path (dev/benchmarks/phase9d_leaf_math_parity.R).
@@ -4911,9 +4911,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   }
 
-  # Phase 2 (1.4.0): derive per-col_var mean and variance from the moment sums (<v>_n [, _wn],
+  # Phase 2 (2.0.0): derive per-col_var mean and variance from the moment sums (<v>_n [, _wn],
   # _s1, _s2) the aggregate + totals scans produced, in ONE pass over the small bound table.
-  # Reproduces the pre-1.4.0 stats::var (unweighted) / weighted.var (weighted) definitions
+  # Reproduces the pre-2.0.0 stats::var (unweighted) / weighted.var (weighted) definitions
   # exactly and removes the old weighted.var double scan. See R/tab-agg.R.
   tabs <- num_derive_stats(tabs, col_vars, weighted = length(wt) != 0)
 
@@ -4938,7 +4938,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     tabs[, "ref_rows___" := refrows]
 
     #Differences and ratios
-    # Phase 2 (1.4.0): the numeric `diff` field is now a real DIFFERENCE (cell_mean - ref_mean);
+    # Phase 2 (2.0.0): the numeric `diff` field is now a real DIFFERENCE (cell_mean - ref_mean);
     # the cell/ref RATIO (the old `diff` value) moves to the `ratio` field. Numeric coloring keeps
     # reading `ratio` against mean_breaks until Phase 5 (D3 interim). See decisions doc §3, §Phasing.
     if (!ref %in% c("no", "") ) {
@@ -4961,7 +4961,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # per-cell significance <v>_pvalue, via the ci_pivot() engine (R/tab-agg.R). Means use the
     # z pivot for cell CIs and the Welch-t pivot for diff CIs when stars are on; the pvalue is
     # the Welch-t inversion p (universal CI-inclusion) -- NA for cell CIs and when stars are
-    # opted out (one interval eval). See dev/tabxplor_1.4.0_decisions.md §20.
+    # opted out (one interval eval). See dev/tabxplor_2.0.0_decisions.md §20.
     if (ci %in% c("cell", "diff")) {
       stars_on <- resolve_stars(stars)
       want_p   <- isTRUE(stars_on) && ci == "diff"
@@ -5932,7 +5932,7 @@ var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
 # `color = "contrib"` under a significance policy (contrib has NO confidence interval to gate on).
 # Weighted note: like the contribution itself, N and v are weighted -> the residual is approximate under
 # variable weights (anti-conservative), consistent with tabxplor's weighted-inference framework
-# (dev/tabxplor_1.4.0_decisions.md §10/§18); exact for unweighted tables.
+# (dev/tabxplor_2.0.0_decisions.md §10/§18); exact for unweighted tables.
 contrib_pvalue <- function(v, twn, in_totrow, in_tottab, comp) {
   n  <- length(v)
   pv <- 2 * stats::pnorm(-sqrt(abs(v) * twn[n]))
@@ -6220,10 +6220,10 @@ tab_match_comp_and_tottab <- function(tabs, comp) {
 
 
 
-# weighted.var() was removed in 1.4.0 (Phase 2): tab_num() now derives the weighted (ML) variance
+# weighted.var() was removed in 2.0.0 (Phase 2): tab_num() now derives the weighted (ML) variance
 # from moment sums in a single pass via num_derive_stats() (R/tab-agg.R), instead of a per-group
 # helper that recomputed weighted.mean() on every call (the old double scan). The ML-vs-sample
-# variance question it flagged is tracked for Phase 3 (dev/tabxplor_1.4.0_decisions.md §14).
+# variance question it flagged is tracked for Phase 3 (dev/tabxplor_2.0.0_decisions.md §14).
 
 # Phase 3a: the scalar mean-CI helpers ci_mean()/ci_mean_diff() and the DescTools proportion-CI
 # closures ci_base()/ci_diff() were removed. All CI math now lives in the vectorised closed-form

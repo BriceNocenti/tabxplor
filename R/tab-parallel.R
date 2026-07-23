@@ -20,7 +20,7 @@
 #   - jmvtab (live cache) is ALWAYS serial: tab_parallel_workers() returns 0 when ctx$cache_env is set
 #     -> the serial map keeps its cache hooks (jmv_cache_aggregate in tab_aggregate; jmv_cache_store_tests
 #     in tab_build_tables).
-# See: CLAUDE.md 1.4.0 roadmap Phase 8/9a + dev/tabxplor_1.4.0_decisions.md 26, 29.
+# See: CLAUDE.md 2.0.0 roadmap Phase 8/9a + dev/tabxplor_2.0.0_decisions.md 26, 29.
 
 # The mirai compute profile name -- isolates tabxplor's daemons from the user's default pool.
 tabxplor_compute <- "tabxplor"

@@ -1,7 +1,7 @@
 # PURPOSE: Characterization guardrail. Locks the CURRENT output of tab()/tab_num()/tab_many()
 #          across an argument matrix, so ambitious internal refactors reproduce it exactly
 #          unless a change is deliberately accepted (and the fixtures regenerated).
-# ROLE: Core retro-compatibility net for tabxplor 1.4.0.
+# ROLE: Core retro-compatibility net for tabxplor 2.0.0.
 # KEY CONSTRAINTS:
 #   - Structural fixtures live in tests/testthat/_golden/*.rds, produced by dev/make_golden.R.
 #   - Display snapshots (tab_md) live in tests/testthat/_snaps/golden.md.
@@ -10,7 +10,7 @@
 # See: helper-golden.R (the shared case matrix) and CLAUDE.md golden regeneration protocol.
 #
 # ===========================================================================================
-# TRIPWIRE LEDGER -- which 1.4.0 phase consciously regenerates which fixture, and why. On the
+# TRIPWIRE LEDGER -- which 2.0.0 phase consciously regenerates which fixture, and why. On the
 # current baseline every fixture below is GREEN; these are the DELIBERATE future changes to
 # review at regen time (not bugs). [display] = also has a tab_md snapshot in _snaps/golden.md.
 #

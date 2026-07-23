@@ -1,9 +1,9 @@
 # tabxplor color & breaks framework — design (Phase 5)
 
 > STATUS: design only. No code has changed. This is the working brief for the Phase 5
-> implementation ("color diff/ratio split" in the 1.4.0 roadmap), to be executed in a later
+> implementation ("color diff/ratio split" in the 2.0.0 roadmap), to be executed in a later
 > session. It supersedes the terse Phase 5 bullets in `CLAUDE.md` and expands
-> `dev/tabxplor_1.4.0_decisions.md` §3/§7/§12/§18/§20. Read this first, then those.
+> `dev/tabxplor_2.0.0_decisions.md` §3/§7/§12/§18/§20. Read this first, then those.
 >
 > Governing rule (from CLAUDE.md): public API stays retro-compatible; internals may be redesigned
 > radically. The maintainer confirmed nobody but him has customized colors/breaks, so the config
@@ -316,7 +316,7 @@ set_color_breaks(
 
 Old-arg shim (reproduces today EXACTLY): `pct_breaks` -> `ratio <- pct_breaks[pct_breaks>1]`,
 `diff <- pct_breaks[pct_breaks<=1]`; `mean_breaks` -> `mean_ratio`; both via
-`lifecycle::deprecate_soft("1.4.0", ...)`. `get_color_breaks()` migrates an old-shape option on read.
+`lifecycle::deprecate_soft("2.0.0", ...)`. `get_color_breaks()` migrates an old-shape option on read.
 
 ### 5.6 Palette model (diff ramp + ratio ramp; text/bg)
 
@@ -455,9 +455,9 @@ color), and (b) warn on `pct="col"` + means that mean coloring is row-referenced
 - **Step 5 — Legend + exporters two-channel** (`tab_kable`/`tab_plot`/`tab_xl`/legend bg;
   export-parity).
 - **Step 6 — Delete dead code**; docs (`@param color`, `devtools::document()`), NEWS, `/color-mode`
-  skill, `dev/tabxplor_architecture.md`, close `dev/tabxplor_1.4.0_decisions.md` §3/§18/§20.
+  skill, `dev/tabxplor_architecture.md`, close `dev/tabxplor_2.0.0_decisions.md` §3/§18/§20.
 
-Each step: golden + parity green; before/after benchmarks to `dev/benchmarks/results_1.4.0/`.
+Each step: golden + parity green; before/after benchmarks to `dev/benchmarks/results_2.0.0/`.
 
 ## 9. Benchmark plan
 
@@ -472,12 +472,12 @@ The refactor exists for performance (driven by `keep_last_break`), so measure:
 - Harness: extend `dev/benchmarks/run_bench.R` with colored ops (`color="diff"`, `"ratio"`,
   `c("diff","ratio")`, wide `tab_many(color="diff")`); add an in-suite micro case to
   `tests/testthat/test-benchmark.R`. Save `before/after_phase5_8M.csv` under
-  `dev/benchmarks/results_1.4.0/`.
+  `dev/benchmarks/results_2.0.0/`.
 
 ## 10. Open decisions for the maintainer (carry into the implementation session)
 
 - **D1** Two-channel composition: may `ci` be a background "significance shade" over a magnitude
-  text ramp, or restrict background to `{ratio, diff, mean_diff}` in 1.4.0?
+  text ramp, or restrict background to `{ratio, diff, mean_diff}` in 2.0.0?
 - **D2** The interleave quirk (a diff above the top break overriding the ×N highlight): preserve for
   byte-identity (recommended now) or clean up consciously (regenerate `f_color_diff`)? Less relevant
   once the two-channel model is the recommended way to show ratio.
@@ -490,7 +490,7 @@ The refactor exists for performance (driven by `keep_last_break`), so measure:
 - **D6** Naming: is `set_color_scheme()` (presets) worth shipping, or keep only
   `set_color_breaks()`/`set_color_style()`?
 - **D7** `fmt_color_selection` shim: may `expect_color()` migrate so the shim can be dropped within
-  1.4.0?
+  2.0.0?
 - **D8** Glass's delta needs the reference `var`; when absent (e.g. some `pct="col"` cases) the cell
   is uncolored — acceptable, or fall back to `ratio`?
 
@@ -509,7 +509,7 @@ The refactor exists for performance (driven by `keep_last_break`), so measure:
 - `R/utils.R` — `.onLoad` breaks/style seed 49-55.
 - Tests: `tests/testthat/test-golden.R` + `helper-golden.R` (add the Step-0 color net),
   `test-tab.R` (`expect_color`), `test-exports.R`, `test-calculations.R`.
-- Decisions: `dev/tabxplor_1.4.0_decisions.md` §3/§7/§12/§18/§20/§24.
+- Decisions: `dev/tabxplor_2.0.0_decisions.md` §3/§7/§12/§18/§20/§24.
 
 ## 12. Proposed framework 2 — radically new colors UI
 

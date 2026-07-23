@@ -15,7 +15,7 @@
 #   - Robust tests run on complete cases of (row_var, col_var) per subtable (the survey convention);
 #     this can differ slightly from the classic chi2 when na = "keep" counts NA as a category -- documented.
 #   - Fisher rows are dropped in robust mode (the robust p is the answer there).
-# See: dev/tabxplor_1.4.0_decisions.md S51; CLAUDE.md Last Phase j; R/tab_reg.R (the design precedent).
+# See: dev/tabxplor_2.0.0_decisions.md S51; CLAUDE.md Last Phase j; R/tab_reg.R (the design precedent).
 
 # === SECTION: design construction (shared with tab_reg) =============================================
 

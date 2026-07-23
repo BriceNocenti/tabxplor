@@ -9,7 +9,7 @@
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
 #   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
 #     reports via a jmvcore::Notice -- the export dispatch lives in R/jmvtab-export.R.
-# See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 1.4.0 roadmap > Phase 7e.
+# See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 2.0.0 roadmap > Phase 7e.
 
 # @rdname jamovi
 jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(

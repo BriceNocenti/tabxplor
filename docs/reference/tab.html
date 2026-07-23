@@ -166,7 +166,7 @@ Leave empty to make a simple cross-table. All <code>tab_vars</code> are converte
 
 <dt id="arg-sup-cols">sup_cols<a class="anchor" aria-label="anchor" href="#arg-sup-cols"></a></dt>
 <dd><p><a href="https://lifecycle.r-lib.org/articles/stages.html#deprecated" class="external-link"><img src="figures/lifecycle-deprecated.svg" alt="[Deprecated]"></a> Supplementary columns variables, with
-only the first level printed. Deprecated in 1.4.0: pass these columns in <code>col_vars</code> and
+only the first level printed. Deprecated in 2.0.0: pass these columns in <code>col_vars</code> and
 set <code>levels = "first"</code> instead (<code>col_vars</code> already accepts several variables).</p></dd>
 
 
@@ -496,7 +496,7 @@ given: a string prefixed to each new column name, and whether to sort the new co
 
 
 <dt id="arg-chi-">chi2<a class="anchor" aria-label="anchor" href="#arg-chi-"></a></dt>
-<dd><p><a href="https://lifecycle.r-lib.org/articles/stages.html#deprecated" class="external-link"><img src="figures/lifecycle-deprecated.svg" alt="[Deprecated]"></a> Renamed to <code>test</code> in 1.4.0: the test is a
+<dd><p><a href="https://lifecycle.r-lib.org/articles/stages.html#deprecated" class="external-link"><img src="figures/lifecycle-deprecated.svg" alt="[Deprecated]"></a> Renamed to <code>test</code> in 2.0.0: the test is a
 Chi-squared only for factors (numeric <code>col_vars</code> get Welch's F), so the old name was
 misleading. Still works.</p></dd>
 
@@ -856,7 +856,7 @@ Export a table with <code><a href="tab_xl.html">tab_xl()</a></code> (Excel), <co
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Differences with the total, except if their confidences intervals are superior to them:</span></span></span>
 <span class="r-in"><span><span class="fu">tab</span><span class="op">(</span><span class="fu">forcats</span><span class="fu">::</span><span class="va"><a href="https://forcats.tidyverse.org/reference/gss_cat.html" class="external-link">gss_cat</a></span>, <span class="va">race</span>, <span class="va">marital</span>, subtext <span class="op">=</span> <span class="va">gss</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff_ci"</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>The `color = "diff_ci"` mode was deprecated in tabxplor 1.4.0.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>The `color = "diff_ci"` mode was deprecated in tabxplor 2.0.0.</span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Please use `color = "diff"` with the `color_signif` argument instead.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 4 × 8</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   race   `No answer` `Never married` Separated Divorced Widowed Married</span>
@@ -871,7 +871,7 @@ Export a table with <code><a href="tab_xl.html">tab_xl()</a></code> (Excel), <co
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Same differences, minus their confidence intervals:</span></span></span>
 <span class="r-in"><span><span class="fu">tab</span><span class="op">(</span><span class="fu">forcats</span><span class="fu">::</span><span class="va"><a href="https://forcats.tidyverse.org/reference/gss_cat.html" class="external-link">gss_cat</a></span>, <span class="va">race</span>, <span class="va">marital</span>, subtext <span class="op">=</span> <span class="va">gss</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"after_ci"</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>The `color = "after_ci"` mode was deprecated in tabxplor 1.4.0.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>The `color = "after_ci"` mode was deprecated in tabxplor 2.0.0.</span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Please use `color = "diff"` with the `color_signif` argument instead.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 4 × 8</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   race   `No answer` `Never married` Separated Divorced Widowed Married</span>

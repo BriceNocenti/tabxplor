@@ -26,10 +26,10 @@ tab_plot(
 \item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
 black table with white text.}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: exports are always
+\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: exports are always
 24-bit (the OKLCH palettes). Kept only so old calls do not error.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
@@ -58,7 +58,7 @@ A \code{\link[ggplot2]{ggplot}} object to be printed in the
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-Superseded (1.4.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
+Superseded (2.0.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
 display is limited and it is no longer actively developed. It keeps working and is retained for a
 future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
 \code{\link{tab_xl}} (Excel).

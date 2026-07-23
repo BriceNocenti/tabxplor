@@ -4,7 +4,7 @@
 #            (b) means            -- Welch-t inclusion  vs  t.test(var.equal = FALSE)
 #          Read before wiring the primitives into R/tab-agg.R. Not a testthat test; run manually:
 #            Rscript dev/verify_ci_inclusion.R
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 3; dev/tabxplor_1.4.0_decisions.md §20.
+# See: CLAUDE.md > 2.0.0 roadmap > Phase 3; dev/tabxplor_2.0.0_decisions.md §20.
 
 options(width = 130)
 z_of  <- function(cl) stats::qnorm(1 - (1 - cl) / 2)

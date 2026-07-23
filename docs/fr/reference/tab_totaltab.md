@@ -2,7 +2,7 @@
 
 **\[superseded\]**
 
-Superseded (1.4.0): the total table is built directly by the `totaltab`
+Superseded (2.0.0): the total table is built directly by the `totaltab`
 argument of
 [`tab()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab.md) /
 [`tab_plain()`](https://bricenocenti.github.io/tabxplor/fr/reference/tab_plain.md)
