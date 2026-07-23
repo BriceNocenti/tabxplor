@@ -44,8 +44,9 @@
   See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
   `lm_plots()` draw it.
 * **`tab_export()`** — one entry point for every export format. **`tab_html()`** is the new name for
-  `tab_kable()` (kept as a permanent alias). **`tab_css()`** generates one stylesheet for a whole document.
-  **`set_caption()` / `get_caption()`** store a caption that survives a pipeline.
+  `tab_kable()` (kept as a permanent alias). **`tab_css()`** generates one stylesheet for a whole document;
+  its cell-colour rules survive Bootstrap-based host pages (pkgdown, Quarto), which style table cells
+  themselves. **`set_caption()` / `get_caption()`** store a caption that survives a pipeline.
 * **`tab_transpose()` / `transpose = TRUE`** — flip a table, mainly for the column-percentage inversion
   workflow. Also: **French vignettes on a bilingual pkgdown website**.
 * **New jamovi "Regression models" analysis (`jmvtabreg`)** for `tab_reg()`. The Crosstables module (`jmvtab`)

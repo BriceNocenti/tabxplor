@@ -36,10 +36,11 @@ The function is kept (unchanged) for the single-row-variable round-trip it alway
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor.html">Introduction to tabxplor</a></li>
+    <li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming.html">Programming with tabxplor</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><h6 class="dropdown-header" data-toc-skip>Français</h6></li>
+    <li><h6 class="dropdown-header" data-toc-skip>En français</h6></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-fr.html">Introduction à tabxplor</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-reg-fr.html">Tableaux de régression avec tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
@@ -141,25 +142,25 @@ a subtabled table with <code>tab_vars</code>, and at most one total row and one 
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{color:#000000;background:#ffffff;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .g1{color:#9f9f9f;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .g2{color:#111111;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .g1,.tabxplor-tab .g1{color:#9f9f9f;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .g2,.tabxplor-tab .g2{color:#111111;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{color:#000000;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p1{color:#02A5B3;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p2{color:#0891C9;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p3{color:#0267C7;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p4{color:#300DFD;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m1{color:#DCA331;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m2{color:#DE7C01;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m3{color:#DD5301;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m4{color:#D60103;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o1{background-color:#DFFCFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o2{background-color:#D7EFFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o3{background-color:#CEE3FF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o4{background-color:#BBCCFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u1{background-color:#FFF4E1;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u2{background-color:#FFE6D3;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u3{background-color:#FFD7C8;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u4{background-color:#FFBAAF;}&lt;/style&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p1,.tabxplor-tab .p1{color:#02A5B3;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p2,.tabxplor-tab .p2{color:#0891C9;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p3,.tabxplor-tab .p3{color:#0267C7;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p4,.tabxplor-tab .p4{color:#300DFD;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m1,.tabxplor-tab .m1{color:#DCA331;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m2,.tabxplor-tab .m2{color:#DE7C01;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m3,.tabxplor-tab .m3{color:#DD5301;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m4,.tabxplor-tab .m4{color:#D60103;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o1,.tabxplor-tab .o1{background-color:#DFFCFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o2,.tabxplor-tab .o2{background-color:#D7EFFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o3,.tabxplor-tab .o3{background-color:#CEE3FF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o4,.tabxplor-tab .o4{background-color:#BBCCFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u1,.tabxplor-tab .u1{background-color:#FFF4E1;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u2,.tabxplor-tab .u2{background-color:#FFE6D3;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u3,.tabxplor-tab .u3{background-color:#FFD7C8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u4,.tabxplor-tab .u4{background-color:#FFBAAF;}&lt;/style&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;table class="tabxplor-tab"&gt;&lt;thead&gt;&lt;tr&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;th class="tx-span" colspan="6"&gt;marital&lt;/th&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th class="tx-l tx-bl tx-rv"&gt;race&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;No answer&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Never married&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Separated&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Divorced&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Widowed&lt;/th&gt;&lt;th class="tx-r tx-num tx-br"&gt;Married&lt;/th&gt;&lt;th class="tx-r tx-num tx-br tx-bl tx-tot"&gt;Total&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class="tx-l tx-bl tx-rv"&gt;Other&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.3 ; n: 2"&gt;12%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.3 ; n: 633"&gt;12%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×1.6 ; n: 110"&gt;15%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.5 ; n: 212"&gt;6%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷2.4 ; n: 70"&gt;4%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 932"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 959"&gt;9%&lt;/td&gt;&lt;/tr&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;tr&gt;&lt;td class="tx-l tx-bl tx-rv"&gt;Black&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 2"&gt;12%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +10% ; ratio: ×1.7 ; n: 1 305"&gt;24%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +12% ; ratio: ×1.8 ; n: 196"&gt;26%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 495"&gt;15%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×1 ; n: 262"&gt;14%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -6% ; ratio: ÷1.7 ; n: 869"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 129"&gt;15%&lt;/td&gt;&lt;/tr&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;tr&gt;&lt;td class="tx-l tx-bl tx-rv"&gt;White&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 13"&gt;76%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -12% ; ratio: ÷1.2 ; n: 3 478"&gt;64%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -18% ; ratio: ÷1.3 ; n: 437"&gt;59%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1 ; n: 2 676"&gt;79%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +5% ; ratio: ×1.1 ; n: 1 475"&gt;82%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×1.1 ; n: 8 316"&gt;82%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 16 395"&gt;76%&lt;/td&gt;&lt;/tr&gt;</span>

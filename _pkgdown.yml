@@ -7,10 +7,31 @@ template:
 # no second FR site build, no language toggle. `intro` is dropped from the left side so the
 # introduction vignette appears in Articles like every other one (symmetric with the French set),
 # instead of a separate "Get started" page.
+# The `articles` menu is EXPLICIT because pkgdown special-cases the package-named vignette
+# (vignettes/tabxplor.Rmd) as the "Get started" intro and silently drops it from the auto-built
+# Articles menu -- with `intro` removed from the navbar it would appear nowhere.
 navbar:
   structure:
     left: [reference, articles, news]
     right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Introduction to tabxplor
+        href: articles/tabxplor.html
+      - text: Regression tables with tab_reg()
+        href: articles/tabxplor-reg.html
+      - text: Programming with tabxplor
+        href: articles/tabxplor-programming.html
+      - text: -------
+      - text: En français
+      - text: Introduction à tabxplor
+        href: articles/tabxplor-fr.html
+      - text: Tableaux de régression avec tab_reg()
+        href: articles/tabxplor-reg-fr.html
+      - text: Programmer avec tabxplor
+        href: articles/tabxplor-programming-fr.html
 
 # The reference is ordered by priority: the two headline functions first, then everything an ordinary
 # user needs, then (clearly separated) the functions for programming with tabxplor. The S3 methods and
@@ -139,3 +160,7 @@ articles:
   - articles/tabxplor-fr
   - articles/tabxplor-reg-fr
   - articles/tabxplor-programming-fr
+# TEMPORARY (delete with vignettes/articles/test-colors.Rmd once colors are verified on the site):
+- title: internal
+  contents:
+  - articles/test-colors

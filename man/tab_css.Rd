@@ -67,8 +67,13 @@ document.
 \section{Restyling a table}{
 
 Nothing is written inline on a cell, so \strong{any} of the look can be overridden by adding your own
-rules after the stylesheet -- no \code{!important} needed. Column widths in particular are left to the
-browser (it sizes each column to its content); to pin one, style its role:
+rules after the stylesheet -- no \code{!important} needed. The cell colour classes are also emitted
+scoped (\verb{.tabxplor-tab .p1}) so they survive host pages that style table cells themselves --
+Bootstrap-based sites (including pkgdown) apply \code{color}/\code{background-color} to every cell of a
+\code{.table}, which would otherwise wash the colours out. On a pathological host (ID selectors or
+\code{!important} on cells), add your own stronger override after the stylesheet. Column widths in
+particular are left to the browser (it sizes each column to its content); to pin one, style its
+role:
 \preformatted{
 .tabxplor-tab .tx-rv  { min-width: 10em; }   /* the row-variable levels column */
 .tabxplor-tab .tx-tot { min-width: 5.5em; }  /* total columns                  */

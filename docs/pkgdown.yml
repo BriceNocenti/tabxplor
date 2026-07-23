@@ -8,7 +8,8 @@ articles:
   articles/tabxplor-reg-fr: tabxplor-reg-fr.html
   tabxplor-reg: tabxplor-reg.html
   tabxplor: tabxplor.html
-last_built: 2026-07-23T09:56Z
+  articles/test-colors: test-colors.html
+last_built: 2026-07-23T10:32Z
 urls:
   reference: https://bricenocenti.github.io/tabxplor/reference
   article: https://bricenocenti.github.io/tabxplor/articles

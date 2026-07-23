@@ -162,6 +162,36 @@ testthat::test_that("the generated CSS is syntactically valid in every mode", {
   }
 })
 
+testthat::test_that("cell colour classes are emitted bare AND scoped (Bootstrap-host proofing)", {
+  # pkgdown stamps class="table" on every table; Bootstrap 5's `.table>:not(caption)>*>*` (0,1,1)
+  # then sets color/background-color on the SAME td our class sits on, beating a bare `.p1` (0,1,0)
+  # -- every cell colour washed out on the pkgdown site while the legend spans survived. The scoped
+  # twin `.tabxplor-tab .p1` (0,2,0) out-specifies it with no !important; the bare selector stays for
+  # tab_md's editor contract and the legend spans outside the wrapper.
+  for (chrome in c(TRUE, FALSE)) {
+    css <- tab_css(chrome = chrome, style_tag = FALSE)
+    lab <- if (chrome) "chrome" else "md"
+    for (cls in c("p1", "m4", "o1", "u4")) {
+      testthat::expect_match(css, paste0(".", cls, ",.tabxplor-tab .", cls, "{"),
+                             fixed = TRUE, label = lab)
+    }
+  }
+  # the greys (grey_non_signif cells) are cell classes too, chrome-only
+  testthat::expect_match(tab_css(style_tag = FALSE), ".g1,.tabxplor-tab .g1{", fixed = TRUE)
+})
+
+testthat::test_that("the html stars legend uses &#42; entities so pandoc cannot eat the stars", {
+  # A knitted page's raw-html block goes THROUGH pandoc (Rmd -> md -> html on pkgdown/Quarto):
+  # its markdown-in-html parsing paired the legend's `***: ... **: ... *:` runs as emphasis and the
+  # stars vanished from every knitted page (Viewer/jamovi/standalone were fine -- no re-parse).
+  # `&#42;` renders as `*` everywhere but is plain text to pandoc.
+  t_stars <- tab(gss, marital, race, pct = "row", color = "diff", stars = TRUE)
+  h <- as.character(tab_kable(t_stars, engine = "html", css = FALSE, tooltips = FALSE))
+  testthat::expect_match(h, "&#42;&#42;&#42;:", fixed = TRUE)      # the legend's *** run, entity-encoded
+  foot <- regmatches(h, regexpr("<div class=\"tx-foot\">.*", h))
+  testthat::expect_no_match(foot, "\\*{2,3}:")                     # no raw pairable star runs left
+})
+
 testthat::test_that("the auto cascade layers are ordered so a page toggle beats the OS", {
   # THE contract of theme = "auto". `@media (prefers-color-scheme)` only reports the OS; Quarto and
   # friends toggle a CLASS, which a media query cannot see. The hook layers must therefore come AFTER

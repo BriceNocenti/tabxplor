@@ -316,13 +316,18 @@ testthat::test_that("the deprecated `title` arg still feeds `caption`", {
 
 # === SECTION: tab_md_css() / tab_css() ========================================
 
-testthat::test_that("tab_md_css emits the slot colour rules, bare and chrome-free", {
+testthat::test_that("tab_md_css emits the slot colour rules, chrome-free", {
   css <- tab_md_css()
   testthat::expect_type(css, "character")
-  testthat::expect_true(grepl("\\.p1\\{color:", css))                     # a text-slot rule
-  testthat::expect_true(grepl("\\.o1\\{background-color:", css))          # a bg-slot rule
-  # The md contract: BARE selectors the user maps in their own editor CSS -- no table chrome.
-  testthat::expect_false(grepl("tabxplor-tab", css, fixed = TRUE))
+  testthat::expect_true(grepl("\\.p1,", css))                             # a text-slot rule (bare part)
+  testthat::expect_true(grepl("\\.o1,", css))                             # a bg-slot rule (bare part)
+  # The md contract: colour classes ONLY, no table chrome. The bare selector stays first (the user
+  # maps it in their own editor CSS); the scoped `.tabxplor-tab .p1` twin rides along since the
+  # Bootstrap-host fix (a Quarto site is Bootstrap too, and styled tab_md wraps tables in the
+  # `::: {.tabxplor-tab}` div) -- so assert the ABSENCE OF CHROME, not of the class name.
+  testthat::expect_false(grepl("\\.tabxplor-tab\\{", css))                # no table-level chrome block
+  testthat::expect_false(grepl("tx-", css, fixed = TRUE))                 # no role/geometry rules
+  testthat::expect_false(grepl("border", css, fixed = TRUE))              # no border chrome
 })
 
 testthat::test_that("tab_md_css theme = 'auto' adds the media block; 'light' does not", {

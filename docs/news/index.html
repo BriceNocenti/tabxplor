@@ -18,10 +18,11 @@
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor.html">Introduction to tabxplor</a></li>
+    <li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming.html">Programming with tabxplor</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><h6 class="dropdown-header" data-toc-skip>Français</h6></li>
+    <li><h6 class="dropdown-header" data-toc-skip>En français</h6></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-fr.html">Introduction à tabxplor</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-reg-fr.html">Tableaux de régression avec tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
@@ -73,7 +74,7 @@
 <li>
 <strong><code><a href="../reference/tab_reg.html">tab_reg()</a></code></strong> — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal), with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export. See the regression vignette. <code><a href="../reference/tab_logit.html">tab_logit()</a></code> / <code><a href="../reference/multi_logit.html">multi_logit()</a></code> are thin wrappers; <code><a href="../reference/or_plot.html">or_plot()</a></code> / <code><a href="../reference/lm_plots.html">lm_plots()</a></code> draw it.</li>
 <li>
-<strong><code><a href="../reference/tab_export.html">tab_export()</a></code></strong> — one entry point for every export format. <strong><code><a href="../reference/tab_html.html">tab_html()</a></code></strong> is the new name for <code><a href="../reference/tab_html.html">tab_kable()</a></code> (kept as a permanent alias). <strong><code><a href="../reference/tab_css.html">tab_css()</a></code></strong> generates one stylesheet for a whole document. <strong><code><a href="../reference/set_caption.html">set_caption()</a></code> / <code><a href="../reference/set_caption.html">get_caption()</a></code></strong> store a caption that survives a pipeline.</li>
+<strong><code><a href="../reference/tab_export.html">tab_export()</a></code></strong> — one entry point for every export format. <strong><code><a href="../reference/tab_html.html">tab_html()</a></code></strong> is the new name for <code><a href="../reference/tab_html.html">tab_kable()</a></code> (kept as a permanent alias). <strong><code><a href="../reference/tab_css.html">tab_css()</a></code></strong> generates one stylesheet for a whole document; its cell-colour rules survive Bootstrap-based host pages (pkgdown, Quarto), which style table cells themselves. <strong><code><a href="../reference/set_caption.html">set_caption()</a></code> / <code><a href="../reference/set_caption.html">get_caption()</a></code></strong> store a caption that survives a pipeline.</li>
 <li>
 <strong><code><a href="../reference/tab_transpose.html">tab_transpose()</a></code> / <code>transpose = TRUE</code></strong> — flip a table, mainly for the column-percentage inversion workflow. Also: <strong>French vignettes on a bilingual pkgdown website</strong>.</li>
 <li>

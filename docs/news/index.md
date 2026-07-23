@@ -91,7 +91,9 @@
   [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
   (kept as a permanent alias).
   **[`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)**
-  generates one stylesheet for a whole document.
+  generates one stylesheet for a whole document; its cell-colour rules
+  survive Bootstrap-based host pages (pkgdown, Quarto), which style
+  table cells themselves.
   **[`set_caption()`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)
   /
   [`get_caption()`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)**

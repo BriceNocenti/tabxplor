@@ -3537,8 +3537,15 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
     if (!is_colored_tok(tk)) {
       # plain token: a variable name (bold) or footer text (stars, weight line...). The stars token is
       # `esc`-flagged: escape `*` so pandoc does not read `***`/`*` as emphasis (user subtext is left raw).
+      # DESIGN: the html medium needs it too -- a knitted page's raw-html block goes THROUGH pandoc
+      # (Rmd -> md -> html on pkgdown/Quarto), whose markdown-in-html parsing pairs the legend's
+      # `***: ... **: ... *:` runs as emphasis and swallows the stars (the Viewer, jamovi and a
+      # standalone file never re-parse, so they were unaffected). `&#42;` renders as `*` in every
+      # browser but is never an emphasis delimiter to pandoc (it round-trips it as an escaped literal,
+      # the same path that keeps the in-cell stars alive).
       txt <- tk$t
-      if (identical(medium, "md") && isTRUE(tk$esc)) txt <- gsub("*", "\\*", txt, fixed = TRUE)
+      if (identical(medium, "md")   && isTRUE(tk$esc)) txt <- gsub("*", "\\*", txt, fixed = TRUE)
+      if (identical(medium, "html") && isTRUE(tk$esc)) txt <- gsub("*", "&#42;", txt, fixed = TRUE)
       if (!bold) return(txt)
       if (identical(medium, "console")) return(cli::style_bold(txt))
       if (identical(medium, "html"))    return(paste0("<b>", txt, "</b>"))

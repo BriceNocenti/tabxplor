@@ -20,10 +20,11 @@ tab_kable() is a permanent alias of tab_html(). Use it directly for HTML-specifi
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor.html">Introduction to tabxplor</a></li>
+    <li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming.html">Programming with tabxplor</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><h6 class="dropdown-header" data-toc-skip>Français</h6></li>
+    <li><h6 class="dropdown-header" data-toc-skip>En français</h6></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-fr.html">Introduction à tabxplor</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-reg-fr.html">Tableaux de régression avec tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
@@ -290,25 +291,25 @@ is chosen with <code>engine =</code>.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{color:#000000;background:#ffffff;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .g1{color:#9f9f9f;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .g2{color:#111111;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .g1,.tabxplor-tab .g1{color:#9f9f9f;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .g2,.tabxplor-tab .g2{color:#111111;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{color:#000000;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p1{color:#02A5B3;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p2{color:#0891C9;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p3{color:#0267C7;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .p4{color:#300DFD;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m1{color:#DCA331;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m2{color:#DE7C01;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m3{color:#DD5301;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .m4{color:#D60103;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o1{background-color:#DFFCFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o2{background-color:#D7EFFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o3{background-color:#CEE3FF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .o4{background-color:#BBCCFF;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u1{background-color:#FFF4E1;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u2{background-color:#FFE6D3;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u3{background-color:#FFD7C8;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .u4{background-color:#FFBAAF;}&lt;/style&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p1,.tabxplor-tab .p1{color:#02A5B3;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p2,.tabxplor-tab .p2{color:#0891C9;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p3,.tabxplor-tab .p3{color:#0267C7;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .p4,.tabxplor-tab .p4{color:#300DFD;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m1,.tabxplor-tab .m1{color:#DCA331;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m2,.tabxplor-tab .m2{color:#DE7C01;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m3,.tabxplor-tab .m3{color:#DD5301;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .m4,.tabxplor-tab .m4{color:#D60103;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o1,.tabxplor-tab .o1{background-color:#DFFCFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o2,.tabxplor-tab .o2{background-color:#D7EFFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o3,.tabxplor-tab .o3{background-color:#CEE3FF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .o4,.tabxplor-tab .o4{background-color:#BBCCFF;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u1,.tabxplor-tab .u1{background-color:#FFF4E1;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u2,.tabxplor-tab .u2{background-color:#FFE6D3;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u3,.tabxplor-tab .u3{background-color:#FFD7C8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .u4,.tabxplor-tab .u4{background-color:#FFBAAF;}&lt;/style&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;table class="tabxplor-tab"&gt;&lt;thead&gt;&lt;tr&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;th class="tx-span" colspan="6"&gt;marital&lt;/th&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th class="tx-l tx-br tx-bl tx-rv"&gt;race&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;No answer&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Never married&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Separated&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Divorced&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Widowed&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Married&lt;/th&gt;&lt;th class="tx-r tx-num tx-br tx-bl tx-tot"&gt;Total&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;Other&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×16.1 ; n: 1"&gt;1%&lt;/td&gt;&lt;td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +9% ; ratio: ×1.4 ; n: 60"&gt;34%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.1 ; n: 8"&gt;5%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -4% ; ratio: ÷1.4 ; n: 20"&gt;11%&lt;/td&gt;&lt;td class="tx-r tx-num m1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷2.1 ; n: 8"&gt;5%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ×1 ; n: 78"&gt;45%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 175"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=   175)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;Black&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×0 ; n: 0"&gt;0%&lt;/td&gt;&lt;td class="tx-r tx-num p2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +11% ; ratio: ×1.4 ; n: 157"&gt;37%&lt;/td&gt;&lt;td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×2.5 ; n: 43"&gt;10%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -2% ; ratio: ÷1.1 ; n: 60"&gt;14%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.2 ; n: 48"&gt;11%&lt;/td&gt;&lt;td class="tx-r tx-num m2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -17% ; ratio: ÷1.6 ; n: 121"&gt;28%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 429"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=   429)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;White&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×0 ; n: 0"&gt;0%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.1 ; n: 495"&gt;22%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.4 ; n: 61"&gt;3%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1 ; n: 361"&gt;16%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 217"&gt;10%&lt;/td&gt;&lt;td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.1 ; n: 1 079"&gt;49%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 2 213"&gt;100%&lt;span style="font-weight:normal;"&gt; (n= 2 213)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;</span>

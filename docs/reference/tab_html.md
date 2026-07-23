@@ -265,25 +265,25 @@ tab_html(tabs, theme = "light")
 #> .tabxplor-tab{color:#000000;background:#ffffff;}
 #> .tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}
 #> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
-#> .g1{color:#9f9f9f;}
-#> .g2{color:#111111;}
+#> .g1,.tabxplor-tab .g1{color:#9f9f9f;}
+#> .g2,.tabxplor-tab .g2{color:#111111;}
 #> .tabxplor-caption{color:#000000;}
-#> .p1{color:#02A5B3;}
-#> .p2{color:#0891C9;}
-#> .p3{color:#0267C7;}
-#> .p4{color:#300DFD;}
-#> .m1{color:#DCA331;}
-#> .m2{color:#DE7C01;}
-#> .m3{color:#DD5301;}
-#> .m4{color:#D60103;}
-#> .o1{background-color:#DFFCFF;}
-#> .o2{background-color:#D7EFFF;}
-#> .o3{background-color:#CEE3FF;}
-#> .o4{background-color:#BBCCFF;}
-#> .u1{background-color:#FFF4E1;}
-#> .u2{background-color:#FFE6D3;}
-#> .u3{background-color:#FFD7C8;}
-#> .u4{background-color:#FFBAAF;}</style>
+#> .p1,.tabxplor-tab .p1{color:#02A5B3;}
+#> .p2,.tabxplor-tab .p2{color:#0891C9;}
+#> .p3,.tabxplor-tab .p3{color:#0267C7;}
+#> .p4,.tabxplor-tab .p4{color:#300DFD;}
+#> .m1,.tabxplor-tab .m1{color:#DCA331;}
+#> .m2,.tabxplor-tab .m2{color:#DE7C01;}
+#> .m3,.tabxplor-tab .m3{color:#DD5301;}
+#> .m4,.tabxplor-tab .m4{color:#D60103;}
+#> .o1,.tabxplor-tab .o1{background-color:#DFFCFF;}
+#> .o2,.tabxplor-tab .o2{background-color:#D7EFFF;}
+#> .o3,.tabxplor-tab .o3{background-color:#CEE3FF;}
+#> .o4,.tabxplor-tab .o4{background-color:#BBCCFF;}
+#> .u1,.tabxplor-tab .u1{background-color:#FFF4E1;}
+#> .u2,.tabxplor-tab .u2{background-color:#FFE6D3;}
+#> .u3,.tabxplor-tab .u3{background-color:#FFD7C8;}
+#> .u4,.tabxplor-tab .u4{background-color:#FFBAAF;}</style>
 #> <table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="6">marital</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">race</th><th class="tx-r tx-num">No answer</th><th class="tx-r tx-num">Never married</th><th class="tx-r tx-num">Separated</th><th class="tx-r tx-num">Divorced</th><th class="tx-r tx-num">Widowed</th><th class="tx-r tx-num">Married</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">Other</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×16.1 ; n: 1">1%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +9% ; ratio: ×1.4 ; n: 60">34%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.1 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -4% ; ratio: ÷1.4 ; n: 20">11%</td><td class="tx-r tx-num m1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷2.1 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ×1 ; n: 78">45%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 175">100%<span style="font-weight:normal;"> (n=   175)</span></td></tr>
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">Black</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×0 ; n: 0">0%</td><td class="tx-r tx-num p2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +11% ; ratio: ×1.4 ; n: 157">37%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×2.5 ; n: 43">10%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -2% ; ratio: ÷1.1 ; n: 60">14%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.2 ; n: 48">11%</td><td class="tx-r tx-num m2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -17% ; ratio: ÷1.6 ; n: 121">28%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 429">100%<span style="font-weight:normal;"> (n=   429)</span></td></tr>
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">White</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×0 ; n: 0">0%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.1 ; n: 495">22%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.4 ; n: 61">3%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1 ; n: 361">16%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 217">10%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.1 ; n: 1 079">49%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 2 213">100%<span style="font-weight:normal;"> (n= 2 213)</span></td></tr>

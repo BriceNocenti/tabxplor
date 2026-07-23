@@ -32,10 +32,11 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
+<li><a class="dropdown-item" href="../articles/tabxplor.html">Introduction to tabxplor</a></li>
+    <li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming.html">Programming with tabxplor</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><h6 class="dropdown-header" data-toc-skip>Français</h6></li>
+    <li><h6 class="dropdown-header" data-toc-skip>En français</h6></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-fr.html">Introduction à tabxplor</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-reg-fr.html">Tableaux de régression avec tab_reg()</a></li>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
@@ -129,25 +130,25 @@
 .tabxplor-tab{color:#000000;background:#ffffff;}
 .tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}
 .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
-.g1{color:#9f9f9f;}
-.g2{color:#111111;}
+.g1,.tabxplor-tab .g1{color:#9f9f9f;}
+.g2,.tabxplor-tab .g2{color:#111111;}
 .tabxplor-caption{color:#000000;}
-.p1{color:#02A5B3;}
-.p2{color:#0891C9;}
-.p3{color:#0267C7;}
-.p4{color:#300DFD;}
-.m1{color:#DCA331;}
-.m2{color:#DE7C01;}
-.m3{color:#DD5301;}
-.m4{color:#D60103;}
-.o1{background-color:#DFFCFF;}
-.o2{background-color:#D7EFFF;}
-.o3{background-color:#CEE3FF;}
-.o4{background-color:#BBCCFF;}
-.u1{background-color:#FFF4E1;}
-.u2{background-color:#FFE6D3;}
-.u3{background-color:#FFD7C8;}
-.u4{background-color:#FFBAAF;}
+.p1,.tabxplor-tab .p1{color:#02A5B3;}
+.p2,.tabxplor-tab .p2{color:#0891C9;}
+.p3,.tabxplor-tab .p3{color:#0267C7;}
+.p4,.tabxplor-tab .p4{color:#300DFD;}
+.m1,.tabxplor-tab .m1{color:#DCA331;}
+.m2,.tabxplor-tab .m2{color:#DE7C01;}
+.m3,.tabxplor-tab .m3{color:#DD5301;}
+.m4,.tabxplor-tab .m4{color:#D60103;}
+.o1,.tabxplor-tab .o1{background-color:#DFFCFF;}
+.o2,.tabxplor-tab .o2{background-color:#D7EFFF;}
+.o3,.tabxplor-tab .o3{background-color:#CEE3FF;}
+.o4,.tabxplor-tab .o4{background-color:#BBCCFF;}
+.u1,.tabxplor-tab .u1{background-color:#FFF4E1;}
+.u2,.tabxplor-tab .u2{background-color:#FFE6D3;}
+.u3,.tabxplor-tab .u3{background-color:#FFD7C8;}
+.u4,.tabxplor-tab .u4{background-color:#FFBAAF;}
 </style>
 <p>For the most common regression models, <code><a href="../reference/tab_reg.html">tab_reg()</a></code> builds
 a <strong>regression table</strong> that looks and behaves like a
@@ -450,10 +451,10 @@ Model: logistic regression; odds ratios (vs the reference
 category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -800,10 +801,10 @@ significant, or a difference under ±5 points.<br><b>Obs_OR, Model_OR —
 </b>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -1280,10 +1281,10 @@ of blue: cells ≥ <span class="p1" style="font-weight:bold;">+5</span>;
 cells ≤ <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Coloured: significantly
 different from the reference category (Wald interval, 95% confidence),
 by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±5 points.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+significant, or a difference under ±5 points.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -1683,10 +1684,9 @@ Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold
 cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Coloured: significantly
 different from the Total row (Wald interval, 95% confidence), by at
 least the first colour threshold. Uncoloured: either not significant, or
-a difference under ±5 points.<br><em><strong>: significantly different
-from the reference category (in bold) at the 99% confidence level;
-</strong>: at the 95% level; </em>: at the 90% level; no star: not
-significant.
+a difference under ±5 points.<br>***: significantly different from the
+reference category (in bold) at the 99% confidence level; **: at the 95%
+level; *: at the 90% level; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
@@ -1827,10 +1827,10 @@ Model: logistic regression; odds ratios (vs the reference
 category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -2036,10 +2036,10 @@ Model: ordinal logistic regression; cumulative odds ratios
 (proportional-odds model).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -2322,10 +2322,10 @@ Model: multinomial logistic regression; odds ratios (each category vs
 the reference).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -2679,10 +2679,10 @@ predicted probability.<br>Shades of blue: AME ≥ <span class="p1" style="font-w
 AME ≤ <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Coloured: significantly
 different from the reference category (Wald interval, 95% confidence),
 by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±5 points.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+significant, or a difference under ±5 points.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -2939,10 +2939,10 @@ category).<br>Shades of blue: β ≥ <span class="p1" style="font-weight:bold;">
 <span class="m1" style="font-weight:bold;">-0.2</span>; <span class="m3" style="font-weight:bold;">-0.5</span>; <span class="m4" style="font-weight:bold;">-0.8</span> SD. Coloured: significantly
 different from the reference category (Wald interval, 95% confidence),
 by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±0.2 SD.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+significant, or a difference under ±0.2 SD.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -3343,10 +3343,10 @@ category).<br><b>Obs_diff, Model_β — </b>Shades of blue: cells ≥ <span clas
 ≤ <span class="m1" style="font-weight:bold;">-0.2</span>; <span class="m3" style="font-weight:bold;">-0.5</span>; <span class="m4" style="font-weight:bold;">-0.8</span> SD. Coloured: significantly
 different from the reference category (Wald interval, 95% confidence),
 by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±0.2 SD.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+significant, or a difference under ±0.2 SD.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -3689,10 +3689,10 @@ Model: Poisson regression; incidence-rate ratios (vs the reference
 category).<br>Shades of blue: IRR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: IRR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log rate-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -4118,10 +4118,10 @@ difference under ×1.2.<br><b>Obs_IRR, Model_IRR — </b>Shades of blue:
 IRR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: IRR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log rate-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -4510,10 +4510,10 @@ Model: logistic regression of married (‘01-Married’); odds ratios (vs
 the reference category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -4982,10 +4982,10 @@ Model: logistic regression; odds ratios (vs the reference
 category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -5113,10 +5113,10 @@ Model: logistic regression; odds ratios (vs the reference
 category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>
@@ -5248,10 +5248,10 @@ Model: logistic regression; odds ratios (vs the reference
 category).<br>Shades of blue: OR ≥ <span class="p1" style="font-weight:bold;">1.2</span>; <span class="p2" style="font-weight:bold;">1.5</span>; <span class="p3" style="font-weight:bold;">2</span>; <span class="p4" style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤ <span class="m1" style="font-weight:bold;">1/1.2</span>; <span class="m2" style="font-weight:bold;">1/1.5</span>; <span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4" style="font-weight:bold;">1/4</span>. Coloured: significantly different
 from the reference category (Wald interval on the log odds-ratio, 95%
 confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br><em><strong>:
-significantly different from the reference category (in bold) at the 99%
-confidence level; </strong>: at the 95% level; </em>: at the 90% level;
-no star: not significant.
+not significant, or a difference under ×1.2.<br>***: significantly
+different from the reference category (in bold) at the 99% confidence
+level; **: at the 95% level; *: at the 90% level; no star: not
+significant.
 </div>
 </td>
 </tr></tfoot>

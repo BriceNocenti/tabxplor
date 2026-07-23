@@ -155,8 +155,8 @@ tx_css_rules <- function(chrome = TRUE) {
     # invariant is locked by test-render-html.R ("no border shorthand in the stylesheet").
     add(".tabxplor-tab th,.tabxplor-tab td", "border-color", cl$border, cd$border)
     add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover)
-    add(".g1", "color", cl$grey,  cd$grey)
-    add(".g2", "color", cl$grey2, cd$grey2)
+    add(tx_cell_sel("g1"), "color", cl$grey,  cd$grey)
+    add(tx_cell_sel("g2"), "color", cl$grey2, cd$grey2)
     # Phase 15d: the table title -- FULL-contrast in both themes (pure black in light, white in dark), not
     # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
     # where it is the maintainer's requested pure black.
@@ -171,12 +171,24 @@ tx_css_rules <- function(chrome = TRUE) {
     pd   <- get_color_style("color_code", type = ch, theme = "dark")
     prp  <- if (ch == "text") "color" else "background-color"
     for (s in 1:8) {
-      add(paste0(".", tx_slot_class(ch, s)), prp,
+      add(tx_cell_sel(tx_slot_class(ch, s)), prp,
           toupper(unname(pl[s])), toupper(unname(pd[s])))
     }
   }
   list(sel = sel, prop = prop, light = lt, dark = dk)
 }
+
+# DESIGN: every CELL colour class is emitted under TWO selectors -- bare (".p1") AND scoped
+# (".tabxplor-tab .p1"). The bare one keeps the tab_md()/editor contract (bare classes a user maps in
+# their own CSS) and reaches the legend spans, which may sit outside any .tabxplor-tab wrapper. The
+# scoped twin is the HOST-PROOFING: its specificity (0,2,0) out-specifies the table-cell colour rules
+# of Bootstrap-flavoured host pages -- pkgdown stamps class="table" on every table, and Bootstrap 5's
+# `.table>:not(caption)>*>*` (0,1,1) then sets color/background-color on the SAME <td> our class sits
+# on, beating a bare class (0,1,0) and washing every cell colour out (legend spans survived because
+# there the host rule only hit the ancestor td -- direct beats inherited). (0,2,0) wins against any
+# element+single-class host rule with no !important, so "restyle with ordinary CSS" still holds; a
+# pathological host (ID selectors / !important on cells) needs a user override, see ?tab_css.
+tx_cell_sel <- function(cls) paste0(".", cls, ",.tabxplor-tab .", cls)
 
 # Prefix every part of a (possibly comma-separated) selector with every hook -> one comma-joined
 # selector list. `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
@@ -469,8 +481,13 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #'
 #' @section Restyling a table:
 #' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own
-#' rules after the stylesheet -- no `!important` needed. Column widths in particular are left to the
-#' browser (it sizes each column to its content); to pin one, style its role:
+#' rules after the stylesheet -- no `!important` needed. The cell colour classes are also emitted
+#' scoped (`.tabxplor-tab .p1`) so they survive host pages that style table cells themselves --
+#' Bootstrap-based sites (including pkgdown) apply `color`/`background-color` to every cell of a
+#' `.table`, which would otherwise wash the colours out. On a pathological host (ID selectors or
+#' `!important` on cells), add your own stronger override after the stylesheet. Column widths in
+#' particular are left to the browser (it sizes each column to its content); to pin one, style its
+#' role:
 #' \preformatted{
 #' .tabxplor-tab .tx-rv  { min-width: 10em; }   /* the row-variable levels column */
 #' .tabxplor-tab .tx-tot { min-width: 5.5em; }  /* total columns                  */
