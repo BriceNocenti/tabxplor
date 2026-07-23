@@ -30,5 +30,8 @@ build*/
 
 inst/doc
 
+# Built pkgdown site: generated output, deployed to gh-pages by CI (.github/workflows/pkgdown.yaml)
+docs/
+
 # Claude Code personal settings (project config in .claude/settings.json is tracked)
 .claude/settings.local.json

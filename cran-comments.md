@@ -1,42 +1,33 @@
-## New version 1.3.1 : first submission
+## New version 2.0.0 : first submission
 
-Minor bug corrections (and associated Jamovi module UI change, 
-not in uploaded package).
+Major release. The public API is retro-compatible (superseded functions and
+arguments are soft-deprecated, not removed); internals were rewritten around a
+single aggregation core for speed and consistency. Main user-facing additions:
+regression tables (`tab_reg()`), tables from pre-aggregated counts
+(`tab_counts()`), HTML export (`tab_html()`, with `tab_kable()` kept as an
+alias), a shared CSS stylesheet (`tab_css()`), captions (`set_caption()`),
+survey-design and effect-size test options, labelled-data support, and a
+French translation of all table legends. See NEWS.md.
 
 
 ## Test environments
-* local Windows 11 install, R devel
-  
-* github Actions : https://github.com/BriceNocenti/tabxplor/actions/runs/17969697656
+* local WSL2 Ubuntu install, R 4.6.1
+
+* github Actions : <FILL: link to the R-CMD-check run on the release PR>
    - macOS, R-release
    - Microsoft Windows Server, R-release
    - Ubuntu Linux LTS, R-devel
    - Ubuntu Linux LTS, R-release
    - Ubuntu Linux LTS, R-oldrel-1
 
-* rhub: https://github.com/BriceNocenti/tabxplor/actions/runs/17970856766
- [CT]  clang19  [clang19]
-   R Under development (unstable) (2025-01-30 r87669) on Ubuntu 22.04.5 LTS
-   ghcr.io/r-hub/containers/clang19:latest
- [CT]  clang20  [clang20]
-   R Under development (unstable) (2024-10-09 r87215) on Ubuntu 22.04.5 LTS
-   ghcr.io/r-hub/containers/clang20:latest
- [CT]  ubuntu-clang  [r-devel-linux-x86_64-debian-clang]
-   R Under development (unstable) (2025-01-31 r87670) on Ubuntu 22.04.5 LTS
-   ghcr.io/r-hub/containers/ubuntu-clang:latest
- [CT]  ubuntu-gcc12  [r-devel-linux-x86_64-debian-gcc]
-   R Under development (unstable) (2025-01-31 r87670) on Ubuntu 22.04.5 LTS
-   ghcr.io/r-hub/containers/ubuntu-gcc12:latest
- [CT]  ubuntu-release  [r-release, r-release-linux-x86_64, ubuntu]
-   R version 4.4.2 (2024-10-31) on Ubuntu 22.04.5 LTS
-   ghcr.io/r-hub/containers/ubuntu-release:latest
+* rhub: <FILL: link to the rhub workflow run>
 
 ## R CMD check results
-* local Windows 11:
-    No ERRORs, no WARNINGs, no NOTEs. 
+* local:
+    No ERRORs, no WARNINGs, no NOTEs.
 
-* github Actions : 
-    No ERRORs, no WARNINGs, no NOTEs. 
+* github Actions :
+    No ERRORs, no WARNINGs, no NOTEs.
 
 * win-builder
     No ERRORs, no WARNINGs, no NOTEs.
@@ -45,6 +36,5 @@ not in uploaded package).
     No ERRORs, no WARNINGs, no NOTEs.
 
 ## Downstream dependencies
-The only downstream dependency is with my package `ggfacto`. 
-I made sure last version of `ggfacto` works with this version of `tabxplor`.
-
+The only downstream dependency is with my package `ggfacto`.
+I made sure the last version of `ggfacto` works with this version of `tabxplor`.

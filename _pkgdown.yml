@@ -160,7 +160,3 @@ articles:
   - articles/tabxplor-fr
   - articles/tabxplor-reg-fr
   - articles/tabxplor-programming-fr
-# TEMPORARY (delete with vignettes/articles/test-colors.Rmd once colors are verified on the site):
-- title: internal
-  contents:
-  - articles/test-colors
