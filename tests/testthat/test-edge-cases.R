@@ -178,6 +178,17 @@ testthat::test_that("other_if_less_than collapses rare categories", {
   testthat::expect_s3_class(result, "tabxplor_tab")
 })
 
+testthat::test_that("other_if_less_than works with tab_vars (dplyr >= 1.2 across inlining)", {
+  # Regression (CRAN-check example failure, 2026-07-23): the fct_relevel step after
+  # fct_lump_min used a nested lambda referencing `.x` inside across(), which dplyr >= 1.2
+  # inlines -- breaking the closure ("object '.x' not found"). Only reached when
+  # other_if_less_than > 0 AND tab_vars are present.
+  result <- tab(sw, sex, hair_color, gender, na = "drop", pct = "row",
+                other_if_less_than = 5)
+  testthat::expect_s3_class(result, "tabxplor_grouped_tab")
+  testthat::expect_true("Others" %in% dplyr::pull(result, sex))
+})
+
 testthat::test_that("other_if_less_than = 0 keeps all categories", {
   d <- dplyr::tibble(
     x = factor(c("a", "b", "c", "d")),

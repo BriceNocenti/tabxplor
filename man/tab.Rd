@@ -525,13 +525,13 @@ library(dplyr)
 tab(dplyr::storms, category, c(status, pressure, wind)) |>
   dplyr::filter(category != "-1") |>
   dplyr::select(-`tropical depression`) |>
-  dplyr::arrange(is_totrow(.), desc(category))
+  dplyr::arrange(is_totrow(pick(everything())), desc(category))
 }
 
 \donttest{
 # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 tab(data, race, marital, year, pct = "row") |>
-  dplyr::arrange(year, is_totrow(.), desc(Married))
+  dplyr::arrange(year, is_totrow(dplyr::pick(dplyr::everything())), desc(Married))
   }
 
 }

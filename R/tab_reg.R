@@ -1948,7 +1948,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       sub   <- data[gmask, , drop = FALSE]
       ds_g  <- design_spec
       if (!is.null(design_spec$design)) ds_g$design <- design_spec$design[gmask, ]  # subset the design
-      tg  <- reg_build(sub, specs, modifyList(shared, list(design_spec = ds_g)),
+      tg  <- reg_build(sub, specs, utils::modifyList(shared, list(design_spec = ds_g)),
                        split_var = NULL, .fit_cache = .fit_cache, reference = NULL, reref = FALSE,
                        skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
@@ -2519,6 +2519,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
+#' @param spread_models Logical, only used with `split_var`. If `TRUE` (default), a single
+#'   non-multinomial model fitted within each `split_var` level is automatically pivoted with
+#'   [tab_spread()] so the per-group models sit side by side as columns. `FALSE` keeps the
+#'   stacked grouped table (one block of rows per group).
 #' @param .fit_cache Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
 #'   (see `jmvreg_cache_env()`) that memoizes fitted models so display / colour / reference toggles
 #'   avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is

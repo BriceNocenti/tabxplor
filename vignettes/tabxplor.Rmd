@@ -22,6 +22,14 @@ options(cli.num_colors = 256)
 set_color_palette(theme = "light") # type = "text"
 ```
 
+The first time only, install the package : 
+
+```{r, eval = FALSE}
+install.packages("tabxplor", dependencies = TRUE)
+```
+
+At the start of each new R session, load it :
+
 ```{r, eval = FALSE}
 library(tabxplor)
 ```
@@ -39,7 +47,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 
 Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their color helpers. Underlying heavy computations run on `data.table`
 
-Throughout this vignette we use `gss_simple`, a cleaned-up version of the General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
+Throughout this vignette we use `gss_simple`, a cleaned-up version of the US General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
 
 ```{r, echo = TRUE}
 gss_simple <- gss_cat_data_formatting()
@@ -148,7 +156,7 @@ tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, c
 
 ```{r, echo = TRUE}
 tab(gss_simple, c(race, relig), party3, pct = "row", color = "diff",
-    ref = c(race = "first", relig = "tot"), na = "drop")
+    ref = c(race = 1, relig = "tot"), na = "drop")
 ```
 
 Under **column** percentages `ref` picks a reference **column** instead, vectorised over the column variables — either named (`ref = c(party3 = "first", marital = "tot")`) or positional, one value per column variable:

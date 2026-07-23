@@ -437,13 +437,13 @@ NULL
 #' tab(dplyr::storms, category, c(status, pressure, wind)) |>
 #'   dplyr::filter(category != "-1") |>
 #'   dplyr::select(-`tropical depression`) |>
-#'   dplyr::arrange(is_totrow(.), desc(category))
+#'   dplyr::arrange(is_totrow(pick(everything())), desc(category))
 #'}
 #'
 #'\donttest{
 #' # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 #' tab(data, race, marital, year, pct = "row") |>
-#'   dplyr::arrange(year, is_totrow(.), desc(Married))
+#'   dplyr::arrange(year, is_totrow(dplyr::pick(dplyr::everything())), desc(Married))
 #'   }
 #'
 #' @seealso
@@ -2021,11 +2021,12 @@ tab_prepare_pop <- function(ctx) {
                                   ~ forcats::fct_lump_min(., other_if_less_than,
                                                           other_level = other_level))) |>
       dplyr::ungroup() |>
-      dplyr::mutate(dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(
-        .x,
-        unique(append(levels(dplyr::pull(data, dplyr::cur_column())), other_level)) |>
-          purrr::discard(\(v) !v %in% levels(.x)))
-      ))
+      # WARNING: no nested lambda referencing `.x` here — dplyr >= 1.2 inlines across() functions,
+      # which breaks the closure (`object '.x' not found`). Keep `.x` in the direct body only.
+      dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(row_vars)), function(.x) {
+        lvs <- unique(append(levels(dplyr::pull(data, dplyr::cur_column())), other_level))
+        forcats::fct_relevel(.x, lvs[lvs %in% levels(.x)])
+      }))
   }
 
 
@@ -3438,6 +3439,14 @@ fmt_stack_frames <- function(frames, meta) {
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 #' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 #' correspondence analysis with \pkg{FactoMineR}.
+#' @param conf_level The confidence level used for the odds-ratio confidence intervals
+#' (only computed when `OR` is requested and `stars` or `color_signif` ask for them),
+#' as a single numeric between 0 and 1. Default to 0.95.
+#' @param stars Set to \code{TRUE} to compute the significance stars attached to the
+#' odds-ratio confidence intervals (with `OR`).
+#' @param color_signif How significance interacts with `color` (with `OR`):
+#' \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
+#' See \code{\link{tab}}.
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed count-aggregate to roll up from
 #' instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
 #' `.by_table` forces the table-by-table path.

@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A tabxplor_grouped_tab object.}
 
-\item{i, j, ...}{Indices}
+\item{i, j}{Indices}
 
 \item{drop}{For matrices and arrays. If TRUE the result is coerced to the lowest
 possible dimension (see the examples). This only works for extracting elements,

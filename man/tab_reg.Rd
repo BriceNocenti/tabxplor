@@ -205,6 +205,11 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
 
+\item{spread_models}{Logical, only used with \code{split_var}. If \code{TRUE} (default), a single
+non-multinomial model fitted within each \code{split_var} level is automatically pivoted with
+\code{\link[=tab_spread]{tab_spread()}} so the per-group models sit side by side as columns. \code{FALSE} keeps the
+stacked grouped table (one block of rows per group).}
+
 \item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
 character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
 from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);

@@ -24,6 +24,18 @@ options(lifecycle_verbosity = "quiet")
 # Also the CRAN-friendly setting (checks are limited to 2 cores).
 if (requireNamespace("data.table", quietly = TRUE)) data.table::setDTthreads(1L)
 
+# ONE BLAS/OpenMP thread per worker, for the same reason. The OpenBLAS-pthread build fixes its
+# thread count from the env at PROCESS STARTUP, so only a runtime call can pin an already-running
+# worker -- an env var set here is too late for this process. RhpcBLASctl (Suggests) is the runtime
+# lever; it no-ops gracefully on reference BLAS (Windows) / Accelerate (macOS).
+if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+  RhpcBLASctl::blas_set_num_threads(1L)
+  try(RhpcBLASctl::omp_set_num_threads(1L), silent = TRUE)
+}
+# Belt-and-braces for GRANDCHILD processes (mirai daemons in test-parallel-parity): they inherit
+# this env at spawn, so their OpenBLAS starts pre-pinned even where RhpcBLASctl is absent.
+if (Sys.getenv("OMP_NUM_THREADS") == "") Sys.setenv(OMP_NUM_THREADS = "1")
+
 # Pin the console colour theme (Phase 14g). tabxplor now DETECTS it at load, from the editor: on a dark
 # Positron the default becomes "dark", so any test reading the option would compare a dark palette
 # against a light expectation -- passing on CI (which has no editor -> "light") and failing on the

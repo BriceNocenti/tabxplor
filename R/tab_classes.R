@@ -2741,7 +2741,7 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 
 #' subset method for class tabxplor_grouped_tab
 #' @param x A tabxplor_grouped_tab object.
-#' @param i,j,... Indices
+#' @param i,j Indices
 #' @param drop For matrices and arrays. If TRUE the result is coerced to the lowest
 #' possible dimension (see the examples). This only works for extracting elements,
 #' not for the replacement.

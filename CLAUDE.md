@@ -486,19 +486,26 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 # The .R file:  Sys.setenv(TESTTHAT_CPUS = "8", NOT_CRAN = "true"); devtools::test("~/github/tabxplor")
 ```
 
-⚠ **`OMP_NUM_THREADS=1` is NOT optional, and `TESTTHAT_CPUS=8` alone is a trap.** Root-caused
-2026-07-16 (second session lost to it). `Config/testthat/parallel: true` runs each test file in its own
-PROCESS, and **each process then multi-threads on its own**:
+✅ **Since 2026-07-23 the suite SELF-PINS its threads** — `tests/testthat/setup.R` pins data.table
+(`setDTthreads(1L)`) AND BLAS/OpenMP (`RhpcBLASctl::blas_set_num_threads(1L)`, Suggests-guarded — the
+runtime call is the ONLY thing that can pin an already-running worker, since OpenBLAS-pthread fixes its
+count from the env at process startup), and `tests/testthat.R` sets `OMP_NUM_THREADS=1` + a non-CRAN
+`TESTTHAT_CPUS` fallback before workers spawn. So `devtools::test()`, `devtools::check()`, GH Actions
+and CRAN all get 1 thread/worker with no manual env. Keep the `OMP_NUM_THREADS=1` prefix anyway
+(harmless belt for grandchild processes and RhpcBLASctl-less setups).
+
+⚠ **The trap this guards against** (root-caused 2026-07-16, second session lost to it; hit again by
+`devtools::check()` 2026-07-23 before the self-pin): `Config/testthat/parallel: true` runs each test
+file in its own PROCESS, and **each process then multi-threads on its own**:
 
 | thread source                                | per worker | x 8 workers | lever                                                |
 |----------------------------------------------|------------|-------------|------------------------------------------------------|
-| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — now in `tests/testthat/setup.R` |
-| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `OMP_NUM_THREADS=1` **in the env before R starts**   |
+| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — in `tests/testthat/setup.R`     |
+| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `RhpcBLASctl` pin in setup.R + `OMP_NUM_THREADS=1`   |
 
 **Measured: 165 threads on 12 cores (~14x oversubscribed) -> the suite ran >26 min instead of ~50 s**,
 two workers pegged at ~485 % CPU while the rest starved and the log went silent for 10 min. With both
-levers: **47 threads, 48.9 s, FAIL 0.** OpenBLAS fixes its thread count at **library init**, so
-`setup.R` is too late for it — it MUST be an env var on the `Rscript` command (workers inherit it).
+levers: **47 threads, 48.9 s, FAIL 0.**
 
 **Never run anything else while the suite runs.** A single `Rscript` repro uses ~4 cores here; racing
 it against 8 workers is what turns "slow" into "apparently hung". Iterate with `filter =`, and run the

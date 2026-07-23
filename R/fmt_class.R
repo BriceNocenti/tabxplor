@@ -27,15 +27,15 @@ utils::globalVariables(c(":=", ".SD", ".N"))
 utils::globalVariables(c("n", "wn"))
 # Phase 3b test engine (R/tab-agg.R) data.table NSE column symbols:
 utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
-                  "grandtot", "nr", "nc", "e", "contrib", "signed_contrib",
+                  "grandtot", "nr", "nc", "e", "contrib", "signed_contrib", "contrib_unc",
                   "statistic", "df", "min_e", "w", "group_id"))
 
-# The `ctx` fields of the tab_build() pipeline (Phase 7d-ii). Each stage starts with
-# `list2env(ctx, environment())` (R/tab.R: tab_setup / tab_prepare_pop / tab_aggregate /
-# tab_transform / tab_assemble_tables / tab_assemble_output), which binds every ctx field as a
-# local -- correct at run time, but invisible to codetools, which then reports each one as an
-# undefined global. Listing them here is the only way to keep R CMD check quiet short of
-# unpacking ~70 fields by hand in six functions.
+# The `ctx` fields of the tab_build() pipeline (Phase 7d-ii) and reg_build()'s `shared` list
+# (Phase 17h). Each stage starts with `list2env(ctx, environment())` (R/tab.R: tab_setup /
+# tab_prepare_pop / tab_aggregate / tab_transform / tab_assemble_tables / tab_assemble_output;
+# R/tab_reg.R: reg_build), which binds every field as a local -- correct at run time, but
+# invisible to codetools, which then reports each one as an undefined global. Listing them here
+# is the only way to keep R CMD check quiet short of unpacking ~70 fields by hand.
 utils::globalVariables(c(
   "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
   "col_vars_text", "color_ci", "color_ctr", "color_diff_OR", "color_num", "comp", "conf_level",
@@ -46,7 +46,14 @@ utils::globalVariables(c(
   "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
   "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
   "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
-  "color_ratio_ci", "ci_scale"))
+  "color_ratio_ci", "ci_scale",
+  # tab_build ctx fields added by Phases 17e/j/k (settings spine, robust tests, var labels):
+  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "test_mode",
+  "var_labels",
+  # reg_build()'s `shared` list fields (Phase 17h):
+  "at", "baseline", "compare", "effect", "empirical", "estimate_display",
+  "inverse_two_level_factors", "method", "multiplier", "spread_models", "stats",
+  "union_predictors", "weighted"))
 
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
@@ -1639,7 +1646,7 @@ get_mean_contrib <- function(x) {
 #' @keywords internal
 fmt_broadcast_last <- function(values, boundary) {
   gr <- cumsum(boundary) - boundary
-  values[ave(seq_along(values), gr, FUN = max)]
+  values[stats::ave(seq_along(values), gr, FUN = max)]
 }
 
 # get_ref_field() -- the reference cell's `getter` value, broadcast to every cell of its reference

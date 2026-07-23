@@ -147,6 +147,17 @@ rows and cols.}
 with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
 
+\item{conf_level}{The confidence level used for the odds-ratio confidence intervals
+(only computed when \code{OR} is requested and \code{stars} or \code{color_signif} ask for them),
+as a single numeric between 0 and 1. Default to 0.95.}
+
+\item{stars}{Set to \code{TRUE} to compute the significance stars attached to the
+odds-ratio confidence intervals (with \code{OR}).}
+
+\item{color_signif}{How significance interacts with \code{color} (with \code{OR}):
+\code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
+See \code{\link{tab}}.}
+
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed count-aggregate to roll up from
 instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
 \code{.by_table} forces the table-by-table path.}
