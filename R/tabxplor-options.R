@@ -25,9 +25,6 @@
 #'   \item{`tabxplor.signif_labels`}{the star labels, default `c("*", "**", "***")`.}
 #'   \item{`tabxplor.ci_print`}{`"ci"` (default) shows the `[inf; sup]` interval; `"moe"` shows the
 #'     larger half-width (margin of error).}
-#'   \item{`tabxplor.totcol_range`}{how a Total column's in-cell base is shown when a table's column
-#'     variables have differing bases (e.g. `na = "drop"`): `"off"` (default) each row's own base;
-#'     `"range"` the per-row `[min;max]`; `"min"` the smallest (safest) base.}
 #'   \item{`tabxplor.var_names`}{which variable names the exporters annotate: `"both"` (default),
 #'     `"rows"`, `"cols"`, `"none"`. Per-call `var_names =`.}
 #'   \item{`tabxplor.var_labels`}{`FALSE` (default): in *exports* (markdown / html / Excel / plot),

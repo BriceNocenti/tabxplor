@@ -307,8 +307,10 @@ export_writable <- function(dir) {
 #' @keywords internal
 #' @noRd
 tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = TRUE, ...) {
+  # tooltips follow the option default (tabxplor.tab_kable_tooltips, seeded TRUE): the native
+  # `title=` attrs work in any browser with no JS; `...` can still pass tooltips = FALSE.
   k    <- tab_html(tabs, engine = "html", wrap_rows = wrap_rows,
-                   wrap_cols = wrap_cols, tooltips = FALSE, ...)
+                   wrap_cols = wrap_cols, ...)
   body <- as.character(k)
   if (!standalone) return(body)
   # Phase 14k: this is the OTHER page tabxplor builds (print.tabxplor_kable()'s Viewer page is the
@@ -413,17 +415,21 @@ jmv_backend_export <- function(self, tabs) {
 }
 
 # Render a built tab (or list of tabs) to standalone HTML for the jamovi results iframe: the Phase 10e
-# dependency-free home-built html engine (inline CSS, no kableExtra) wrapped in a scroll box. tooltips
-# stay OFF here for now (the engine emits the SAME bootstrap tooltip attrs, so they can be turned on
-# once verified live).
+# dependency-free home-built html engine (inline CSS, no kableExtra) wrapped in a scroll box.
+# DESIGN: tooltips are ON by default (the option tabxplor.tab_kable_tooltips, seeded TRUE): the
+# non-popover attrs carry the content in the native `title=` attribute, which needs NO bootstrap JS
+# and works in jamovi's results webview (the multinomial empirical_tips become reachable). The
+# Phase-7e perf cost of building them (~+15% render time, ~+44% DOM bytes) is an accepted trade.
+# Opt-out = options(tabxplor.tab_kable_tooltips = FALSE) -- note that inside jamovi's bundled R a
+# user has no practical .Rprofile, so this is effectively the fixed default there. Popovers
+# (tabxplor.kable_popover) stay off: their content lives in data-content, dead without bootstrap JS.
 #' @keywords internal
 #' @noRd
 jmv_backend_render_html <- function(self, tabs) {
   tab_html(
     tabs, engine = "html",
     wrap_rows = self$options$wrap_rows,
-    wrap_cols = self$options$wrap_cols,
-    tooltips = FALSE
+    wrap_cols = self$options$wrap_cols
   ) |>
     tab_render_scrollbox()
 }

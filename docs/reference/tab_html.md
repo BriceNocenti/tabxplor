@@ -15,7 +15,7 @@ tab_html(
   color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
-  tooltips = TRUE,
+  tooltips = NULL,
   popover = NULL,
   color_legend = TRUE,
   lang = NULL,
@@ -39,7 +39,7 @@ tab_kable(
   color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
-  tooltips = TRUE,
+  tooltips = NULL,
   popover = NULL,
   color_legend = TRUE,
   lang = NULL,
@@ -105,8 +105,11 @@ tab_kable(
 
 - tooltips:
 
-  By default, html tooltips are used to display additional informations
-  at mouse hover. Set to `FALSE` to discard.
+  By default, takes `getOption("tabxplor.tab_kable_tooltips")` (`TRUE`
+  unless set): html tooltips display additional informations at mouse
+  hover. Set to `FALSE` to discard (or set the option to `FALSE` once
+  per document, e.g. in a vignette or report where every table
+  auto-prints).
 
 - popover:
 

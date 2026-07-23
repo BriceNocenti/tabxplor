@@ -218,6 +218,15 @@ tab_logit(
 
   Optional character. A note shown below the table.
 
+- spread_models:
+
+  Logical, only used with `split_var`. If `TRUE` (default), a single
+  non-multinomial model fitted within each `split_var` level is
+  automatically pivoted with
+  [`tab_spread()`](https://bricenocenti.github.io/tabxplor/reference/tab_spread.md)
+  so the per-group models sit side by side as columns. `FALSE` keeps the
+  stacked grouped table (one block of rows per group).
+
 ## Value
 
 A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column

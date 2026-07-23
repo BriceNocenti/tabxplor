@@ -34,6 +34,12 @@
   (about 3× faster and much lighter than kableExtra, which becomes
   optional). Its geometry is CSS classes, so your own CSS can restyle
   it.
+- **`options(tabxplor.print = "html")`** — auto-print every table as its
+  html version: in the Viewer pane in RStudio/Positron, and as a real
+  colored table in rmarkdown/Quarto chunks (`"kable"` is kept as a
+  synonym). New `options(tabxplor.tab_kable_tooltips = FALSE)` switches
+  the per-cell hover tooltips off document-wide. The vignettes now
+  showcase the live html tables.
 - **Significance stars and correct confidence intervals.** Stars are
   opt-in (`stars =`); cell / difference / mean intervals are now the
   proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars
@@ -97,7 +103,10 @@
 - **New jamovi “Regression models” analysis (`jmvtabreg`)** for
   [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md).
   The Crosstables module (`jmvtab`) gains a reference-level picker,
-  export, a live cache, and the new options.
+  export, a live cache, and the new options. The jamovi html results and
+  exports now show the per-cell hover tooltips (counts, confidence
+  intervals, differences; `options(tabxplor.tab_kable_tooltips = FALSE)`
+  to disable).
 
 ### Changes that may affect existing code
 

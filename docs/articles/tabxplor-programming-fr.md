@@ -12,7 +12,15 @@ library(dplyr)
 #> 
 #>     intersect, setdiff, setequal, union
 
-# options(tabxplor.lang = "fr") affiche les legendes et les notes de bas de tableau en francais.
+# Les tableaux sont rendus comme les vrais tableaux html de tabxplor (le reglage recommande au
+# quotidien) ; la feuille de style partagee est emise une fois par tab_css() ci-dessous, et les
+# infobulles restent coupees ici.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# Les sorties console (vecteurs, champs...) gardent leurs couleurs de terminal, converties par
+# fansi. options(tabxplor.lang = "fr") affiche les legendes et les notes en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
 set_color_palette(theme = "light")
@@ -50,17 +58,17 @@ qui extrait le champ actuellement affiché :
 
 ``` r
 tabs |> mutate(across(where(is_fmt), get_num))
+#> ! tabxplor formatting and colors skipped: the table has no tabxplor_fmt columns
+#>   (not a tabxplor table).
+#> ℹ Rendering the plain table instead.
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 8
-#>   race  Married Separated Divorced Widowed `Never married`     `NA` Total
-#>   <fct>   <dbl>     <dbl>    <dbl>   <dbl>           <dbl>    <dbl> <dbl>
-#> 1 White   0.507    0.0267    0.163  0.0900           0.212 0.000793     1
-#> 2 Black   0.278    0.0626    0.158  0.0837           0.417 0.000639     1
-#> 3 Other   0.476    0.0562    0.108  0.0357           0.323 0.00102      1
-#> 4 Total   0.471    0.0346    0.157  0.0841           0.252 0.000791     1
-```
+| race | Married | Separated | Divorced | Widowed | Never married | NA | Total |
+|----|----|----|----|----|----|----|----|
+| White | 0.507227813357731 | 0.0266544678255566 | 0.163220494053065 | 0.0899664531869472 | 0.212137846904544 | 0.000792924672156145 | 1 |
+| Black | 0.277724512623841 | 0.0626398210290828 | 0.158197507190796 | 0.0837328219878555 | 0.417066155321189 | 0.000639181847235539 | 1 |
+| Other | 0.475752935171006 | 0.0561510974987238 | 0.108218478815722 | 0.035732516590097 | 0.32312404287902 | 0.00102092904543134 | 1 |
+| Total | 0.470930503188568 | 0.0345854861983894 | 0.157473351021738 | 0.0841130195968906 | 0.252106316622446 | 0.000791323371968533 | 1 |
 
 Pour obtenir plutôt les chaînes de caractères (formatées, mais sans les
 couleurs), utilisez [`format()`](https://rdrr.io/r/base/format.html) :
@@ -203,17 +211,7 @@ comme d’habitude :
 tabs |> set_display("{pct} ({diff})")
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 8
-#>   race      Married Separated  Divorced  Widowed `Never married`     `NA`
-#>   <fct>      <row%>    <row%>    <row%>   <row%>          <row%>   <row%>
-#> 1 White  51% ( +4%)  3% (-1%) 16% (+1%) 9% (+1%)      21% ( -4%) 0% (+0%)
-#> 2 Black  28% (-19%)  6% (+3%) 16% (+0%) 8% (-0%)      42% (+16%) 0% (-0%)
-#> 3 Other  48% ( +0%)  6% (+2%) 11% (-5%) 4% (-5%)      32% ( +7%) 0% (+0%)
-#> 4 Total  47% ( +0%)  3% (+0%) 16% (+0%) 8% (+0%)      25% ( +0%) 0% (+0%)
-#> # ℹ 1 more variable: Total <row%>
-#> # différence (Total) : -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 Les règles :
 
@@ -250,18 +248,7 @@ tab(gss_simple, race, marital, pct = "row") |>
   mutate(across(where(is_fmt), ~ set_display(., "diff"), .names = "{.col}_diff"))
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 15
-#>   race   Married Separated Divorced Widowed `Never married`   `NA`  Total
-#>   <fct>   <row%>    <row%>   <row%>  <row%>          <row%> <row%> <row%>
-#> 1 White      51%        3%      16%      9%             21%     0%   100%
-#> 2 Black      28%        6%      16%      8%             42%     0%   100%
-#> 3 Other      48%        6%      11%      4%             32%     0%   100%
-#> 4 Total      47%        3%      16%      8%             25%     0%   100%
-#> # ℹ 7 more variables: Married_diff <row%-diff>, Separated_diff <row%-diff>,
-#> #   Divorced_diff <row%-diff>, Widowed_diff <row%-diff>,
-#> #   `Never married_diff` <row%-diff>, NA_diff <row%-diff>, Total_diff <row%>
-```
+[TABLE]
 
 `.names = "{.col}_diff"` conserve les colonnes de pourcentages
 originales et ajoute à côté de chacune un jumeau `<nom>_diff`. (Si une
@@ -366,19 +353,7 @@ counts <- dplyr::count(gss_simple, marital, race)
 tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
 ```
 
-``` r-output
-#> # A tabxplor tab: 7 × 5
-#>   marital        White  Black  Other           Total
-#>   <fct>         <row%> <row%> <row%>          <row%>
-#> 1 Married          82%     9%     9% 100% (n=10 117)
-#> 2 Separated        59%    26%    15% 100% (n=   743)
-#> 3 Divorced         79%    15%     6% 100% (n= 3 383)
-#> 4 Widowed          82%    14%     4% 100% (n= 1 807)
-#> 5 Never married    64%    24%    12% 100% (n= 5 416)
-#> 6 NA               76%    12%    12% 100% (n=    17)
-#> 7 Total            76%    15%     9% 100% (n=21 483)
-#> # différence (Total) : -30 -20 -10 -5 +5 +10 +20 +30 ; fond rapport : ÷4 ÷2 ÷1,5 ×1,5 ×2 ×4
-```
+[TABLE]
 
 ``` r
 # identique à tab(gss_simple, marital, race, pct = "row", color = "diff")
@@ -427,21 +402,7 @@ tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row")
   tab_spread(year)
 ```
 
-``` r-output
-#> # A tabxplor tab: 10 × 9
-#>    relig                 `2000` `2002` `2004` `2006` `2008` `2010` `2012` `2014`
-#>    <fct>                 <row%> <row%> <row%> <row%> <row%> <row%> <row%> <row%>
-#>  1 "1-Protestant"           47%    48%    54%    50%    51%    47%    50%    49%
-#>  2 "2-Catholic"             47%    49%    57%    53%    49%    44%    47%    47%
-#>  3 "3-Other christian"      47%    41%    51%    38%    59%    39%    42%    43%
-#>  4 "4-Jewish"               49%    44%    53%    51%    44%    54%    64%    50%
-#>  5 "5-Buddhist/Hinduist"    40%    41%    65%    50%    59%    50%    60%    51%
-#>  6 "6-Muslim"               42%    38%    69%    71%    31%    36%    62%    67%
-#>  7 "7-Other"                30%    48%    43%    30%    25%    33%    42%    39%
-#>  8 "8-None"                 38%    33%    40%    37%    38%    36%    32%    37%
-#>  9 "NA"                     75%    37%    67%    38%    67%    31%    29%    50%
-#> 10 "TOTAL "                 45%    46%    53%    48%    48%    44%    46%    46%
-```
+[TABLE]
 
 `tab(..., spread_vars = year)` fait la même chose en un seul appel. Le
 `split_var` de la vignette sur la régression produit un tableau groupé
@@ -463,21 +424,19 @@ gss_simple |>
   tab(relig, score)
 ```
 
-``` r-output
-#> # A tabxplor tab: 10 × 2
-#>    relig                      score
-#>    <fct>                     <mean>
-#>  1 1-Protestant        0.82 (σ0.72)
-#>  2 2-Catholic          0.85 (σ0.73)
-#>  3 3-Other christian   0.79 (σ0.71)
-#>  4 4-Jewish            0.94 (σ0.75)
-#>  5 5-Buddhist/Hinduist 0.99 (σ0.76)
-#>  6 6-Muslim            0.85 (σ0.71)
-#>  7 7-Other             0.74 (σ0.69)
-#>  8 8-None              0.74 (σ0.73)
-#>  9 NA                  0.60 (σ0.68)
-#> 10 Total               0.81 (σ0.73)
-```
+|                     | score        |
+|---------------------|--------------|
+| relig               | mean (sd)    |
+| 1-Protestant        | 0.82 (σ0.72) |
+| 2-Catholic          | 0.85 (σ0.73) |
+| 3-Other christian   | 0.79 (σ0.71) |
+| 4-Jewish            | 0.94 (σ0.75) |
+| 5-Buddhist/Hinduist | 0.99 (σ0.76) |
+| 6-Muslim            | 0.85 (σ0.71) |
+| 7-Other             | 0.74 (σ0.69) |
+| 8-None              | 0.74 (σ0.73) |
+| NA                  | 0.60 (σ0.68) |
+| Total               | 0.81 (σ0.73) |
 
 Le score va de 0 au nombre de facteurs (les valeurs manquantes ne
 comptent jamais). Un tel score sommé est exactement l’entrée que
@@ -522,7 +481,10 @@ exportateurs et la construction. HTML /
   tableau (`TRUE`) ; mettez `FALSE` dans un document à plusieurs
   tableaux et appelez
   [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
-  une seule fois à la place.
+  une seule fois à la place (comme cette page).
+- `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases
+  (`TRUE`) ; mettez `FALSE` une fois par document pour les couper
+  partout.
 - `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — les piles
   de polices CSS des nombres et du texte.
 - `tabxplor.kable_popover` — des info-bulles au clic plutôt qu’au
@@ -542,18 +504,17 @@ Console, statistiques et chemins :
   total / colorées (détecté automatiquement selon l’éditeur).
 - `tabxplor.signif_levels` / `tabxplor.signif_labels` — les seuils de
   p-valeur et les étiquettes d’étoiles.
-- `tabxplor.totcol_range` — comment une colonne Total s’imprime quand
-  les variables en colonne ont des bases différentes.
 - `tabxplor.plot_num_font` — la police des nombres de
   [`tab_plot()`](https://bricenocenti.github.io/tabxplor/reference/tab_plot.md)
   ; `tabxplor.export_dir` — le répertoire d’export par défaut.
 
-Performance et intégration : - `tabxplor.parallel` — construire un
-processus par variable en ligne sur un pool en arrière-plan (nécessite
-`mirai`) ; `tabxplor.parallel_min` fixe le plus petit nombre de
-variables en ligne qui vaille la peine d’être distribué. Libérez le pool
-avec
-[`tab_parallel_stop()`](https://bricenocenti.github.io/tabxplor/reference/tab_parallel_stop.md).
+Performance et intégration :
+
+- `tabxplor.parallel` — construire un processus par variable en ligne
+  sur un pool en arrière-plan (nécessite `mirai`) ;
+  `tabxplor.parallel_min` fixe le plus petit nombre de variables en
+  ligne qui vaille la peine d’être distribué. Libérez le pool avec
+  [`tab_parallel_stop()`](https://bricenocenti.github.io/tabxplor/reference/tab_parallel_stop.md).
 
 Voir `?tabxplor-options` pour la liste complète et chaque valeur par
 défaut.

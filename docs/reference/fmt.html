@@ -41,7 +41,7 @@ using vctrs."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,8 +49,7 @@ using vctrs."></head><body>
     </button>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
-      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
-<li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+      <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
@@ -62,8 +61,7 @@ using vctrs."></head><body>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
-      </ul><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
-<li class="nav-item"><form class="form-inline" role="search">
+      </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/BriceNocenti/tabxplor/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
@@ -612,48 +610,119 @@ regression family, "" on crosstabs)</p></li>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">&lt;-</span> <span class="fu"><a href="tab.html">tab</a></span><span class="op">(</span><span class="va">starwars</span>, <span class="va">sex</span>, <span class="va">hair_color</span>, <span class="va">gender</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span>,</span></span>
 <span class="r-in"><span>            other_if_less_than <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in dplyr::mutate(dplyr::ungroup(dplyr::mutate(dplyr::group_by(data,     !!!tab_vars), dplyr::across(tidyselect::all_of(as.character(row_vars)),     ~forcats::fct_lump_min(., other_if_less_than, other_level = other_level)))),     dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(.x,         purrr::discard(unique(append(levels(dplyr::pull(data,             dplyr::cur_column())), other_level)), function(v) !v %in%             levels(.x))))):</span> <span style="color: #00BBBB;">ℹ</span> In argument: `dplyr::across(...)`.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `across()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #BBBB00;">!</span> Can't compute column `sex`.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `purrr::discard()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> In index: 1.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `.fn()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #BBBB00;">!</span> object '.x' not found</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To identify the total columns, and work with them :</span></span></span>
 <span class="r-in"><span><span class="fu">is_totcol</span><span class="op">(</span><span class="va">tabs</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> gender    sex  black  brown   none Others  Total </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  FALSE  FALSE  FALSE  FALSE  FALSE  FALSE   TRUE </span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is_totcol</span><span class="op">)</span>, <span class="op">~</span> <span class="st">"total column"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex              black  brown   none Others Total       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt; </span>          <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female             19%    31%    31%    19% total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others              <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>   100%     <span style="color: #949494;">0%</span> total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine     <span style="font-weight: bold;">18%</span>    <span style="font-weight: bold;">29%</span>    <span style="font-weight: bold;">35%</span>    <span style="font-weight: bold;">18%</span> total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male               15%    19%    49%    17% total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none                <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>   100%     <span style="color: #949494;">0%</span> total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others              <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span> total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine    <span style="font-weight: bold;">15%</span>    <span style="font-weight: bold;">18%</span>    <span style="font-weight: bold;">51%</span>    <span style="font-weight: bold;">16%</span> total column</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble     <span style="font-weight: bold;">15%</span>    <span style="font-weight: bold;">21%</span>    <span style="font-weight: bold;">47%</span>    <span style="font-weight: bold;">17%</span> total column</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To identify the total rows, and work with them :</span></span></span>
 <span class="r-in"><span><span class="fu">is_totrow</span><span class="op">(</span><span class="va">tabs</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] FALSE FALSE  TRUE FALSE FALSE FALSE  TRUE  TRUE</span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>    <span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is_fmt</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>    <span class="op">~</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/if_else.html" class="external-link">if_else</a></span><span class="op">(</span><span class="fu">is_totrow</span><span class="op">(</span><span class="va">.</span><span class="op">)</span>, true <span class="op">=</span> <span class="st">"into_total_row"</span>, false <span class="op">=</span> <span class="st">"normal_cell"</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex             black          brown          none      Others Total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female          normal_cell    normal_cell    normal_c… norma… norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others          normal_cell    normal_cell    normal_c… norma… norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine  into_total_row into_total_row into_tot… into_… into…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male            normal_cell    normal_cell    normal_c… norma… norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none            normal_cell    normal_cell    normal_c… norma… norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others          normal_cell    normal_cell    normal_c… norma… norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine into_total_row into_total_row into_tot… into_… into…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble  into_total_row into_total_row into_tot… into_… into…</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To identify the total tables, and work with them :</span></span></span>
 <span class="r-in"><span><span class="va">tottabs</span> <span class="op">&lt;-</span> <span class="fu">is_tottab</span><span class="op">(</span><span class="va">tabs</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span> <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/add_column.html" class="external-link">add_column</a></span><span class="op">(</span><span class="va">tottabs</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>total <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/if_else.html" class="external-link">if_else</a></span><span class="op">(</span><span class="va">tottabs</span>, <span class="st">"part of a total table"</span>, <span class="st">"normal cell"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 9</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex              black  brown  none Others       Total tottabs total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt; </span>          <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female             19%    31%   31%    19% <span style="font-weight: bold;">100% (n=16)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others              <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>  100%     <span style="color: #949494;">0%</span> <span style="font-weight: bold;">100% (n= 1)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine     <span style="font-weight: bold;">18%</span>    <span style="font-weight: bold;">29%</span>   <span style="font-weight: bold;">35%</span>    <span style="font-weight: bold;">18%</span> <span style="font-weight: bold;">100% (n=17)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male               15%    19%   49%    17% <span style="font-weight: bold;">100% (n=59)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none                <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>  100%     <span style="color: #949494;">0%</span> <span style="font-weight: bold;">100% (n= 2)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others              <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span>    <span style="color: #949494;">0%</span>     <span style="color: #949494;">0%</span> <span style="font-weight: bold;">  0% (n= 0)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine    <span style="font-weight: bold;">15%</span>    <span style="font-weight: bold;">18%</span>   <span style="font-weight: bold;">51%</span>    <span style="font-weight: bold;">16%</span> <span style="font-weight: bold;">100% (n=61)</span> FALSE   norm…</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble     <span style="font-weight: bold;">15%</span>    <span style="font-weight: bold;">21%</span>   <span style="font-weight: bold;">47%</span>    <span style="font-weight: bold;">17%</span> <span style="font-weight: bold;">100% (n=78)</span> TRUE    part…</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To access the displayed numbers, as numeric vectors :</span></span></span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is_fmt</span><span class="op">)</span>, <span class="va">get_num</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex             black brown  none Others Total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female          0.188 0.312 0.312  0.188     1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others          0     0     1      0         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine  0.176 0.294 0.353  0.176     1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male            0.153 0.186 0.492  0.169     1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none            0     0     1      0         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others          0     0     0      0         0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine 0.148 0.180 0.508  0.164     1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble  0.154 0.205 0.474  0.167     1</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To access the displayed numbers, as character vectors (without colors) :</span></span></span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is_fmt</span><span class="op">)</span>, <span class="va">format</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex             black brown none  Others Total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female          19%   31%   31%   19%    100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others          0%    0%    100%  0%     100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine  18%   29%   35%   18%    100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male            15%   19%   49%   17%    100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none            0%    0%    100%  0%     100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others          0%    0%    0%    0%     0%   </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine 15%   18%   51%   16%    100% </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble  15%   21%   47%   17%    100% </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To access the (non-displayed) differences of the cells percentages from totals :</span></span></span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is_fmt</span><span class="op">)</span>, <span class="op">~</span> <span class="fu">vctrs</span><span class="fu">::</span><span class="fu"><a href="https://vctrs.r-lib.org/reference/fields.html" class="external-link">field</a></span><span class="op">(</span><span class="va">.</span>, <span class="st">"diff"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 8 × 7</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         gender [3]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   gender    sex                black    brown    none   Others Total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> feminine  female           0.011<span style="text-decoration: underline;">0</span>   0.018<span style="text-decoration: underline;">4</span>  -<span style="color: #BB0000;">0.040</span><span style="color: #BB0000; text-decoration: underline;">4</span>  0.011<span style="text-decoration: underline;">0</span>      0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> feminine  Others          -<span style="color: #BB0000;">0.176</span>   -<span style="color: #BB0000;">0.294</span>    0.647  -<span style="color: #BB0000;">0.176</span>       0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> feminine  Total feminine   0        0        0       0           0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> masculine male             0.005<span style="text-decoration: underline;">00</span>  0.006<span style="text-decoration: underline;">11</span> -<span style="color: #BB0000;">0.016</span><span style="color: #BB0000; text-decoration: underline;">7</span>  0.005<span style="text-decoration: underline;">56</span>     0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> masculine none            -<span style="color: #BB0000;">0.148</span>   -<span style="color: #BB0000;">0.180</span>    0.492  -<span style="color: #BB0000;">0.164</span>       0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> masculine Others          -<span style="color: #BB0000;">0.148</span>   -<span style="color: #BB0000;">0.180</span>   -<span style="color: #BB0000;">0.508</span>  -<span style="color: #BB0000;">0.164</span>      -<span style="color: #BB0000;">1</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">7</span> masculine Total masculine  0        0        0       0           0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">8</span> Ensemble  Total Ensemble   0        0        0       0           0</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># To do more complex operations, like creating a new column with standard deviation and</span></span></span>

@@ -97,11 +97,14 @@ tx_getOption <- function(names, default = NULL) {
 
   options("tabxplor.ci_print" = "ci") # or "moe"
 
-  # Phase 10: how a Total column's in-cell base is shown when a table's col_vars have DIFFERING bases
-  # (e.g. na = "drop"). "off" (default) = each row's own base, uniform "{pct} (n={n})"; "range" =
-  # the per-row "[min;max]" across col_vars; "min" = the smallest (safest) base. Read by both the
-  # console (tab_fold_addn_incell) and the exporter prep (tab_totcol_range), so set once here.
-  options("tabxplor.totcol_range" = "off")
+  # DORMANT (possible future implementation): tabxplor.totcol_range ("off"/"range"/"min") -- how a
+  # Total column's in-cell base is shown when col_vars have DIFFERING bases (e.g. na = "drop"):
+  # "range" = per-row "[min;max]" across col_vars, "min" = the smallest base. Retired pre-2.0.0
+  # release: the per-row literal templates it emitted defeat the composite-token padding
+  # (fmt_class.R format alignment groups by unique template), and its render-model compute
+  # (range_totcol) had no consumer. Dormant sites: tab.R tab_fold_addn_incell (read branch),
+  # tab-export-prep.R tab_totcol_range (helper, kept + tested directly).
+  # options("tabxplor.totcol_range" = "off")
 
   # Phase 3a significance stars (universal CI-inclusion). `stars` default (OPT-IN: FALSE, so a plain
   # tab() stores no per-cell pvalue and shows no stars; tab_reg() sets stars = TRUE itself), and the

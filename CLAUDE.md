@@ -1473,6 +1473,14 @@ and left **uncommitted** (untracked, not `.gitignore`'d → Phase z publishes it
 #### Last Phase x — Jamovi UI French translation (DONE)
 
 
+#### Last Phase x2 — README 2.0.0 + totcol_range retirement + jamovi tooltips (DONE)
+
+**DONE (2026-07-23).** Full suite green (FAIL 0, WARN 0, SKIP 4, PASS 4261), zero golden/snapshot churn.
+- **README single-source rewrite**: concise `README.Rmd` (`github_document`, `html_preview: false`) knit to `README.md` with 3 LIVE colored html tables (the vignette machinery: `tabxplor.print="html"` + one `tab_css(theme="light")` asis chunk + `tab_kable_css=FALSE`) — the pkgdown home renders them colored, GitHub strips `<style>`/classes to plain-but-readable tables. One hero screenshot at `man/figures/README-hero.jpg` (CRAN-safe path; **stopgap = the 1.3.1 console JPG, maintainer should recapture with the 2.0.0 palette**). Vignette links = absolute pkgdown URLs, intro first + FR articles. The old `.readme_images/` refs (broken on pkgdown/CRAN) are gone from the README; the folder awaits maintainer deletion.
+- **`options(tabxplor.totcol_range)` retired → DORMANT** (deliberate exception to "no commented corpses", tagged `# DORMANT (possible future implementation)`): seed commented in `.onLoad`, read branch commented in `tab_fold_addn_incell` (tab.R), `range_totcol` compute commented in the prep (named NULL slot stays in the model), the 3 `"range"` compute-flag seeds dropped; `tab_totcol_range()` helper KEPT, exercised directly by test-export-prep.R. Option doc + both programming-vignette bullets removed. Rationale: its per-row literal templates defeat the composite-token padding (format aligns per unique template) and no renderer ever consumed `range_totcol`. Dead-option audit: totcol_range was the ONLY defective option; all other seeded options are live and doc-synced.
+- **jamovi html tooltips ON by default**: the two hard-coded `tooltips = FALSE` (jmvtab-export.R `tab_html_string` + `jmv_backend_render_html`) deleted → both follow `tabxplor.tab_kable_tooltips` (seeded TRUE); native `title=` attrs need no bootstrap JS in the webview. Perf trade (~+15% render, +44% DOM) accepted. Fixtures in test-jmvtab-export.R. **Maintainer: live-jamovi smoke test on a big table recommended.**
+
+
 #### Last Phase y – NEWS.md simplification
 
 `NEWS.md`  `# tabxplor 2.0.0 (in development)` section have accumulated all dev history of the new version, must most of it is really not user-facing and irrevelant (and already in other dev documentation). A **drastic** reduction is needed here, no dev details **at all**, straight to the point, please **reduce 1150 lines to maximum 100 lines**, divide it by 10 :

@@ -1,5 +1,13 @@
 # Introduction to tabxplor
 
+The first time only, install the package :
+
+``` r
+install.packages("tabxplor", dependencies = TRUE)
+```
+
+At the start of each new R session, load it :
+
 ``` r
 library(tabxplor)
 ```
@@ -14,7 +22,7 @@ verbs, and tables export to Excel, HTML and Markdown with their color
 helpers. Underlying heavy computations run on `data.table`
 
 Throughout this vignette we use `gss_simple`, a cleaned-up version of
-the General Social Survey
+the US General Social Survey
 ([`forcats::gss_cat`](https://forcats.tidyverse.org/reference/gss_cat.html))
 with factors levels merged and reordered.
 
@@ -27,6 +35,23 @@ gss_simple <- gss_cat_data_formatting()
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
 needs a data frame, a **row variable** and a **column variable**. By
 default it shows counts:
+
+``` r
+tab(gss_simple, marital, race)
+```
+
+[TABLE]
+
+This is tabxplor’s **html table** — what you get in the RStudio or
+Positron Viewer pane with the recommended session option, used
+throughout this vignette:
+
+``` r
+options(tabxplor.print = "html")
+```
+
+Without the option, the same table prints in the **console**, as a
+colored `tibble` — same information, lighter display:
 
 ``` r
 tab(gss_simple, marital, race)
@@ -53,18 +78,7 @@ automatically:
 tab(gss_simple, marital, race, pct = "row")
 ```
 
-``` r-output
-#> # A tabxplor tab: 7 × 5
-#>   marital        White  Black  Other           Total
-#>   <fct>         <row%> <row%> <row%>          <row%>
-#> 1 Married          82%     9%     9% 100% (n=10 117)
-#> 2 Separated        59%    26%    15% 100% (n=   743)
-#> 3 Divorced         79%    15%     6% 100% (n= 3 383)
-#> 4 Widowed          82%    14%     4% 100% (n= 1 807)
-#> 5 Never married    64%    24%    12% 100% (n= 5 416)
-#> 6 NA               76%    12%    12% 100% (n=    17)
-#> 7 Total            76%    15%     9% 100% (n=21 483)
-```
+[TABLE]
 
 When the column variable is **numeric**,
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
@@ -74,18 +88,16 @@ shows its **mean** in each row instead of percentages:
 tab(gss_simple, marital, age)
 ```
 
-``` r-output
-#> # A tabxplor tab: 7 × 2
-#>   marital            age
-#>   <fct>           <mean>
-#> 1 Married       49 (σ15)
-#> 2 Separated     45 (σ13)
-#> 3 Divorced      51 (σ13)
-#> 4 Widowed       72 (σ13)
-#> 5 Never married 34 (σ13)
-#> 6 NA            52 (σ17)
-#> 7 Total         47 (σ17)
-```
+|               | age       |
+|---------------|-----------|
+| marital       | mean (sd) |
+| Married       | 49 (σ15)  |
+| Separated     | 45 (σ13)  |
+| Divorced      | 51 (σ13)  |
+| Widowed       | 72 (σ13)  |
+| Never married | 34 (σ13)  |
+| NA            | 52 (σ17)  |
+| Total         | 47 (σ17)  |
 
 You can pass **several row and column variables at once**.
 
@@ -93,27 +105,7 @@ You can pass **several row and column variables at once**.
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-``` r-output
-#> # A tabxplor tab: 13 × 7
-#> # Groups:         row_var [2]
-#>    row_var levels              `1-Democrat` `2-Independent, other`
-#>    <fct>   <fct>                     <row%>                 <row%>
-#>  1 race    White                        39%                    21%
-#>  2 race    Black                        76%                    17%
-#>  3 race    Other                        49%                    33%
-#>  4 race    Total                        45%                    21%
-#> 
-#>  5 relig   1-Protestant                 43%                    17%
-#>  6 relig   2-Catholic                   46%                    22%
-#>  7 relig   3-Other christian            42%                    24%
-#>  8 relig   4-Jewish                     68%                    12%
-#>  9 relig   5-Buddhist/Hinduist          57%                    29%
-#> 10 relig   6-Muslim                     66%                    22%
-#> 11 relig   7-Other                      48%                    29%
-#> 12 relig   8-None                       50%                    31%
-#> 13 relig   Total                        45%                    21%
-#> # ℹ 3 more variables: `3-Republican` <row%>, Total <row%>, tvhours <mean>
-```
+[TABLE]
 
 `levels = "first"` keeps only the first level of each column factor,
 which is handy to display many binary factors, like survey questions
@@ -123,20 +115,18 @@ with multiple answers, all at once, in a compact way :
 tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", na = "drop", cleannames = TRUE)
 ```
 
-``` r-output
-#> # A tabxplor tab: 9 × 4
-#>   relig             Married  Black `$25000 or more`
-#>   <fct>              <row%> <row%>           <row%>
-#> 1 Protestant            50%    21%              32%
-#> 2 Catholic              50%     4%              35%
-#> 3 Other christian       44%    18%              35%
-#> 4 Jewish                51%     3%              43%
-#> 5 Buddhist/Hinduist     51%     5%              47%
-#> 6 Muslim                53%    34%              32%
-#> 7 Other                 37%    13%              37%
-#> 8 None                  37%    11%              37%
-#> 9 Total                 47%    15%              34%
-```
+|                   | married | black | income25k       |
+|-------------------|---------|-------|-----------------|
+| relig             | Married | Black | \$25000 or more |
+| Protestant        | 50%     | 21%   | 32%             |
+| Catholic          | 50%     | 4%    | 35%             |
+| Other christian   | 44%     | 18%   | 35%             |
+| Jewish            | 51%     | 3%    | 43%             |
+| Buddhist/Hinduist | 51%     | 5%    | 47%             |
+| Muslim            | 53%     | 34%   | 32%             |
+| Other             | 37%     | 13%   | 37%             |
+| None              | 37%     | 11%   | 37%             |
+| Total             | 47%     | 15%   | 34%             |
 
 A few other everyday arguments: `na = "drop"` to drop missing values
 from the base, `digits =` for the number of decimals, and
@@ -193,34 +183,7 @@ operations then run within each sub-table.
 tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 ```
 
-``` r-output
-#> # A tabxplor tab: 17 × 6
-#> # Groups:         rincome [5]
-#>    rincome           race                    `1-Democrat` `2-Independent, other`
-#>    <fct>             <fct>                         <row%>                 <row%>
-#>  1 1-Lt $10000       White                            38%                    26%
-#>  2 1-Lt $10000       Black                            67%                    22%
-#>  3 1-Lt $10000       Other                            49%                    31%
-#>  4 1-Lt $10000       Total 1-Lt $10000                45%                    26%
-#> 
-#>  5 2-$10000 to 14999 White                            40%                    27%
-#>  6 2-$10000 to 14999 Black                            76%                    14%
-#>  7 2-$10000 to 14999 Other                            43%                    44%
-#>  8 2-$10000 to 14999 Total 2-$10000 to 14999          47%                    26%
-#> 
-#>  9 3-$15000 to 24999 White                            38%                    26%
-#> 10 3-$15000 to 24999 Black                            79%                    15%
-#> 11 3-$15000 to 24999 Other                            45%                    39%
-#> 12 3-$15000 to 24999 Total 3-$15000 to 24999          46%                    25%
-#> 
-#> 13 4-$25000 or more  White                            39%                    17%
-#> 14 4-$25000 or more  Black                            81%                    12%
-#> 15 4-$25000 or more  Other                            56%                    22%
-#> 16 4-$25000 or more  Total 4-$25000 or more           45%                    16%
-#> 
-#> 17 Ensemble          Total Ensemble                   45%                    20%
-#> # ℹ 2 more variables: `3-Republican` <row%>, Total <row%>
-```
+[TABLE]
 
 When you pass several **row variables** *without* `tab_vars`,
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
@@ -230,75 +193,6 @@ variable** (with `tab_vars`, the result is always a list):
 
 ``` r
 tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
-```
-
-``` r-output
-<!-- KNITR_ASIS_OUTPUT_TOKEN --><style>.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
-.tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-.tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
-.tabxplor-tab tfoot{font-size:80%;text-align:left;}
-.tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
-.tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
-.tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}
-.tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}
-.tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,.tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{border-left-style:solid;border-left-width:1px;}
-.tabxplor-tab table > thead > tr:first-child > *{border-top-style:solid;border-top-width:1px;}
-.tabxplor-tab table > tbody > tr:last-child > *{border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,.tabxplor-tab table > thead > tr > *:last-child{border-right-style:solid;border-right-width:1px;}
-.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:first-child,.tabxplor-tab table > thead > tr > *:first-child{border-left-style:solid;border-left-width:1px;}
-.tabxplor-tab p{font-size:80%;}
-.tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
-.tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab .tx-r{text-align:right;}
-.tabxplor-tab .tx-l{text-align:left;}
-.tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
-.tabxplor-tab .tx-num{white-space:nowrap;}
-.tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
-.tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
-.tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}
-.tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}
-.tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;padding:4px 2px;}
-.tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}
-.tabxplor-tab tr.tx-bt>*{border-top-style:solid;border-top-width:1px;}
-.tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}
-.tabxplor-tab .tx-foot{width:0;min-width:100%;}
-.tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}
-.tooltip-inner{max-width:none;white-space:nowrap;}
-.popover{max-width:none;}
-.popover-body,.popover-content{padding:6px;white-space:nowrap;}
-.tabxplor-tab{color:#000000;background:#ffffff;}
-.tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}
-.tabxplor-tab tbody tr:hover{background:#FFFCE5;}
-.g1{color:#9f9f9f;}
-.g2{color:#111111;}
-.tabxplor-caption{color:#000000;}
-.p1{color:#02A5B3;}
-.p2{color:#0891C9;}
-.p3{color:#0267C7;}
-.p4{color:#300DFD;}
-.m1{color:#DCA331;}
-.m2{color:#DE7C01;}
-.m3{color:#DD5301;}
-.m4{color:#D60103;}
-.o1{background-color:#DFFCFF;}
-.o2{background-color:#D7EFFF;}
-.o3{background-color:#CEE3FF;}
-.o4{background-color:#BBCCFF;}
-.u1{background-color:#FFF4E1;}
-.u2{background-color:#FFE6D3;}
-.u3{background-color:#FFD7C8;}
-.u4{background-color:#FFBAAF;}</style>
-<table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">married</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">01-Married</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×1.1 ; n: 8 316">82%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -6% ; ratio: ÷1.7 ; n: 869">9%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 932">9%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 10 117">100%<span style="font-weight:normal;"> (n=10 117)</span></td></tr>
-<tr><td class="tx-l tx-br tx-bl tx-rv">02-Not married</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷1.1 ; n: 8 079">71%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +5% ; ratio: ×1.4 ; n: 2 260">20%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×1 ; n: 1 027">9%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 11 366">100%<span style="font-weight:normal;"> (n=11 366)</span></td></tr>
-<tr class="tx-b tx-bt tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 16 395">76%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 129">15%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 959">9%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 21 483">100%<span style="font-weight:normal;"> (n=21 483)</span></td></tr></tbody></table>
-<br>
-<table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">income25k</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">01-$25000 or more</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1 ; n: 5 856">80%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 886">12%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.1 ; n: 621">8%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 7 363">100%<span style="font-weight:normal;"> (n= 7 363)</span></td></tr>
-<tr><td class="tx-l tx-br tx-bl tx-rv">02-Less than 25k</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -2% ; ratio: ×1 ; n: 10 539">75%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.1 ; n: 2 243">16%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 1 338">9%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 14 120">100%<span style="font-weight:normal;"> (n=14 120)</span></td></tr>
-<tr class="tx-b tx-bt tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 16 395">76%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 129">15%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 959">9%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 21 483">100%<span style="font-weight:normal;"> (n=21 483)</span></td></tr></tbody></table>
-
-<!-- KNITR_ASIS_OUTPUT_TOKEN -->
 ```
 
 ## colors: reading helpers
@@ -314,16 +208,7 @@ the stronger the shade — and a color legend is printed underneath.
 tab(gss_simple, race, party3, pct = "row", color = "diff")
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total
-#>   <cha>       <row%>                 <row%>         <row%> <row>          <row%>
-#> 1 White          39%                    21%            40%    1% 100% (n=16 395)
-#> 2 Black          75%                    16%             8%    1% 100% (n= 3 129)
-#> 3 Other          48%                    32%            18%    1% 100% (n= 1 959)
-#> 4 Total          45%                    21%            33%    1% 100% (n=21 483)
-#> # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 `color = TRUE` picks a sensible scheme automatically for each column
 type (both differences and ratio for percentages, only ratios for means,
@@ -333,20 +218,7 @@ type (both differences and ratio for percentages, only ratios for means,
 tab(gss_simple, rincome, c(party3, marital), pct = "row", color = TRUE)
 ```
 
-``` r-output
-#> # A tabxplor tab: 6 × 12
-#>   rincome           `1-Democrat` `2-Independent, other` `3-Republican` NA_party3
-#>   <fct>                   <row%>                 <row%>         <row%>    <row%>
-#> 1 1-Lt $10000                44%                    25%            30%        1%
-#> 2 2-$10000 to 14999          46%                    26%            27%        1%
-#> 3 3-$15000 to 24999          45%                    25%            29%        0%
-#> 4 4-$25000 or more           45%                    16%            38%        0%
-#> 5 NA                         45%                    22%            32%        1%
-#> 6 Total                      45%                    21%            33%        1%
-#> # ℹ 7 more variables: Married <row%>, Separated <row%>, Divorced <row%>,
-#> #   Widowed <row%>, `Never married` <row%>, NA_marital <row%>, Total <row%>
-#> # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30; bg ratio: ÷4 ÷2 ÷1.5 ×1.5 ×2 ×4
-```
+[TABLE]
 
 Numeric columns are colored the same way, on their **means** (here,
 hours of TV per day by income):
@@ -355,18 +227,7 @@ hours of TV per day by income):
 tab(gss_simple, rincome, tvhours, color = "diff")
 ```
 
-``` r-output
-#> # A tabxplor tab: 6 × 2
-#>   rincome              tvhours
-#>   <fct>                 <mean>
-#> 1 1-Lt $10000       3.1 (σ2.8)
-#> 2 2-$10000 to 14999 3.0 (σ2.4)
-#> 3 3-$15000 to 24999 2.8 (σ2.1)
-#> 4 4-$25000 or more  2.2 (σ1.7)
-#> 5 NA                3.6 (σ3.1)
-#> 6 Total             3.0 (σ2.6)
-#> # standardized difference (Total): -0.8 -0.5 -0.2 +0.2 +0.5 +0.8
-```
+[TABLE]
 
 **Which cell is the reference for comparison ?** By default each cell is
 compared to the relevant Total (Total row for row percentages and Total
@@ -382,53 +243,13 @@ under-representations. Two useful alternatives:
 tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 ```
 
-``` r-output
-#> # A tabxplor tab: 9 × 8
-#>   year  Married Separated Divorced Widowed `Never married`  `NA`           Total
-#>   <cha>  <row%>    <row%>   <row%>  <row%>          <row%> <row>          <row%>
-#> 1 2000      45%        4%      16%     10%             25%    0% 100% (n= 2 817)
-#> 2 2002      46%        3%      16%      9%             26%    0% 100% (n= 2 765)
-#> 3 2004      53%        3%      15%      7%             22%    0% 100% (n= 2 812)
-#> 4 2006      48%        3%      16%      8%             24%    0% 100% (n= 4 510)
-#> 5 2008      48%        3%      14%      8%             26%    0% 100% (n= 2 023)
-#> 6 2010      44%        3%      17%      9%             28%    0% 100% (n= 2 044)
-#> 7 2012      46%        3%      16%      8%             27%    0% 100% (n= 1 974)
-#> 8 2014      46%        3%      16%      8%             27%    0% 100% (n= 2 538)
-#> 9 Total     47%        3%      16%      8%             25%    0% 100% (n=21 483)
-#> # difference (2000): -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 ``` r
 tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, comp="all")
 ```
 
-``` r-output
-#> # A tabxplor tab: 16 × 6
-#> # Groups:         race [4]
-#>    race     rincome           `1-Democrat` `2-Independent, other` `3-Republican`
-#>    <fct>    <fct>                   <row%>                 <row%>         <row%>
-#>  1 White    1-Lt $10000                38%                    26%            36%
-#>  2 White    2-$10000 to 14999          40%                    27%            33%
-#>  3 White    3-$15000 to 24999          38%                    26%            36%
-#>  4 White    4-$25000 or more           39%                    17%            45%
-#>  5 White    Total White                39%                    20%            41%
-#> 
-#>  6 Black    1-Lt $10000                67%                    22%            11%
-#>  7 Black    2-$10000 to 14999          76%                    14%            10%
-#>  8 Black    3-$15000 to 24999          79%                    15%             6%
-#>  9 Black    4-$25000 or more           81%                    12%             7%
-#> 10 Black    Total Black                77%                    15%             8%
-#> 
-#> 11 Other    1-Lt $10000                49%                    31%            20%
-#> 12 Other    2-$10000 to 14999          43%                    44%            13%
-#> 13 Other    3-$15000 to 24999          45%                    39%            16%
-#> 14 Other    4-$25000 or more           56%                    22%            22%
-#> 15 Other    Total Other                51%                    30%            19%
-#> 
-#> 16 Ensemble Total Ensemble             45%                    20%            34%
-#> # ℹ 1 more variable: Total <row%>
-#> # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30; bg ratio: ÷4 ÷2 ÷1.5 ×1.5 ×2 ×4
-```
+[TABLE]
 
 **A different reference for each variable.** `ref` is reinterpreted by
 `pct`. Under **row** percentages (or means) it picks a reference
@@ -437,31 +258,10 @@ tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, c
 
 ``` r
 tab(gss_simple, c(race, relig), party3, pct = "row", color = "diff",
-    ref = c(race = "first", relig = "tot"), na = "drop")
+    ref = c(race = 1, relig = "tot"), na = "drop")
 ```
 
-``` r-output
-#> # A tabxplor tab: 13 × 6
-#> # Groups:         row_var [2]
-#>    row_var levels              `1-Democrat` `2-Independent, other`
-#>    <fct>   <fct>                     <row%>                 <row%>
-#>  1 race    White                        39%                    21%
-#>  2 race    Black                        76%                    17%
-#>  3 race    Other                        49%                    33%
-#>  4 race    Total                        45%                    21%
-#> 
-#>  5 relig   1-Protestant                 43%                    17%
-#>  6 relig   2-Catholic                   46%                    22%
-#>  7 relig   3-Other christian            42%                    24%
-#>  8 relig   4-Jewish                     68%                    12%
-#>  9 relig   5-Buddhist/Hinduist          57%                    29%
-#> 10 relig   6-Muslim                     66%                    22%
-#> 11 relig   7-Other                      48%                    29%
-#> 12 relig   8-None                       50%                    31%
-#> 13 relig   Total                        45%                    21%
-#> # ℹ 2 more variables: `3-Republican` <row%>, Total <row%>
-#> # difference (ref.): -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 Under **column** percentages `ref` picks a reference **column** instead,
 vectorised over the column variables — either named
@@ -473,20 +273,7 @@ tab(gss_simple, race, c(party3, marital), pct = "col", color = "diff",
     ref = c("first", "tot"), na = "drop")
 ```
 
-``` r-output
-#> # A tabxplor tab: 5 × 10
-#>   race   `1-Democrat` `2-Independent, other` `3-Republican`    Married Separated
-#>   <fct>  <col%-mixed>           <col%-mixed>   <col%-mixed> <col%-mix> <col%-mi>
-#> 1 White           66%                    75%            92%        82%       59%
-#> 2 Black           24%                    11%             3%         9%       26%
-#> 3 Other           10%                    14%             5%         9%       15%
-#> 4 Total          100%                   100%           100%       100%      100%
-#> 5 n             9 679                  4 512          7 137     10 117       743
-#> # ℹ 4 more variables: Divorced <col%-mixed>, Widowed <col%-mixed>,
-#> #   `Never married` <col%-mixed>, Total <col%-mixed>
-#> # party3: difference (1-Democrat): -30 -20 -10 -5 +5 +10 +20 +30
-#> # marital: difference (Total): -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 Color thresholds and the palette can be customised : set them **once for
 the whole session** with
@@ -518,16 +305,7 @@ the coloring:
 tab(gss_simple, race, party3, pct = "row", color = "diff", color_signif = "grey_non_signif")
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total
-#>   <cha>       <row%>                 <row%>         <row%> <row>          <row%>
-#> 1 White          39%                    21%            40%    1% 100% (n=16 395)
-#> 2 Black          75%                    16%             8%    1% 100% (n= 3 129)
-#> 3 Other          48%                    32%            18%    1% 100% (n= 1 959)
-#> 4 Total          45%                    21%            33%    1% 100% (n=21 483)
-#> # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30 [grey: non-significant or under ±5 points]
-```
+[TABLE]
 
 ``` r
 gss_simple |>
@@ -535,16 +313,7 @@ gss_simple |>
   tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race   `1-Democrat` `2-Independent, other` `3-Republican`  `NA`          Total
-#>   <fct>        <row%>                 <row%>         <row%> <row>         <row%>
-#> 1 White           40%                    22%            37%    1% 100% (n=1 477)
-#> 2 Black           81%                    14%             5%    0% 100% (n=  301)
-#> 3 Other           47%                    32%            19%    2% 100% (n=  196)
-#> 4 Total           47%                    22%            30%    1% 100% (n=1 974)
-#> # difference (Total): -25 -15 -5 -0 +0 +5 +15 +25 [all that is significant is colored, error-adjusted]
-```
+[TABLE]
 
 On **small samples** a big-looking percentage can rest on a handful of
 respondents. `n_min =` is a purely visual filter, applied last: it hides
@@ -556,16 +325,7 @@ drop out:
 tab(gss_simple, relig, race, pct = "row", n_min = 400)
 ```
 
-``` r-output
-#> # A tabxplor tab: 5 × 5
-#>   relig              White  Black  Other           Total
-#>   <fct>             <row%> <row%> <row%>          <row%>
-#> 1 1-Protestant         75%    21%     4% 100% (n=10 846)
-#> 2 2-Catholic           78%     4%    18% 100% (n= 5 124)
-#> 3 3-Other christian    72%    18%    10% 100% (n=   784)
-#> 4 8-None               80%    11%     9% 100% (n= 3 523)
-#> 5 Total                76%    15%     9% 100% (n=21 483)
-```
+[TABLE]
 
 An alternative is to keep the small rows and cols but group them all in
 a “Other” level :
@@ -574,18 +334,7 @@ a “Other” level :
 tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
 ```
 
-``` r-output
-#> # A tabxplor tab: 7 × 5
-#>   relig              White  Black  Other           Total
-#>   <fct>             <row%> <row%> <row%>          <row%>
-#> 1 1-Protestant         75%    21%     4% 100% (n=10 846)
-#> 2 2-Catholic           78%     4%    18% 100% (n= 5 124)
-#> 3 3-Other christian    72%    18%    10% 100% (n=   784)
-#> 4 8-None               80%    11%     9% 100% (n= 3 523)
-#> 5 Others               68%    10%    22% 100% (n= 1 098)
-#> 6 NA                   67%    18%    16% 100% (n=   108)
-#> 7 Total                76%    15%     9% 100% (n=21 483)
-```
+[TABLE]
 
 ## Confidence intervals, tests and contributions
 
@@ -596,16 +345,7 @@ Print confidence intervals for the percentage or mean of each cell with
 tab(gss_simple, race, party3, pct = "row", ci = "cell") # by default, conf_level = 0.95
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race   `1-Democrat` `2-Independent, other` `3-Republican`   `NA`
-#>   <fct>        <row%>                 <row%>         <row%> <row%>
-#> 1 White      [38;40]%               [20;21]%       [39;41]% [0;1]%
-#> 2 Black      [73;76]%               [15;18]%         [7;9]% [1;2]%
-#> 3 Other      [46;50]%               [30;34]%       [16;20]% [1;2]%
-#> 4 Total           45%                    21%            33%     1%
-#> # ℹ 1 more variable: Total <row%>
-```
+[TABLE]
 
 Print the confidence intervals of the **difference** with a reference,
 used to calculate significance (if 0 belongs to the confidence interval,
@@ -620,17 +360,7 @@ gss_simple |>
   )
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race    `1-Democrat` `2-Independent, other` `3-Republican`       `NA`
-#>   <fct>         <row%>                 <row%>         <row%>     <row%>
-#> 1 White  40% [-10;-3]%          22%   [-3;3]% 37%    [4;10]% 1% [-1;1]%
-#> 2 Black  81%  [28;38]%          14% [-12;-3]%  5% [-28;-22]% 0% [-1;1]%
-#> 3 Other  47%   [-7;7]%          32%   [4;17]% 19%  [-17;-5]% 2% [-0;4]%
-#> 4 Total            47%                    22%            30%         1%
-#> # ℹ 1 more variable: Total <row%>
-#> # difference (Total): -25 -15 -5 -0 +0 +5 +15 +25; bg ratio: ÷2.667 ÷1.333 ÷1 ×1 ×1.333 ×2.667 [all that is significant is colored, error-adjusted]
-```
+[TABLE]
 
 `display = "num_ci"` is a type-adaptive shorthand for this: it shows
 each value with whatever confidence interval the table computes —
@@ -648,19 +378,7 @@ gss_simple |>
   tab(rincome, c(party3, tvhours), pct = "row", display = "num_ci", stars = TRUE)
 ```
 
-``` r-output
-#> # A tabxplor tab: 6 × 7
-#>   rincome              `1-Democrat` `2-Independent, other` `3-Republican`
-#>   <fct>                      <row%>                 <row%>         <row%>
-#> 1 1-Lt $10000       40%** [-15;-1]%        33%***  [5;18]% 27%    [-9;3]%
-#> 2 2-$10000 to 14999 45%    [-12;7]%        27%    [-2;15]% 26%   [-12;5]%
-#> 3 3-$15000 to 24999 50%    [-5;10]%        25%    [-2;10]% 25%   [-12;1]%
-#> 4 4-$25000 or more  49%     [-2;7]%        16%*** [-9;-2]% 35%**   [0;8]%
-#> 5 NA                47%     [-4;4]%        22%     [-3;4]% 30%    [-4;3]%
-#> 6 Total                       47%                   22%             30%  
-#> # ℹ 3 more variables: `NA` <row%>, Total <row%>, tvhours <mean>
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
-```
+[TABLE]
 
 **Show two numbers in one cell.** `display` is not just for confidence
 intervals: it takes a **[`{}`](https://rdrr.io/r/base/Paren.html)
@@ -673,17 +391,7 @@ count:
 tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({diff})")
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 6
-#>   race   `1-Democrat` `2-Independent, other` `3-Republican`     `NA`
-#>   <fct>        <row%>                 <row%>         <row%>   <row%>
-#> 1 White    39% ( -6%)             21% ( -0%)     40% ( +7%) 1% (-0%)
-#> 2 Black    75% (+30%)             16% ( -5%)      8% (-26%) 1% (+0%)
-#> 3 Other    48% ( +3%)             32% (+11%)     18% (-15%) 1% (+1%)
-#> 4 Total    45% ( +0%)             21% ( +0%)     33% ( +0%) 1% (+0%)
-#> # ℹ 1 more variable: Total <row%>
-#> # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30
-```
+[TABLE]
 
 The first field in the template is the *primary* one — the value Excel
 keeps and the one the colours read.
@@ -699,22 +407,7 @@ F):
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
 
-``` r-output
-#> |      | Tests                  |   party3 |   |     tvhours |
-#> |:-----|:-----------------------|---------:|:-:|------------:|
-#> | race | N                      |   21 483 |   |      11 337 |
-#> |      | pvalue (Chi2, Welch F) |   <0.01% |   |      <0.01% |
-#> |      | Cramér's V, eta2       | V = 0.21 |   | eta2 = 0.04 |
-#> 
-#> # A tabxplor tab: 4 × 7
-#>   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total
-#>   <cha>       <row%>                 <row%>         <row%> <row>          <row%>
-#> 1 White          39%                    21%            40%    1% 100% (n=16 395)
-#> 2 Black          75%                    16%             8%    1% 100% (n= 3 129)
-#> 3 Other          48%                    32%            18%    1% 100% (n= 1 959)
-#> 4 Total          45%                    21%            33%    1% 100% (n=21 483)
-#> # ℹ 1 more variable: tvhours <mean>
-```
+[TABLE]
 
 `color = "contrib"` colors cells by their **contribution to the
 Chi-squared** — the cells that would stand out in a correspondence
@@ -724,22 +417,7 @@ analysis :
 tab(gss_simple, race, party3, color = "contrib")
 ```
 
-``` r-output
-#> |      | Tests         |   party3 |
-#> |:-----|:--------------|---------:|
-#> | race | N             |   21 483 |
-#> |      | pvalue (Chi2) |   <0.01% |
-#> |      | Cramér's V    | V = 0.21 |
-#> 
-#> # A tabxplor tab: 4 × 6
-#>   race   `1-Democrat` `2-Independent, other` `3-Republican` `NA`  Total
-#>   <fct>           <n>                    <n>            <n>  <n>    <n>
-#> 1 White         6 390                  3 365          6 546   94 16 395
-#> 2 Black         2 344                    513            236   36  3 129
-#> 3 Other           945                    634            355   25  1 959
-#> 4 Total         9 679                  4 512          7 137  155 21 483
-#> # contribution to Chi2 (vs the mean): ×10 ×5 ×2 ×1 ×1 ×2 ×5 ×10
-```
+[TABLE]
 
 ``` r
 # tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns
@@ -747,6 +425,23 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be
 composed.
+
+## Hover tooltips (html tables)
+
+Every html table carries per-cell hover **tooltips** with the numbers
+behind the cell: the unweighted count, the difference from the
+reference, the ratio, the confidence interval… They are on by default in
+the Viewer and in reports — this vignette only switched them off
+document-wide with `options(tabxplor.tab_kable_tooltips = FALSE)`, to
+keep the page light. Hover the cells of the table below, where they are
+switched back on with `tooltips = TRUE`:
+
+``` r
+tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+  tab_html(tooltips = TRUE)
+```
+
+[TABLE]
 
 **A note on weights.** With a weight (`wt =`), every proportion or mean
 is weighted, but by default the sample size behind the confidence
@@ -785,16 +480,18 @@ tab_export(tabs, theme = "auto") # HTML that follows the reader's light/dark mod
   during export using `transpose = TRUE` :
 
 ``` r
-tab(gss_simple, party3, c(race, relig, tvhours), pct = "row") |>
-  tab_export(transpose = TRUE)
+tab(gss_simple, party3, c(race, tvhours), pct = "row") |>
+  tab_html(transpose = TRUE)
 ```
+
+[TABLE]
 
 - **One stylesheet for a whole document.** In an `.Rmd`/`.qmd` report,
   [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
-  writes the colour CSS once and every later
-  [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
-  emits only classes, so a single `theme` — including `"auto"`, which
-  follows the reader’s light/dark mode — styles every table at once:
+  writes the colour CSS once and every later table emits only classes,
+  so a single `theme` — including `"auto"`, which follows the reader’s
+  light/dark mode — styles every table at once. This very vignette does
+  exactly that (with `theme = "light"`):
 
 ``` r
 options(tabxplor.tab_kable_css = FALSE)
@@ -821,15 +518,7 @@ tab(gss_simple, race, marital, pct = "row") |>
   arrange(desc(Married))
 ```
 
-``` r-output
-#> # A tabxplor tab: 4 × 8
-#>   race  Married Separated Divorced Widowed `Never married`  `NA`           Total
-#>   <cha>  <row%>    <row%>   <row%>  <row%>          <row%> <row>          <row%>
-#> 1 White     51%        3%      16%      9%             21%    0% 100% (n=16 395)
-#> 2 Other     48%        6%      11%      4%             32%    0% 100% (n= 1 959)
-#> 3 Black     28%        6%      16%      8%             42%    0% 100% (n= 3 129)
-#> 4 Total     47%        3%      16%      8%             25%    0% 100% (n=21 483)
-```
+[TABLE]
 
 **Titling and annotating.** `subtext =` prints one or more legend lines
 under a table (a data source, a note).
@@ -841,6 +530,10 @@ exporter uses it as the table title:
 tab(gss_simple, race, marital, pct = "row", subtext = "Source: GSS, 2000-2014") |>
   set_caption("Custom title")
 ```
+
+Custom title
+
+[TABLE]
 
 ## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
 
@@ -884,20 +577,24 @@ Total row or Total column):
 | mean | `ratio` | cell mean / reference mean | robust ratio-of-means |
 
 Alternative interval methods (see
-[`?tab_ci`](https://bricenocenti.github.io/tabxplor/reference/tab_ci.md)): -
-`method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage
-difference; - `method_mean_diff = "student"` (pooled, the OLS two-group
-interval) for a mean difference; - `method_mean_ratio = "quasipoisson"`
-or `"poisson"` for a mean ratio. - The relative-risk
-(`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no
-alternative. - A mean **difference** is colored **standardized** —
-Glass’s Δ, the difference divided by the reference’s standard deviation
-— so the `mean_diff` color breaks are read in SD units, unless the user
-provides a custom break scale. - For a factor with **3 or more levels**,
-the odds ratio (and its interval) compares each level to the `ref2`
-baseline level : it is a relative risk ratio (RRR) (the same observed
-quantity that is modelised by a multinomial logistic regression). The OR
-interval is computed only when `color_signif` or `stars` needs it.
+[`?tab_ci`](https://bricenocenti.github.io/tabxplor/reference/tab_ci.md)):
+
+- `method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage
+  difference;
+- `method_mean_diff = "student"` (pooled, the OLS two-group interval)
+  for a mean difference;
+- `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio.
+- The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf)
+  intervals have no alternative.
+- A mean **difference** is colored **standardized** — Glass’s Δ, the
+  difference divided by the reference’s standard deviation — so the
+  `mean_diff` color breaks are read in SD units, unless the user
+  provides a custom break scale.
+- For a factor with **3 or more levels**, the odds ratio (and its
+  interval) compares each level to the `ref2` baseline level : it is a
+  relative risk ratio (RRR) (the same observed quantity that is
+  modelised by a multinomial logistic regression). The OR interval is
+  computed only when `color_signif` or `stars` needs it.
 
 **Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare
 each cell to 0 % (or a mean of 0), *not* to a reference:
@@ -912,20 +609,23 @@ purely descriptive: they carry **no significance and no stars**.
 `method_cell` chooses `"wilson"` (default) or `"wald"` for percentages;
 a mean cell interval is always the one-sample Student *t*.
 
-**`color_signif` turns that interval into a coloring policy.** -
-`"ignore"` colors **every** cell by its **observed effect** size, for
-example the observed difference compared to the Total row. Grey cells
-have an observed effect below the threshold (for example, differences of
-less than ±5 points of percentages). - `"grey_non_signif"` and
-`"guaranteed_effect"` both color **only significant cells**, but differ
-in the *intensity basis*: + `grey_non_signif` colors by the **observed**
-effect, like “ignore”, greying out small deviations, but it also **greys
-out any large deviation that turns to be non-significant**. Ideal for
-large samples. + `guaranteed_effect` colors by the **guaranteed** effect
-— the confidence-bound (CI-floor), the **smaller deviation that is
-assured at a given confidence level** (default 95%) — so its colors are
-dimmer and conservative, but **all significative differences are
-colored**, which is ideal for small samples.
+**`color_signif` turns that interval into a coloring policy.**
+
+- `"ignore"` colors **every** cell by its **observed effect** size, for
+  example the observed difference compared to the Total row. Grey cells
+  have an observed effect below the threshold (for example, differences
+  of less than ±5 points of percentages).
+- `"grey_non_signif"` and `"guaranteed_effect"` both color **only
+  significant cells**, but differ in the *intensity basis*:
+  - `grey_non_signif` colors by the **observed** effect, like “ignore”,
+    greying out small deviations, but it also **greys out any large
+    deviation that turns to be non-significant**. Ideal for large
+    samples.
+  - `guaranteed_effect` colors by the **guaranteed** effect — the
+    confidence-bound (CI-floor), the **smaller deviation that is assured
+    at a given confidence level** (default 95%) — so its colors are
+    dimmer and conservative, but **all significative differences are
+    colored**, which is ideal for small samples.
 
 | type | color | `="ignore"` | `="grey_non_signif"` | `="guaranteed_effect"` |
 |----|----|----|----|----|

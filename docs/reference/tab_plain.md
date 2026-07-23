@@ -215,6 +215,23 @@ tab_plain(
   numeric vectors (not fmt). Useful, for example, to pass the table to
   correspondence analysis with FactoMineR.
 
+- conf_level:
+
+  The confidence level used for the odds-ratio confidence intervals
+  (only computed when `OR` is requested and `stars` or `color_signif`
+  ask for them), as a single numeric between 0 and 1. Default to 0.95.
+
+- stars:
+
+  Set to `TRUE` to compute the significance stars attached to the
+  odds-ratio confidence intervals (with `OR`).
+
+- color_signif:
+
+  How significance interacts with `color` (with `OR`): `"ignore"`
+  (default), `"grey_non_signif"` or `"guaranteed_effect"`. See
+  [`tab`](https://bricenocenti.github.io/tabxplor/reference/tab.md).
+
 - .fine, .by_table:
 
   Internal. `.fine` is a pre-computed count-aggregate to roll up from

@@ -15,7 +15,7 @@ x[i, j, drop = FALSE]
 
   A tabxplor_grouped_tab object.
 
-- i, j, ...:
+- i, j:
 
   Indices
 

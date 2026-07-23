@@ -187,21 +187,21 @@ cat(tab_css(theme = "auto"))
 #>   .g2{color:#EEEEEE;}
 #>   .tabxplor-caption{color:#FFFFFF;}
 #>   .p1{color:#028282;}
-#>   .p2{color:#018BC1;}
+#>   .p2{color:#0286B1;}
 #>   .p3{color:#4687D8;}
 #>   .p4{color:#6987FF;}
 #>   .m1{color:#867002;}
 #>   .m2{color:#B87501;}
 #>   .m3{color:#EC6F02;}
 #>   .m4{color:#FF626B;}
-#>   .o1{background-color:#001B1B;}
-#>   .o2{background-color:#002537;}
-#>   .o3{background-color:#132D5C;}
-#>   .o4{background-color:#17226D;}
-#>   .u1{background-color:#1C1600;}
-#>   .u2{background-color:#321C00;}
-#>   .u3{background-color:#4C1F00;}
-#>   .u4{background-color:#6B141F;}
+#>   .o1{background-color:#002828;}
+#>   .o2{background-color:#012D3F;}
+#>   .o3{background-color:#122E5D;}
+#>   .o4{background-color:#202E7A;}
+#>   .u1{background-color:#292100;}
+#>   .u2{background-color:#3B2300;}
+#>   .u3{background-color:#4F2100;}
+#>   .u4{background-color:#720119;}
 #> }
 #> body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab{color:#000000;background:#ffffff;}
 #> body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td{border-color:#000000;}
@@ -232,21 +232,21 @@ cat(tab_css(theme = "auto"))
 #> body.quarto-dark .g2,[data-bs-theme=dark] .g2,[data-theme=dark] .g2,html.dark .g2{color:#EEEEEE;}
 #> body.quarto-dark .tabxplor-caption,[data-bs-theme=dark] .tabxplor-caption,[data-theme=dark] .tabxplor-caption,html.dark .tabxplor-caption{color:#FFFFFF;}
 #> body.quarto-dark .p1,[data-bs-theme=dark] .p1,[data-theme=dark] .p1,html.dark .p1{color:#028282;}
-#> body.quarto-dark .p2,[data-bs-theme=dark] .p2,[data-theme=dark] .p2,html.dark .p2{color:#018BC1;}
+#> body.quarto-dark .p2,[data-bs-theme=dark] .p2,[data-theme=dark] .p2,html.dark .p2{color:#0286B1;}
 #> body.quarto-dark .p3,[data-bs-theme=dark] .p3,[data-theme=dark] .p3,html.dark .p3{color:#4687D8;}
 #> body.quarto-dark .p4,[data-bs-theme=dark] .p4,[data-theme=dark] .p4,html.dark .p4{color:#6987FF;}
 #> body.quarto-dark .m1,[data-bs-theme=dark] .m1,[data-theme=dark] .m1,html.dark .m1{color:#867002;}
 #> body.quarto-dark .m2,[data-bs-theme=dark] .m2,[data-theme=dark] .m2,html.dark .m2{color:#B87501;}
 #> body.quarto-dark .m3,[data-bs-theme=dark] .m3,[data-theme=dark] .m3,html.dark .m3{color:#EC6F02;}
 #> body.quarto-dark .m4,[data-bs-theme=dark] .m4,[data-theme=dark] .m4,html.dark .m4{color:#FF626B;}
-#> body.quarto-dark .o1,[data-bs-theme=dark] .o1,[data-theme=dark] .o1,html.dark .o1{background-color:#001B1B;}
-#> body.quarto-dark .o2,[data-bs-theme=dark] .o2,[data-theme=dark] .o2,html.dark .o2{background-color:#002537;}
-#> body.quarto-dark .o3,[data-bs-theme=dark] .o3,[data-theme=dark] .o3,html.dark .o3{background-color:#132D5C;}
-#> body.quarto-dark .o4,[data-bs-theme=dark] .o4,[data-theme=dark] .o4,html.dark .o4{background-color:#17226D;}
-#> body.quarto-dark .u1,[data-bs-theme=dark] .u1,[data-theme=dark] .u1,html.dark .u1{background-color:#1C1600;}
-#> body.quarto-dark .u2,[data-bs-theme=dark] .u2,[data-theme=dark] .u2,html.dark .u2{background-color:#321C00;}
-#> body.quarto-dark .u3,[data-bs-theme=dark] .u3,[data-theme=dark] .u3,html.dark .u3{background-color:#4C1F00;}
-#> body.quarto-dark .u4,[data-bs-theme=dark] .u4,[data-theme=dark] .u4,html.dark .u4{background-color:#6B141F;}
+#> body.quarto-dark .o1,[data-bs-theme=dark] .o1,[data-theme=dark] .o1,html.dark .o1{background-color:#002828;}
+#> body.quarto-dark .o2,[data-bs-theme=dark] .o2,[data-theme=dark] .o2,html.dark .o2{background-color:#012D3F;}
+#> body.quarto-dark .o3,[data-bs-theme=dark] .o3,[data-theme=dark] .o3,html.dark .o3{background-color:#122E5D;}
+#> body.quarto-dark .o4,[data-bs-theme=dark] .o4,[data-theme=dark] .o4,html.dark .o4{background-color:#202E7A;}
+#> body.quarto-dark .u1,[data-bs-theme=dark] .u1,[data-theme=dark] .u1,html.dark .u1{background-color:#292100;}
+#> body.quarto-dark .u2,[data-bs-theme=dark] .u2,[data-theme=dark] .u2,html.dark .u2{background-color:#3B2300;}
+#> body.quarto-dark .u3,[data-bs-theme=dark] .u3,[data-theme=dark] .u3,html.dark .u3{background-color:#4F2100;}
+#> body.quarto-dark .u4,[data-bs-theme=dark] .u4,[data-theme=dark] .u4,html.dark .u4{background-color:#720119;}
 #> </style>
 cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
 #> .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}

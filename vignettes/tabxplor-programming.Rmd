@@ -282,7 +282,6 @@ Console, stats and paths:
 
 - `tabxplor.console_bold` — embolden reference / total / coloured cells (auto-detected per editor).
 - `tabxplor.signif_levels` / `tabxplor.signif_labels` — the p-value cut-offs and the star labels.
-- `tabxplor.totcol_range` — how a Total column prints when the column variables have different bases.
 - `tabxplor.plot_num_font` — `tab_plot()`'s number font; `tabxplor.export_dir` — the default export directory.
 
 Performance and integration:

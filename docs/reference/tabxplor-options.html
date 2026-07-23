@@ -15,7 +15,7 @@ relevant function, which always wins over the option."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -23,8 +23,7 @@ relevant function, which always wins over the option."></head><body>
     </button>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
-      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
-<li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+      <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
@@ -36,8 +35,7 @@ relevant function, which always wins over the option."></head><body>
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
-      </ul><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
-<li class="nav-item"><form class="form-inline" role="search">
+      </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/BriceNocenti/tabxplor/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
@@ -67,7 +65,10 @@ relevant function, which always wins over the option.</p>
 
 
 <dl><dt><code>tabxplor.print</code></dt>
-<dd><p><code>"console"</code> (default) or <code>"kable"</code>: how a table auto-prints.</p></dd>
+<dd><p><code>"console"</code> (default) or <code>"html"</code>: how a table auto-prints.
+<code>"html"</code> renders the <code><a href="tab_html.html">tab_html()</a></code> table (in the Viewer pane in RStudio/Positron, and
+as a real html table in rmarkdown/Quarto documents) — recommended when you work in an
+IDE with a Viewer. <code>"kable"</code> is an accepted synonym of <code>"html"</code> (the pre-2.0.0 name).</p></dd>
 
 <dt><code>tabxplor.stars</code></dt>
 <dd><p><code>FALSE</code> (default): whether cells show significance stars
@@ -82,11 +83,6 @@ relevant function, which always wins over the option.</p>
 <dt><code>tabxplor.ci_print</code></dt>
 <dd><p><code>"ci"</code> (default) shows the <code>[inf; sup]</code> interval; <code>"moe"</code> shows the
 larger half-width (margin of error).</p></dd>
-
-<dt><code>tabxplor.totcol_range</code></dt>
-<dd><p>how a Total column's in-cell base is shown when a table's column
-variables have differing bases (e.g. <code>na = "drop"</code>): <code>"off"</code> (default) each row's own base;
-<code>"range"</code> the per-row <code>[min;max]</code>; <code>"min"</code> the smallest (safest) base.</p></dd>
 
 <dt><code>tabxplor.var_names</code></dt>
 <dd><p>which variable names the exporters annotate: <code>"both"</code> (default),
@@ -139,19 +135,6 @@ to <code>"light"</code>.</p></dd>
 <dd><p>which one-way ANOVA F is shown for mean columns: <code>"welch"</code> (default,
 robust) or <code>"classic"</code> (pooled variance). Both are always stored in the <code>test</code> attribute.</p></dd>
 
-<dt><code>tabxplor.test_lines</code></dt>
-<dd><p>how many crosstab test rows the exporters (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_html()</a></code>,
-<code><a href="tab_xl.html">tab_xl()</a></code>) append: <code>"summary"</code> (default: p-value + effect size), <code>"all"</code> (+ the raw statistic),
-<code>"stat"</code> (p-value + statistic), or <code>"pvalue"</code> (the single p-value row). The p-value row name states
-the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
-V, eta2"). N is never added – it is already shown by <code>add_n</code>. The console summary block always
-shows N + p-value + effect size.</p></dd>
-
-<dt><code>tabxplor.legend_style</code></dt>
-<dd><p>the colour-legend style in exports (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_kable()</a></code>,
-<code><a href="tab_xl.html">tab_xl()</a></code>, <code><a href="tab_plot.html">tab_plot()</a></code>): <code>"prose"</code> (default, full sentences) or <code>"terse"</code> (the compact
-one-line form the console uses). The console itself is always terse.</p></dd>
-
 <dt><code>tabxplor.kish_neff</code></dt>
 <dd><p><code>FALSE</code> by default (weighted estimate, raw unweighted n). Set to
 <code>TRUE</code> to replace that raw n with Kish's effective sample size <code>n_eff = (sum w)^2 / sum(w^2)</code>
@@ -171,6 +154,19 @@ with <code>wt =</code>/<code>strata =</code>/<code>ids =</code>, or pass a <code
 <dd><p>confidence level for the intervals and significance tests, default
 <code>0.95</code>. The per-call <code>conf_level =</code> argument of <code><a href="tab.html">tab()</a></code>, <code><a href="tab_num.html">tab_num()</a></code>, <code><a href="tab_ci.html">tab_ci()</a></code> and <code><a href="tab_reg.html">tab_reg()</a></code>
 overrides it.</p></dd>
+
+<dt><code>tabxplor.legend_style</code></dt>
+<dd><p>the colour-legend style in exports (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_kable()</a></code>,
+<code><a href="tab_xl.html">tab_xl()</a></code>, <code><a href="tab_plot.html">tab_plot()</a></code>): <code>"prose"</code> (default, full sentences) or <code>"terse"</code> (the compact
+one-line form the console uses). The console itself is always terse.</p></dd>
+
+<dt><code>tabxplor.test_lines</code></dt>
+<dd><p>how many crosstab test rows the exporters (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_html()</a></code>,
+<code><a href="tab_xl.html">tab_xl()</a></code>) append: <code>"summary"</code> (default: p-value + effect size), <code>"all"</code> (+ the raw statistic),
+<code>"stat"</code> (p-value + statistic), or <code>"pvalue"</code> (the single p-value row). The p-value row name states
+the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+V, eta2"). N is never added – it is already shown by <code>add_n</code>. The console summary block always
+shows N + p-value + effect size.</p></dd>
 
 
 </dl></div>
@@ -193,6 +189,11 @@ kableExtra engine's output (a legacy-engine knob).</p></dd>
 
 <dt><code>tabxplor.kable_html_font</code></dt>
 <dd><p>the CSS font stack for the kableExtra engine.</p></dd>
+
+<dt><code>tabxplor.tab_kable_tooltips</code></dt>
+<dd><p><code>TRUE</code> (default): show the per-cell hover tooltips
+(counts, confidence intervals, differences...) in html tables. Set <code>FALSE</code> once per
+document when every table auto-prints and tooltips are unwanted. Per-call <code>tooltips =</code>.</p></dd>
 
 <dt><code>tabxplor.kable_popover</code></dt>
 <dd><p><code>FALSE</code> (default): use click popovers instead of hover tooltips.</p></dd>
@@ -248,8 +249,8 @@ path).</p></dd>
 
 <dl><dt><code>tabxplor.parallel</code></dt>
 <dd><p><code>FALSE</code> (default): build the per-<code>row_var</code> tables of one <code><a href="tab.html">tab()</a></code> call
-on a background worker pool (needs the suggested <code>mirai</code> package). <code>TRUE</code> = auto workers, an
-integer = that many daemons. Per-call <code>parallel =</code>. Release the pool with <code><a href="tab_parallel_stop.html">tab_parallel_stop()</a></code>.</p></dd>
+on parallel CPU cores (needs the <code>mirai</code> package). <code>TRUE</code> = auto select number of cores,
+integer = that many cores. Release the pool with <code><a href="tab_parallel_stop.html">tab_parallel_stop()</a></code>.</p></dd>
 
 <dt><code>tabxplor.parallel_min</code></dt>
 <dd><p><code>2L</code> (default): the smallest <code>row_var</code> count worth dispatching

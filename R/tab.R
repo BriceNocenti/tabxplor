@@ -6809,23 +6809,26 @@ tab_is_or_display <- function(tab) {
 # add_n base shows in the Total cell as an in-cell composite `{pct} (n={n})` (via the Phase-10i-A
 # display grammar), reading the base from the Total column's OWN `n` field. Phase 17g: text no longer
 # builds the separate `n` COLUMN at all (tab_add_n_pct skips it), so the leading select(-any_of("n"))
-# is now a no-op guard (it still runs for any stray column). Default (`tabxplor.totcol_range = "off"`):
-# each Total cell
-# shows its OWN base `{n}`. Option `"range"` / `"min"`: the cross-col_var base via tab_totcol_range()
-# (a per-row literal `[min;max]` / smallest), for tables whose col_vars have differing NA bases.
+# is now a no-op guard (it still runs for any stray column). Each Total cell shows its OWN base
+# `{n}`. DORMANT: the retired option `tabxplor.totcol_range` ("range"/"min") once swapped in the
+# cross-col_var base via tab_totcol_range() (a per-row literal `[min;max]` / smallest) -- see the
+# commented branch below and the DORMANT note in utils.R .onLoad.
 # Phase 16c: for an OR/RRR table the "100%" is dropped -> the cell shows only `n={n}` (the base).
 # NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
 tab_fold_addn_incell <- function(tab) {
   tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_type(tab) == "row" &
                                      get_col_var(tab) != "no_col_var"])
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
-  style <- getOption("tabxplor.totcol_range", "off")
   is_or <- tab_is_or_display(tab)
 
-  rng <- if (!identical(style, "off")) {
-    fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
-    tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)), style = style)
-  } else NULL
+  # DORMANT (possible future implementation): the retired tabxplor.totcol_range option.
+  # Re-enabling = uncomment these lines (and the option seed in utils.R .onLoad):
+  # style <- getOption("tabxplor.totcol_range", "off")
+  # rng <- if (!identical(style, "off")) {
+  #   fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
+  #   tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)), style = style)
+  # } else NULL
+  rng <- NULL
 
   tmpl <- if (is_or) {                                # OR/RRR: show only the base n, drop the "100%"
     if (is.null(rng)) rep("n={n}", nrow(tab))

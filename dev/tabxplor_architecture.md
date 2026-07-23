@@ -611,7 +611,9 @@ reads a consistent shape), and the bold-row set (`tab_bold_rows()`). The derive-
 LOCAL to each exporter (md keeps+blanks tab_vars and uses `str_trunc` → `drop_tab_vars=FALSE`,
 `wrap=NULL`; kable's knitr `*`-escape + `row_spec`/`column_spec`; plot's ggpubr render; the divergent
 `new_col_var` transition index). `tab_totcol_range()` (the `[min;max]` total-column base pre-pass, §10)
-is built and populated into the model but INERT until consumed (10e/10f). Byte-identical to the
+is DORMANT: the driving option `tabxplor.totcol_range` was retired pre-2.0.0 release (its per-row
+literal templates broke the composite-token padding; `range_totcol` had no consumer) — the helper is
+kept for a possible future implementation, exercised directly by tests. Byte-identical to the
 pre-Phase-10d exporters (golden/color-golden/md-snapshot/A/B locked). `tab_plot()` is soft-deprecated
 (`lifecycle` superseded) here.
 
@@ -931,7 +933,6 @@ so it is aliased, never renamed). Aliases are silent (no deprecation) and unseed
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `tabxplor.totcol_range` | `"off"` | Total-column in-cell base when col_var bases differ: off/range/min |
 | `tabxplor.color_style_type` | `"text"` | Color type: "text" or "bg" |
 | `tabxplor.color_style_theme` | auto-detect | "light" or "dark" console theme (alias `console_theme`) |
 | `tabxplor.color_html_24_bit` | `"no"` | "green_red", "blue_red", or "no" |

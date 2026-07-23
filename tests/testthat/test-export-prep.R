@@ -1,5 +1,5 @@
 # PURPOSE: Lock the Phase 10d shared exporter-prep (tab_export_prep + the render-model + ann +
-#          tab_check_same_col_vars + tab_bold_rows + tab_totcol_range). The byte-identity of the
+#          tab_check_same_col_vars + tab_bold_rows + tab_totcol_range [DORMANT]). The byte-identity of the
 #          kable/md/plot OUTPUT is covered by test-golden.R / test-color-golden.R / test-tab_md.R;
 #          this file locks the prep's INTERNAL derive-once quantities and the degrade / base-list split.
 # ROLE: Phase 10d.
@@ -147,13 +147,20 @@ testthat::test_that("tab_bold_rows: no discriminating column -> integer(0) (no a
   testthat::expect_identical(tabxplor:::tab_bold_rows(disc), 3L)
 })
 
-# === SECTION: tab_totcol_range (block B, inert in Part 1) ====================
+# === SECTION: tab_totcol_range (DORMANT helper, exercised directly) ==========
+# The driving option tabxplor.totcol_range was retired pre-2.0.0 release (no consumer of the
+# render-model range_totcol; the console fold branch is commented out). The helper is kept for a
+# possible future implementation, so these tests call it DIRECTLY to keep its math honest.
+
+totcol_range_of <- function(tt) {
+  fmt_cols <- which(purrr::map_lgl(tt, tabxplor:::is_fmt))
+  tabxplor:::tab_totcol_range(tt, fmt_cols, get_col_var(tt), which(is_totcol(tt)))
+}
 
 testthat::test_that("tab_totcol_range is scalar when col_var bases are equal (na='keep')", {
-  rd <- tabxplor:::tab_export_prep(t_multi, backend = "kable", wrap = NULL)$tables[[1]]
-  rng <- rd$range_totcol
+  rng <- totcol_range_of(t_multi)
   testthat::expect_named(rng, c("col", "text", "differ"))
-  testthat::expect_length(rng$text, nrow(rd$tab))
+  testthat::expect_length(rng$text, nrow(t_multi))
   testthat::expect_false(any(rng$differ))  # na='keep' -> every col_var's base = full N
 })
 
@@ -165,10 +172,15 @@ testthat::test_that("tab_totcol_range yields [min;max] when bases differ (na='dr
     q2 = factor(sample(c("yes", "no", NA), 400, TRUE, prob = c(0.4, 0.4, 0.2)))
   )
   tt <- tab(d, g, c(q1, q2), pct = "row", na = "drop")
-  rd <- tabxplor:::tab_export_prep(tt, backend = "kable", wrap = NULL)$tables[[1]]
-  rng <- rd$range_totcol
+  rng <- totcol_range_of(tt)
   testthat::expect_true(any(rng$differ))
   testthat::expect_true(any(grepl("^\\[.*;.*\\]$", rng$text[rng$differ])))
+})
+
+testthat::test_that("range_totcol is a dormant NULL slot in the render model", {
+  rd <- tabxplor:::tab_export_prep(t_multi, backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_true("range_totcol" %in% names(rd))
+  testthat::expect_null(rd$range_totcol)
 })
 
 

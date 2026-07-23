@@ -631,48 +631,119 @@ set_color(f, "contrib")
 
 tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
             other_if_less_than = 5)
-#> Error in dplyr::mutate(dplyr::ungroup(dplyr::mutate(dplyr::group_by(data,     !!!tab_vars), dplyr::across(tidyselect::all_of(as.character(row_vars)),     ~forcats::fct_lump_min(., other_if_less_than, other_level = other_level)))),     dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(.x,         purrr::discard(unique(append(levels(dplyr::pull(data,             dplyr::cur_column())), other_level)), function(v) !v %in%             levels(.x))))): ℹ In argument: `dplyr::across(...)`.
-#> Caused by error in `across()`:
-#> ! Can't compute column `sex`.
-#> Caused by error in `purrr::discard()`:
-#> ℹ In index: 1.
-#> Caused by error in `.fn()`:
-#> ! object '.x' not found
 
 # To identify the total columns, and work with them :
 is_totcol(tabs)
-#> Error: object 'tabs' not found
+#> gender    sex  black  brown   none Others  Total 
+#>  FALSE  FALSE  FALSE  FALSE  FALSE  FALSE   TRUE 
 tabs |> mutate(across(where(is_totcol), ~ "total column"))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 7
+#> # Groups:         gender [3]
+#>   gender    sex              black  brown   none Others Total       
+#>   <fct>     <fct>           <row%> <row%> <row%> <row%> <chr>       
+#> 1 feminine  female             19%    31%    31%    19% total column
+#> 2 feminine  Others              0%     0%   100%     0% total column
+#> 3 feminine  Total feminine     18%    29%    35%    18% total column
+#> 
+#> 4 masculine male               15%    19%    49%    17% total column
+#> 5 masculine none                0%     0%   100%     0% total column
+#> 6 masculine Others              0%     0%     0%     0% total column
+#> 7 masculine Total masculine    15%    18%    51%    16% total column
+#> 
+#> 8 Ensemble  Total Ensemble     15%    21%    47%    17% total column
 
 # To identify the total rows, and work with them :
 is_totrow(tabs)
-#> Error: object 'tabs' not found
+#> [1] FALSE FALSE  TRUE FALSE FALSE FALSE  TRUE  TRUE
 tabs |>
   mutate(across(
     where(is_fmt),
     ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
   ))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 7
+#> # Groups:         gender [3]
+#>   gender    sex             black          brown          none      Others Total
+#>   <fct>     <fct>           <chr>          <chr>          <chr>     <chr>  <chr>
+#> 1 feminine  female          normal_cell    normal_cell    normal_c… norma… norm…
+#> 2 feminine  Others          normal_cell    normal_cell    normal_c… norma… norm…
+#> 3 feminine  Total feminine  into_total_row into_total_row into_tot… into_… into…
+#> 
+#> 4 masculine male            normal_cell    normal_cell    normal_c… norma… norm…
+#> 5 masculine none            normal_cell    normal_cell    normal_c… norma… norm…
+#> 6 masculine Others          normal_cell    normal_cell    normal_c… norma… norm…
+#> 7 masculine Total masculine into_total_row into_total_row into_tot… into_… into…
+#> 
+#> 8 Ensemble  Total Ensemble  into_total_row into_total_row into_tot… into_… into…
 
 # To identify the total tables, and work with them :
 tottabs <- is_tottab(tabs)
-#> Error: object 'tabs' not found
 tabs |> tibble::add_column(tottabs) |>
   mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 9
+#> # Groups:         gender [3]
+#>   gender    sex              black  brown  none Others       Total tottabs total
+#>   <fct>     <fct>           <row%> <row%> <row> <row%>      <row%> <lgl>   <chr>
+#> 1 feminine  female             19%    31%   31%    19% 100% (n=16) FALSE   norm…
+#> 2 feminine  Others              0%     0%  100%     0% 100% (n= 1) FALSE   norm…
+#> 3 feminine  Total feminine     18%    29%   35%    18% 100% (n=17) FALSE   norm…
+#> 
+#> 4 masculine male               15%    19%   49%    17% 100% (n=59) FALSE   norm…
+#> 5 masculine none                0%     0%  100%     0% 100% (n= 2) FALSE   norm…
+#> 6 masculine Others              0%     0%    0%     0%   0% (n= 0) FALSE   norm…
+#> 7 masculine Total masculine    15%    18%   51%    16% 100% (n=61) FALSE   norm…
+#> 
+#> 8 Ensemble  Total Ensemble     15%    21%   47%    17% 100% (n=78) TRUE    part…
 
 # To access the displayed numbers, as numeric vectors :
 tabs |> mutate(across(where(is_fmt), get_num))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 7
+#> # Groups:         gender [3]
+#>   gender    sex             black brown  none Others Total
+#>   <fct>     <fct>           <dbl> <dbl> <dbl>  <dbl> <dbl>
+#> 1 feminine  female          0.188 0.312 0.312  0.188     1
+#> 2 feminine  Others          0     0     1      0         1
+#> 3 feminine  Total feminine  0.176 0.294 0.353  0.176     1
+#> 
+#> 4 masculine male            0.153 0.186 0.492  0.169     1
+#> 5 masculine none            0     0     1      0         1
+#> 6 masculine Others          0     0     0      0         0
+#> 7 masculine Total masculine 0.148 0.180 0.508  0.164     1
+#> 
+#> 8 Ensemble  Total Ensemble  0.154 0.205 0.474  0.167     1
 
 # To access the displayed numbers, as character vectors (without colors) :
 tabs |> mutate(across(where(is_fmt), format))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 7
+#> # Groups:         gender [3]
+#>   gender    sex             black brown none  Others Total
+#>   <fct>     <fct>           <chr> <chr> <chr> <chr>  <chr>
+#> 1 feminine  female          19%   31%   31%   19%    100% 
+#> 2 feminine  Others          0%    0%    100%  0%     100% 
+#> 3 feminine  Total feminine  18%   29%   35%   18%    100% 
+#> 
+#> 4 masculine male            15%   19%   49%   17%    100% 
+#> 5 masculine none            0%    0%    100%  0%     100% 
+#> 6 masculine Others          0%    0%    0%    0%     0%   
+#> 7 masculine Total masculine 15%   18%   51%   16%    100% 
+#> 
+#> 8 Ensemble  Total Ensemble  15%   21%   47%   17%    100% 
 
 # To access the (non-displayed) differences of the cells percentages from totals :
 tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
-#> Error: object 'tabs' not found
+#> # A tabxplor tab: 8 × 7
+#> # Groups:         gender [3]
+#>   gender    sex                black    brown    none   Others Total
+#>   <fct>     <fct>              <dbl>    <dbl>   <dbl>    <dbl> <dbl>
+#> 1 feminine  female           0.0110   0.0184  -0.0404  0.0110      0
+#> 2 feminine  Others          -0.176   -0.294    0.647  -0.176       0
+#> 3 feminine  Total feminine   0        0        0       0           0
+#> 
+#> 4 masculine male             0.00500  0.00611 -0.0167  0.00556     0
+#> 5 masculine none            -0.148   -0.180    0.492  -0.164       0
+#> 6 masculine Others          -0.148   -0.180   -0.508  -0.164      -1
+#> 7 masculine Total masculine  0        0        0       0           0
+#> 
+#> 8 Ensemble  Total Ensemble   0        0        0       0           0
 
 
 # To do more complex operations, like creating a new column with standard deviation and

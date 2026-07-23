@@ -13,7 +13,13 @@ function, which always wins over the option.
 
 - `tabxplor.print`:
 
-  `"console"` (default) or `"kable"`: how a table auto-prints.
+  `"console"` (default) or `"html"`: how a table auto-prints. `"html"`
+  renders the
+  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
+  table (in the Viewer pane in RStudio/Positron, and as a real html
+  table in rmarkdown/Quarto documents) — recommended when you work in an
+  IDE with a Viewer. `"kable"` is an accepted synonym of `"html"` (the
+  pre-2.0.0 name).
 
 - `tabxplor.stars`:
 
@@ -36,13 +42,6 @@ function, which always wins over the option.
 
   `"ci"` (default) shows the `[inf; sup]` interval; `"moe"` shows the
   larger half-width (margin of error).
-
-- `tabxplor.totcol_range`:
-
-  how a Total column's in-cell base is shown when a table's column
-  variables have differing bases (e.g. `na = "drop"`): `"off"` (default)
-  each row's own base; `"range"` the per-row `[min;max]`; `"min"` the
-  smallest (safest) base.
 
 - `tabxplor.var_names`:
 
@@ -106,30 +105,6 @@ function, which always wins over the option.
   robust) or `"classic"` (pooled variance). Both are always stored in
   the `test` attribute.
 
-- `tabxplor.test_lines`:
-
-  how many crosstab test rows the exporters
-  ([`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md),
-  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md),
-  [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md))
-  append: `"summary"` (default: p-value + effect size), `"all"` (+ the
-  raw statistic), `"stat"` (p-value + statistic), or `"pvalue"` (the
-  single p-value row). The p-value row name states the test used
-  ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its
-  measure ("Cramer's V, eta2"). N is never added – it is already shown
-  by `add_n`. The console summary block always shows N + p-value +
-  effect size.
-
-- `tabxplor.legend_style`:
-
-  the colour-legend style in exports
-  ([`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md),
-  [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md),
-  [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md),
-  [`tab_plot()`](https://bricenocenti.github.io/tabxplor/reference/tab_plot.md)):
-  `"prose"` (default, full sentences) or `"terse"` (the compact one-line
-  form the console uses). The console itself is always terse.
-
 - `tabxplor.kish_neff`:
 
   `FALSE` by default (weighted estimate, raw unweighted n). Set to
@@ -172,6 +147,30 @@ function, which always wins over the option.
   [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
   overrides it.
 
+- `tabxplor.legend_style`:
+
+  the colour-legend style in exports
+  ([`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md),
+  [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md),
+  [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md),
+  [`tab_plot()`](https://bricenocenti.github.io/tabxplor/reference/tab_plot.md)):
+  `"prose"` (default, full sentences) or `"terse"` (the compact one-line
+  form the console uses). The console itself is always terse.
+
+- `tabxplor.test_lines`:
+
+  how many crosstab test rows the exporters
+  ([`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md),
+  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md),
+  [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md))
+  append: `"summary"` (default: p-value + effect size), `"all"` (+ the
+  raw statistic), `"stat"` (p-value + statistic), or `"pvalue"` (the
+  single p-value row). The p-value row name states the test used
+  ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its
+  measure ("Cramer's V, eta2"). N is never added – it is already shown
+  by `add_n`. The console summary block always shows N + p-value +
+  effect size.
+
 ## HTML / [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md) export
 
 - `tabxplor.tab_kable_engine`:
@@ -199,6 +198,13 @@ function, which always wins over the option.
 - `tabxplor.kable_html_font`:
 
   the CSS font stack for the kableExtra engine.
+
+- `tabxplor.tab_kable_tooltips`:
+
+  `TRUE` (default): show the per-cell hover tooltips (counts, confidence
+  intervals, differences...) in html tables. Set `FALSE` once per
+  document when every table auto-prints and tooltips are unwanted.
+  Per-call `tooltips =`.
 
 - `tabxplor.kable_popover`:
 
@@ -256,9 +262,9 @@ function, which always wins over the option.
 
   `FALSE` (default): build the per-`row_var` tables of one
   [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
-  call on a background worker pool (needs the suggested `mirai`
-  package). `TRUE` = auto workers, an integer = that many daemons.
-  Per-call `parallel =`. Release the pool with
+  call on parallel CPU cores (needs the `mirai` package). `TRUE` = auto
+  select number of cores, integer = that many cores. Release the pool
+  with
   [`tab_parallel_stop()`](https://bricenocenti.github.io/tabxplor/reference/tab_parallel_stop.md).
 
 - `tabxplor.parallel_min`:

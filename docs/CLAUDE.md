@@ -113,7 +113,12 @@ full statistical metadata, enabling lossless display switching.
     │                              auto-print + Viewer routing); 17g: tab_materialize_extras -> tab_materialize()
     │                              over materialize_specs() (DECLARED list(kind,when,apply): add_n_pct/or_total/
     │                              sd_twin/footer/collapse_totals; mat_add_n_pct/mat_sd_twin applies; add_n `n`
-    │                              COLUMN built xl-ONLY, text folds direct -- no throwaway; collapse = display slice)
+    │                              COLUMN built xl-ONLY, text folds direct -- no throwaway; collapse = display slice);
+    │                              tx_print_html = THE options(tabxplor.print) predicate ("html" taught,
+    │                              "kable" synonym) -> print + knit_print.tabxplor_tab/_grouped_tab render
+    │                              tab_html() (bare tab() chunks knit as live html tables; tooltips option
+    │                              tabxplor.tab_kable_tooltips). pkgdown = ONE English site (_pkgdown.fr.yml
+    │                              + docs/fr + the toggle removed; FR vignette-articles stay in Articles)
     ├── tab_xl.R        (~595 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
     │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
     │                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid
@@ -691,22 +696,35 @@ the weakest link:
 # The .R file:  Sys.setenv(TESTTHAT_CPUS = "8", NOT_CRAN = "true"); devtools::test("~/github/tabxplor")
 ```
 
-⚠ **`OMP_NUM_THREADS=1` is NOT optional, and `TESTTHAT_CPUS=8` alone is
-a trap.** Root-caused 2026-07-16 (second session lost to it).
-`Config/testthat/parallel: true` runs each test file in its own PROCESS,
-and **each process then multi-threads on its own**:
+✅ **Since 2026-07-23 the suite SELF-PINS its threads** —
+`tests/testthat/setup.R` pins data.table (`setDTthreads(1L)`) AND
+BLAS/OpenMP (`RhpcBLASctl::blas_set_num_threads(1L)`, Suggests-guarded —
+the runtime call is the ONLY thing that can pin an already-running
+worker, since OpenBLAS-pthread fixes its count from the env at process
+startup), and `tests/testthat.R` sets `OMP_NUM_THREADS=1` + a non-CRAN
+`TESTTHAT_CPUS` fallback before workers spawn. So
+[`devtools::test()`](https://devtools.r-lib.org/reference/test.html),
+[`devtools::check()`](https://devtools.r-lib.org/reference/check.html),
+GH Actions and CRAN all get 1 thread/worker with no manual env. Keep the
+`OMP_NUM_THREADS=1` prefix anyway (harmless belt for grandchild
+processes and RhpcBLASctl-less setups).
+
+⚠ **The trap this guards against** (root-caused 2026-07-16, second
+session lost to it; hit again by
+[`devtools::check()`](https://devtools.r-lib.org/reference/check.html)
+2026-07-23 before the self-pin): `Config/testthat/parallel: true` runs
+each test file in its own PROCESS, and **each process then multi-threads
+on its own**:
 
 | thread source | per worker | x 8 workers | lever |
 |----|----|----|----|
-| data.table (defaults to 50 % of cores) | 6 | 48 | `setDTthreads(1L)` — now in `tests/testthat/setup.R` |
-| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10 | ~80 | `OMP_NUM_THREADS=1` **in the env before R starts** |
+| data.table (defaults to 50 % of cores) | 6 | 48 | `setDTthreads(1L)` — in `tests/testthat/setup.R` |
+| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10 | ~80 | `RhpcBLASctl` pin in setup.R + `OMP_NUM_THREADS=1` |
 
 **Measured: 165 threads on 12 cores (~14x oversubscribed) -\> the suite
 ran \>26 min instead of ~50 s**, two workers pegged at ~485 % CPU while
 the rest starved and the log went silent for 10 min. With both levers:
-**47 threads, 48.9 s, FAIL 0.** OpenBLAS fixes its thread count at
-**library init**, so `setup.R` is too late for it — it MUST be an env
-var on the `Rscript` command (workers inherit it).
+**47 threads, 48.9 s, FAIL 0.**
 
 **Never run anything else while the suite runs.** A single `Rscript`
 repro uses ~4 cores here; racing it against 8 workers is what turns

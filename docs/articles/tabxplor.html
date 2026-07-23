@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -28,7 +28,6 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
-<li class="active nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
@@ -45,7 +44,6 @@
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
-<li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
@@ -72,210 +70,23 @@
 
     
     
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/BriceNocenti/tabxplor" class="external-link">tabxplor</a></span><span class="op">)</span></span></code></pre></div>
-<p><code>tabxplor</code> helps you <strong>explore data with
-cross-tables, coloring the cells so you can read a table at a
-glance</strong>. Over-represented cells use shades of blue,
-under-represented ones turn red/orange, so patterns jump out without you
-squinting at every number.</p>
-<p>Everything is a <code>tibble</code>, so the result works with the
-usual <code>dplyr</code> verbs, and tables export to Excel, HTML and
-Markdown with their color helpers. Underlying heavy computations run on
-<code>data.table</code></p>
-<p>Throughout this vignette we use <code>gss_simple</code>, a cleaned-up
-version of the General Social Survey (<code><a href="https://forcats.tidyverse.org/reference/gss_cat.html" class="external-link">forcats::gss_cat</a></code>)
-with factors levels merged and reordered.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/gss_cat_data_formatting.html">gss_cat_data_formatting</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<div class="section level2">
-<h2 id="your-first-cross-tables">Your first cross-tables<a class="anchor" aria-label="anchor" href="#your-first-cross-tables"></a>
-</h2>
-<p><code><a href="../reference/tab.html">tab()</a></code> needs a data frame, a <strong>row
-variable</strong> and a <strong>column variable</strong>. By default it
-shows counts:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 7 × 5</span></span>
-<span><span class="co">#&gt;   marital        White Black Other  Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;            &lt;n&gt;   &lt;n&gt;   &lt;n&gt;    &lt;n&gt;</span></span>
-<span><span class="co">#&gt; 1 Married        8 316   869   932 10 117</span></span>
-<span><span class="co">#&gt; 2 Separated        437   196   110    743</span></span>
-<span><span class="co">#&gt; 3 Divorced       2 676   495   212  3 383</span></span>
-<span><span class="co">#&gt; 4 Widowed        1 475   262    70  1 807</span></span>
-<span><span class="co">#&gt; 5 Never married  3 478 1 305   633  5 416</span></span>
-<span><span class="co">#&gt; 6 NA                13     2     2     17</span></span>
-<span><span class="co">#&gt; 7 Total         16 395 3 129 1 959 21 483</span></span></code></pre>
-<p>Add <code>pct = "row"</code> for row percentages (or
-<code>"col"</code> for column percentages). A <strong>Total</strong>
-row/column and a count column (<code>n</code>) are added
-automatically:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 7 × 5</span></span>
-<span><span class="co">#&gt;   marital        White  Black  Other           Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;         &lt;row%&gt; &lt;row%&gt; &lt;row%&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 Married          82%     9%     9% 100% (n=10 117)</span></span>
-<span><span class="co">#&gt; 2 Separated        59%    26%    15% 100% (n=   743)</span></span>
-<span><span class="co">#&gt; 3 Divorced         79%    15%     6% 100% (n= 3 383)</span></span>
-<span><span class="co">#&gt; 4 Widowed          82%    14%     4% 100% (n= 1 807)</span></span>
-<span><span class="co">#&gt; 5 Never married    64%    24%    12% 100% (n= 5 416)</span></span>
-<span><span class="co">#&gt; 6 NA               76%    12%    12% 100% (n=    17)</span></span>
-<span><span class="co">#&gt; 7 Total            76%    15%     9% 100% (n=21 483)</span></span></code></pre>
-<p>When the column variable is <strong>numeric</strong>,
-<code><a href="../reference/tab.html">tab()</a></code> shows its <strong>mean</strong> in each row instead
-of percentages:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">age</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 7 × 2</span></span>
-<span><span class="co">#&gt;   marital            age</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;           &lt;mean&gt;</span></span>
-<span><span class="co">#&gt; 1 Married       49 (σ15)</span></span>
-<span><span class="co">#&gt; 2 Separated     45 (σ13)</span></span>
-<span><span class="co">#&gt; 3 Divorced      51 (σ13)</span></span>
-<span><span class="co">#&gt; 4 Widowed       72 (σ13)</span></span>
-<span><span class="co">#&gt; 5 Never married 34 (σ13)</span></span>
-<span><span class="co">#&gt; 6 NA            52 (σ17)</span></span>
-<span><span class="co">#&gt; 7 Total         47 (σ17)</span></span></code></pre>
-<p>You can pass <strong>several row and column variables at
-once</strong>.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 13 × 7</span></span>
-<span><span class="co">#&gt; # Groups:         row_var [2]</span></span>
-<span><span class="co">#&gt;    row_var levels              `1-Democrat` `2-Independent, other`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;   &lt;fct&gt;                     &lt;row%&gt;                 &lt;row%&gt;</span></span>
-<span><span class="co">#&gt;  1 race    White                        39%                    21%</span></span>
-<span><span class="co">#&gt;  2 race    Black                        76%                    17%</span></span>
-<span><span class="co">#&gt;  3 race    Other                        49%                    33%</span></span>
-<span><span class="co">#&gt;  4 race    Total                        45%                    21%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 relig   1-Protestant                 43%                    17%</span></span>
-<span><span class="co">#&gt;  6 relig   2-Catholic                   46%                    22%</span></span>
-<span><span class="co">#&gt;  7 relig   3-Other christian            42%                    24%</span></span>
-<span><span class="co">#&gt;  8 relig   4-Jewish                     68%                    12%</span></span>
-<span><span class="co">#&gt;  9 relig   5-Buddhist/Hinduist          57%                    29%</span></span>
-<span><span class="co">#&gt; 10 relig   6-Muslim                     66%                    22%</span></span>
-<span><span class="co">#&gt; 11 relig   7-Other                      48%                    29%</span></span>
-<span><span class="co">#&gt; 12 relig   8-None                       50%                    31%</span></span>
-<span><span class="co">#&gt; 13 relig   Total                        45%                    21%</span></span>
-<span><span class="co">#&gt; # ℹ 3 more variables: `3-Republican` &lt;row%&gt;, Total &lt;row%&gt;, tvhours &lt;mean&gt;</span></span></code></pre>
-<p><code>levels = "first"</code> keeps only the first level of each
-column factor, which is handy to display many binary factors, like
-survey questions with multiple answers, all at once, in a compact way
-:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">married</span>, <span class="va">black</span>, <span class="va">income25k</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, levels <span class="op">=</span> <span class="st">"first"</span>, na <span class="op">=</span> <span class="st">"drop"</span>, cleannames <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 9 × 4</span></span>
-<span><span class="co">#&gt;   relig             Married  Black `$25000 or more`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;              &lt;row%&gt; &lt;row%&gt;           &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 Protestant            50%    21%              32%</span></span>
-<span><span class="co">#&gt; 2 Catholic              50%     4%              35%</span></span>
-<span><span class="co">#&gt; 3 Other christian       44%    18%              35%</span></span>
-<span><span class="co">#&gt; 4 Jewish                51%     3%              43%</span></span>
-<span><span class="co">#&gt; 5 Buddhist/Hinduist     51%     5%              47%</span></span>
-<span><span class="co">#&gt; 6 Muslim                53%    34%              32%</span></span>
-<span><span class="co">#&gt; 7 Other                 37%    13%              37%</span></span>
-<span><span class="co">#&gt; 8 None                  37%    11%              37%</span></span>
-<span><span class="co">#&gt; 9 Total                 47%    15%              34%</span></span></code></pre>
-<p>A few other everyday arguments: <code>na = "drop"</code> to drop
-missing values from the base, <code>digits =</code> for the number of
-decimals, and <code>cleannames = TRUE</code> to strip prefixes like
-<code>"1-"</code> from level names. See <code><a href="../reference/tab.html">?tab</a></code> for the full
-list.</p>
-</div>
-<div class="section level2">
-<h2 id="weights">Weights<a class="anchor" aria-label="anchor" href="#weights"></a>
-</h2>
-<p>The argument <code>wt =</code> adds a survey weight. Every percentage
-and mean is then <strong>weighted</strong>, while the sample size behind
-the confidence intervals stays the real, <strong>unweighted</strong>
-number of cases — the honest default basis for uncertainty.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hdv2003</span>, package <span class="op">=</span> <span class="st">"questionr"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">hdv2003</span>, <span class="va">nivetud</span>, <span class="va">occup</span>, wt <span class="op">=</span> <span class="va">poids</span>, pct <span class="op">=</span> <span class="st">"row"</span>, na<span class="op">=</span><span class="st">"drop"</span>, digits <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
-<p>Under <strong>unequal</strong> weights that default interval carries
-no design effect, so it runs a little too narrow. Kish’s <em>effective
-sample size</em> fixes this : it counts each observation by how much it
-really contributes, <code>n_eff = (sum of w)² / (sum of w²)</code>
-(always at most the real <em>n</em>), and uses <code>n_eff</code> in
-place of the raw <em>n</em>. Turn it on and every weighted confidence
-interval in the table — proportions and means alike — widens
-honestly:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.kish_neff <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<p>This is a simple single-stage approximation (it needs the individual
-weights, so it is not available for tables built from pre-aggregated
-counts). A <strong>fully design-based</strong> result — clusters,
-strata, exact standard errors — is available for Chi2 pvalues (factors)
-and ANOVA F pvalues (numeric column variables) only with
-<code>test = "survey"</code> and the related arguments (see the
-<code>test =</code> argument) : confidence intervals are not covered.
-See the <a href="https://CRAN.R-project.org/package=survey" class="external-link">survey</a>
-package for more informations about survey design.
-<code><a href="../reference/tab_reg.html">tab_reg()</a></code> regressions tables with weights always use
-design-effect for standard errors
-(<code><a href="../articles/tabxplor-reg.html">vignette("tabxplor-reg")</a></code>), but the base version only use
-Kish’s effective sample size.</p>
-</div>
-<div class="section level2">
-<h2 id="sub-tables">Sub-tables<a class="anchor" aria-label="anchor" href="#sub-tables"></a>
-</h2>
-<p>Give <code><a href="../reference/tab.html">tab()</a></code> a third variable as <code>tab_vars</code> and
-it builds <strong>one sub-table per group</strong> (here, one per income
-group). The result is <em>grouped</em>: <code>dplyr</code> operations
-then run within each sub-table.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, <span class="va">rincome</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 17 × 6</span></span>
-<span><span class="co">#&gt; # Groups:         rincome [5]</span></span>
-<span><span class="co">#&gt;    rincome           race                    `1-Democrat` `2-Independent, other`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;             &lt;fct&gt;                         &lt;row%&gt;                 &lt;row%&gt;</span></span>
-<span><span class="co">#&gt;  1 1-Lt $10000       White                            38%                    26%</span></span>
-<span><span class="co">#&gt;  2 1-Lt $10000       Black                            67%                    22%</span></span>
-<span><span class="co">#&gt;  3 1-Lt $10000       Other                            49%                    31%</span></span>
-<span><span class="co">#&gt;  4 1-Lt $10000       Total 1-Lt $10000                45%                    26%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 2-$10000 to 14999 White                            40%                    27%</span></span>
-<span><span class="co">#&gt;  6 2-$10000 to 14999 Black                            76%                    14%</span></span>
-<span><span class="co">#&gt;  7 2-$10000 to 14999 Other                            43%                    44%</span></span>
-<span><span class="co">#&gt;  8 2-$10000 to 14999 Total 2-$10000 to 14999          47%                    26%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  9 3-$15000 to 24999 White                            38%                    26%</span></span>
-<span><span class="co">#&gt; 10 3-$15000 to 24999 Black                            79%                    15%</span></span>
-<span><span class="co">#&gt; 11 3-$15000 to 24999 Other                            45%                    39%</span></span>
-<span><span class="co">#&gt; 12 3-$15000 to 24999 Total 3-$15000 to 24999          46%                    25%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 13 4-$25000 or more  White                            39%                    17%</span></span>
-<span><span class="co">#&gt; 14 4-$25000 or more  Black                            81%                    12%</span></span>
-<span><span class="co">#&gt; 15 4-$25000 or more  Other                            56%                    22%</span></span>
-<span><span class="co">#&gt; 16 4-$25000 or more  Total 4-$25000 or more           45%                    16%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 17 Ensemble          Total Ensemble                   45%                    20%</span></span>
-<span><span class="co">#&gt; # ℹ 2 more variables: `3-Republican` &lt;row%&gt;, Total &lt;row%&gt;</span></span></code></pre>
-<p>When you pass several <strong>row variables</strong> <em>without</em>
-<code>tab_vars</code>, <code><a href="../reference/tab.html">tab()</a></code> merges the mirror tables into
-a single table by default. <code>output_list = TRUE</code> returns
-instead a <strong>list with one table per row variable</strong> (with
-<code>tab_vars</code>, the result is always a list):</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">married</span>, <span class="va">income25k</span><span class="op">)</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>, output_list <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code>&lt;!-- KNITR_ASIS_OUTPUT_TOKEN --&gt;&lt;style&gt;.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
+<style>
+.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
 .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
-.tabxplor-tab table tbody tr:not(:has(td:not(:empty)))&gt;*{border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}
+.tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}
 .tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}
 .tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,.tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{border-left-style:solid;border-left-width:1px;}
-.tabxplor-tab table &gt; thead &gt; tr:first-child &gt; *{border-top-style:solid;border-top-width:1px;}
-.tabxplor-tab table &gt; tbody &gt; tr:last-child &gt; *{border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab table &gt; tbody &gt; tr:has(td:not(:empty)) &gt; *:last-child,.tabxplor-tab table &gt; thead &gt; tr &gt; *:last-child{border-right-style:solid;border-right-width:1px;}
-.tabxplor-tab table &gt; tbody &gt; tr:has(td:not(:empty)) &gt; *:first-child,.tabxplor-tab table &gt; thead &gt; tr &gt; *:first-child{border-left-style:solid;border-left-width:1px;}
+.tabxplor-tab table > thead > tr:first-child > *{border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab table > tbody > tr:last-child > *{border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,.tabxplor-tab table > thead > tr > *:last-child{border-right-style:solid;border-right-width:1px;}
+.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:first-child,.tabxplor-tab table > thead > tr > *:first-child{border-left-style:solid;border-left-width:1px;}
 .tabxplor-tab p{font-size:80%;}
 .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab &gt; thead &gt; tr:first-child &gt; *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
 .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
 .tabxplor-tab .tx-r{text-align:right;}
 .tabxplor-tab .tx-l{text-align:left;}
@@ -287,9 +98,9 @@ instead a <strong>list with one table per row variable</strong> (with
 .tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}
 .tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;padding:4px 2px;}
 .tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}
-.tabxplor-tab tr.tx-bt&gt;*{border-top-style:solid;border-top-width:1px;}
-.tabxplor-tab tr.tx-bb&gt;*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}
-.tabxplor-tab tr.tx-bb2&gt;*{border-bottom-style:solid;border-bottom-width:2px;}
+.tabxplor-tab tr.tx-bt>*{border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}
 .tabxplor-tab .tx-foot{width:0;min-width:100%;}
 .tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}
 .tooltip-inner{max-width:none;white-space:nowrap;}
@@ -316,16 +127,1298 @@ instead a <strong>list with one table per row variable</strong> (with
 .u1{background-color:#FFF4E1;}
 .u2{background-color:#FFE6D3;}
 .u3{background-color:#FFD7C8;}
-.u4{background-color:#FFBAAF;}&lt;/style&gt;
-&lt;table class="tabxplor-tab"&gt;&lt;thead&gt;&lt;tr&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;th class="tx-span" colspan="3"&gt;race&lt;/th&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th class="tx-l tx-br tx-bl tx-rv"&gt;married&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;White&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Black&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Other&lt;/th&gt;&lt;th class="tx-r tx-num tx-br tx-bl tx-tot"&gt;Total&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;01-Married&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×1.1 ; n: 8 316"&gt;82%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -6% ; ratio: ÷1.7 ; n: 869"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 932"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 10 117"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=10 117)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;02-Not married&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷1.1 ; n: 8 079"&gt;71%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +5% ; ratio: ×1.4 ; n: 2 260"&gt;20%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×1 ; n: 1 027"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 11 366"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=11 366)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;tr class="tx-b tx-bt tx-bb tx-bb2"&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;Total&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 16 395"&gt;76%&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 129"&gt;15%&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 959"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 21 483"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=21 483)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;
-&lt;br&gt;
-&lt;table class="tabxplor-tab"&gt;&lt;thead&gt;&lt;tr&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;th class="tx-span" colspan="3"&gt;race&lt;/th&gt;&lt;th class="tx-span" colspan="1"&gt;&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th class="tx-l tx-br tx-bl tx-rv"&gt;income25k&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;White&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Black&lt;/th&gt;&lt;th class="tx-r tx-num"&gt;Other&lt;/th&gt;&lt;th class="tx-r tx-num tx-br tx-bl tx-tot"&gt;Total&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;01-$25000 or more&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1 ; n: 5 856"&gt;80%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 886"&gt;12%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.1 ; n: 621"&gt;8%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 7 363"&gt;100%&lt;span style="font-weight:normal;"&gt; (n= 7 363)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;02-Less than 25k&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -2% ; ratio: ×1 ; n: 10 539"&gt;75%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.1 ; n: 2 243"&gt;16%&lt;/td&gt;&lt;td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 1 338"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 14 120"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=14 120)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;tr class="tx-b tx-bt tx-bb tx-bb2"&gt;&lt;td class="tx-l tx-br tx-bl tx-rv"&gt;Total&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 16 395"&gt;76%&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 129"&gt;15%&lt;/td&gt;&lt;td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 959"&gt;9%&lt;/td&gt;&lt;td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 21 483"&gt;100%&lt;span style="font-weight:normal;"&gt; (n=21 483)&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;
-
-&lt;!-- KNITR_ASIS_OUTPUT_TOKEN --&gt;</code></pre>
+.u4{background-color:#FFBAAF;}
+</style>
+<p>The first time only, install the package :</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"tabxplor"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>At the start of each new R session, load it :</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/BriceNocenti/tabxplor" class="external-link">tabxplor</a></span><span class="op">)</span></span></code></pre></div>
+<p><code>tabxplor</code> helps you <strong>explore data with
+cross-tables, coloring the cells so you can read a table at a
+glance</strong>. Over-represented cells use shades of blue,
+under-represented ones turn red/orange, so patterns jump out without you
+squinting at every number.</p>
+<p>Everything is a <code>tibble</code>, so the result works with the
+usual <code>dplyr</code> verbs, and tables export to Excel, HTML and
+Markdown with their color helpers. Underlying heavy computations run on
+<code>data.table</code></p>
+<p>Throughout this vignette we use <code>gss_simple</code>, a cleaned-up
+version of the US General Social Survey (<code><a href="https://forcats.tidyverse.org/reference/gss_cat.html" class="external-link">forcats::gss_cat</a></code>)
+with factors levels merged and reordered.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/gss_cat_data_formatting.html">gss_cat_data_formatting</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<div class="section level2">
+<h2 id="your-first-cross-tables">Your first cross-tables<a class="anchor" aria-label="anchor" href="#your-first-cross-tables"></a>
+</h2>
+<p><code><a href="../reference/tab.html">tab()</a></code> needs a data frame, a <strong>row
+variable</strong> and a <strong>column variable</strong>. By default it
+shows counts:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+race
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+marital
+</th>
+<th class="tx-r tx-num">
+White
+</th>
+<th class="tx-r tx-num">
+Black
+</th>
+<th class="tx-r tx-num">
+Other
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num g2">
+8 316
+</td>
+<td class="tx-r tx-num g2">
+869
+</td>
+<td class="tx-r tx-num g2">
+932
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+10 117
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num g2">
+437
+</td>
+<td class="tx-r tx-num g2">
+196
+</td>
+<td class="tx-r tx-num g2">
+110
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+743
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num g2">
+2 676
+</td>
+<td class="tx-r tx-num g2">
+495
+</td>
+<td class="tx-r tx-num g2">
+212
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+3 383
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num g2">
+1 475
+</td>
+<td class="tx-r tx-num g2">
+262
+</td>
+<td class="tx-r tx-num g2">
+70
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+1 807
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num g2">
+3 478
+</td>
+<td class="tx-r tx-num g2">
+1 305
+</td>
+<td class="tx-r tx-num g2">
+633
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+5 416
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num g2">
+13
+</td>
+<td class="tx-r tx-num g2">
+2
+</td>
+<td class="tx-r tx-num g2">
+2
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+17
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+16 395
+</td>
+<td class="tx-r tx-num tx-b">
+3 129
+</td>
+<td class="tx-r tx-num tx-b">
+1 959
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+21 483
+</td>
+</tr>
+</tbody>
+</table>
+<p>This is tabxplor’s <strong>html table</strong> — what you get in the
+RStudio or Positron Viewer pane with the recommended session option,
+used throughout this vignette:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.print <span class="op">=</span> <span class="st">"html"</span><span class="op">)</span></span></code></pre></div>
+<p>Without the option, the same table prints in the
+<strong>console</strong>, as a colored <code>tibble</code> — same
+information, lighter display:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span><span class="op">)</span></span></code></pre></div>
+<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 7 × 5</span></span>
+<span><span class="co">#&gt;   marital        White Black Other  Total</span></span>
+<span><span class="co">#&gt;   &lt;fct&gt;            &lt;n&gt;   &lt;n&gt;   &lt;n&gt;    &lt;n&gt;</span></span>
+<span><span class="co">#&gt; 1 Married        8 316   869   932 10 117</span></span>
+<span><span class="co">#&gt; 2 Separated        437   196   110    743</span></span>
+<span><span class="co">#&gt; 3 Divorced       2 676   495   212  3 383</span></span>
+<span><span class="co">#&gt; 4 Widowed        1 475   262    70  1 807</span></span>
+<span><span class="co">#&gt; 5 Never married  3 478 1 305   633  5 416</span></span>
+<span><span class="co">#&gt; 6 NA                13     2     2     17</span></span>
+<span><span class="co">#&gt; 7 Total         16 395 3 129 1 959 21 483</span></span></code></pre>
+<p>Add <code>pct = "row"</code> for row percentages (or
+<code>"col"</code> for column percentages). A <strong>Total</strong>
+row/column and a count column (<code>n</code>) are added
+automatically:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+race
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+marital
+</th>
+<th class="tx-r tx-num">
+White
+</th>
+<th class="tx-r tx-num">
+Black
+</th>
+<th class="tx-r tx-num">
+Other
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num g2">
+82%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=10 117)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num g2">
+59%
+</td>
+<td class="tx-r tx-num g2">
+26%
+</td>
+<td class="tx-r tx-num g2">
+15%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   743)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num g2">
+79%
+</td>
+<td class="tx-r tx-num g2">
+15%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 383)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num g2">
+82%
+</td>
+<td class="tx-r tx-num g2">
+14%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 807)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num g2">
+64%
+</td>
+<td class="tx-r tx-num g2">
+24%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 416)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num g2">
+76%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=    17)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+76%
+</td>
+<td class="tx-r tx-num tx-b">
+15%
+</td>
+<td class="tx-r tx-num tx-b">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+</table>
+<p>When the column variable is <strong>numeric</strong>,
+<code><a href="../reference/tab.html">tab()</a></code> shows its <strong>mean</strong> in each row instead
+of percentages:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">age</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+age
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+marital
+</th>
+<th class="tx-r tx-num tx-br">
+mean (sd)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num tx-br g2">
+49 (σ15)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num tx-br g2">
+45 (σ13)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num tx-br g2">
+51 (σ13)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num tx-br g2">
+72 (σ13)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num tx-br g2">
+34 (σ13)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num tx-br g2">
+52 (σ17)
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+47<span style="font-weight:normal;"> (σ17)</span>
+</td>
+</tr>
+</tbody>
+</table>
+<p>You can pass <strong>several row and column variables at
+once</strong>.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="2">
+</th>
+<th class="tx-span" colspan="3">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl">
+</th>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+<th class="tx-r tx-num tx-br">
+mean (sd)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname" rowspan="4">
+race
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+39%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+40%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 301)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.8 (σ2.3)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+76%
+</td>
+<td class="tx-r tx-num g2">
+17%
+</td>
+<td class="tx-r tx-num g2">
+8%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 093)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+4.2 (σ3.5)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+49%
+</td>
+<td class="tx-r tx-num g2">
+33%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 934)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.8 (σ2.4)
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 328)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3.0<span style="font-weight:normal;"> (σ2.6)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-bb" rowspan="9">
+relig
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num g2">
+43%
+</td>
+<td class="tx-r tx-num g2">
+17%
+</td>
+<td class="tx-r tx-num g2">
+40%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=10 794)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.1 (σ2.7)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g2">
+46%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num g2">
+32%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 090)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.0 (σ2.4)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g2">
+42%
+</td>
+<td class="tx-r tx-num g2">
+24%
+</td>
+<td class="tx-r tx-num g2">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   778)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.8 (σ2.5)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num g2">
+68%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num g2">
+20%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   388)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.5 (σ2.1)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g2">
+57%
+</td>
+<td class="tx-r tx-num g2">
+29%
+</td>
+<td class="tx-r tx-num g2">
+14%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   212)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.2 (σ1.9)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num g2">
+66%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=    99)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.4 (σ2.2)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num g2">
+48%
+</td>
+<td class="tx-r tx-num g2">
+29%
+</td>
+<td class="tx-r tx-num g2">
+24%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   384)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.7 (σ2.5)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g2">
+50%
+</td>
+<td class="tx-r tx-num g2">
+31%
+</td>
+<td class="tx-r tx-num g2">
+19%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 509)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.7 (σ2.6)
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 254)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3.0<span style="font-weight:normal;"> (σ2.6)</span>
+</td>
+</tr>
+</tbody>
+</table>
+<p><code>levels = "first"</code> keeps only the first level of each
+column factor, which is handy to display many binary factors, like
+survey questions with multiple answers, all at once, in a compact way
+:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">married</span>, <span class="va">black</span>, <span class="va">income25k</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, levels <span class="op">=</span> <span class="st">"first"</span>, na <span class="op">=</span> <span class="st">"drop"</span>, cleannames <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+married
+</th>
+<th class="tx-span" colspan="1">
+black
+</th>
+<th class="tx-span" colspan="1">
+income25k
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+relig
+</th>
+<th class="tx-r tx-num tx-br">
+Married
+</th>
+<th class="tx-r tx-num tx-br">
+Black
+</th>
+<th class="tx-r tx-num tx-br">
+$25000 or more
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Protestant
+</td>
+<td class="tx-r tx-num tx-br g2">
+50%
+</td>
+<td class="tx-r tx-num tx-br g2">
+21%
+</td>
+<td class="tx-r tx-num tx-br g2">
+32%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Catholic
+</td>
+<td class="tx-r tx-num tx-br g2">
+50%
+</td>
+<td class="tx-r tx-num tx-br g2">
+4%
+</td>
+<td class="tx-r tx-num tx-br g2">
+35%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other christian
+</td>
+<td class="tx-r tx-num tx-br g2">
+44%
+</td>
+<td class="tx-r tx-num tx-br g2">
+18%
+</td>
+<td class="tx-r tx-num tx-br g2">
+35%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Jewish
+</td>
+<td class="tx-r tx-num tx-br g2">
+51%
+</td>
+<td class="tx-r tx-num tx-br g2">
+3%
+</td>
+<td class="tx-r tx-num tx-br g2">
+43%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num tx-br g2">
+51%
+</td>
+<td class="tx-r tx-num tx-br g2">
+5%
+</td>
+<td class="tx-r tx-num tx-br g2">
+47%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Muslim
+</td>
+<td class="tx-r tx-num tx-br g2">
+53%
+</td>
+<td class="tx-r tx-num tx-br g2">
+34%
+</td>
+<td class="tx-r tx-num tx-br g2">
+32%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g2">
+37%
+</td>
+<td class="tx-r tx-num tx-br g2">
+13%
+</td>
+<td class="tx-r tx-num tx-br g2">
+37%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+None
+</td>
+<td class="tx-r tx-num tx-br g2">
+37%
+</td>
+<td class="tx-r tx-num tx-br g2">
+11%
+</td>
+<td class="tx-r tx-num tx-br g2">
+37%
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+15%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+34%
+</td>
+</tr>
+</tbody>
+</table>
+<p>A few other everyday arguments: <code>na = "drop"</code> to drop
+missing values from the base, <code>digits =</code> for the number of
+decimals, and <code>cleannames = TRUE</code> to strip prefixes like
+<code>"1-"</code> from level names. See <code><a href="../reference/tab.html">?tab</a></code> for the full
+list.</p>
+</div>
+<div class="section level2">
+<h2 id="weights">Weights<a class="anchor" aria-label="anchor" href="#weights"></a>
+</h2>
+<p>The argument <code>wt =</code> adds a survey weight. Every percentage
+and mean is then <strong>weighted</strong>, while the sample size behind
+the confidence intervals stays the real, <strong>unweighted</strong>
+number of cases — the honest default basis for uncertainty.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hdv2003</span>, package <span class="op">=</span> <span class="st">"questionr"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">hdv2003</span>, <span class="va">nivetud</span>, <span class="va">occup</span>, wt <span class="op">=</span> <span class="va">poids</span>, pct <span class="op">=</span> <span class="st">"row"</span>, na<span class="op">=</span><span class="st">"drop"</span>, digits <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<p>Under <strong>unequal</strong> weights that default interval carries
+no design effect, so it runs a little too narrow. Kish’s <em>effective
+sample size</em> fixes this : it counts each observation by how much it
+really contributes, <code>n_eff = (sum of w)² / (sum of w²)</code>
+(always at most the real <em>n</em>), and uses <code>n_eff</code> in
+place of the raw <em>n</em>. Turn it on and every weighted confidence
+interval in the table — proportions and means alike — widens
+honestly:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.kish_neff <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>This is a simple single-stage approximation (it needs the individual
+weights, so it is not available for tables built from pre-aggregated
+counts). A <strong>fully design-based</strong> result — clusters,
+strata, exact standard errors — is available for Chi2 pvalues (factors)
+and ANOVA F pvalues (numeric column variables) only with
+<code>test = "survey"</code> and the related arguments (see the
+<code>test =</code> argument) : confidence intervals are not covered.
+See the <a href="https://CRAN.R-project.org/package=survey" class="external-link">survey</a>
+package for more informations about survey design.
+<code><a href="../reference/tab_reg.html">tab_reg()</a></code> regressions tables with weights always use
+design-effect for standard errors
+(<code><a href="../articles/tabxplor-reg.html">vignette("tabxplor-reg")</a></code>), but the base version only use
+Kish’s effective sample size.</p>
+</div>
+<div class="section level2">
+<h2 id="sub-tables">Sub-tables<a class="anchor" aria-label="anchor" href="#sub-tables"></a>
+</h2>
+<p>Give <code><a href="../reference/tab.html">tab()</a></code> a third variable as <code>tab_vars</code> and
+it builds <strong>one sub-table per group</strong> (here, one per income
+group). The result is <em>grouped</em>: <code>dplyr</code> operations
+then run within each sub-table.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, <span class="va">rincome</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+38%
+</td>
+<td class="tx-r tx-num g2">
+26%
+</td>
+<td class="tx-r tx-num g2">
+36%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 501)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+67%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   374)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+49%
+</td>
+<td class="tx-r tx-num g2">
+31%
+</td>
+<td class="tx-r tx-num g2">
+20%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   264)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total 1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+26%
+</td>
+<td class="tx-r tx-num tx-b">
+30%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 139)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+40%
+</td>
+<td class="tx-r tx-num g2">
+27%
+</td>
+<td class="tx-r tx-num g2">
+33%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   828)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+76%
+</td>
+<td class="tx-r tx-num g2">
+14%
+</td>
+<td class="tx-r tx-num g2">
+10%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   207)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+43%
+</td>
+<td class="tx-r tx-num g2">
+44%
+</td>
+<td class="tx-r tx-num g2">
+13%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   125)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total 2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+26%
+</td>
+<td class="tx-r tx-num tx-b">
+27%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 160)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+38%
+</td>
+<td class="tx-r tx-num g2">
+26%
+</td>
+<td class="tx-r tx-num g2">
+36%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 682)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+79%
+</td>
+<td class="tx-r tx-num g2">
+15%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   400)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+45%
+</td>
+<td class="tx-r tx-num g2">
+39%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   243)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total 3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-b">
+46%
+</td>
+<td class="tx-r tx-num tx-b">
+25%
+</td>
+<td class="tx-r tx-num tx-b">
+29%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 325)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+39%
+</td>
+<td class="tx-r tx-num g2">
+17%
+</td>
+<td class="tx-r tx-num g2">
+45%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 843)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+81%
+</td>
+<td class="tx-r tx-num g2">
+12%
+</td>
+<td class="tx-r tx-num g2">
+7%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   881)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+56%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   618)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total 4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+16%
+</td>
+<td class="tx-r tx-num tx-b">
+38%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 7 342)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total Ensemble
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+20%
+</td>
+<td class="tx-r tx-num tx-b">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=12 966)</span>
+</td>
+</tr>
+</tbody>
+</table>
+<p>When you pass several <strong>row variables</strong> <em>without</em>
+<code>tab_vars</code>, <code><a href="../reference/tab.html">tab()</a></code> merges the mirror tables into
+a single table by default. <code>output_list = TRUE</code> returns
+instead a <strong>list with one table per row variable</strong> (with
+<code>tab_vars</code>, the result is always a list):</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">married</span>, <span class="va">income25k</span><span class="op">)</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>, output_list <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="colors-reading-helpers">colors: reading helpers<a class="anchor" aria-label="anchor" href="#colors-reading-helpers"></a>
@@ -338,47 +1431,516 @@ Cells clearly above the average turn <strong>blue</strong>, cells
 clearly below turn <strong>red/orange</strong> — the further a cell sits
 from its reference, the stronger the shade — and a color legend is
 printed underneath.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total</span></span>
-<span><span class="co">#&gt;   &lt;cha&gt;       &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt; &lt;row&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White          39%                    21%            40%    1% 100% (n=16 395)</span></span>
-<span><span class="co">#&gt; 2 Black          75%                    16%             8%    1% 100% (n= 3 129)</span></span>
-<span><span class="co">#&gt; 3 Other          48%                    32%            18%    1% 100% (n= 1 959)</span></span>
-<span><span class="co">#&gt; 4 Total          45%                    21%            33%    1% 100% (n=21 483)</span></span>
-<span><span class="co">#&gt; # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+39%
+</td>
+<td class="tx-r tx-num g1">
+21%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+40%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p3 tx-b">
+75%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+8%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+48%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+32%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+18%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><code>color = TRUE</code> picks a sensible scheme automatically for
 each column type (both differences and ratio for percentages, only
 ratios for means, …), check which one in the legend:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">marital</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 6 × 12</span></span>
-<span><span class="co">#&gt;   rincome           `1-Democrat` `2-Independent, other` `3-Republican` NA_party3</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;                   &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt;    &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 1-Lt $10000                44%                    25%            30%        1%</span></span>
-<span><span class="co">#&gt; 2 2-$10000 to 14999          46%                    26%            27%        1%</span></span>
-<span><span class="co">#&gt; 3 3-$15000 to 24999          45%                    25%            29%        0%</span></span>
-<span><span class="co">#&gt; 4 4-$25000 or more           45%                    16%            38%        0%</span></span>
-<span><span class="co">#&gt; 5 NA                         45%                    22%            32%        1%</span></span>
-<span><span class="co">#&gt; 6 Total                      45%                    21%            33%        1%</span></span>
-<span><span class="co">#&gt; # ℹ 7 more variables: Married &lt;row%&gt;, Separated &lt;row%&gt;, Divorced &lt;row%&gt;,</span></span>
-<span><span class="co">#&gt; #   Widowed &lt;row%&gt;, `Never married` &lt;row%&gt;, NA_marital &lt;row%&gt;, Total &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30; bg ratio: ÷4 ÷2 ÷1.5 ×1.5 ×2 ×4</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="6">
+marital
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+rincome
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br">
+NA
+</th>
+<th class="tx-r tx-num">
+Married
+</th>
+<th class="tx-r tx-num">
+Separated
+</th>
+<th class="tx-r tx-num">
+Divorced
+</th>
+<th class="tx-r tx-num">
+Widowed
+</th>
+<th class="tx-r tx-num">
+Never married
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num g1">
+44%
+</td>
+<td class="tx-r tx-num g1">
+25%
+</td>
+<td class="tx-r tx-num g1">
+30%
+</td>
+<td class="tx-r tx-num tx-br g1">
+1%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+37%
+</td>
+<td class="tx-r tx-num g1">
+5%
+</td>
+<td class="tx-r tx-num g1">
+11%
+</td>
+<td class="tx-r tx-num">
+<span class="tx-pill u2">4%</span>
+</td>
+<td class="tx-r tx-num p2 tx-b">
+<span class="tx-pill o2">43%</span>
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 153)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+46%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+26%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+27%
+</td>
+<td class="tx-r tx-num tx-br g1">
+1%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+41%
+</td>
+<td class="tx-r tx-num g1">
+5%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num">
+<span class="tx-pill u2">5%</span>
+</td>
+<td class="tx-r tx-num p1 tx-b">
+33%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 168)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g1">
+45%
+</td>
+<td class="tx-r tx-num g1">
+25%
+</td>
+<td class="tx-r tx-num g1">
+29%
+</td>
+<td class="tx-r tx-num tx-br">
+<span class="tx-pill u3">0%</span>
+</td>
+<td class="tx-r tx-num g1">
+43%
+</td>
+<td class="tx-r tx-num g1">
+4%
+</td>
+<td class="tx-r tx-num g1">
+18%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+<span class="tx-pill u3">3%</span>
+</td>
+<td class="tx-r tx-num p1 tx-b">
+31%
+</td>
+<td class="tx-r tx-num">
+<span class="tx-pill u2">0%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 331)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num g1">
+45%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+38%
+</td>
+<td class="tx-r tx-num tx-br">
+<span class="tx-pill u3">0%</span>
+</td>
+<td class="tx-r tx-num p1 tx-b">
+55%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+18%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+<span class="tx-pill u3">2%</span>
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 7 363)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num g1">
+45%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num g1">
+32%
+</td>
+<td class="tx-r tx-num tx-br">
+<span class="tx-pill o2">1%</span>
+</td>
+<td class="tx-r tx-num g1">
+45%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+14%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+<span class="tx-pill o2">17%</span>
+</td>
+<td class="tx-r tx-num g1">
+21%
+</td>
+<td class="tx-r tx-num">
+<span class="tx-pill o3">0%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 8 468)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+3%
+</td>
+<td class="tx-r tx-num tx-b">
+16%
+</td>
+<td class="tx-r tx-num tx-b">
+8%
+</td>
+<td class="tx-r tx-num tx-b">
+25%
+</td>
+<td class="tx-r tx-num tx-b">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="12">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Background colour (ratio):
+Cells ≥ the Total row <span class="o2" style="border-radius:4px;padding-right:4px;padding-left:4px;">×1.5</span>;
+<span class="o3" style="border-radius:4px;padding-right:4px;padding-left:4px;">×2</span>;
+<span class="o4" style="border-radius:4px;padding-right:4px;padding-left:4px;">×4</span>.
+Cells ≤ the Total row <span class="u2" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷1.5</span>;
+<span class="u3" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷2</span>;
+<span class="u4" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷4</span>.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Numeric columns are colored the same way, on their
 <strong>means</strong> (here, hours of TV per day by income):</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="va">tvhours</span>, color <span class="op">=</span> <span class="st">"diff"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 6 × 2</span></span>
-<span><span class="co">#&gt;   rincome              tvhours</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;                 &lt;mean&gt;</span></span>
-<span><span class="co">#&gt; 1 1-Lt $10000       3.1 (σ2.8)</span></span>
-<span><span class="co">#&gt; 2 2-$10000 to 14999 3.0 (σ2.4)</span></span>
-<span><span class="co">#&gt; 3 3-$15000 to 24999 2.8 (σ2.1)</span></span>
-<span><span class="co">#&gt; 4 4-$25000 or more  2.2 (σ1.7)</span></span>
-<span><span class="co">#&gt; 5 NA                3.6 (σ3.1)</span></span>
-<span><span class="co">#&gt; 6 Total             3.0 (σ2.6)</span></span>
-<span><span class="co">#&gt; # standardized difference (Total): -0.8 -0.5 -0.2 +0.2 +0.5 +0.8</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+rincome
+</th>
+<th class="tx-r tx-num tx-br">
+mean (sd)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-br g1">
+3.1 (σ2.8)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-br g1">
+3.0 (σ2.4)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-br g1">
+2.8 (σ2.1)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+2.2<span style="font-weight:normal;"> (σ1.7)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+3.6<span style="font-weight:normal;"> (σ3.1)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3.0<span style="font-weight:normal;"> (σ2.6)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+0.2</span>; <span class="p3" style="font-weight:bold;">+0.5</span>; <span class="p4" style="font-weight:bold;">+0.8</span> SD. Shades of yellow to red: cells
+≤ the Total row <span class="m1" style="font-weight:bold;">-0.2</span>;
+<span class="m3" style="font-weight:bold;">-0.5</span>; <span class="m4" style="font-weight:bold;">-0.8</span> SD.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><strong>Which cell is the reference for comparison ?</strong> By
 default each cell is compared to the relevant Total (Total row for row
 percentages and Total column for column percentages) to highlight
@@ -393,97 +1955,1117 @@ factor.</li>
 <strong>overall</strong> Total instead of each sub-table’s own
 Total.</li>
 </ul>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">year</span>, <span class="va">marital</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 9 × 8</span></span>
-<span><span class="co">#&gt;   year  Married Separated Divorced Widowed `Never married`  `NA`           Total</span></span>
-<span><span class="co">#&gt;   &lt;cha&gt;  &lt;row%&gt;    &lt;row%&gt;   &lt;row%&gt;  &lt;row%&gt;          &lt;row%&gt; &lt;row&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 2000      45%        4%      16%     10%             25%    0% 100% (n= 2 817)</span></span>
-<span><span class="co">#&gt; 2 2002      46%        3%      16%      9%             26%    0% 100% (n= 2 765)</span></span>
-<span><span class="co">#&gt; 3 2004      53%        3%      15%      7%             22%    0% 100% (n= 2 812)</span></span>
-<span><span class="co">#&gt; 4 2006      48%        3%      16%      8%             24%    0% 100% (n= 4 510)</span></span>
-<span><span class="co">#&gt; 5 2008      48%        3%      14%      8%             26%    0% 100% (n= 2 023)</span></span>
-<span><span class="co">#&gt; 6 2010      44%        3%      17%      9%             28%    0% 100% (n= 2 044)</span></span>
-<span><span class="co">#&gt; 7 2012      46%        3%      16%      8%             27%    0% 100% (n= 1 974)</span></span>
-<span><span class="co">#&gt; 8 2014      46%        3%      16%      8%             27%    0% 100% (n= 2 538)</span></span>
-<span><span class="co">#&gt; 9 Total     47%        3%      16%      8%             25%    0% 100% (n=21 483)</span></span>
-<span><span class="co">#&gt; # difference (2000): -30 -20 -10 -5 +5 +10 +20 +30</span></span></code></pre>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="6">
+marital
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+year
+</th>
+<th class="tx-r tx-num">
+Married
+</th>
+<th class="tx-r tx-num">
+Separated
+</th>
+<th class="tx-r tx-num">
+Divorced
+</th>
+<th class="tx-r tx-num">
+Widowed
+</th>
+<th class="tx-r tx-num">
+Never married
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+2000
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+4%
+</td>
+<td class="tx-r tx-num tx-b">
+16%
+</td>
+<td class="tx-r tx-num tx-b">
+10%
+</td>
+<td class="tx-r tx-num tx-b">
+25%
+</td>
+<td class="tx-r tx-num tx-b">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 817)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2002
+</td>
+<td class="tx-r tx-num g1">
+46%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+9%
+</td>
+<td class="tx-r tx-num g1">
+26%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 765)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2004
+</td>
+<td class="tx-r tx-num p1 tx-b">
+53%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+15%
+</td>
+<td class="tx-r tx-num g1">
+7%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 812)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2006
+</td>
+<td class="tx-r tx-num g1">
+48%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+8%
+</td>
+<td class="tx-r tx-num g1">
+24%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 4 510)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2008
+</td>
+<td class="tx-r tx-num g1">
+48%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+14%
+</td>
+<td class="tx-r tx-num g1">
+8%
+</td>
+<td class="tx-r tx-num g1">
+26%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 023)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2010
+</td>
+<td class="tx-r tx-num g1">
+44%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+17%
+</td>
+<td class="tx-r tx-num g1">
+9%
+</td>
+<td class="tx-r tx-num g1">
+28%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 044)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2012
+</td>
+<td class="tx-r tx-num g1">
+46%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+8%
+</td>
+<td class="tx-r tx-num g1">
+27%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 974)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2014
+</td>
+<td class="tx-r tx-num g1">
+46%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+8%
+</td>
+<td class="tx-r tx-num g1">
+27%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 538)</span>
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+47%
+</td>
+<td class="tx-r tx-num g1">
+3%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num g1">
+8%
+</td>
+<td class="tx-r tx-num g1">
+25%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="8">
+<div class="tx-foot">
+Shades of blue: cells ≥ the 2000 row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the 2000 row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="va">party3</span>, <span class="va">race</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="cn">TRUE</span>, comp<span class="op">=</span><span class="st">"all"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 16 × 6</span></span>
-<span><span class="co">#&gt; # Groups:         race [4]</span></span>
-<span><span class="co">#&gt;    race     rincome           `1-Democrat` `2-Independent, other` `3-Republican`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                   &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt;</span></span>
-<span><span class="co">#&gt;  1 White    1-Lt $10000                38%                    26%            36%</span></span>
-<span><span class="co">#&gt;  2 White    2-$10000 to 14999          40%                    27%            33%</span></span>
-<span><span class="co">#&gt;  3 White    3-$15000 to 24999          38%                    26%            36%</span></span>
-<span><span class="co">#&gt;  4 White    4-$25000 or more           39%                    17%            45%</span></span>
-<span><span class="co">#&gt;  5 White    Total White                39%                    20%            41%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 Black    1-Lt $10000                67%                    22%            11%</span></span>
-<span><span class="co">#&gt;  7 Black    2-$10000 to 14999          76%                    14%            10%</span></span>
-<span><span class="co">#&gt;  8 Black    3-$15000 to 24999          79%                    15%             6%</span></span>
-<span><span class="co">#&gt;  9 Black    4-$25000 or more           81%                    12%             7%</span></span>
-<span><span class="co">#&gt; 10 Black    Total Black                77%                    15%             8%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 11 Other    1-Lt $10000                49%                    31%            20%</span></span>
-<span><span class="co">#&gt; 12 Other    2-$10000 to 14999          43%                    44%            13%</span></span>
-<span><span class="co">#&gt; 13 Other    3-$15000 to 24999          45%                    39%            16%</span></span>
-<span><span class="co">#&gt; 14 Other    4-$25000 or more           56%                    22%            22%</span></span>
-<span><span class="co">#&gt; 15 Other    Total Other                51%                    30%            19%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 16 Ensemble Total Ensemble             45%                    20%            34%</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: Total &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30; bg ratio: ÷4 ÷2 ÷1.5 ×1.5 ×2 ×4</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+rincome
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num m1 tx-b">
+38%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+26%
+</td>
+<td class="tx-r tx-num g1">
+36%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 501)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num m1 tx-b">
+40%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+27%
+</td>
+<td class="tx-r tx-num g1">
+33%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   828)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num m1 tx-b">
+38%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+26%
+</td>
+<td class="tx-r tx-num g1">
+36%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 682)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num m1 tx-b">
+39%
+</td>
+<td class="tx-r tx-num g1">
+17%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 843)</span>
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+39%
+</td>
+<td class="tx-r tx-num g1">
+20%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+41%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 9 854)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num p3 tx-b">
+67%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u3">11%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   374)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num p4 tx-b">
+<span class="tx-pill o2">76%</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+14%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u3">10%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   207)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num p4 tx-b">
+<span class="tx-pill o2">79%</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+15%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u4">6%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   400)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num p4 tx-b">
+<span class="tx-pill o2">81%</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+<span class="tx-pill u2">12%</span>
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u4">7%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   881)</span>
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total Black
+</td>
+<td class="tx-r tx-num p4 tx-b">
+<span class="tx-pill o2">77%</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+15%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u4">8%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 862)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num g1">
+49%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+<span class="tx-pill o2">31%</span>
+</td>
+<td class="tx-r tx-num m2 tx-b">
+<span class="tx-pill u2">20%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   264)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+43%
+</td>
+<td class="tx-r tx-num p3 tx-b">
+<span class="tx-pill o3">44%</span>
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u3">13%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   125)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g1">
+45%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+<span class="tx-pill o2">39%</span>
+</td>
+<td class="tx-r tx-num m2 tx-b">
+<span class="tx-pill u3">16%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   243)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num p2 tx-b">
+56%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+<span class="tx-pill u2">22%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   618)</span>
+</td>
+</tr>
+<tr class="tx-bt tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total Other
+</td>
+<td class="tx-r tx-num p1 tx-b">
+51%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+30%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+<span class="tx-pill u2">19%</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 250)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total Ensemble
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+20%
+</td>
+<td class="tx-r tx-num tx-b">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=12 966)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="5">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Background colour (ratio):
+Cells ≥ the Total row <span class="o2" style="border-radius:4px;padding-right:4px;padding-left:4px;">×1.5</span>;
+<span class="o3" style="border-radius:4px;padding-right:4px;padding-left:4px;">×2</span>;
+<span class="o4" style="border-radius:4px;padding-right:4px;padding-left:4px;">×4</span>.
+Cells ≤ the Total row <span class="u2" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷1.5</span>;
+<span class="u3" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷2</span>;
+<span class="u4" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷4</span>.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><strong>A different reference for each variable.</strong>
 <code>ref</code> is reinterpreted by <code>pct</code>. Under
 <strong>row</strong> percentages (or means) it picks a reference
 <strong>row</strong>, so a <em>named</em> vector gives each row variable
 its own — here <code>race</code> is read against its first row,
 <code>relig</code> against its Total:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span><span class="op">)</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>,</span>
-<span>    ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>race <span class="op">=</span> <span class="st">"first"</span>, relig <span class="op">=</span> <span class="st">"tot"</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 13 × 6</span></span>
-<span><span class="co">#&gt; # Groups:         row_var [2]</span></span>
-<span><span class="co">#&gt;    row_var levels              `1-Democrat` `2-Independent, other`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;   &lt;fct&gt;                     &lt;row%&gt;                 &lt;row%&gt;</span></span>
-<span><span class="co">#&gt;  1 race    White                        39%                    21%</span></span>
-<span><span class="co">#&gt;  2 race    Black                        76%                    17%</span></span>
-<span><span class="co">#&gt;  3 race    Other                        49%                    33%</span></span>
-<span><span class="co">#&gt;  4 race    Total                        45%                    21%</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 relig   1-Protestant                 43%                    17%</span></span>
-<span><span class="co">#&gt;  6 relig   2-Catholic                   46%                    22%</span></span>
-<span><span class="co">#&gt;  7 relig   3-Other christian            42%                    24%</span></span>
-<span><span class="co">#&gt;  8 relig   4-Jewish                     68%                    12%</span></span>
-<span><span class="co">#&gt;  9 relig   5-Buddhist/Hinduist          57%                    29%</span></span>
-<span><span class="co">#&gt; 10 relig   6-Muslim                     66%                    22%</span></span>
-<span><span class="co">#&gt; 11 relig   7-Other                      48%                    29%</span></span>
-<span><span class="co">#&gt; 12 relig   8-None                       50%                    31%</span></span>
-<span><span class="co">#&gt; 13 relig   Total                        45%                    21%</span></span>
-<span><span class="co">#&gt; # ℹ 2 more variables: `3-Republican` &lt;row%&gt;, Total &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; # difference (ref.): -30 -20 -10 -5 +5 +10 +20 +30</span></span></code></pre>
+<span>    ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>race <span class="op">=</span> <span class="fl">1</span>, relig <span class="op">=</span> <span class="st">"tot"</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="2">
+</th>
+<th class="tx-span" colspan="3">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl">
+</th>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname" rowspan="4">
+race
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+39%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+40%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 301)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p4 tx-b">
+76%
+</td>
+<td class="tx-r tx-num g1">
+17%
+</td>
+<td class="tx-r tx-num m4 tx-b">
+8%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 093)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num p1 tx-b">
+49%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+33%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+18%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 934)</span>
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num p1 tx-b">
+45%
+</td>
+<td class="tx-r tx-num g1">
+21%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 328)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-bb" rowspan="9">
+relig
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num g1">
+43%
+</td>
+<td class="tx-r tx-num g1">
+17%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+40%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=10 794)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+46%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num g1">
+32%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 090)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g1">
+42%
+</td>
+<td class="tx-r tx-num g1">
+24%
+</td>
+<td class="tx-r tx-num g1">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   778)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num p3 tx-b">
+68%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+12%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+20%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   388)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num p2 tx-b">
+57%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+29%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+14%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   212)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num p3 tx-b">
+66%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+12%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=    99)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num g1">
+48%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+29%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+24%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   384)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g1">
+50%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+31%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+19%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 509)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+34%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 254)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Under <strong>column</strong> percentages <code>ref</code> picks a
 reference <strong>column</strong> instead, vectorised over the column
 variables — either named
 (<code>ref = c(party3 = "first", marital = "tot")</code>) or positional,
 one value per column variable:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">marital</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"col"</span>, color <span class="op">=</span> <span class="st">"diff"</span>,</span>
 <span>    ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"first"</span>, <span class="st">"tot"</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 5 × 10</span></span>
-<span><span class="co">#&gt;   race   `1-Democrat` `2-Independent, other` `3-Republican`    Married Separated</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;  &lt;col%-mixed&gt;           &lt;col%-mixed&gt;   &lt;col%-mixed&gt; &lt;col%-mix&gt; &lt;col%-mi&gt;</span></span>
-<span><span class="co">#&gt; 1 White           66%                    75%            92%        82%       59%</span></span>
-<span><span class="co">#&gt; 2 Black           24%                    11%             3%         9%       26%</span></span>
-<span><span class="co">#&gt; 3 Other           10%                    14%             5%         9%       15%</span></span>
-<span><span class="co">#&gt; 4 Total          100%                   100%           100%       100%      100%</span></span>
-<span><span class="co">#&gt; 5 n             9 679                  4 512          7 137     10 117       743</span></span>
-<span><span class="co">#&gt; # ℹ 4 more variables: Divorced &lt;col%-mixed&gt;, Widowed &lt;col%-mixed&gt;,</span></span>
-<span><span class="co">#&gt; #   `Never married` &lt;col%-mixed&gt;, Total &lt;col%-mixed&gt;</span></span>
-<span><span class="co">#&gt; # party3: difference (1-Democrat): -30 -20 -10 -5 +5 +10 +20 +30</span></span>
-<span><span class="co">#&gt; # marital: difference (Total): -30 -20 -10 -5 +5 +10 +20 +30</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+party3
+</th>
+<th class="tx-span" colspan="5">
+marital
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num tx-br">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+Married
+</th>
+<th class="tx-r tx-num">
+Separated
+</th>
+<th class="tx-r tx-num">
+Divorced
+</th>
+<th class="tx-r tx-num">
+Widowed
+</th>
+<th class="tx-r tx-num">
+Never married
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+66%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+75%
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+92%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+82%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+59%
+</td>
+<td class="tx-r tx-num g1">
+79%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+82%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+64%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+76%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-b">
+24%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+11%
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+3%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+9%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+26%
+</td>
+<td class="tx-r tx-num g1">
+15%
+</td>
+<td class="tx-r tx-num g1">
+14%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+24%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+15%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-b">
+10%
+</td>
+<td class="tx-r tx-num g1">
+14%
+</td>
+<td class="tx-r tx-num tx-br g1">
+5%
+</td>
+<td class="tx-r tx-num g1">
+9%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+15%
+</td>
+<td class="tx-r tx-num g1">
+6%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+4%
+</td>
+<td class="tx-r tx-num g1">
+12%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+9%
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%
+</td>
+</tr>
+<tr class="tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+n
+</td>
+<td class="tx-r tx-num">
+9 679
+</td>
+<td class="tx-r tx-num g1">
+4 512
+</td>
+<td class="tx-r tx-num tx-br g1">
+7 137
+</td>
+<td class="tx-r tx-num g1">
+10 117
+</td>
+<td class="tx-r tx-num g1">
+743
+</td>
+<td class="tx-r tx-num g1">
+3 383
+</td>
+<td class="tx-r tx-num g1">
+1 807
+</td>
+<td class="tx-r tx-num g1">
+5 416
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
+21 466
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="10">
+<div class="tx-foot">
+<b>party3 — </b>Shades of blue: cells ≥ the 1-Democrat column <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the 1-Democrat column <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.<br><b>marital — </b>Shades
+of blue: cells ≥ the Total column <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total column <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Color thresholds and the palette can be customised : set them
 <strong>once for the whole session</strong> with
 <code><a href="../reference/tab_many.html">set_color_breaks()</a></code> and
@@ -517,92 +3099,808 @@ conservative colors. Use it on <strong>small samples</strong> to
 interpret</strong>. Everything colored is significant ; nothing grey
 is.</li>
 </ul>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total</span></span>
-<span><span class="co">#&gt;   &lt;cha&gt;       &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt; &lt;row&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White          39%                    21%            40%    1% 100% (n=16 395)</span></span>
-<span><span class="co">#&gt; 2 Black          75%                    16%             8%    1% 100% (n= 3 129)</span></span>
-<span><span class="co">#&gt; 3 Other          48%                    32%            18%    1% 100% (n= 1 959)</span></span>
-<span><span class="co">#&gt; 4 Total          45%                    21%            33%    1% 100% (n=21 483)</span></span>
-<span><span class="co">#&gt; # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30 [grey: non-significant or under ±5 points]</span></span></code></pre>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+39%
+</td>
+<td class="tx-r tx-num g1">
+21%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+40%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p3 tx-b">
+75%
+</td>
+<td class="tx-r tx-num g1">
+16%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+8%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+48%
+</td>
+<td class="tx-r tx-num p2 tx-b">
+32%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+18%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Coloured: significantly
+different from the Total row (Newcombe score interval, 95% confidence),
+by at least the first colour threshold. Uncoloured: either not
+significant, or a difference under ±5 points.
+</div>
+</td>
+</tr></tfoot>
+</table>
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">year</span> <span class="op">==</span> <span class="st">"2012"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="co"># n=1 974</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race   `1-Democrat` `2-Independent, other` `3-Republican`  `NA`          Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;        &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt; &lt;row&gt;         &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White           40%                    22%            37%    1% 100% (n=1 477)</span></span>
-<span><span class="co">#&gt; 2 Black           81%                    14%             5%    0% 100% (n=  301)</span></span>
-<span><span class="co">#&gt; 3 Other           47%                    32%            19%    2% 100% (n=  196)</span></span>
-<span><span class="co">#&gt; 4 Total           47%                    22%            30%    1% 100% (n=1 974)</span></span>
-<span><span class="co">#&gt; # difference (Total): -25 -15 -5 -0 +0 +5 +15 +25 [all that is significant is colored, error-adjusted]</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+40%
+</td>
+<td class="tx-r tx-num g1">
+22%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+37%
+</td>
+<td class="tx-r tx-num g1">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=1 477)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p4 tx-b">
+81%
+</td>
+<td class="tx-r tx-num m1 tx-b">
+14%
+</td>
+<td class="tx-r tx-num m3 tx-b">
+5%
+</td>
+<td class="tx-r tx-num g1">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  301)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+47%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+32%
+</td>
+<td class="tx-r tx-num m2 tx-b">
+19%
+</td>
+<td class="tx-r tx-num g1">
+2%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  196)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+22%
+</td>
+<td class="tx-r tx-num tx-b">
+30%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=1 974)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+0</span>; <span class="p2" style="font-weight:bold;">+5</span>; <span class="p3" style="font-weight:bold;">+15</span>; <span class="p4" style="font-weight:bold;">+25</span> points, after subtracting the
+margin of error (Newcombe score interval, 95% confidence). Shades of
+yellow to red: cells ≤ the Total row <span class="m1" style="font-weight:bold;">-0</span>; <span class="m2" style="font-weight:bold;">-5</span>; <span class="m3" style="font-weight:bold;">-15</span>; <span class="m4" style="font-weight:bold;">-25</span> points. Grey: not significantly
+different from the Total row after the margin of error.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>On <strong>small samples</strong> a big-looking percentage can rest
 on a handful of respondents. <code>n_min =</code> is a purely visual
 filter, applied last: it hides cells whose (unweighted) base is below
 the threshold and drops a row entirely when its largest base falls
 short. Here the rarest religions drop out:</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>, n_min <span class="op">=</span> <span class="fl">400</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 5 × 5</span></span>
-<span><span class="co">#&gt;   relig              White  Black  Other           Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;             &lt;row%&gt; &lt;row%&gt; &lt;row%&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 1-Protestant         75%    21%     4% 100% (n=10 846)</span></span>
-<span><span class="co">#&gt; 2 2-Catholic           78%     4%    18% 100% (n= 5 124)</span></span>
-<span><span class="co">#&gt; 3 3-Other christian    72%    18%    10% 100% (n=   784)</span></span>
-<span><span class="co">#&gt; 4 8-None               80%    11%     9% 100% (n= 3 523)</span></span>
-<span><span class="co">#&gt; 5 Total                76%    15%     9% 100% (n=21 483)</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+race
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+relig
+</th>
+<th class="tx-r tx-num">
+White
+</th>
+<th class="tx-r tx-num">
+Black
+</th>
+<th class="tx-r tx-num">
+Other
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num g2">
+75%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=10 846)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g2">
+78%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 124)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g2">
+72%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num g2">
+10%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   784)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g2">
+80%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 523)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+76%
+</td>
+<td class="tx-r tx-num tx-b">
+15%
+</td>
+<td class="tx-r tx-num tx-b">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+</table>
 <p>An alternative is to keep the small rows and cols but group them all
 in a “Other” level :</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>,  other_if_less_than <span class="op">=</span> <span class="fl">400</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 7 × 5</span></span>
-<span><span class="co">#&gt;   relig              White  Black  Other           Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;             &lt;row%&gt; &lt;row%&gt; &lt;row%&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 1-Protestant         75%    21%     4% 100% (n=10 846)</span></span>
-<span><span class="co">#&gt; 2 2-Catholic           78%     4%    18% 100% (n= 5 124)</span></span>
-<span><span class="co">#&gt; 3 3-Other christian    72%    18%    10% 100% (n=   784)</span></span>
-<span><span class="co">#&gt; 4 8-None               80%    11%     9% 100% (n= 3 523)</span></span>
-<span><span class="co">#&gt; 5 Others               68%    10%    22% 100% (n= 1 098)</span></span>
-<span><span class="co">#&gt; 6 NA                   67%    18%    16% 100% (n=   108)</span></span>
-<span><span class="co">#&gt; 7 Total                76%    15%     9% 100% (n=21 483)</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+race
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+relig
+</th>
+<th class="tx-r tx-num">
+White
+</th>
+<th class="tx-r tx-num">
+Black
+</th>
+<th class="tx-r tx-num">
+Other
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num g2">
+75%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=10 846)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g2">
+78%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 5 124)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g2">
+72%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num g2">
+10%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   784)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g2">
+80%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 523)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Others
+</td>
+<td class="tx-r tx-num g2">
+68%
+</td>
+<td class="tx-r tx-num g2">
+10%
+</td>
+<td class="tx-r tx-num g2">
+22%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 098)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num g2">
+67%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   108)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+76%
+</td>
+<td class="tx-r tx-num tx-b">
+15%
+</td>
+<td class="tx-r tx-num tx-b">
+9%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section level2">
 <h2 id="confidence-intervals-tests-and-contributions">Confidence intervals, tests and contributions<a class="anchor" aria-label="anchor" href="#confidence-intervals-tests-and-contributions"></a>
 </h2>
 <p>Print confidence intervals for the percentage or mean of each cell
 with <code>ci = "cell"</code> :</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, ci <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span> <span class="co"># by default, conf_level = 0.95</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race   `1-Democrat` `2-Independent, other` `3-Republican`   `NA`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;        &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt; &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White      [38;40]%               [20;21]%       [39;41]% [0;1]%</span></span>
-<span><span class="co">#&gt; 2 Black      [73;76]%               [15;18]%         [7;9]% [1;2]%</span></span>
-<span><span class="co">#&gt; 3 Other      [46;50]%               [30;34]%       [16;20]% [1;2]%</span></span>
-<span><span class="co">#&gt; 4 Total           45%                    21%            33%     1%</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: Total &lt;row%&gt;</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+[38;40]%
+</td>
+<td class="tx-r tx-num g2">
+[20;21]%
+</td>
+<td class="tx-r tx-num g2">
+[39;41]%
+</td>
+<td class="tx-r tx-num g2">
+[0;1]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+[73;76]%
+</td>
+<td class="tx-r tx-num g2">
+[15;18]%
+</td>
+<td class="tx-r tx-num g2">
+[7;9]%
+</td>
+<td class="tx-r tx-num g2">
+[1;2]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+[46;50]%
+</td>
+<td class="tx-r tx-num g2">
+[30;34]%
+</td>
+<td class="tx-r tx-num g2">
+[16;20]%
+</td>
+<td class="tx-r tx-num g2">
+[1;2]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+</table>
 <p>Print the confidence intervals of the <strong>difference</strong>
 with a reference, used to calculate significance (if 0 belongs to the
 confidence interval, the cell is not significantly different from the
 reference, here the Total row) :</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">year</span> <span class="op">==</span> <span class="st">"2012"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="co"># n=1 974</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="cn">TRUE</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span>,</span>
 <span>      display <span class="op">=</span> <span class="st">"num_ci"</span> <span class="co"># "{pct} {ci}"</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race    `1-Democrat` `2-Independent, other` `3-Republican`       `NA`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;         &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt;     &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White  40% [-10;-3]%          22%   [-3;3]% 37%    [4;10]% 1% [-1;1]%</span></span>
-<span><span class="co">#&gt; 2 Black  81%  [28;38]%          14% [-12;-3]%  5% [-28;-22]% 0% [-1;1]%</span></span>
-<span><span class="co">#&gt; 3 Other  47%   [-7;7]%          32%   [4;17]% 19%  [-17;-5]% 2% [-0;4]%</span></span>
-<span><span class="co">#&gt; 4 Total            47%                    22%            30%         1%</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: Total &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; # difference (Total): -25 -15 -5 -0 +0 +5 +15 +25; bg ratio: ÷2.667 ÷1.333 ÷1 ×1 ×1.333 ×2.667 [all that is significant is colored, error-adjusted]</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+<span class="tx-pill u2">40%<span style="font-weight:normal;"> [-10;-3]%</span></span>
+</td>
+<td class="tx-r tx-num g1">
+22%   [-3;3]%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+<span class="tx-pill o2">37%<span style="font-weight:normal;">    [4;10]%</span></span>
+</td>
+<td class="tx-r tx-num g1">
+1% [-1;1]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=1 477)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p4 tx-b">
+<span class="tx-pill o3">81%<span style="font-weight:normal;">  [28;38]%</span></span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+<span class="tx-pill u2">14%<span style="font-weight:normal;"> [-12;-3]%</span></span>
+</td>
+<td class="tx-r tx-num m3 tx-b">
+<span class="tx-pill u4"> 5%<span style="font-weight:normal;"> [-28;-22]%</span></span>
+</td>
+<td class="tx-r tx-num g1">
+0% [-1;1]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  301)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+47%   [-7;7]%
+</td>
+<td class="tx-r tx-num p1 tx-b">
+<span class="tx-pill o2">32%<span style="font-weight:normal;">   [4;17]%</span></span>
+</td>
+<td class="tx-r tx-num m2 tx-b">
+<span class="tx-pill u2">19%<span style="font-weight:normal;">  [-17;-5]%</span></span>
+</td>
+<td class="tx-r tx-num g1">
+2% [-0;4]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  196)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+22%
+</td>
+<td class="tx-r tx-num tx-b">
+30%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=1 974)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+0</span>; <span class="p2" style="font-weight:bold;">+5</span>; <span class="p3" style="font-weight:bold;">+15</span>; <span class="p4" style="font-weight:bold;">+25</span> points, after subtracting the
+margin of error (Newcombe score interval, 95% confidence). Shades of
+yellow to red: cells ≤ the Total row <span class="m1" style="font-weight:bold;">-0</span>; <span class="m2" style="font-weight:bold;">-5</span>; <span class="m3" style="font-weight:bold;">-15</span>; <span class="m4" style="font-weight:bold;">-25</span> points. Background colour (ratio):
+Cells ≥ the Total row <span class="o2" style="border-radius:4px;padding-right:4px;padding-left:4px;">×1</span>;
+<span class="o3" style="border-radius:4px;padding-right:4px;padding-left:4px;">×1.333</span>;
+<span class="o4" style="border-radius:4px;padding-right:4px;padding-left:4px;">×2.667</span>,
+after subtracting the margin of error (Newcombe score interval, 95%
+confidence). Cells ≤ the Total row <span class="u2" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷1</span>;
+<span class="u3" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷1.333</span>;
+<span class="u4" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷2.667</span>.
+Grey: not significantly different from the Total row after the margin of
+error.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><code>display = "num_ci"</code> is a type-adaptive shorthand for
 this: it shows each value with whatever confidence interval the table
 computes — <code>{pct} {ci}</code> on percentage columns and
@@ -611,38 +3909,329 @@ works for a mix of factors and numbers in one call:</p>
 <p>Add significance stars with <code>stars = TRUE</code>. They tell the
 same story than confidence intervals of the difference with the
 reference, but for different confidence levels (99%, 95%, 90%) :</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">year</span> <span class="op">==</span> <span class="st">"2012"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="co"># n=1 974</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">rincome</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, display <span class="op">=</span> <span class="st">"num_ci"</span>, stars <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 6 × 7</span></span>
-<span><span class="co">#&gt;   rincome              `1-Democrat` `2-Independent, other` `3-Republican`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;                      &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 1-Lt $10000       40%** [-15;-1]%        33%***  [5;18]% 27%    [-9;3]%</span></span>
-<span><span class="co">#&gt; 2 2-$10000 to 14999 45%    [-12;7]%        27%    [-2;15]% 26%   [-12;5]%</span></span>
-<span><span class="co">#&gt; 3 3-$15000 to 24999 50%    [-5;10]%        25%    [-2;10]% 25%   [-12;1]%</span></span>
-<span><span class="co">#&gt; 4 4-$25000 or more  49%     [-2;7]%        16%*** [-9;-2]% 35%**   [0;8]%</span></span>
-<span><span class="co">#&gt; 5 NA                47%     [-4;4]%        22%     [-3;4]% 30%    [-4;3]%</span></span>
-<span><span class="co">#&gt; 6 Total                       47%                   22%             30%  </span></span>
-<span><span class="co">#&gt; # ℹ 3 more variables: `NA` &lt;row%&gt;, Total &lt;row%&gt;, tvhours &lt;mean&gt;</span></span>
-<span><span class="co">#&gt; # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.</span></span></code></pre>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+rincome
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+<th class="tx-r tx-num tx-br">
+mean (sd)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num g2">
+40%** [-15;-1]%
+</td>
+<td class="tx-r tx-num g2">
+33%***  [5;18]%
+</td>
+<td class="tx-r tx-num g2">
+27%    [-9;3]%
+</td>
+<td class="tx-r tx-num g2">
+0% [-1;2]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  200)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.3     [-0.3;0.8]
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g2">
+45%    [-12;7]%
+</td>
+<td class="tx-r tx-num g2">
+27%    [-2;15]%
+</td>
+<td class="tx-r tx-num g2">
+26%   [-12;5]%
+</td>
+<td class="tx-r tx-num g2">
+2% [-0;6]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  103)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.3     [-0.4;0.9]
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g2">
+50%    [-5;10]%
+</td>
+<td class="tx-r tx-num g2">
+25%    [-2;10]%
+</td>
+<td class="tx-r tx-num g2">
+25%   [-12;1]%
+</td>
+<td class="tx-r tx-num g2">
+0% [-1;1]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  194)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.0     [-0.5;0.4]
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num g2">
+49%     [-2;7]%
+</td>
+<td class="tx-r tx-num g2">
+16%*** [-9;-2]%
+</td>
+<td class="tx-r tx-num g2">
+35%**   [0;8]%
+</td>
+<td class="tx-r tx-num g2">
+0% [-1;0]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  649)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.2*** [-1.1;-0.6]
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+NA
+</td>
+<td class="tx-r tx-num g2">
+47%     [-4;4]%
+</td>
+<td class="tx-r tx-num g2">
+22%     [-3;4]%
+</td>
+<td class="tx-r tx-num g2">
+30%    [-4;3]%
+</td>
+<td class="tx-r tx-num g2">
+1% [-0;1]%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=  828)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.7***   [0.3;1.0]
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+47%  
+</td>
+<td class="tx-r tx-num tx-b">
+22%   
+</td>
+<td class="tx-r tx-num tx-b">
+30%  
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=1 974)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3.1<span style="font-weight:normal;"> (σ2.9)   </span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="7">
+<div class="tx-foot">
+<em><strong>: significantly different from the reference category (in
+bold) at the 99% confidence level; </strong>: at the 95% level; </em>:
+at the 90% level; no star: not significant.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><strong>Show two numbers in one cell.</strong> <code>display</code>
 is not just for confidence intervals: it takes a <strong><code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>
 template</strong> that combines any cell fields. For example
 <code>display = "{pct} ({diff})"</code> prints each percentage followed
 by its difference from the reference, and <code>"{pct} (n={n})"</code>
 follows it with the count:</p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>, display <span class="op">=</span> <span class="st">"{pct} ({diff})"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race   `1-Democrat` `2-Independent, other` `3-Republican`     `NA`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;        &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt;   &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White    39% ( -6%)             21% ( -0%)     40% ( +7%) 1% (-0%)</span></span>
-<span><span class="co">#&gt; 2 Black    75% (+30%)             16% ( -5%)      8% (-26%) 1% (+0%)</span></span>
-<span><span class="co">#&gt; 3 Other    48% ( +3%)             32% (+11%)     18% (-15%) 1% (+1%)</span></span>
-<span><span class="co">#&gt; 4 Total    45% ( +0%)             21% ( +0%)     33% ( +0%) 1% (+0%)</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: Total &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; # difference (Total): -30 -20 -10 -5 +5 +10 +20 +30</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b">
+39%<span style="font-weight:normal;"> ( -6%)</span>
+</td>
+<td class="tx-r tx-num g1">
+21% ( -0%)
+</td>
+<td class="tx-r tx-num p1 tx-b">
+40%<span style="font-weight:normal;"> ( +7%)</span>
+</td>
+<td class="tx-r tx-num g1">
+1% (-0%)
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p3 tx-b">
+75%<span style="font-weight:normal;"> (+30%)</span>
+</td>
+<td class="tx-r tx-num g1">
+16% ( -5%)
+</td>
+<td class="tx-r tx-num m3 tx-b">
+ 8%<span style="font-weight:normal;"> (-26%)</span>
+</td>
+<td class="tx-r tx-num g1">
+1% (+0%)
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+48% ( +3%)
+</td>
+<td class="tx-r tx-num p2 tx-b">
+32%<span style="font-weight:normal;"> (+11%)</span>
+</td>
+<td class="tx-r tx-num m2 tx-b">
+18%<span style="font-weight:normal;"> (-15%)</span>
+</td>
+<td class="tx-r tx-num g1">
+1% (+1%)
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%<span style="font-weight:normal;"> ( +0%)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+21%<span style="font-weight:normal;"> ( +0%)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+33%<span style="font-weight:normal;"> ( +0%)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+1%<span style="font-weight:normal;"> (+0%)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>The first field in the template is the <em>primary</em> one — the
 value Excel keeps and the one the colours read.
 <code><a href="../articles/tabxplor-programming.html">vignette("tabxplor-programming")</a></code> explains the full grammar
@@ -652,45 +4241,481 @@ and lists every field you can combine.</p>
 <strong>Welch’s F ANOVA</strong> for numeric variables
 (<code>options(tabxplor.anova = "classic")</code> switches to the pooled
 F):</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, test <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; |      | Tests                  |   party3 |   |     tvhours |</span></span>
-<span><span class="co">#&gt; |:-----|:-----------------------|---------:|:-:|------------:|</span></span>
-<span><span class="co">#&gt; | race | N                      |   21 483 |   |      11 337 |</span></span>
-<span><span class="co">#&gt; |      | pvalue (Chi2, Welch F) |   &lt;0.01% |   |      &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |      | Cramér's V, eta2       | V = 0.21 |   | eta2 = 0.04 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 4 × 7</span></span>
-<span><span class="co">#&gt;   race  `1-Democrat` `2-Independent, other` `3-Republican`  `NA`           Total</span></span>
-<span><span class="co">#&gt;   &lt;cha&gt;       &lt;row%&gt;                 &lt;row%&gt;         &lt;row%&gt; &lt;row&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White          39%                    21%            40%    1% 100% (n=16 395)</span></span>
-<span><span class="co">#&gt; 2 Black          75%                    16%             8%    1% 100% (n= 3 129)</span></span>
-<span><span class="co">#&gt; 3 Other          48%                    32%            18%    1% 100% (n= 1 959)</span></span>
-<span><span class="co">#&gt; 4 Total          45%                    21%            33%    1% 100% (n=21 483)</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: tvhours &lt;mean&gt;</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+<th class="tx-r tx-num tx-br">
+mean (sd)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+39%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+40%
+</td>
+<td class="tx-r tx-num g2">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.8 (σ2.3)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+75%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num g2">
+8%
+</td>
+<td class="tx-r tx-num g2">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+4.2 (σ3.5)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+48%
+</td>
+<td class="tx-r tx-num g2">
+32%
+</td>
+<td class="tx-r tx-num g2">
+18%
+</td>
+<td class="tx-r tx-num g2">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+<td class="tx-r tx-num tx-br g2">
+2.8 (σ2.4)
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+45%
+</td>
+<td class="tx-r tx-num tx-b">
+21%
+</td>
+<td class="tx-r tx-num tx-b">
+33%
+</td>
+<td class="tx-r tx-num tx-b">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3.0<span style="font-weight:normal;"> (σ2.6)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+pvalue (Chi2, Welch F)
+</td>
+<td class="tx-r tx-num g2">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+</td>
+<td class="tx-r tx-num tx-br g2">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Cramér’s V, eta2
+</td>
+<td class="tx-r tx-num g2">
+0.21
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+</td>
+<td class="tx-r tx-num tx-br g2">
+0.04
+</td>
+</tr>
+</tbody>
+</table>
 <p><code>color = "contrib"</code> colors cells by their
 <strong>contribution to the Chi-squared</strong> — the cells that would
 stand out in a correspondence analysis :</p>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, color <span class="op">=</span> <span class="st">"contrib"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; |      | Tests         |   party3 |</span></span>
-<span><span class="co">#&gt; |:-----|:--------------|---------:|</span></span>
-<span><span class="co">#&gt; | race | N             |   21 483 |</span></span>
-<span><span class="co">#&gt; |      | pvalue (Chi2) |   &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |      | Cramér's V    | V = 0.21 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 4 × 6</span></span>
-<span><span class="co">#&gt;   race   `1-Democrat` `2-Independent, other` `3-Republican` `NA`  Total</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;           &lt;n&gt;                    &lt;n&gt;            &lt;n&gt;  &lt;n&gt;    &lt;n&gt;</span></span>
-<span><span class="co">#&gt; 1 White         6 390                  3 365          6 546   94 16 395</span></span>
-<span><span class="co">#&gt; 2 Black         2 344                    513            236   36  3 129</span></span>
-<span><span class="co">#&gt; 3 Other           945                    634            355   25  1 959</span></span>
-<span><span class="co">#&gt; 4 Total         9 679                  4 512          7 137  155 21 483</span></span>
-<span><span class="co">#&gt; # contribution to Chi2 (vs the mean): ×10 ×5 ×2 ×1 ×1 ×2 ×5 ×10</span></span></code></pre>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g1">
+6 390
+</td>
+<td class="tx-r tx-num g1">
+3 365
+</td>
+<td class="tx-r tx-num p1 tx-b">
+6 546
+</td>
+<td class="tx-r tx-num g1">
+94
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+16 395
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p2 tx-b">
+2 344
+</td>
+<td class="tx-r tx-num g1">
+513
+</td>
+<td class="tx-r tx-num m2 tx-b">
+236
+</td>
+<td class="tx-r tx-num g1">
+36
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+3 129
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+945
+</td>
+<td class="tx-r tx-num g1">
+634
+</td>
+<td class="tx-r tx-num g1">
+355
+</td>
+<td class="tx-r tx-num g1">
+25
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+1 959
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+9 679
+</td>
+<td class="tx-r tx-num tx-b">
+4 512
+</td>
+<td class="tx-r tx-num tx-b">
+7 137
+</td>
+<td class="tx-r tx-num tx-b">
+155
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+21 483
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+pvalue (Chi2)
+</td>
+<td class="tx-r tx-num g1">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+</td>
+</tr>
+<tr class="tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Cramér’s V
+</td>
+<td class="tx-r tx-num g1">
+0.21
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ <span class="p1" style="font-weight:bold;">×1</span>; <span class="p2" style="font-weight:bold;">×2</span>; <span class="p3" style="font-weight:bold;">×5</span>; <span class="p4" style="font-weight:bold;">×10</span> the mean contribution. Shades of
+yellow to red: cells ≤ <span class="m1" style="font-weight:bold;">×1</span>; <span class="m2" style="font-weight:bold;">×2</span>; <span class="m3" style="font-weight:bold;">×5</span>; <span class="m4" style="font-weight:bold;">×10</span> the mean contribution.
+</div>
+</td>
+</tr></tfoot>
+</table>
+<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns</span></span></code></pre></div>
 <p>See below for the detail of how confidence intervals and colors can
 be composed.</p>
+</div>
+<div class="section level2">
+<h2 id="hover-tooltips-html-tables">Hover tooltips (html tables)<a class="anchor" aria-label="anchor" href="#hover-tooltips-html-tables"></a>
+</h2>
+<p>Every html table carries per-cell hover <strong>tooltips</strong>
+with the numbers behind the cell: the unweighted count, the difference
+from the reference, the ratio, the confidence interval… They are on by
+default in the Viewer and in reports — this vignette only switched them
+off document-wide with
+<code>options(tabxplor.tab_kable_tooltips = FALSE)</code>, to keep the
+page light. Hover the cells of the table below, where they are switched
+back on with <code>tooltips = TRUE</code>:</p>
+<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/tab_html.html">tab_html</a></span><span class="op">(</span>tooltips <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num m1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -6% ; ratio: ÷1.2 ; n: 6 390">
+39%
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ×1 ; n: 3 365">
+21%
+</td>
+<td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +7% ; ratio: ×1.2 ; n: 6 546">
+40%
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -0% ; ratio: ÷1.3 ; n: 94">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 16 395">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p3 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +30% ; ratio: ×1.7 ; n: 2 344">
+75%
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷1.3 ; n: 513">
+16%
+</td>
+<td class="tx-r tx-num m3 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -26% ; ratio: ÷4.4 ; n: 236">
+8%
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1.6 ; n: 36">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 3 129">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.1 ; n: 945">
+48%
+</td>
+<td class="tx-r tx-num p2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +11% ; ratio: ×1.5 ; n: 634">
+32%
+</td>
+<td class="tx-r tx-num m2 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -15% ; ratio: ÷1.8 ; n: 355">
+18%
+</td>
+<td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.8 ; n: 25">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 1 959">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 9 679">
+45%
+</td>
+<td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 4 512">
+21%
+</td>
+<td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 7 137">
+33%
+</td>
+<td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 155">
+1%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="n: 21 483">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Shades of blue: cells ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><strong>A note on weights.</strong> With a weight
 (<code>wt =</code>), every proportion or mean is weighted, but by
 default the sample size behind the confidence intervals and tests stays
@@ -705,7 +4730,7 @@ the whole-table Chi2 tests to a Rao–Scott correction.</p>
 </h2>
 <p>A finished table exports with its colors to Excel, HTML or
 Markdown:</p>
-<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tabs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab_export.html">tab_export</a></span><span class="op">(</span><span class="va">tabs</span><span class="op">)</span> <span class="co"># default : html table (RStudio Viewer, .Rmd/.qmd, etc.)</span></span>
 <span><span class="fu"><a href="../reference/tab_export.html">tab_export</a></span><span class="op">(</span><span class="va">tabs</span>, format <span class="op">=</span> <span class="st">"xl"</span>, path <span class="op">=</span> <span class="st">"table"</span><span class="op">)</span> <span class="co"># Excel export </span></span>
@@ -719,26 +4744,191 @@ For the console, <code>set_color_palette(theme = "auto")</code> detects
 the editor (RStudio, Positron, etc.) and picks the matching palette — it
 is applied automatically when the package loads.</li>
 </ul>
-<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_export.html">tab_export</a></span><span class="op">(</span><span class="va">tabs</span>, theme <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span> <span class="co"># HTML that follows the reader's light/dark modes</span></span></code></pre></div>
 <ul>
 <li>Since numeric variables can only be passed in columns, some complex
 layout with numeric variables in rows need to transpose the table during
 export using <code>transpose = TRUE</code> :</li>
 </ul>
-<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">party3</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/tab_export.html">tab_export</a></span><span class="op">(</span>transpose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">party3</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/tab_html.html">tab_html</a></span><span class="op">(</span>transpose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="2">
+</th>
+<th class="tx-span" colspan="4">
+party3
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-bl">
+</th>
+<th class="tx-l tx-bl tx-rv">
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent, other
+</th>
+<th class="tx-r tx-num">
+3-Republican
+</th>
+<th class="tx-r tx-num tx-br">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-bl tx-lbl tx-vname" rowspan="3">
+race
+</td>
+<td class="tx-l tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+66%
+</td>
+<td class="tx-r tx-num g2">
+75%
+</td>
+<td class="tx-r tx-num g2">
+92%
+</td>
+<td class="tx-r tx-num tx-br g2">
+61%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+76%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+24%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num g2">
+3%
+</td>
+<td class="tx-r tx-num tx-br g2">
+23%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+15%
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+10%
+</td>
+<td class="tx-r tx-num g2">
+14%
+</td>
+<td class="tx-r tx-num g2">
+5%
+</td>
+<td class="tx-r tx-num tx-br g2">
+16%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+9%
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-bl tx-lbl tx-vname" rowspan="2">
+</td>
+<td class="tx-l tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+100%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%
+</td>
+</tr>
+<tr class="tx-bb tx-bb2">
+<td class="tx-l tx-bl tx-rv">
+n
+</td>
+<td class="tx-r tx-num g2">
+9 679
+</td>
+<td class="tx-r tx-num g2">
+4 512
+</td>
+<td class="tx-r tx-num g2">
+7 137
+</td>
+<td class="tx-r tx-num tx-br g2">
+155
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+21 483
+</td>
+</tr>
+<tr class="tx-bb">
+<td class="tx-l tx-bl tx-lbl  tx-bb" rowspan="1">
+tvhours
+</td>
+<td class="tx-l tx-bl tx-rv">
+mean
+</td>
+<td class="tx-r tx-num g2">
+3.2 (σ2.7)
+</td>
+<td class="tx-r tx-num g2">
+3.1 (σ2.9)
+</td>
+<td class="tx-r tx-num g2">
+2.7 (σ2.2)
+</td>
+<td class="tx-r tx-num tx-br g2">
+3.2 (σ3.3)
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+3.0 (σ2.6)
+</td>
+</tr>
+</tbody>
+</table>
 <ul>
 <li>
 <strong>One stylesheet for a whole document.</strong> In an
 <code>.Rmd</code>/<code>.qmd</code> report, <code><a href="../reference/tab_css.html">tab_css()</a></code>
-writes the colour CSS once and every later <code><a href="../reference/tab_html.html">tab_kable()</a></code>
-emits only classes, so a single <code>theme</code> — including
-<code>"auto"</code>, which follows the reader’s light/dark mode — styles
-every table at once:</li>
+writes the colour CSS once and every later table emits only classes, so
+a single <code>theme</code> — including <code>"auto"</code>, which
+follows the reader’s light/dark mode — styles every table at once. This
+very vignette does exactly that (with
+<code>theme = "light"</code>):</li>
 </ul>
-<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb37"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.tab_kable_css <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab_css.html">tab_css</a></span><span class="op">(</span>theme <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span>   <span class="co"># emit once, near the top of the document</span></span></code></pre></div>
 <p>Nothing is written inline on a cell, so any look is overridable with
@@ -754,25 +4944,318 @@ for the role classes (<code>.tx-rv</code>, <code>.tx-tot</code>,
 the helper <code><a href="../reference/fmt.html">is_totrow()</a></code> to keep the Total row in place when
 you re-order (it flags total rows, so sorting on it first sends them to
 the bottom):</p>
-<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb38"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">marital</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">Married</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 8</span></span>
-<span><span class="co">#&gt;   race  Married Separated Divorced Widowed `Never married`  `NA`           Total</span></span>
-<span><span class="co">#&gt;   &lt;cha&gt;  &lt;row%&gt;    &lt;row%&gt;   &lt;row%&gt;  &lt;row%&gt;          &lt;row%&gt; &lt;row&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt; 1 White     51%        3%      16%      9%             21%    0% 100% (n=16 395)</span></span>
-<span><span class="co">#&gt; 2 Other     48%        6%      11%      4%             32%    0% 100% (n= 1 959)</span></span>
-<span><span class="co">#&gt; 3 Black     28%        6%      16%      8%             42%    0% 100% (n= 3 129)</span></span>
-<span><span class="co">#&gt; 4 Total     47%        3%      16%      8%             25%    0% 100% (n=21 483)</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="6">
+marital
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+Married
+</th>
+<th class="tx-r tx-num">
+Separated
+</th>
+<th class="tx-r tx-num">
+Divorced
+</th>
+<th class="tx-r tx-num">
+Widowed
+</th>
+<th class="tx-r tx-num">
+Never married
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+51%
+</td>
+<td class="tx-r tx-num g2">
+3%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+48%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num g2">
+32%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+28%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num g2">
+8%
+</td>
+<td class="tx-r tx-num g2">
+42%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+3%
+</td>
+<td class="tx-r tx-num tx-b">
+16%
+</td>
+<td class="tx-r tx-num tx-b">
+8%
+</td>
+<td class="tx-r tx-num tx-b">
+25%
+</td>
+<td class="tx-r tx-num tx-b">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+</table>
 <p><strong>Titling and annotating.</strong> <code>subtext =</code>
 prints one or more legend lines under a table (a data source, a note).
 <code><a href="../reference/set_caption.html">set_caption()</a></code> gives a table a <strong>title that survives a
 dplyr pipeline</strong>, and every exporter uses it as the table
 title:</p>
-<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb39"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">marital</span>, pct <span class="op">=</span> <span class="st">"row"</span>, subtext <span class="op">=</span> <span class="st">"Source: GSS, 2000-2014"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/set_caption.html">set_caption</a></span><span class="op">(</span><span class="st">"Custom title"</span><span class="op">)</span></span></code></pre></div>
+<div class="tabxplor-caption">
+Custom title
+</div>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="6">
+marital
+</th>
+<th class="tx-span" colspan="1">
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+Married
+</th>
+<th class="tx-r tx-num">
+Separated
+</th>
+<th class="tx-r tx-num">
+Divorced
+</th>
+<th class="tx-r tx-num">
+Widowed
+</th>
+<th class="tx-r tx-num">
+Never married
+</th>
+<th class="tx-r tx-num">
+NA
+</th>
+<th class="tx-r tx-num tx-br tx-bl tx-tot">
+Total
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num g2">
+51%
+</td>
+<td class="tx-r tx-num g2">
+3%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num g2">
+9%
+</td>
+<td class="tx-r tx-num g2">
+21%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=16 395)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+28%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num g2">
+16%
+</td>
+<td class="tx-r tx-num g2">
+8%
+</td>
+<td class="tx-r tx-num g2">
+42%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+48%
+</td>
+<td class="tx-r tx-num g2">
+6%
+</td>
+<td class="tx-r tx-num g2">
+11%
+</td>
+<td class="tx-r tx-num g2">
+4%
+</td>
+<td class="tx-r tx-num g2">
+32%
+</td>
+<td class="tx-r tx-num g2">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num tx-b">
+47%
+</td>
+<td class="tx-r tx-num tx-b">
+3%
+</td>
+<td class="tx-r tx-num tx-b">
+16%
+</td>
+<td class="tx-r tx-num tx-b">
+8%
+</td>
+<td class="tx-r tx-num tx-b">
+25%
+</td>
+<td class="tx-r tx-num tx-b">
+0%
+</td>
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=21 483)</span>
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="8">
+<div class="tx-foot">
+Source: GSS, 2000-2014
+</div>
+</td>
+</tr></tfoot>
+</table>
 </div>
 <div class="section level2">
 <h2 id="confidence-intervals-and-colors-composition-variable_type-color-color_signif">Confidence intervals and colors composition : variable_type ×
@@ -866,23 +5349,31 @@ corresponding cell in the Total row or Total column):</p>
 </tr>
 </tbody>
 </table>
-<p>Alternative interval methods (see <code><a href="../reference/tab_ci.html">?tab_ci</a></code>): -
-<code>method_diff = "ac"</code> (Agresti-Caffo) or <code>"wald"</code>
-for a percentage difference; - <code>method_mean_diff = "student"</code>
-(pooled, the OLS two-group interval) for a mean difference; -
+<p>Alternative interval methods (see <code><a href="../reference/tab_ci.html">?tab_ci</a></code>):</p>
+<ul>
+<li>
+<code>method_diff = "ac"</code> (Agresti-Caffo) or
+<code>"wald"</code> for a percentage difference;</li>
+<li>
+<code>method_mean_diff = "student"</code> (pooled, the OLS two-group
+interval) for a mean difference;</li>
+<li>
 <code>method_mean_ratio = "quasipoisson"</code> or
-<code>"poisson"</code> for a mean ratio. - The relative-risk
-(<code>method_ratio = "katz"</code>) and odds-ratio (Woolf) intervals
-have no alternative. - A mean <strong>difference</strong> is colored
+<code>"poisson"</code> for a mean ratio.</li>
+<li>The relative-risk (<code>method_ratio = "katz"</code>) and
+odds-ratio (Woolf) intervals have no alternative.</li>
+<li>A mean <strong>difference</strong> is colored
 <strong>standardized</strong> — Glass’s Δ, the difference divided by the
 reference’s standard deviation — so the <code>mean_diff</code> color
 breaks are read in SD units, unless the user provides a custom break
-scale. - For a factor with <strong>3 or more levels</strong>, the odds
-ratio (and its interval) compares each level to the <code>ref2</code>
-baseline level : it is a relative risk ratio (RRR) (the same observed
-quantity that is modelised by a multinomial logistic regression). The OR
-interval is computed only when <code>color_signif</code> or
-<code>stars</code> needs it.</p>
+scale.</li>
+<li>For a factor with <strong>3 or more levels</strong>, the odds ratio
+(and its interval) compares each level to the <code>ref2</code> baseline
+level : it is a relative risk ratio (RRR) (the same observed quantity
+that is modelised by a multinomial logistic regression). The OR interval
+is computed only when <code>color_signif</code> or <code>stars</code>
+needs it.</li>
+</ul>
 <p><strong>Simple, cell-by-cell confidence intervals</strong>
 (<code>ci = "cell"</code>) compare each cell to 0 % (or a mean of 0),
 <em>not</em> to a reference:</p>
@@ -921,22 +5412,34 @@ stars</strong>. <code>method_cell</code> chooses <code>"wilson"</code>
 (default) or <code>"wald"</code> for percentages; a mean cell interval
 is always the one-sample Student <em>t</em>.</p>
 <p><strong><code>color_signif</code> turns that interval into a coloring
-policy.</strong> - <code>"ignore"</code> colors <strong>every</strong>
-cell by its <strong>observed effect</strong> size, for example the
-observed difference compared to the Total row. Grey cells have an
-observed effect below the threshold (for example, differences of less
-than ±5 points of percentages). - <code>"grey_non_signif"</code> and
-<code>"guaranteed_effect"</code> both color <strong>only significant
-cells</strong>, but differ in the <em>intensity basis</em>: +
+policy.</strong></p>
+<ul>
+<li>
+<code>"ignore"</code> colors <strong>every</strong> cell by its
+<strong>observed effect</strong> size, for example the observed
+difference compared to the Total row. Grey cells have an observed effect
+below the threshold (for example, differences of less than ±5 points of
+percentages).</li>
+<li>
+<code>"grey_non_signif"</code> and <code>"guaranteed_effect"</code>
+both color <strong>only significant cells</strong>, but differ in the
+<em>intensity basis</em>:
+<ul>
+<li>
 <code>grey_non_signif</code> colors by the <strong>observed</strong>
 effect, like “ignore”, greying out small deviations, but it also
 <strong>greys out any large deviation that turns to be
-non-significant</strong>. Ideal for large samples. +
-<code>guaranteed_effect</code> colors by the <strong>guaranteed</strong>
-effect — the confidence-bound (CI-floor), the <strong>smaller deviation
-that is assured at a given confidence level</strong> (default 95%) — so
-its colors are dimmer and conservative, but <strong>all significative
-differences are colored</strong>, which is ideal for small samples.</p>
+non-significant</strong>. Ideal for large samples.</li>
+<li>
+<code>guaranteed_effect</code> colors by the
+<strong>guaranteed</strong> effect — the confidence-bound (CI-floor),
+the <strong>smaller deviation that is assured at a given confidence
+level</strong> (default 95%) — so its colors are dimmer and
+conservative, but <strong>all significative differences are
+colored</strong>, which is ideal for small samples.</li>
+</ul>
+</li>
+</ul>
 <table class="table">
 <colgroup>
 <col width="6%">
@@ -998,7 +5501,7 @@ differences are colored</strong>, which is ideal for small samples.</p>
 </tbody>
 </table>
 <p>Examples :</p>
-<div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># --- factors: percentages -------------------------------------------------</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"diff"</span>,  color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"ratio"</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span><span class="op">)</span></span>

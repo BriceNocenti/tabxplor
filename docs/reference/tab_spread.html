@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -15,8 +15,7 @@
     </button>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
-      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
-<li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+      <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
@@ -28,8 +27,7 @@
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
-      </ul><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
-<li class="nav-item"><form class="form-inline" role="search">
+      </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/BriceNocenti/tabxplor/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
@@ -100,18 +98,30 @@ If <code>FALSE</code>, the default, column names are ordered by first appearance
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">&lt;-</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="tab.html">tab</a></span><span class="op">(</span><span class="va">data</span>, <span class="va">relig</span>, <span class="va">marital</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">race</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, totaltab <span class="op">=</span> <span class="st">"no"</span>,</span></span>
 <span class="r-in"><span>      color <span class="op">=</span> <span class="st">"diff"</span>, tot <span class="op">=</span> <span class="st">"row"</span>, other_if_less_than <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in dplyr::mutate(dplyr::ungroup(dplyr::mutate(dplyr::group_by(data,     !!!tab_vars), dplyr::across(tidyselect::all_of(as.character(row_vars)),     ~forcats::fct_lump_min(., other_if_less_than, other_level = other_level)))),     dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(.x,         purrr::discard(unique(append(levels(dplyr::pull(data,             dplyr::cur_column())), other_level)), function(v) !v %in%             levels(.x))))):</span> <span style="color: #00BBBB;">ℹ</span> In argument: `dplyr::across(...)`.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `across()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #BBBB00;">!</span> Can't compute column `relig`.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `purrr::discard()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> In index: 1.</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Caused by error in `.fn()`:</span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span style="color: #BBBB00;">!</span> object '.x' not found</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">tabs</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">race</span>, <span class="va">relig</span>, <span class="va">Married</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">tab_spread</span><span class="op">(</span><span class="va">race</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'tabs' not found</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 14 × 6</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         year [2]</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    year  relig       Other  Black  White  Total</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span> <span style="color: #949494; font-style: italic;">&lt;fct&gt; </span>     <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span> <span style="color: #949494; font-style: italic;">&lt;row%&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 1</span> 2000  Other                       <span style="color: #FF8700; font-weight: bold;">31%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 2</span> 2000  None                 <span style="color: #FF8700; font-weight: bold;">12%</span>    <span style="color: #AF8700; font-weight: bold;">42%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 3</span> 2000  Jewish                      <span style="color: #949494;">49%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 4</span> 2000  Catholic      <span style="color: #949494;">44%</span>    <span style="color: #AF8700; font-weight: bold;">20%</span>    <span style="color: #949494;">49%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 5</span> 2000  Protestant           <span style="color: #949494;">32%</span>    <span style="color: #949494;">51%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 6</span> 2000  Others        <span style="color: #949494;">46%</span>    <span style="color: #AF8700; font-weight: bold;">17%</span>    <span style="color: #949494;">47%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 7</span> 2000  TOTAL 2000    <span style="font-weight: bold;">45%</span>    <span style="font-weight: bold;">28%</span>    <span style="font-weight: bold;">49%</span>    <span style="font-weight: bold;">45%</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 8</span> 2014  Christian            <span style="color: #00AFAF; font-weight: bold;">31%</span>    <span style="color: #949494;">49%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 9</span> 2014  None          <span style="color: #949494;">44%</span>    <span style="color: #AF8700; font-weight: bold;">19%</span>    <span style="color: #AF8700; font-weight: bold;">39%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">10</span> 2014  Jewish                      <span style="color: #949494;">54%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">11</span> 2014  Catholic      <span style="color: #949494;">40%</span>           <span style="color: #949494;">49%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">12</span> 2014  Protestant    <span style="color: #949494;">39%</span>    <span style="color: #949494;">25%</span>    <span style="color: #00AFAF; font-weight: bold;">57%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">13</span> 2014  Others        <span style="color: #00AFAF; font-weight: bold;">51%</span>    <span style="color: #949494;">30%</span>    <span style="color: #AF8700; font-weight: bold;">44%</span>       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">14</span> 2014  TOTAL 2014    <span style="font-weight: bold;">43%</span>    <span style="font-weight: bold;">25%</span>    <span style="font-weight: bold;">50%</span>    <span style="font-weight: bold;">46%</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>difference (Total): <span style="color: #FF8787; font-weight: bold;">-30</span> <span style="color: #FF8700; font-weight: bold;">-15</span> <span style="color: #AF8700; font-weight: bold;">-5</span> <span style="color: #00AFAF; font-weight: bold;">+5</span> <span style="color: #5FAFFF; font-weight: bold;">+15</span> <span style="color: #87AFFF; font-weight: bold;">+30</span></span>
 <span class="r-in"><span>  </span></span>
 </code></pre></div>
     </div>

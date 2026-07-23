@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -28,7 +28,6 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
-<li class="nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
@@ -45,7 +44,6 @@
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
-<li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
@@ -84,11 +82,76 @@
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;     intersect, setdiff, setequal, union</span></span>
 <span></span>
-<span><span class="co"># Comme dans la vignette d'introduction, les tableaux sont affiches comme la sortie coloree de la</span></span>
-<span><span class="co"># console convertie en HTML. options(tabxplor.lang = "fr") met les legendes et notes en francais.</span></span>
+<span><span class="co"># Comme dans la vignette d'introduction, les tableaux sont rendus comme les vrais tableaux html</span></span>
+<span><span class="co"># de tabxplor (le reglage recommande au quotidien) ; la feuille de style partagee est emise une</span></span>
+<span><span class="co"># fois par tab_css() ci-dessous, et les infobulles restent coupees.</span></span>
+<span><span class="co"># options(tabxplor.lang = "fr") met les legendes et notes en francais.</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.print <span class="op">=</span> <span class="st">"html"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.tab_kable_css <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.tab_kable_tooltips <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>cli.num_colors <span class="op">=</span> <span class="fl">256</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tabxplor.lang <span class="op">=</span> <span class="st">"fr"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab_many.html">set_color_palette</a></span><span class="op">(</span>theme <span class="op">=</span> <span class="st">"light"</span><span class="op">)</span></span></code></pre></div>
+<style>
+.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
+.tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
+.tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+.tabxplor-tab tfoot{font-size:80%;text-align:left;}
+.tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
+.tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
+.tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}
+.tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}
+.tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,.tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{border-left-style:solid;border-left-width:1px;}
+.tabxplor-tab table > thead > tr:first-child > *{border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab table > tbody > tr:last-child > *{border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,.tabxplor-tab table > thead > tr > *:last-child{border-right-style:solid;border-right-width:1px;}
+.tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:first-child,.tabxplor-tab table > thead > tr > *:first-child{border-left-style:solid;border-left-width:1px;}
+.tabxplor-tab p{font-size:80%;}
+.tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab .tx-r{text-align:right;}
+.tabxplor-tab .tx-l{text-align:left;}
+.tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+.tabxplor-tab .tx-num{white-space:nowrap;}
+.tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
+.tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
+.tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}
+.tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}
+.tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;padding:4px 2px;}
+.tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}
+.tabxplor-tab tr.tx-bt>*{border-top-style:solid;border-top-width:1px;}
+.tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}
+.tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}
+.tabxplor-tab .tx-foot{width:0;min-width:100%;}
+.tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}
+.tooltip-inner{max-width:none;white-space:nowrap;}
+.popover{max-width:none;}
+.popover-body,.popover-content{padding:6px;white-space:nowrap;}
+.tabxplor-tab{color:#000000;background:#ffffff;}
+.tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}
+.tabxplor-tab tbody tr:hover{background:#FFFCE5;}
+.g1{color:#9f9f9f;}
+.g2{color:#111111;}
+.tabxplor-caption{color:#000000;}
+.p1{color:#02A5B3;}
+.p2{color:#0891C9;}
+.p3{color:#0267C7;}
+.p4{color:#300DFD;}
+.m1{color:#DCA331;}
+.m2{color:#DE7C01;}
+.m3{color:#DD5301;}
+.m4{color:#D60103;}
+.o1{background-color:#DFFCFF;}
+.o2{background-color:#D7EFFF;}
+.o3{background-color:#CEE3FF;}
+.o4{background-color:#BBCCFF;}
+.u1{background-color:#FFF4E1;}
+.u2{background-color:#FFE6D3;}
+.u3{background-color:#FFD7C8;}
+.u4{background-color:#FFBAAF;}
+</style>
 <p>Pour les modèles de régression les plus courants,
 <code><a href="../reference/tab_reg.html">tab_reg()</a></code> construit un <strong>tableau de
 régression</strong> qui ressemble et se comporte comme un tableau croisé
@@ -156,13 +219,17 @@ observée à comparer<a class="anchor" aria-label="anchor" href="#le-type-de-la-
 accompagnée d’une colonne compagne brute/observée montrant l’effet
 <em>empirique, non ajusté, à un seul prédicteur</em> — l’effet que vous
 verriez sans aucun contrôle, « toutes choses étant inégales par ailleurs
-», pour ce prédicteur. - logistique à 2 modalités (binomial) → %
-observés, et rapports de cotes observés (non modélisés : calculés
-uniquement à partir des pourcentages) - logistique à 3 modalités ou plus
-(multinomial) → les OR observés sont affichés en infobulle sur les cases
-du modèle dans les exports html - gaussien (linéaire) → moyennes de
-groupe et leur différence - poisson (comptage) → taux observé et rapport
-de taux observé</p>
+», pour ce prédicteur.</p>
+<ul>
+<li>logistique à 2 modalités (binomial) → % observés, et rapports de
+cotes observés (non modélisés : calculés uniquement à partir des
+pourcentages)</li>
+<li>logistique à 3 modalités ou plus (multinomial) → les OR observés
+sont affichés en infobulle sur les cases du modèle dans les exports
+html</li>
+<li>gaussien (linéaire) → moyennes de groupe et leur différence</li>
+<li>poisson (comptage) → taux observé et rapport de taux observé</li>
+</ul>
 </div>
 <div class="section level2">
 <h2 id="régression-logistique-un-facteur-binaire">Régression logistique (un facteur binaire)<a class="anchor" aria-label="anchor" href="#r%C3%A9gression-logistique-un-facteur-binaire"></a>
@@ -172,54 +239,237 @@ married » contre « not married », <code><a href="../reference/tab_reg.html">t
 famille <strong>binomiale</strong> pour ajuster une régression
 logistique et rapporte des <strong>rapports de cotes</strong> (la
 modalité de référence de chaque prédicteur affiche la valeur neutre
-<code>1</code>). - Comme dans tout modèle de régression, l’effet d’une
-modalité de prédicteur sur la variable expliquée se lit « les autres
-prédicteurs choisis étant égaux ». - Les couleurs se lisent comme dans
-n’importe quel tableau <code>tabxplor</code> : un rapport de cotes
-supérieur à 1 (bleu) signifie <em>plus susceptible d’être marié</em> que
-la modalité de référence, inférieur à 1 (rouge) signifie <em>moins
-susceptible</em> ; étoiles et couleurs signalent toutes deux la
-significativité.</p>
+<code>1</code>).</p>
+<ul>
+<li>Comme dans tout modèle de régression, l’effet d’une modalité de
+prédicteur sur la variable expliquée se lit « les autres prédicteurs
+choisis étant égaux ».</li>
+<li>Les couleurs se lisent comme dans n’importe quel tableau
+<code>tabxplor</code> : un rapport de cotes supérieur à 1 (bleu)
+signifie <em>plus susceptible d’être marié</em> que la modalité de
+référence, inférieur à 1 (rouge) signifie <em>moins susceptible</em> ;
+étoiles et couleurs signalent toutes deux la significativité.</li>
+</ul>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors          | Model fit   | married |</span></span>
-<span><span class="co">#&gt; |:--------------------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age, rincome, | N           |  12 960 |</span></span>
-<span><span class="co">#&gt; | relig               | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                     | McFadden R2 |   0.057 |</span></span>
-<span><span class="co">#&gt; |                     | AIC         |  16 960 |</span></span>
-<span><span class="co">#&gt; |                     | BIC         |  17 064 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 17 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels                Model_OR</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population 1/3.07***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                     1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                1/2.40***</span></span>
-<span><span class="co">#&gt;  4 race     Other                  1.11   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                    1.02***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 rincome  1-Lt $10000               1   </span></span>
-<span><span class="co">#&gt;  7 rincome  2-$10000 to 14999      1.14*  </span></span>
-<span><span class="co">#&gt;  8 rincome  3-$15000 to 24999      1.27***</span></span>
-<span><span class="co">#&gt;  9 rincome  4-$25000 or more       1.86***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant              1   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic           1/1.17***</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian    1/1.43***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish             1/1.29*  </span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist  1/1.36*  </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim               1.05   </span></span>
-<span><span class="co">#&gt; 16 relig    7-Other              1/2.04***</span></span>
-<span><span class="co">#&gt; 17 relig    8-None               1/1.79***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, age +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/3.07***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.40***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.11   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.02***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.14*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.27***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.86***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.17***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.43***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.29*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.36*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.04***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.79***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 960
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.057
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+16 960
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+17 064
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Pour une régression logistique simple, <code>empirical = TRUE</code>
 ajoute les <strong>pourcentages bruts</strong> et les <strong>rapports
 de cotes bruts non modélisés</strong> pour chaque prédicteur.</p>
@@ -227,156 +477,861 @@ de cotes bruts non modélisés</strong> pour chaque prédicteur.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span>, empirical <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors          | Model fit   | married |</span></span>
-<span><span class="co">#&gt; |:--------------------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age, rincome, | N           |  12 960 |</span></span>
-<span><span class="co">#&gt; | relig               | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                     | McFadden R2 |   0.057 |</span></span>
-<span><span class="co">#&gt; |                     | AIC         |  16 960 |</span></span>
-<span><span class="co">#&gt; |                     | BIC         |  17 064 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 17 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels               `Obs_%`    Obs_OR  Model_OR</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                 &lt;row%&gt; &lt;row%-or&gt; &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                   1/3.07***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                 52%         1         1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                 31%*** 1/2.43*** 1/2.40***</span></span>
-<span><span class="co">#&gt;  4 race     Other                 49%*   1/1.12*     1.11   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                                      1.02***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 rincome  1-Lt $10000           37%         1         1   </span></span>
-<span><span class="co">#&gt;  7 rincome  2-$10000 to 14999     41%**    1.20**    1.14*  </span></span>
-<span><span class="co">#&gt;  8 rincome  3-$15000 to 24999     43%***   1.32***   1.27***</span></span>
-<span><span class="co">#&gt;  9 rincome  4-$25000 or more      55%***   2.12***   1.86***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant          52%         1         1   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic            52%    1/1.03    1/1.17***</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian     42%*** 1/1.53*** 1/1.43***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish              55%      1.10    1/1.29*  </span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist   50%    1/1.09    1/1.36*  </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim              48%    1/1.17      1.05   </span></span>
-<span><span class="co">#&gt; 16 relig    7-Other               35%*** 1/2.04*** 1/2.04***</span></span>
-<span><span class="co">#&gt; 17 relig    8-None                38%*** 1/1.76*** 1/1.79***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # Obs_% : différence (réf.) : -30 -20 -10 -5 +5 +10 +20 +30 [gris : non significatif ou sous ±5 points]</span></span>
-<span><span class="co">#&gt; # Obs_OR, Model_OR : OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, age +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+Obs_%
+</th>
+<th class="tx-r tx-num">
+Obs_OR
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/3.07***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m3 tx-b">
+31%***
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/2.43***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.40***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+49%*  
+</td>
+<td class="tx-r tx-num g1">
+1/1.12*  
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.11   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.02***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+37%   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+41%** 
+</td>
+<td class="tx-r tx-num g1">
+1.20** 
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.14*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num p1 tx-b">
+43%***
+</td>
+<td class="tx-r tx-num p1 tx-b">
+1.32***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.27***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num p2 tx-b">
+55%***
+</td>
+<td class="tx-r tx-num p3 tx-b">
+2.12***
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.86***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+52%   
+</td>
+<td class="tx-r tx-num g1">
+1/1.03   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.17***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num m2 tx-b">
+42%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+1/1.53***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.43***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num g1">
+55%   
+</td>
+<td class="tx-r tx-num g1">
+1.10   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.29*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g1">
+50%   
+</td>
+<td class="tx-r tx-num g1">
+1/1.09   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.36*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num g1">
+48%   
+</td>
+<td class="tx-r tx-num g1">
+1/1.17   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num m2 tx-b">
+35%***
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/2.04***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.04***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num m2 tx-b">
+38%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+1/1.76***
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.79***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 960
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.057
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+16 960
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+17 064
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br><b>Obs_% — </b>Nuances de bleu : cases ≥
+<span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points. Nuances du jaune au rouge :
+cases ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald, seuil de
+confiance à 95 %), d’au moins le premier seuil de couleur. Non coloré :
+soit non significatif, soit une différence inférieure à ±5
+points.<br><b>Obs_OR, Model_OR — </b>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Les pourcentages bruts <code>Obs_%</code> sont un résumé des
 résultats observés de base dont tout, dans le modèle, est dérivé : « 28
 % des Américains noirs sont mariés, contre 51 % pour les Américains
-blancs » - La simple différence à la référence est colorée (28 % − 51 %
-= −23 %). - Les cases qui ne diffèrent pas significativement de la
-référence sont grisées (d’après un intervalle de confiance de Newcombe
-pour les différences de proportions).</p>
+blancs »</p>
+<ul>
+<li>La simple différence à la référence est colorée (28 % − 51 % = −23
+%).</li>
+<li>Les cases qui ne diffèrent pas significativement de la référence
+sont grisées (d’après un intervalle de confiance de Newcombe pour les
+différences de proportions).</li>
+</ul>
 <p>Les <strong>rapports de cotes modélisés</strong>
 <code>Model_OR</code> sont directement comparés aux <strong>rapports de
-cotes observés</strong> <code>Obs_OR</code> : - Comparer les deux vous
-dit quel ajustement le modèle a opéré : si l’OR <strong>du
-modèle</strong> d’un prédicteur est bien plus proche de 1 que son OR
-<strong>brut</strong>, l’association brute était largement expliquée par
-les autres prédicteurs. - Ici, « toutes choses étant inégales par
-ailleurs », les Américains noirs ont des cotes d’être mariés 2,68 fois
-plus faibles que les Américains blancs. « Toutes choses égales par
-ailleurs » (plus précisément : à revenu, âge et religion égaux), les
-Américains noirs ont encore des cotes 2,4 fois plus faibles d’être
-mariés que les Américains blancs. Le résultat tient, il n’est pas
-expliqué par des différences de revenu ni de religion.</p>
+cotes observés</strong> <code>Obs_OR</code> :</p>
+<ul>
+<li>Comparer les deux vous dit quel ajustement le modèle a opéré : si
+l’OR <strong>du modèle</strong> d’un prédicteur est bien plus proche de
+1 que son OR <strong>brut</strong>, l’association brute était largement
+expliquée par les autres prédicteurs.</li>
+<li>Ici, « toutes choses étant inégales par ailleurs », les Américains
+noirs ont des cotes d’être mariés 2,68 fois plus faibles que les
+Américains blancs. « Toutes choses égales par ailleurs » (plus
+précisément : à revenu, âge et religion égaux), les Américains noirs ont
+encore des cotes 2,4 fois plus faibles d’être mariés que les Américains
+blancs. Le résultat tient, il n’est pas expliqué par des différences de
+revenu ni de religion.</li>
+</ul>
 <p>Les <strong>rapports de cotes observés</strong> <code>Obs_OR</code>
 sont les mêmes que ceux que vous pouvez calculer à partir des seuls
-pourcentages dans un tableau croisé : - Les couleurs et les étoiles de
-significativité utilisent un <strong>intervalle de confiance de Woolf
-pour l’OR</strong> qui correspond à ce qui est fait dans le modèle de
-régression. - La population du tableau doit correspondre à la population
-en cas complets du modèle, en filtrant les individus ayant un
-<code>NA</code> sur l’une des variables impliquées.</p>
+pourcentages dans un tableau croisé :</p>
+<ul>
+<li>Les couleurs et les étoiles de significativité utilisent un
+<strong>intervalle de confiance de Woolf pour l’OR</strong> qui
+correspond à ce qui est fait dans le modèle de régression.</li>
+<li>La population du tableau doit correspondre à la population en cas
+complets du modèle, en filtrant les individus ayant un <code>NA</code>
+sur l’une des variables impliquées.</li>
+</ul>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">if_all</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/all_of.html" class="external-link">all_of</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span><span class="op">)</span>, <span class="op">~</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">.</span><span class="op">)</span> <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">married</span>, pct <span class="op">=</span> <span class="st">"row"</span>, na <span class="op">=</span> <span class="st">"drop"</span>,</span>
 <span>    OR <span class="op">=</span> <span class="st">"OR"</span>, color <span class="op">=</span> <span class="st">"OR"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span></span>
 <span>   <span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 3</span></span>
-<span><span class="co">#&gt;   race   `01-Married` `02-Not married`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;     &lt;row%-or&gt;        &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; 1 White       1 (52%)          1 (48%)</span></span>
-<span><span class="co">#&gt; 2 Black        1/2.43             2.43</span></span>
-<span><span class="co">#&gt; 3 Other        1/1.12             1.12</span></span>
-<span><span class="co">#&gt; 4 Total        1/1.14             1.14</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="2">
+married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+01-Married
+</th>
+<th class="tx-r tx-num tx-br">
+02-Not married
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+1 (52%)
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 (48%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/2.43
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.43
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+1/1.12
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.12
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+1/1.14
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.14
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="3">
+<div class="tx-foot">
+Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (White) (intervalle de Wald sur le
+log rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <div class="section level3">
 <h3 id="effets-marginaux-moyens-ame-dune-régression-logistique">Effets marginaux moyens (AME) d’une régression logistique<a class="anchor" aria-label="anchor" href="#effets-marginaux-moyens-ame-dune-r%C3%A9gression-logistique"></a>
 </h3>
 <p>Une autre façon d’interpréter une régression logistique est
 d’utiliser les <strong>effets marginaux moyens</strong> (AME) avec
-<code>effect = "ame"</code> : - Au lieu de lire directement le rapport
-de cotes modélisé, on peut en déduire la différence moyenne de
-pourcentage de chaque modalité comparée à la référence. - Ici
-<code>Model_AME</code> se lit ainsi : « En comparant des répondants
-noirs et blancs semblables en revenu, âge et religion, être noir est
-associé à un taux de mariage inférieur de 19,8 points, en moyenne. »</p>
+<code>effect = "ame"</code> :</p>
+<ul>
+<li>Au lieu de lire directement le rapport de cotes modélisé, on peut en
+déduire la différence moyenne de pourcentage de chaque modalité comparée
+à la référence.</li>
+<li>Ici <code>Model_AME</code> se lit ainsi : « En comparant des
+répondants noirs et blancs semblables en revenu, âge et religion, être
+noir est associé à un taux de mariage inférieur de 19,8 points, en
+moyenne. »</li>
+</ul>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span>, effect <span class="op">=</span> <span class="st">"ame"</span>, empirical <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors          | Model fit   | married |</span></span>
-<span><span class="co">#&gt; |:--------------------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age, rincome, | N           |  12 960 |</span></span>
-<span><span class="co">#&gt; | relig               | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                     | McFadden R2 |   0.057 |</span></span>
-<span><span class="co">#&gt; |                     | AIC         |  16 960 |</span></span>
-<span><span class="co">#&gt; |                     | BIC         |  17 064 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 17 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels               `Obs_%`    Obs_diff `Model_AME (adjusted %)`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                 &lt;row%&gt; &lt;row%-diff&gt;             &lt;row%-mixed&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                                             </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                 52%         +0%                     (51.3%)</span></span>
-<span><span class="co">#&gt;  3 race     Black                 31%***     -21%***        -19.8%*** (31.5%)</span></span>
-<span><span class="co">#&gt;  4 race     Other                 49%*        -3%*           +2.4%    (53.8%)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                                                      +0.5%***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 rincome  1-Lt $10000           37%         +0%                     (39.2%)</span></span>
-<span><span class="co">#&gt;  7 rincome  2-$10000 to 14999     41%**       +4%**          +3.0%*   (42.2%)</span></span>
-<span><span class="co">#&gt;  8 rincome  3-$15000 to 24999     43%***      +7%***         +5.5%*** (44.7%)</span></span>
-<span><span class="co">#&gt;  9 rincome  4-$25000 or more      55%***     +18%***        +14.5%*** (53.7%)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant          52%         +0%                     (52.9%)</span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic            52%         -1%            -3.7%*** (49.3%)</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian     42%***     -11%***         -8.3%*** (44.6%)</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish              55%         +2%            -6.0%*   (46.9%)</span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist   50%         -2%            -7.2%*   (45.7%)</span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim              48%         -4%            +1.2%    (54.1%)</span></span>
-<span><span class="co">#&gt; 16 relig    7-Other               35%***     -17%***        -16.4%*** (36.5%)</span></span>
-<span><span class="co">#&gt; 17 relig    8-None                38%***     -14%***        -13.5%*** (39.4%)</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; effets marginaux sur l'échelle de probabilité (points de pourcentage) (moyenne sur l'échantillon) ; chaque case indique l'effet par rapport à la modalité de référence et, entre parenthèses, la probabilité prédite ajustée.</span></span>
-<span><span class="co">#&gt; # Obs_%, Obs_diff, Model_AME (adjusted %) : différence (réf.) : -30 -20 -10 -5 +5 +10 +20 +30 [gris : non significatif ou sous ±5 points]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, age +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+Obs_%
+</th>
+<th class="tx-r tx-num">
+Obs_diff
+</th>
+<th class="tx-r tx-num tx-br">
+Model_AME<br>(adjusted %)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
++0%   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(51.3%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m3 tx-b">
+31%***
+</td>
+<td class="tx-r tx-num m3 tx-b">
+-21%***
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-19.8%***<span style="font-weight:normal;"> (31.5%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+49%*  
+</td>
+<td class="tx-r tx-num g1">
+-3%*  
+</td>
+<td class="tx-r tx-num tx-br g1">
+ +2.4%    (53.8%)
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
++0.5%***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+37%   
+</td>
+<td class="tx-r tx-num tx-b">
++0%   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(39.2%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+41%** 
+</td>
+<td class="tx-r tx-num g1">
++4%** 
+</td>
+<td class="tx-r tx-num tx-br g1">
+ +3.0%*   (42.2%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num p1 tx-b">
+43%***
+</td>
+<td class="tx-r tx-num p1 tx-b">
++7%***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+ +5.5%***<span style="font-weight:normal;"> (44.7%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num p2 tx-b">
+55%***
+</td>
+<td class="tx-r tx-num p2 tx-b">
++18%***
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
++14.5%***<span style="font-weight:normal;"> (53.7%)</span>
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
++0%   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(52.9%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+52%   
+</td>
+<td class="tx-r tx-num g1">
+-1%   
+</td>
+<td class="tx-r tx-num tx-br g1">
+ -3.7%*** (49.3%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num m2 tx-b">
+42%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+-11%***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+ -8.3%***<span style="font-weight:normal;"> (44.6%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num g1">
+55%   
+</td>
+<td class="tx-r tx-num g1">
++2%   
+</td>
+<td class="tx-r tx-num tx-br g1">
+ -6.0%*   (46.9%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g1">
+50%   
+</td>
+<td class="tx-r tx-num g1">
+-2%   
+</td>
+<td class="tx-r tx-num tx-br g1">
+ -7.2%*   (45.7%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num g1">
+48%   
+</td>
+<td class="tx-r tx-num g1">
+-4%   
+</td>
+<td class="tx-r tx-num tx-br g1">
+ +1.2%    (54.1%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num m2 tx-b">
+35%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+-17%***
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-16.4%***<span style="font-weight:normal;"> (36.5%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num m2 tx-b">
+38%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+-14%***
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-13.5%***<span style="font-weight:normal;"> (39.4%)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 960
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.057
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+16 960
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+17 064
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression logistique ; effets marginaux sur l’échelle de
+probabilité (points de pourcentage) (moyenne sur l’échantillon) ; chaque
+case indique l’effet par rapport à la modalité de référence et, entre
+parenthèses, la probabilité prédite ajustée.<br><b>Obs_%, Obs_diff,
+Model_AME (adjusted %) — </b>Nuances de bleu : cases ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points. Nuances du jaune au rouge :
+cases ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald, seuil de
+confiance à 95 %), d’au moins le premier seuil de couleur. Non coloré :
+soit non significatif, soit une différence inférieure à ±5
+points.<br>*** : chiffre significativement différent de celui de la
+modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au
+seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>On peut alors utiliser <code>empirical = TRUE</code> pour comparer
 cette nouvelle quantité modélisée à la <strong>différence brute,
-observée, de pourcentages</strong> : - Dans l’échantillon
-(<code>Obs_diff</code>), on observe un taux de mariages inférieur de 23
-points pour les Américains noirs comparés aux Américains blancs
-(<code>28% - 51% = -23%</code>). - La différence modélisée
-<code>Model_AME</code> est très proche, <code>-19,8 %</code>, donc très
-peu de cette différence entre noirs et blancs peut être expliquée par
-l’âge, le revenu ou la religion.</p>
+observée, de pourcentages</strong> :</p>
+<ul>
+<li>Dans l’échantillon (<code>Obs_diff</code>), on observe un taux de
+mariages inférieur de 23 points pour les Américains noirs comparés aux
+Américains blancs (<code>28% - 51% = -23%</code>).</li>
+<li>La différence modélisée <code>Model_AME</code> est très proche,
+<code>-19,8 %</code>, donc très peu de cette différence entre noirs et
+blancs peut être expliquée par l’âge, le revenu ou la religion.</li>
+</ul>
 <p>On peut aussi comparer le pourcentage brut <code>Obs_%</code> avec la
 <strong>probabilité ajustée par le modèle</strong> — la valeur entre
-parenthèses dans la colonne <code>Model_AME (adjusted %)</code> : - Le
-pourcentage ajusté, qui est un résultat du modèle, se lit ainsi : « si
-tout l’échantillon gardait sa distribution de revenu/âge/religion mais
-que tout le monde était noir, on estime que 31,5 % seraient mariés,
-contre 51,3 % si tout le monde était blanc ». - Les noirs se marient à
-30,9 % dans cet échantillon (observé) ; standardiser leur
-revenu/âge/religion au mélange de la population ne déplace cela qu’à
-31,5 % — donc presque rien de l’écart noir-blanc ne s’explique par des
-différences dans ces trois variables ; il persiste après ajustement.</p>
+parenthèses dans la colonne <code>Model_AME (adjusted %)</code> :</p>
+<ul>
+<li>Le pourcentage ajusté, qui est un résultat du modèle, se lit ainsi :
+« si tout l’échantillon gardait sa distribution de revenu/âge/religion
+mais que tout le monde était noir, on estime que 31,5 % seraient mariés,
+contre 51,3 % si tout le monde était blanc ».</li>
+<li>Les noirs se marient à 30,9 % dans cet échantillon (observé) ;
+standardiser leur revenu/âge/religion au mélange de la population ne
+déplace cela qu’à 31,5 % — donc presque rien de l’écart noir-blanc ne
+s’explique par des différences dans ces trois variables ; il persiste
+après ajustement.</li>
+</ul>
 <p>On peut, à nouveau, obtenir les mêmes différences empiriques et
 intervalles de confiance avec un simple tableau :</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
@@ -390,33 +1345,372 @@ intervalles de confiance avec un simple tableau :</p>
 <span>      method_diff <span class="op">=</span> <span class="st">"wald"</span></span>
 <span>      <span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>diff <span class="op">=</span> <span class="fu"><a href="../reference/fmt.html">set_display</a></span><span class="op">(</span><span class="va">`01-Married`</span>, <span class="st">"diff"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 18 × 6</span></span>
-<span><span class="co">#&gt; # Groups:         row_var [3]</span></span>
-<span><span class="co">#&gt;    row_var levels              `01-Married` `02-Not married`           Total</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;   &lt;fct&gt;                     &lt;row%&gt;           &lt;row%&gt;          &lt;row%&gt;</span></span>
-<span><span class="co">#&gt;  1 race    White                     52%              48%    100% (n= 9 846)</span></span>
-<span><span class="co">#&gt;  2 race    Black                     31%***           69%*** 100% (n= 1 860)</span></span>
-<span><span class="co">#&gt;  3 race    Other                     49%*             51%*   100% (n= 1 254)</span></span>
-<span><span class="co">#&gt;  4 race    Total                     49%***           51%*** 100% (n=12 960)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 rincome 1-Lt $10000               37%              63%    100% (n= 2 142)</span></span>
-<span><span class="co">#&gt;  6 rincome 2-$10000 to 14999         41%**            59%**  100% (n= 1 164)</span></span>
-<span><span class="co">#&gt;  7 rincome 3-$15000 to 24999         43%***           57%*** 100% (n= 2 322)</span></span>
-<span><span class="co">#&gt;  8 rincome 4-$25000 or more          55%***           45%*** 100% (n= 7 332)</span></span>
-<span><span class="co">#&gt;  9 rincome Total                     49%***           51%*** 100% (n=12 960)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig   1-Protestant              52%              48%    100% (n= 6 269)</span></span>
-<span><span class="co">#&gt; 11 relig   2-Catholic                52%              48%    100% (n= 3 121)</span></span>
-<span><span class="co">#&gt; 12 relig   3-Other christian         42%***           58%*** 100% (n=   507)</span></span>
-<span><span class="co">#&gt; 13 relig   4-Jewish                  55%              45%    100% (n=   222)</span></span>
-<span><span class="co">#&gt; 14 relig   5-Buddhist/Hinduist       50%              50%    100% (n=   144)</span></span>
-<span><span class="co">#&gt; 15 relig   6-Muslim                  48%              52%    100% (n=    56)</span></span>
-<span><span class="co">#&gt; 16 relig   7-Other                   35%***           65%*** 100% (n=   267)</span></span>
-<span><span class="co">#&gt; 17 relig   8-None                    38%***           62%*** 100% (n= 2 374)</span></span>
-<span><span class="co">#&gt; 18 relig   Total                     49%***           51%*** 100% (n=12 960)</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: diff &lt;row%-diff&gt;</span></span>
-<span><span class="co">#&gt; # différence (réf.) : -30 -20 -10 -5 +5 +10 +20 +30 [gris : non significatif ou sous ±5 points]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="2">
+</th>
+<th class="tx-span" colspan="2">
+married
+</th>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl">
+</th>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+01-Married
+</th>
+<th class="tx-r tx-num">
+02-Not married
+</th>
+<th class="tx-r tx-num tx-bl tx-tot">
+Total
+</th>
+<th class="tx-r tx-num tx-br">
+diff
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname" rowspan="4">
+race
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
+48%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 9 846)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+ref:52%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m3 tx-b">
+31%***
+</td>
+<td class="tx-r tx-num p3 tx-b">
+69%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 860)</span>
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-21%***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+49%*  
+</td>
+<td class="tx-r tx-num g1">
+51%*  
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 254)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-3%*  
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+49%***
+</td>
+<td class="tx-r tx-num g1">
+51%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=12 960)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-3%***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname" rowspan="5">
+rincome
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+37%   
+</td>
+<td class="tx-r tx-num tx-b">
+63%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 142)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+ref:37%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+41%** 
+</td>
+<td class="tx-r tx-num g1">
+59%** 
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 1 164)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
++4%** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num p1 tx-b">
+43%***
+</td>
+<td class="tx-r tx-num m1 tx-b">
+57%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 322)</span>
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
++7%***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num p2 tx-b">
+55%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+45%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 7 332)</span>
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
++18%***
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num p2 tx-b">
+49%***
+</td>
+<td class="tx-r tx-num m2 tx-b">
+51%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=12 960)</span>
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
++12%***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-bb" rowspan="9">
+relig
+</td>
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+52%   
+</td>
+<td class="tx-r tx-num tx-b">
+48%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 6 269)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+ref:52%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+52%   
+</td>
+<td class="tx-r tx-num g1">
+48%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 3 121)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num m2 tx-b">
+42%***
+</td>
+<td class="tx-r tx-num p2 tx-b">
+58%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   507)</span>
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-11%***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num g1">
+55%   
+</td>
+<td class="tx-r tx-num g1">
+45%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   222)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
++2%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g1">
+50%   
+</td>
+<td class="tx-r tx-num g1">
+50%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   144)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-2%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num g1">
+48%   
+</td>
+<td class="tx-r tx-num g1">
+52%   
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=    56)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-4%   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num m2 tx-b">
+35%***
+</td>
+<td class="tx-r tx-num p2 tx-b">
+65%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=   267)</span>
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-17%***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num m2 tx-b">
+38%***
+</td>
+<td class="tx-r tx-num p2 tx-b">
+62%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n= 2 374)</span>
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-14%***
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+49%***
+</td>
+<td class="tx-r tx-num g1">
+51%***
+</td>
+<td class="tx-r tx-num tx-bl tx-tot tx-b">
+100%<span style="font-weight:normal;"> (n=12 960)</span>
+</td>
+<td class="tx-r tx-num tx-br g1">
+-3%***
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="6">
+<div class="tx-foot">
+Nuances de bleu : cases ≥ à la ligne Total <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points. Nuances du jaune au rouge :
+cases ≤ à la ligne Total <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Coloré : significativement
+différent de la ligne Total (intervalle de Wald, seuil de confiance à 95
+%), d’au moins le premier seuil de couleur. Non coloré : soit non
+significatif, soit une différence inférieure à ±5 points.<br>*** :
+chiffre significativement différent de celui de la modalité de référence
+(en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * :
+au seuil de 90 % ; aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 </div>
 </div>
 <div class="section level2">
@@ -435,29 +1729,134 @@ comptant les facteurs à leur première modalité :</p>
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/score_from_lv1.html">score_from_lv1</a></span><span class="op">(</span><span class="st">"score"</span>, vars_list <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"married"</span>, <span class="st">"income25k"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span>   <span class="co"># a 0–2 score</span></span>
 <span>  <span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="st">"score"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span><span class="op">)</span>, family <span class="op">=</span> <span class="st">"binomial"</span>, trials <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors | Model fit   |  score |</span></span>
-<span><span class="co">#&gt; |:-----------|:------------|-------:|</span></span>
-<span><span class="co">#&gt; | race, age  | N           | 21 407 |</span></span>
-<span><span class="co">#&gt; |            | LR vs null  | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |            | McFadden R2 |  0.012 |</span></span>
-<span><span class="co">#&gt; |            | AIC         | 44 395 |</span></span>
-<span><span class="co">#&gt; |            | BIC         | 44 427 |</span></span>
-<span><span class="co">#&gt; |            | Dispersion  |   1.09 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 5 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [3]</span></span>
-<span><span class="co">#&gt;   var      levels                Model_OR</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;    &lt;fct&gt;                &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; 1 Constant Reference population 1/1.10***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 2 race     White                     1   </span></span>
-<span><span class="co">#&gt; 3 race     Black                1/1.99***</span></span>
-<span><span class="co">#&gt; 4 race     Other                1/1.20***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 5 age      age                  1/1.00***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: score selon race, age
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+score
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.10***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.99***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.20***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.00***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 407
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.012
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+44 395
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+44 427
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Dispersion
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1.09
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Les modèles binomiaux groupés (comme Poisson) rapportent un contrôle
 de <strong>dispersion</strong> de Pearson dans le bas de tableau,
 signalant les comptages surdispersés.</p>
@@ -479,38 +1878,197 @@ comme un modèle logistique à cotes proportionnelles (cumulé) :</p>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Cumulative odds ratios may mislead; consider `family = "multinomial"` or a</span></span>
 <span><span class="co">#&gt;   partial proportional-odds model.</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> The Brant test over-rejects at large N; inspect the per-variable tests too.</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors       | Model fit     | rincome |</span></span>
-<span><span class="co">#&gt; |:-----------------|:--------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age, relig | N             |  12 960 |</span></span>
-<span><span class="co">#&gt; |                  | LR vs null    |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                  | McFadden R2   |   0.017 |</span></span>
-<span><span class="co">#&gt; |                  | AIC           |  29 193 |</span></span>
-<span><span class="co">#&gt; |                  | BIC           |  29 290 |</span></span>
-<span><span class="co">#&gt; |                  | Brant PO test |  0.887% |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 13 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [4]</span></span>
-<span><span class="co">#&gt;    var      levels                Model_OR</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population          </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                     1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                1/1.40***</span></span>
-<span><span class="co">#&gt;  4 race     Other                1/1.45***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                    1.02***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 relig    1-Protestant              1   </span></span>
-<span><span class="co">#&gt;  7 relig    2-Catholic             1.15***</span></span>
-<span><span class="co">#&gt;  8 relig    3-Other christian      1.02   </span></span>
-<span><span class="co">#&gt;  9 relig    4-Jewish               2.00***</span></span>
-<span><span class="co">#&gt; 10 relig    5-Buddhist/Hinduist    2.41***</span></span>
-<span><span class="co">#&gt; 11 relig    6-Muslim               1.32   </span></span>
-<span><span class="co">#&gt; 12 relig    7-Other                1.09   </span></span>
-<span><span class="co">#&gt; 13 relig    8-None                 1.05   </span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ordinale ; rapports de cotes cumulés (modèle à cotes proportionnelles).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique ordinale: rincome selon race, age +1 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+rincome
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.40***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.45***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.02***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.15***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.02   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+2.00***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.41***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.32   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.09   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05   
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 960
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.017
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+29 193
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+29 290
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Brant PO test
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.89%
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression logistique ordinale ; rapports de cotes cumulés
+(modèle à cotes proportionnelles).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Une variable expliquée nominale à trois modalités non ordonnées ou
 plus est ajustée comme un seul modèle logistique
 <strong>multinomial</strong>, donnant une colonne de rapport de cotes
@@ -520,44 +2078,286 @@ par catégorie de la variable expliquée contre la catégorie de référence
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"party3"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"party3"</span>: nominal outcome detected -&gt; `family = "multinomial"` (multinomial</span></span>
 <span><span class="co">#&gt;   logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors          | Model fit   | party3 |</span></span>
-<span><span class="co">#&gt; |:--------------------|:------------|-------:|</span></span>
-<span><span class="co">#&gt; | race, age, rincome, | N           | 12 914 |</span></span>
-<span><span class="co">#&gt; | relig               | LR vs null  | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                     | McFadden R2 |  0.083 |</span></span>
-<span><span class="co">#&gt; |                     | AIC         | 24 939 |</span></span>
-<span><span class="co">#&gt; |                     | BIC         | 25 148 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 17 × 4</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels               2-Independent, other v…¹ 3-Republican vs 1-De…²</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                               &lt;row%-or&gt;              &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                    18                   1.87***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                                    1                      1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                               1/3.03***             1/12.89***</span></span>
-<span><span class="co">#&gt;  4 race     Other                                 1.05                 1/2.37***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                                 1/1.01***              1/1.00***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 rincome  1-Lt $10000                              1                      1   </span></span>
-<span><span class="co">#&gt;  7 rincome  2-$10000 to 14999                     1.01                 1/1.21** </span></span>
-<span><span class="co">#&gt;  8 rincome  3-$15000 to 24999                   1/1.00                 1/1.08   </span></span>
-<span><span class="co">#&gt;  9 rincome  4-$25000 or more                    1/1.53***                1.17** </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant                             1                      1   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic                          1/1.11                 1/1.78***</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian                     1.13                 1/1.27** </span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish                            1/2.96***              1/4.88***</span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist                 1/1.33                 1/4.83***</span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim                            1/2.36**               1/5.96***</span></span>
-<span><span class="co">#&gt; 16 relig    7-Other                               1.10                 1/2.56***</span></span>
-<span><span class="co">#&gt; 17 relig    8-None                                1.22***              1/3.54***</span></span>
-<span><span class="co">#&gt; # ℹ abbreviated names: ¹​`2-Independent, other vs 1-Democrat`,</span></span>
-<span><span class="co">#&gt; #   ²​`3-Republican vs 1-Democrat`</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique multinomiale ; rapports de cotes (chaque modalité par rapport à la référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique multinomiale: party3 selon race, age +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="2">
+party3: OR
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other vs<br>1-Democrat
+</th>
+<th class="tx-r tx-num tx-br">
+3-Republican vs<br>1-Democrat
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-b">
+18   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1.87***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/3.03***
+</td>
+<td class="tx-r tx-num tx-br m4 tx-b">
+1/12.89***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+1.05   
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.37***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num g1">
+1/1.01***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.00***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+1.01   
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.21** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g1">
+1/1.00   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.08   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num m2 tx-b">
+1/1.53***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.17** 
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+1/1.11   
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.78***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g1">
+1.13   
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.27** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/2.96***
+</td>
+<td class="tx-r tx-num tx-br m4 tx-b">
+1/4.88***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g1">
+1/1.33   
+</td>
+<td class="tx-r tx-num tx-br m4 tx-b">
+1/4.83***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num m3 tx-b">
+1/2.36** 
+</td>
+<td class="tx-r tx-num tx-br m4 tx-b">
+1/5.96***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num g1">
+1.10   
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.56***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num p1 tx-b">
+1.22***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/3.54***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+12 914
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-b">
+0.083
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-b">
+24 939
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-b">
+25 148
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="3">
+<div class="tx-foot">
+Modèle : régression logistique multinomiale ; rapports de cotes (chaque
+modalité par rapport à la référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Les rapports de risques relatifs peuvent être assez difficiles à lire
 parce qu’ils sont relatifs à <strong>deux</strong> modalités de
 référence : non seulement la référence choisie pour le prédicteur, mais
@@ -575,43 +2375,349 @@ des rapports de cotes).</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"party3"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span>, <span class="st">"rincome"</span>, <span class="st">"relig"</span><span class="op">)</span>, effect <span class="op">=</span> <span class="st">"ame"</span>, empirical <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="co"># |&gt; tab_export()</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"party3"</span>: nominal outcome detected -&gt; `family = "multinomial"` (multinomial</span></span>
 <span><span class="co">#&gt;   logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors          | Model fit   | party3 |</span></span>
-<span><span class="co">#&gt; |:--------------------|:------------|-------:|</span></span>
-<span><span class="co">#&gt; | race, age, rincome, | N           | 12 914 |</span></span>
-<span><span class="co">#&gt; | relig               | LR vs null  | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                     | McFadden R2 |  0.083 |</span></span>
-<span><span class="co">#&gt; |                     | AIC         | 24 939 |</span></span>
-<span><span class="co">#&gt; |                     | BIC         | 25 148 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 17 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels                    `1-Democrat` `2-Independent, other`</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                     &lt;row%-mixed&gt;           &lt;row%-mixed&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                                         </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                          (38.3%)                (20.6%)</span></span>
-<span><span class="co">#&gt;  3 race     Black                +40.6%*** (78.9%)       -6.6%*** (14.0%)</span></span>
-<span><span class="co">#&gt;  4 race     Other                +11.0%*** (49.3%)       +6.8%*** (27.4%)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 age      age                           +0.2%***               -0.1%***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  6 rincome  1-Lt $10000                    (44.0%)                (24.5%)</span></span>
-<span><span class="co">#&gt;  7 rincome  2-$10000 to 14999     +2.0%    (46.0%)       +1.6%    (26.1%)</span></span>
-<span><span class="co">#&gt;  8 rincome  3-$15000 to 24999     +0.9%    (44.9%)       +0.5%    (25.0%)</span></span>
-<span><span class="co">#&gt;  9 rincome  4-$25000 or more      +1.8%    (45.8%)       -7.7%*** (16.8%)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant                   (39.2%)                (17.2%)</span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic            +9.2%*** (48.4%)       +2.4%*** (19.6%)</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian     +2.4%    (41.7%)       +3.7%**  (20.9%)</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish             +31.4%*** (70.6%)       -6.0%*** (11.2%)</span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist  +23.1%*** (62.3%)       +4.4%    (21.6%)</span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim             +31.6%*** (70.9%)       -3.1%    (14.1%)</span></span>
-<span><span class="co">#&gt; 16 relig    7-Other              +11.7%*** (50.9%)       +8.0%*** (25.2%)</span></span>
-<span><span class="co">#&gt; 17 relig    8-None               +13.4%*** (52.7%)      +11.9%*** (29.1%)</span></span>
-<span><span class="co">#&gt; # ℹ 1 more variable: `3-Republican` &lt;row%-mixed&gt;</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique multinomiale ; effets marginaux sur l'échelle de probabilité (points de pourcentage) (moyenne sur l'échantillon) ; chaque case indique l'effet par rapport à la modalité de référence et, entre parenthèses, la probabilité prédite ajustée.</span></span>
-<span><span class="co">#&gt; # AME (réf.) : -30 -20 -10 -5 +5 +10 +20 +30 [gris : non significatif ou sous ±5 points]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique multinomiale: party3 selon race, age +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+party3: AME (adjusted %)
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+1-Democrat
+</th>
+<th class="tx-r tx-num">
+2-Independent,<br>other
+</th>
+<th class="tx-r tx-num tx-br">
+3-Republican
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+(38.3%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+(20.6%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(41.1%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p4 tx-b">
++40.6%***<span style="font-weight:normal;"> (78.9%)</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+ -6.6%***<span style="font-weight:normal;"> (14.0%)</span>
+</td>
+<td class="tx-r tx-num tx-br m4 tx-b">
+-34.0%***<span style="font-weight:normal;"> ( 7.1%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num p2 tx-b">
++11.0%***<span style="font-weight:normal;"> (49.3%)</span>
+</td>
+<td class="tx-r tx-num p1 tx-b">
+ +6.8%***<span style="font-weight:normal;"> (27.4%)</span>
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-17.8%***<span style="font-weight:normal;"> (23.3%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num g1">
++0.2%***
+</td>
+<td class="tx-r tx-num g1">
+-0.1%***
+</td>
+<td class="tx-r tx-num tx-br g1">
++0%   
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+(44.0%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+(24.5%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(31.5%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+ +2.0%    (46.0%)
+</td>
+<td class="tx-r tx-num g1">
+ +1.6%    (26.1%)
+</td>
+<td class="tx-r tx-num tx-br g1">
+ -3.6%**  (27.9%)
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g1">
+ +0.9%    (44.9%)
+</td>
+<td class="tx-r tx-num g1">
+ +0.5%    (25.0%)
+</td>
+<td class="tx-r tx-num tx-br g1">
+ -1.4%    (30.1%)
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num g1">
+ +1.8%    (45.8%)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+ -7.7%***<span style="font-weight:normal;"> (16.8%)</span>
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+ +5.9%***<span style="font-weight:normal;"> (37.4%)</span>
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+(39.2%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+(17.2%<span style="font-weight:normal;">)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+(43.6%<span style="font-weight:normal;">)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num p1 tx-b">
+ +9.2%***<span style="font-weight:normal;"> (48.4%)</span>
+</td>
+<td class="tx-r tx-num g1">
+ +2.4%*** (19.6%)
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-11.5%***<span style="font-weight:normal;"> (32.0%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g1">
+ +2.4%    (41.7%)
+</td>
+<td class="tx-r tx-num g1">
+ +3.7%**  (20.9%)
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+ -6.1%***<span style="font-weight:normal;"> (37.5%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num p4 tx-b">
++31.4%***<span style="font-weight:normal;"> (70.6%)</span>
+</td>
+<td class="tx-r tx-num m1 tx-b">
+ -6.0%***<span style="font-weight:normal;"> (11.2%)</span>
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-25.4%***<span style="font-weight:normal;"> (18.2%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num p3 tx-b">
++23.1%***<span style="font-weight:normal;"> (62.3%)</span>
+</td>
+<td class="tx-r tx-num g1">
+ +4.4%    (21.6%)
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-27.5%***<span style="font-weight:normal;"> (16.1%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num p4 tx-b">
++31.6%***<span style="font-weight:normal;"> (70.9%)</span>
+</td>
+<td class="tx-r tx-num g1">
+ -3.1%    (14.1%)
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-28.5%***<span style="font-weight:normal;"> (15.1%)</span>
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num p2 tx-b">
++11.7%***<span style="font-weight:normal;"> (50.9%)</span>
+</td>
+<td class="tx-r tx-num p1 tx-b">
+ +8.0%***<span style="font-weight:normal;"> (25.2%)</span>
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+-19.6%***<span style="font-weight:normal;"> (23.9%)</span>
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num p2 tx-b">
++13.4%***<span style="font-weight:normal;"> (52.7%)</span>
+</td>
+<td class="tx-r tx-num p2 tx-b">
++11.9%***<span style="font-weight:normal;"> (29.1%)</span>
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-25.4%***<span style="font-weight:normal;"> (18.2%)</span>
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+12 914
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-b">
+0.083
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-b">
+24 939
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-b">
+25 148
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression logistique multinomiale ; effets marginaux sur
+l’échelle de probabilité (points de pourcentage) (moyenne sur
+l’échantillon) ; chaque case indique l’effet par rapport à la modalité
+de référence et, entre parenthèses, la probabilité prédite
+ajustée.<br>Nuances de bleu : AME ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points. Nuances du jaune au rouge :
+AME ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald, seuil de
+confiance à 95 %), d’au moins le premier seuil de couleur. Non coloré :
+soit non significatif, soit une différence inférieure à ±5
+points.<br>*** : chiffre significativement différent de celui de la
+modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au
+seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Avec <code>empirical = TRUE</code>, les différences
 brutes/observées/non ajustées et les pourcentages bruts apparaissent
 dans des infobulles html, disponibles au survol de la souris sur une
@@ -626,46 +2732,255 @@ parce qu’un entier comme <code>age</code> est ambigu — il pourrait aussi
 être modélisé comme un comptage) :</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"age"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"marital"</span>, <span class="st">"relig"</span>, <span class="st">"rincome"</span><span class="op">)</span>, family <span class="op">=</span> <span class="st">"gaussian"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors     | Model fit   |    age |</span></span>
-<span><span class="co">#&gt; |:---------------|:------------|-------:|</span></span>
-<span><span class="co">#&gt; | race, marital, | N           | 12 958 |</span></span>
-<span><span class="co">#&gt; | relig, rincome | F           | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                | R2          |  0.256 |</span></span>
-<span><span class="co">#&gt; |                | Adjusted R2 |  0.255 |</span></span>
-<span><span class="co">#&gt; |                | Residual SD |  11.62 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 21 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels                 Model_β</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                   &lt;coef&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population  43.81***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                     0   </span></span>
-<span><span class="co">#&gt;  3 race     Black                 -1.00***</span></span>
-<span><span class="co">#&gt;  4 race     Other                 -3.32***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 marital  Married                   0   </span></span>
-<span><span class="co">#&gt;  6 marital  Separated             -2.02***</span></span>
-<span><span class="co">#&gt;  7 marital  Divorced               2.88***</span></span>
-<span><span class="co">#&gt;  8 marital  Widowed               15.15***</span></span>
-<span><span class="co">#&gt;  9 marital  Never married        -10.72***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant              0   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic            -1.03***</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian     -3.25***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish               3.39***</span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist    0.49   </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim              -2.86*  </span></span>
-<span><span class="co">#&gt; 16 relig    7-Other               -3.52***</span></span>
-<span><span class="co">#&gt; 17 relig    8-None                -2.79***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 18 rincome  1-Lt $10000               0   </span></span>
-<span><span class="co">#&gt; 19 rincome  2-$10000 to 14999      1.18***</span></span>
-<span><span class="co">#&gt; 20 rincome  3-$15000 to 24999      0.96***</span></span>
-<span><span class="co">#&gt; 21 rincome  4-$25000 or more       3.17***</span></span>
-<span><span class="co">#&gt; # Modèle : régression linéaire ; coefficients (différence de moyenne par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # β (réf.) : -0,8 -0,5 -0,2 +0,2 +0,5 +0,8 [gris : non significatif ou sous ±0,2 écarts-types]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression linéaire: age selon race, marital +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+age
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_β
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+43.81***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1.00***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.32***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num tx-br g1">
+-2.02***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+2.88***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num tx-br p4 tx-b">
+15.15***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-10.72***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1.03***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.25***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+3.39***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num tx-br g1">
+0.49   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num tx-br g1">
+-2.86*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.52***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-2.79***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.18***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-br g1">
+0.96***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+3.17***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 958
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+F
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.256
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Adjusted R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.255
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Residual SD
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+11.62
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression linéaire ; coefficients (différence de moyenne par
+rapport à la modalité de référence).<br>Nuances de bleu : β ≥ <span class="p1" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,5</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> écarts-types. Nuances du jaune au
+rouge : β ≤ <span class="m1" style="font-weight:bold;">-0,2</span> ;
+<span class="m3" style="font-weight:bold;">-0,5</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> écarts-types. Coloré :
+significativement différent de la modalité de référence (intervalle de
+Wald, seuil de confiance à 95 %), d’au moins le premier seuil de
+couleur. Non coloré : soit non significatif, soit une différence
+inférieure à ±0,2 écarts-types.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Dans le cas d’une régression linéaire, la <strong>contrepartie
 empirique/observée du coefficient du modèle</strong> pour un prédicteur
 catégoriel est simplement la <strong>différence de moyennes</strong> :
@@ -673,46 +2988,406 @@ ici, la différence d’âge moyen, par modalité du prédicteur, comparée à
 la modalité de référence.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"age"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"marital"</span>, <span class="st">"relig"</span>, <span class="st">"rincome"</span><span class="op">)</span>, family <span class="op">=</span> <span class="st">"gaussian"</span>, empirical <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors     | Model fit   |    age |</span></span>
-<span><span class="co">#&gt; |:---------------|:------------|-------:|</span></span>
-<span><span class="co">#&gt; | race, marital, | N           | 12 958 |</span></span>
-<span><span class="co">#&gt; | relig, rincome | F           | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                | R2          |  0.256 |</span></span>
-<span><span class="co">#&gt; |                | Adjusted R2 |  0.255 |</span></span>
-<span><span class="co">#&gt; |                | Residual SD |  11.62 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 21 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels                     Obs_mean  Obs_diff   Model_β</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                        &lt;mean&gt;    &lt;coef&gt;    &lt;coef&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                           43.81***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                43.32 (σ13.58)      0         0   </span></span>
-<span><span class="co">#&gt;  3 race     Black                40.31 (σ12.67)  -3.01***  -1.00***</span></span>
-<span><span class="co">#&gt;  4 race     Other                38.06 (σ12.46)  -5.26***  -3.32***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 marital  Married              44.91 (σ12.20)      0         0   </span></span>
-<span><span class="co">#&gt;  6 marital  Separated            41.94 (σ10.93)  -2.97***  -2.02***</span></span>
-<span><span class="co">#&gt;  7 marital  Divorced             47.63 (σ11.16)   2.72***   2.88***</span></span>
-<span><span class="co">#&gt;  8 marital  Widowed              59.88 (σ13.13)  14.97***  15.15***</span></span>
-<span><span class="co">#&gt;  9 marital  Never married        33.03 (σ11.42) -11.88*** -10.72***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant         44.15 (σ13.60)      0         0   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic           41.99 (σ13.37)  -2.16***  -1.03***</span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian    39.23 (σ11.47)  -4.92***  -3.25***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish             48.04 (σ15.08)   3.89***   3.39***</span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist  41.45 (σ12.95)  -2.70**    0.49   </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim             38.71 (σ10.55)  -5.43***  -2.86*  </span></span>
-<span><span class="co">#&gt; 16 relig    7-Other              38.91 (σ11.78)  -5.24***  -3.52***</span></span>
-<span><span class="co">#&gt; 17 relig    8-None               38.92 (σ12.69)  -5.23***  -2.79***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 18 rincome  1-Lt $10000          38.50 (σ16.75)      0         0   </span></span>
-<span><span class="co">#&gt; 19 rincome  2-$10000 to 14999    41.09 (σ15.17)   2.59***   1.18***</span></span>
-<span><span class="co">#&gt; 20 rincome  3-$15000 to 24999    40.82 (σ13.34)   2.32***   0.96***</span></span>
-<span><span class="co">#&gt; 21 rincome  4-$25000 or more     44.21 (σ11.69)   5.71***   3.17***</span></span>
-<span><span class="co">#&gt; # Modèle : régression linéaire ; coefficients (différence de moyenne par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # Obs_diff, Model_β : différence standardisée (réf.) : -0,8 -0,5 -0,2 +0,2 +0,5 +0,8 [gris : non significatif ou sous ±0,2 écarts-types]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression linéaire: age selon race, marital +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+age
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+Obs_mean
+</th>
+<th class="tx-r tx-num">
+Obs_diff
+</th>
+<th class="tx-r tx-num tx-br">
+Model_β
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num g2">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+43.81***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+43.32<span style="font-weight:normal;"> (σ13.58)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+0   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num g2">
+40.31 (σ12.67)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-3.01***
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1.00***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g2">
+38.06 (σ12.46)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-5.26***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.32***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num tx-b">
+44.91<span style="font-weight:normal;"> (σ12.20)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+0   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num g2">
+41.94 (σ10.93)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-2.97***
+</td>
+<td class="tx-r tx-num tx-br g1">
+-2.02***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num g2">
+47.63 (σ11.16)
+</td>
+<td class="tx-r tx-num p1 tx-b">
+2.72***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+2.88***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num g2">
+59.88 (σ13.13)
+</td>
+<td class="tx-r tx-num p4 tx-b">
+14.97***
+</td>
+<td class="tx-r tx-num tx-br p4 tx-b">
+15.15***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num g2">
+33.03 (σ11.42)
+</td>
+<td class="tx-r tx-num m4 tx-b">
+-11.88***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-10.72***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+44.15<span style="font-weight:normal;"> (σ13.60)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+0   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g2">
+41.99 (σ13.37)
+</td>
+<td class="tx-r tx-num g1">
+-2.16***
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1.03***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g2">
+39.23 (σ11.47)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-4.92***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.25***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num g2">
+48.04 (σ15.08)
+</td>
+<td class="tx-r tx-num p1 tx-b">
+3.89***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+3.39***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num g2">
+41.45 (σ12.95)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-2.70** 
+</td>
+<td class="tx-r tx-num tx-br g1">
+0.49   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num g2">
+38.71 (σ10.55)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-5.43***
+</td>
+<td class="tx-r tx-num tx-br g1">
+-2.86*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num g2">
+38.91 (σ11.78)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-5.24***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-3.52***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g2">
+38.92 (σ12.69)
+</td>
+<td class="tx-r tx-num m1 tx-b">
+-5.23***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-2.79***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+38.50<span style="font-weight:normal;"> (σ16.75)</span>
+</td>
+<td class="tx-r tx-num tx-b">
+0   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g2">
+41.09 (σ15.17)
+</td>
+<td class="tx-r tx-num g1">
+2.59***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.18***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g2">
+40.82 (σ13.34)
+</td>
+<td class="tx-r tx-num g1">
+2.32***
+</td>
+<td class="tx-r tx-num tx-br g1">
+0.96***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num g2">
+44.21 (σ11.69)
+</td>
+<td class="tx-r tx-num p1 tx-b">
+5.71***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+3.17***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+12 958
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+F
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+R2
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.256
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Adjusted R2
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.255
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Residual SD
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+11.62
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression linéaire ; coefficients (différence de moyenne par
+rapport à la modalité de référence).<br><b>Obs_diff, Model_β —
+</b>Nuances de bleu : cases ≥ <span class="p1" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,5</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> écarts-types. Nuances du jaune au
+rouge : cases ≤ <span class="m1" style="font-weight:bold;">-0,2</span> ;
+<span class="m3" style="font-weight:bold;">-0,5</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> écarts-types. Coloré :
+significativement différent de la modalité de référence (intervalle de
+Wald, seuil de confiance à 95 %), d’au moins le premier seuil de
+couleur. Non coloré : soit non significatif, soit une différence
+inférieure à ±0,2 écarts-types.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Les âges moyens empiriques, et les différences d’âge moyen à la
 référence, peuvent être calculés dans un simple tableau avec :</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
@@ -720,14 +3395,82 @@ référence, peuvent être calculés dans un simple tableau avec :</p>
 <span>    color <span class="op">=</span> <span class="st">"diff"</span>, ref <span class="op">=</span> <span class="fl">1</span>,  method_mean_diff <span class="op">=</span> <span class="st">"student"</span></span>
 <span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>diff <span class="op">=</span> <span class="fu"><a href="../reference/fmt.html">set_display</a></span><span class="op">(</span><span class="va">age</span>, <span class="st">"diff"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 3</span></span>
-<span><span class="co">#&gt;   race              age        diff</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;          &lt;mean&gt; &lt;mean-diff&gt;</span></span>
-<span><span class="co">#&gt; 1 White  48.72 (σ17.50)   ref:48.72</span></span>
-<span><span class="co">#&gt; 2 Black  43.90 (σ16.06)       -4.83</span></span>
-<span><span class="co">#&gt; 3 Other  39.48 (σ14.39)       -9.24</span></span>
-<span><span class="co">#&gt; 4 Total  47.18 (σ17.29)       -1.54</span></span>
-<span><span class="co">#&gt; # différence standardisée (White) : -0,8 -0,5 -0,2 +0,2 +0,5 +0,8</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="2">
+age
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+mean (sd)
+</th>
+<th class="tx-r tx-num tx-br">
+diff
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+48.72<span style="font-weight:normal;"> (σ17.50)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+ref:48.72
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num m1 tx-b">
+43.90<span style="font-weight:normal;"> (σ16.06)</span>
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+-4.83
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num m3 tx-b">
+39.48<span style="font-weight:normal;"> (σ14.39)</span>
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+-9.24
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+47.18 (σ17.29)
+</td>
+<td class="tx-r tx-num tx-br g1">
+-1.54
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="3">
+<div class="tx-foot">
+Nuances de bleu : cases ≥ à la ligne White <span class="p1" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,5</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> écarts-types. Nuances du jaune au
+rouge : cases ≤ à la ligne White <span class="m1" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,5</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> écarts-types.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># student : intervalles de confiance a variance commune, pour correspondre a ceux calcules par la regression lineaire</span></span></code></pre></div>
 </div>
@@ -736,47 +3479,262 @@ référence, peuvent être calculés dans un simple tableau avec :</p>
 </h2>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"tvhours"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"marital"</span>, <span class="st">"relig"</span>, <span class="st">"rincome"</span><span class="op">)</span>, family <span class="op">=</span> <span class="st">"poisson"</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors     | Model fit   | tvhours |</span></span>
-<span><span class="co">#&gt; |:---------------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, marital, | N           |   6 811 |</span></span>
-<span><span class="co">#&gt; | relig, rincome | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                | McFadden R2 |   0.033 |</span></span>
-<span><span class="co">#&gt; |                | AIC         |  26 179 |</span></span>
-<span><span class="co">#&gt; |                | BIC         |  26 295 |</span></span>
-<span><span class="co">#&gt; |                | Dispersion  |    1.45 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 21 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels               Model_IRR</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population   2.83***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                     1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                  1.47***</span></span>
-<span><span class="co">#&gt;  4 race     Other                  1.01   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 marital  Married                   1   </span></span>
-<span><span class="co">#&gt;  6 marital  Separated              1.06   </span></span>
-<span><span class="co">#&gt;  7 marital  Divorced               1.05*  </span></span>
-<span><span class="co">#&gt;  8 marital  Widowed                1.11** </span></span>
-<span><span class="co">#&gt;  9 marital  Never married          1.07***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant              1   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic             1.00   </span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian    1/1.18***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish             1/1.11   </span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist  1/1.26** </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim             1/1.58***</span></span>
-<span><span class="co">#&gt; 16 relig    7-Other              1/1.02   </span></span>
-<span><span class="co">#&gt; 17 relig    8-None               1/1.11***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 18 rincome  1-Lt $10000               1   </span></span>
-<span><span class="co">#&gt; 19 rincome  2-$10000 to 14999    1/1.04   </span></span>
-<span><span class="co">#&gt; 20 rincome  3-$15000 to 24999    1/1.10***</span></span>
-<span><span class="co">#&gt; 21 rincome  4-$25000 or more     1/1.34***</span></span>
-<span><span class="co">#&gt; # Modèle : régression de Poisson ; rapports de taux d'incidence (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # IRR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression de Poisson: tvhours selon race, marital +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_IRR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2.83***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.47***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01   
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.06   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.11** 
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.07***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.00   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.18***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.11   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.26** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.58***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.02   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.11***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.04   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.10***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.34***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+6 811
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.033
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+26 179
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+26 295
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Dispersion
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1.45
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression de Poisson ; rapports de taux d’incidence (par
+rapport à la modalité de référence).<br>Nuances de bleu : IRR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : IRR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de taux, seuil de confiance à 95 %), d’au moins le premier seuil
+de couleur. Non coloré : soit non significatif, soit une différence
+inférieure à ×1,2.<br>*** : chiffre significativement différent de celui
+de la modalité de référence (en gras), au seuil de confiance de 99 % ;
+** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non
+significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Un <strong>rapport de taux d’incidence</strong> (IRR) de 1,5 signifie
 « 50 % d’heures de télévision de plus par jour ». Les modèles de Poisson
 non pondérés utilisent automatiquement des erreurs-types mises à
@@ -797,48 +3755,423 @@ le rapport des heures moyennes de télévision comparé à la modalité de
 référence.</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"tvhours"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"marital"</span>, <span class="st">"relig"</span>, <span class="st">"rincome"</span><span class="op">)</span>, family <span class="op">=</span> <span class="st">"poisson"</span>, empirical <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors     | Model fit   | tvhours |</span></span>
-<span><span class="co">#&gt; |:---------------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, marital, | N           |   6 811 |</span></span>
-<span><span class="co">#&gt; | relig, rincome | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |                | McFadden R2 |   0.033 |</span></span>
-<span><span class="co">#&gt; |                | AIC         |  26 179 |</span></span>
-<span><span class="co">#&gt; |                | BIC         |  26 295 |</span></span>
-<span><span class="co">#&gt; |                | Dispersion  |    1.45 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 21 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [5]</span></span>
-<span><span class="co">#&gt;    var      levels               Obs_rate   Obs_IRR Model_IRR</span></span>
-<span><span class="co">#&gt;    &lt;fct&gt;    &lt;fct&gt;                  &lt;mean&gt; &lt;row%-or&gt; &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt;  1 Constant Reference population                      2.83***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  2 race     White                 2.36         1         1   </span></span>
-<span><span class="co">#&gt;  3 race     Black                 3.66***   1.55***   1.47***</span></span>
-<span><span class="co">#&gt;  4 race     Other                 2.44      1.03      1.01   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;  5 marital  Married               2.36         1         1   </span></span>
-<span><span class="co">#&gt;  6 marital  Separated             2.87***   1.21***   1.06   </span></span>
-<span><span class="co">#&gt;  7 marital  Divorced              2.54***   1.08***   1.05*  </span></span>
-<span><span class="co">#&gt;  8 marital  Widowed               2.93***   1.24***   1.11** </span></span>
-<span><span class="co">#&gt;  9 marital  Never married         2.81***   1.19***   1.07***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 10 relig    1-Protestant          2.72         1         1   </span></span>
-<span><span class="co">#&gt; 11 relig    2-Catholic            2.50*** 1/1.09***   1.00   </span></span>
-<span><span class="co">#&gt; 12 relig    3-Other christian     2.31*** 1/1.18*** 1/1.18***</span></span>
-<span><span class="co">#&gt; 13 relig    4-Jewish              2.14*** 1/1.27*** 1/1.11   </span></span>
-<span><span class="co">#&gt; 14 relig    5-Buddhist/Hinduist   1.95*** 1/1.40*** 1/1.26** </span></span>
-<span><span class="co">#&gt; 15 relig    6-Muslim              1.89**  1/1.44**  1/1.58***</span></span>
-<span><span class="co">#&gt; 16 relig    7-Other               2.64    1/1.03    1/1.02   </span></span>
-<span><span class="co">#&gt; 17 relig    8-None                2.37*** 1/1.15*** 1/1.11***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 18 rincome  1-Lt $10000           3.10         1         1   </span></span>
-<span><span class="co">#&gt; 19 rincome  2-$10000 to 14999     3.02    1/1.03    1/1.04   </span></span>
-<span><span class="co">#&gt; 20 rincome  3-$15000 to 24999     2.84**  1/1.09**  1/1.10***</span></span>
-<span><span class="co">#&gt; 21 rincome  4-$25000 or more      2.24*** 1/1.39*** 1/1.34***</span></span>
-<span><span class="co">#&gt; # Modèle : régression de Poisson ; rapports de taux d'incidence (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # Obs_rate : rapport (réf.) : ÷4 ÷2 ÷1,5 ÷1,2 ×1,2 ×1,5 ×2 ×4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # Obs_IRR, Model_IRR : IRR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression de Poisson: tvhours selon race, marital +2 more
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="3">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num">
+Obs_rate
+</th>
+<th class="tx-r tx-num">
+Obs_IRR
+</th>
+<th class="tx-r tx-num tx-br">
+Model_IRR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num g1">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2.83***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+2.36   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p2 tx-b">
+3.66***
+</td>
+<td class="tx-r tx-num p2 tx-b">
+1.55***
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.47***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+2.44   
+</td>
+<td class="tx-r tx-num g1">
+1.03   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01   
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+Married
+</td>
+<td class="tx-r tx-num tx-b">
+2.36   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Separated
+</td>
+<td class="tx-r tx-num p1 tx-b">
+2.87***
+</td>
+<td class="tx-r tx-num p1 tx-b">
+1.21***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.06   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Divorced
+</td>
+<td class="tx-r tx-num g1">
+2.54***
+</td>
+<td class="tx-r tx-num g1">
+1.08***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05*  
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Widowed
+</td>
+<td class="tx-r tx-num p1 tx-b">
+2.93***
+</td>
+<td class="tx-r tx-num p1 tx-b">
+1.24***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.11** 
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Never married
+</td>
+<td class="tx-r tx-num g1">
+2.81***
+</td>
+<td class="tx-r tx-num g1">
+1.19***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.07***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Protestant
+</td>
+<td class="tx-r tx-num tx-b">
+2.72   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Catholic
+</td>
+<td class="tx-r tx-num g1">
+2.50***
+</td>
+<td class="tx-r tx-num g1">
+1/1.09***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.00   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Other christian
+</td>
+<td class="tx-r tx-num g1">
+2.31***
+</td>
+<td class="tx-r tx-num g1">
+1/1.18***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.18***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+4-Jewish
+</td>
+<td class="tx-r tx-num m1 tx-b">
+2.14***
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1/1.27***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.11   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+5-Buddhist/Hinduist
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1.95***
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1/1.40***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.26** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+6-Muslim
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1.89** 
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1/1.44** 
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.58***
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+7-Other
+</td>
+<td class="tx-r tx-num g1">
+2.64   
+</td>
+<td class="tx-r tx-num g1">
+1/1.03   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.02   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+8-None
+</td>
+<td class="tx-r tx-num g1">
+2.37***
+</td>
+<td class="tx-r tx-num g1">
+1/1.15***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.11***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-b">
+3.10   
+</td>
+<td class="tx-r tx-num tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num g1">
+3.02   
+</td>
+<td class="tx-r tx-num g1">
+1/1.03   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.04   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num g1">
+2.84** 
+</td>
+<td class="tx-r tx-num g1">
+1/1.09** 
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.10***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num m1 tx-b">
+2.24***
+</td>
+<td class="tx-r tx-num m1 tx-b">
+1/1.39***
+</td>
+<td class="tx-r tx-num tx-br m1 tx-b">
+1/1.34***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+6 811
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.033
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+26 179
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+26 295
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Dispersion
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1.45
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression de Poisson ; rapports de taux d’incidence (par
+rapport à la modalité de référence).<br><b>Obs_rate — </b>Nuances de
+bleu : cases ≥ <span class="p1" style="font-weight:bold;">×1,2</span> ;
+<span class="p2" style="font-weight:bold;">×1,5</span> ; <span class="p3" style="font-weight:bold;">×2</span> ; <span class="p4" style="font-weight:bold;">×4</span>. Nuances du jaune au rouge : cases ≤
+<span class="m1" style="font-weight:bold;">÷1,2</span> ; <span class="m2" style="font-weight:bold;">÷1,5</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald, seuil de
+confiance à 95 %), d’au moins le premier seuil de couleur. Non coloré :
+soit non significatif, soit une différence inférieure à
+×1,2.<br><b>Obs_IRR, Model_IRR — </b>Nuances de bleu : IRR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : IRR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de taux, seuil de confiance à 95 %), d’au moins le premier seuil
+de couleur. Non coloré : soit non significatif, soit une différence
+inférieure à ×1,2.<br>*** : chiffre significativement différent de celui
+de la modalité de référence (en gras), au seuil de confiance de 99 % ;
+** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non
+significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Les heures moyennes empiriques de télévision par jour, et les
 différences de taux de visionnage à la référence, peuvent être calculées
 dans un simple tableau avec :</p>
@@ -847,14 +4180,83 @@ dans un simple tableau avec :</p>
 <span>    color <span class="op">=</span> <span class="st">"ratio"</span>, ref <span class="op">=</span> <span class="fl">1</span>,  method_mean_ratio <span class="op">=</span> <span class="st">"quasipoisson"</span></span>
 <span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>IRR <span class="op">=</span> <span class="fu"><a href="../reference/fmt.html">set_display</a></span><span class="op">(</span><span class="va">tvhours</span>, <span class="st">"ratio"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; # A tabxplor tab: 4 × 3</span></span>
-<span><span class="co">#&gt;   race        tvhours          IRR</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;        &lt;mean&gt; &lt;mean-ratio&gt;</span></span>
-<span><span class="co">#&gt; 1 White  2.77 (σ2.31)           ×1</span></span>
-<span><span class="co">#&gt; 2 Black  4.18 (σ3.51)        ×1.51</span></span>
-<span><span class="co">#&gt; 3 Other  2.76 (σ2.41)           ×1</span></span>
-<span><span class="co">#&gt; 4 Total  2.98 (σ2.59)        ×1.08</span></span>
-<span><span class="co">#&gt; # rapport (White) : ÷4 ÷2 ÷1,5 ÷1,2 ×1,2 ×1,5 ×2 ×4</span></span></code></pre>
+<table class="table tabxplor-tab">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="2">
+tvhours
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+race
+</th>
+<th class="tx-r tx-num">
+mean (sd)
+</th>
+<th class="tx-r tx-num tx-br">
+IRR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-b">
+2.77<span style="font-weight:normal;"> (σ2.31)</span>
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+   ×1
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num p2 tx-b">
+4.18<span style="font-weight:normal;"> (σ3.51)</span>
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+×1.51
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num g1">
+2.76 (σ2.41)
+</td>
+<td class="tx-r tx-num tx-br g1">
+   ×1
+</td>
+</tr>
+<tr class="tx-bt tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Total
+</td>
+<td class="tx-r tx-num g1">
+2.98 (σ2.59)
+</td>
+<td class="tx-r tx-num tx-br g1">
+×1.08
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="3">
+<div class="tx-foot">
+Nuances de bleu : cases ≥ à la ligne White <span class="p1" style="font-weight:bold;">×1,2</span> ; <span class="p2" style="font-weight:bold;">×1,5</span> ; <span class="p3" style="font-weight:bold;">×2</span> ; <span class="p4" style="font-weight:bold;">×4</span>. Nuances du jaune au rouge : cases ≤
+à la ligne White <span class="m1" style="font-weight:bold;">÷1,2</span>
+; <span class="m2" style="font-weight:bold;">÷1,5</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># la methode par defaut pour les intervalles de confiance est le rapport de moyennes robuste a variance inegale ;</span></span>
 <span><span class="co">#  on utilise "quasipoisson" pour correspondre a ceux calcules par la regression quasi-poisson</span></span>
@@ -926,33 +4328,250 @@ vraisemblance de comparaison dans le bas de tableau
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> A different N is usually the per-model missing-value drop; set `na =</span></span>
 <span><span class="co">#&gt;   "drop_all_models"` to fit every model on the same complete cases so the</span></span>
 <span><span class="co">#&gt;   likelihood-ratio test can run.</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | Model fit             | Race only |   |  + age |   | + party |</span></span>
-<span><span class="co">#&gt; |:----------------------|----------:|:-:|-------:|:-:|--------:|</span></span>
-<span><span class="co">#&gt; | N                     |    21 483 |   | 21 407 |   |  21 261 |</span></span>
-<span><span class="co">#&gt; | LR vs null            |    &lt;0.01% |   | &lt;0.01% |   |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; | McFadden R2           |     0.019 |   |  0.023 |   |   0.032 |</span></span>
-<span><span class="co">#&gt; | AIC                   |    29 139 |   | 28 933 |   |  28 489 |</span></span>
-<span><span class="co">#&gt; | BIC                   |    29 163 |   | 28 965 |   |  28 537 |</span></span>
-<span><span class="co">#&gt; | Delta-AIC vs previous |           |   |   -206 |   |    -444 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 8 × 5</span></span>
-<span><span class="co">#&gt; # Groups:         var [4]</span></span>
-<span><span class="co">#&gt;   var      levels               `Race only`   `+ age` `+ party`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;    &lt;fct&gt;                  &lt;row%-or&gt; &lt;row%-or&gt; &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; 1 Constant Reference population       13*   1/1.46*** 1/1.79***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 2 race     White                       1         1         1   </span></span>
-<span><span class="co">#&gt; 3 race     Black                  1/2.68*** 1/2.58*** 1/2.19***</span></span>
-<span><span class="co">#&gt; 4 race     Other                  1/1.13*** 1/1.05      1.05   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 5 age      age                                1.01***   1.01***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 6 party3   1-Democrat                                      1   </span></span>
-<span><span class="co">#&gt; 7 party3   2-Independent, other                         1.05   </span></span>
-<span><span class="co">#&gt; 8 party3   3-Republican                                 1.65***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique de married ('01-Married') ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistiques (comparaison de modèles) : married, ‘01-Married’
+(OR)
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+Race only
+</th>
+<th class="tx-span" colspan="1">
+<ul><li>age
+</li></ul>
+</th>
+<th class="tx-span" colspan="1">
+<ul><li>party
+</li></ul>
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Race only
+</th>
+<th class="tx-r tx-num tx-br">
++ age
+</th>
+<th class="tx-r tx-num tx-br">
++ party
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+13*  
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.46***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.79***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.68***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.58***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.19***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.13***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.05   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num tx-br g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01***
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Democrat
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-Independent, other
+</td>
+<td class="tx-r tx-num tx-br g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.05   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+3-Republican
+</td>
+<td class="tx-r tx-num tx-br g1">
+</td>
+<td class="tx-r tx-num tx-br g1">
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.65***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 483
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 407
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 261
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.019
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.023
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.032
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+29 139
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 933
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 489
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+29 163
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 965
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 537
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Delta-AIC vs previous
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+-206
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+-444
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="4">
+<div class="tx-foot">
+Modèle : régression logistique de married (‘01-Married’) ; rapports de
+cotes (par rapport à la modalité de référence).<br>Nuances de bleu : OR
+≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 </div>
 <div class="section level2">
 <h2 id="le-même-modèle-au-sein-de-sous-populations">Le même modèle au sein de sous-populations<a class="anchor" aria-label="anchor" href="#le-m%C3%AAme-mod%C3%A8le-au-sein-de-sous-populations"></a>
@@ -969,32 +4588,465 @@ comparaison facile :</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"rincome"</span><span class="op">)</span>, split_var <span class="op">=</span> <span class="st">"year"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors    | Model fit   |   2000 |   |   2002 |   |   2004 |   |   2006 |   |   2008 |   |   2010 |   |   2012 |   |   2014 |</span></span>
-<span><span class="co">#&gt; |:--------------|:------------|-------:|:-:|-------:|:-:|-------:|:-:|-------:|:-:|-------:|:-:|-------:|:-:|-------:|:-:|-------:|</span></span>
-<span><span class="co">#&gt; | race, rincome | N           |  1 818 |   |  1 780 |   |  1 688 |   |  2 669 |   |  1 189 |   |  1 202 |   |  1 146 |   |  1 523 |</span></span>
-<span><span class="co">#&gt; |               | LR vs null  | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |   | &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |               | McFadden R2 |  0.020 |   |  0.024 |   |  0.033 |   |  0.029 |   |  0.034 |   |  0.043 |   |  0.050 |   |  0.046 |</span></span>
-<span><span class="co">#&gt; |               | AIC         |  2 475 |   |  2 418 |   |  2 267 |   |  3 604 |   |  1 604 |   |  1 598 |   |  1 519 |   |  2 021 |</span></span>
-<span><span class="co">#&gt; |               | BIC         |  2 508 |   |  2 451 |   |  2 299 |   |  3 640 |   |  1 635 |   |  1 628 |   |  1 549 |   |  2 053 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 8 × 10</span></span>
-<span><span class="co">#&gt; # Groups:         var [3]</span></span>
-<span><span class="co">#&gt;   var     levels                  `2000`    `2002`    `2004`    `2006`    `2008`</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;   &lt;fct&gt;                &lt;row%-or&gt; &lt;row%-or&gt; &lt;row%-or&gt; &lt;row%-or&gt; &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; 1 Consta… Reference population 1/1.54*** 1/1.45*** 1/1.23    1/1.22*   1/1.60***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 2 race    White                     1         1         1         1         1   </span></span>
-<span><span class="co">#&gt; 3 race    Black                1/1.89*** 1/2.15*** 1/2.42*** 1/2.44*** 1/2.21***</span></span>
-<span><span class="co">#&gt; 4 race    Other                1/1.10      1.12      1.04      1.01    1/1.10   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 5 rincome 1-Lt $10000               1         1         1         1         1   </span></span>
-<span><span class="co">#&gt; 6 rincome 2-$10000 to 14999      1.44**    1.48**    1.11    1/1.20      1.13   </span></span>
-<span><span class="co">#&gt; 7 rincome 3-$15000 to 24999      1.28      1.22      1.29      1.08      1.43*  </span></span>
-<span><span class="co">#&gt; 8 rincome 4-$25000 or more       1.85***   1.79***   2.04***   1.70***   2.25***</span></span>
-<span><span class="co">#&gt; # ℹ 3 more variables: `2010` &lt;row%-or&gt;, `2012` &lt;row%-or&gt;, `2014` &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, rincome (ventilé par year)
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+2000<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2002<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2004<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2006<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2008<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2010<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2012<br>married: 01-Married
+</th>
+<th class="tx-span" colspan="1">
+2014<br>married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+2000
+</th>
+<th class="tx-r tx-num tx-br">
+2002
+</th>
+<th class="tx-r tx-num tx-br">
+2004
+</th>
+<th class="tx-r tx-num tx-br">
+2006
+</th>
+<th class="tx-r tx-num tx-br">
+2008
+</th>
+<th class="tx-r tx-num tx-br">
+2010
+</th>
+<th class="tx-r tx-num tx-br">
+2012
+</th>
+<th class="tx-r tx-num tx-br">
+2014
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.54***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.45***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.23   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.22*  
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.60***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.77***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/2.02***
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.92***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m2 tx-b">
+1/1.89***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.15***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.42***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.44***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.21***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.89***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.16***
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.86***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.10   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.12   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.04   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.10   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.19   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.17   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.36*  
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+1-Lt $10000
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+2-$10000 to 14999
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.44** 
+</td>
+<td class="tx-r tx-num tx-br p1 tx-b">
+1.48** 
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.11   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.20   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.13   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.44   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.01   
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.72** 
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+3-$15000 to 24999
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.28   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.22   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.29   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.08   
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.43*  
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.35   
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.67** 
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.76***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+4-$25000 or more
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.85***
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.79***
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.04***
+</td>
+<td class="tx-r tx-num tx-br p2 tx-b">
+1.70***
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.25***
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.30***
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.99***
+</td>
+<td class="tx-r tx-num tx-br p3 tx-b">
+2.58***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 818
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 780
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 688
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 669
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 189
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 202
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 146
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 523
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.020
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.024
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.033
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.029
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.034
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.043
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.050
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.046
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 475
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 418
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 267
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3 604
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 604
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 598
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 519
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 021
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 508
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 451
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 299
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+3 640
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 635
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 628
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1 549
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+2 053
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="9">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 </div>
 <div class="section level2">
 <h2 id="affiner-laffichage-et-mettre-à-léchelle-un-prédicteur">Affiner l’affichage, et mettre à l’échelle un prédicteur<a class="anchor" aria-label="anchor" href="#affiner-laffichage-et-mettre-%C3%A0-l%C3%A9chelle-un-pr%C3%A9dicteur"></a>
@@ -1010,28 +5062,126 @@ l’intervalle de confiance à côté de chaque estimation (toute famille)
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span><span class="op">)</span>, estimate_display <span class="op">=</span> <span class="st">"ci"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors | Model fit   | married |</span></span>
-<span><span class="co">#&gt; |:-----------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age  | N           |  21 407 |</span></span>
-<span><span class="co">#&gt; |            | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |            | McFadden R2 |   0.023 |</span></span>
-<span><span class="co">#&gt; |            | AIC         |  28 933 |</span></span>
-<span><span class="co">#&gt; |            | BIC         |  28 965 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 5 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [3]</span></span>
-<span><span class="co">#&gt;   var      levels                          Model_OR</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;    &lt;fct&gt;                         &lt;row%-est&gt;</span></span>
-<span><span class="co">#&gt; 1 Constant Reference population 0.69 [0.63;0.74]***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 2 race     White                            1.00   </span></span>
-<span><span class="co">#&gt; 3 race     Black                0.39 [0.36;0.42]***</span></span>
-<span><span class="co">#&gt; 4 race     Other                0.95 [0.86;1.04]   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 5 age      age                  1.01 [1.01;1.01]***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, age
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.69 [0.63;0.74]***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1.00   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+0.39 [0.36;0.42]***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+0.95 [0.86;1.04]   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.01 [1.01;1.01]***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 407
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.023
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 933
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 965
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p>Pour un modèle logistique, vous pouvez à la place replier la
 probabilité prédite ajustée par le modèle (<code>"prob"</code>) ou
 l’effet marginal moyen (<code>"ame"</code>) dans la case du rapport de
@@ -1052,28 +5202,126 @@ puissance 10, avec son intervalle mis à l’échelle pour correspondre)
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="st">"married"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"age"</span><span class="op">)</span>, multiplier <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>age <span class="op">=</span> <span class="fl">10</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> <span style="color: #0000BB;">"married"</span>: binary outcome detected -&gt; `family =</span></span>
 <span><span class="co">#&gt; "binomial"` (logistic).</span></span></code></pre></div>
-<pre class="r-output"><code><span><span class="co">#&gt; | predictors | Model fit   | married |</span></span>
-<span><span class="co">#&gt; |:-----------|:------------|--------:|</span></span>
-<span><span class="co">#&gt; | race, age  | N           |  21 407 |</span></span>
-<span><span class="co">#&gt; |            | LR vs null  |  &lt;0.01% |</span></span>
-<span><span class="co">#&gt; |            | McFadden R2 |   0.023 |</span></span>
-<span><span class="co">#&gt; |            | AIC         |  28 933 |</span></span>
-<span><span class="co">#&gt; |            | BIC         |  28 965 |</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; # A tabxplor tab: 5 × 3</span></span>
-<span><span class="co">#&gt; # Groups:         var [3]</span></span>
-<span><span class="co">#&gt;   var      levels                Model_OR</span></span>
-<span><span class="co">#&gt;   &lt;fct&gt;    &lt;fct&gt;                &lt;row%-or&gt;</span></span>
-<span><span class="co">#&gt; 1 Constant Reference population 1/1.46***</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 2 race     White                     1   </span></span>
-<span><span class="co">#&gt; 3 race     Black                1/2.58***</span></span>
-<span><span class="co">#&gt; 4 race     Other                1/1.05   </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; 5 age      age (per 10)           1.09***</span></span>
-<span><span class="co">#&gt; # Modèle : régression logistique ; rapports de cotes (par rapport à la modalité de référence).</span></span>
-<span><span class="co">#&gt; # OR (réf.) : 1/4 1/2 1/1,5 1/1,2 1,2 1,5 2 4 [gris : non significatif ou sous ×1,2]</span></span>
-<span><span class="co">#&gt; # *** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ; aucune étoile : non significatif.</span></span></code></pre>
+<div class="tabxplor-caption">
+Régression logistique: married selon race, age
+</div>
+<table class="table tabxplor-tab tx-has-stars">
+<thead>
+<tr>
+<th class="tx-span" colspan="1">
+</th>
+<th class="tx-span" colspan="1">
+married: 01-Married
+</th>
+</tr>
+<tr>
+<th class="tx-l tx-br tx-bl tx-rv">
+levels
+</th>
+<th class="tx-r tx-num tx-br">
+Model_OR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="tx-b tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Reference population
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1/1.46***
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+White
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+1   
+</td>
+</tr>
+<tr>
+<td class="tx-l tx-br tx-bl tx-rv">
+Black
+</td>
+<td class="tx-r tx-num tx-br m3 tx-b">
+1/2.58***
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+Other
+</td>
+<td class="tx-r tx-num tx-br g1">
+1/1.05   
+</td>
+</tr>
+<tr class="tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+age (per 10)
+</td>
+<td class="tx-r tx-num tx-br g1">
+1.09***
+</td>
+</tr>
+<tr class="tx-b tx-bt">
+<td class="tx-l tx-br tx-bl tx-rv">
+N
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+21 407
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+LR vs null
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+&lt;0.01%
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+McFadden R2
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+0.023
+</td>
+</tr>
+<tr class="tx-b">
+<td class="tx-l tx-br tx-bl tx-rv">
+AIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 933
+</td>
+</tr>
+<tr class="tx-b tx-bb tx-bb2">
+<td class="tx-l tx-br tx-bl tx-rv">
+BIC
+</td>
+<td class="tx-r tx-num tx-br tx-b">
+28 965
+</td>
+</tr>
+</tbody>
+<tfoot><tr>
+<td colspan="2">
+<div class="tx-foot">
+Modèle : régression logistique ; rapports de cotes (par rapport à la
+modalité de référence).<br>Nuances de bleu : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span>. Nuances du jaune au rouge : OR ≤
+<span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Coloré : significativement
+différent de la modalité de référence (intervalle de Wald sur le log
+rapport de cotes, seuil de confiance à 95 %), d’au moins le premier
+seuil de couleur. Non coloré : soit non significatif, soit une
+différence inférieure à ×1,2.<br>*** : chiffre significativement
+différent de celui de la modalité de référence (en gras), au seuil de
+confiance de 99 % ; ** : au seuil de 95 % ; * : au seuil de 90 % ;
+aucune étoile : non significatif.
+</div>
+</td>
+</tr></tfoot>
+</table>
 <p><strong><code>at = "reference"</code></strong> évalue l’effet au
 profil de référence (la population abstraite combinant la modalité de
 référence de tous les prédicteurs) au lieu de le moyenner sur

@@ -17,12 +17,20 @@ a regression table that looks and behaves like one.
 
 The same idea as
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md), for
-a particular input.
+a particular input:
+[`tab_num()`](https://bricenocenti.github.io/tabxplor/reference/tab_num.md)
+for numeric variables,
+[`tab_counts()`](https://bricenocenti.github.io/tabxplor/reference/tab_counts.md)
+for pre-aggregated counts,
+[`tab_plain()`](https://bricenocenti.github.io/tabxplor/reference/tab_plain.md)
+for a single bare cross-table.
 
 - [`tab_num()`](https://bricenocenti.github.io/tabxplor/reference/tab_num.md)
   : Means table
 - [`tab_counts()`](https://bricenocenti.github.io/tabxplor/reference/tab_counts.md)
   : Cross-table from already-aggregated counts ("from the middle")
+- [`tab_plain()`](https://bricenocenti.github.io/tabxplor/reference/tab_plain.md)
+  : Plain single cross-table
 
 ## Regression shortcuts and plots
 
@@ -120,6 +128,12 @@ page).
 
 ## Point-and-click interface (jamovi)
 
+Everything tabxplor does, without writing R code. Install the free
+open-source [jamovi](https://www.jamovi.org/download.html), open the
+modules menu (the `+` at the top-right), choose *jamovi library*, and
+install **tabxplor**: it adds a *Crosstables* and a *Regressions*
+analysis, driven entirely by menus.
+
 - [`jmvtab()`](https://bricenocenti.github.io/tabxplor/reference/jmvtab.md)
   : Crosstables
 - [`jmvtabreg()`](https://bricenocenti.github.io/tabxplor/reference/jmvtabreg.md)
@@ -212,9 +226,6 @@ now fuses into one. Each is still exported and usable on its own, but
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md) /
 [`tab_num()`](https://bricenocenti.github.io/tabxplor/reference/tab_num.md)
 supersede them.
-
-- [`tab_plain()`](https://bricenocenti.github.io/tabxplor/reference/tab_plain.md)
-  : Plain single cross-table
 
 - [`tab_prepare()`](https://bricenocenti.github.io/tabxplor/reference/tab_prepare.md)
   :

@@ -281,7 +281,6 @@ Console, statistiques et chemins :
 
 - `tabxplor.console_bold` — mettre en gras les cases de référence / de total / colorées (détecté automatiquement selon l'éditeur).
 - `tabxplor.signif_levels` / `tabxplor.signif_labels` — les seuils de p-valeur et les étiquettes d'étoiles.
-- `tabxplor.totcol_range` — comment une colonne Total s'imprime quand les variables en colonne ont des bases différentes.
 - `tabxplor.plot_num_font` — la police des nombres de `tab_plot()` ; `tabxplor.export_dir` — le répertoire d'export par défaut.
 
 Performance et intégration :

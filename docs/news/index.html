@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -15,8 +15,7 @@
     </button>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
-      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../articles/tabxplor.html">Get started</a></li>
-<li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/tabxplor-reg.html">Regression tables with tab_reg()</a></li>
@@ -28,8 +27,7 @@
     <li><a class="dropdown-item" href="../articles/tabxplor-programming-fr.html">Programmer avec tabxplor</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
-      </ul><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../fr/index.html">FR</a></li>
-<li class="nav-item"><form class="form-inline" role="search">
+      </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/BriceNocenti/tabxplor/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
@@ -45,9 +43,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="2.0.0" id="tabxplor-140">tabxplor 2.0.0<a class="anchor" aria-label="anchor" href="#tabxplor-140"></a></h2>
+<h2 class="pkg-version" data-toc-text="2.0.0" id="tabxplor-200">tabxplor 2.0.0<a class="anchor" aria-label="anchor" href="#tabxplor-200"></a></h2>
 <div class="section level3">
-<h3 id="new-features-1-4-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-4-0"></a></h3>
+<h3 id="new-features-2-0-0">New features<a class="anchor" aria-label="anchor" href="#new-features-2-0-0"></a></h3>
 <ul><li>
 <strong><code><a href="../reference/tab.html">tab()</a></code> is now the unified entry point.</strong> It accepts <strong>several <code>row_vars</code> / <code>col_vars</code></strong> (e.g. <code>tab(data, c(race, relig), marital)</code>), merged into one table by default or returned as a list with <code>output_list = TRUE</code>. <code><a href="../reference/tab_many.html">tab_many()</a></code> is kept as a soft-deprecated alias.</li>
 <li>
@@ -56,6 +54,8 @@
 <strong>Dark mode.</strong> <code>theme = "auto"</code> on <code><a href="../reference/tab_html.html">tab_html()</a></code> / <code><a href="../reference/tab_md.html">tab_md()</a></code> / <code><a href="../reference/tab_css.html">tab_css()</a></code> / <code><a href="../reference/tab_export.html">tab_export()</a></code> follows whoever is reading the table (their browser, or the editor for the Viewer). The console also auto-detects a dark editor (RStudio and Positron).</li>
 <li>
 <strong>A new, dependency-free HTML engine, now the default</strong> for <code><a href="../reference/tab_html.html">tab_html()</a></code> (about 3× faster and much lighter than kableExtra, which becomes optional). Its geometry is CSS classes, so your own CSS can restyle it.</li>
+<li>
+<strong><code>options(tabxplor.print = "html")</code></strong> — auto-print every table as its html version: in the Viewer pane in RStudio/Positron, and as a real colored table in rmarkdown/Quarto chunks (<code>"kable"</code> is kept as a synonym). New <code>options(tabxplor.tab_kable_tooltips = FALSE)</code> switches the per-cell hover tooltips off document-wide. The vignettes now showcase the live html tables.</li>
 <li>
 <strong>Significance stars and correct confidence intervals.</strong> Stars are opt-in (<code>stars =</code>); cell / difference / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read the same interval. <code>ci</code> gains <code>"ratio"</code>; <code>method_cell</code> / <code>method_diff</code> / <code>method_mean_diff</code> / <code>method_mean_ratio</code> / <code>method_ratio</code> choose the interval.</li>
 <li>
@@ -77,10 +77,10 @@
 <li>
 <strong><code><a href="../reference/tab_transpose.html">tab_transpose()</a></code> / <code>transpose = TRUE</code></strong> — flip a table, mainly for the column-percentage inversion workflow. Also: <strong>French vignettes on a bilingual pkgdown website</strong>.</li>
 <li>
-<strong>New jamovi “Regression models” analysis (<code>jmvtabreg</code>)</strong> for <code><a href="../reference/tab_reg.html">tab_reg()</a></code>. The Crosstables module (<code>jmvtab</code>) gains a reference-level picker, export, a live cache, and the new options.</li>
+<strong>New jamovi “Regression models” analysis (<code>jmvtabreg</code>)</strong> for <code><a href="../reference/tab_reg.html">tab_reg()</a></code>. The Crosstables module (<code>jmvtab</code>) gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and exports now show the per-cell hover tooltips (counts, confidence intervals, differences; <code>options(tabxplor.tab_kable_tooltips = FALSE)</code> to disable).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="changes-that-may-affect-existing-code-1-4-0">Changes that may affect existing code<a class="anchor" aria-label="anchor" href="#changes-that-may-affect-existing-code-1-4-0"></a></h3>
+<h3 id="changes-that-may-affect-existing-code-2-0-0">Changes that may affect existing code<a class="anchor" aria-label="anchor" href="#changes-that-may-affect-existing-code-2-0-0"></a></h3>
 <ul><li>
 <strong>Excel export now uses <code>openxlsx2</code></strong> (Suggests) instead of <code>openxlsx</code>.</li>
 <li>
@@ -95,7 +95,7 @@
 <li>A few options got clearer names (<code>tabxplor.kable_css</code> → <code>tabxplor.tab_kable_css</code>, plus <code>tabxplor.console_theme</code> / <code>tabxplor.export_theme</code>); the old names still work.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-1-4-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-4-0"></a></h3>
+<h3 id="bug-fixes-2-0-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2-0-0"></a></h3>
 <ul><li>A factor carrying <strong><code>NA</code> as a real level</strong> (<code>factor(..., exclude = NULL)</code>, common in imported data) no longer crashes <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> / <code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code> / any export.</li>
 <li>
 <code><a href="../reference/tab.html">tab()</a></code> accepts a <strong><code>data.table</code></strong> as input, and a <strong>logical <code>col_var</code></strong>.</li>
@@ -104,7 +104,7 @@
 <li>The <strong><code>lang</code> argument now works on Linux</strong> (<code>lang = "fr"</code> used to return an English legend).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="deprecations-1-4-0">Deprecations<a class="anchor" aria-label="anchor" href="#deprecations-1-4-0"></a></h3>
+<h3 id="deprecations-2-0-0">Deprecations<a class="anchor" aria-label="anchor" href="#deprecations-2-0-0"></a></h3>
 <p>Soft-deprecated (still work):</p>
 <ul><li>
 <code><a href="../reference/tab_many.html">tab_many()</a></code> (use <code><a href="../reference/tab.html">tab()</a></code> with several <code>row_vars</code> / <code>col_vars</code>); singular <code>row_var</code> / <code>col_var</code>; <code>tab(sup_cols =)</code> (use <code>col_vars =</code>); <code>tab(filter =)</code> (filter upstream).</li>

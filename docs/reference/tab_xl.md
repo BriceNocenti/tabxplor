@@ -189,6 +189,6 @@ if (requireNamespace("openxlsx2", quietly = TRUE)) {
     tab(marital, race, pct = "row", color = "diff") |>
     tab_xl()
 }
-#> ✔ Excel file written to /tmp/RtmpueHYmF/Tab.xlsx
+#> ✔ Excel file written to /tmp/RtmpMeIviw/Tab.xlsx
 # }
 ```

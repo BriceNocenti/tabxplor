@@ -24,9 +24,6 @@ IDE with a Viewer. \code{"kable"} is an accepted synonym of \code{"html"} (the p
 \item{\code{tabxplor.signif_labels}}{the star labels, default \code{c("*", "**", "***")}.}
 \item{\code{tabxplor.ci_print}}{\code{"ci"} (default) shows the \verb{[inf; sup]} interval; \code{"moe"} shows the
 larger half-width (margin of error).}
-\item{\code{tabxplor.totcol_range}}{how a Total column's in-cell base is shown when a table's column
-variables have differing bases (e.g. \code{na = "drop"}): \code{"off"} (default) each row's own base;
-\code{"range"} the per-row \verb{[min;max]}; \code{"min"} the smallest (safest) base.}
 \item{\code{tabxplor.var_names}}{which variable names the exporters annotate: \code{"both"} (default),
 \code{"rows"}, \code{"cols"}, \code{"none"}. Per-call \verb{var_names =}.}
 \item{\code{tabxplor.var_labels}}{\code{FALSE} (default): in \emph{exports} (markdown / html / Excel / plot),

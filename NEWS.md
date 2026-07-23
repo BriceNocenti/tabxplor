@@ -49,7 +49,9 @@
 * **`tab_transpose()` / `transpose = TRUE`** — flip a table, mainly for the column-percentage inversion
   workflow. Also: **French vignettes on a bilingual pkgdown website**.
 * **New jamovi "Regression models" analysis (`jmvtabreg`)** for `tab_reg()`. The Crosstables module (`jmvtab`)
-  gains a reference-level picker, export, a live cache, and the new options.
+  gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and
+  exports now show the per-cell hover tooltips (counts, confidence intervals, differences;
+  `options(tabxplor.tab_kable_tooltips = FALSE)` to disable).
 
 ## Changes that may affect existing code
 

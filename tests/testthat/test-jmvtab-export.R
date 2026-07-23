@@ -1,4 +1,5 @@
-# PURPOSE: Phase 7g jamovi export helpers -- resolveExportPath(), tab_html_string(), jmvtab_export().
+# PURPOSE: Phase 7g jamovi export helpers -- resolveExportPath(), tab_html_string(), jmvtab_export(),
+#          + the jamovi html tooltip default (ON via tabxplor.tab_kable_tooltips since pre-release).
 # ROLE: The export logic is engine-free so it is unit-testable without a live jamovi session.
 # KEY CONSTRAINTS: no native picker -> a typed path resolved to Documents; ~ expands via USERPROFILE.
 
@@ -100,6 +101,25 @@ testthat::test_that("tab_html_string produces self-contained HTML (table + inlin
   testthat::expect_true(grepl("<table", h))
   testthat::expect_true(grepl("<style", h))           # CSS inlined, not linked
   testthat::expect_false(grepl("<link", h))           # no external stylesheet
+})
+
+testthat::test_that("jamovi html carries hover tooltips by default, and tooltips = FALSE overrides", {
+  # Last Phase (pre-release): the two hard-coded tooltips = FALSE were removed -- both jamovi html
+  # paths now follow the option default (tabxplor.tab_kable_tooltips, seeded TRUE). The non-popover
+  # attrs ride the native `title=` attribute, so they work with no bootstrap JS in the webview.
+  h <- tab_html_string(tabs)
+  testthat::expect_match(h, 'data-toggle="tooltip"', fixed = TRUE)
+  testthat::expect_match(h, ' title="', fixed = TRUE)
+  # the ... override path still works (and is the user's option escape hatch)
+  h_off <- tab_html_string(tabs, tooltips = FALSE)
+  testthat::expect_no_match(h_off, 'data-toggle="tooltip"', fixed = TRUE)
+
+  # results panel: jmv_backend_render_html only reads wrap_rows/wrap_cols off self$options,
+  # so a plain list stands in for the R6 self
+  self <- list(options = list(wrap_rows = 35, wrap_cols = 15))
+  hr <- as.character(jmv_backend_render_html(self, tabs))
+  testthat::expect_match(hr, "tx-scrollbox", fixed = TRUE)               # scroll box intact
+  testthat::expect_match(hr, 'data-toggle="tooltip"', fixed = TRUE)      # tooltips on by default
 })
 
 testthat::test_that("jmvtab_export writes Markdown", {

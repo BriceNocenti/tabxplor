@@ -1037,18 +1037,46 @@ library(dplyr)
 tab(dplyr::storms, category, c(status, pressure, wind)) |>
   dplyr::filter(category != "-1") |>
   dplyr::select(-`tropical depression`) |>
-  dplyr::arrange(is_totrow(.), desc(category))
-#> Error in dplyr::arrange(.data = tibble::as_tibble(.data), ... = !!!dots,     .by_group = FALSE, .locale = .locale): ℹ In argument: `..3 = is_totrow(.)`.
-#> Caused by error:
-#> ! object '.' not found
+  dplyr::arrange(is_totrow(pick(everything())), desc(category))
+#> # A tabxplor tab: 7 × 12
+#>   category disturbance extratropical hurricane `other low`
+#>   <fct>            <n>           <n>       <n>         <n>
+#> 1 NA               212         2 318         0       1 623
+#> 2 5                  0             0       129           0
+#> 3 4                  0             0       586           0
+#> 4 3                  0             0       632           0
+#> 5 2                  0             0     1 046           0
+#> 6 1                  0             0     2 707           0
+#> 7 Total            212         2 318     5 100       1 623
+#> # ℹ 7 more variables: `subtropical depression` <n>, `subtropical storm` <n>,
+#> #   `tropical storm` <n>, `tropical wave` <n>, Total <n>, pressure <mean>,
+#> #   wind <mean>
 # }
 
 # \donttest{
 # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 tab(data, race, marital, year, pct = "row") |>
-  dplyr::arrange(year, is_totrow(.), desc(Married))
-#> Error in dplyr::arrange(.data = tibble::as_tibble(.data), ... = !!!dots,     .by_group = FALSE, .locale = .locale): ℹ In argument: `..5 = is_totrow(.)`.
-#> Caused by error:
-#> ! object '.' not found
+  dplyr::arrange(year, is_totrow(dplyr::pick(dplyr::everything())), desc(Married))
+#> # A tabxplor tab: 13 × 7
+#> # Groups:         year [4]
+#>    year     race           `Never married` Separated Divorced Married
+#>    <fct>    <fct>                   <row%>    <row%>   <row%>  <row%>
+#>  1 2000     White                      25%        3%      18%     54%
+#>  2 2000     Other                      36%        5%      12%     47%
+#>  3 2000     Black                      41%       11%      16%     32%
+#>  4 2000     Total 2000                 28%        4%      17%     50%
+#> 
+#>  5 2006     White                      22%        3%      19%     57%
+#>  6 2006     Other                      29%        7%      11%     53%
+#>  7 2006     Black                      47%        6%      18%     30%
+#>  8 2006     Total 2006                 26%        4%      18%     52%
+#> 
+#>  9 2012     White                      25%        3%      18%     53%
+#> 10 2012     Other                      37%        6%       7%     51%
+#> 11 2012     Black                      43%        5%      21%     31%
+#> 12 2012     Total 2012                 29%        4%      18%     50%
+#> 
+#> 13 Ensemble Total Ensemble             27%        4%      18%     51%
+#> # ℹ 1 more variable: Total <row%>
   # }
 ```

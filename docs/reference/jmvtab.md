@@ -382,9 +382,9 @@ jmvtab(
 - export_dir:
 
   The folder to save the exported file in. Blank or `~/Documents`
-  auto-detects your real Documents folder (a redirected `D:` or network
-  Documents included). Type any other folder to override; a leading `~`
-  there expands to your home folder.
+  auto-detects your real Documents folder (a redirected `D:/Documents`
+  or network Documents included). Type any other folder to override; a
+  leading `~` there expands to your home folder.
 
 - export_filename:
 

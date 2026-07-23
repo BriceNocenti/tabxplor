@@ -204,19 +204,19 @@ tab_label_runs <- function(tab, label_names) {
 }
 
 
-# === SECTION: total-column base range [min;max] (block B, decisions.md Sec 10) =======
+# === SECTION: total-column base range [min;max] -- DORMANT (block B, decisions.md Sec 10) =======
 
-# Each col_var's own percentage base can differ (chiefly na="drop" with different NA rates), so one
-# Total column must summarise K row bases. This TABLE-LEVEL pre-pass (format() sees one column at a
-# time and cannot) returns, per data row, the scalar base when all col_vars agree, else the range.
-#   base per cell = get_tot_n() for row/col/all types, get_n() for means; weighted variants via
-#   get_tot_wn()/get_wn() -- the tab_ci()/tab_apply_n_min() rule (tab.R). Built INERT in Phase 10d
-#   (nothing consumes `text` yet -> byte-identical); the exporters overwrite the Total cell strings
-#   in Phase 10e/10f (a conscious golden change then).
+# DORMANT -- possible future implementation. The retired option `tabxplor.totcol_range` once drove
+# this: when col_vars have differing percentage bases (chiefly na="drop" with different NA rates),
+# one Total column must summarise K row bases. This TABLE-LEVEL pre-pass (format() sees one column
+# at a time and cannot) returns, per data row, the scalar base when all col_vars agree, else the
+# range. base per cell = get_tot_n() for row/col/all types, get_n() for means.
 # `style`: "range" (default) -> "[min;max]", "min" -> the smallest (safest) base, "off" -> uniform
-# (no per-row range). Only ONE site reads option "tabxplor.totcol_range": the console
-# (tab.R tab_fold_addn_incell), which passes `style` explicitly here (and only for "range"/"min").
-# The export prep always computes the range into the render model, so this default is a plain "range".
+# (no per-row range). NO site reads the option any more: the console fold branch
+# (tab.R tab_fold_addn_incell) and the render-model compute (range_totcol, below) are both
+# commented out -- the per-row literal templates it emitted defeated the composite-token padding
+# (format.tabxplor_fmt aligns per unique template) and no renderer ever consumed range_totcol.
+# The helper is kept honest by direct tests in test-export-prep.R.
 #' @keywords internal
 tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
                              style = "range") {
@@ -488,9 +488,12 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     }
   }
 
-  range_totcol <- if ("range" %in% compute) {
-    tab_totcol_range(tab, fmt_cols, col_var_map, totcols)
-  } else NULL
+  # DORMANT (possible future implementation, retired tabxplor.totcol_range): no renderer ever
+  # consumed range_totcol, so the compute is off. The named NULL slot stays in the model below.
+  # range_totcol <- if ("range" %in% compute) {
+  #   tab_totcol_range(tab, fmt_cols, col_var_map, totcols)
+  # } else NULL
+  range_totcol <- NULL
 
   # Phase 13c-iii: the shared col_var HEADER model (spanning variable-name row + suffix-stripped level
   # labels), consumed by every exporter so the two header rows stay in sync (console is unchanged).
@@ -753,7 +756,7 @@ tab_export_prep <- function(tabs,
   if (is.null(what)) what <- paste0("tab_", backend, "()")
   if (is.null(compute)) {
     compute <- if (backend %in% c("kable", "plot")) {
-      c("refs", "colors", "bold", "range")
+      c("refs", "colors", "bold")  # "range" DORMANT (retired totcol_range)
     } else c("refs", "bold")  # md / xl
   }
 

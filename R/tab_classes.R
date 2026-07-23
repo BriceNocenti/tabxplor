@@ -825,7 +825,7 @@ tab_html <- function(tabs,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE)
   theme <- o$theme
   color_legend <- o$color_legend
-  compute <- c("refs", "bold", "range")
+  compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
   if (o$color) compute <- c(compute, "colors")
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
@@ -1764,7 +1764,7 @@ tab_plot <- function(tabs,
                            transpose = transpose, var_names = var_names)
   theme <- o$theme
   color_legend <- o$color_legend
-  compute <- c("refs", "bold", "range")
+  compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
   if (o$color) compute <- c(compute, "colors")
 
   # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---
