@@ -17,8 +17,6 @@ cells that stand out from the total, only when the difference is
 statistically solid**. You spot the structure of your data immediately,
 instead of scanning numbers row by row.
 
-What sets it apart:
-
 - **Colors encode effect size *and* significance** at once: the stronger
   the difference, the deeper the color; non-significant cells stay
   uncolored (or greyed).
@@ -32,8 +30,6 @@ What sets it apart:
   percentages.
 - Weighted and survey data are supported throughout, and a
   point-and-click [jamovi](https://www.jamovi.org/) module is available.
-
-<!-- TODO maintainer: recapture this hero screenshot with the 2.0.0 palette and legend -->
 
 <figure>
 <img src="man/figures/README-hero.jpg"
@@ -109,7 +105,7 @@ full colored version.*
 ## Installation
 
 ``` r
-install.packages("tabxplor")
+install.packages("tabxplor", dependencies = TRUE)
 
 # Development version:
 # install.packages("devtools")
@@ -125,7 +121,7 @@ under-represented, and the legend below the table says by how much.
 ``` r
 gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
 
-tab(gss, marital, race, pct = "row", color = "diff")
+tab(gss, race, party3, pct = "row", color = "diff")
 ```
 
 <table class="tabxplor-tab">
@@ -138,9 +134,9 @@ tab(gss, marital, race, pct = "row", color = "diff")
 
 </th>
 
-<th class="tx-span" colspan="3">
+<th class="tx-span" colspan="4">
 
-race
+party3
 </th>
 
 <th class="tx-span" colspan="1">
@@ -153,22 +149,27 @@ race
 
 <th class="tx-l tx-br tx-bl tx-rv">
 
-marital
+race
 </th>
 
 <th class="tx-r tx-num">
 
-White
+1-Democrat
 </th>
 
 <th class="tx-r tx-num">
 
-Black
+2-Independent,<br>other
 </th>
 
 <th class="tx-r tx-num">
 
-Other
+3-Republican
+</th>
+
+<th class="tx-r tx-num">
+
+NA
 </th>
 
 <th class="tx-r tx-num tx-br tx-bl tx-tot">
@@ -186,27 +187,32 @@ Total
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-Married
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-82%
+White
 </td>
 
 <td class="tx-r tx-num m1 tx-b">
 
-9%
+39%
 </td>
 
 <td class="tx-r tx-num g1">
 
-9%
+21%
+</td>
+
+<td class="tx-r tx-num p1 tx-b">
+
+40%
+</td>
+
+<td class="tx-r tx-num g1">
+
+1%
 </td>
 
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 
-100%<span style="font-weight:normal;"> (n=10 117)</span>
+100%<span style="font-weight:normal;"> (n=16 395)</span>
 </td>
 
 </tr>
@@ -215,143 +221,66 @@ Married
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-Separated
+Black
 </td>
 
-<td class="tx-r tx-num m2 tx-b">
+<td class="tx-r tx-num p3 tx-b">
 
-59%
+75%
+</td>
+
+<td class="tx-r tx-num g1">
+
+16%
+</td>
+
+<td class="tx-r tx-num m3 tx-b">
+
+8%
+</td>
+
+<td class="tx-r tx-num g1">
+
+1%
+</td>
+
+<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+
+100%<span style="font-weight:normal;"> (n= 3 129)</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Other
+</td>
+
+<td class="tx-r tx-num g1">
+
+48%
 </td>
 
 <td class="tx-r tx-num p2 tx-b">
 
-26%
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-15%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n=   743)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Divorced
-</td>
-
-<td class="tx-r tx-num g1">
-
-79%
-</td>
-
-<td class="tx-r tx-num g1">
-
-15%
-</td>
-
-<td class="tx-r tx-num g1">
-
-6%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n= 3 383)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Widowed
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-82%
-</td>
-
-<td class="tx-r tx-num g1">
-
-14%
-</td>
-
-<td class="tx-r tx-num m1 tx-b">
-
-4%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n= 1 807)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Never married
+32%
 </td>
 
 <td class="tx-r tx-num m2 tx-b">
 
-64%
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-24%
+18%
 </td>
 
 <td class="tx-r tx-num g1">
 
-12%
+1%
 </td>
 
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 
-100%<span style="font-weight:normal;"> (n= 5 416)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-NA
-</td>
-
-<td class="tx-r tx-num g1">
-
-76%
-</td>
-
-<td class="tx-r tx-num g1">
-
-12%
-</td>
-
-<td class="tx-r tx-num g1">
-
-12%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n=    17)</span>
+100%<span style="font-weight:normal;"> (n= 1 959)</span>
 </td>
 
 </tr>
@@ -365,17 +294,22 @@ Total
 
 <td class="tx-r tx-num tx-b">
 
-76%
+45%
 </td>
 
 <td class="tx-r tx-num tx-b">
 
-15%
+21%
 </td>
 
 <td class="tx-r tx-num tx-b">
 
-9%
+33%
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+1%
 </td>
 
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
@@ -391,7 +325,7 @@ Total
 
 <tr>
 
-<td colspan="5">
+<td colspan="6">
 
 <div class="tx-foot">
 
@@ -423,7 +357,7 @@ different from the total are greyed out, so every colored (or black)
 figure is a solid one. Use `wt =` for weighted or survey data.
 
 ``` r
-tab(gss, relig, c(married, income25k), pct = "row", levels = "first",
+tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
     color = "diff", color_signif = "grey_non_signif")
 ```
 
@@ -447,6 +381,11 @@ married
 income25k
 </th>
 
+<th class="tx-span" colspan="1">
+
+black
+</th>
+
 </tr>
 
 <tr>
@@ -464,6 +403,11 @@ relig
 <th class="tx-r tx-num tx-br">
 
 01-\$25000 or<br>more
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+01-Black
 </th>
 
 </tr>
@@ -489,6 +433,11 @@ relig
 32%
 </td>
 
+<td class="tx-r tx-num tx-br p1 tx-b">
+
+21%
+</td>
+
 </tr>
 
 <tr>
@@ -506,6 +455,11 @@ relig
 <td class="tx-r tx-num tx-br g1">
 
 35%
+</td>
+
+<td class="tx-r tx-num tx-br m2 tx-b">
+
+4%
 </td>
 
 </tr>
@@ -527,6 +481,11 @@ relig
 35%
 </td>
 
+<td class="tx-r tx-num tx-br g1">
+
+18%
+</td>
+
 </tr>
 
 <tr>
@@ -544,6 +503,11 @@ relig
 <td class="tx-r tx-num tx-br p1 tx-b">
 
 43%
+</td>
+
+<td class="tx-r tx-num tx-br m2 tx-b">
+
+3%
 </td>
 
 </tr>
@@ -565,6 +529,11 @@ relig
 47%
 </td>
 
+<td class="tx-r tx-num tx-br m1 tx-b">
+
+5%
+</td>
+
 </tr>
 
 <tr>
@@ -582,6 +551,11 @@ relig
 <td class="tx-r tx-num tx-br g1">
 
 32%
+</td>
+
+<td class="tx-r tx-num tx-br p2 tx-b">
+
+34%
 </td>
 
 </tr>
@@ -603,6 +577,11 @@ relig
 37%
 </td>
 
+<td class="tx-r tx-num tx-br g1">
+
+13%
+</td>
+
 </tr>
 
 <tr>
@@ -620,6 +599,11 @@ relig
 <td class="tx-r tx-num tx-br g1">
 
 37%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+11%
 </td>
 
 </tr>
@@ -641,6 +625,11 @@ NA
 15%
 </td>
 
+<td class="tx-r tx-num tx-br g1">
+
+18%
+</td>
+
 </tr>
 
 <tr class="tx-b tx-bt tx-bb tx-bb2">
@@ -660,6 +649,11 @@ Total
 34%
 </td>
 
+<td class="tx-r tx-num tx-br tx-b">
+
+15%
+</td>
+
 </tr>
 
 </tbody>
@@ -668,7 +662,7 @@ Total
 
 <tr>
 
-<td colspan="3">
+<td colspan="4">
 
 <div class="tx-foot">
 
@@ -698,10 +692,12 @@ significant, or a difference under ±5 points.
 
 The same visual language extends to regression models: `tab_reg()`
 detects a binary outcome and fits a logistic regression, coloring odds
-ratios by strength and greying the non-significant ones.
+ratios by strength and greying the non-significant ones, with a possible
+comparison between modelised quantities and their crude observed
+empirical counterparts.
 
 ``` r
-tab_reg(gss, dependent = "married", predictors = c("race", "age", "rincome"))
+tab_reg(gss, dependent = "married", predictors = c("race", "age", "rincome"), empirical = TRUE)
 ```
 
 <div class="tabxplor-caption">
@@ -720,7 +716,7 @@ Logistic regression: married by race, age +1 more
 
 </th>
 
-<th class="tx-span" colspan="1">
+<th class="tx-span" colspan="3">
 
 married: 01-Married
 </th>
@@ -734,6 +730,16 @@ married: 01-Married
 levels
 </th>
 
+<th class="tx-r tx-num">
+
+Obs\_%
+</th>
+
+<th class="tx-r tx-num">
+
+Obs_OR
+</th>
+
 <th class="tx-r tx-num tx-br">
 
 Model_OR
@@ -745,11 +751,19 @@ Model_OR
 
 <tbody>
 
-<tr class="tx-b tx-bb2">
+<tr class="tx-bb2">
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 Reference population
+</td>
+
+<td class="tx-r tx-num g1">
+
+</td>
+
+<td class="tx-r tx-num g1">
+
 </td>
 
 <td class="tx-r tx-num tx-br tx-b">
@@ -766,6 +780,16 @@ Reference population
 White
 </td>
 
+<td class="tx-r tx-num tx-b">
+
+52%   
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+1   
+</td>
+
 <td class="tx-r tx-num tx-br tx-b">
 
 1   
@@ -778,6 +802,16 @@ White
 <td class="tx-l tx-br tx-bl tx-rv">
 
 Black
+</td>
+
+<td class="tx-r tx-num m3 tx-b">
+
+31%\*\*\*
+</td>
+
+<td class="tx-r tx-num m3 tx-b">
+
+1/2.45\*\*\*
 </td>
 
 <td class="tx-r tx-num tx-br m3 tx-b">
@@ -794,6 +828,16 @@ Black
 Other
 </td>
 
+<td class="tx-r tx-num g1">
+
+49%\*  
+</td>
+
+<td class="tx-r tx-num g1">
+
+1/1.11\*  
+</td>
+
 <td class="tx-r tx-num tx-br g1">
 
 1.08   
@@ -806,6 +850,14 @@ Other
 <td class="tx-l tx-br tx-bl tx-rv">
 
 age
+</td>
+
+<td class="tx-r tx-num g1">
+
+</td>
+
+<td class="tx-r tx-num g1">
+
 </td>
 
 <td class="tx-r tx-num tx-br g1">
@@ -822,6 +874,16 @@ age
 1-Lt \$10000
 </td>
 
+<td class="tx-r tx-num tx-b">
+
+37%   
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+1   
+</td>
+
 <td class="tx-r tx-num tx-br tx-b">
 
 1   
@@ -834,6 +896,16 @@ age
 <td class="tx-l tx-br tx-bl tx-rv">
 
 2-\$10000 to 14999
+</td>
+
+<td class="tx-r tx-num g1">
+
+41%\*\* 
+</td>
+
+<td class="tx-r tx-num p1 tx-b">
+
+1.21\*\* 
 </td>
 
 <td class="tx-r tx-num tx-br g1">
@@ -850,6 +922,16 @@ age
 3-\$15000 to 24999
 </td>
 
+<td class="tx-r tx-num p1 tx-b">
+
+43%\*\*\*
+</td>
+
+<td class="tx-r tx-num p1 tx-b">
+
+1.33\*\*\*
+</td>
+
 <td class="tx-r tx-num tx-br p1 tx-b">
 
 1.28\*\*\*
@@ -862,6 +944,16 @@ age
 <td class="tx-l tx-br tx-bl tx-rv">
 
 4-\$25000 or more
+</td>
+
+<td class="tx-r tx-num p2 tx-b">
+
+55%\*\*\*
+</td>
+
+<td class="tx-r tx-num p3 tx-b">
+
+2.14\*\*\*
 </td>
 
 <td class="tx-r tx-num tx-br p2 tx-b">
@@ -878,6 +970,14 @@ age
 N
 </td>
 
+<td class="tx-r tx-num tx-b">
+
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+</td>
+
 <td class="tx-r tx-num tx-br tx-b">
 
 12 990
@@ -890,6 +990,14 @@ N
 <td class="tx-l tx-br tx-bl tx-rv">
 
 LR vs null
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+</td>
+
+<td class="tx-r tx-num tx-b">
+
 </td>
 
 <td class="tx-r tx-num tx-br tx-b">
@@ -906,6 +1014,14 @@ LR vs null
 McFadden R2
 </td>
 
+<td class="tx-r tx-num tx-b">
+
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+</td>
+
 <td class="tx-r tx-num tx-br tx-b">
 
 0.049
@@ -918,6 +1034,14 @@ McFadden R2
 <td class="tx-l tx-br tx-bl tx-rv">
 
 AIC
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+</td>
+
+<td class="tx-r tx-num tx-b">
+
 </td>
 
 <td class="tx-r tx-num tx-br tx-b">
@@ -934,6 +1058,14 @@ AIC
 BIC
 </td>
 
+<td class="tx-r tx-num tx-b">
+
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+</td>
+
 <td class="tx-r tx-num tx-br tx-b">
 
 17 181
@@ -947,12 +1079,24 @@ BIC
 
 <tr>
 
-<td colspan="2">
+<td colspan="4">
 
 <div class="tx-foot">
 
 Model: logistic regression; odds ratios (vs the reference
-category).<br>Shades of blue: OR ≥ <span class="p1"
+category).<br><b>Obs\_% — </b>Shades of blue: cells ≥ <span class="p1"
+style="font-weight:bold;">+5</span>; <span class="p2"
+style="font-weight:bold;">+10</span>; <span class="p3"
+style="font-weight:bold;">+20</span>; <span class="p4"
+style="font-weight:bold;">+30</span> points. Shades of yellow to red:
+cells ≤ <span class="m1" style="font-weight:bold;">-5</span>;
+<span class="m2" style="font-weight:bold;">-10</span>; <span class="m3"
+style="font-weight:bold;">-20</span>; <span class="m4"
+style="font-weight:bold;">-30</span> points. Coloured: significantly
+different from the reference category (Wald interval, 95% confidence),
+by at least the first colour threshold. Uncoloured: either not
+significant, or a difference under ±5 points.<br><b>Obs_OR, Model_OR —
+</b>Shades of blue: OR ≥ <span class="p1"
 style="font-weight:bold;">1.2</span>; <span class="p2"
 style="font-weight:bold;">1.5</span>; <span class="p3"
 style="font-weight:bold;">2</span>; <span class="p4"
@@ -984,8 +1128,8 @@ Any table exports with its colors to Excel, html or markdown, and can be
 drawn as a plot:
 
 ``` r
+tab(gss, marital, race, pct = "row", color = "diff") |> tab_export()  # "html"
 tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl()      # Excel
-tab(gss, marital, race, pct = "row", color = "diff") |> tab_export("html")
 ```
 
 ## Learn more
@@ -996,11 +1140,12 @@ tab(gss, marital, race, pct = "row", color = "diff") |> tab_export("html")
   français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html)*).
 - [Regression tables with
   tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html)
-  (*[en
+  (*aussi disponible [en
   français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html)*).
 - [Programming with
   tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.html)
-  — many tables at once, custom workflows, options (*[en
+  — many tables at once, custom workflows, options (*aussi disponible
+  [en
   français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html)*).
 
 No code needed: the tabxplor modules for the free statistical
