@@ -93,6 +93,8 @@ tx_getOption <- function(names, default = NULL) {
 
   options("tabxplor.kable_popover" = FALSE)
 
+  options("tabxplor.tab_kable_tooltips" = TRUE)
+
   options("tabxplor.ci_print" = "ci") # or "moe"
 
   # Phase 10: how a Total column's in-cell base is shown when a table's col_vars have DIFFERING bases

@@ -15,7 +15,10 @@
 #'
 #' @section Display and printing:
 #' \describe{
-#'   \item{`tabxplor.print`}{`"console"` (default) or `"kable"`: how a table auto-prints.}
+#'   \item{`tabxplor.print`}{`"console"` (default) or `"html"`: how a table auto-prints.
+#'     `"html"` renders the [tab_html()] table (in the Viewer pane in RStudio/Positron, and
+#'     as a real html table in rmarkdown/Quarto documents) — recommended when you work in an
+#'     IDE with a Viewer. `"kable"` is an accepted synonym of `"html"` (the pre-2.0.0 name).}
 #'   \item{`tabxplor.stars`}{`FALSE` (default): whether cells show significance stars
 #'     (`*`/`**`/`***`). Off for [tab()], on for [tab_reg()]. Per-call `stars =`.}
 #'   \item{`tabxplor.signif_levels`}{p-value cut-offs for the stars, default `c(0.10, 0.05, 0.01)`.}
@@ -56,15 +59,6 @@
 #' \describe{
 #'   \item{`tabxplor.anova`}{which one-way ANOVA F is shown for mean columns: `"welch"` (default,
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
-#'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_html()],
-#'     [tab_xl()]) append: `"summary"` (default: p-value + effect size), `"all"` (+ the raw statistic),
-#'     `"stat"` (p-value + statistic), or `"pvalue"` (the single p-value row). The p-value row name states
-#'     the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
-#'     V, eta2"). N is never added -- it is already shown by `add_n`. The console summary block always
-#'     shows N + p-value + effect size.}
-#'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
-#'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
-#'     one-line form the console uses). The console itself is always terse.}
 #'   \item{`tabxplor.kish_neff`}{`FALSE` by default (weighted estimate, raw unweighted n). Set to
 #'     `TRUE` to replace that raw n with Kish's effective sample size `n_eff = (sum w)^2 / sum(w^2)`
 #'     in \strong{every weighted descriptive confidence interval} -- factor proportions \emph{and}
@@ -81,6 +75,15 @@
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it.}
+#'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
+#'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
+#'     one-line form the console uses). The console itself is always terse.}
+#'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_html()],
+#'     [tab_xl()]) append: `"summary"` (default: p-value + effect size), `"all"` (+ the raw statistic),
+#'     `"stat"` (p-value + statistic), or `"pvalue"` (the single p-value row). The p-value row name states
+#'     the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+#'     V, eta2"). N is never added -- it is already shown by `add_n`. The console summary block always
+#'     shows N + p-value + effect size.}
 #' }
 #'
 #' @section HTML / `tab_kable()` export:
@@ -93,6 +96,9 @@
 #'   \item{`tabxplor.always_add_css_in_tab_kable`}{`TRUE` (default): always include `tab.css` in the
 #'     kableExtra engine's output (a legacy-engine knob).}
 #'   \item{`tabxplor.kable_html_font`}{the CSS font stack for the kableExtra engine.}
+#'   \item{`tabxplor.tab_kable_tooltips`}{`TRUE` (default): show the per-cell hover tooltips
+#'     (counts, confidence intervals, differences...) in html tables. Set `FALSE` once per
+#'     document when every table auto-prints and tooltips are unwanted. Per-call `tooltips =`.}
 #'   \item{`tabxplor.kable_popover`}{`FALSE` (default): use click popovers instead of hover tooltips.}
 #'   \item{`tabxplor.tab_kable_num_font`}{the HTML/markdown number-font CSS stack. Monospace by
 #'     default so figures stay column-aligned (set a proportional stack to revert).}
@@ -122,8 +128,8 @@
 #' @section Parallel build:
 #' \describe{
 #'   \item{`tabxplor.parallel`}{`FALSE` (default): build the per-`row_var` tables of one [tab()] call
-#'     on a background worker pool (needs the suggested `mirai` package). `TRUE` = auto workers, an
-#'     integer = that many daemons. Per-call `parallel =`. Release the pool with [tab_parallel_stop()].}
+#'     on parallel CPU cores (needs the `mirai` package). `TRUE` = auto select number of cores,
+#'     integer = that many cores. Release the pool with [tab_parallel_stop()].}
 #'   \item{`tabxplor.parallel_min`}{`2L` (default): the smallest `row_var` count worth dispatching
 #'     (fewer runs serially, since the setup would outweigh the gain).}
 #' }

@@ -14,12 +14,23 @@ knitr::opts_chunk$set(
 )
 library(tabxplor)
 
-# The tables below are shown exactly as they appear in the R console --- colored. tabxplor builds
-# its terminal colors with cli (which reads options("cli.num_colors")); the hook just below turns
-# that ANSI into the colored HTML you see here (via fansi). In a report you would instead export
-# with tab_kable() (HTML) or tab_xl() (Excel) --- see the "Exporting" section.
+# The tables below are tabxplor's real html tables, rendered live: the setup sets
+# options(tabxplor.print = "html") --- the recommended everyday setting in RStudio/Positron ---
+# so every bare tab() chunk knits as a colored html table. The shared stylesheet is emitted ONCE
+# by the tab_css() chunk below (tab_kable_css = FALSE stops each table re-inlining it), and the
+# hover tooltips are off document-wide (see the dedicated tooltips section, which re-enables them).
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# The few console examples still show terminal colors: cli emits ANSI (options("cli.num_colors")),
+# and the fansi hook below turns that ANSI into colored HTML.
 options(cli.num_colors = 256)
 set_color_palette(theme = "light") # type = "text"
+```
+
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
 ```
 
 The first time only, install the package : 
@@ -36,7 +47,11 @@ library(tabxplor)
 
 
 ```{r, echo = FALSE, include = FALSE}
+# Colour the console outputs (ANSI -> html, via fansi), but hand as-is results (the html tables,
+# marked by knitr with an ASIS token) back to knitr's default hook untouched.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -59,6 +74,26 @@ gss_simple <- gss_cat_data_formatting()
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, race)
+```
+
+This is tabxplor's **html table** — what you get in the RStudio or Positron Viewer pane with the recommended session option, used throughout this vignette:
+
+```{r, eval = FALSE}
+options(tabxplor.print = "html")
+```
+
+Without the option, the same table prints in the **console**, as a colored `tibble` — same information, lighter display:
+
+```{r, include = FALSE}
+options(tabxplor.print = "console")
+```
+
+```{r, echo = TRUE}
+tab(gss_simple, marital, race)
+```
+
+```{r, include = FALSE}
+options(tabxplor.print = "html")
 ```
 
 Add `pct = "row"` for row percentages (or `"col"` for column percentages). A **Total** row/column and a count column (`n`) are added automatically:
@@ -251,6 +286,15 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
+## Hover tooltips (html tables)
+
+Every html table carries per-cell hover **tooltips** with the numbers behind the cell: the unweighted count, the difference from the reference, the ratio, the confidence interval... They are on by default in the Viewer and in reports — this vignette only switched them off document-wide with `options(tabxplor.tab_kable_tooltips = FALSE)`, to keep the page light. Hover the cells of the table below, where they are switched back on with `tooltips = TRUE`:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+  tab_html(tooltips = TRUE)
+```
+
 **A note on weights.** With a weight (`wt =`), every proportion or mean is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of observations. Under unequal weights it carries no design effect, so it runs a little too narrow : opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` (see [Weights](#weights)) to widen every interval honestly and switch the whole-table Chi2 tests to a Rao–Scott correction.
 
 ## Exporting
@@ -274,12 +318,12 @@ tab_export(tabs, theme = "auto") # HTML that follows the reader's light/dark mod
 
 - Since numeric variables can only be passed in columns, some complex layout with numeric variables in rows need to transpose the table during export using `transpose = TRUE` :
 
-```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, party3, c(race, relig, tvhours), pct = "row") |>
-  tab_export(transpose = TRUE)
+```{r, echo = TRUE}
+tab(gss_simple, party3, c(race, tvhours), pct = "row") |>
+  tab_html(transpose = TRUE)
 ```
 
-- **One stylesheet for a whole document.** In an `.Rmd`/`.qmd` report, `tab_css()` writes the colour CSS once and every later `tab_kable()` emits only classes, so a single `theme` — including `"auto"`, which follows the reader's light/dark mode — styles every table at once:
+- **One stylesheet for a whole document.** In an `.Rmd`/`.qmd` report, `tab_css()` writes the colour CSS once and every later table emits only classes, so a single `theme` — including `"auto"`, which follows the reader's light/dark mode — styles every table at once. This very vignette does exactly that (with `theme = "light"`):
 
 ```{r, echo = TRUE, eval = FALSE}
 options(tabxplor.tab_kable_css = FALSE)
@@ -300,7 +344,7 @@ tab(gss_simple, race, marital, pct = "row") |>
 
 **Titling and annotating.** `subtext =` prints one or more legend lines under a table (a data source, a note). `set_caption()` gives a table a **title that survives a dplyr pipeline**, and every exporter uses it as the table title:
 
-```{r, echo = TRUE, eval = FALSE}
+```{r, echo = TRUE}
 tab(gss_simple, race, marital, pct = "row", subtext = "Source: GSS, 2000-2014") |>
   set_caption("Custom title")
 ```
@@ -330,6 +374,7 @@ Every colored table answers three questions:
 | mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means         |
 
 Alternative interval methods (see `?tab_ci`): 
+
 - `method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage difference; 
 - `method_mean_diff = "student"` (pooled, the OLS two-group interval) for a mean difference; 
 - `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio. 
@@ -347,6 +392,7 @@ Alternative interval methods (see `?tab_ci`):
 Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**. `method_cell` chooses `"wilson"` (default) or `"wald"` for percentages; a mean cell interval is always the one-sample Student *t*.
 
 **`color_signif` turns that interval into a coloring policy.** 
+
 - `"ignore"` colors **every** cell by its **observed effect** size, for example the observed difference compared to the Total row. Grey cells have an observed effect below the threshold (for example, differences of less than ±5 points of percentages). 
 - `"grey_non_signif"` and `"guaranteed_effect"` both color **only significant cells**, but differ in the *intensity basis*: 
   + `grey_non_signif` colors by the **observed** effect, like "ignore", greying out small deviations, but it also **greys out any large deviation that turns to be non-significant**. Ideal for large samples.

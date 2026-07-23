@@ -16,6 +16,10 @@
 * **A new, dependency-free HTML engine, now the default** for `tab_html()` (about 3× faster and much
   lighter than kableExtra, which becomes optional). Its geometry is CSS classes, so your own CSS can
   restyle it.
+* **`options(tabxplor.print = "html")`** — auto-print every table as its html version: in the Viewer
+  pane in RStudio/Positron, and as a real colored table in rmarkdown/Quarto chunks (`"kable"` is kept
+  as a synonym). New `options(tabxplor.tab_kable_tooltips = FALSE)` switches the per-cell hover
+  tooltips off document-wide. The vignettes now showcase the live html tables.
 * **Significance stars and correct confidence intervals.** Stars are opt-in (`stars =`); cell / difference
   / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read
   the same interval. `ci` gains `"ratio"`; `method_cell` / `method_diff` / `method_mean_diff` /

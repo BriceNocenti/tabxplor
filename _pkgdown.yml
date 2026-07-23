@@ -3,14 +3,14 @@ url: https://bricenocenti.github.io/tabxplor/
 template:
   bootstrap: 5
 
-# Last Phase w: language switcher -> the French site built from _pkgdown.fr.yml into docs/fr/.
+# One English site. The French translations of the vignettes live in Articles ("En français") --
+# no second FR site build, no language toggle. `intro` is dropped from the left side so the
+# introduction vignette appears in Articles like every other one (symmetric with the French set),
+# instead of a separate "Get started" page.
 navbar:
   structure:
-    right: [lang, search, github]
-  components:
-    lang:
-      text: FR
-      href: fr/index.html
+    left: [reference, articles, news]
+    right: [search, github]
 
 # The reference is ordered by priority: the two headline functions first, then everything an ordinary
 # user needs, then (clearly separated) the functions for programming with tabxplor. The S3 methods and
@@ -29,10 +29,13 @@ reference:
   - tab_reg
 
 - title: Variants of tab()
-  desc: The same idea as `tab()`, for a particular input.
+  desc: >
+    The same idea as `tab()`, for a particular input: `tab_num()` for numeric variables,
+    `tab_counts()` for pre-aggregated counts, `tab_plain()` for a single bare cross-table.
   contents:
   - tab_num
   - tab_counts
+  - tab_plain
 
 - title: Regression shortcuts and plots
   desc: >
@@ -68,6 +71,11 @@ reference:
   - gss_cat_data_formatting
 
 - title: Point-and-click interface (jamovi)
+  desc: >
+    Everything tabxplor does, without writing R code. Install the free open-source
+    [jamovi](https://www.jamovi.org/download.html), open the modules menu (the `+` at the
+    top-right), choose *jamovi library*, and install **tabxplor**: it adds a *Crosstables*
+    and a *Regressions* analysis, driven entirely by menus.
   contents:
   - jmvtab
   - jmvtabreg
@@ -99,7 +107,6 @@ reference:
     The individual steps `tab_many()` now fuses into one. Each is still exported and usable on its
     own, but `tab()` / `tab_num()` supersede them.
   contents:
-  - tab_plain
   - tab_prepare
   - tab_pct
   - tab_tot
@@ -117,9 +124,8 @@ reference:
   - tab_parallel_stop
   - kable_tabxplor_style
 
-# pkgdown builds every article under vignettes/ into BOTH site trees, and an incomplete `articles:`
-# index is a hard error, so all six are listed here. The French translations (vignettes/articles/*-fr)
-# lead the French site (_pkgdown.fr.yml) and sit in a secondary "En français" group here.
+# An incomplete `articles:` index is a hard pkgdown error, so all six articles are listed here.
+# The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.
 articles:
 - title: Get started
   navbar: ~

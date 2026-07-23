@@ -15,12 +15,27 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(tabxplor)
 library(dplyr)
 
+# Tables render as tabxplor's real html tables (the recommended everyday setting); the shared
+# stylesheet is emitted once by tab_css() below, and the hover tooltips are kept off here.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# Console outputs (vectors, fields...) keep their terminal colors, turned to html by fansi.
 options(cli.num_colors = 256)
 set_color_palette(theme = "light")
 ```
 
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
+```
+
 ```{r, echo = FALSE, include = FALSE}
+# Colour the console outputs (ANSI -> html, via fansi), but hand as-is results (the html tables,
+# marked by knitr with an ASIS token) back to knitr's default hook untouched.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -253,7 +268,8 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Session options*), these `options()` tune the exporters and the build. HTML / `tab_kable()`:
 
 - `tabxplor.tab_kable_engine` — `"html"` (dependency-free, the default) or `"kableExtra"` (legacy).
-- `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead.
+- `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does).
+- `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`); set `FALSE` once per document to switch them off everywhere.
 - `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — the number and text CSS font stacks.
 - `tabxplor.kable_popover` — click popovers instead of hover tooltips.
 
@@ -270,6 +286,7 @@ Console, stats and paths:
 - `tabxplor.plot_num_font` — `tab_plot()`'s number font; `tabxplor.export_dir` — the default export directory.
 
 Performance and integration:
+
 - `tabxplor.parallel` — build one worker per row variable on a background pool (needs `mirai`); `tabxplor.parallel_min` sets the smallest row-variable count worth dispatching. Release the pool with `tab_parallel_stop()`.
 
 See `?tabxplor-options` for the full list and every default.

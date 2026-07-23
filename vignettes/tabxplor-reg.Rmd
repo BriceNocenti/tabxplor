@@ -15,13 +15,26 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(tabxplor)
 library(dplyr)
 
-# As in the introduction vignette, tables are shown as the coloured console output turned to HTML.
+# As in the introduction vignette, tables render as tabxplor's real html tables (the recommended
+# everyday setting); the shared stylesheet is emitted once by tab_css() below, tooltips kept off.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
 options(cli.num_colors = 256)
 set_color_palette(theme = "light")
 ```
 
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
+```
+
 ```{r, echo = FALSE, include = FALSE}
+# Colour the console outputs (ANSI -> html, via fansi), but hand as-is results (the html tables,
+# marked by knitr with an ASIS token) back to knitr's default hook untouched.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -50,6 +63,7 @@ You rarely set `family` by hand — `tab_reg()` mostly detects it:
 | 3+ level ordered factor | ordinal (proportional odds) | cumulative OR |
 
 With `empirical = TRUE`, each model column is joined by a crude/observed companion column showing the *empirical, unadjusted, single-predictor* effect — the effect you would see with no controls at all, "all things being unequal", for that predictor.
+
 - 2 levels logistic (binomial) → observed %, and observed odd-ratios (not modelised: calculated from percentages only)
 - 3+ levels logistic (multinomial) → the observed ORs are shown as a tooltip on the model cells in html exports
 - gaussian (linear) → group means and their difference
@@ -59,6 +73,7 @@ With `empirical = TRUE`, each model column is joined by a crude/observed compani
 ## Logistic regression (a binary factor)
 
 When the outcome is a two-level factor, here "married" versus "not married", `tab_reg()` chooses a **binomial** family to fit a logistic regression and reports **odds ratios** (the reference level of each predictor shows the neutral value `1`). 
+
 - Like in every regression model, the effect of a predictor level on the dependent variable reads "all the others chosen predictors being equals".
 - Colors read like any `tabxplor` table: an odds ratio above 1 (blue) means *more likely to be married* than the reference level, below 1 (red) means *less likely*; stars and colors both flag significance.
 
@@ -73,14 +88,17 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical =
 ```
 
 The raw percentages `Obs_%` are a summary of the base observed results everything in the model is derived from :"28% of black americans are married, compared to 51% for white americans"
+
 - The plain difference from reference is colored (28% - 51% = -23%).
 - Cells that are non-significantly different from the reference are greyed out (based on a Newcombe confidence interval for differences of proportions).
 
 The **modelised odds-ratios** `Model_OR` directly compared to the **observed odds-ratios** `Obs_OR` :
+
 - Comparing the two tells you what adjustment the model did: if a predictor's **model** OR is much closer to 1 than its **crude** OR, the raw association was largely explained by the other predictors.
 - Here, "all things being unequal", black americans have 2.68 lower odds to be married than white americans. "All things being equal" (more precisely : income, age and religion being equal), black americans still have 2.4 lower odds to be married than white americans. The result holds, it’s not explained by income differences or religious differences.
 
 The **observed odds-ratios** `Obs_OR` are the same as those you can calculate from percentages only in a crosstable :
+
 - Colors and significance stars use a **Woolf OR confidence interval** that matches what is done in the regression model. 
 - The population of the table must match the complete-cases population of the model, filtering out indivivuals with `NA` at any involved variable.
 
@@ -95,6 +113,7 @@ gss_simple |>
 ### Average marginal effects (AME) of a logistic regression
 
 Another way to interpret a logistic regression is to use **average marginal effects** (AME) with `effect = "ame"` :
+
 - Instead of directly reading the modelised odd-ratio we can infer, from it, the average difference of percentage of each level compared to the reference.
 - Here `Model_AME` reads like this : "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate 19.8 points lower, on average."
 
@@ -103,10 +122,12 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "a
 ```
 
 Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
+
 - In the sample (`Obs_diff`), we observe a rate of marriages 23 points lower for black americans compared to white american (`28% - 51% = -23%`).
 - The modelised difference `Model_AME` is very close, `-19.8%`, so very little of this difference between black and white can be explained by age, income or religion.
 
 We can also compare the raw percentage `Obs_%` with the **model-adjusted probability** — the value in parentheses in the `Model_AME (adjusted %)` column :
+
 - Adjusted percentage, which is a result of the model, reads this way : "if the whole sample kept its income/age/religion distribution but everyone were Black, an estimated 31.5% would be married, vs 51.3% if everyone were White". 
 - Blacks marry at 30.9% in this sample (observed); standardizing their income/age/religion to the population mix moves that only to 31.5% — so almost none of the Black–White gap is accounted for by differences in those three variables; it persists after adjustment.
 

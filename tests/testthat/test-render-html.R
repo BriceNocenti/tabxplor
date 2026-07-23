@@ -727,3 +727,59 @@ testthat::test_that("Phase 17g: tabxplor_kable print degrades when kableExtra is
   # interactive themed print WITHOUT kableExtra -> graceful degrade (note + knitr print), never a crash
   testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, FALSE), "degrade")
 })
+
+# === SECTION: options(tabxplor.print) html routing + tooltips option =====================
+# The taught value is "html" (tab_kable was renamed tab_html in Last Phase g); "kable" stays a
+# working synonym. knit_print methods make a bare `tab(...)` chunk render as a real html table in
+# Rmd/Quarto instead of knitr's default text capture.
+
+testthat::test_that("tabxplor.print accepts html (taught) and kable (synonym)", {
+  t1 <- tab(gss, marital, race, pct = "row")
+  for (val in c("html", "kable")) {
+    withr::local_options(list(tabxplor.print = val))
+    txt <- utils::capture.output(res <- withVisible(print(t1)))
+    testthat::expect_false(res$visible)
+    testthat::expect_s3_class(res$value, "tabxplor_kable")
+  }
+  # multi-table list routes the same way (the "kable" spelling is locked in test-display-13c.R)
+  withr::local_options(list(tabxplor.print = "html"))
+  tl <- tab(gss, c(marital, relig), race, pct = "row", output_list = TRUE)
+  testthat::expect_s3_class(tl, "tabxplor_tabs")
+  outl <- utils::capture.output(res <- withVisible(print(tl)))
+  testthat::expect_false(res$visible)
+  testthat::expect_s3_class(res$value, "tabxplor_tabs")
+  testthat::expect_true(any(grepl("<table", outl, fixed = TRUE)))
+  # default stays the console tibble render
+  withr::local_options(list(tabxplor.print = "console"))
+  txt <- utils::capture.output(print(t1))
+  testthat::expect_match(paste(txt, collapse = "\n"), "A tabxplor tab")
+})
+
+testthat::test_that("knit_print renders a bare tab as as-is html under tabxplor.print = html", {
+  t1 <- tab(gss, marital, race, pct = "row")
+  withr::local_options(list(tabxplor.print = "html"))
+  k <- knitr::knit_print(t1)
+  testthat::expect_s3_class(k, "knit_asis")
+  testthat::expect_match(as.character(k), "<table", fixed = TRUE)
+  # grouped tab (tab_vars) has its own registration (its class vector lacks "tabxplor_tab")
+  tg <- tab(gss, marital, race, year, pct = "row")
+  testthat::expect_s3_class(tg, "tabxplor_grouped_tab")
+  kg <- knitr::knit_print(tg)
+  testthat::expect_s3_class(kg, "knit_asis")
+  # console mode falls through to knitr's default text capture (the fansi-hookable path)
+  withr::local_options(list(tabxplor.print = "console"))
+  txt <- utils::capture.output(res <- knitr::knit_print(t1))
+  testthat::expect_false(inherits(res, "knit_asis"))
+})
+
+testthat::test_that("tabxplor.tab_kable_tooltips = FALSE strips tooltips document-wide", {
+  t1 <- tab(gss, marital, race, pct = "row")
+  h_on  <- as.character(tab_html(t1))
+  testthat::expect_match(h_on, 'data-toggle="tooltip"', fixed = TRUE)
+  withr::local_options(list(tabxplor.tab_kable_tooltips = FALSE))
+  h_off <- as.character(tab_html(t1))
+  testthat::expect_no_match(h_off, 'data-toggle="tooltip"', fixed = TRUE)
+  # the per-call argument still wins over the option
+  h_arg <- as.character(tab_html(t1, tooltips = TRUE))
+  testthat::expect_match(h_arg, 'data-toggle="tooltip"', fixed = TRUE)
+})

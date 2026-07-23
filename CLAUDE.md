@@ -108,7 +108,12 @@ R/
 │                              auto-print + Viewer routing); 17g: tab_materialize_extras -> tab_materialize()
 │                              over materialize_specs() (DECLARED list(kind,when,apply): add_n_pct/or_total/
 │                              sd_twin/footer/collapse_totals; mat_add_n_pct/mat_sd_twin applies; add_n `n`
-│                              COLUMN built xl-ONLY, text folds direct -- no throwaway; collapse = display slice)
+│                              COLUMN built xl-ONLY, text folds direct -- no throwaway; collapse = display slice);
+│                              tx_print_html = THE options(tabxplor.print) predicate ("html" taught,
+│                              "kable" synonym) -> print + knit_print.tabxplor_tab/_grouped_tab render
+│                              tab_html() (bare tab() chunks knit as live html tables; tooltips option
+│                              tabxplor.tab_kable_tooltips). pkgdown = ONE English site (_pkgdown.fr.yml
+│                              + docs/fr + the toggle removed; FR vignette-articles stay in Articles)
 ├── tab_xl.R        (~595 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
 │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
 │                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid

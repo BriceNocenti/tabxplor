@@ -728,6 +728,18 @@ Phase g renamed `tab_kable()` → **`tab_html()`** (the output is an HTML table;
 `engine =`), keeping `tab_kable <- tab_html` as a permanent exported alias; `tab_export()`'s first format
 is `"html"`. The S3 class stays `tabxplor_kable` (internal).
 
+**Auto-print routing.** `options(tabxplor.print = "html")` (taught value; `"kable"` is the pre-2.0.0
+synonym — the ONE predicate is `tx_print_html()`, `R/tab_classes.R`) makes `print.tabxplor_tab` /
+`print.tabxplor_tabs` render through `tab_html()`. In knitr, bare-value auto-print would capture that
+html as escaped TEXT, so `knit_print.tabxplor_tab` / `.tabxplor_grouped_tab` (registered like the
+pre-existing `.tabxplor_tabs`) route to `knitr::knit_print(tab_html(x))` (as-is html) when the option
+asks for html, and fall through to the default text capture otherwise — this is what lets a vignette
+render every bare `tab()` chunk as a live table. `tab_html(tooltips =)` now defaults to
+`options(tabxplor.tab_kable_tooltips)` (seeded `TRUE`) so a many-table document can switch the hover
+tooltips off once. NOTE for hand-written fansi output hooks (the vignettes): knitr marks as-is output
+with `KNITR_ASIS_OUTPUT_TOKEN` — a custom output hook MUST hand those back to the default hook, or
+the tables get escaped into text (the vignettes' hook does exactly that).
+
 `tab_html()` = `tab_export_prep(list_method=TRUE)` → map the `render_kable_html()` **engine seam**
 (`R/tab-render-html.R`, Phase 10e) over the prepared tables → `tab_kable_join()`. The `engine` argument
 (default `getOption("tabxplor.tab_kable_engine")`, **`"html"` since Phase 14e**) picks the backend, both
@@ -924,7 +936,8 @@ so it is aliased, never renamed). Aliases are silent (no deprecation) and unseed
 | `tabxplor.color_style_theme` | auto-detect | "light" or "dark" console theme (alias `console_theme`) |
 | `tabxplor.color_html_24_bit` | `"no"` | "green_red", "blue_red", or "no" |
 | `tabxplor.color_breaks` | (see Layer 2) | List of break vectors |
-| `tabxplor.print` | `"console"` | "console" or "kable" |
+| `tabxplor.print` | `"console"` | "console" or "html" (recommended; "kable" synonym) |
+| `tabxplor.tab_kable_tooltips` | `TRUE` | Per-cell hover tooltips in html tables (off = document-wide) |
 | `tabxplor.ci_print` | `"ci"` | "ci" (brackets) or "moe" (±margin) |
 | `tabxplor.compact` | `FALSE` | Compact table output by default |
 | `tabxplor.cleannames` | `FALSE` | Clean factor names by default |

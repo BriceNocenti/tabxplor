@@ -466,6 +466,13 @@ new_test_tibble <- local({
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
+# Why this exists: THE one predicate for "does options(tabxplor.print) ask for an html render?".
+# "html" is the taught value (the engine has been html-first since Last Phase g renamed tab_kable ->
+# tab_html); "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
+tx_print_html <- function() {
+  getOption("tabxplor.print") %in% c("html", "kable")
+}
+
 #' Printing method for class tabxplor_tab
 #' @param x Object to format or print.
 #' @param ... Passed on to \code{tbl_format_setup()}.
@@ -485,7 +492,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
   # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
-  if (getOption("tabxplor.print") == "kable") {
+  if (tx_print_html()) {
     x <- tab_html(x)
     print(x)
     return(invisible(x))
@@ -590,9 +597,9 @@ as_tabxplor_tabs <- function(x) {
 #' @export
 #' @keywords internal
 print.tabxplor_tabs <- function(x, ...) {
-  # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "kable" renders all tables joined
+  # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "html" renders all tables joined
   # (routed to the Viewer, like a single tab); otherwise print each element's tibble in sequence.
-  if (getOption("tabxplor.print") == "kable") {
+  if (tx_print_html()) {
     print(tab_html(x))
     return(invisible(x))
   }
@@ -613,6 +620,23 @@ c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tabs <- function(x, ...) {
   knitr::knit_print(tab_html(x), ...)
+}
+
+# knit_print for a SINGLE tab: without it, knitr's default auto-print captures print()'s html as
+# escaped text, so options(tabxplor.print = "html") could never render a bare `tab(...)` chunk as a
+# real table in Rmd/Quarto. Honours the option: html/kable -> as-is html; else the default text
+# capture (which the fansi output hooks can colour).
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_tab <- function(x, ...) {
+  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  NextMethod()
+}
+
+# The grouped class vector does not contain "tabxplor_tab" (separate S3 world) -> own registration.
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_grouped_tab <- function(x, ...) {
+  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  NextMethod()
 }
 
 
@@ -720,8 +744,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
 #' so one copy styles every table. With `FALSE` and no \code{\link{tab_css}} call, tables render
 #' uncoloured.
-#' @param tooltips By default, html tooltips are used to display additional informations
-#' at mouse hover. Set to \code{FALSE} to discard.
+#' @param tooltips By default, takes \code{getOption("tabxplor.tab_kable_tooltips")}
+#' (\code{TRUE} unless set): html tooltips display additional informations at mouse
+#' hover. Set to \code{FALSE} to discard (or set the option to \code{FALSE} once per
+#' document, e.g. in a vignette or report where every table auto-prints).
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
 #' `FALSE`, html tooltips are of the base kind : they can't be used with floating table of
 #' content in \pkg{rmarkdown} documents. Set to `TRUE` to use \pkg{kableExtra} html
@@ -778,7 +804,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' }
 tab_html <- function(tabs,
                      theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
-                     color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
+                     color = TRUE, tooltips = NULL, popover = NULL, color_legend = TRUE,
                      lang = NULL,
                      caption = knitr::opts_current$get("tab.cap"),
                      transpose = FALSE,
@@ -803,6 +829,7 @@ tab_html <- function(tabs,
   if (o$color) compute <- c(compute, "colors")
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
+  tooltips <- if (is.null(tooltips)) {getOption("tabxplor.tab_kable_tooltips", TRUE)} else {tooltips}
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
   engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "html")} else {engine}
   engine  <- match.arg(engine, c("kableExtra", "html"))
@@ -3154,7 +3181,7 @@ default_bg_legend_colors_neg <- c(
 #### Dark text colors ----
 default_dark_text_colors <- c(
   "#028282", # oklch(0.55 0.0934 195) # better for color blindness
-  "#018bc1", # oklch(0.60 0.1270 235)
+  "#0286b1", # oklch(0.58 0.1151 230)
   "#4687d8", # oklch(0.62 0.1400 255)
   "#6987ff"#,# oklch(0.66 0.1797 270)
   # "#288463", # oklch(0.55 0.1000 165)   "#03ab86", # oklch(0.66 0.13 167)   
@@ -3177,24 +3204,24 @@ default_dark_text_colors_neg <- c(
 
 #### Dark background colors ----
 default_dark_background_colors <-  c(
-  "#001b1b", # oklch(0.20 0.0336 195)  # better for color blindness
-  "#002537", # oklch(0.25 0.0526 235)
-  "#132d5c", # oklch(0.30 0.0900 261)
-  "#17226d"#,# oklch(0.30 0.1300 270)
+  "#002828", # oklch(0.25 0.0423 195)   # "#001b1b", # oklch(0.20 0.0336 195)  # better for color blindness
+  "#012d3f", # oklch(0.28 0.0553 230)   # "#002537", # oklch(0.25 0.0526 235)
+  "#122e5d", # oklch(0.31 0.09   260)   # "#132d5c", # oklch(0.30 0.0900 261)
+  "#202e7a"#,# oklch(0.34 0.13   270)   # "#17226d"#,# oklch(0.30 0.1300 270)
   #"#001c11", # oklch(0.20 0.0418 165)  # "#002115", # oklch(0.22 0.0461 165) # "#001c12", # oklch(0.20 0.0407 167)    # "#e3fcf1", # oklch(0.97 0.0300 167) 
   #"#00272d", # oklch(0.25 0.0429 210)  # "#00272d", # oklch(0.25 0.0429 210) # "#002538", # oklch(0.25 0.0543 236.97)   # "#d7efff", # oklch(0.94 0.0336 235) 
   #"#00314c", # oklch(0.30 0.0684 240)  # "#002c45", # oklch(0.28 0.0640 240) # "#002d5c", # oklch(0.30 0.0961 254.26)   # "#cee3ff", # oklch(0.91 0.0439 255) 
   #"#0d246e"#,# oklch(0.30 0.1300 265)  # "#0d246e"#,# oklch(0.30 0.1300 265) # "#243278"#,# oklch(0.35 0.12 270.4)   # "#bbccff"  # oklch(0.85 0.0733 270) 
 )
 default_dark_background_colors_neg <- c(
-  "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
-  "#321c00", # oklch(0.25 0.0537 70) # "#321c00", # oklch(0.25 0.0537 70) # "#2f1d0e", # oklch(0.25 0.0374 59.56)   # "#ffe6d3", # oklch(0.94 0.0374 60) 
-  "#4c1f00", # oklch(0.30 0.0792 50) # "#441b00", # oklch(0.28 0.0738 50) # "#511900", # oklch(0.3 0.0906 41.62)   # "#ffd7c8", # oklch(0.91 0.0488 42) 
-  "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
+  "#292100", # oklch(0.25 0.051  95)   # "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
+  "#3b2300", # oklch(0.28 0.0602 70)   # "#321c00", # oklch(0.25 0.0537 70) # "#321c00", # oklch(0.25 0.0537 70) # "#2f1d0e", # oklch(0.25 0.0374 59.56)   # "#ffe6d3", # oklch(0.94 0.0374 60) 
+  "#4f2100", # oklch(0.31 0.0814 50)   # "#4c1f00", # oklch(0.30 0.0792 50) # "#441b00", # oklch(0.28 0.0738 50) # "#511900", # oklch(0.3 0.0906 41.62)   # "#ffd7c8", # oklch(0.91 0.0488 42) 
+  "#720119"# # oklch(0.35 0.1401 20)   # "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
 )
 
 # ### Color palettes visual tests, with color blind mode ----
-# source("d:/Statistiques/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
+# source("~/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
 # # Light palette
 # light_text_palette <- c(plain= "#9f9f9f", default_text_colors, default_text_colors_neg)
 # light_bg_palette   <- c(plain= "#ffffff",default_background_colors, default_background_colors_neg)

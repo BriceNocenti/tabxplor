@@ -10,14 +10,26 @@ knitr::opts_chunk$set(
 )
 library(tabxplor)
 
-# Les tableaux ci-dessous sont montres exactement comme ils apparaissent dans la console R --- en
-# couleur. tabxplor construit ses couleurs de terminal avec cli (qui lit options("cli.num_colors")) ;
-# le hook juste en dessous transforme cet ANSI en HTML colore (via fansi). Dans un rapport, on
-# exporterait plutot avec tab_kable() (HTML) ou tab_xl() (Excel) --- voir la section "Exporter".
+# Les tableaux ci-dessous sont les vrais tableaux html de tabxplor, rendus en direct : le setup
+# active options(tabxplor.print = "html") --- le reglage recommande au quotidien dans RStudio ou
+# Positron --- si bien que chaque chunk tab() se tisse en tableau html colore. La feuille de style
+# partagee est emise UNE fois par le chunk tab_css() ci-dessous (tab_kable_css = FALSE evite de la
+# re-inserer a chaque tableau), et les infobulles sont coupees pour tout le document (voir la
+# section dediee, qui les reactive).
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# Les quelques exemples console gardent leurs couleurs de terminal : cli emet de l'ANSI
+# (options("cli.num_colors")), et le hook fansi ci-dessous le transforme en HTML colore.
 # options(tabxplor.lang = "fr") affiche les legendes et les notes de bas de tableau en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
 set_color_palette(theme = "light") # type = "text"
+```
+
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
 ```
 
 ```{r, eval = FALSE}
@@ -26,7 +38,11 @@ library(tabxplor)
 
 
 ```{r, echo = FALSE, include = FALSE}
+# Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
+# tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -49,6 +65,26 @@ gss_simple <- gss_cat_data_formatting()
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, race)
+```
+
+C'est le **tableau html** de tabxplor — ce que l'on obtient dans le panneau Viewer de RStudio ou Positron avec l'option de session recommandée, utilisée tout au long de cette introduction :
+
+```{r, eval = FALSE}
+options(tabxplor.print = "html")
+```
+
+Sans l'option, le même tableau s'imprime dans la **console**, sous forme de `tibble` coloré — même information, affichage plus léger :
+
+```{r, include = FALSE}
+options(tabxplor.print = "console")
+```
+
+```{r, echo = TRUE}
+tab(gss_simple, marital, race)
+```
+
+```{r, include = FALSE}
+options(tabxplor.print = "html")
 ```
 
 Ajoutez `pct = "row"` pour des pourcentages en ligne (ou `"col"` pour des pourcentages en colonne). Une ligne/colonne **Total** et une colonne d'effectifs (`n`) sont ajoutées automatiquement :
@@ -241,6 +277,15 @@ tab(gss_simple, race, party3, color = "contrib")
 
 Voir plus bas le détail de la composition des intervalles de confiance et des couleurs.
 
+## Infobulles au survol (tableaux html)
+
+Chaque tableau html porte des **infobulles** au survol des cases, avec les nombres derrière la case : l'effectif non pondéré, l'écart à la référence, le ratio, l'intervalle de confiance... Elles sont actives par défaut dans le Viewer et dans les rapports — cette page les a seulement coupées pour tout le document avec `options(tabxplor.tab_kable_tooltips = FALSE)`, pour rester légère. Survolez les cases du tableau ci-dessous, où elles sont réactivées avec `tooltips = TRUE` :
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+  tab_html(tooltips = TRUE)
+```
+
 **Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan, donc elle est un peu trop étroite : activez la taille d'échantillon efficace de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir honnêtement chaque intervalle et faire passer les tests du Chi2 d'ensemble à une correction de Rao–Scott.
 
 ## Exporter
@@ -264,12 +309,12 @@ tab_export(tabs, theme = "auto") # HTML qui suit le mode clair/sombre du lecteur
 
 - Comme les variables numériques ne peuvent être passées qu'en colonnes, certaines mises en page complexes avec des variables numériques en lignes nécessitent de transposer le tableau à l'export avec `transpose = TRUE` :
 
-```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, party3, c(race, relig, tvhours), pct = "row") |>
-  tab_export(transpose = TRUE)
+```{r, echo = TRUE}
+tab(gss_simple, party3, c(race, tvhours), pct = "row") |>
+  tab_html(transpose = TRUE)
 ```
 
-- **Une seule feuille de style pour tout un document.** Dans un rapport `.Rmd`/`.qmd`, `tab_css()` écrit le CSS des couleurs une seule fois, et chaque `tab_kable()` suivant n'émet que des classes : un unique `theme` — y compris `"auto"`, qui suit le mode clair/sombre du lecteur — met en forme tous les tableaux d'un coup :
+- **Une seule feuille de style pour tout un document.** Dans un rapport `.Rmd`/`.qmd`, `tab_css()` écrit le CSS des couleurs une seule fois, et chaque tableau suivant n'émet que des classes : un unique `theme` — y compris `"auto"`, qui suit le mode clair/sombre du lecteur — met en forme tous les tableaux d'un coup. Cette page fait exactement cela (avec `theme = "light"`) :
 
 ```{r, echo = TRUE, eval = FALSE}
 options(tabxplor.tab_kable_css = FALSE)
@@ -290,7 +335,7 @@ tab(gss_simple, race, marital, pct = "row") |>
 
 **Titrer et annoter.** `subtext =` imprime une ou plusieurs lignes de légende sous un tableau (une source de données, une note). `set_caption()` donne à un tableau un **titre qui survit à un pipeline dplyr**, et chaque exportateur l'utilise comme titre du tableau :
 
-```{r, echo = TRUE, eval = FALSE}
+```{r, echo = TRUE}
 tab(gss_simple, race, marital, pct = "row", subtext = "Source : GSS, 2000-2014") |>
   set_caption("Titre personnalisé")
 ```
@@ -320,6 +365,7 @@ Tout tableau coloré répond à trois questions :
 | mean | `ratio`   | moyenne case / moyenne référence            | rapport de moyennes robuste      |
 
 Méthodes d'intervalle alternatives (voir `?tab_ci`) :
+
 - `method_diff = "ac"` (Agresti-Caffo) ou `"wald"` pour une différence de pourcentages ;
 - `method_mean_diff = "student"` (à variance commune, l'intervalle à deux groupes des MCO) pour une différence de moyennes ;
 - `method_mean_ratio = "quasipoisson"` ou `"poisson"` pour un rapport de moyennes.
@@ -337,6 +383,7 @@ Méthodes d'intervalle alternatives (voir `?tab_ci`) :
 Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `method_cell` choisit `"wilson"` (défaut) ou `"wald"` pour les pourcentages ; un intervalle de case pour une moyenne est toujours le *t* de Student à un échantillon.
 
 **`color_signif` transforme cet intervalle en politique de coloration.**
+
 - `"ignore"` colore **chaque** case selon la taille de son **effet observé**, par exemple la différence observée avec la ligne Total. Les cases grises ont un effet observé sous le seuil (par exemple, des différences de moins de ±5 points de pourcentage).
 - `"grey_non_signif"` et `"guaranteed_effect"` colorent tous deux **seulement les cases significatives**, mais diffèrent par la *base d'intensité* :
   + `grey_non_signif` colore selon l'effet **observé**, comme « ignore », en grisant les petits écarts, mais il **grise aussi tout grand écart qui se révèle non significatif**. Idéal pour les grands échantillons.

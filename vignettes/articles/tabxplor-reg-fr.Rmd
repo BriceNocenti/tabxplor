@@ -11,15 +11,29 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(tabxplor)
 library(dplyr)
 
-# Comme dans la vignette d'introduction, les tableaux sont affiches comme la sortie coloree de la
-# console convertie en HTML. options(tabxplor.lang = "fr") met les legendes et notes en francais.
+# Comme dans la vignette d'introduction, les tableaux sont rendus comme les vrais tableaux html
+# de tabxplor (le reglage recommande au quotidien) ; la feuille de style partagee est emise une
+# fois par tab_css() ci-dessous, et les infobulles restent coupees.
+# options(tabxplor.lang = "fr") met les legendes et notes en francais.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
 set_color_palette(theme = "light")
 ```
 
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
+```
+
 ```{r, echo = FALSE, include = FALSE}
+# Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
+# tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -48,6 +62,7 @@ Vous fixez rarement `family` à la main — le plus souvent, `tab_reg()` le dét
 | facteur ordonné à 3 modalités ou plus | ordinal (cotes proportionnelles) | OR cumulé |
 
 Avec `empirical = TRUE`, chaque colonne de modèle est accompagnée d'une colonne compagne brute/observée montrant l'effet *empirique, non ajusté, à un seul prédicteur* — l'effet que vous verriez sans aucun contrôle, « toutes choses étant inégales par ailleurs », pour ce prédicteur.
+
 - logistique à 2 modalités (binomial) → % observés, et rapports de cotes observés (non modélisés : calculés uniquement à partir des pourcentages)
 - logistique à 3 modalités ou plus (multinomial) → les OR observés sont affichés en infobulle sur les cases du modèle dans les exports html
 - gaussien (linéaire) → moyennes de groupe et leur différence
@@ -57,6 +72,7 @@ Avec `empirical = TRUE`, chaque colonne de modèle est accompagnée d'une colonn
 ## Régression logistique (un facteur binaire)
 
 Quand la variable expliquée est un facteur à deux modalités, ici « married » contre « not married », `tab_reg()` choisit une famille **binomiale** pour ajuster une régression logistique et rapporte des **rapports de cotes** (la modalité de référence de chaque prédicteur affiche la valeur neutre `1`).
+
 - Comme dans tout modèle de régression, l'effet d'une modalité de prédicteur sur la variable expliquée se lit « les autres prédicteurs choisis étant égaux ».
 - Les couleurs se lisent comme dans n'importe quel tableau `tabxplor` : un rapport de cotes supérieur à 1 (bleu) signifie *plus susceptible d'être marié* que la modalité de référence, inférieur à 1 (rouge) signifie *moins susceptible* ; étoiles et couleurs signalent toutes deux la significativité.
 
@@ -71,14 +87,17 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical =
 ```
 
 Les pourcentages bruts `Obs_%` sont un résumé des résultats observés de base dont tout, dans le modèle, est dérivé : « 28 % des Américains noirs sont mariés, contre 51 % pour les Américains blancs »
+
 - La simple différence à la référence est colorée (28 % − 51 % = −23 %).
 - Les cases qui ne diffèrent pas significativement de la référence sont grisées (d'après un intervalle de confiance de Newcombe pour les différences de proportions).
 
 Les **rapports de cotes modélisés** `Model_OR` sont directement comparés aux **rapports de cotes observés** `Obs_OR` :
+
 - Comparer les deux vous dit quel ajustement le modèle a opéré : si l'OR **du modèle** d'un prédicteur est bien plus proche de 1 que son OR **brut**, l'association brute était largement expliquée par les autres prédicteurs.
 - Ici, « toutes choses étant inégales par ailleurs », les Américains noirs ont des cotes d'être mariés 2,68 fois plus faibles que les Américains blancs. « Toutes choses égales par ailleurs » (plus précisément : à revenu, âge et religion égaux), les Américains noirs ont encore des cotes 2,4 fois plus faibles d'être mariés que les Américains blancs. Le résultat tient, il n'est pas expliqué par des différences de revenu ni de religion.
 
 Les **rapports de cotes observés** `Obs_OR` sont les mêmes que ceux que vous pouvez calculer à partir des seuls pourcentages dans un tableau croisé :
+
 - Les couleurs et les étoiles de significativité utilisent un **intervalle de confiance de Woolf pour l'OR** qui correspond à ce qui est fait dans le modèle de régression.
 - La population du tableau doit correspondre à la population en cas complets du modèle, en filtrant les individus ayant un `NA` sur l'une des variables impliquées.
 
@@ -93,6 +112,7 @@ gss_simple |>
 ### Effets marginaux moyens (AME) d'une régression logistique
 
 Une autre façon d'interpréter une régression logistique est d'utiliser les **effets marginaux moyens** (AME) avec `effect = "ame"` :
+
 - Au lieu de lire directement le rapport de cotes modélisé, on peut en déduire la différence moyenne de pourcentage de chaque modalité comparée à la référence.
 - Ici `Model_AME` se lit ainsi : « En comparant des répondants noirs et blancs semblables en revenu, âge et religion, être noir est associé à un taux de mariage inférieur de 19,8 points, en moyenne. »
 
@@ -101,10 +121,12 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "a
 ```
 
 On peut alors utiliser `empirical = TRUE` pour comparer cette nouvelle quantité modélisée à la **différence brute, observée, de pourcentages** :
+
 - Dans l'échantillon (`Obs_diff`), on observe un taux de mariages inférieur de 23 points pour les Américains noirs comparés aux Américains blancs (`28% - 51% = -23%`).
 - La différence modélisée `Model_AME` est très proche, `-19,8 %`, donc très peu de cette différence entre noirs et blancs peut être expliquée par l'âge, le revenu ou la religion.
 
 On peut aussi comparer le pourcentage brut `Obs_%` avec la **probabilité ajustée par le modèle** — la valeur entre parenthèses dans la colonne `Model_AME (adjusted %)` :
+
 - Le pourcentage ajusté, qui est un résultat du modèle, se lit ainsi : « si tout l'échantillon gardait sa distribution de revenu/âge/religion mais que tout le monde était noir, on estime que 31,5 % seraient mariés, contre 51,3 % si tout le monde était blanc ».
 - Les noirs se marient à 30,9 % dans cet échantillon (observé) ; standardiser leur revenu/âge/religion au mélange de la population ne déplace cela qu'à 31,5 % — donc presque rien de l'écart noir-blanc ne s'explique par des différences dans ces trois variables ; il persiste après ajustement.
 

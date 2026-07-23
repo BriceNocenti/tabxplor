@@ -11,7 +11,7 @@ tab_html(
   color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
-  tooltips = TRUE,
+  tooltips = NULL,
   popover = NULL,
   color_legend = TRUE,
   lang = NULL,
@@ -35,7 +35,7 @@ tab_kable(
   color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
-  tooltips = TRUE,
+  tooltips = NULL,
   popover = NULL,
   color_legend = TRUE,
   lang = NULL,
@@ -78,8 +78,10 @@ the text palette. The colour CHANNEL is chosen by \code{color = c(text, backgrou
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{tooltips}{By default, html tooltips are used to display additional informations
-at mouse hover. Set to \code{FALSE} to discard.}
+\item{tooltips}{By default, takes \code{getOption("tabxplor.tab_kable_tooltips")}
+(\code{TRUE} unless set): html tooltips display additional informations at mouse
+hover. Set to \code{FALSE} to discard (or set the option to \code{FALSE} once per
+document, e.g. in a vignette or report where every table auto-prints).}
 
 \item{popover}{By default, takes \code{getOption("tabxplor.kable_popover")}. When
 \code{FALSE}, html tooltips are of the base kind : they can't be used with floating table of

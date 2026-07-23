@@ -150,17 +150,34 @@ tab_reg(gss_simple, dependent = "married", predictors = c("rincome", "party3"), 
 
 
 
-tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
-   color = TRUE, color_signif = "grey_non_signif"
-) |> 
-  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test", replace = TRUE)
+# tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
+#    color = TRUE, color_signif = "grey_non_signif"
+# ) |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test", replace = TRUE)
 
-tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
-   color = TRUE, color_signif = "grey_non_signif", ref = 1, stars = TRUE
-) |> 
-  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
+# tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
+#    color = TRUE, color_signif = "grey_non_signif", ref = 1, stars = TRUE
+# ) |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
 
-tab_reg(gss_simple, "married", c("race",  "rincome"), family = "binomial") |> 
-  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
+# tab_reg(gss_simple, "married", c("race",  "rincome"), family = "binomial") |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
 
+
+
+# Not working
+# options(tabxplor.totcol_range = "off")
+# tab(gss_simple, race, c(rincome, party3, relig), pct = "row",
+#    color = TRUE, color_signif = "grey_non_signif", ref = 1
+# )
+
+# options(tabxplor.totcol_range = "range")
+# tab(gss_simple, race, c(rincome, party3, relig), pct = "row",
+#    color = TRUE, color_signif = "grey_non_signif", ref = 1
+# )
+
+# options(tabxplor.totcol_range = "min")
+# tab(gss_simple, race, c(rincome, party3, relig), pct = "row",
+#    color = TRUE, color_signif = "grey_non_signif", ref = 1
+# )
 

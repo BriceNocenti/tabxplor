@@ -14,7 +14,10 @@ relevant function, which always wins over the option.
 \section{Display and printing}{
 
 \describe{
-\item{\code{tabxplor.print}}{\code{"console"} (default) or \code{"kable"}: how a table auto-prints.}
+\item{\code{tabxplor.print}}{\code{"console"} (default) or \code{"html"}: how a table auto-prints.
+\code{"html"} renders the \code{\link[=tab_html]{tab_html()}} table (in the Viewer pane in RStudio/Positron, and
+as a real html table in rmarkdown/Quarto documents) — recommended when you work in an
+IDE with a Viewer. \code{"kable"} is an accepted synonym of \code{"html"} (the pre-2.0.0 name).}
 \item{\code{tabxplor.stars}}{\code{FALSE} (default): whether cells show significance stars
 (\code{*}/\verb{**}/\verb{***}). Off for \code{\link[=tab]{tab()}}, on for \code{\link[=tab_reg]{tab_reg()}}. Per-call \verb{stars =}.}
 \item{\code{tabxplor.signif_levels}}{p-value cut-offs for the stars, default \code{c(0.10, 0.05, 0.01)}.}
@@ -59,15 +62,6 @@ to \code{"light"}.}
 \describe{
 \item{\code{tabxplor.anova}}{which one-way ANOVA F is shown for mean columns: \code{"welch"} (default,
 robust) or \code{"classic"} (pooled variance). Both are always stored in the \code{test} attribute.}
-\item{\code{tabxplor.test_lines}}{how many crosstab test rows the exporters (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_html]{tab_html()}},
-\code{\link[=tab_xl]{tab_xl()}}) append: \code{"summary"} (default: p-value + effect size), \code{"all"} (+ the raw statistic),
-\code{"stat"} (p-value + statistic), or \code{"pvalue"} (the single p-value row). The p-value row name states
-the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
-V, eta2"). N is never added -- it is already shown by \code{add_n}. The console summary block always
-shows N + p-value + effect size.}
-\item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
-\code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
-one-line form the console uses). The console itself is always terse.}
 \item{\code{tabxplor.kish_neff}}{\code{FALSE} by default (weighted estimate, raw unweighted n). Set to
 \code{TRUE} to replace that raw n with Kish's effective sample size \verb{n_eff = (sum w)^2 / sum(w^2)}
 in \strong{every weighted descriptive confidence interval} -- factor proportions \emph{and}
@@ -84,6 +78,15 @@ with \verb{wt =}/\verb{strata =}/\verb{ids =}, or pass a \code{survey::svydesign
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
 overrides it.}
+\item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
+\code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
+one-line form the console uses). The console itself is always terse.}
+\item{\code{tabxplor.test_lines}}{how many crosstab test rows the exporters (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_html]{tab_html()}},
+\code{\link[=tab_xl]{tab_xl()}}) append: \code{"summary"} (default: p-value + effect size), \code{"all"} (+ the raw statistic),
+\code{"stat"} (p-value + statistic), or \code{"pvalue"} (the single p-value row). The p-value row name states
+the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+V, eta2"). N is never added -- it is already shown by \code{add_n}. The console summary block always
+shows N + p-value + effect size.}
 }
 }
 
@@ -98,6 +101,9 @@ in a many-table document that emits \code{\link[=tab_css]{tab_css()}} once at th
 \item{\code{tabxplor.always_add_css_in_tab_kable}}{\code{TRUE} (default): always include \code{tab.css} in the
 kableExtra engine's output (a legacy-engine knob).}
 \item{\code{tabxplor.kable_html_font}}{the CSS font stack for the kableExtra engine.}
+\item{\code{tabxplor.tab_kable_tooltips}}{\code{TRUE} (default): show the per-cell hover tooltips
+(counts, confidence intervals, differences...) in html tables. Set \code{FALSE} once per
+document when every table auto-prints and tooltips are unwanted. Per-call \verb{tooltips =}.}
 \item{\code{tabxplor.kable_popover}}{\code{FALSE} (default): use click popovers instead of hover tooltips.}
 \item{\code{tabxplor.tab_kable_num_font}}{the HTML/markdown number-font CSS stack. Monospace by
 default so figures stay column-aligned (set a proportional stack to revert).}
@@ -133,8 +139,8 @@ path).}
 
 \describe{
 \item{\code{tabxplor.parallel}}{\code{FALSE} (default): build the per-\code{row_var} tables of one \code{\link[=tab]{tab()}} call
-on a background worker pool (needs the suggested \code{mirai} package). \code{TRUE} = auto workers, an
-integer = that many daemons. Per-call \verb{parallel =}. Release the pool with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
+on parallel CPU cores (needs the \code{mirai} package). \code{TRUE} = auto select number of cores,
+integer = that many cores. Release the pool with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
 \item{\code{tabxplor.parallel_min}}{\code{2L} (default): the smallest \code{row_var} count worth dispatching
 (fewer runs serially, since the setup would outweigh the gain).}
 }

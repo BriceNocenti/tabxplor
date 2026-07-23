@@ -11,14 +11,30 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(tabxplor)
 library(dplyr)
 
-# options(tabxplor.lang = "fr") affiche les legendes et les notes de bas de tableau en francais.
+# Les tableaux sont rendus comme les vrais tableaux html de tabxplor (le reglage recommande au
+# quotidien) ; la feuille de style partagee est emise une fois par tab_css() ci-dessous, et les
+# infobulles restent coupees ici.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# Les sorties console (vecteurs, champs...) gardent leurs couleurs de terminal, converties par
+# fansi. options(tabxplor.lang = "fr") affiche les legendes et les notes en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
 set_color_palette(theme = "light")
 ```
 
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
+```
+
 ```{r, echo = FALSE, include = FALSE}
+# Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
+# tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
@@ -251,7 +267,8 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 Au-delà des réglages du quotidien (`vignette("tabxplor")` &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la construction. HTML / `tab_kable()` :
 
 - `tabxplor.tab_kable_engine` — `"html"` (sans dépendance, le défaut) ou `"kableExtra"` (ancien).
-- `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; mettez `FALSE` dans un document à plusieurs tableaux et appelez `tab_css()` une seule fois à la place.
+- `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; mettez `FALSE` dans un document à plusieurs tableaux et appelez `tab_css()` une seule fois à la place (comme cette page).
+- `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases (`TRUE`) ; mettez `FALSE` une fois par document pour les couper partout.
 - `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — les piles de polices CSS des nombres et du texte.
 - `tabxplor.kable_popover` — des info-bulles au clic plutôt qu'au survol.
 
@@ -268,6 +285,7 @@ Console, statistiques et chemins :
 - `tabxplor.plot_num_font` — la police des nombres de `tab_plot()` ; `tabxplor.export_dir` — le répertoire d'export par défaut.
 
 Performance et intégration :
+
 - `tabxplor.parallel` — construire un processus par variable en ligne sur un pool en arrière-plan (nécessite `mirai`) ; `tabxplor.parallel_min` fixe le plus petit nombre de variables en ligne qui vaille la peine d'être distribué. Libérez le pool avec `tab_parallel_stop()`.
 
 Voir `?tabxplor-options` pour la liste complète et chaque valeur par défaut.
