@@ -36,9 +36,12 @@ Normal Q-Q, Scale-Location, and Residuals vs Leverage (with Cook's-distance cont
 model, or a data frame plus the variable names to fit one on the fly.
 }
 \examples{
+# \donttest: building the 2x2 ggplot grid costs 3-4 s of CPU (CRAN NOTEs any topic over 5 s).
+\donttest{
 m <- stats::lm(tvhours ~ age, data = forcats::gss_cat)
 if (requireNamespace("ggplot2", quietly = TRUE) &&
     requireNamespace("gridExtra", quietly = TRUE)) {
   lm_plots(m)
+}
 }
 }

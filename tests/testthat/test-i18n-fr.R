@@ -1,8 +1,17 @@
 # Last Phase w -- French runtime-string translation. These fixtures FAIL without the filled po/R-fr.po
 # (compiled to inst/po/fr/LC_MESSAGES/R-tabxplor.mo) AND the gettext-wrapping of the reg / test / measure
-# labels. They also guard the English path: a table asked for in English must stay byte-English (so the
-# goldens never move). gettext resolves against the installed .mo via bindtextdomain (.onLoad); the render
-# helpers set LANGUAGE through with_legend_lang(), so these are deterministic regardless of the CI locale.
+# labels. gettext resolves against the installed .mo via bindtextdomain (.onLoad); the render helpers
+# set LANGUAGE through with_legend_lang().
+#
+# EACH FEATURE IS TESTED TWICE, deliberately split:
+#   - an ENGLISH block, UNGUARDED. A table asked for in English must stay byte-English, so the goldens
+#     never move. This is the guard-rail against an accidental global language switch and it must run
+#     EVERYWHERE, including where translation is impossible.
+#   - a FRENCH block, guarded by skip_if_no_gettext() (helper-i18n.R). Setting LANGUAGE is a no-op
+#     under glibc when LC_MESSAGES is "C" -- the state under R CMD check on Linux and on the CRAN
+#     farm -- so the French assertions can only be honest where the environment can translate at all.
+#     (An earlier revision of this header claimed these were "deterministic regardless of the CI
+#     locale". They are not: that false premise is what turned 3 Linux CI jobs red.)
 
 fr_data <- function() {
   set.seed(1)
@@ -17,37 +26,59 @@ footer_txt <- function(x, lang) {
   paste(render_footer(tab_footer_streams(x, lang = lang), "plain"), collapse = " ")
 }
 
-test_that("crosstab colour legend translates to French (and English is untouched)", {
+test_that("crosstab colour legend stays English when asked in English", {
   ct <- tab(fr_data(), race, y, pct = "row", color = TRUE)
   en <- footer_txt(ct, "en")
-  fr <- footer_txt(ct, "fr")
 
-  # English legend words present in EN, absent in FR (guards against an accidental global switch).
+  # English legend words present, French ones absent (guards against an accidental global switch).
   expect_match(en, "Shades of blue")
   expect_no_match(en, "Nuances de bleu")
+})
+
+test_that("crosstab colour legend translates to French", {
+  skip_if_no_gettext()
+  ct <- tab(fr_data(), race, y, pct = "row", color = TRUE)
+  fr <- footer_txt(ct, "fr")
 
   # French legend words present, English ones gone.
   expect_match(fr, "Nuances de bleu")
   expect_match(fr, "Couleur de fond")
   expect_no_match(fr, "Shades of blue")
-  # French typography: multiply sign + decimal comma (ASCII-escaped per the non-ASCII-source rule).
-  expect_match(fr, "\u00d71,5")      # x1,5
+})
+
+test_that("French typography: multiply sign + decimal comma (locale-independent)", {
+  # number formatting follows the resolved `lang` directly, NOT the gettext catalog -- so this holds
+  # even where translation is impossible. Hence unguarded. (ASCII-escaped per the non-ASCII rule.)
+  ct <- tab(fr_data(), race, y, pct = "row", color = TRUE)
+  expect_match(footer_txt(ct, "fr"), "\u00d71,5")      # x1,5
+})
+
+reg_fit <- function() {
+  tab_reg(fr_data(), dependent = "y", predictors = c("race", "inc"), family = "binomial")
+}
+
+test_that("regression 'Model:' footer + estimand stay English when asked in English", {
+  en <- reg_model_lines(reg_fit(), "en")
+  expect_match(en, "^Model: logistic regression")
+  expect_match(en, "odds ratios \\(vs the reference category\\)")
 })
 
 test_that("regression 'Model:' footer + estimand translate", {
-  t  <- tab_reg(fr_data(), dependent = "y", predictors = c("race", "inc"), family = "binomial")
-  en <- reg_model_lines(t, "en")
-  fr <- reg_model_lines(t, "fr")
-
-  expect_match(en, "^Model: logistic regression")
-  expect_match(en, "odds ratios \\(vs the reference category\\)")
-
+  skip_if_no_gettext()
+  fr <- reg_model_lines(reg_fit(), "fr")
   expect_match(fr, "^Mod\u00e8le : r\u00e9gression logistique")
   expect_match(fr, "rapports de cotes")
   expect_no_match(fr, "logistic regression")
 })
 
+test_that("summary / GOF row labels stay English under the ambient en locale", {
+  # goldens/snapshots must not move.
+  expect_equal(test_es_measure("cramer_v"), "Cram\u00e9r's V")
+  expect_equal(reg_footer_spec()$sigma$label, "Residual SD")
+})
+
 test_that("summary / GOF row labels + measure words translate", {
+  skip_if_no_gettext()
   with_legend_lang("fr", function(lg) {
     expect_match(test_pvalue_descriptor(c("chi2", "F_welch")), "p-valeur")
     expect_match(test_pvalue_descriptor(c("chi2", "F_welch")), "F de Welch")
@@ -57,8 +88,4 @@ test_that("summary / GOF row labels + measure words translate", {
     expect_equal(legend_measure_word("diff", FALSE, NA, lg), "diff\u00e9rence")
     expect_equal(legend_measure_word("contrib", FALSE, NA, lg), "contribution au Chi2")
   })
-
-  # English (ambient en locale) stays English -> goldens/snapshots do not move.
-  expect_equal(test_es_measure("cramer_v"), "Cram\u00e9r's V")
-  expect_equal(reg_footer_spec()$sigma$label, "Residual SD")
 })

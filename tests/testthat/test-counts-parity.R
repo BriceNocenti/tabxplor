@@ -3,6 +3,10 @@
 #          counts are produced from the SAME microdata via dplyr::count() (unweighted) or
 #          count()+summarise (weighted, real n + weighted wn), so any divergence is a real bug.
 # See: R/tab-counts.R; CLAUDE.md > 2.0.0 roadmap > Phase 4; decisions doc §20.
+#
+# CRAN time: one of the four heaviest files (~23-25 s serial). skip_on_cran() trims the CRAN check
+# only -- devtools/covr/r-lib-actions all set NOT_CRAN=true, so our own CI still runs it in full.
+skip_on_cran()
 
 # gss_cat + a deterministic weight + deterministic NAs (mirrors test-fuse-parity.R's make_gss()).
 counts_gss <- function() {

@@ -289,32 +289,38 @@ directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent =
 }
 \examples{
   data <- gss_cat_data_formatting()
+  # a subset keeps the examples fast: fitting these models on all 21,483 rows costs well over
+  # CRAN's 5-second-per-topic budget. Use the full `data` in real analyses.
+  reg_data <- head(data, 3000)
 
   # logistic (odds ratios):
-  tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")
-  # linear (betas):
-  tab_reg(data, dependent = "tvhours", predictors = c("rincome", "age"), family = "gaussian")
-  # to use normal R model formulas instead (same model, terser):
-  tab_reg(data, married ~ race + rincome, family = "binomial")
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+          family = "binomial")
 
 \donttest{
+  # linear (betas):
+  tab_reg(reg_data, dependent = "tvhours", predictors = c("rincome", "age"),
+          family = "gaussian")
+  # to use normal R model formulas instead (same model, terser):
+  tab_reg(reg_data, married ~ race + rincome, family = "binomial")
+
  # logistic : comparison between observed odds-ratio and modelised odds-ratio
-  tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial",
-          empirical = TRUE
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+          family = "binomial", empirical = TRUE
   )
 # average marginal effects + adjusted predictions (needs the marginaleffects package):
 if (requireNamespace("marginaleffects", quietly = TRUE)) {
-  tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
                 family = "binomial", effect = "ame")
   # marginal effects at the reference profile (others at their reference level / mean):
-  tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
                 family = "binomial", effect = "ame", at = "reference")
 }
 # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-  tab_reg(data, dependent = "party3", predictors = c("race", "age"),
+  tab_reg(reg_data, dependent = "party3", predictors = c("race", "age"),
                 family = "multinomial", reference = c(party3 = "3-Republican"))
 # ordinal (proportional-odds): one cumulative-OR column
-  tab_reg(data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
+  tab_reg(reg_data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
 }
 
 }

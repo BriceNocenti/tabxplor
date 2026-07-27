@@ -118,10 +118,13 @@ lm_plot_resid_leverage <- function(df, n_params) {
 #' @return Invisibly, the assembled `gtable` (drawn on the current graphics device).
 #'
 #' @examples
+#' # \donttest: building the 2x2 ggplot grid costs 3-4 s of CPU (CRAN NOTEs any topic over 5 s).
+#' \donttest{
 #' m <- stats::lm(tvhours ~ age, data = forcats::gss_cat)
 #' if (requireNamespace("ggplot2", quietly = TRUE) &&
 #'     requireNamespace("gridExtra", quietly = TRUE)) {
 #'   lm_plots(m)
+#' }
 #' }
 #' @export
 lm_plots <- function(object, dependent = NULL, predictors = NULL, family = "gaussian",

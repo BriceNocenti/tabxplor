@@ -35,3 +35,8 @@ docs/
 
 # Claude Code personal settings (project config in .claude/settings.json is tracked)
 .claude/settings.local.json
+
+# Device output left behind by running the plotting examples (or_plot / lm_plots / tab_plot)
+# locally: harmless, but it lands in the package root and R CMD check NOTEs it as a
+# "Non-standard file/directory found at top level".
+Rplots.pdf

@@ -5,6 +5,13 @@
 #   - Comparisons use tolerance to allow for floating-point differences.
 #   - gss_cat "Not applicable" race level has 0 observations — tabxplor drops it.
 #   - Unweighted tab_num uses stats::var() (sample variance, n-1 denominator).
+#
+# CRAN time: one of the four heaviest files (~23-25 s serial). skip_on_cran() trims the CRAN check
+# only -- devtools/covr/r-lib-actions all set NOT_CRAN=true, so our own 5-platform CI still runs it
+# in full. NOTE for the maintainer: of the four skipped files this is the one carrying real
+# user-facing correctness (the others are dev-regression goldens), so it is the first to drop from
+# the list if the CRAN check turns out to have time to spare.
+skip_on_cran()
 
 # === SECTION: Data setup ====================================================
 

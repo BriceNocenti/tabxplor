@@ -74,15 +74,22 @@ testthat::test_that("export_documents_dir() returns one usable directory and nev
 })
 
 testthat::test_that("resolveExportPath routes the Documents sentinels through the resolver, real paths not", {
+  # Compare like with like on EVERY platform: resolveExportPath returns normalizePath() output
+  # (BACKslashes on Windows) but the test reads it through dirname(), which always emits "/". So
+  # both sides go through one winslash = "/" normaliser -- otherwise the assertion is unsatisfiable
+  # on Windows regardless of what the code does.
+  norm_dir <- function(p) normalizePath(p, winslash = "/", mustWork = FALSE)
+
   # blank / "~" / "~/Documents" / "auto" all mean "my Documents" -> the SAME resolved folder
   dirs <- vapply(c("", "~", "~/Documents", "~/documents", "auto"),
                  function(s) dirname(resolveExportPath(s, "x", "md")), character(1))
   testthat::expect_length(unique(dirs), 1L)
-  testthat::expect_identical(unique(dirs), normalizePath(export_documents_dir(), mustWork = FALSE))
+  testthat::expect_identical(unique(dirs), norm_dir(export_documents_dir()))
 
-  # a real typed folder is respected, NOT rerouted to Documents
-  testthat::expect_identical(dirname(resolveExportPath("/tmp/tabxplor_xyz", "x", "md")),
-                             normalizePath("/tmp/tabxplor_xyz", mustWork = FALSE))
+  # a real typed folder is respected, NOT rerouted to Documents. tempdir(), not a "/tmp/..." literal:
+  # a leading-slash path is DRIVE-RELATIVE on Windows and resolves under the current drive.
+  typed <- file.path(tempdir(), "tabxplor_xyz")
+  testthat::expect_identical(dirname(resolveExportPath(typed, "x", "md")), norm_dir(typed))
   # a real ~-path still expands to the OS home (NOT the Documents sentinel)
   p <- resolveExportPath("~/Desktop", "x", "md")
   testthat::expect_false(grepl("^~", p))
@@ -90,8 +97,13 @@ testthat::test_that("resolveExportPath routes the Documents sentinels through th
 })
 
 testthat::test_that("jmvtab_export gives a friendly error when the folder can't be created", {
-  # a path under a location we can't write to -> a clear, actionable message (not a raw connection error)
-  bad <- "/proc/tabxplor_nope/sub/Table.md"
+  # a path we can't create -> a clear, actionable message (not a raw connection error).
+  # A directory UNDER A REGULAR FILE is uncreatable on Windows, macOS and Linux alike -- unlike the
+  # old "/proc/..." fixture, which is only unwritable on Linux (on Windows it is a drive-relative
+  # D:\proc\... and creation legitimately succeeds, so the friendly error never fired there).
+  f <- withr::local_tempfile()
+  writeLines("x", f)
+  bad <- file.path(f, "sub", "Table.md")
   testthat::expect_error(jmvtab_export(tabs, "md", bad), "folder", ignore.case = TRUE)
 })
 

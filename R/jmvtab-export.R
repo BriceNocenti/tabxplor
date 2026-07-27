@@ -192,6 +192,11 @@ export_status_html <- function(text, ok = TRUE) {
 #' @noRd
 export_is_wsl <- function() {
   if (nzchar(Sys.getenv("WSL_DISTRO_NAME"))) return(TRUE)
+  # WARNING: gate on file.exists FIRST (the doc_xdg_file pattern below). readLines(warn = FALSE)
+  # only silences the incomplete-final-line warning: when /proc/version is absent, file() signals a
+  # WARNING and *then* an error, so an error-only tryCatch lets the warning escape to the caller.
+  # That leaked one warning per Documents-resolution on Windows (9 in the test file alone).
+  if (!file.exists("/proc/version")) return(FALSE)
   pv <- tryCatch(readLines("/proc/version", n = 1L, warn = FALSE), error = function(e) character())
   length(pv) && grepl("microsoft|WSL", pv[1], ignore.case = TRUE)
 }

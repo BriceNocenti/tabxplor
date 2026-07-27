@@ -506,10 +506,10 @@ and CRAN all get 1 thread/worker with no manual env. Keep the `OMP_NUM_THREADS=1
 `devtools::check()` 2026-07-23 before the self-pin): `Config/testthat/parallel: true` runs each test
 file in its own PROCESS, and **each process then multi-threads on its own**:
 
-| thread source                                | per worker | x 8 workers | lever                                                |
-|----------------------------------------------|------------|-------------|------------------------------------------------------|
-| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — in `tests/testthat/setup.R`     |
-| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `RhpcBLASctl` pin in setup.R + `OMP_NUM_THREADS=1`   |
+| thread source                                | per worker | x 8 workers | lever                                              |
+|----------------------------------------------|------------|-------------|----------------------------------------------------|
+| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — in `tests/testthat/setup.R`   |
+| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `RhpcBLASctl` pin in setup.R + `OMP_NUM_THREADS=1` |
 
 **Measured: 165 threads on 12 cores (~14x oversubscribed) -> the suite ran >26 min instead of ~50 s**,
 two workers pegged at ~485 % CPU while the rest starved and the log went silent for 10 min. With both
@@ -528,6 +528,22 @@ to the orphan rule below. In order: (1) is another R of mine running? (2) `ps -e
 # One/few files while iterating (cheap, safe to repeat):
 devtools::test("~/github/tabxplor", filter = "tab")  # regex on test-<name>.R
 ```
+
+⚠ **A green local suite does NOT mean a green CI — this box is `fr_FR.UTF-8`.** GNU gettext ignores
+`LANGUAGE` entirely when `LC_MESSAGES` is `C`/`POSIX`, which is the state under `R CMD check` on
+Linux (check.R forces `LANGUAGE=en`, and testthat's `local_reproducible_output()` pins `LANG`/
+`LANGUAGE` to `"C"` per block) **and on the CRAN farm**. So every French assertion passes here and
+fails there. That is why French output is guarded by `skip_if_no_gettext()`
+(`tests/testthat/helper-i18n.R`) and why each i18n feature is tested twice — an UNGUARDED English
+block (the guard-rail that keeps the goldens from moving; must run everywhere) plus a GUARDED French
+one. **Simulate CI before pushing anything locale-touching:**
+
+```bash
+LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R   # the CI locale
+```
+
+Use `C.UTF-8`, not `C`: plain `C` is *harsher* than any CI runner (non-UTF-8 native encoding), and
+makes `test-non-ascii.R`'s own fixtures fail for reasons no CI job will ever hit.
 
 ⚠ **Two test/tooling steps need `dangerouslyDisableSandbox` here — root-caused 2026-07-16 from the bwrap
 command line, do not re-diagnose:**
@@ -642,9 +658,29 @@ Look at `dev/tabxplor_2.0.0_jamovi_dev.md` and `@dev/jamovi/` for detailed infor
 
 For the full detailed technical reference, see `dev/tabxplor_architecture.md`, which documents every subsystem in depth. Read it whenever needed and keep it up-to-date.
 
+---
 
+## tabxplor github repo
+
+Branches :
+- `dev` is the branch where development happens
+- `release/<version number>` is the version stripped of dev only files
+- `master` is the public user-facing branch
+
+Commits :
+- **The maintainer makes the commits.** Do not commit unless explicitly asked.
+- **Never add a `Co-Authored-By` trailer** (nor any "Generated with …" line) to a commit message.
+  This overrides the default. The maintainer authors and signs every commit and is solely
+  responsible for it; the assistant does not co-sign.
+- The release procedure is `dev/release_checklist.md` — read it before touching a release branch.
 
 ---
+
+
+
+
+
+
 
 ## tabxplor version 2.0.0 roadmap : the current goal
 
@@ -669,7 +705,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 2. **`dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** – the detailed report of all the **already implemented phases of the roadmap**.  
 3. **`dev/tabxplor_2.0.0_decisions.md`** – the **new architecture decisions** taken for version 2.0.0. Some parts of the file may be outdated :
 4. **`dev/tabxplor_architecture.md`** — architecture guide (type system, pipeline, compaction loss, exporters). It describes the **current** architecture. Read the section matching the file you touch.
-4. **Top of this CLAUDE.md** — Repository Map, Global Architecture, Key Constraints, Design Decisions.
+5. **Top of this CLAUDE.md** — Repository Map, Global Architecture, Key Constraints, Design Decisions.
 
 **Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline here — read the matching ones before you start:**
 - `dev/benchmarks/` — performance harness + saved results (documented under *Reference > Benchmarks*). Read/run when a phase touches perf (Phases 2, 3, 6, 8).
@@ -989,21 +1025,21 @@ Read first: analysis §1 (hot/cold surface), §6 closing note; the three vignett
 Feature-by-vignette map (a paragraph or short subsection each — an example the reader can run, one sentence on when to reach for it, no internals):
 
 1. **Intro vignette (`tabxplor.Rmd`)**:
-   + `n_min=` — hiding cells with too-small bases (the small-sample companion to `guaranteed_effect`).
-   + `subtext=` and the new `set_caption()` (17b) — titling and annotating a table that survives the pipeline into every export.
-   + `transpose=` at export — the sanctioned answer to "col% with several row_vars" (settled §7), shown on `tab_kable`/`tab_xl`.
-   + `tab_css()` — one stylesheet for a whole document, dark-mode `theme = "auto"`, the fixed-width escape hatches (`?tab_css`).
-   + `output_list=` — when you want separate tables instead of one merged table.
-   + One honest sentence on `tab()`'s weighting rule (weighted estimate + unweighted n; Kish `n_eff` opt-in; `tab_reg()` is fully design-based) — the vignette layer currently doesn't state it (analysis, Tensions).
+   - `n_min=` — hiding cells with too-small bases (the small-sample companion to `guaranteed_effect`).
+   - `subtext=` and the new `set_caption()` (17b) — titling and annotating a table that survives the pipeline into every export.
+   - `transpose=` at export — the sanctioned answer to "col% with several row_vars" (settled §7), shown on `tab_kable`/`tab_xl`.
+   - `tab_css()` — one stylesheet for a whole document, dark-mode `theme = "auto"`, the fixed-width escape hatches (`?tab_css`).
+   - `output_list=` — when you want separate tables instead of one merged table.
+   - One honest sentence on `tab()`'s weighting rule (weighted estimate + unweighted n; Kish `n_eff` opt-in; `tab_reg()` is fully design-based) — the vignette layer currently doesn't state it (analysis, Tensions).
 2. **Programming vignette (`tabxplor-programming.Rmd`)**:
-   + `tab_counts()` — a real section: building tabxplor tables from pre-aggregated counts (long/wide/freq+N), what CI/chi2 can and cannot do on frequency-only input. A whole Phase-4 feature with zero doc presence today.
-   + `tab_spread()` / `spread_vars=` — pivoting tab_vars into columns, with the reg `split_var` cross-reference.
-   + `score_from_lv1()` — per the ruling: test + roxygen refresh land here too, with a worked example.
-   + A pointer paragraph: `tab_many()`'s list mode + `purrr::pmap` batch workflow (already in README) linked from here.
+   - `tab_counts()` — a real section: building tabxplor tables from pre-aggregated counts (long/wide/freq+N), what CI/chi2 can and cannot do on frequency-only input. A whole Phase-4 feature with zero doc presence today.
+   - `tab_spread()` / `spread_vars=` — pivoting tab_vars into columns, with the reg `split_var` cross-reference.
+   - `score_from_lv1()` — per the ruling: test + roxygen refresh land here too, with a worked example.
+   - A pointer paragraph: `tab_many()`'s list mode + `purrr::pmap` batch workflow (already in README) linked from here.
 3. **Regression vignette (`tabxplor-reg.Rmd`)**:
-   + `split_var=` — a real section: one model per subpopulation, side by side, `tab_spread`-able; how it appears in exports (the merged vertical first column).
-   + `trials=` — grouped-binomial outcomes (the jamovi Model table exposes it; R users currently have no example).
-   + `tab_logit()` / `multi_logit()` — one paragraph naming the curated wrappers and when they suffice.
+   - `split_var=` — a real section: one model per subpopulation, side by side, `tab_spread`-able; how it appears in exports (the merged vertical first column).
+   - `trials=` — grouped-binomial outcomes (the jamovi Model table exposes it; R users currently have no example).
+   - `tab_logit()` / `multi_logit()` — one paragraph naming the curated wrappers and when they suffice.
 4. **Placement sanity**: every example must use only exported functions (the Last Phase e-iiii lesson — vignettes build against the installed namespace); keep each addition short — these are discovery paragraphs, not reference docs (the reference lives in `?help`).
 
 Verification: all three vignettes render with colours (the fansi hook); `devtools::build_vignettes()` clean; no new unexported-function calls (grep the chunks); full suite untouched.
@@ -1033,7 +1069,7 @@ Other improvements to implement :
 - **Export rename.** `tab_kable()` → `tab_html()` (full body + roxygen), `tab_kable <- tab_html` a permanent exported alias (`@rdname`); `tab_export(format = c("html","md","xl","plot"))` (`"kable"` hard-removed, new fn); internal callers + `kable_tabxplor_style` deprecation point at `tab_html`. S3 class `tabxplor_kable` kept (internal).
 - **Legend/footer weight (fmt_class.R `legend_render_line`).** `.lg_tok(bold=, esc=)`: variable names bold every medium; the bold decision drops for the **background** channel (text breaks bold, bg breaks plain); the stars token is `esc`-flagged so the md renderer backslash-escapes `*` (pandoc no longer reads `***`/`*` as emphasis). User subtext left raw.
 - **md/html render.** `md_bold` keeps alignment pad OUTSIDE the `**` (valid `**77%**`, no star placeholders on references); `td.tx-num` monospace by default (one `tab_kable_num_font` lever, `_stars` retired); md footer font-size via `.tabxplor-tab p`; best-effort col_var vertical borders (`:has()` on the md spacer column); composite `" (n="` join + styled-md level labels use U+00A0 (no wrap); `tab_md(css = TRUE)` default.
-- **tab_reg naming.** `Obs_%`/`Obs_OR`/`Obs_mean`/`Obs_diff`/`Obs_rate`/`Obs_IRR` (was `Emp. `) + `Model_OR`/`Model_IRR`/`Model_β`; multi-dependent disambiguated by a `[dep]` bracket the console shows and `tab_col_var_header()` strips in exports (role-driven).
+- **tab_reg naming.** `Obs_%`/`Obs_OR`/`Obs_mean`/`Obs_diff`/`Obs_rate`/`Obs_IRR` (was `Emp.`) + `Model_OR`/`Model_IRR`/`Model_β`; multi-dependent disambiguated by a `[dep]` bracket the console shows and `tab_col_var_header()` strips in exports (role-driven).
 - **exponentiate=FALSE colour + empirical.** New `log_odds_scale()` (fmt_class.R) — a non-gaussian coef (`type=="coef"` + `model_family ∈ binomial/poisson/…`) colours on the LOGGED odds_ratio breaks (center 0, std=FALSE → SD-division skips), so it matches its OR twin; gaussian β keeps SD-standardization. Legend `is_std` false for log-coef (no "SD" unit). `REG_EMPIRICAL` gains `or_log`/`irr_log` twins → `reg_empirical_columns(do_exp=)` builds `Obs_log(OR)`/`Obs_log(IRR)` (logged effect + logged CI).
 - **split_var auto-spread.** `tab_reg(spread_models = TRUE)` (+ `tab_logit`): a single non-multinomial model with a split_var auto-`tab_spread()`s to side-by-side columns; `reg_spread_models()` folds the split level into each column's col_var as `"{level}<br>{outcome}"` (borders + two-line span; xl converts `<br>`→newline+wrap). `FALSE` keeps the stacked grouped_tab.
 
@@ -1115,7 +1151,7 @@ Then, we should also think what to add, minimally, in jmvtab, UI for these new f
 **DONE (2026-07-21).** Full suite green (FAIL 0, PASS 3939 — +24 from the new `test-effect-size-survey.R` parity file, SKIP 5). The classic path is BYTE-IDENTICAL: a script proved the 36 structural goldens differ ONLY by the 3 new `test` columns (`effect_size`/`es_type`/`pvalue_exact`, body untouched); the only conscious snapshot moves are `render-html.md` (the summary gained a statistic + effect-size row) + 3 hardcoded display assertions. Design in `dev/tabxplor_2.0.0_decisions.md` §51.
 - **Effect sizes** ride each omnibus row as two columns: `agg_chi2` emits Cramér's V (uncorrected chi2) / phi (2×2), `agg_anova` emits η² = SSB/SST. Rendered as an "effect size" line (console grid + export summary; `test_fmt_es`). **Fisher** (`agg_fisher`, size/N-guarded) on small weak factor tables (`min_e < 5`), stored as `pvalue_exact` ON the chi2 row (no row-count change) and shown only when the EXACT test ran (a large table's simulated fallback is dropped → keeps the chi2 + `!` flag).
 - **Robust p-value ladder** (opt-in, all on the `test` attribute): `options(tabxplor.kish_neff = TRUE)` → `chi2_kish`/`F_kish` (first-order Rao-Scott n_eff rescale); `test = "survey"` (+ new `ids`/`strata`/`fpc`/`nest` args, or a `survey::svydesign` as `data`) → `chi2_svy`/`F_svy` (`survey::svychisq` / `svyglm`+`regTermTest`, matches the survey package to 1e-6). New `R/survey-design.R` = the shared `svy_*` design helpers (tab_reg's `reg_*` now delegate, byte-identical) + `tab_robust_overlay()` (runs in `tab_assemble_tables` where `ctx$data` lives; the ONE test path reading the microdata, per-table, documented complete-case caveat).
-- **Export default** `tabxplor.test_lines` `"pvalue"` → `"summary"` (statistic + effect size + p-value). **jamovi** gained a `test_robust` selector + `strata`/`ids` (`.a.yaml`/`.u.yaml`/`.b.R`), 
+- **Export default** `tabxplor.test_lines` `"pvalue"` → `"summary"` (statistic + effect size + p-value). **jamovi** gained a `test_robust` selector + `strata`/`ids` (`.a.yaml`/`.u.yaml`/`.b.R`),
 
 #### Last Phase k — last new features 2, labelled-data
 
@@ -1380,8 +1416,8 @@ markdown export still have a few problems on their own pandoc/quarto html render
 
 #### Last Phase s – Kish neff for all CI
 
-The current documentation say contradictory things about kish_neff, and I can’t remember exactly what was done : 
-- In `tab()`, with `wt = ` survey weights provided (but no full survey design), is `options(tabxplor.kish_neff = TRUE)` actually used in the calculation of **all** confidence intervals (for factors, for means, and all of them) ?
+The current documentation say contradictory things about kish_neff, and I can’t remember exactly what was done :
+- In `tab()`, with `wt =` survey weights provided (but no full survey design), is `options(tabxplor.kish_neff = TRUE)` actually used in the calculation of **all** confidence intervals (for factors, for means, and all of them) ?
 - In `tab_reg()`, is `options(tabxplor.kish_neff = TRUE)` used not only for weighted models, but also for their observed counterpart’s confidence intervals using `empirical = TRUE` ?
 - In `tab_reg()`, are **all** the selected kind of models handling well `options(tabxplor.kish_neff = TRUE)` ? A real full survey design ?
 
@@ -1468,7 +1504,7 @@ and left **uncommitted** (untracked, not `.gitignore`'d → Phase z publishes it
   every article into BOTH trees, so each config must index all six); and `set_caption` (exported in
   Phase 17b) missing from the reference index.
 - **Flag for maintainer**: a pre-existing `\Documents` unknown-Rd-macro warning in `man/jmvtab.Rd:258`
-  + `man/jmvtabreg.Rd:159` (should be `\\Documents` or escaped in the roxygen source — harmless, not
+  - `man/jmvtabreg.Rd:159` (should be `\\Documents` or escaped in the roxygen source — harmless, not
   fixed here). The three `dev/french_glossary.md` runtime-string rough-spots (reg-caption colon,
   comparison-title plural, ambient-locale tooltips) still await review — they are NOT vignette prose.
   Translations are **first drafts** for the maintainer's hand review.
@@ -1499,6 +1535,56 @@ and left **uncommitted** (untracked, not `.gitignore`'d → Phase z publishes it
 Help me do the github PR.
 
 I want the master github branch to get rid of `dev/` and other not user-facing files, while still keeping them in a branch for development and future bug fixes (the branch I want to use in Positron, since master is more user-facing). What would be the best wax to proceed ? Should I just keep two branches in parallel, master and dev, and PR to master before releases ? What are the good practices in that matter, for simplicity and reliability ?
+
+**DONE (2026-07-27) — the branch model is `dev/release_checklist.md`** (dev = everything · master =
+user-facing, never committed to directly · `release/x.y.z` = dev + one strip commit · merge commit,
+NEVER squash · tag after CRAN acceptance). Two facts established while fixing the PR:
+- **The release branch has zero effect on the tarball.** Every path it strips (`dev/`, `.claude/`,
+  `.vscode/`, `CLAUDE.md`, `air.toml`) is already in `.Rbuildignore`, so `R CMD build` from `dev`
+  and from `release/x.y.z` produce identical sources -> **dev-green means release-green**, which is
+  why `dev` was added to the CI push triggers.
+- **CRAN submission comes AFTER the merge**, not before: `pkgdown.yaml` deploys only on a push to
+  master (it skips PRs), so until then `DESCRIPTION`'s own `URL:` 404s and CRAN's incoming URL check
+  would flag it. GitHub Pages must also be enabled once, manually.
+
+---
+
+#### Last Phase z2 — green up the release PR (CI, CRAN hygiene, commit trailers)
+
+**DONE (2026-07-27).** Full suite green in BOTH locales: normal `fr_FR.UTF-8` → FAIL 0, WARN 0,
+SKIP 4, PASS 4274; CI-equivalent `LC_ALL=C.UTF-8` → FAIL 0, WARN 0, SKIP 8, PASS 4257. **Zero
+golden/snapshot churn.** All work on `dev`; `release/2.0.0`, `master` and PR #3 untouched.
+
+The PR was red on 4/5 R-CMD-check jobs + test-coverage while `check()` was green locally — both
+clusters are environment-specific and invisible on the maintainer's box.
+- **i18n (12 failures, every Linux job).** `with_legend_lang()` sets only `LANGUAGE`, which glibc
+  ignores when `LC_MESSAGES` is `C` — the state under `R CMD check` and on the CRAN farm. Passed
+  locally only because the dev box is `fr_FR.UTF-8`. The probe that fixes it already existed in
+  `test-color-legend.R` but had never been shared. Promoted to **`tests/testthat/helper-i18n.R`
+  `skip_if_no_gettext()`** (catalog compiled → `capabilities("NLS")` → a real `gettext()`
+  round-trip, so macOS/Windows still exercise the translation). `test-i18n-fr.R` was **split into
+  unguarded ENGLISH blocks and guarded FRENCH blocks** — the English guard-rails that keep the
+  goldens from moving must run everywhere, including where translation is impossible.
+- **Windows (3 failures + 9 warnings).** The failures were test-fixture bugs: `dirname()` always
+  emits `/` while `normalizePath()` emits `\` on Windows (both sides now go through one
+  `winslash = "/"` normaliser), a drive-relative `/tmp/...` literal (now `tempdir()`), and a
+  `/proc` fixture only unwritable on Linux (now a directory under a regular *file*, uncreatable on
+  every OS). The warnings were a real defect: **`export_is_wsl()`** read `/proc/version` with an
+  error-only `tryCatch`, and `readLines(warn = FALSE)` does not suppress the connection-open
+  warning — now gated on `file.exists()`, the `doc_xdg_file()` pattern from the same file.
+- **CRAN.** `tab_reg`'s example was **15.5 s user+system** on CI (CRAN NOTEs any topic over 5 s on
+  u+s *or* elapsed) — now **0.17 s** main / 4.1 s donttest, via one visible model call on a
+  3000-row subset (2000 tripped a Brant warning) with the rest in `\donttest{}`; `lm_plots`
+  (3.2 s, unguarded) moved into `\donttest{}`. Deleted **`tests/testthat/_problems/`** (51 tracked
+  files, 208 KB of extracted debug reproducers that shipped in the tarball) + `.Rbuildignore`d it.
+  File-level `skip_on_cran()` on the 4 heaviest test files — this does NOT weaken our CI, since
+  devtools/covr/r-lib-actions all set `NOT_CRAN=true` (see `helper-benchmark.R`).
+- **CI triggers**: `dev` added to `push` on R-CMD-check + test-coverage, both gain
+  `workflow_dispatch`.
+- **Residual watch item** (measured, deliberately NOT changed — flagship docs the maintainer
+  reviews): `tab`'s `--run-donttest` pass is 6.2 s u+s / 2.6 s elapsed across its 7 donttest blocks,
+  all on the full 21,483-row `gss_cat`. Its MAIN pass is 0.65 s, so CRAN's default check is safe;
+  only the donttest flavour would NOTE.
 
 
 
