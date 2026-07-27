@@ -49,11 +49,11 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-`tabxplor` aide à **explorer les données avec des tableaux croisés, en colorant les cases pour lire un tableau d'un coup d'œil**. Les cases sur-représentées prennent des nuances de bleu, les sous-représentées virent au rouge/orange : les régularités sautent aux yeux sans avoir à scruter chaque nombre.
+`tabxplor` aide à **l’exploration de données au moyen de tableaux croisés, en utilisant un code couleur pour trouver plus rapidement les informations les plus importantes d’un tableau**. Les cases sur-représentées sont soulignée en nuances de bleu, les cases sous-représentées en nuances de l’orange au rouge.
 
-Tout est un `tibble`, donc le résultat fonctionne avec les verbes habituels de `dplyr`, et les tableaux s'exportent vers Excel, HTML et Markdown avec leurs repères de couleur. Les calculs lourds sous-jacents tournent sur `data.table`.
+Tout tableau est un `data.frame` de classe `tibble`, modifiable avec les verbes habituels de `dplyr`. Les tableaux s'exportent vers Excel, HTML et Markdown.
 
-Tout au long de cette introduction, nous utilisons `gss_simple`, une version nettoyée de la General Social Survey (`forcats::gss_cat`), dont les modalités des facteurs ont été fusionnées et réordonnées.
+Tout au long de cette introduction, nous utilisons `gss_simple`, une version nettoyée du *General Social Survey* états-unien (`forcats::gss_cat`).
 
 ```{r, echo = TRUE}
 gss_simple <- gss_cat_data_formatting()
@@ -67,13 +67,13 @@ gss_simple <- gss_cat_data_formatting()
 tab(gss_simple, marital, race)
 ```
 
-C'est le **tableau html** de tabxplor — ce que l'on obtient dans le panneau Viewer de RStudio ou Positron avec l'option de session recommandée, utilisée tout au long de cette introduction :
+L’option recommandée est d’afficher le résultat sous forme d’un **tableau html** dans le panneau Viewer de RStudio ou Positron:
 
 ```{r, eval = FALSE}
 options(tabxplor.print = "html")
 ```
 
-Sans l'option, le même tableau s'imprime dans la **console**, sous forme de `tibble` coloré — même information, affichage plus léger :
+Sans l'option, le même tableau s'imprime dans la **console**, sous forme de `tibble` :
 
 ```{r, include = FALSE}
 options(tabxplor.print = "console")
@@ -87,53 +87,53 @@ tab(gss_simple, marital, race)
 options(tabxplor.print = "html")
 ```
 
-Ajoutez `pct = "row"` pour des pourcentages en ligne (ou `"col"` pour des pourcentages en colonne). Une ligne/colonne **Total** et une colonne d'effectifs (`n`) sont ajoutées automatiquement :
+Ajoutez `pct = "row"` pour des pourcentages en ligne (ou `"col"` pour des pourcentages en colonne). Une ligne/colonne **Total** comprenant les effectifs (`n`) entre parenthèse est ajoutée automatiquement :
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, race, pct = "row")
 ```
 
-Quand la variable en colonne est **numérique**, `tab()` affiche sa **moyenne** dans chaque ligne, au lieu de pourcentages :
+Quand la variable en colonne est **numérique**, `tab()` affiche sa **moyenne** pour chaque catégorie de ligne :
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, age)
 ```
 
-Vous pouvez passer **plusieurs variables en ligne et en colonne à la fois**.
+Il est possible de passer **plusieurs variables en ligne et en colonne à la fois**.
 
 ```{r, echo = TRUE}
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-`levels = "first"` ne garde que la première modalité de chaque facteur en colonne, ce qui est pratique pour afficher de façon compacte de nombreux facteurs binaires, comme des questions d'enquête à réponses multiples, tous en même temps :
+`levels = "first"` ne garde que la première modalité de chaque facteur en colonne, pratique pour afficher de façon compacte de nombreuses variables catégorielles binaires, comme un questionnaire d’enquête avec multiples réponses possibles :
 
 ```{r, echo = TRUE}
 tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", na = "drop", cleannames = TRUE)
 ```
 
-Quelques autres arguments du quotidien : `na = "drop"` pour retirer les valeurs manquantes de la base, `digits =` pour le nombre de décimales, et `cleannames = TRUE` pour retirer des préfixes comme `"1-"` des noms de modalités. Voir `?tab` pour la liste complète.
+Quelques autres arguments du quotidien : `na = "drop"` pour retirer les valeurs manquantes de la base, `digits =` pour le nombre de décimales, et `cleannames = TRUE` pour retirer des préfixes comme `"1-"` des noms de catégories. Voir `?tab` pour la liste complète.
 
 ## Pondération
 
-L'argument `wt =` ajoute une pondération d'enquête. Chaque pourcentage et chaque moyenne est alors **pondéré**, tandis que la taille d'échantillon derrière les intervalles de confiance reste le nombre réel, **non pondéré**, d'observations — la base honnête, par défaut, de l'incertitude.
+L'argument `wt =` permet de pondérer le tableau. Chaque pourcentage et chaque moyenne utilise la pondération, tandis que la taille d'échantillon derrière les intervalles de confiance reste le nombre réel, non pondéré, d'observations.
 
 ```{r, echo=TRUE, eval=FALSE}
 data(hdv2003, package = "questionr")
 tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
 ```
 
-Sous des poids **inégaux**, cet intervalle par défaut ne porte aucun effet de plan, donc il est un peu trop étroit. La *taille d'échantillon efficace* de Kish corrige cela : elle compte chaque observation selon ce qu'elle apporte réellement, `n_eff = (somme des w)² / (somme des w²)` (toujours au plus le *n* réel), et utilise `n_eff` à la place du *n* brut. Activez-la et chaque intervalle de confiance pondéré du tableau — proportions comme moyennes — s'élargit honnêtement :
+Lorsque les poids sont **inégaux**, cet intervalle par défaut ne porte aucun *design-effect*, donc il est un peu trop étroit. Au besoin, la taille d'échantillon effective de Kish (*Kish effective sample size*) corrige cela : elle compte chaque observation selon ce qu'elle apporte réellement, `n_eff = (somme des w)² / (somme des w²)`, et utilise `n_eff` à la place du *n* brut. Activer l’option élargit les intervalles de confiance pondérés de tous les tableaux pour donner une estimation plus fiable de l’incertitude :
 
 ```{r, echo=TRUE, eval=FALSE}
 options(tabxplor.kish_neff = TRUE)
 ```
 
-C'est une approximation simple, à un seul degré (elle a besoin des poids individuels, donc elle n'est pas disponible pour les tableaux construits à partir d'effectifs déjà agrégés). Un résultat **pleinement fondé sur le plan de sondage** — grappes, strates, erreurs-types exactes — n'est disponible que pour les p-valeurs du Chi2 (facteurs) et les p-valeurs du F d'ANOVA (variables en colonne numériques), via `test = "survey"` et les arguments associés (voir l'argument `test =`) : les intervalles de confiance ne sont pas couverts. Voir le paquet [survey](https://CRAN.R-project.org/package=survey) pour plus d'informations sur les plans de sondage. Les tableaux de régression `tab_reg()` avec pondération utilisent toujours l'effet de plan pour leurs erreurs-types (`vignette("tabxplor-reg")`), mais la version de base n'utilise que la taille d'échantillon efficace de Kish.
+C'est une approximation simple, à un seul degré. Un résultat **pleinement fondé sur le plan de sondage/design-effect** — grappes, strates, erreurs-types exactes — n'est disponible que pour les *pvalues* du test du Chi2 (variables catégorielles) et les *pvalues* du de l’ANOVA F (variables en colonne numériques), via `test = "survey"` et les arguments associés (voir l'argument `test =`) : les intervalles de confiance ne sont pas concernés. Voir le package [survey](https://CRAN.R-project.org/package=survey) pour plus d'informations sur les *design-effects*. Les modèles de regression pondérés de `tab_reg()` utilisent toujours le *design-effect* pour calculer leurs erreurs-types (`vignette("tabxplor-reg")`), mais les tableaux de base n'utilisent que la taille d'échantillon effective de Kish.
 
 
 ## Sous-tableaux
 
-Donnez à `tab()` une troisième variable comme `tab_vars` et il construit **un sous-tableau par groupe** (ici, un par tranche de revenu). Le résultat est *groupé* : les opérations `dplyr` s'appliquent alors à l'intérieur de chaque sous-tableau.
+Donner à `tab()` une troisième variable comme `tab_vars` permet de construire **un sous-tableau par groupe** (ici, un par tranche de revenu). Le résultat est *groupé* : les opérations `dplyr` s'appliquent alors à l'intérieur de chaque sous-tableau.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")

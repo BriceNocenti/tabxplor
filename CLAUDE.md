@@ -1581,6 +1581,17 @@ clusters are environment-specific and invisible on the maintainer's box.
   devtools/covr/r-lib-actions all set `NOT_CRAN=true` (see `helper-benchmark.R`).
 - **CI triggers**: `dev` added to `push` on R-CMD-check + test-coverage, both gain
   `workflow_dispatch`.
+- **test-coverage** (which had NEVER passed — only 2 runs ever, both red) died *after* a green suite
+  with `Error in readRDS(f) : error reading from connection`. Root-caused by local reproduction:
+  covr injects `reg.finalizer(ns, covr:::save_trace, onexit = TRUE)` into the INSTALLED package, so
+  every process loading tabxplor writes a `covr_trace_*.Rds` at exit — including the **mirai daemons**
+  `test-parallel-parity.R` starts, which `mirai::daemons(0)` then KILLS mid-`saveRDS`. Measured: 10
+  healthy ~1.19 MB traces beside 4 truncated ones of exactly 688128 / 753664 bytes (both exact
+  multiples of 4096 — only whole filesystem pages flushed); `merge_coverage.character()` readRDS'es
+  each with no guard, so the run aborts. **Only visible when `NOT_CRAN=true`** (r-lib/actions sets it
+  job-wide; without it `skip_on_cran()` already skipped that file — which is why a plain local
+  `covr::package_coverage()` passed). Fixed by an `R_COVR` skip on that one file: coverage now
+  completes at **79.2 %**, and R-CMD-check still runs it in full (`devtools::test()` → PASS 11, SKIP 0).
 - **Residual watch item** (measured, deliberately NOT changed — flagship docs the maintainer
   reviews): `tab`'s `--run-donttest` pass is 6.2 s u+s / 2.6 s elapsed across its 7 donttest blocks,
   all on the full 21,483-row `gss_cat`. Its MAIN pass is 0.65 s, so CRAN's default check is safe;

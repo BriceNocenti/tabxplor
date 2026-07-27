@@ -7,6 +7,23 @@ skip_on_cran()
 skip_if_not_installed("mirai")
 skip_if_not_installed("pkgload")
 
+# WARNING: must also skip under covr, or `covr::package_coverage()` DIES (not fails -- dies) with
+# "Error in readRDS(f) : error reading from connection". Root-caused 2026-07-27 by reproducing it
+# locally: covr instruments the INSTALLED package and injects
+# `reg.finalizer(ns, covr:::save_trace, onexit = TRUE)`, so EVERY process that loads tabxplor writes
+# a `covr_trace_*.Rds` when it exits -- including the mirai daemons these tests start. Those daemons
+# are then KILLED by `mirai::daemons(0)` (tab_parallel_stop / the pool resize), which interrupts
+# saveRDS mid-write. Measured: 10 healthy traces of ~1.19 MB alongside 4 truncated ones of exactly
+# 688128 and 753664 bytes -- both exact multiples of 4096, i.e. only whole filesystem pages were
+# flushed. covr's `merge_coverage.character()` then readRDS()es every trace with no guard against a
+# corrupt one, so the whole coverage run aborts.
+# This is invisible unless NOT_CRAN=true: without it `skip_on_cran()` above already skips this file.
+# r-lib/actions sets NOT_CRAN=true job-wide, which is why the CI coverage job hit it and a plain
+# local `covr::package_coverage()` did not. Nothing is lost by skipping: a killed grandchild process
+# cannot contribute reliable coverage anyway. R-CMD-check still runs this file in full.
+skip_if(identical(Sys.getenv("R_COVR"), "true"),
+        "covr: killed mirai daemons truncate covr's trace files (see comment above)")
+
 withr::defer(tab_parallel_stop())  # release the "tabxplor" pool at end of file
 
 # The daemons bind the *installed* tabxplor namespace. Under devtools::load_all that predates the
