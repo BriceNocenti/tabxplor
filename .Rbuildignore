@@ -24,4 +24,5 @@
 ^docs$
 ^pkgdown$
 ^codecov\.yml$
+^\.covrignore$
 ^tests/testthat/_problems$

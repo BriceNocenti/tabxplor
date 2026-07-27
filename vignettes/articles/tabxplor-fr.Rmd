@@ -139,7 +139,7 @@ Donner à `tab()` une troisième variable comme `tab_vars` permet de construire 
 tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 ```
 
-Quand vous passez plusieurs **variables en ligne** *sans* `tab_vars`, `tab()` fusionne par défaut les tableaux jumeaux en un seul tableau. `output_list = TRUE` renvoie plutôt une **liste avec un tableau par variable en ligne** (avec `tab_vars`, le résultat est toujours une liste) :
+Passer plusieurs **variables de ligne** (`row_vars`) *sans* `tab_vars` fusionne tout dans un seul tableau : le résultat est un `tibble` groupé dont chaque tableau correspond à un groupe. `output_list = TRUE` renvoie plutôt une **liste**, avec un tableau par variable en ligne** (avec `tab_vars` et plusieurs `row_vars`, le résultat est toujours une liste) :
 
 ```{r, echo = TRUE}
 tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
@@ -147,13 +147,13 @@ tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 
 ## Couleurs : des repères de lecture
 
-L'un des principaux objectifs de `tabxplor` est de fournir une palette complète de repères colorés pour l'exploration des données. `color = "diff"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne. Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte — et une légende de couleur est imprimée en dessous.
+L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration des données. `color = "diff"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne. Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff")
 ```
 
-`color = TRUE` choisit automatiquement un schéma sensé pour chaque type de colonne (différences et rapport pour les pourcentages, seulement les rapports pour les moyennes, …) ; vérifiez lequel dans la légende :
+`color = TRUE` choisit automatiquement un schéma sensé pour chaque type de colonne (différences et ratio pour les pourcentages ; seulement les ratio pour les tableaux de moyennes ; …) ; la légende permet de savoir lequel :
 
 ```{r, echo = TRUE}
 tab(gss_simple, rincome, c(party3, marital), pct = "row", color = TRUE)
@@ -165,10 +165,10 @@ Les colonnes numériques sont colorées de la même façon, sur leurs **moyennes
 tab(gss_simple, rincome, tvhours, color = "diff")
 ```
 
-**Quelle case sert de référence pour la comparaison ?** Par défaut, chaque case est comparée au Total pertinent (ligne Total pour les pourcentages en ligne, colonne Total pour les pourcentages en colonne), afin de mettre en évidence sur-représentations et sous-représentations. Deux variantes utiles :
+**Quelle case sert-elle de référence pour la comparaison ?** Par défaut, chaque case est comparée au Total pertinent (ligne Total pour les pourcentages en ligne, colonne Total pour les pourcentages en colonne) : la couleur met en évidence sur-représentations et sous-représentations. Deux variantes utiles :
 
-- `ref = 1` compare chaque ligne à la **première ligne** — parfait pour lire une évolution dans le temps ou un facteur ordinal.
-- avec des sous-tableaux, `comp = "all"` compare au Total **d'ensemble** plutôt qu'au Total propre à chaque sous-tableau.
+- `ref = 1` compare chaque ligne à la **première ligne** — parfait pour lire une évolution dans le temps ou une variable ordinale.
+- avec des sous-tableaux (`tab_vars`), `comp = "all"` compare au Total **d'ensemble** plutôt qu'au Total de chaque sous-tableau.
 
 ```{r, echo = TRUE}
 tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
@@ -178,29 +178,29 @@ tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, comp="all")
 ```
 
-**Une référence différente pour chaque variable.** `ref` est réinterprété par `pct`. Sous des pourcentages en **ligne** (ou des moyennes), il choisit une **ligne** de référence : un vecteur *nommé* donne alors à chaque variable en ligne la sienne — ici `race` est lu par rapport à sa première ligne, `relig` par rapport à son Total :
+**Une référence différente pour chaque variable.** Il est possible de choisir une `ref` pour chaque variable concernée. Pour des pourcentages en **ligne** (ou des moyennes), il est possible de choisir une réference différente pour chaque variable de ligne (ici `race` est lu par rapport à sa première ligne, `relig` par rapport à son Total) :
 
 ```{r, echo = TRUE}
 tab(gss_simple, c(race, relig), party3, pct = "row", color = "diff",
-    ref = c(race = "first", relig = "tot"), na = "drop")
+    ref = c(race = "1", relig = "tot"), na = "drop")
 ```
 
-Sous des pourcentages en **colonne**, `ref` choisit plutôt une **colonne** de référence, vectorisé sur les variables en colonne — nommé (`ref = c(party3 = "first", marital = "tot")`) ou positionnel, une valeur par variable en colonne :
+Pour des pourcentages en **colonne**, il est possible de choisir une réference différente pour chaque variable de colonne : 
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(party3, marital), pct = "col", color = "diff",
     ref = c("first", "tot"), na = "drop")
 ```
 
-Les seuils de couleur et la palette se personnalisent : réglez-les **une fois pour toute la session** avec `set_color_breaks()` et `set_color_palette()`.
+Il est possible de personnaliser les seuils de couleur et la palette de couleurs avec `set_color_breaks()` et `set_color_palette()` (pour toute la session R en cours).
 
 ## Des couleurs qui respectent la significativité
 
-Les couleurs ci-dessus montrent la *taille* d'un écart, mais pas s'il est **statistiquement fiable**. Sur de petits échantillons, une différence d'apparence marquée peut n'être que du bruit. L'argument `color_signif` fait entrer la significativité dans la coloration :
+Les couleurs ci-dessus montrent la *taille* d'un écart, mais ne disent pas s'il est **statistiquement fiable**. Sur de petits échantillons, une différence qui semble marquée peut n'être que du bruit. L'argument `color_signif` fait entrer la significativité dans les repères de couleur :
 
-- `"ignore"` (par défaut) : colore chaque écart selon sa taille observée. Grise les petites différences sous un certain seuil.
+- `"ignore"` (par défaut) : colore chaque écart selon sa taille observée. Les petites différences sous un certain seuil (en-dessous de ±5% pour une différence de proportion) apparaissent grisées. 
 - `"grey_non_signif"` : colore selon la taille de l'effet, grise les petits effets sous un certain seuil, mais grise **aussi les cases dont l'effet est important mais non significatif**. Chaque case colorée est alors garantie significativement différente de sa référence, sans être encombrée par de très petites différences significatives.
-- `"guaranteed_effect"` : ne colore que la part de l'effet dont on peut être sûr (sa borne de confiance), avec des couleurs plus ternes et prudentes. À utiliser sur de **petits échantillons** pour **mettre en évidence toutes les différences que l'on a le droit d'interpréter**. Tout ce qui est coloré est significatif ; rien de ce qui est gris ne l'est.
+- `"guaranteed_effect"` : ne colore que la part de l'effet dont on peut être certain au seuil de confiance choisi (la borne inférieure de l’intervalle), avec des couleurs moins fortes et plus prudentes. À utiliser sur de **petits échantillons** pour **mettre en évidence toutes les différences qu'on a le droit d'interpréter**. Tout ce qui est coloré est significatif ; rien de ce qui est gris ne l'est.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff", color_signif = "grey_non_signif")
@@ -212,7 +212,7 @@ gss_simple |>
   tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
-Sur de **petits échantillons**, un pourcentage d'apparence marquée peut reposer sur une poignée de répondants. `n_min =` est un filtre purement visuel, appliqué en dernier : il masque les cases dont la base (non pondérée) est sous le seuil, et retire entièrement une ligne quand sa plus grande base est trop faible. Ici, les religions les plus rares disparaissent :
+Sur de **petits échantillons**, un pourcentage d'apparence marquée peut reposer sur très peu de répondants. `n_min =` est un filtre purement visuel, appliqué en dernier : il masque les cases dont la base (non pondérée) est sous le seuil, et retire entièrement une ligne quand sa plus grande base est trop faible. Ici, les religions les plus rares disparaissent :
 
 ```{r, echo = TRUE}
 tab(gss_simple, relig, race, pct = "row", n_min = 400)
@@ -228,13 +228,13 @@ tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
 
 ## Intervalles de confiance, tests et contributions
 
-Affichez les intervalles de confiance du pourcentage ou de la moyenne de chaque case avec `ci = "cell"` :
+Afficher les intervalles de confiance du pourcentage ou de la moyenne **de chaque case** avec `ci = "cell"` :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", ci = "cell") # par défaut, conf_level = 0.95
 ```
 
-Affichez les intervalles de confiance de la **différence** avec une référence, utilisés pour calculer la significativité (si 0 appartient à l'intervalle de confiance, la case n'est pas significativement différente de la référence, ici la ligne Total) :
+Afficher les intervalles de confiance de la **différence** avec une référence, ceux-là même qui sont utilisés pour calculer la significativité (si 0 appartient à l'intervalle de confiance, la case n'est pas significativement différente de la référence, ici la ligne Total) :
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
@@ -243,10 +243,9 @@ gss_simple |>
   )
 ```
 
-`display = "num_ci"` en est un raccourci adaptatif au type : il affiche chaque valeur avec l'intervalle de confiance que le tableau calcule — `{pct} {ci}` sur les colonnes de pourcentages et `{mean} {ci}` sur les colonnes numériques, choisi colonne par colonne — donc il fonctionne pour un mélange de facteurs et de nombres en un seul appel :
+`display = "num_ci"` affiche la principale quantitée, pourcentage ou moyenne, suivie de son intervalle de confiance. 
 
-
-Ajoutez des étoiles de significativité avec `stars = TRUE`. Elles racontent la même histoire que les intervalles de confiance de la différence avec la référence, mais pour différents seuils de confiance (99 %, 95 %, 90 %) :
+Il est possible d’ajouter des étoiles de significativité avec `stars = TRUE`, soit en plus des couleurs, soit à leur place. Elles racontent la même histoire que les intervalles de confiance de la différence avec la référence (couleur), mais pour différents seuils de confiance (99 %, 95 %, 90 %) :
 
 ```{r, echo = TRUE}
 gss_simple |>
@@ -254,15 +253,15 @@ gss_simple |>
   tab(rincome, c(party3, tvhours), pct = "row", display = "num_ci", stars = TRUE)
 ```
 
-**Afficher deux nombres dans une même case.** `display` ne sert pas qu'aux intervalles de confiance : il accepte un **gabarit `{}`** qui combine n'importe quels champs de la case. Par exemple, `display = "{pct} ({diff})"` imprime chaque pourcentage suivi de sa différence à la référence, et `"{pct} (n={n})"` le fait suivre de l'effectif :
+**Afficher deux nombres dans une même case.** `display` ne sert pas qu'aux intervalles de confiance : il accepte un **gabarit `{}`** qui combine n'importe quels champs de la case. Par exemple, `display = "{pct} ({diff})"` imprime chaque pourcentage suivi de sa différence à la référence entre parenthèse, et `"{pct} (n={n})"` le fait suivre de l'effectif non pondéré :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({diff})")
 ```
 
-Le premier champ du gabarit est le champ *primaire* — la valeur que garde Excel et celle que lisent les couleurs. `vignette("tabxplor-programming")` détaille toute la grammaire et liste tous les champs combinables.
+Le premier champ du gabarit est le champ *primaire* — la valeur que garde Excel et celle que lisent les couleurs. `vignette("tabxplor-programming")` détaille toute la grammaire et liste tous les champs possibles.
 
-`test = TRUE` ajoute un test statistique d'indépendance par (sous-)tableau — **Chi2** pour les colonnes facteurs, **F d'ANOVA de Welch** pour les variables numériques (`options(tabxplor.anova = "classic")` bascule vers le F à variance commune) :
+`test = TRUE` ajoute un test statistique d'indépendance par (sous-)tableau : **test du Chi2** pour les colonnes facteurs, **ANOVA F de Welch** pour les variables numériques (`options(tabxplor.anova = "classic")` bascule vers une ANOVA F classique, à variance commune) :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
@@ -272,25 +271,26 @@ tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, color = "contrib")
-# tab(gss_simple, race, party3, pct="row", color = "contrib") # fonctionne avec pct, mais indépendant des lignes/colonnes
+# tab(gss_simple, race, party3, pct="row", color = "contrib") # fonctionne avec pct ; mais indépendant des lignes/colonnes
 ```
 
 Voir plus bas le détail de la composition des intervalles de confiance et des couleurs.
 
-## Infobulles au survol (tableaux html)
+**Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan de sondage / *design-effect*, et la cas échant peut s’avérer trop étroite : activez la taille d'échantillon effective de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir chaque intervalle de manière plus fiable et faire passer les tests du Chi2 à une correction de Rao–Scott.
 
-Chaque tableau html porte des **infobulles** au survol des cases, avec les nombres derrière la case : l'effectif non pondéré, l'écart à la référence, le ratio, l'intervalle de confiance... Elles sont actives par défaut dans le Viewer et dans les rapports — cette page les a seulement coupées pour tout le document avec `options(tabxplor.tab_kable_tooltips = FALSE)`, pour rester légère. Survolez les cases du tableau ci-dessous, où elles sont réactivées avec `tooltips = TRUE` :
+
+## Infobulles au survol à la souris (tableaux html)
+
+Chaque tableau html porte des **infobulles** au survol des cases, avec les principaux champs utilisés : l'effectif non pondéré, la différence par rapport à la référence, le ratio, l'intervalle de confiance, etc. Elles sont actives par défaut dans le Viewer de RStudio/Positron et dans les fichiers `.Rmd` ou `.qmd`. Voila le résultat en les réactivant ici :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff") |>
   tab_html(tooltips = TRUE)
 ```
 
-**Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan, donc elle est un peu trop étroite : activez la taille d'échantillon efficace de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir honnêtement chaque intervalle et faire passer les tests du Chi2 d'ensemble à une correction de Rao–Scott.
-
 ## Exporter
 
-Un tableau terminé s'exporte avec ses couleurs vers Excel, HTML ou Markdown :
+Il est possible d’exporter un tableau, avec ses repères de couleur, vers Excel, HTML ou Markdown :
 
 ```{r, echo = TRUE, eval = FALSE}
 tabs <- tab(gss_simple, race, party3, pct = "row", color = "diff")
@@ -301,31 +301,31 @@ tab_export(tabs, format = "md", path = "table") # fichier markdown plat (tableau
 
 Deux options valent la peine d'être connues :
 
-- `theme = "auto"` fait **suivre le mode clair/sombre du lecteur** à un export HTML ou Markdown (il bascule en direct). Pour la console, `set_color_palette(theme = "auto")` détecte l'éditeur (RStudio, Positron, etc.) et choisit la palette correspondante — c'est appliqué automatiquement au chargement du paquet.
+- `theme = "auto"` **suit le mode clair/sombre de l’éditeur de code**, pour un export HTML ou Markdown. Pour la console, `set_color_palette(theme = "auto")` détecte l'éditeur (RStudio, Positron, etc.) et choisit la palette correspondante (ce qui est fait automatiquement au chargement du package).
 
 ```{r, echo = TRUE, eval = FALSE}
-tab_export(tabs, theme = "auto") # HTML qui suit le mode clair/sombre du lecteur
+tab_export(tabs, theme = "auto")
 ```
 
-- Comme les variables numériques ne peuvent être passées qu'en colonnes, certaines mises en page complexes avec des variables numériques en lignes nécessitent de transposer le tableau à l'export avec `transpose = TRUE` :
+- Comme les variables numériques ne peuvent être passées qu'en colonnes, certaines mises en page complexes avec des variables numériques en lignes nécessitent de transposer le tableau à l'export avec `transpose = TRUE`, pour inverser les lignes et les colonnes :
 
 ```{r, echo = TRUE}
 tab(gss_simple, party3, c(race, tvhours), pct = "row") |>
   tab_html(transpose = TRUE)
 ```
 
-- **Une seule feuille de style pour tout un document.** Dans un rapport `.Rmd`/`.qmd`, `tab_css()` écrit le CSS des couleurs une seule fois, et chaque tableau suivant n'émet que des classes : un unique `theme` — y compris `"auto"`, qui suit le mode clair/sombre du lecteur — met en forme tous les tableaux d'un coup. Cette page fait exactement cela (avec `theme = "light"`) :
+- **Utiliser une seule feuille de style pour tout un document.** Dans un fichier `.Rmd`/`.qmd`, `tab_css()` écrit le CSS des couleurs une seule fois, et chaque tableau suivant n'émet que des classes : un unique `theme` — y compris `"auto"`, qui suit le mode clair/sombre du lecteur — met en forme tous les tableaux d'un coup.
 
 ```{r, echo = TRUE, eval = FALSE}
 options(tabxplor.tab_kable_css = FALSE)
 tab_css(theme = "auto")   # à émettre une fois, en haut du document
 ```
 
-Rien n'est écrit en ligne sur une case, donc tout rendu reste surchargé par du CSS ordinaire ensuite (largeurs de colonnes, polices…) ; voir `?tab_css` pour les classes de rôle (`.tx-rv`, `.tx-tot`, `.tx-num`).
+Tous les styles sont ensuite modifiables via du CSS ordinaire (largeurs de colonnes, polices, etc.) ; voir `?tab_css` pour les classes de rôle (`.tx-rv`, `.tx-tot`, `.tx-num`).
 
 ## Travailler avec le résultat
 
-`tab()` renvoie un `tibble` (de classe `tabxplor_tab`), donc les verbes `dplyr` fonctionnent tels quels. Utilisez le prédicat `is_totrow()` pour garder la ligne Total en place quand vous réordonnez (il repère les lignes de total, donc trier dessus d'abord les envoie tout en bas) :
+`tab()` renvoie un `tibble` (de classe `tabxplor_tab`), donc les verbes `dplyr` fonctionnent tels quels. En réordonnant les lignes, le prédicat `is_totrow()` est utilisé en interne pour garder les lignes Total en place :
 
 ```{r, echo = TRUE, message = FALSE}
 library(dplyr)
@@ -333,7 +333,7 @@ tab(gss_simple, race, marital, pct = "row") |>
   arrange(desc(Married))
 ```
 
-**Titrer et annoter.** `subtext =` imprime une ou plusieurs lignes de légende sous un tableau (une source de données, une note). `set_caption()` donne à un tableau un **titre qui survit à un pipeline dplyr**, et chaque exportateur l'utilise comme titre du tableau :
+**Titrer et annoter.** `subtext =` imprime une ou plusieurs lignes de légende sous un tableau (un champ, une source de données, une note, etc.). `set_caption()` donne à un tableau un titre que chaque exportateur affiche ensuite en-dessus du tableau :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, marital, pct = "row", subtext = "Source : GSS, 2000-2014") |>
@@ -343,15 +343,15 @@ tab(gss_simple, race, marital, pct = "row", subtext = "Source : GSS, 2000-2014")
 
 ## Composition des intervalles de confiance et des couleurs : type de variable × `color` × `color_signif`
 
-Cette section est la référence derrière les deux sections sur les couleurs ci-dessus. Elle montre comment les paramètres s'articulent — le **type de variable**, la **mesure** que l'on colore (`color`) et la **politique de significativité** (`color_signif`).
+Cette section est la référence derrière les deux sections sur les repères de couleurs ci-dessus. Elle montre comment les paramètres s'articulent — le **type de variable**, la **mesure** que l'on colore (`color`) et la **politique de significativité** (`color_signif`).
 
-Le **type** est fixé par la variable en colonne — un **facteur** (des pourcentages sont calculés, `pct`) ou une **numérique** (des moyennes sont calculées, `mean`). La variable en ligne est toujours transformée en facteur.
+Le **type** est fixé par la variable en colonne — une **variable catégorielle** ou `factor` (des pourcentages sont calculés, `pct`) ou une **variable numérique** (des moyennes sont calculées, `mean`). La variable en ligne est toujours transformée en variable catégorielle.
 
 Tout tableau coloré répond à trois questions :
 
 - **Comment mesurer l'écart ?** `color =` choisit ce qu'une couleur *signifie* : `"diff"` (distance à la référence), `"ratio"` (risque relatif pour les pourcentages, rapport de moyennes pour les moyennes), `"contrib"` (poids dans le Chi2), `"OR"` (rapport de cotes). `color = TRUE` en choisit un sensé par type de colonne.
-- **Quelle confiance a-t-on dans cette mesure ?** chaque couleur lit un **intervalle de confiance** au seuil `conf_level` (95 % par défaut). Une case est *significative* quand cet intervalle exclut sa valeur neutre — **0** pour une différence, **1** pour un rapport ou un rapport de cotes. Le crochet imprimé, les étoiles de significativité et le grisage lisent tous ce même intervalle, donc ils ne peuvent jamais se contredire.
-- **Comment montrer la significativité ?** `color_signif` — `"ignore"`, `"grey_non_signif"` ou `"guaranteed_effect"` ; `stars = TRUE` pour utiliser des étoiles de significativité au lieu des couleurs, ou empilées avec elles.
+- **Quelle confiance a-t-on dans cette mesure ?** Chaque couleur lit un **intervalle de confiance** au seuil `conf_level` (95 % par défaut). Une case est *significative* quand cet intervalle exclut sa valeur neutre — **0** pour une différence, **1** pour un rapport ou un rapport de cotes. Les chiffres entre crochets, les étoiles de significativité et les couleurs utilisent tous ce même intervalle, et par construction ne se contredisent pas.
+- **Comment montrer la significativité ?** `color_signif` — `"ignore"`, `"grey_non_signif"` ou `"guaranteed_effect"` ; `stars = TRUE` pour utiliser des étoiles de significativité en plus des couleurs, ou à leur place.
 
 **L'intervalle de confiance utilisé pour les couleurs et les étoiles** compare chaque case à sa case de référence (par défaut, la case correspondante dans la ligne ou la colonne Total) :
 
@@ -367,11 +367,11 @@ Tout tableau coloré répond à trois questions :
 Méthodes d'intervalle alternatives (voir `?tab_ci`) :
 
 - `method_diff = "ac"` (Agresti-Caffo) ou `"wald"` pour une différence de pourcentages ;
-- `method_mean_diff = "student"` (à variance commune, l'intervalle à deux groupes des MCO) pour une différence de moyennes ;
+- `method_mean_diff = "student"` (à variance commune, l'intervalle à deux groupes d’une regression linéaire) pour une différence de moyennes ;
 - `method_mean_ratio = "quasipoisson"` ou `"poisson"` pour un rapport de moyennes.
 - Les intervalles du risque relatif (`method_ratio = "katz"`) et du rapport de cotes (Woolf) n'ont pas d'alternative.
-- Une **différence** de moyennes est colorée **standardisée** — le Δ de Glass, la différence divisée par l'écart-type de la référence — donc les seuils de couleur `mean_diff` se lisent en unités d'écart-type, sauf si l'utilisateur fournit une échelle de seuils personnalisée.
-- Pour un facteur à **3 modalités ou plus**, le rapport de cotes (et son intervalle) compare chaque modalité à la modalité de base `ref2` : c'est un rapport de risques relatifs (RRR) (la même quantité observée que celle modélisée par une régression logistique multinomiale). L'intervalle de l'OR n'est calculé que lorsque `color_signif` ou `stars` en a besoin.
+- Une **différence** de moyennes est, par défault, **standardisée** : les seuils de couleur `mean_diff` se lisent en unités d'écart-type (Δ de Glass, différence divisée par l'écart-type de la référence), sauf si l'utilisateur fournit une échelle de seuils personnalisée avec `set_color_breaks(mean_diff = c(100, 200, 500))`.
+- Pour un facteur à **3 modalités ou plus**, l’*odds-ratio* ou rapport de cotes (et son intervalle) compare chaque modalité à la modalité de base `ref2` : c'est un rapport de risques relatifs (RRR) (la même quantité observée que celle modélisée par une régression logistique multinomiale).
 
 **Les intervalles de confiance simples, case par case** (`ci = "cell"`) comparent chaque case à 0 % (ou à une moyenne de 0), *et non* à une référence :
 
@@ -380,14 +380,14 @@ Méthodes d'intervalle alternatives (voir `?tab_ci`) :
 | pct  | `cell` | intervalle score de Wilson       | `method_cell = "wald"` (normal) |
 | mean | `cell` | *t* de Student à un échantillon (n-1) | —                          |
 
-Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `method_cell` choisit `"wilson"` (défaut) ou `"wald"` pour les pourcentages ; un intervalle de case pour une moyenne est toujours le *t* de Student à un échantillon.
+Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `method_cell` choisit `"wilson"` (défaut) ou `"wald"` pour les pourcentages ; pour une moyenne, un intervalle de confiance au niveau de chaque case est toujours le *t* de Student à un échantillon.
 
-**`color_signif` transforme cet intervalle en politique de coloration.**
+**`color_signif` transforme cet intervalle en repères de couleur.**
 
-- `"ignore"` colore **chaque** case selon la taille de son **effet observé**, par exemple la différence observée avec la ligne Total. Les cases grises ont un effet observé sous le seuil (par exemple, des différences de moins de ±5 points de pourcentage).
-- `"grey_non_signif"` et `"guaranteed_effect"` colorent tous deux **seulement les cases significatives**, mais diffèrent par la *base d'intensité* :
-  + `grey_non_signif` colore selon l'effet **observé**, comme « ignore », en grisant les petits écarts, mais il **grise aussi tout grand écart qui se révèle non significatif**. Idéal pour les grands échantillons.
-  + `guaranteed_effect` colore selon l'effet **garanti** — la borne de confiance (le plancher de l'IC), le **plus petit écart assuré à un seuil de confiance donné** (95 % par défaut) — donc ses couleurs sont plus ternes et prudentes, mais **toutes les différences significatives sont colorées**, ce qui est idéal pour les petits échantillons.
+- `"ignore"` colore **chaque** case selon la taille de son **effet observé**, par exemple la différence observée avec la ligne Total. Les cases grises ont un effet observé sous le seuil (par exemple, des différences en-dessous de ±5 points de pourcentage).
+- `"grey_non_signif"` et `"guaranteed_effect"` colorent tous deux **seulement les cases significatives**, mais diffèrent par la manière dont ils mesurent l’intensité de l’écart/de la couleur :
+  + `grey_non_signif` colore selon l'effet **observé**, comme « ignore », en grisant les petits écarts, mais il **grise aussi tout écart important qui se révèle non significatif**. Idéal pour les grands échantillons.
+  + `guaranteed_effect` colore selon l'effet **garanti** — la borne de confiance (le plancher de l'intervalle de confiance), soit **l’écart, plus petit, qui est assuré à un seuil de confiance donné** (95 % par défaut). Ses couleurs sont plus faibles et plus prudentes, mais **toutes les différences significatives sont colorées**, ce qui est idéal pour les petits échantillons.
 
 | type | color     | `="ignore"`      | `="grey_non_signif"`               | `="guaranteed_effect"`         |
 |------|-----------|------------------|------------------------------------|--------------------------------|
@@ -416,9 +416,9 @@ tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signi
     color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
 ```
 
-## Options de session
+## Options de session R
 
-Une poignée d'`options()` fixent vos préférences par défaut, une fois pour toute la session — placez-les en haut d'un script, ou dans votre `.Rprofile`. Chacune a aussi un argument par appel ; l'option ne fait que changer la valeur par défaut. Les plus courantes :
+Une poignée d'`options()` fixent les préférences par défaut, une fois pour toute la session R — placez-les en haut d'un script, ou dans votre `.Rprofile`. La plupart sont également modifiable directement dans `tab()` ou `tab_reg()` :
 
 - `options(tabxplor.print = "html")` — afficher les tableaux non pas dans la console, mais en html dans le panneau Viewer de RStudio ou Positron par défaut (recommandé)
 - `options(tabxplor.cleannames = TRUE)` — retirer partout les préfixes de type `"1-"` des noms de modalités.
@@ -434,10 +434,10 @@ Les seuils de couleur et les palettes ont leurs propres fonctions, `set_color_br
 
 ## Une interface graphique (jamovi)
 
-Tout ce qui précède est aussi disponible **sans écrire de code R**, via un module [jamovi](https://www.jamovi.org/download). jamovi est un logiciel statistique libre et gratuit : installez-le, ouvrez le menu des modules (le **`+`** en haut à droite), choisissez **jamovi library**, et installez *tabxplor*. Il ajoute une analyse **Crosstables** — et une analyse **Regressions** propulsée par `tab_reg()` — avec les mêmes tableaux colorés et exportables, pilotés entièrement par des menus. Pratique pour l'enseignement, ou pour des collègues qui n'utilisent pas R.
+Tout ce qui précède est aussi disponible **sans écrire de code R**, via un module [jamovi](https://www.jamovi.org/download). jamovi est un logiciel statistique libre et gratuit : installer, ouvrir le menu des modules (le **`+`** en haut à droite), choisir **jamovi library**, et installer *tabxplor*. Le module comprend une analyse **Tableaux croisés** correspondant à `tab()`, et une analyse **Modèles de regression** qui appelle `tab_reg()`. Pratique pour l'enseignement, ou pour des collègues qui n'utilisent pas R.
 
 ## Pour aller plus loin
 
-- `vignette("tabxplor-reg")` — les tableaux de régression avec `tab_reg()`, et la comparaison entre effets modélisés et observés.
-- `vignette("tabxplor-programming")` — le type de cellule `tabxplor_fmt` et comment programmer avec ses champs.
-- `?tab` pour chaque argument (groupés par usage), `?tab_ci` pour les méthodes d'intervalle de confiance, et `?tabxplor-options` pour les réglages par défaut du paquet.
+- `vignette("tabxplor-reg")` — les modèles de régression avec `tab_reg()`, et la comparaison entre effets modélisés et effets observés.
+- `vignette("tabxplor-programming")` — le type de vecteur R `tabxplor_fmt` et comment programmer avec ses champs `vctrs`.
+- `?tab` pour obtenir l’aide sur chaque argument, `?tab_ci` pour le détail des méthodes d'intervalle de confiance, et `?tabxplor-options` pour les réglages par défaut du package.

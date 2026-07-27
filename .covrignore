@@ -1,0 +1,29 @@
+# Files excluded from test-coverage measurement (covr reads this automatically; one glob per line,
+# relative to the package root). `.Rbuildignore`d, so it never ships in the tarball.
+#
+# The rule for this list: a file belongs here only when coverage is MEANINGLESS (the file is not
+# hand-written R that a test could call) or IMPOSSIBLE (it needs a runtime we cannot start in a test
+# process). "Untested but testable" does NOT belong here -- hiding that would remove the signal.
+
+# --- Meaningless: auto-generated ------------------------------------------------------------
+# Emitted by `jmvtools::prepare()` from the jamovi .a.yaml (CLAUDE.md: "auto-generated, do not
+# edit"). 964 lines of option-class scaffolding that no R test can call, and that we must never
+# hand-edit -- so a coverage figure for them is noise, and it dominated the headline number.
+R/jmvtab.h.R
+R/jmvtabreg.h.R
+
+# --- Impossible: needs a live jamovi session ------------------------------------------------
+# The R6 analysis backends. Their methods run inside jamovi's own Analysis lifecycle (jmvcore
+# results objects, $state persistence, the option/results plumbing); there is no jamovi process in
+# a testthat run. The engine-free logic they orchestrate is deliberately factored OUT into
+# jmvtab-cache.R / jmvtabreg-cache.R / jmvtab-export.R, which ARE tested (87-93%).
+R/jmvtab.b.R
+R/jmvtabreg.b.R
+
+# --- Deliberately NOT excluded --------------------------------------------------------------
+# R/tab-steps-legacy.R    exported (superseded) public API -- tab_pct()/tab_tot()/tab_totaltab().
+#                         Was 0% (its only test calls were commented out at test-tab.R:272-307);
+#                         test-steps-legacy.R now covers it. Testable, so it stays measured.
+# R/tab-parallel.R        real code, only under-measured because test-parallel-parity.R skips
+#                         under covr (killed mirai daemons truncate covr's trace files). It is
+#                         still run in full by devtools::test() and R-CMD-check on all 5 platforms.
