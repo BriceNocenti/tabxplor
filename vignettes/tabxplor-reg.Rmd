@@ -154,6 +154,56 @@ gss_simple |>
 
 
 
+### Risk ratios: "how many times more likely?"
+
+An odds ratio is **not** a "times more likely". The two are close only when the outcome is **rare**; as
+soon as it is common — above roughly 10%, which covers most survey questions — the odds ratio sits much
+further from 1 than the ratio of probabilities, so reading `Model_OR = 0.41` as "41% as likely to be
+married" overstates the gap. There is a second reason to care: an odds ratio is *non-collapsible*, which
+means it moves when you add a covariate **even if that covariate is not a confounder** — so comparing
+`Model_OR` across nested models is not valid. Risk ratios do not have that problem.
+
+tabxplor gives you two ways to get a **risk ratio** (RR), and on real data they agree closely.
+
+The first keeps the familiar logistic model and just asks for the effect as a ratio, with
+`effect = "ame_ratio"`. Each cell shows the risk ratio and, in parentheses, the same adjusted predicted
+probability as the AME column:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
+        effect = "ame_ratio", empirical = TRUE)
+```
+
+`Model_RR` now reads plainly: "comparing Black and White respondents alike in income, age and religion,
+Black respondents are about 0.61 times as likely to be married" — and `Obs_RR` is the same quantity
+computed straight from the data, with no model. The cell is coherent by construction: the reference
+probability multiplied by the risk ratio gives the level's probability (`51.3% × 0.61 ≈ 31.5%`), which is
+the multiplicative counterpart of the additive AME identity above.
+
+The second route changes the model itself: with a **binary outcome**, `family = "poisson"` fits a
+*modified Poisson* regression (Zou 2004), whose coefficients are risk ratios directly:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
+        family = "poisson", empirical = TRUE)
+```
+
+This is strictly opt-in — a binary outcome still defaults to logistic — and tabxplor tells you when it
+switches. Which to choose? `effect = "ame_ratio"` keeps the well-behaved logistic fit and can never
+predict a probability above 100%; `family = "poisson"` is the form epidemiologists will recognise, and it
+is unaffected by the caveat that a marginal ratio is standardized to the sample at hand (so under
+`split_var` each group standardizes to its own subpopulation). Neither is for prediction: with the
+Poisson route the log link is unbounded, so fitted probabilities can exceed 1.
+
+For readers who want the technical detail: standard errors are handled consistently in both cases.
+Fitting a Poisson likelihood to a 0/1 outcome is a deliberate misspecification, so the naive standard
+errors would be too wide; tabxplor replaces them with the robust **Huber–White sandwich**, via
+`survey::svyglm()` — which means the design-based variance when you supply survey weights, and the
+equivalent of `HC0` otherwise. The observed companion follows the same estimand throughout: `Obs_RR` is
+the crude risk ratio with a Katz interval, never the crude odds ratio. The modified Poisson needs a
+reasonable sample (n of at least about 100), and since a quasi-likelihood has no true likelihood its
+footer reports N and a Wald-vs-null test instead of AIC/BIC.
+
 ## Grouped-binomial outcomes (a summed score)
 
 When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability. `score_from_lv1()` (see `vignette("tabxplor-programming")`) builds such a score by counting factors at their first level:

@@ -11,7 +11,7 @@ tab_reg(
   split_var = NULL,
   wt = NULL,
   family = "auto",
-  effect = c("coefficient", "ame"),
+  effect = c("coefficient", "ame", "ame_ratio"),
   at = c("average", "reference"),
   exponentiate = TRUE,
   trials = NULL,
@@ -75,6 +75,26 @@ dependent; a \strong{vector} aligned to \code{dependent}, or a \strong{named} ve
 families work only with a character \code{predictors} (one model per outcome); a \code{predictors} list
 (model comparison) is single-outcome, hence single-family.
 
+\strong{A binary outcome with \code{family = "poisson"} (modified Poisson).} Asking for \code{"poisson"} on a
+binary outcome is not a mistake and not a count model: it fits the \strong{modified Poisson regression}
+(Zou 2004), whose exponentiated coefficient is a \strong{risk ratio} (RR), not an odds ratio. It is
+strictly opt-in --- a binary outcome still auto-detects as \code{"binomial"}; you must name \code{"poisson"}.
+Reach for it when the outcome is \strong{common} (above roughly 10\%), where an odds ratio is much further
+from 1 than the risk ratio and is almost always narrated as if it were one ("twice as likely"), and
+when you compare a coefficient \strong{across nested models}, which an odds ratio does not support (it is
+non-collapsible: it moves when you add a covariate even if that covariate is not a confounder).
+\strong{Standard errors are handled consistently}: the Poisson likelihood is deliberately
+misspecified for a 0/1 outcome, so the naive standard errors are too wide and are replaced by the
+robust \strong{Huber--White sandwich} --- via \code{survey::svyglm()} in both cases, which means the
+design-based variance when you supply \code{wt}/\code{ids}/\code{strata}, and the equivalent of \code{HC0} on a
+constant-weight design when you do not. The observed companion (\code{empirical = TRUE}) follows the same
+estimand: \code{Obs_RR} is the crude \strong{risk} ratio with a Katz interval, not the crude odds ratio.
+Two caveats: the log link is unbounded above, so predicted probabilities can exceed 1 --- the model
+is for \strong{effect estimation, not prediction}; and the sandwich needs a decent sample (n of at least
+about 100). \code{method = "profile"} is not available (a quasi-likelihood has no profile), and the
+footer reports N and a Wald-vs-null test rather than AIC/BIC/pseudo-R2, which a quasi-likelihood
+does not define.
+
 \strong{Over-dispersed counts.} An unweighted \code{"poisson"} fit auto-scales its standard errors by
 the square root of the Pearson dispersion, so with an over-dispersed outcome (dispersion clearly
 above 1) its CIs and p-values are \strong{identical to \code{"quasipoisson"}}, and it \strong{warns} to say so
@@ -94,7 +114,24 @@ averaged), so it is genuinely covariate-adjusted and coheres with the effect ---
 \item AME(level) equals adjusted-\%(level). Read it as a standardized comparison ("holding the measured
 covariates' distribution fixed"), not a manipulation. Requires the \code{marginaleffects} package. A
 multinomial / ordinal outcome gets one AME column per outcome category.
-}}
+}
+
+\code{"ame_ratio"} is the same quantity as a \strong{ratio} instead of a difference: the \strong{marginal risk
+ratio} (RR), i.e. the ratio of those adjusted predicted probabilities, with the adjusted
+probability again in parentheses (e.g. \verb{0.62*** (32\%)}). Its cell is coherent by construction, the
+multiplicative twin of the AME identity --- adjusted-\%(reference) * RR(level) equals
+adjusted-\%(level). Reach for it for the same reason as the modified Poisson (see \code{family}): with a
+\strong{common} outcome an odds ratio is not a risk ratio and should not be narrated as one, and unlike
+the odds ratio a risk ratio stays comparable \strong{across nested models}. The two routes answer
+slightly different questions --- \code{ame_ratio} gives a \strong{marginal} (population-averaged) risk ratio
+from the familiar logistic fit and can never predict a probability above 1, while
+\code{family = "poisson"} gives a \strong{conditional} one; on real data they agree closely. Standard errors
+are the delta-method interval on the log ratio (design-based when the model is weighted), and the
+observed companion is the crude risk ratio \code{Obs_RR} with a Katz interval --- the same estimand.
+Requires \code{marginaleffects}; \strong{probability-scale outcomes only} (binomial / multinomial / ordinal),
+since a ratio of adjusted means or counts has no such interpretation. One caveat worth knowing:
+the estimate is standardized to the covariate distribution of the sample at hand, so under
+\code{split_var} each group standardizes to \strong{its own} subpopulation.}
 
 \item{at}{Where the profile-conditional quantities are evaluated (needs \code{marginaleffects}).
 \code{"average"} (default) is the sample average (the AME / adjusted prediction over the data).
@@ -315,7 +352,15 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
   # marginal effects at the reference profile (others at their reference level / mean):
   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
                 family = "binomial", effect = "ame", at = "reference")
+  # the same quantity as a RATIO: marginal risk ratios beside the crude ones. With a common
+  # outcome this is what a reader means by "x times more likely" -- an odds ratio is not.
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+                family = "binomial", effect = "ame_ratio", empirical = TRUE)
 }
+# modified Poisson (Zou 2004): a binary outcome + family = "poisson" gives conditional RISK
+# ratios with robust standard errors. Opt-in -- a binary outcome still defaults to logistic.
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+                family = "poisson", empirical = TRUE)
 # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
   tab_reg(reg_data, dependent = "party3", predictors = c("race", "age"),
                 family = "multinomial", reference = c(party3 = "3-Republican"))

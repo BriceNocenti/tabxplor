@@ -453,6 +453,12 @@ NULL
 #'   [tab_chi2()] (statistical tests), [tab_pct()] / [tab_tot()] (percentages and totals).
 #'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
 #'   [tab_plot()]. Package-wide defaults live in [tabxplor-options].
+#'
+#'   `color = "contrib"` shows each cell's departure from the **log-linear model of independence**
+#'   (that is what the chi-squared is), so it reads as a heatmap of the association pattern. For the
+#'   specialist contingency-table models built on top of it --- quasi-independence, Goodman's RC
+#'   association models, UNIDIFF --- see the \pkg{logmult} package
+#'   (\url{https://cran.r-project.org/package=logmult}), which also supports complex survey designs.
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
                 OR = "no", test = FALSE,

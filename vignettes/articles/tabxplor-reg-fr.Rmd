@@ -147,6 +147,63 @@ gss_simple |>
 
 
 
+### Rapports de risques : « combien de fois plus de chances ? »
+
+Un rapport de cotes (*odds ratio*) n'est **pas** un « combien de fois plus de chances ». Les deux ne se
+confondent que si le phénomène est **rare** ; dès qu'il est fréquent — au-delà d'environ 10 %, ce qui
+couvre la plupart des questions d'enquête — le rapport de cotes s'éloigne de 1 bien plus que le rapport
+des probabilités, si bien que lire `Model_OR = 0.41` comme « 41 % de chances d'être marié » exagère
+l'écart. Il y a une seconde raison d'y prendre garde : un rapport de cotes est *non collapsible*,
+c'est-à-dire qu'il bouge quand on ajoute une variable de contrôle **même si celle-ci n'est pas une
+variable de confusion** — comparer `Model_OR` entre modèles emboîtés n'est donc pas valide. Les rapports
+de risques n'ont pas ce défaut.
+
+tabxplor propose deux façons d'obtenir un **rapport de risques** (RR) ; sur données réelles, elles
+donnent des résultats très proches.
+
+La première conserve le modèle logistique habituel et demande simplement l'effet sous forme de rapport,
+avec `effect = "ame_ratio"`. Chaque case affiche le rapport de risques et, entre parenthèses, la même
+probabilité prédite ajustée que la colonne AME :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
+        effect = "ame_ratio", empirical = TRUE)
+```
+
+`Model_RR` se lit alors très simplement : « à revenu, âge et religion comparables, les personnes noires
+ont environ 0,61 fois autant de chances d'être mariées » — et `Obs_RR` est la même quantité calculée
+directement sur les données, sans modèle. La case est cohérente par construction : la probabilité de
+référence multipliée par le rapport de risques donne celle de la modalité (`51,3 % × 0,61 ≈ 31,5 %`),
+ce qui est le pendant multiplicatif de l'identité additive de l'AME ci-dessus.
+
+La seconde voie change le modèle lui-même : avec une variable expliquée **binaire**,
+`family = "poisson"` ajuste une régression de *Poisson modifiée* (Zou 2004), dont les coefficients sont
+directement des rapports de risques :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
+        family = "poisson", empirical = TRUE)
+```
+
+C'est strictement optionnel — une variable binaire reste par défaut logistique — et tabxplor vous
+prévient quand il bascule. Laquelle choisir ? `effect = "ame_ratio"` conserve l'ajustement logistique,
+bien conditionné, et ne peut jamais prédire une probabilité supérieure à 100 % ; `family = "poisson"` est
+la forme que reconnaîtront les épidémiologistes, et elle échappe à la réserve suivante : un rapport
+marginal est standardisé sur la composition de l'échantillon considéré (avec `split_var`, chaque groupe
+est donc standardisé sur sa propre sous-population). Aucune des deux n'est faite pour la prédiction :
+avec la voie Poisson, la fonction de lien logarithmique n'est pas bornée, donc les probabilités ajustées
+peuvent dépasser 1.
+
+Pour les lectrices et lecteurs qui veulent le détail technique : les erreurs-types sont traitées de
+façon cohérente dans les deux cas. Ajuster une vraisemblance de Poisson à une variable 0/1 est une
+mauvaise spécification délibérée, si bien que les erreurs-types naïves seraient trop larges ; tabxplor
+les remplace par le **sandwich de Huber-White** robuste, via `survey::svyglm()` — c'est-à-dire la
+variance fondée sur le plan de sondage lorsque des pondérations sont fournies, et l'équivalent de `HC0`
+sinon. La colonne observée suit partout le même estimande : `Obs_RR` est le rapport de risques brut avec
+un intervalle de Katz, jamais le rapport de cotes brut. La Poisson modifiée demande un échantillon
+raisonnable (n d'au moins 100 environ), et comme une quasi-vraisemblance n'a pas de vraisemblance au sens
+strict, son pied de tableau indique N et un test de Wald contre le modèle nul plutôt que l'AIC/BIC.
+
 ## Variables expliquées binomiales groupées (un score sommé)
 
 Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*. `score_from_lv1()` (voir `vignette("tabxplor-programming")`) construit un tel score en comptant le nombre de variables catégorielles choisies d’après leur première modalité :

@@ -290,6 +290,15 @@ tab(gss_simple, race, party3, color = "contrib")
 # tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns
 ```
 
+If you have met **log-linear models** for contingency tables (Goodman's tradition, familiar from social
+mobility research), this colouring is their descriptive core: the chi-squared *is* the log-linear model
+of independence, and each cell's contribution is its departure from it — so a `color = "contrib"` table
+is a heatmap of the association pattern, read at a glance. For the specialist models built on top of
+that — quasi-independence, RC association models, UNIDIFF for comparing fluidity across groups or
+cohorts — use the [logmult](https://cran.r-project.org/package=logmult) package, which also supports
+complex survey designs. (Note that "log-linear" in this sense means models of *cell counts* in a table;
+it is unrelated to `tab_reg(family = "poisson")`, which models an individual outcome.)
+
 See below for the detail of how confidence intervals and colors can be composed.
 
 ## Hover tooltips (html tables)

@@ -1650,7 +1650,69 @@ clusters are environment-specific and invisible on the maintainer's box.
 
 #### Last Phase z3 — very last new features : ratio marginal effects and poisson regression for binomial
 
+**DONE (2026-08-05).** Full suite green (FAIL 0, WARN 0, SKIP 4, PASS 4349 = +57, exactly the new test
+file), **zero golden/snapshot churn** — both features are new opt-in paths, so nothing existing moved.
+Design study + measurements: `dev/poisson_vs_logistic_binary_outcome.md`.
 
+**Why**: with a common outcome (>10 %, the survey norm) an OR is not a "times more likely" — measured
+OR 2.53 where the RR is 1.64 — and it is **non-collapsible**, so comparing `Model_OR` across nested
+models (what `predictors = list(...)` invites) is invalid. Two orthogonal routes now give a risk ratio.
+
+- **`effect = "ame_ratio"`** (marginal standardization / g-computation on the ordinary logistic fit).
+  `reg_marginal()` already had a `comparison=` formal and a multiplicative `"lnor"` branch, so this is
+  `comparison = "lnratioavg"` + one generalised label parse (`ln(odds(L)/odds(R))` and
+  `ln(mean(L)/mean(R))` share the double-paren shape). New `reg_marginal_column()` shape
+  **`"prob_ratio"`** = `"{or} ({pct})"`, coherent by construction (adjusted%(ref) × RR ==
+  adjusted%(level), verified to 1e-13); the reference cell keeps the FULL template with `or = 1`, not
+  `"({pct})"`, whose `display_primary` is `pct` and would attach a stray `cond_or` hover. Guarded to
+  probability-scale families. `Obs_RR` (Katz) is the crude twin on BOTH model paths.
+- **`family = "poisson"` on a BINARY outcome** = modified Poisson (Zou 2004), resolved at ONE site (the
+  `families_vec` loop) to the **internal family key `"rr"`**, deliberately absent from `valid_families`
+  so a user reaches it only through `family = "poisson"` (with a `cli_inform`). Auto-detection still
+  returns `"binomial"`. The variance is the **sandwich**: `"rr"` always fits through `svyglm` (an
+  unweighted call gets `reg_make_design`'s constant-weight `ids = ~1` design) — measured exactly
+  HC0 × √(n/(n−1)), and `reg_build_digest()` stores `vcov(fit)`, which for an svyglm IS the sandwich, so
+  the jamovi reref contract needed no special case. `reg_prep_binary()` then coerces to 0/1 **numeric**
+  (a factor response errors in `glm(poisson)`). Footer = n + Wald-vs-null only (a quasi-likelihood has
+  no AIC/BIC/McFadden; binary Pearson dispersion is just mean(1−μ)); `method = "profile"` refused with a
+  message; `reg_compare_rows` takes the design-based Wald branch.
+- **Net simplification** (the maintainer's explicit ask): four shared predicates next to
+  `reg_detect_family()` — `reg_is_binary_outcome()` / `reg_fam_binary()` / `reg_fam_prob()` /
+  `reg_fam_logscale()` — replaced 11 bare `== "binomial"` tests, 4 probability-scale lists, and the
+  log-scale whitelist that was written **twice verbatim** in `fmt_class.R` (:2753 + :3655, a
+  sync-by-comment pair the comment itself admitted). Because `"rr"` is a family VALUE, the three most
+  dangerous guards (`over_disp` φ-scaling, `disp_known`, `use_profile`) exclude it *by construction* —
+  they could not be forgotten. A flag beside `family` would have needed all three kept in sync.
+- **jamovi** (inert until `prepare()` + rebuild): a 2-level factor's family dropdown gains `poisson`
+  with a binary-context label ("poisson (risk ratio)"); third `effect` option `ame_ratio`; `effect_3`
+  radio + `at` enabled for both marginal estimands; `anyProbScale()` greys `ame_ratio` when no outcome
+  is probability-scale. `.h.R` untouched (generated).
+- **Docs**: `?tab_reg` `@param family`/`@param effect` (estimand, >10 % rule, non-collapsibility,
+  fitted values can exceed 1, n ≥ 100, SE handling, the `split_var` standardization caveat) + 2
+  examples; a "Risk ratios" section in the EN and FR regression vignettes; NEWS. Also the **Goodman
+  note**: `color = "contrib"` IS the departure from the log-linear model of independence — documented in
+  both intro vignettes and `?tab`'s `@seealso`, pointing at **logmult** for RC/UNIDIFF. ⚠ Never write
+  "log-linear" for the modified Poisson: in sociology that phrase names Goodman's contingency-table
+  models (report §1.6); a test asserts it.
+- **OPEN — maintainer step**: `po/R-fr.po` has the 6 new French msgids, but
+  `inst/po/fr/LC_MESSAGES/R-tabxplor.mo` could NOT be recompiled — the box has no `msgfmt`/`msgmerge`
+  (only `gettext-base`), so `potools::po_update`/`po_compile` fail. Install `gettext`, then
+  `Rscript dev/update_translations.R`. The new French strings stay untranslated at runtime until then.
+
+#### Last Phase z4 — very last new features: standardised raw chi2 contributions
+
+In tab(), I want to add a way to add standardised raw chi2 contributions, SPSS way. First, I want you to make researches and think about the best overall framework to do that. Read `\dev\tabxplor_missing_features_audit.md`, `dev/new_colors_UI.md` and make web searches. We’ll implement it next.
+- `color = "standardised contrib"` ? We’ll keep `color = "contrib"` anyway, since it’s what matches what a simple correspondence analysis would do.
+- What standardised residuals to use here and how to use them ? What is the standard practice ? If it’s not the same, what is the modern, user-friendly, interpretable practice ? Make very detailed web searches.
+- Would it works well with the three `color_signif` possibilities, in a strong statistical meaning, and is it standard practice ? 
+- Currently, `color_signif` with `color = "contrib"` use raw residuals / absolute chi2 contributions as a threshold to calculate colors, so large cells dominate. I wonder if it’s statistically sound with understandardised residuals (does the >2 = notable rule work here ?) ? On the opposite direction, with standardised residuals and `color_signif`, isn’t there a risk to color highlight meaningless cells (high deviation with small counts) ?
+- Write your detailed report in a new .md file in `dev/`.
+
+#### Last Phase z5 — very last new features: comparison between modelisez effect and observed effect
+
+In `tab_reg` with `empirical=TRUE`, to reinforce comparison between modelised effect and observed effect, I would want to add a new color measure based on the difference between observed and modelised effect.
+- Observed effects should be the reference columns for comparisons. They should be additive or multiplicative etc. depending on their type.
+- Would there be 
 
 
 

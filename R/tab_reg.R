@@ -147,15 +147,33 @@ reg_parse_formula <- function(formula, data) {
        formula = formula, lhs_is_name = lhs_is_name, simple = simple)
 }
 
+# DESIGN (Last Phase z3): the family PREDICATES. Every "which families behave like X" question is asked
+# here ONCE instead of by a hand-written whitelist at each call site (there were 11 bare `== "binomial"`
+# tests, 4 probability-scale lists, and the log-scale list written TWICE verbatim in fmt_class.R). The
+# internal family key "rr" (modified Poisson on a binary outcome, see the families_vec resolver in
+# tab_reg()) joins the binary + log-scale sets here and nowhere else.
+# WARNING: `reg_fam_logscale()` is read by fmt_class.R's colour engine AND its legend -- it is the single
+# source that replaced their sync-by-comment pair. Keep it set-identical for the pre-existing families.
+reg_is_binary_outcome <- function(y) length(unique(stats::na.omit(y))) == 2L
+# the binary-outcome machinery: reg_prep_binary / positive_level / the crude 2x2 companion.
+reg_fam_binary   <- function(f) f %in% c("binomial", "rr")
+# probability-scale outcomes: a marginal effect is a probability (percentage points / a risk ratio).
+reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
+# coefficients that live on a LOG scale, so an un-exponentiated coef colours on the logged OR breaks
+# (log_odds_scale) rather than the SD-standardized mean_diff scale. gaussian is the only family out.
+reg_fam_logscale <- function(f)
+  f %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial", "rr")
+
 # Auto-detect the model family from the outcome (a message is emitted). The safe data-driven rules
 # (S37 D2): 0/1 or any 2-level outcome -> binomial; an ORDERED factor with 3+ levels -> ordinal
 # (proportional-odds); an UNORDERED factor / character with 3+ levels -> multinomial; a non-integer
 # numeric -> gaussian. An integer/count with 3+ values stays ambiguous (poisson vs grouped-binomial
-# vs gaussian) and must be named explicitly.
+# vs gaussian) and must be named explicitly. A binary outcome is ALWAYS binomial here: the modified
+# Poisson (risk-ratio) path is opt-in via an explicit family = "poisson" (Last Phase z3).
 reg_detect_family <- function(data, dependent) {
   y <- data[[dependent]]
   u <- unique(stats::na.omit(y))
-  if (length(u) == 2L) {
+  if (reg_is_binary_outcome(y)) {
     cli::cli_inform(c("i" = paste0(
       "{.val {dependent}}: binary outcome detected -> {.code family = \"binomial\"} (logistic)."
     )))
@@ -192,11 +210,13 @@ reg_detect_family <- function(data, dependent) {
 # header). effect="ame" -> "AME" (average marginal effect, response scale). Otherwise: additive (raw)
 # -> beta ; multiplicative -> OR (binomial) / IRR (poisson) / exp(beta).
 reg_effect_word <- function(family, do_exp, effect = "coefficient", at = "average") {
+  if (effect == "ame_ratio") return("RR")   # marginal RISK RATIO (ratio of adjusted probabilities)
   if (effect == "ame") return(if (at == "reference") "MER" else "AME")   # marginal effect at reference
   if (!do_exp) return("\u03b2")                  # beta (raw / log-odds coefficient)
   switch(family,
          "binomial" = , "multinomial" = , "ordinal" = "OR",
          "poisson" = , "quasipoisson" = "IRR",
+         "rr" = "RR",                                # modified Poisson on a binary outcome: risk ratio
          "exp(\u03b2)")
 }
 
@@ -210,6 +230,7 @@ reg_family_display_name <- function(family) {
     "binomial"     = gettext("logistic regression"),
     "poisson"      = gettext("Poisson regression"),
     "quasipoisson" = gettext("quasi-Poisson regression"),
+    "rr"           = gettext("modified Poisson regression"),
     "multinomial"  = gettext("multinomial logistic regression"),
     "ordinal"      = gettext("ordinal logistic regression"),
     gettext("regression"))
@@ -222,6 +243,7 @@ reg_family_short <- function(family) {
     "binomial"     = "logit",
     "poisson"      = "poisson",
     "quasipoisson" = "qpoisson",
+    "rr"           = "rr",
     "multinomial"  = "mlogit",
     "ordinal"      = "ologit",
     "reg")
@@ -233,8 +255,18 @@ reg_family_short <- function(family) {
 # Last Phase w: translatable (gettext); runs inside a with_legend_lang() context (see reg_model_lines /
 # reg_title). Notation (OR/IRR/beta) lives in reg_effect_word, kept English; only this prose translates.
 reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average") {
+  # Last Phase z3: the ratio twin of the AME phrase. Guarded to prob-scale families upstream, so the
+  # "adjusted predicted probability" wording always applies. Name the quantity a RATIO OF PROBABILITIES,
+  # never a "log-linear model" -- in sociology that phrase means Goodman's contingency-table models.
+  if (effect == "ame_ratio") {
+    where <- if (at == "reference")
+      gettext(" at the reference profile (other predictors held at their reference level / mean)")
+    else gettext(" (sample-averaged)")
+    return(paste0(gettext("marginal risk ratios (the ratio of adjusted predicted probabilities)"), where,
+                  gettext("; each cell shows the ratio vs the reference level and, in parentheses, the adjusted predicted probability")))
+  }
   if (effect == "ame") {
-    prob  <- family %in% c("binomial", "multinomial", "ordinal")
+    prob  <- reg_fam_prob(family)
     where <- if (at == "reference")
       gettext(" at the reference profile (other predictors held at their reference level / mean)")
     else gettext(" (sample-averaged)")
@@ -254,6 +286,8 @@ reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average
     "poisson"      = ,
     "quasipoisson" = if (do_exp) gettext("incidence-rate ratios (vs the reference category)")
                      else        gettext("log-rate coefficients (vs the reference category)"),
+    "rr"           = if (do_exp) gettext("risk ratios (vs the reference category)")
+                     else        gettext("log-risk coefficients (vs the reference category)"),
     "multinomial"  = if (do_exp) gettext("odds ratios (each category vs the reference)")
                      else        gettext("log-odds coefficients (each category vs the reference)"),
     "ordinal"      = if (do_exp) gettext("cumulative odds ratios (proportional-odds model)")
@@ -363,7 +397,7 @@ reg_sheet_name <- function(meta) {
 # comparison mode (each model keeps its own col_var = model name, so borders separate the models, and the
 # outcome / reference / effect go in the title instead).
 reg_shared_col_var <- function(family, dependent, positive_level, cleannames) {
-  if (family == "binomial" && !is.null(positive_level) && !is.na(positive_level)) {
+  if (reg_fam_binary(family) && !is.null(positive_level) && !is.na(positive_level)) {
     pl <- reg_cleanup(positive_level, cleannames)
     paste0(dependent, ": ", pl)
   } else dependent
@@ -864,10 +898,22 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     },
     "poisson" = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
     "quasipoisson" = stats::quasipoisson("log"),
+    # Last Phase z3 -- modified Poisson on a binary outcome (Zou 2004). Same binary prep as the logistic
+    # arm (so `inverse_two_level_factors` and the positive-level label behave identically), then the
+    # factor is coerced to the 0/1 NUMERIC a log-link Poisson needs: glm(poisson) / svyglm both error on
+    # a factor response. quasipoisson (not poisson) in BOTH the weighted and unweighted case -- the fit
+    # goes through svyglm either way (see the dispatch below), and it also makes AIC/BIC return NA, which
+    # is the honest answer for a quasi-likelihood.
+    "rr" = {
+      mdata <- reg_prep_binary(mdata, dependent, inverse_two_level_factors)
+      positive_level <- attr(mdata, "positive_level")
+      mdata[[dependent]] <- as.numeric(mdata[[dependent]] == positive_level)
+      stats::quasipoisson("log")
+    },
     "gaussian" = stats::gaussian(),
     cli::cli_abort("Unsupported {.arg family}: {.val {family}}.")
   )
-  if (is.null(formula) && !grouped && family != "binomial" && !is.numeric(mdata[[dependent]])) {
+  if (is.null(formula) && !grouped && !reg_fam_binary(family) && !is.numeric(mdata[[dependent]])) {
     cli::cli_abort(c(
       "A {.val {family}} outcome must be numeric.",
       "x" = "{.val {dependent}} is {.cls {class(mdata[[dependent]])}}."
@@ -883,15 +929,28 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     ))
   }
 
+  # Last Phase z3: "rr" ALWAYS fits through svyglm, weighted or not. A Poisson likelihood on a 0/1
+  # outcome is deliberately misspecified (Var = mu, truth = mu(1-mu)), so the naive SEs are too large
+  # and must be replaced by the Huber-White SANDWICH. svyglm's design-based variance IS that sandwich
+  # (measured: exactly HC0 * sqrt(n/(n-1)) on a constant-weight ids=~1 design, coefficients identical to
+  # glm). Reusing it rather than hand-rolling the matrix keeps ONE encoding of the variance rule -- and
+  # crucially reg_build_digest() stores vcov(fit), which for an svyglm is already the sandwich, so the
+  # jamovi reref byte-identity contract needs no special case. `weighted` stays FALSE for an unweighted
+  # "rr": it is a whole-call scalar that a mixed table shares, so it must keep meaning "the USER gave a
+  # design". The "rr" branches in reg_glance / reg_footer_stats / reg_compare_rows key on the family.
+  use_svy <- weighted || family == "rr"
   fit <- if (family == "gaussian" && !weighted) {
     stats::lm(fml, data = mdata)
-  } else if (!weighted) {
+  } else if (!use_svy) {
     stats::glm(fml, data = mdata, family = fam_obj)
   } else {
-    # weighted: svyglm on the design for this model's complete cases (built or subset via make_design)
+    # svyglm on the design for this model's complete cases (built or subset via make_design; an
+    # unweighted "rr" gets reg_make_design's ids = ~1, weights = NULL constant-weight design).
     survey::svyglm(fml, design = make_design(mdata), family = fam_obj)
   }
-  if (weighted) fit <- reg_svyglm_env(fit)   # make survey::svyglm visible to AIC / anova null-refits
+  # make survey::svyglm visible to AIC / anova null-refits. Fit-driven, not flag-driven, so it covers
+  # the unweighted "rr" too (svyolr / svy_vglm return earlier and are not svyglm -- unchanged).
+  if (inherits(fit, "svyglm")) fit <- reg_svyglm_env(fit)
 
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")  # strip formula backticks -> match skeleton
@@ -928,10 +987,16 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     ))
   }
 
+  # "rr" is excluded by construction (the test names binomial/poisson, never the "rr" key) -- but say so,
+  # rather than silently downgrading: a profile likelihood on a deliberately misspecified quasi-likelihood
+  # is not a meaningful interval, and the robust Wald IS the method the modified Poisson is defined with.
   use_profile <- method == "profile" && !weighted && family %in% c("binomial", "poisson")
   if (method == "profile" && weighted) {
     cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for survey-weighted ",
                                    "models; using Wald.")))
+  } else if (method == "profile" && family == "rr") {
+    cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for a modified Poisson ",
+                                   "fit (a quasi-likelihood); using the robust Wald interval.")))
   }
 
   if (use_profile) {
@@ -1067,7 +1132,7 @@ reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, desig
 reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt) {
   w  <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   yv <- data[[dependent]]
-  bin <- family == "binomial"
+  bin <- reg_fam_binary(family)
   # Last Phase s: the crude companion CIs honour Kish n_eff like tab()'s descriptive CIs (opt-in +
   # weighted). We carry a SEPARATE effective-n (`n_ci`) for the interval; the displayed `n` stays the
   # raw unweighted count. Off-kish/unweighted n_ci == the raw count -> byte-identical.
@@ -1146,6 +1211,16 @@ REG_EMPIRICAL <- list(
     ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
     or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR"),
     or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff")),
+  # Last Phase z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
+  # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
+  # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
+  # of the whole feature: the observed companion must be on the same scale as the model column.
+  rr = list(
+    method_diff = "wald",
+    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
+    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
+    rr     = list(nm = "Obs_RR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR"),
+    rr_log = list(nm = "Obs_log(RR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff")),
   gaussian = list(
     method_mean_diff = "student",
     base = list(nm = "Obs_mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = ""),
@@ -1197,7 +1272,9 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   }
   two <- function(a, b) stats::setNames(list(a$col, b$col), c(a$shape$nm, b$shape$nm))
 
-  if (family == "binomial") {
+  # binomial + "rr" (modified Poisson) share every BASE fact -- a crude risk and its Wald risk-difference
+  # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Last Phase z3).
+  if (reg_fam_binary(family)) {
     rd <- na_ref(ci_prop_diff(base, nv_ci, rb, rn_ci, conf_level = conf_level,    # crude risk-difference
                               method = fam$method_diff, want_p = TRUE))
     rd_fields <- list(pct = base, diff = diffv, n = nv, tot_n = nv,
@@ -1206,19 +1283,41 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     if (effect == "ame")               # the AME shows a difference, not an OR -> crude risk-difference
       return(two(list(col = base_col, shape = fam$base),
                  list(col = emp_col(fam$ame, rd_fields), shape = fam$ame)))
-    or_ci <- na_ref(ci_or(base * nv_ci, (1 - base) * nv_ci,                        # Woolf log-OR Wald
-                          rb * rn_ci, (1 - rb) * rn_ci,
-                          conf_level = conf_level, want_p = TRUE))
-    if (do_exp) {
-      eff_col <- emp_col(fam$or, list(or = ratio, n = nv, ci_inf = or_ci$inf,
-                                      ci_sup = or_ci$sup, pvalue = or_ci$pvalue))
-      return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$or)))
+    # Last Phase z3: a marginal RATIO's crude twin is the crude RISK ratio with the Katz log-RR interval
+    # -- on the binomial model path as well as the "rr" one, since the estimand is what must match, not
+    # the fitted family. Always exponentiated: `exponentiate` is ignored for marginal effects. The Obs_RR
+    # shape is defined once, in REG_EMPIRICAL$rr, and reused here rather than duplicated per family.
+    if (effect == "ame_ratio") {
+      rr_ci <- na_ref(ci_katz_rr(base, nv_ci, rb, rn_ci, conf_level = conf_level, want_p = TRUE))
+      sh    <- REG_EMPIRICAL$rr$rr
+      return(two(list(col = base_col, shape = fam$base),
+                 list(col = emp_col(sh, list(or = base / rb, n = nv, ci_inf = rr_ci$inf,
+                                             ci_sup = rr_ci$sup, pvalue = rr_ci$pvalue)),
+                      shape = sh)))
     }
-    # Phase g: exponentiate = FALSE -> the crude companion is Obs_log(OR): the log of the crude OR in
-    # the `diff` field, and the log of the Woolf OR CI (symmetric on the log scale = exact log-OR Wald).
-    eff_col <- emp_col(fam$or_log, list(diff = log(ratio), n = nv, ci_inf = log(or_ci$inf),
-                                        ci_sup = log(or_ci$sup), pvalue = or_ci$pvalue))
-    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$or_log)))
+    # binomial -> the crude ODDS ratio (emp_ratio = wpos/wneg vs the reference's) with the Woolf log-OR
+    # interval. "rr" -> the crude RISK ratio (base/rb) with the Katz log-RR interval. WARNING: `ratio`
+    # (emp_ratio) is an ODDS ratio -- feeding it to an Obs_RR column would print an OR under an RR header.
+    is_rr  <- family == "rr"
+    eff_v  <- if (is_rr) base / rb else ratio
+    eff_ci <- na_ref(if (is_rr)
+      ci_katz_rr(base, nv_ci, rb, rn_ci, conf_level = conf_level, want_p = TRUE)
+    else
+      ci_or(base * nv_ci, (1 - base) * nv_ci,
+            rb * rn_ci, (1 - rb) * rn_ci, conf_level = conf_level, want_p = TRUE))
+    sh_exp <- if (is_rr) fam$rr     else fam$or
+    sh_log <- if (is_rr) fam$rr_log else fam$or_log
+    if (do_exp) {
+      eff_col <- emp_col(sh_exp, list(or = eff_v, n = nv, ci_inf = eff_ci$inf,
+                                      ci_sup = eff_ci$sup, pvalue = eff_ci$pvalue))
+      return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = sh_exp)))
+    }
+    # Phase g: exponentiate = FALSE -> the crude companion is the LOGGED effect (Obs_log(OR) /
+    # Obs_log(RR)): the log ratio in the `diff` field with the logged CI, i.e. the exact Wald interval
+    # on the log scale -- the same link scale as the raw model coefficient.
+    eff_col <- emp_col(sh_log, list(diff = log(eff_v), n = nv, ci_inf = log(eff_ci$inf),
+                                    ci_sup = log(eff_ci$sup), pvalue = eff_ci$pvalue))
+    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = sh_log)))
   }
 
   if (family == "gaussian") {
@@ -1320,6 +1419,11 @@ reg_reference_grid_values <- function(data, predictors) {
 #   at = "reference" -> comparisons/predictions at the reference profile (a single datagrid row, so no
 #                       averaging / no weights). `comparison = "lnor"` (MNL "j vs rest" OR at the
 #                       profile) returns log-odds-ratios, exp()'d here into odds ratios.
+# Last Phase z3: `comparison = "lnratioavg"` is the RATIO twin of the default additive contrast -- the
+# log of the ratio of adjusted predicted probabilities (marginal standardization / g-computation), exp()'d
+# here into a risk ratio. It shares the whole multiplicative path with "lnor": same double-paren label
+# shape, same exp() of the estimate and BOTH bounds (so the interval stays a Wald interval on the log
+# scale, asymmetric and strictly positive once exponentiated).
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE) {
   ref_vals <- if (at == "reference") reg_reference_grid_values(data, predictors) else NULL
@@ -1329,7 +1433,9 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
   # marginaleffects (default FALSE), so the arg is omitted when unweighted or at a profile.
   wts_arg <- if (at == "reference" || is.null(wt)) list() else list(wts = wt)
   cmp_arg <- if (is.null(comparison)) list() else list(comparison = comparison)
-  do_exp  <- identical(comparison, "lnor")
+  # WARNING: `comparison` is NULL on the additive default, and `NULL %in% x` is logical(0), not FALSE --
+  # which would make every `if (do_exp)` below error with "argument is of length zero".
+  do_exp  <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
 
   amelist <- purrr::map(predictors, function(v) {
     ac <- if (at == "reference")
@@ -1347,14 +1453,16 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     # reg_fit). A numeric predictor keys on the variable name.
     ref_lv <- if (is_fac) levels(forcats::fct_drop(as.factor(data[[v]])))[1] else NA_character_
     level  <- if (!is_fac) v else {
-      pre <- if (do_exp) "ln(odds(" else ""
-      # lnor contrast = "ln(odds(<Level>) / odds(<Ref>))" -- note the DOUBLE closing paren.
-      suf <- if (do_exp) paste0(") / odds(", ref_lv, "))") else paste0(" - ", ref_lv)
+      # "lnor"       -> "ln(odds(<Level>) / odds(<Ref>))"
+      # "lnratioavg"  -> "ln(mean(<Level>) / mean(<Ref>))"   -- same shape, DOUBLE closing paren.
+      inner <- if (identical(comparison, "lnor")) "odds" else "mean"
+      pre <- if (do_exp) paste0("ln(", inner, "(") else ""
+      suf <- if (do_exp) paste0(") / ", inner, "(", ref_lv, "))") else paste0(" - ", ref_lv)
       substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
     }
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
     est <- ac$estimate; lo <- ac$conf.low; hi <- ac$conf.high
-    if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # lnor -> OR (and its CI)
+    if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # log-ratio -> OR / RR (and its CI)
     tibble::tibble(var = v, level = as.character(level), group = grp,
                    ame = est, ame_lo = lo, ame_hi = hi, ame_p = ac$p.value)
   })
@@ -1429,6 +1537,25 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       type = "row", display = display, digits = 1L, ci_type = "diff",
+      color = color, color_signif = color_signif, col_var = col_var,
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
+    )
+  } else if (shape == "prob_ratio") {
+    # Last Phase z3: the RATIO twin of "prob" -- a marginal RISK RATIO with the adjusted predicted
+    # probability in parentheses. The composite is coherent BY CONSTRUCTION: marginal standardization
+    # gives adjusted%(ref) * RR(level) == adjusted%(level) exactly, the multiplicative mirror of the
+    # additive identity "prob" relies on. WARNING: the reference cell keeps the FULL "{or} ({pct})"
+    # template with or = 1, not "({pct})" -- display_primary("({pct})") is `pct`, which would make
+    # cond_or (tab_classes.R) attach a stray "OR: 1.00" hover to a risk-ratio column.
+    compos <- in_model & !is_const & !is_ref & !is.na(ame_v) & !is.na(pred_v)
+    display[compos]                            <- "{or} ({pct})"
+    display[in_model & is_ref & !is.na(pred_v)] <- "{or} ({pct})"
+    display[in_model & is_num & !is.na(ame_v)]  <- "or"        # numeric predictor: bare RR
+    ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
+    fmt(
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
+      pct = pred_v, or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+      type = "row", display = display, digits = 1L, ref = "1", ci_type = "or",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -1548,6 +1675,23 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     tibble::tibble(test = test, statistic = statistic, df1 = df1, df2 = df2, pvalue = pvalue)
   out <- row("n", statistic = as.numeric(nobs))
 
+  # Last Phase z3: a modified-Poisson ("rr") fit is a QUASI-likelihood on a deliberately misspecified
+  # variance, so AIC / BIC / McFadden are not defined, and the Pearson dispersion of a 0/1 outcome is
+  # just mean(1-mu) -- a constant of the fitted values, never a diagnostic. Report the honest pair:
+  # n + the design-based Wald-vs-null. Placed FIRST so it holds weighted or not (the fit is an svyglm
+  # either way); the weighted branch below keeps its Nagelkerke/AIC set for genuine survey models.
+  if (family == "rr") {
+    terms_all <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
+    wt <- if (length(terms_all) > 0)
+      tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
+               error = function(e) NULL)
+    else NULL
+    if (!is.null(wt)) out <- dplyr::bind_rows(out, row("wald_null",
+      statistic = as.numeric(wt$Ftest), df1 = as.numeric(wt$df), df2 = as.numeric(wt$ddf),
+      pvalue = as.numeric(wt$p)))
+    return(out)
+  }
+
   if (weighted) {
     # svyglm: no true likelihood -> Rao-Scott Wald-vs-null (relabelled) + Nagelkerke pseudo-R2 + AIC.
     # survey's psrsq / AIC emit "rsquared may be wrong" / "zero weight" notes under scaled weights; these
@@ -1616,7 +1760,10 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
 # sigma; weighted -> n/wald_null/nagelkerke_r2/aic. A character vector overrides (keeping its order,
 # valid names only); FALSE / "none" suppresses the footer; NULL / "all" / TRUE = the default set.
 reg_footer_stats <- function(family, weighted, grouped, stats) {
-  default <- if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
+  # Last Phase z3: "rr" FIRST -- a quasi-likelihood has no AIC/BIC/McFadden, and binary-outcome Pearson
+  # dispersion is meaningless (see reg_glance). Matches the pair reg_glance actually emits.
+  default <- if (family == "rr") c("n", "wald_null")
+    else if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
     else if (family == "gaussian") c("n", "r2", "r2_adj", "f_model", "sigma")
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
            if (family == "poisson" || grouped) s <- c(s, "dispersion")
@@ -1717,6 +1864,10 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     return(reg_gof)
   }
   use_f  <- family %in% c("gaussian", "quasipoisson")
+  # Last Phase z3: an "rr" fit is an svyglm (see reg_fit), so its comparison takes the DESIGN-BASED Wald
+  # branch below whether or not the user gave a design -- a likelihood-ratio test between two
+  # quasi-likelihood fits would be a false LR.
+  use_wald <- weighted || family == "rr"
   base_i <- if (compare == "baseline") {
     if (is.null(baseline))          1L
     else if (is.numeric(baseline))  as.integer(baseline)
@@ -1744,7 +1895,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     m_lo <- if (dir >= 0L) m_ref  else m_full
     m_hi <- if (dir >= 0L) m_full else m_ref
     if (dir != 0L) {
-      if (weighted) {
+      if (use_wald) {
         # design-based Wald test on the extra term(s): anova.svyglm(method="Wald") -> a regTermTest
         # ($Ftest/$df/$ddf/$p), the same object reg_glance's Wald-vs-null uses.
         e <- tryCatch({
@@ -2023,7 +2174,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   compound   <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
   mnl_vsrest <- effect == "coefficient" && at == "reference" && family == "multinomial"
   if (is.null(skeleton))
-    skeleton <- if (effect == "ame" || mnl_vsrest) reg_skeleton(skeleton_data, union_predictors)
+    skeleton <- if (effect %in% c("ame", "ame_ratio") || mnl_vsrest)
+                  reg_skeleton(skeleton_data, union_predictors)
                 else if (any(compound))            reg_skeleton_from_fit(fits[[1]]$fit)
                 else                               reg_skeleton(skeleton_data, union_predictors)
 
@@ -2039,18 +2191,23 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # built_per_fit: a list PER FIT of {label, col} lists (a multinomial / MNL-vs-rest / AME-per-category
   # fit contributes SEVERAL columns). Kept un-flattened so reg_gof_tibble() can key the model-summary
   # footer to each fit's FIRST output column (Phase 12f).
-  if (effect == "ame") {
+  if (effect %in% c("ame", "ame_ratio")) {
     built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       # Phase 15e: prob-scale / per-category / colour shape are per OUTCOME family (a mixed AME table
       # mixes binomial prob-points with a gaussian coef in one grid).
       sp_fam       <- sp$family
       sp_eff       <- sp$eff_word
       sp_col       <- sp$color
-      prob_scale   <- sp_fam %in% c("binomial", "multinomial", "ordinal")
+      prob_scale   <- reg_fam_prob(sp_fam)
       per_category <- sp_fam %in% c("multinomial", "ordinal")
-      shape        <- if (prob_scale) "prob" else "raw"
+      # Last Phase z3: effect = "ame_ratio" swaps the ADDITIVE contrast for the log-ratio one, i.e. the
+      # ratio of adjusted predicted probabilities (a marginal risk ratio). Guarded to prob-scale families
+      # at the tab_reg() boundary, so `shape` can only become "prob_ratio" where a probability exists.
+      ratio_ame    <- effect == "ame_ratio"
+      shape        <- if (!prob_scale) "raw" else if (ratio_ame) "prob_ratio" else "prob"
       marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                            at = at, want_pred = prob_scale)
+                            at = at, want_pred = prob_scale,
+                            comparison = if (ratio_ame) "lnratioavg" else NULL)
       var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$dependent]])))
                else NA_real_
       if (per_category) {                            # one AME column per OUTCOME category (all levels)
@@ -2070,7 +2227,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         # Phase 14r (E): the model OR (exp of the fit's coefficient, aligned to the skeleton by term)
         # carried in the AME column's `or` field for the tooltip. Binomial single-outcome only -- for
         # gaussian/poisson the coefficient is not an OR. NA on reference / out-of-model rows (term NA).
-        or_tip <- if (sp_fam == "binomial") {
+        # the OR hover is a "prob"-shape rider only: a "prob_ratio" cell already SHOWS a ratio in `or`.
+        or_tip <- if (sp_fam == "binomial" && !ratio_ame) {
           td <- broom::tidy(f$fit); td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
           exp(td$estimate[match(skeleton$term, td$term)])
         } else NULL
@@ -2199,11 +2357,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       for (i in seq_along(specs)) {
         fam_i   <- specs[[i]]$family
         # quasipoisson rides the poisson crude path (rate + IRR); ordinal none; multinomial tooltip.
-        if (!fam_i %in% c("binomial", "gaussian", "poisson", "quasipoisson")) next
+        if (!fam_i %in% c("binomial", "gaussian", "poisson", "quasipoisson", "rr")) next
         col_i   <- specs[[i]]$color               # on/off follows the model column
         dep_i   <- specs[[i]]$dependent
-        pos_i   <- if (fam_i == "binomial") fits[[i]]$positive_level else NULL
-        if (fam_i == "binomial" && is.null(pos_i)) next   # grouped-binomial / compound: no crude 2x2
+        pos_i   <- if (reg_fam_binary(fam_i)) fits[[i]]$positive_level else NULL
+        if (reg_fam_binary(fam_i) && is.null(pos_i)) next # grouped-binomial / compound: no crude 2x2
         mdata_i  <- emp_frame_of(dep_i)                    # Change B: same complete-case frame as the model
         var_y_i <- if (fam_i == "gaussian")
           suppressWarnings(stats::var(as.numeric(mdata_i[[dep_i]]), na.rm = TRUE)) else NA_real_
@@ -2397,6 +2555,26 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   families work only with a character `predictors` (one model per outcome); a `predictors` list
 #'   (model comparison) is single-outcome, hence single-family.
 #'
+#'   \strong{A binary outcome with `family = "poisson"` (modified Poisson).} Asking for `"poisson"` on a
+#'   binary outcome is not a mistake and not a count model: it fits the **modified Poisson regression**
+#'   (Zou 2004), whose exponentiated coefficient is a **risk ratio** (RR), not an odds ratio. It is
+#'   strictly opt-in --- a binary outcome still auto-detects as `"binomial"`; you must name `"poisson"`.
+#'   Reach for it when the outcome is **common** (above roughly 10%), where an odds ratio is much further
+#'   from 1 than the risk ratio and is almost always narrated as if it were one ("twice as likely"), and
+#'   when you compare a coefficient **across nested models**, which an odds ratio does not support (it is
+#'   non-collapsible: it moves when you add a covariate even if that covariate is not a confounder).
+#'   \strong{Standard errors are handled consistently}: the Poisson likelihood is deliberately
+#'   misspecified for a 0/1 outcome, so the naive standard errors are too wide and are replaced by the
+#'   robust **Huber--White sandwich** --- via `survey::svyglm()` in both cases, which means the
+#'   design-based variance when you supply `wt`/`ids`/`strata`, and the equivalent of `HC0` on a
+#'   constant-weight design when you do not. The observed companion (`empirical = TRUE`) follows the same
+#'   estimand: `Obs_RR` is the crude **risk** ratio with a Katz interval, not the crude odds ratio.
+#'   Two caveats: the log link is unbounded above, so predicted probabilities can exceed 1 --- the model
+#'   is for **effect estimation, not prediction**; and the sandwich needs a decent sample (n of at least
+#'   about 100). `method = "profile"` is not available (a quasi-likelihood has no profile), and the
+#'   footer reports N and a Wald-vs-null test rather than AIC/BIC/pseudo-R2, which a quasi-likelihood
+#'   does not define.
+#'
 #'   \strong{Over-dispersed counts.} An unweighted `"poisson"` fit auto-scales its standard errors by
 #'   the square root of the Pearson dispersion, so with an over-dispersed outcome (dispersion clearly
 #'   above 1) its CIs and p-values are **identical to `"quasipoisson"`**, and it **warns** to say so
@@ -2429,6 +2607,23 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   + AME(level) equals adjusted-%(level). Read it as a standardized comparison ("holding the measured
 #'   covariates' distribution fixed"), not a manipulation. Requires the `marginaleffects` package. A
 #'   multinomial / ordinal outcome gets one AME column per outcome category.
+#'
+#'   `"ame_ratio"` is the same quantity as a **ratio** instead of a difference: the **marginal risk
+#'   ratio** (RR), i.e. the ratio of those adjusted predicted probabilities, with the adjusted
+#'   probability again in parentheses (e.g. `0.62*** (32%)`). Its cell is coherent by construction, the
+#'   multiplicative twin of the AME identity --- adjusted-%(reference) * RR(level) equals
+#'   adjusted-%(level). Reach for it for the same reason as the modified Poisson (see `family`): with a
+#'   **common** outcome an odds ratio is not a risk ratio and should not be narrated as one, and unlike
+#'   the odds ratio a risk ratio stays comparable **across nested models**. The two routes answer
+#'   slightly different questions --- `ame_ratio` gives a **marginal** (population-averaged) risk ratio
+#'   from the familiar logistic fit and can never predict a probability above 1, while
+#'   `family = "poisson"` gives a **conditional** one; on real data they agree closely. Standard errors
+#'   are the delta-method interval on the log ratio (design-based when the model is weighted), and the
+#'   observed companion is the crude risk ratio `Obs_RR` with a Katz interval --- the same estimand.
+#'   Requires `marginaleffects`; **probability-scale outcomes only** (binomial / multinomial / ordinal),
+#'   since a ratio of adjusted means or counts has no such interpretation. One caveat worth knowing:
+#'   the estimate is standardized to the covariate distribution of the sample at hand, so under
+#'   `split_var` each group standardizes to **its own** subpopulation.
 #' @param at Where the profile-conditional quantities are evaluated (needs `marginaleffects`).
 #'   `"average"` (default) is the sample average (the AME / adjusted prediction over the data).
 #'   `"reference"` evaluates at the **reference profile** --- every other predictor held at its
@@ -2558,7 +2753,15 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   # marginal effects at the reference profile (others at their reference level / mean):
 #'   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
 #'                 family = "binomial", effect = "ame", at = "reference")
+#'   # the same quantity as a RATIO: marginal risk ratios beside the crude ones. With a common
+#'   # outcome this is what a reader means by "x times more likely" -- an odds ratio is not.
+#'   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial", effect = "ame_ratio", empirical = TRUE)
 #' }
+#' # modified Poisson (Zou 2004): a binary outcome + family = "poisson" gives conditional RISK
+#' # ratios with robust standard errors. Opt-in -- a binary outcome still defaults to logistic.
+#'   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "poisson", empirical = TRUE)
 #' # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
 #'   tab_reg(reg_data, dependent = "party3", predictors = c("race", "age"),
 #'                 family = "multinomial", reference = c(party3 = "3-Republican"))
@@ -2569,7 +2772,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = NULL, 
                     family = "auto", 
-                    effect = c("coefficient", "ame"), at = c("average", "reference"), exponentiate = TRUE, 
+                    effect = c("coefficient", "ame", "ame_ratio"), at = c("average", "reference"),
+                    exponentiate = TRUE, 
                     trials = NULL, empirical = FALSE,
                     color = TRUE, color_signif = NULL, stars = TRUE, 
                     conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
@@ -2711,6 +2915,20 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
       cli::cli_abort(c("{.arg family} for {.val {d}} must be one of {.or {.val {valid_families}}}.",
                        "x" = "Got {.val {f}}."))
     }
+    # DESIGN (Last Phase z3): THE resolution site for the modified-Poisson path. An explicit
+    # poisson/quasipoisson on a BINARY outcome is not a count model -- it is Zou (2004)'s modified
+    # Poisson, whose exp(coef) is a RISK RATIO, not an incidence-rate ratio. Resolving it to the
+    # internal family key "rr" here (before `specs` are built) means the split_var recursion, the
+    # multi-dependent recursion and the jamovi bridge all inherit it, and every family switch
+    # downstream dispatches on ONE key. "rr" is deliberately absent from `valid_families`: a user
+    # reaches it only through family = "poisson", never by typing it.
+    if (f %in% c("poisson", "quasipoisson") && reg_is_binary_outcome(data[[d]])) {
+      cli::cli_inform(c("i" = paste0(
+        "{.val {d}} is binary: fitting a modified Poisson regression (robust standard errors) -> ",
+        "{.strong risk ratios}, not incidence-rate ratios."
+      )))
+      f <- "rr"
+    }
     f
   }, character(1))
   names(families_vec) <- dependent
@@ -2731,12 +2949,25 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # via svyVGAM::svy_vglm (checked in reg_check_deps). The marginaleffects paths (effect="ame", and the
   # multinomial "j vs rest" OR at the reference profile) have no method for svyolr / svy_vglm -> error.
   if (weighted && any(families_vec %in% c("multinomial", "ordinal")) &&
-      (effect == "ame" || at == "reference")) {
+      (effect %in% c("ame", "ame_ratio") || at == "reference")) {
     cli::cli_abort(c(
       paste0("Marginal-effects output ({.code effect = \"ame\"}",
              if (any(families_vec == "multinomial")) ' or {.code at = "reference"}' else "",
              ") is not available for survey-weighted {.val multinomial}/{.val ordinal} models."),
       "i" = "Use the default {.code effect = \"coefficient\"} (at = \"average\"), or drop the weights."
+    ))
+  }
+
+  # Last Phase z3: a marginal RATIO needs a probability to take a ratio OF -- so it is defined only for
+  # probability-scale outcomes. A ratio of adjusted MEANS (gaussian) or of predicted COUNTS (poisson) is
+  # unstable near zero and the "{or} ({pct})" cell would have no percentage to show. Abort naming the
+  # offending outcome(s) rather than silently degrading.
+  if (effect == "ame_ratio" && !all(reg_fam_prob(families_vec))) {
+    bad <- dependent[!reg_fam_prob(families_vec)]
+    cli::cli_abort(c(
+      '{.code effect = "ame_ratio"} needs a probability-scale outcome ({.val binomial}, {.val multinomial} or {.val ordinal}).',
+      "x" = "{.val {bad}}: {.val {families_vec[!reg_fam_prob(families_vec)]}}.",
+      "i" = 'Use {.code effect = "ame"} (marginal effects on the response scale) for {.val gaussian} / {.val poisson} outcomes.'
     ))
   }
 
@@ -2765,7 +2996,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # unambiguous next to the crude "Emp. %". The parenthetical is the marginal-STANDARDISED predicted
   # probability (decisions doc S50, change A/C), hence "adjusted %" not "model %". Gated on `empirical`
   # (the maintainer's disambiguation case), prob-scale families only (gaussian/poisson AME is a bare effect).
-  if (effect == "ame" && isTRUE(empirical) && family %in% c("binomial", "multinomial", "ordinal")) {
+  if (effect %in% c("ame", "ame_ratio") && isTRUE(empirical) && reg_fam_prob(family)) {
     eff_word <- paste0(eff_word, " (adjusted %)")
   }
   # Phase 15e: the per-dependent versions of the above (each outcome keeps its own family shape). The
@@ -2774,8 +3005,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   effect_shape_for <- function(d) if (do_exp_for(d)) "ratio" else "additive"
   eff_word_for     <- function(d) {
     w <- reg_effect_word(family_for(d), do_exp_for(d), effect, at)
-    if (effect == "ame" && isTRUE(empirical) &&
-        family_for(d) %in% c("binomial", "multinomial", "ordinal"))
+    if (effect %in% c("ame", "ame_ratio") && isTRUE(empirical) &&
+        reg_fam_prob(family_for(d)))
       w <- paste0(w, " (adjusted %)")
     w
   }
@@ -2784,7 +3015,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # any family) apply everywhere; the "prob"/"ame" folds (OR + adjusted probability / OR + marginal
   # effect, via reg_marginal) are probability-scale -> binomial coefficient models only. Marginal-effects
   # output (effect="ame" / the MNL "j vs rest" OR at reference) already has its own layout -> ignored.
-  if (estimate_display != "value" && (effect == "ame" || mnl_vsrest)) {
+  if (estimate_display != "value" && (effect %in% c("ame", "ame_ratio") || mnl_vsrest)) {
     cli::cli_inform(c("i" = "{.arg estimate_display} is ignored with marginal-effects output."))
     estimate_display <- "value"
   }
@@ -2836,12 +3067,18 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null()/is.na().
   # effect="ame" always colours the marginal effect as a difference (neutral 0), never as a ratio.
   color_auto <- is.na(color)                                    # Phase 15e: remember the auto sentinel
-  if (color_auto)            color        <- if (effect_shape == "ratio" && effect != "ame") "OR" else "diff"
+  # Last Phase z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
+  # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`
+  # alone would colour an ame_ratio column on the 0-centred difference scale under exponentiate = FALSE.
+  color_auto_measure <- function(shape) if (effect == "ame") "diff"
+    else if (effect == "ame_ratio") "OR"
+    else if (shape == "ratio") "OR" else "diff"
+  if (color_auto)            color        <- color_auto_measure(effect_shape)
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
   # Phase 15e: the per-dependent auto colour measure (each family its own default). An explicit user
   # `color=` (string / c(text, bg)) is not auto -> applied to every column unchanged.
   color_for <- function(d) if (color_auto)
-    (if (effect_shape_for(d) == "ratio" && effect != "ame") "OR" else "diff") else color
+    color_auto_measure(effect_shape_for(d)) else color
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
 
@@ -2869,7 +3106,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # digest); any multinomial/ordinal outcome degrades the whole table to the cached raw-fit path.
   reref <- !is.null(.fit_cache) && effect == "coefficient" && !mnl_vsrest &&
     estimate_display %in% c("value", "ci") && method == "wald" &&
-    all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson")) &&
+    all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")) &&
     !formula_mode && is.null(split_var) && is.null(multiplier) && is.null(trials) &&
     compare == "none" && !is_comparison
 
@@ -2904,7 +3141,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   } else {
     labels <- purrr::map_chr(dependent, function(d) {
       # a summed-score / compound-formula binomial has no single "positive level" -> label by name
-      base <- if (family_for(d) == "binomial" && !formula_mode && is.null(trials_for(d))) {
+      base <- if (reg_fam_binary(family_for(d)) && !formula_mode && is.null(trials_for(d))) {
         pl <- reg_cleanup(reg_positive_level(data, d, inverse_for(d)), cleannames)
         pl
       } else d
@@ -2977,7 +3214,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # Phase 15e: kept ON whenever ANY outcome supports a crude companion (the per-fit loop skips the
   # ineligible outcomes -- ordinal -- individually). Only dropped when NO outcome is eligible.
   if (isTRUE(empirical) &&
-      !any(families_vec %in% c("binomial", "gaussian", "poisson", "quasipoisson", "multinomial"))) {
+      !any(families_vec %in% c("binomial", "gaussian", "poisson", "quasipoisson", "multinomial",
+                               "rr"))) {
     cli::cli_inform(c("i" = paste0(
       "{.arg empirical} (crude descriptive companion) is not available for any of these outcome ",
       "families; ignored here.")))
@@ -2987,7 +3225,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)
   # Phase 15e: check the Suggests deps of EVERY family present (nnet for multinomial, MASS for ordinal...).
   for (fm in unique(families_vec))
-    reg_check_deps(fm, weighted, needs_marginaleffects = effect == "ame" || mnl_vsrest ||
+    reg_check_deps(fm, weighted, needs_marginaleffects = effect %in% c("ame", "ame_ratio") || mnl_vsrest ||
                      estimate_display %in% c("prob", "ame"))
   # Phase 17h: every per-call setting reg_build's leaves + assembler read, bundled once (the specs carry
   # the per-dependent family/do_exp/effect_shape/eff_word/color, so those scalars are no longer threaded).
@@ -3015,7 +3253,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # effect word is read from the column's own `model_family` fmt attribute (Step D) in the legend, so this
   # record is only the table-level narrative. `family`/`do_exp`/`eff_word` stay scalar = the first outcome.
   positive_levels <- purrr::map_chr(dependent, function(d) {
-    if (family_for(d) != "binomial" || formula_mode || !is.null(trials_for(d))) return(NA_character_)
+    if (!reg_fam_binary(family_for(d)) || formula_mode || !is.null(trials_for(d))) return(NA_character_)
     pl <- reg_positive_level(data, d, inverse_for(d))
     pl <- reg_cleanup(pl, cleannames)
     pl

@@ -2749,8 +2749,9 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # odds_ratio scale (center 0, no SD-division), so a coefficient of log(2) reads the same intensity as
   # an OR of 2 -- the exponentiate=TRUE twin. Derived from odds_ratio so the two always agree. A
   # gaussian beta keeps its own SD-standardized mean_diff scale (var(Y) is meaningful there).
-  is_logcoef <- type == "coef" &&
-    get_model_family(x) %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial")
+  # Last Phase z3: the family list is reg_fam_logscale() (R/tab_reg.R) -- ONE predicate shared with the
+  # legend's twin gate below, which used to repeat this vector verbatim and be kept in sync by comment.
+  is_logcoef <- type == "coef" && reg_fam_logscale(get_model_family(x))
   # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
   # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
   # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
@@ -3212,8 +3213,15 @@ legend_reg_eff_word <- function(col, meta) {
   # beta scale (AME is handled by the effect branch above), so no scalar `do_exp` check is needed -- that
   # scalar would mislabel a gaussian column in a binomial-first mixed table.
   fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
-  if (identical(get_ci_type(col), "or"))
-    return(if (fam %in% c("poisson", "quasipoisson")) "IRR" else "OR")
+  # Last Phase z3: two ways a multiplicative column can be a RISK ratio rather than an odds ratio.
+  # (a) effect = "ame_ratio" -- the ESTIMAND is a ratio of adjusted probabilities, whatever family was
+  #     fitted (a logistic fit still yields a marginal RR), so it wins over the family switch; it also
+  #     covers the crude Obs_RR companion, which carries the model's family attribute.
+  # (b) family "rr" -- the modified Poisson, whose exp(coef) is a risk ratio by construction.
+  if (identical(get_ci_type(col), "or")) {
+    if (identical(meta$effect, "ame_ratio")) return("RR")
+    return(switch(fam, "poisson" = , "quasipoisson" = "IRR", "rr" = "RR", "OR"))
+  }
   if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
     if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
     if (identical(get_type(col), "coef")) return(.lg_beta)   # gaussian beta
@@ -3292,6 +3300,7 @@ legend_method_name <- function(spec) {
       return(switch(w,
                     "IRR" = gettext("Wald interval on the log rate-ratio"),
                     "OR"  = gettext("Wald interval on the log odds-ratio"),
+                    "RR"  = gettext("Wald interval on the log risk-ratio"),
                     gettext("Wald interval on the log scale")))
     }
     return(gettext("Wald interval"))
@@ -3649,10 +3658,9 @@ legend_specs <- function(x) {
     is_pct   <- !is_num
     # Phase g: a NON-gaussian coefficient (exponentiate = FALSE) colours on the LOGGED odds_ratio scale
     # (log_odds_scale), NOT the SD-standardized mean_diff -- so its legend must NOT say "SD" (the breaks
-    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Mirrors the
-    # is_logcoef gate in fmt_color_plan.
-    is_logcoef <- is_coef &&
-      get_model_family(col) %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial")
+    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Last Phase z3:
+    # this and fmt_color_plan's gate now SHARE reg_fam_logscale() -- they cannot drift apart any more.
+    is_logcoef <- is_coef && reg_fam_logscale(get_model_family(col))
     is_std   <- is_num && mean_diff_std && !is_logcoef
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_

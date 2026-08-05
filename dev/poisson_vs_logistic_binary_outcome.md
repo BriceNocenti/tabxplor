@@ -136,12 +136,12 @@ A balanced report must state these; they shape the recommendation.
 
 ### 1.5 The competing approaches
 
-| Approach                                                       | Gives                                                     | Verdict for tabxplor                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|----------------------------------------------------------------|-----------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Log-binomial** (`glm(family=binomial(link="log"))`)          | RR, fully parametric, efficient, respects the [0,1] bound | **Rejected.** Notorious convergence failures — the optimum sits on the boundary of the constrained parameter space. Unacceptable in a live jamovi UI where every click refits.                                                                                                                                                                                                                                                                          |
-| **Modified Poisson** (Zou)                                     | RR + robust SE                                            | **Recommended.** Always converges, one line from the existing code, robust to outliers (Chen et al. 2014 find it *more* outlier-robust than log-binomial).                                                                                                                                                                                                                                                                                              |
-| **Marginal standardization / g-computation** on a logistic fit | marginal RR (and RD)                                      | **Strong alternative, already ~90 % wired.** See §1.5b — this is the other serious candidate, and in tabxplor it is *cheaper* than modified Poisson. |
-| **Cox / robust Poisson variants**                              | RR                                                        | Equivalent in practice; no reason to add.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Approach                                                       | Gives                                                     | Verdict for tabxplor                                                                                                                                                           |
+|----------------------------------------------------------------|-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Log-binomial** (`glm(family=binomial(link="log"))`)          | RR, fully parametric, efficient, respects the [0,1] bound | **Rejected.** Notorious convergence failures — the optimum sits on the boundary of the constrained parameter space. Unacceptable in a live jamovi UI where every click refits. |
+| **Modified Poisson** (Zou)                                     | RR + robust SE                                            | **Recommended.** Always converges, one line from the existing code, robust to outliers (Chen et al. 2014 find it *more* outlier-robust than log-binomial).                     |
+| **Marginal standardization / g-computation** on a logistic fit | marginal RR (and RD)                                      | **Strong alternative, already ~90 % wired.** See §1.5b — this is the other serious candidate, and in tabxplor it is *cheaper* than modified Poisson.                           |
+| **Cox / robust Poisson variants**                              | RR                                                        | Equivalent in practice; no reason to add.                                                                                                                                      |
 
 ### 1.5b Marginal standardization — is it common practice, and is it robust?
 
@@ -166,14 +166,14 @@ field either way.
 
 **Is it robust?** Measured here — yes, on every axis tested (probes 7–8):
 
-| Check | Result |
-|---|---|
-| Bias | true marginal RR 1.3999, mean estimate over 500 reps **1.3981** |
-| CI coverage (delta method, 95 %) | **0.948** — nominal |
-| Weighted `svyglm` fits | **works**, returns design-based CIs (RR 1.3842 [1.313, 1.459]) |
-| Rare outcome (0.7 % prevalence) | **no blow-up**: RR 3.21 [1.18, 8.72] vs OR 3.24 — converges to the OR exactly as theory says |
-| Numeric predictors | works (contrast label `mean(+1)`) |
-| Coherence with the adjusted % | **exact**: adjusted%(ref) × RR = adjusted%(level), to all printed digits |
+| Check                            | Result                                                                                       |
+|----------------------------------|----------------------------------------------------------------------------------------------|
+| Bias                             | true marginal RR 1.3999, mean estimate over 500 reps **1.3981**                              |
+| CI coverage (delta method, 95 %) | **0.948** — nominal                                                                          |
+| Weighted `svyglm` fits           | **works**, returns design-based CIs (RR 1.3842 [1.313, 1.459])                               |
+| Rare outcome (0.7 % prevalence)  | **no blow-up**: RR 3.21 [1.18, 8.72] vs OR 3.24 — converges to the OR exactly as theory says |
+| Numeric predictors               | works (contrast label `mean(+1)`)                                                            |
+| Coherence with the adjusted %    | **exact**: adjusted%(ref) × RR = adjusted%(level), to all printed digits                     |
 
 That last row matters for tabxplor specifically. The existing `effect = "ame"` display grammar composes
 `"{diff} ({pct})"` — the AME with the adjusted predicted probability in parentheses — and it holds because
@@ -210,11 +210,11 @@ construction*, the same way the current one is. That is a real design argument, 
 Asked directly: **no, they are not the same thing**, and the confusion is especially dangerous for
 tabxplor's readership. Three distinct things share the log link and must be kept apart:
 
-| Term | Outcome modelled | What it estimates | Field |
-|---|---|---|---|
-| **Modified / robust Poisson** (Zou) | an **individual's** binary 0/1 | RR/PR of the *individual* outcome | epidemiology, public health |
-| **Log-linear model** (Goodman, Bishop–Fienberg–Holland) | **cell counts of a contingency table** | the *association structure* among categorical variables | **sociology**, categorical data analysis |
-| **Log-binomial** | an individual's binary 0/1 | RR/PR — same estimand as modified Poisson, different estimator (binomial likelihood) | epidemiology |
+| Term                                                    | Outcome modelled                       | What it estimates                                                                    | Field                                    |
+|---------------------------------------------------------|----------------------------------------|--------------------------------------------------------------------------------------|------------------------------------------|
+| **Modified / robust Poisson** (Zou)                     | an **individual's** binary 0/1         | RR/PR of the *individual* outcome                                                    | epidemiology, public health              |
+| **Log-linear model** (Goodman, Bishop–Fienberg–Holland) | **cell counts of a contingency table** | the *association structure* among categorical variables                              | **sociology**, categorical data analysis |
+| **Log-binomial**                                        | an individual's binary 0/1             | RR/PR — same estimand as modified Poisson, different estimator (binomial likelihood) | epidemiology                             |
 
 The trap: in the **generic GLM sense** modified Poisson *is* "log-linear" — it fits log(risk) = Xβ, linear
 on the log scale. So the phrase is not *wrong*, merely ambiguous. But in **sociology "log-linear model" is
@@ -235,19 +235,19 @@ whichever wording function ends up carrying it.
 
 ### 1.7 Decision table — when to use which
 
-| Situation                                                                       | Use                                                 |
-|---------------------------------------------------------------------------------|-----------------------------------------------------|
-| Outcome **rare** (<10 %)                                                        | Logistic. OR ≈ RR anyway, and it is more efficient. |
-| Outcome **common** (>10 %) and you will *speak* of "more likely" / "times more" | **Modified Poisson (RR)** *or* **ratio AME**        |
-| **Cross-sectional** survey, prevalence ratio wanted                             | **Modified Poisson (PR)** — the canonical use case  |
-| Comparing coefficients **across nested models**                                 | Either RR route (both collapsible) — **not** the OR |
-| You want a **population-level** ("if everyone were…") statement                 | **Ratio AME** (marginal standardization)            |
-| You want an **individual-level** ("two similar people…") statement              | **Modified Poisson** (conditional RR)               |
-| **Case-control** design                                                         | Logistic only — the RR is not identified            |
-| You need **predicted probabilities**                                            | Logistic, or the ratio AME (Poisson can exceed 1)   |
+| Situation                                                                       | Use                                                                             |
+|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| Outcome **rare** (<10 %)                                                        | Logistic. OR ≈ RR anyway, and it is more efficient.                             |
+| Outcome **common** (>10 %) and you will *speak* of "more likely" / "times more" | **Modified Poisson (RR)** *or* **ratio AME**                                    |
+| **Cross-sectional** survey, prevalence ratio wanted                             | **Modified Poisson (PR)** — the canonical use case                              |
+| Comparing coefficients **across nested models**                                 | Either RR route (both collapsible) — **not** the OR                             |
+| You want a **population-level** ("if everyone were…") statement                 | **Ratio AME** (marginal standardization)                                        |
+| You want an **individual-level** ("two similar people…") statement              | **Modified Poisson** (conditional RR)                                           |
+| **Case-control** design                                                         | Logistic only — the RR is not identified                                        |
+| You need **predicted probabilities**                                            | Logistic, or the ratio AME (Poisson can exceed 1)                               |
 | Sub-population columns via **`split_var`**                                      | **Modified Poisson** (the ratio AME re-standardizes per split — §1.5b caveat 2) |
-| n < 100                                                                         | Logistic, or modified Poisson with HC3 / Firth      |
-| Reviewers/field expect ORs (clinical epi, much of quant. psych)                 | Logistic, possibly reporting both                   |
+| n < 100                                                                         | Logistic, or modified Poisson with HC3 / Firth                                  |
+| Reviewers/field expect ORs (clinical epi, much of quant. psych)                 | Logistic, possibly reporting both                                               |
 
 For tabxplor's actual audience — French sociologists doing cross-sectional survey analysis on common
 outcomes like "married", "voted", "has a diploma" — **rows 2, 3, 4 and 5 all apply simultaneously**. This
@@ -413,14 +413,14 @@ Confirming point by point:
 
 So the concrete R-side change is roughly:
 
-| Site | Change |
-|---|---|
-| `reg_marginal()` `do_exp` | `identical(comparison, "lnor")` → `comparison %in% c("lnor", "lnratioavg")` |
-| `reg_marginal()` label parsing | generalise the `pre`/`suf` pair: `"ln(odds("` / `"ln(mean("` and `") / odds("` / `") / mean("`. Two literals, one lookup |
-| `tab_reg()` public arg | `effect = "ame"` gains a ratio sibling — e.g. `effect = "rr"` (or an `ame_type =` modifier), threaded into `reg_marginal(comparison = "lnratioavg")` |
-| `reg_marginal_column()` | reuse the existing `shape = "or"`, or a `"prob_ratio"` shape composing `"{or} ({pct})"` — the coherence identity makes this well-defined |
-| `REG_EMPIRICAL$binomial` | the `ame` row (`Obs_diff`, Wald risk-difference) gains an RR twin: `Obs_RR`, using **`ci_katz_rr()` which already exists** (`tab-agg.R:386`) |
-| colour | none — multiplicative ⇒ the existing `color = "OR"` ratio breaks |
+| Site                           | Change                                                                                                                                               |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reg_marginal()` `do_exp`      | `identical(comparison, "lnor")` → `comparison %in% c("lnor", "lnratioavg")`                                                                          |
+| `reg_marginal()` label parsing | generalise the `pre`/`suf` pair: `"ln(odds("` / `"ln(mean("` and `") / odds("` / `") / mean("`. Two literals, one lookup                             |
+| `tab_reg()` public arg         | `effect = "ame"` gains a ratio sibling — e.g. `effect = "rr"` (or an `ame_type =` modifier), threaded into `reg_marginal(comparison = "lnratioavg")` |
+| `reg_marginal_column()`        | reuse the existing `shape = "or"`, or a `"prob_ratio"` shape composing `"{or} ({pct})"` — the coherence identity makes this well-defined             |
+| `REG_EMPIRICAL$binomial`       | the `ame` row (`Obs_diff`, Wald risk-difference) gains an RR twin: `Obs_RR`, using **`ci_katz_rr()` which already exists** (`tab-agg.R:386`)         |
+| colour                         | none — multiplicative ⇒ the existing `color = "OR"` ratio breaks                                                                                     |
 
 **Numeric predictors need no work**: `reg_marginal()` already keys them on the variable name rather than
 the contrast label (`level <- if (!is_fac) v`), so the differing `"mean(+1)"` label format is harmless.
@@ -430,16 +430,16 @@ family value, no jamovi family dropdown entry. Perhaps a half-day including test
 
 **How the two routes compare for tabxplor:**
 
-| | Modified Poisson (`family = "rr"`) | Ratio AME (marginal standardization) |
-|---|---|---|
-| Estimand | conditional RR | marginal (standardized) RR |
-| New dependency | **none** (`survey` is an Import) | `marginaleffects` (a **Suggests**) |
-| Fitted values > 1 | possible | **impossible** |
-| Works under `split_var` | yes, comparably | yes, but each split standardizes to its own population ⚠ |
-| Speed | coefficient read-off | n × levels predictions per predictor |
-| Nested-model comparison | valid | valid |
-| Effort here | ~1 day | ~half a day |
-| Fits the existing UI | a new `family` value | a new `effect` value |
+|                         | Modified Poisson (`family = "rr"`) | Ratio AME (marginal standardization)                     |
+|-------------------------|------------------------------------|----------------------------------------------------------|
+| Estimand                | conditional RR                     | marginal (standardized) RR                               |
+| New dependency          | **none** (`survey` is an Import)   | `marginaleffects` (a **Suggests**)                       |
+| Fitted values > 1       | possible                           | **impossible**                                           |
+| Works under `split_var` | yes, comparably                    | yes, but each split standardizes to its own population ⚠ |
+| Speed                   | coefficient read-off               | n × levels predictions per predictor                     |
+| Nested-model comparison | valid                              | valid                                                    |
+| Effort here             | ~1 day                             | ~half a day                                              |
+| Fits the existing UI    | a new `family` value               | a new `effect` value                                     |
 
 They are **not mutually exclusive, and ideally both ship** — they sit on orthogonal axes of `tab_reg()`
 (`family =` vs `effect =`), which is exactly how the current architecture separates "what model" from
@@ -534,13 +534,13 @@ A log-linear model treats the **cell counts** of an n-way contingency table as P
 log(expected count) as a sum of main effects and interactions. The interactions *are* the associations,
 so the model family is a hierarchy you compare by deviance:
 
-| Model (3-way, R × C × L) | Reads as |
-|---|---|
-| `R + C + L` | complete independence |
-| `RC + L` | R and C associated, both independent of the layer |
-| `RL + CL` | **conditional independence**: R ⫫ C given L |
-| `RC + RL + CL` | **homogeneous association**: R–C association exists and is the *same* in every layer |
-| `RCL` (saturated) | the association differs by layer — fits perfectly, explains nothing |
+| Model (3-way, R × C × L) | Reads as                                                                             |
+|--------------------------|--------------------------------------------------------------------------------------|
+| `R + C + L`              | complete independence                                                                |
+| `RC + L`                 | R and C associated, both independent of the layer                                    |
+| `RL + CL`                | **conditional independence**: R ⫫ C given L                                          |
+| `RC + RL + CL`           | **homogeneous association**: R–C association exists and is the *same* in every layer |
+| `RCL` (saturated)        | the association differs by layer — fits perfectly, explains nothing                  |
 
 The classic sociological refinements sit on top: **quasi-independence** (blank out the diagonal to model
 mobility net of immobility), **uniform association** (one parameter for an ordinal × ordinal table),

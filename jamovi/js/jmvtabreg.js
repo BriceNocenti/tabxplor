@@ -375,6 +375,15 @@ var FAMILY_LABEL = {
     gaussian: "gaussian (linear)", binomial: "binomial (logistic)", poisson: "poisson (counts)",
     multinomial: "multinomial (nominal)", ordinal: "ordinal (ordered)"
 };
+// Last Phase z3: on a BINARY outcome, family = "poisson" is not a count model -- R resolves it to the
+// modified Poisson (Zou 2004), whose exp(coef) is a RISK ratio. Same stored value ("poisson"), different
+// label, so the dropdown never says "counts" next to a yes/no variable.
+var FAMILY_LABEL_BINARY = {
+    binomial: "binomial (logistic)", poisson: "poisson (risk ratio)"
+};
+var familyLabelsFor = function(c) {
+    return (c && c.levels !== null && c.levels.length === 2) ? FAMILY_LABEL_BINARY : FAMILY_LABEL;
+};
 
 // The family detected from the outcome's R type (mirrors reg_detect_family, but resolves the integer
 // count -> poisson that the R side leaves to an explicit pick). Stored explicitly so the backend never
@@ -396,11 +405,12 @@ var afterFetchMT = function(ui) {
     if (ui.modelTableCtrl && ui.modelTableCtrl.$el) renderModelTable(ui);
 };
 
-// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). Concrete only:
-// a 2-level factor has a single option (binomial) -> the select is greyed out (nothing to choose).
+// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). Concrete only.
+// Last Phase z3: a 2-level factor now offers poisson too -- the OPT-IN modified Poisson / risk-ratio
+// path. binomial stays first, so it remains the detected default (detectFamily is unchanged).
 var familyOptionsFor = function(c) {
     if (!c || c.levels === null) return ["gaussian", "binomial", "poisson"];
-    if (c.levels.length === 2) return ["binomial"];
+    if (c.levels.length === 2) return ["binomial", "poisson"];
     if (c.mt === "ordinal")    return ["ordinal", "multinomial"];
     return ["multinomial", "ordinal"];
 };
@@ -484,7 +494,7 @@ var renderModelRow = function(ui, frag, v) {
     var storedF  = arrGet(ui, "depFamily", v, "family");
     var famSel   = (storedF && opts.indexOf(storedF) >= 0) ? storedF : detected;
     if (!storedF) arrWrite(ui, "depFamily", v, "family", detected);   // persist the detected default
-    var famSelEl = makeSelect(TABX.mtSel, opts, FAMILY_LABEL, famSel,
+    var famSelEl = makeSelect(TABX.mtSel, opts, familyLabelsFor(c), famSel,
         function(f) { arrWrite(ui, "depFamily", v, "family", f); renderModelTable(ui); });
     if (opts.length <= 1) famSelEl.disabled = true;
     row.appendChild(famSelEl);
@@ -553,11 +563,27 @@ var anyNonGaussian = function(ui) {
     }
     return false;
 };
+// Last Phase z3: `ame_ratio` (a marginal RISK RATIO) needs a PROBABILITY to take a ratio of, so it is
+// defined only for binomial / multinomial / ordinal outcomes -- the R side aborts otherwise. Grey it on
+// the same imperative pass rather than letting the user pick a combination that cannot run.
+var anyProbScale = function(ui) {
+    if (!ui.dependent) return false;
+    var deps = utils.clone(ui.dependent.value(), []);
+    for (var i = 0; i < deps.length; i++) {
+        var c = mtCache[deps[i]];
+        if (!c || c === FETCHING) continue;
+        var storedF = arrGet(ui, "depFamily", deps[i], "family");
+        var fam = (storedF && FAMILY_LABEL[storedF]) ? storedF : detectFamily(c);
+        if (fam === "binomial" || fam === "multinomial" || fam === "ordinal") return true;
+    }
+    return false;
+};
 var applyModelEnables = function(ui) {
     var on = anyNonGaussian(ui);
     ["effect_1", "effect_2", "exponentiate"].forEach(function(nm) {
         if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(on);
     });
+    if (ui.effect_3 && ui.effect_3.setEnabled) ui.effect_3.setEnabled(on && anyProbScale(ui));
 };
 
 // ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------

@@ -43,6 +43,12 @@
   with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
   See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
   `lm_plots()` draw it.
+* **Risk ratios, two ways.** With a common outcome an odds ratio is not a "times more likely", and it
+  cannot be compared across nested models. `tab_reg(effect = "ame_ratio")` reports the **marginal risk
+  ratio** from the usual logistic fit (with the adjusted probability in parentheses), and
+  `tab_reg(family = "poisson")` on a **binary** outcome fits a **modified Poisson** regression (robust
+  standard errors) whose coefficients are risk ratios. Both are opt-in — a binary outcome still defaults
+  to logistic — and `empirical = TRUE` gives the matching crude `Obs_RR`.
 * **`tab_export()`** — one entry point for every export format. **`tab_html()`** is the new name for
   `tab_kable()` (kept as a permanent alias). **`tab_css()`** generates one stylesheet for a whole document;
   its cell-colour rules survive Bootstrap-based host pages (pkgdown, Quarto), which style table cells

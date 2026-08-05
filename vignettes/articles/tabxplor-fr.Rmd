@@ -277,6 +277,16 @@ tab(gss_simple, race, party3, color = "contrib")
 # tab(gss_simple, race, party3, pct="row", color = "contrib") # fonctionne avec pct ; mais indépendant des lignes/colonnes
 ```
 
+Si vous connaissez les **modèles log-linéaires** pour tableaux de contingence (la tradition de Goodman,
+familière aux recherches sur la mobilité sociale), cette coloration en constitue le cœur descriptif : le
+Chi2 *est* le modèle log-linéaire d'indépendance, et la contribution de chaque case est son écart à ce
+modèle — un tableau `color = "contrib"` est donc une carte de chaleur de la structure d'association, qui
+se lit d'un coup d'œil. Pour les modèles spécialisés qui se construisent par-dessus — quasi-indépendance,
+modèles d'association RC, UNIDIFF pour comparer la fluidité entre groupes ou cohortes — utilisez le
+package [logmult](https://cran.r-project.org/package=logmult), qui gère aussi les plans de sondage
+complexes. (Attention : « log-linéaire » désigne ici des modèles des *effectifs des cases* d'un tableau ;
+cela n'a rien à voir avec `tab_reg(family = "poisson")`, qui modélise une variable individuelle.)
+
 Voir plus bas le détail de la composition des intervalles de confiance et des couleurs.
 
 **Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan de sondage / *design-effect*, et la cas échant peut s’avérer trop étroite : activez la taille d'échantillon effective de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir chaque intervalle de manière plus fiable et faire passer les tests du Chi2 à une correction de Rao–Scott.

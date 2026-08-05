@@ -85,6 +85,10 @@ children:
                         name: effect_2
                         optionName: effect
                         optionPart: ame
+                      - type: RadioButton
+                        name: effect_3
+                        optionName: effect
+                        optionPart: ame_ratio
               - type: LayoutBox
                 cell: { column: 1, row: 0 }
                 children:
@@ -95,12 +99,12 @@ children:
                         name: at_1
                         optionName: at
                         optionPart: average
-                        enable: (effect_2)
+                        enable: (effect_2 || effect_3)
                       - type: RadioButton
                         name: at_2
                         optionName: at
                         optionPart: reference
-                        enable: (effect_2)
+                        enable: (effect_2 || effect_3)
           - type: CheckBox
             name: empirical
             label: empirical = <i>(compare model estimates with observed values)</i>
