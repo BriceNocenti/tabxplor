@@ -40,8 +40,23 @@ jobs:
 
       - uses: codecov/codecov-action@v4
         with:
-          # Fail if error if not on PR, or if on PR and token is given
-          fail_ci_if_error: ${{ github.event_name != 'pull_request' || secrets.CODECOV_TOKEN }}
+          # NEVER redden CI on an upload failure. The r-lib template's expression
+          # (`github.event_name != 'pull_request' || secrets.CODECOV_TOKEN`) assumes a
+          # CODECOV_TOKEN exists, so on a push it evaluated to `true` and a failed upload failed the
+          # whole job -- which is what happened on 2026-07-27: covr itself succeeded (FAIL 0, PASS
+          # 4263) and only this step died with
+          #   "Branch `dev` is protected but no token was provided"
+          #   "Codecov: Failed to properly create commit: ... exit code 1"
+          # No CODECOV_TOKEN secret is configured on this repo, and Codecov refuses a tokenless
+          # create-commit on a protected branch. Coverage here is INFORMATIONAL by design --
+          # codecov.yml sets `informational: true` for both the project and patch status -- so a
+          # broken upload must not gate the release. `fail_ci_if_error` is the documented gate for
+          # exactly these three errors (create-commit / create-report / upload-process all route
+          # through the action's setFailure(msg, failCi)).
+          # To actually publish coverage: add the repo on codecov.io, then
+          #   gh secret set CODECOV_TOKEN --repo BriceNocenti/tabxplor
+          # No workflow change is needed afterwards -- the token input below picks it up.
+          fail_ci_if_error: false
           file: ./cobertura.xml
           plugin: noop
           disable_search: true

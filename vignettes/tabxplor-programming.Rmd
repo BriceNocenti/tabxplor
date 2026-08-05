@@ -13,6 +13,12 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
 ```{r setup}
 library(tabxplor)
+
+# Pin the legend language: it defaults to "auto" = the ambient locale, so building this English
+# vignette on a French machine silently renders French legends and captions (the -fr articles pin
+# "fr" for the same reason). Output must not depend on where it is built.
+options(tabxplor.lang = "en")
+Sys.setenv(LANGUAGE = "en")   # the test-summary / model-fit row labels go through gettext, not this option
 library(dplyr)
 
 # Tables render as tabxplor's real html tables (the recommended everyday setting); the shared

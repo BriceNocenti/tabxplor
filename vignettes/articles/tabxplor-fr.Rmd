@@ -25,6 +25,7 @@ options(tabxplor.tab_kable_tooltips = FALSE)
 # options(tabxplor.lang = "fr") affiche les legendes et les notes de bas de tableau en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
+Sys.setenv(LANGUAGE = "fr")   # idem : les libelles de resume de test / ajustement passent par gettext
 set_color_palette(theme = "light") # type = "text"
 ```
 
@@ -49,7 +50,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-`tabxplor` aide à **l’exploration de données au moyen de tableaux croisés, en utilisant un code couleur pour trouver plus rapidement les informations les plus importantes d’un tableau**. Les cases sur-représentées sont soulignée en nuances de bleu, les cases sous-représentées en nuances de l’orange au rouge.
+`tabxplor` aide à **l’exploration de données au moyen de tableaux croisés, en utilisant un code couleur pour trouver rapidement les informations les plus importantes d’un tableau**. Les cases sur-représentées sont soulignée en nuances de bleu, les cases sous-représentées en nuances de l’orange au rouge.
 
 Tout tableau est un `data.frame` de classe `tibble`, modifiable avec les verbes habituels de `dplyr`. Les tableaux s'exportent vers Excel, HTML et Markdown.
 
@@ -87,19 +88,19 @@ tab(gss_simple, marital, race)
 options(tabxplor.print = "html")
 ```
 
-Ajoutez `pct = "row"` pour des pourcentages en ligne (ou `"col"` pour des pourcentages en colonne). Une ligne/colonne **Total** comprenant les effectifs (`n`) entre parenthèse est ajoutée automatiquement :
+Ajouter `pct = "row"` pour des pourcentages en ligne (ou `pct = "col"` pour des pourcentages en colonne). Une ligne/colonne **Total**, comprenant les effectifs (`n`) entre parenthèses, est ajoutée automatiquement :
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, race, pct = "row")
 ```
 
-Quand la variable en colonne est **numérique**, `tab()` affiche sa **moyenne** pour chaque catégorie de ligne :
+Quand la variable de colonne est **numérique**, `tab()` affiche sa **moyenne** pour chaque catégorie de ligne :
 
 ```{r, echo = TRUE}
 tab(gss_simple, marital, age)
 ```
 
-Il est possible de passer **plusieurs variables en ligne et en colonne à la fois**.
+Il est possible de passer **plusieurs variables en ligne et en colonne à la fois** (les bordures horizontales et verticales permettent de les distinguer).
 
 ```{r, echo = TRUE}
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
@@ -128,7 +129,7 @@ Lorsque les poids sont **inégaux**, cet intervalle par défaut ne porte aucun *
 options(tabxplor.kish_neff = TRUE)
 ```
 
-C'est une approximation simple, à un seul degré. Un résultat **pleinement fondé sur le plan de sondage/design-effect** — grappes, strates, erreurs-types exactes — n'est disponible que pour les *pvalues* du test du Chi2 (variables catégorielles) et les *pvalues* du de l’ANOVA F (variables en colonne numériques), via `test = "survey"` et les arguments associés (voir l'argument `test =`) : les intervalles de confiance ne sont pas concernés. Voir le package [survey](https://CRAN.R-project.org/package=survey) pour plus d'informations sur les *design-effects*. Les modèles de regression pondérés de `tab_reg()` utilisent toujours le *design-effect* pour calculer leurs erreurs-types (`vignette("tabxplor-reg")`), mais les tableaux de base n'utilisent que la taille d'échantillon effective de Kish.
+C'est une approximation simple, à un seul degré. Un résultat **pleinement fondé sur le plan de sondage/design-effect** — grappes, strates, erreurs-types exactes — n'est disponible que pour les *pvalues* du test du Chi2 (variables catégorielles) et les *pvalues* de l’ANOVA F (variables en colonne numériques), via `test = "survey"` et les arguments associés (voir l'argument `test =`) : les intervalles de confiance ne sont pas concernés. Voir le package [survey](https://CRAN.R-project.org/package=survey) pour plus d'informations sur les *design-effects*. Les modèles de regression pondérés de `tab_reg()` utilisent toujours le *design-effect* pour calculer leurs erreurs-types (`vignette("tabxplor-reg")`), mais les tableaux de base n'utilisent que la taille d'échantillon effective de Kish.
 
 
 ## Sous-tableaux
@@ -147,13 +148,13 @@ tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 
 ## Couleurs : des repères de lecture
 
-L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration des données. `color = "diff"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne. Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.
+L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration de données. `color = "diff"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne (le pourcentage moyen pour toute la population). Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff")
 ```
 
-`color = TRUE` choisit automatiquement un schéma sensé pour chaque type de colonne (différences et ratio pour les pourcentages ; seulement les ratio pour les tableaux de moyennes ; …) ; la légende permet de savoir lequel :
+`color = TRUE` choisit automatiquement un schéma sensé pour chaque type de colonne (différences + ratio pour les pourcentages ; seulement les ratio pour les tableaux de moyennes ; …) ; la légende permet de savoir lequel :
 
 ```{r, echo = TRUE}
 tab(gss_simple, rincome, c(party3, marital), pct = "row", color = TRUE)
@@ -175,7 +176,9 @@ tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 ```
 
 ```{r, echo = TRUE}
-tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, comp="all")
+tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", 
+    color = TRUE, comp="all"
+    )
 ```
 
 **Une référence différente pour chaque variable.** Il est possible de choisir une `ref` pour chaque variable concernée. Pour des pourcentages en **ligne** (ou des moyennes), il est possible de choisir une réference différente pour chaque variable de ligne (ici `race` est lu par rapport à sa première ligne, `relig` par rapport à son Total) :
@@ -196,7 +199,7 @@ Il est possible de personnaliser les seuils de couleur et la palette de couleurs
 
 ## Des couleurs qui respectent la significativité
 
-Les couleurs ci-dessus montrent la *taille* d'un écart, mais ne disent pas s'il est **statistiquement fiable**. Sur de petits échantillons, une différence qui semble marquée peut n'être que du bruit. L'argument `color_signif` fait entrer la significativité dans les repères de couleur :
+Les couleurs ci-dessus montrent la *taille* d'un écart, mais ne disent pas s'il est **statistiquement fiable**. Sur de petits échantillons, une différence qui semble marquée peut s’avérer n'être que du bruit. L'argument `color_signif` fait entrer la significativité dans les repères de couleur :
 
 - `"ignore"` (par défaut) : colore chaque écart selon sa taille observée. Les petites différences sous un certain seuil (en-dessous de ±5% pour une différence de proportion) apparaissent grisées. 
 - `"grey_non_signif"` : colore selon la taille de l'effet, grise les petits effets sous un certain seuil, mais grise **aussi les cases dont l'effet est important mais non significatif**. Chaque case colorée est alors garantie significativement différente de sa référence, sans être encombrée par de très petites différences significatives.
@@ -212,7 +215,7 @@ gss_simple |>
   tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
-Sur de **petits échantillons**, un pourcentage d'apparence marquée peut reposer sur très peu de répondants. `n_min =` est un filtre purement visuel, appliqué en dernier : il masque les cases dont la base (non pondérée) est sous le seuil, et retire entièrement une ligne quand sa plus grande base est trop faible. Ici, les religions les plus rares disparaissent :
+Sur de **petits échantillons**, un pourcentage qui semble marqué peut reposer sur très peu de répondants. `n_min =` est un filtre purement visuel, appliqué en dernier : il masque les cases dont la base (non pondérée) est sous le seuil, et retire entièrement une ligne quand sa plus grande base est trop faible. Ici, les religions les plus rares disparaissent :
 
 ```{r, echo = TRUE}
 tab(gss_simple, relig, race, pct = "row", n_min = 400)
@@ -234,7 +237,7 @@ Afficher les intervalles de confiance du pourcentage ou de la moyenne **de chaqu
 tab(gss_simple, race, party3, pct = "row", ci = "cell") # par défaut, conf_level = 0.95
 ```
 
-Afficher les intervalles de confiance de la **différence** avec une référence, ceux-là même qui sont utilisés pour calculer la significativité (si 0 appartient à l'intervalle de confiance, la case n'est pas significativement différente de la référence, ici la ligne Total) :
+Afficher les intervalles de confiance de la **différence** avec une référence, ceux qui sont utilisés pour calculer la significativité (si 0 appartient à l'intervalle de confiance, la case n'est pas significativement différente de la référence, ici la ligne Total) :
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974

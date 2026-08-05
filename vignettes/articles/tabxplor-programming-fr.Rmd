@@ -22,6 +22,7 @@ options(tabxplor.tab_kable_tooltips = FALSE)
 # fansi. options(tabxplor.lang = "fr") affiche les legendes et les notes en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
+Sys.setenv(LANGUAGE = "fr")   # idem : les libelles de resume de test / ajustement passent par gettext
 set_color_palette(theme = "light")
 ```
 
@@ -41,9 +42,9 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-Cette vignette s'adresse aux utilisateurs qui veulent **programmer avec** `tabxplor` — écrire leurs propres fonctions auxiliaires, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Si vous souhaitez seulement construire et lire des tableaux, `vignette("tabxplor")` est le point de départ.
+Cette vignette s'adresse aux utilisateurs qui veulent programmer avec `tabxplor` — écrire leurs propres fonctions, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Si vous souhaitez seulement construire et lire des tableaux, `vignette("tabxplor")` est le point de départ.
 
-Chaque colonne numérique d'un tableau `tabxplor` est un unique vecteur de classe **`tabxplor_fmt`** (« nombre formaté »). C'est un [enregistrement `vctrs`](https://vctrs.r-lib.org/reference/new_rcrd.html) : derrière l'unique valeur affichée, chaque case stocke **toutes les données nécessaires pour calculer le nombre affiché, sa mise en forme et sa couleur** — effectifs, pourcentages, différences, risques relatifs, bornes d'intervalle de confiance, rapports de cotes, etc. Comme c'est un véritable vecteur, il survit à tous les verbes `dplyr`, et vous pouvez lire ou réécrire n'importe lequel de ses champs.
+Chaque colonne de nombres d'un tableau `tabxplor` est un unique vecteur de classe **`tabxplor_fmt`** (« nombre formaté »). En coulisses, il s’agit d’un [record `vctrs`](https://vctrs.r-lib.org/reference/new_rcrd.html) : derrière la seule valeur visible, chaque case stocke **toutes les données nécessaires pour calculer le nombre affiché, sa mise en forme et sa couleur** — effectifs, pourcentages, différences, risques relatifs, bornes d'intervalle de confiance, rapports de cotes, etc. Comme c'est un véritable vecteur, il survit à tous les verbes `dplyr`, et il est possible de lire ou de réécrire n'importe lequel de ses champs.
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
@@ -58,7 +59,7 @@ Le moyen le plus rapide de récupérer les nombres sous-jacents sous forme de ve
 tabs |> mutate(across(where(is_fmt), get_num))
 ```
 
-Pour obtenir plutôt les chaînes de caractères (formatées, mais sans les couleurs), utilisez `format()` :
+Pour obtenir plutôt les chaînes de caractères (formatées, mais sans les couleurs), utiliser `format()` :
 
 ```{r, eval = FALSE}
 tabs |> mutate(across(where(is_fmt), format))
@@ -93,7 +94,7 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `display`   | quel champ est affiché (par case) |
 | `in_totrow`, `in_tottab`, `in_refrow` | la case est-elle dans une ligne de total / un tableau de total / une ligne de référence (logique) |
 
-Voyez l'ensemble du data frame sous-jacent d'une colonne avec `vctrs::vec_data()` :
+Il est possible de visualiser l'ensemble du data frame sous-jacent d'une colonne avec `vctrs::vec_data()` :
 
 ```{r}
 vctrs::vec_data(tabs$Married)
@@ -101,7 +102,7 @@ vctrs::vec_data(tabs$Married)
 
 ## Lire et modifier les champs
 
-Lisez un champ avec `$` (le plus commode), ou avec `vctrs::field()` :
+Il est possible d’accéder à un champ avec `$` (le plus commode), ou autrement avec `vctrs::field()` :
 
 ```{r, eval = FALSE}
 tabs$Married$pct
@@ -117,14 +118,14 @@ ci_tab$Married$ci_inf
 ci_tab$Married$ci_sup
 ```
 
-Changez le champ affiché avec `set_display()` :
+Pour changer le champ affiché avec `set_display()` :
 
 ```{r, eval = FALSE}
 tabs |> set_display("diff")
 tabs |> mutate(across(where(is_fmt), ~ set_display(., "diff")))
 ```
 
-Pour modifier un champ, la voie la plus simple est `dplyr::mutate()` **sur le vecteur fmt lui-même** — un `tabxplor_fmt` se comporte comme un petit data frame de ses champs. Par exemple, arrondir chaque case à deux décimales :
+Pour modifier un champ, la voie la plus simple est `dplyr::mutate()` **sur le vecteur fmt lui-même** — une colonne `tabxplor_fmt` se comporte comme un petit data frame avec autant de colonnes que de champs (19). Par exemple, pour arrondir chaque case à deux décimales lors de l’affichage :
 
 ```{r, eval = FALSE}
 tabs |> mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
@@ -143,7 +144,7 @@ tab_num(gss_simple, race, c(age, tvhours), digits = 1L) |>
 
 ## Affichage composite : combiner des champs
 
-`set_display()` choisit *un* champ à afficher. Pour montrer **plusieurs champs dans une même case**, donnez-lui un **gabarit** `{}` plutôt qu'un simple nom de champ — le même gabarit que vous pouvez passer à `tab(display =)` lors de la construction du tableau. Le gabarit est du texte ordinaire avec des jetons `{champ}` ; chaque jeton est remplacé par ce champ, formaté comme d'habitude :
+`set_display()` choisit *un* champ à afficher. Pour montrer **plusieurs champs dans une même case**, il est possible de lui donner un **gabarit** `{}` plutôt qu'un simple nom de champ — le même gabarit qu’il est possible de passer à `tab(display =)` lors de la construction du tableau. Le gabarit est un texte ordinaire avec des `{champ}` :
 
 ```{r}
 tabs |> set_display("{pct} ({diff})")
@@ -151,29 +152,29 @@ tabs |> set_display("{pct} ({diff})")
 
 Les règles :
 
-- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var` — le même ensemble que pour les affichages à champ unique.
-- Le **premier** jeton est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
-- Un **nom de champ nu** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
-- C'est une **surcouche d'affichage** pour les sorties texte (la console, `tab_kable()`, `tab_md()`) : les champs stockés restent intacts, vous pouvez donc revenir en arrière à tout moment.
-- Le champ `{ci}` imprime déjà ses propres crochets `[…;…]`, écrivez donc `"{pct} {ci}"` — et **non** `"{pct} [{ci}]"`, qui les doublerait.
+- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`.
+- Le **premier** `{}` est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
+- Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
+- Il s’agit simplement d’un affichage pour les sorties (la console, `tab_kable()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.
+- Le champ `{ci}` imprime déjà ses propres crochets `[…;…]` ; écrire `"{pct} {ci}"` et **non** `"{pct} [{ci}]"`.
 
 ## Créer une colonne à partir d'un autre champ
 
-Comme changer l'affichage ne recalcule rien — chaque champ est déjà stocké dans la case — vous pouvez dériver une **nouvelle colonne qui affiche un champ différent**. Un tableau de pourcentages a une référence par défaut (la ligne Total), donc son champ `diff` est déjà rempli ; un jumeau en différence de chaque colonne de pourcentages tient alors en un seul `mutate()` :
+Comme changer l'affichage ne recalcule rien — chaque champ est déjà stocké dans la case — il est possible d’**afficher un champ dans une nouvelle colonne**. Par exemple une nouvelle colonne avec la différence par rapport à la catégorie de référence :
 
 ```{r}
 tab(gss_simple, race, marital, pct = "row") |>
   mutate(across(where(is_fmt), ~ set_display(., "diff"), .names = "{.col}_diff"))
 ```
 
-`.names = "{.col}_diff"` conserve les colonnes de pourcentages originales et ajoute à côté de chacune un jumeau `<nom>_diff`. (Si une colonne `diff` ressort vide, c'est que le tableau source n'avait pas de case de référence — construisez-la avec `ref =` / `comp =`, ou avec `color = "diff"`.)
+`.names = "{.col}_diff"` conserve les colonnes de pourcentages originales et ajoute à côté de chacune un jumeau `<nom>_diff`.
 
 ## Lignes de total, lignes et colonnes de référence
 
-Des prédicats auxiliaires vous permettent d'agir sur les parties structurelles d'un tableau : `is_totrow()` / `is_tottab()` / `is_refrow()` (au niveau de la case, vecteurs logiques), et `is_totcol()` / `is_refcol()` (au niveau de la colonne). Ce sont eux qui maintiennent les totaux en place quand vous réordonnez, ou quand vous écrivez une mise en forme conditionnelle :
+Des fonctions de test logique permettent d'agir sur les parties structurelles d'un tableau : `is_totrow()` / `is_tottab()` / `is_refrow()` (au niveau de la case, vecteurs logiques : est-ce que la case appartient à une ligne Total ? À un sous-tableau "Ensemble" ? À une ligne de référence ?), et `is_totcol()` / `is_refcol()` (au niveau de la colonne : est-ce que la colonne est une colonne Total ? Est-ce qu’elle est la colonne de référence ?). Ils permettent, par exemple, d’appliquer une mise en forme différence sur la ligne Total et sur le corps du tableau :
 
 ```{r, eval = FALSE}
-# plus de décimales sur la ligne de total que sur le corps du tableau :
+# moins de décimales sur la ligne Total que sur le corps du tableau :
 tab(gss_simple, race, marital, race, pct = "row") |>
   mutate(across(
     where(is_fmt),
@@ -183,25 +184,25 @@ tab(gss_simple, race, marital, race, pct = "row") |>
 
 ## Attributs de colonne
 
-Outre ses champs par case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
+Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
 
-- `type` — `get_type()` / `set_type()` : `"n"`, `"mean"`, `"row"`, `"col"`, `"all"`, `"all_tabs"` (ou `"coef"` pour les bêtas de régression). Il détermine quels calculs effectuent les fonctions `tab_*`.
+- `type` — `get_type()` / `set_type()` : `"n"`, `"mean"`, `"row"`, `"col"`, `"all"`, `"all_tabs"` (ou `"coef"` pour les coefficients bêtas d’une régression linéaire). Il détermine quels calculs effectuent les fonctions `tab_*`.
 - `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
-- `col_var` — `get_col_var()` : le nom de la variable en colonne (un tableau peut en contenir plusieurs).
+- `col_var` — `get_col_var()` : le nom de la variable en colonne (un tableau peut en contenir plusieurs, un nom différent ajoute une bordure verticale entre les différences variables de colonne).
 - `comp_all` — `get_comp_all()` : avec des `tab_vars`, la référence de comparaison est-elle le sous-tableau (`FALSE`) ou le tableau entier (`TRUE`) ?
 - `totcol` / `refcol` — `is_totcol()` / `is_refcol()` : est-ce une colonne de total / une colonne de référence ?
 
-## Construire des cases de zéro
+## Construire des cases à partir de zéro
 
-`fmt()` construit un vecteur `fmt` directement à partir de nombres — pratique pour les tests, ou pour ajouter une colonne calculée à la main. Tout ce dont les moteurs d'affichage et de couleur ont besoin peut être fourni :
+`fmt()` construit un vecteur `fmt` directement à partir de nombres — pratique pour ajouter une colonne à la main. Tout ce dont les moteurs d'affichage et les repères de couleur ont besoin peut être fourni :
 
 ```{r}
-fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
+fmt(n = c(10L, 20L, 30L), pct = c(0.2, 0.4, 0.6), display = "pct", digits = 0L)
 ```
 
 ## Tableaux à partir d'effectifs déjà agrégés
 
-Parfois, les données arrivent déjà **croisées** — un tableau d'effectifs issu d'un rapport, une `table()`, une matrice de fréquences. `tab_counts()` construit le même tableau `tabxplor` coloré que `tab()`, mais à partir de ces effectifs plutôt que des observations brutes ; chaque calcul tourne sur les effectifs, donc le résultat est identique à ce que `tab()` aurait produit à partir des observations individuelles.
+Parfois, les données arrivent déjà croisées — un tableau d'effectifs issu d'un rapport, une `table()`, une matrice de fréquences. `tab_counts()` construit le même tableau `tabxplor` que `tab()`, mais à partir de ces effectifs plutôt que des observations brutes et des données individuelles.
 
 L'entrée la plus courante est un data frame d'**effectifs au format long** (une ligne par combinaison, l'effectif dans une colonne) :
 
@@ -211,7 +212,7 @@ tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
 # identique à tab(gss_simple, marital, race, pct = "row", color = "diff")
 ```
 
-Il fond aussi automatiquement une `table()` / `xtabs()` / matrice, et lit un frame au format **large** (une colonne par modalité de la variable en colonne) via `cols =` / `col_name =` :
+L’entrée peut aussi être une `table()` / `xtabs()` / matrice, et lit un dataframe au format **large** (une colonne par modalité de la variable en colonne) via `cols =` / `col_name =` :
 
 ```{r, eval = FALSE}
 tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "diff")
@@ -221,11 +222,11 @@ tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
            col_name = "race", pct = "row", color = "diff")
 ```
 
-La pondération fonctionne comme dans `tab()` : passez l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (La taille d'échantillon efficace de Kish, `options(tabxplor.kish_neff = TRUE)`, a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus, elle ne s'applique donc pas ici — les intervalles de confiance utilisent le N non pondéré comme indiqué.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.
+La pondération fonctionne comme dans `tab()` : passer l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (La taille d'échantillon efficace de Kish, `options(tabxplor.kish_neff = TRUE)`, a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus, elle ne s'applique donc pas ici — les intervalles de confiance utilisent toujours le N non pondéré.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.
 
 ## Passer un tableau groupé en colonnes
 
-Un tableau **groupé** (construit avec des `tab_vars`) empile un sous-tableau par groupe. `tab_spread()` bascule les modalités d'une variable de groupe en **colonnes côte à côte** — idéal pour comparer une même mesure entre les groupes. Sélectionnez d'abord la colonne de mesure voulue, puis basculez :
+Un tableau **groupé** (construit avec des `tab_vars`) empile un sous-tableau par groupe. `tab_spread()` bascule les modalités d'une variable de groupe en **colonnes côte à côte** — idéal pour comparer une même mesure entre les groupes. D'abord sélectionner la colonne de mesure voulue, puis basculer :
 
 ```{r}
 tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row") |>
@@ -233,11 +234,10 @@ tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row")
   tab_spread(year)
 ```
 
-`tab(..., spread_vars = year)` fait la même chose en un seul appel. Le `split_var` de la vignette sur la régression produit un tableau groupé que vous pouvez basculer de la même façon — voir `vignette("tabxplor-reg")`.
 
 ## Un score à partir de plusieurs facteurs
 
-`score_from_lv1()` transforme une batterie de facteurs oui/non (ou d'accord/pas d'accord) en un unique **score sommé** : pour chaque ligne, il compte combien des facteurs listés se trouvent à leur **première modalité**. Ici, nous comptons combien de deux marqueurs — être marié, et se situer dans la tranche de revenu supérieure — possède chaque répondant :
+`score_from_lv1()` transforme une batterie de variables catégorielles binaires Oui/Non (ou D'accord/Pas d'accord) en un unique **score** : pour chaque individu : il compte combien des variables listés se trouvent à leur **première modalité**. Ici, nous comptons combien de deux marqueurs — être marié, et se situer dans la tranche de revenu supérieure — possède chaque répondant :
 
 ```{r}
 gss_simple |>
@@ -249,7 +249,7 @@ Le score va de 0 au nombre de facteurs (les valeurs manquantes ne comptent jamai
 
 ## Construire plusieurs tableaux d'un coup
 
-`tab_many()` — le moteur derrière `tab()` — accepte des **listes d'arguments** pour construire plusieurs tableaux de formes différentes en un seul appel. Pour un lot entièrement piloté par les données, `purrr::pmap()` sur une petite table de spécifications est l'idiome — une ligne par tableau, une colonne par argument :
+`tab()` accepte des **listes d'arguments** pour construire plusieurs tableaux de formes différentes en un seul appel. Pour un lot entièrement piloté par les données, `purrr::pmap()` sur une petite table de spécifications est l'idiome — une ligne par tableau, une colonne par argument :
 
 ```{r, eval = FALSE}
 specs <- tibble::tribble(
@@ -264,7 +264,9 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 ## Options avancées
 
-Au-delà des réglages du quotidien (`vignette("tabxplor")` &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la construction. HTML / `tab_kable()` :
+Au-delà des réglages les plus habituels (`vignette("tabxplor")` &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la parallelisation des calculs. 
+
+HTML / `tab_kable()` :
 
 - `tabxplor.tab_kable_engine` — `"html"` (sans dépendance, le défaut) ou `"kableExtra"` (ancien).
 - `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; mettez `FALSE` dans un document à plusieurs tableaux et appelez `tab_css()` une seule fois à la place (comme cette page).

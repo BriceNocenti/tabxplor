@@ -1581,6 +1581,34 @@ clusters are environment-specific and invisible on the maintainer's box.
   devtools/covr/r-lib-actions all set `NOT_CRAN=true` (see `helper-benchmark.R`).
 - **CI triggers**: `dev` added to `push` on R-CMD-check + test-coverage, both gain
   `workflow_dispatch`.
+- **codecov upload made non-blocking** (`fail_ci_if_error: false`). With covr fixed, the job still
+  went red — but on the UPLOAD step only (covr itself: FAIL 0, PASS 4263). No `CODECOV_TOKEN` secret
+  exists on the repo, and Codecov refuses a tokenless `create-commit` on a protected branch
+  (*"Branch `dev` is protected but no token was provided"*). The r-lib template's
+  `fail_ci_if_error: ${{ github.event_name != 'pull_request' || secrets.CODECOV_TOKEN }}` assumes a
+  token, so on a push it evaluated to `true`. That also contradicted `codecov.yml`, which already
+  sets `informational: true` for both statuses. A **Codecov badge** was then added to `README.Rmd`
+  (+ rebuilt `README.md`); it stays "unknown" until the maintainer adds the repo on codecov.io and
+  runs `gh secret set CODECOV_TOKEN` — the workflow needs no further change.
+- **⚠ Locale trap in the DOC BUILD, found while rebuilding the README** (same root cause as the CI
+  i18n failure, opposite direction). `tabxplor.lang` defaults to `"auto"` = the ambient locale, so
+  knitting the **English** README/vignettes on the maintainer's `fr_FR.UTF-8` box silently produced
+  **French** legends, captions and GOF labels. Two levers are needed, because they drive different
+  strings: `options(tabxplor.lang=)` covers the colour legend / footer / reg caption, while the
+  test-summary + model-fit row labels (`reg_footer_spec`/`test_pvalue_descriptor`/`test_es_measure`,
+  R/tab-test-display.R) resolve through gettext on the AMBIENT locale, which only `LANGUAGE` reaches
+  ("LR vs null" knitted as "RV vs nul"). Both are now pinned in all 7 documents — `"en"` in
+  `README.Rmd` + the 3 English vignettes, `"fr"` in the 3 `-fr` articles (symmetric, so render order
+  cannot matter). `README.md` rebuilt: the diff is now **exactly the badge**, zero French left.
+  **Known residual limitation, NOT fixable from tabxplor** (measured): glibc caches a gettext domain's
+  catalog per process, so once French is loaded, switching `LANGUAGE` back to `"en"` does NOT restore
+  English — neither `flush_gettext_cache()` (even in `with_legend_lang()`'s flush-set-flush order) nor
+  re-binding the real domain via `bindtextdomain("R-tabxplor", NULL)` + re-bind clears it. The pins
+  are therefore reliable per-process (the normal case: `build_readme()`, and pkgdown/`R CMD build`
+  rendering each document separately) but an English document rendered **after** a French one *in the
+  same R process* would keep French gettext strings. Escaping that would mean routing those labels
+  through the explicit `lang` argument instead of ambient gettext — a design change, deliberately not
+  attempted here.
 - **test-coverage** (which had NEVER passed — only 2 runs ever, both red) died *after* a green suite
   with `Error in readRDS(f) : error reading from connection`. Root-caused by local reproduction:
   covr injects `reg.finalizer(ns, covr:::save_trace, onexit = TRUE)` into the INSTALLED package, so
@@ -1620,7 +1648,7 @@ clusters are environment-specific and invisible on the maintainer's box.
 
 
 
-
+#### Last Phase z3 — very last new features : ratio marginal effects and poisson regression for binomial
 
 
 

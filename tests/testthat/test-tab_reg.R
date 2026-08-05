@@ -349,6 +349,7 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
   expect_true(all(get_or(col)[ref] == 1))
 })
 
+
 test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the coef shape", {
   skip_if_not_installed("broom")
   d  <- gb_data()

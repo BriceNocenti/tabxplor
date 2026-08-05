@@ -8,6 +8,8 @@
 [![CRAN
 status](https://www.r-pkg.org/badges/version/tabxplor)](https://CRAN.R-project.org/package=tabxplor)
 [![R-CMD-check](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/BriceNocenti/tabxplor/graph/badge.svg)](https://app.codecov.io/gh/BriceNocenti/tabxplor)
 <!-- badges: end -->
 
 `tabxplor` makes cross-tables readable at a glance, for data

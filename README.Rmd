@@ -18,6 +18,16 @@ library(tabxplor)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
+# Pin the language, BOTH ways -- this English README must not depend on who builds it (knitting it
+# on the maintainer's fr_FR.UTF-8 box otherwise yields French legends, captions and GOF labels).
+# Two levers are needed because they drive different strings:
+#   - options(tabxplor.lang) drives the colour legend / footer / reg caption;
+#   - the test-summary and model-fit row labels (reg_footer_spec / test_pvalue_descriptor /
+#     test_es_measure, R/tab-test-display.R) resolve through gettext on the AMBIENT locale, which
+#     only LANGUAGE reaches. Without it, "LR vs null" knits as "RV vs nul".
+# Same discipline as set_color_palette(theme=) below and tests/testthat/setup.R.
+options(tabxplor.lang = "en")
+Sys.setenv(LANGUAGE = "en")
 set_color_palette(theme = "light")
 ```
 
@@ -26,6 +36,7 @@ set_color_palette(theme = "light")
 <!-- badges: start -->
 [![CRAN status](https://www.r-pkg.org/badges/version/tabxplor)](https://CRAN.R-project.org/package=tabxplor)
 [![R-CMD-check](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/BriceNocenti/tabxplor/graph/badge.svg)](https://app.codecov.io/gh/BriceNocenti/tabxplor)
 <!-- badges: end -->
 
 `tabxplor` makes cross-tables readable at a glance, for data exploration. One line of code builds a table with percentages, weighted counts, confidence intervals and tests — and **colors highlight the cells that stand out from the total, only when the difference is statistically solid**. You spot the structure of your data immediately, instead of scanning numbers row by row.
