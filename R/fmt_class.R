@@ -1367,30 +1367,27 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 new_fmt <- function(n         = integer(),
                     type      = "n"          ,
 
-                    digits    = rep(0L      , length(n)),
-                    display   = dplyr::case_when(
-                      type == "mean"                                ~ "mean",
-                      type %in% c("row", "col", "all", "all_tabs")  ~ "pct" ,
-                      TRUE                                          ~ "n"    ),
+                    digits    = NULL,
+                    display   = NULL,
 
-                    wn        = rep(NA_real_, length(n)),
-                    pct       = rep(NA_real_, length(n)),
-                    mean      = rep(NA_real_, length(n)),
-                    diff      = rep(NA_real_, length(n)),
-                    ratio     = rep(NA_real_, length(n)),
-                    ctr       = rep(NA_real_, length(n)),
-                    var       = rep(NA_real_, length(n)),
-                    ci_inf    = rep(NA_real_, length(n)),
-                    ci_sup    = rep(NA_real_, length(n)),
-                    pvalue    = rep(NA_real_, length(n)),
-                    or        = rep(NA_real_, length(n)),
-                    tot_n     = rep(NA_real_, length(n)),
-                    n_eff     = rep(NA_real_, length(n)),
-                    obs       = rep(NA_real_, length(n)),
+                    wn        = NULL,
+                    pct       = NULL,
+                    mean      = NULL,
+                    diff      = NULL,
+                    ratio     = NULL,
+                    ctr       = NULL,
+                    var       = NULL,
+                    ci_inf    = NULL,
+                    ci_sup    = NULL,
+                    pvalue    = NULL,
+                    or        = NULL,
+                    tot_n     = NULL,
+                    n_eff     = NULL,
+                    obs       = NULL,
 
-                    in_totrow = rep(FALSE   , length(n)),
-                    in_tottab = rep(FALSE   , length(n)),
-                    in_refrow = rep(FALSE   , length(n)),
+                    in_totrow = NULL,
+                    in_tottab = NULL,
+                    in_refrow = NULL,
 
                     comp_all  = NA   ,
                     ref = ""   ,
@@ -1421,8 +1418,45 @@ new_fmt <- function(n         = integer(),
   #   purrr::map(length) |> print()
   # cat("\n")
 
+  # Last Phase z6: the 17 unset fields share ONE `NA` vector instead of allocating one each.
+  #   R's copy-on-write makes this invisible -- any `field<-` / vec_slice / arithmetic duplicates
+  #   the touched field alone -- but a freshly built record costs 1 allocation, not 17 (measured
+  #   at 1e6 cells: 9.9 MB instead of 129.7 MB; about half the sharing survives the pipeline).
+  #   The `display` default is base-R for the same reason: the dplyr::case_when() it replaces cost
+  #   90 us per call, more than half the whole constructor, on all 210 calls of a tab_many() build.
+  #   `%in%` (not ==) so an NA `type` falls through to "n", exactly as case_when did.
+  #   WARNING: NULL defaults, so a field passed as NULL is "unset", not an error. No caller does
+  #   that; if one ever needs an empty column it must pass a 0-length vector with length(n) == 0.
+  #   See dev/empty_vctrs_fields_sparse_record.md (why the fields stay ALWAYS present).
+  size <- length(n)
+  nas  <- rep(NA_real_, size)
+  fls  <- rep(FALSE   , size)
+  if (is.null(display)) {
+    display <- rep("n", length(type))
+    display[type %in% c("row", "col", "all", "all_tabs")] <- "pct"
+    display[type %in% "mean"                            ] <- "mean"
+  }
+  if (is.null(digits)) digits <- rep(0L, size)
+  if (is.null(wn    )) wn     <- nas
+  if (is.null(pct   )) pct    <- nas
+  if (is.null(mean  )) mean   <- nas
+  if (is.null(diff  )) diff   <- nas
+  if (is.null(ratio )) ratio  <- nas
+  if (is.null(ctr   )) ctr    <- nas
+  if (is.null(var   )) var    <- nas
+  if (is.null(ci_inf)) ci_inf <- nas
+  if (is.null(ci_sup)) ci_sup <- nas
+  if (is.null(pvalue)) pvalue <- nas
+  if (is.null(or    )) or     <- nas
+  if (is.null(tot_n )) tot_n  <- nas
+  if (is.null(n_eff )) n_eff  <- nas
+  if (is.null(obs   )) obs    <- nas
+  if (is.null(in_totrow)) in_totrow <- fls
+  if (is.null(in_tottab)) in_tottab <- fls
+  if (is.null(in_refrow)) in_refrow <- fls
+
   #vctrs::vec_assert(display, character()) #check display or size
-  display <- vctrs::vec_recycle(display, size = length(n))
+  display <- vctrs::vec_recycle(display, size = size)
   # vctrs::vec_assert(n     , integer()) #, size = length(n)
   # vctrs::vec_assert(wn    , double() ) #, size = length(n)
   # vctrs::vec_assert(pct   , double() ) #, size = length(n)

@@ -1834,8 +1834,54 @@ strings plus z3's 6, and the two stale "nulll" fuzzies resolved).
 
 ---
 
-#### Last Phase z6 — a significance test for the model-vs-observed gap
+#### Last Phase z6 — remove some empty vctrs field ?
 
+Would there be a simple way to not create empty vctrs fields (all `NA`), for exemple not create `obs` field unless `tab_reg(..., color = "adjustment")` ? Can we ensure `get_*` or `$` or `mutate()` a non-existing field will return the right `NA` vector (without creating the field), and `set_*` or `$<-` create it reliably ? Maybe always keeping the base fields (`n`, etc.) for reliability ? Would it be easy/straightforward to implement that in the current code by not creating columns that don’t need to be ? Would there be caveats ? Would it increase performance, or would it be, mostly, completely useless for performance (start with this maybe : if it’s useless, it’s useless) ?
+
+**DONE (2026-08-05) — studied; sparse fields CLOSED, constructor cleanup landed.** Full suite green
+(FAIL 0, WARN 0, SKIP 4, PASS 4479 = the z5 count exactly), **zero golden/snapshot churn** — the
+change is byte-identical by construction. Study, measurements and rejected alternatives:
+`dev/empty_vctrs_fields_sparse_record.md`.
+
+**The record stays dense (20 fields, always present).** Sparse fields are *technically possible* —
+records with different field sets combine correctly through tabxplor's own `vec_ptype2`/`vec_cast`
+(probed: `vec_c`/`c`/`vec_rbind`/`bind_rows`/`vec_slice`/`vec_assign` all work) — but every reason
+to do it failed measurement:
+- **Performance: no.** A field costs ~0.7 µs/call; a big `tab_many()` build makes 210 `new_fmt()`
+  calls, so the ceiling is ~0.03 % of a 624 ms build. The time is in data.table + dplyr, where the
+  perf profile already put it.
+- **Memory: ~92 KB.** All-`NA`/`FALSE` fields are 42 % of an fmt column's field bytes = 30 % of the
+  object, but the biggest realistic table measured is **308 KB total**. fmt memory scales with
+  *cells*, not rows, so the 8M-row fixtures do not change it.
+- **Simplicity: the opposite.** It turns a fixed, snapshot-locked shape into a per-column variable
+  one (`test-fmt-contract.R` could no longer state what the record *is*), and adds a SECOND way to
+  ask "does this cell have an observed effect" (`"obs" %in% fields(x)`) beside the existing
+  `is.na(get_obs(x))` — two encodings of one fact, the §2.5 disease Phase 17 spent itself removing.
+  `NA` is already the honest encoding of "this measure does not apply here", and z5's colour engine
+  depends on it. Hard limits found: `` vctrs::`field<-` `` **cannot create** a field (every setter
+  would need a full-column rebuild), and `mutate()` — explicit user-contract surface — cannot see an
+  absent column without materialising the dense frame anyway.
+
+**What did land** (the honest residue): `new_fmt()` took `NULL` field defaults and now fills them in
+the body from ONE shared `nas`/`fls` vector (copy-on-write keeps it correct), with a base-R `display`
+default replacing a `dplyr::case_when()` that cost **90 µs — more than half the constructor** — on
+every call, including the size-0 `vec_ptype2` path (the compact merge's hottest fmt site). Measured
+**203 → 107 µs** defaulted, **189 → 62 µs** on that ptype path, 20 → 5 distinct SEXPs per fresh
+record, `identical()` on data AND attributes across 13 constructor shapes. Public `fmt()` deliberately
+untouched (0 calls on the crosstab path; its defaults are documented usage). **End-to-end gain: none**
+— a same-session A/B gave 691 ms vs 679 ms, i.e. noise. Hygiene, not perf; no NEWS entry.
+
+**Re-open threshold**: the verdict is a function of *20 fields / 210 calls per build*. If a later
+phase pushes the record past ~30 fields (z7's gap SE would be the 21st), re-measure §4/§5 of the
+report rather than assuming the answer still holds.
+
+---
+
+#### Last Phase z7 — research for possible final new features
+
+I want you to do full researches, both in web searches and the current code, about three possible new features for 2.0.0, and create three different new .md file in `dev/`. Do not hesitate to test some ideas in temporary scripts. 
+
+##### 1. A significance test for the model-vs-observed gap
 Phase z5 colours the SIZE of the gap between a modelled effect and its observed counterpart, and says
 so honestly: `color_signif` is pinned to `ignore` because the gap has no test of its own yet. This
 phase adds one. It is a genuinely separate piece of work -- new statistics, a second stored quantity,
@@ -1845,9 +1891,9 @@ Read first: `dev/model_vs_observed_effect_colour.md` SS4 (why CI overlap is not 
 validated influence-function route, the rejected alternatives), SS4.4 (why it was deferred), SS9.1 (the
 `split_var` case, where the cheap test is already the sound one) and SS6 (the storage decision).
 
-**Step 1 — study, statistical soundness, architecture questions. Report only, then pause.**
+**Step 1 — study, statistical soundness, architecture questions.**
 Write the report in a new `dev/*.md`, in the same shape as z5's: measured evidence, rejected
-alternatives, and a numbered list of decisions for the maintainer. It must answer at least:
+alternatives, and a numbered list of decisions for the maintainer (we’ll plan for implementation and implement in another phase and another session). It must answer, at least:
 
 - The measurement is settled in principle (SS4.2 measured the stacked influence-function SE against an
   800-replicate bootstrap: ratio 1.02 unweighted, 1.02 weighted, and it reproduced `svyglm`'s own SE
@@ -1875,11 +1921,19 @@ alternatives, and a numbered list of decisions for the maintainer. It must answe
   entirely non-collapsibility (SS4.2 measured p = 0.020 with zero confounding). What should the legend
   and the docs say then?
 
-**Step 2 — plan, then implement.** Only after the maintainer has answered.
+##### 2. Add crude counterparts for numeric predictors ?
+
+`"multiplier only touches numeric predictors, which have no crude twin"` : would’nt the right crude twin for numeric predictors have a meaning and be a simple mean computable with `tab_num()`, or is it more complex depending on the `family` ? Would the rationale for not adding it be that mixing factors and numerics on the same column will bring formatting white elephants, because the whole framework is made to treat column numeric variables as full columns ? Would there be a reliable workaround or isn’t it worthwhile ?
+
+##### 3. Black and white "publication ready" opt-in formatting ?
+
+What black and white text formatting, visually striking, are shared by html and Excel/Word (console stay colored) ? Grey stay the same (under threshold). We then have : plain black / bold black / underlined black / grey background, and the combinations of them. What else ? Are different underline style visually different enough, in a striking enough way, to use them to do a gradient ? How many breaks could we hope, is 2 breaks over and 2 breaks over achieveable ? Would there be a way to signify what is under-represented and what is over-represented in a visually meaningful way ? Should we combine that with significance stars ? Do some scientific articles use these kind of visual helpers, what are the good practices and minimal standards on that matter, and do some scientific reviews accept them (I know that some sociology review I already wrote in accept them) ? The default black and white publication ready formatting palette should be readable, not overwhelming nor confusing, so it should definitely be more simple and straightforward than the colored one.
 
 
 
+#### Last Phase z8 — a significance test for the model-vs-observed gap
 
+**Step 2 — plan, then implement what has been chosen from z7.**
 
 
 

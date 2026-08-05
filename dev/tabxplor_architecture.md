@@ -62,7 +62,9 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
 
 **Critical distinction:** Fields are per-cell vectors (every cell can have a different `n`, `pct`, etc.). Attributes are scalar values describing the entire column (all cells in the column share the same `type`, `color`, etc.). Do not confuse the two when modifying the class.
 
-**Constructor chain:** `fmt()` (public, validates and coerces arguments) → `new_fmt()` (internal, calls `vctrs::new_rcrd()`).
+**Constructor chain:** `fmt()` (public, validates and coerces arguments) → `new_fmt()` (internal, calls `vctrs::new_rcrd()`). `new_fmt()`'s field formals default to `NULL` and are filled in the body from ONE shared `nas`/`fls` vector (Last Phase z6): copy-on-write makes that invisible, but a fresh record costs 1 allocation instead of 17, and its `display` default is base-R rather than a `dplyr::case_when()` that cost more than half the constructor on all ~210 calls of a `tab_many()` build — including the size-0 `vec_ptype2` path, the compact merge's hottest fmt site.
+
+**The record is deliberately DENSE:** every column carries all 20 fields, and an inapplicable measure is stored as `NA`, never as an absent field. That is the contract `test-fmt-contract.R` locks, and the colour engine reads it directly (`fmt_adjustment_score()`, `get_num()`'s `obs` arm and the tooltip builder all call `get_obs(x)` on *every* column and leave the cell uncoloured because the value is `NA`). Optional/sparse fields were measured and rejected in Last Phase z6 — feasible in vctrs, but worth ~0.03 % of build time and ≤92 KB, while replacing a fixed shape with a per-column variable one and adding a second encoding (`"obs" %in% fields(x)`) of a fact `is.na(get_obs(x))` already states. See `dev/empty_vctrs_fields_sparse_record.md`.
 
 **Adding a new field** requires updating: `new_fmt()`, `fmt()`, `format.tabxplor_fmt()`, `pillar_shaft.tabxplor_fmt()`, the relevant `vec_arith` methods, and possibly `tab_pct()`/`tab_ci()`/`tab_chi2()`. Expect ~8 functions across 3 files.
 
