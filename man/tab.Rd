@@ -122,7 +122,26 @@ may still be significant -- just too small to colour (and it can carry significa
 only guarantee is: a coloured cell is significantly different from its reference.
 \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
 only cells whose interval clears the threshold, with dimmer, conservative colors.
-}}
+}
+With \code{color = "contrib"} the three values are three readings of the same departure from
+independence, because a contribution has no confidence interval to floor:
+\itemize{
+\item \code{"ignore"} and \code{"grey_non_signif"} color the \strong{relative} contribution
+(a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
+the correspondence-analysis reading, so the scale is relative to the table);
+\item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
+the absolute \code{residual} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
+thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
+}
+In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
+residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
+whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
+the package rule -- weighted estimate, unweighted \code{n} base, or Kish \code{n_eff} with
+\code{options(tabxplor.kish_neff = TRUE)} -- while the contribution itself stays weighted (it
+estimates the population table's structure). Cells whose expected count is below 1 are left
+uncolored: the normal approximation does not hold there.
+Note that the colors are computed per column at print time, so every significance threshold in
+them reads \code{options(tabxplor.conf_level)}, not a per-call \code{conf_level}.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
 for a binary variable the usual odds ratio; for a variable with 3 levels or more,
@@ -324,8 +343,12 @@ value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 \code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
-\emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
+\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid}; the
+first field is the \emph{primary}, shown alone by Excel and used for coloring.
+\code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
+standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
+\code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
+whether it departs from independence -- the SPSS cell layout. A bare field name is also accepted as a
 shorthand for its single-field template, so \code{display = "ci"} is the same as
 \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
@@ -542,4 +565,10 @@ Go further with the helper functions: \code{\link[=tab_ci]{tab_ci()}} (confidenc
 \code{\link[=tab_chi2]{tab_chi2()}} (statistical tests), \code{\link[=tab_pct]{tab_pct()}} / \code{\link[=tab_tot]{tab_tot()}} (percentages and totals).
 Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
 \code{\link[=tab_plot]{tab_plot()}}. Package-wide defaults live in \link{tabxplor-options}.
+
+\code{color = "contrib"} shows each cell's departure from the \strong{log-linear model of independence}
+(that is what the chi-squared is), so it reads as a heatmap of the association pattern. For the
+specialist contingency-table models built on top of it --- quasi-independence, Goodman's RC
+association models, UNIDIFF --- see the \pkg{logmult} package
+(\url{https://cran.r-project.org/package=logmult}), which also supports complex survey designs.
 }

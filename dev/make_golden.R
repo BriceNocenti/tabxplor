@@ -8,6 +8,13 @@
 #   1. review `git diff tests/testthat/_golden/` and accept the changes deliberately;
 #   2. for display snapshots, run the tests then `testthat::snapshot_accept("golden")`.
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
+#
+# LEDGER
+#   Last Phase z4: f_color_contrib REGENERATED, and it alone -- verified field by field across all 36
+#     cases that the ONLY delta is its `pvalue` field, moving from the Pearson residual to the
+#     adjusted standardized (Haberman) one. Its RENDERED output is byte-identical (that case uses the
+#     default color_signif = "ignore", where the p-value drives nothing), which is why no display
+#     snapshot moved with it.
 
 pkg <- normalizePath(".", winslash = "/")
 devtools::load_all(pkg, quiet = TRUE)

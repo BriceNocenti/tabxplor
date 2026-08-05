@@ -12,6 +12,10 @@
 #     added). The other data rows are unchanged.
 #   CONSCIOUSLY REGENERATED at Step 3: c_mean_diff (numeric diff -> Glass's delta), and the
 #     pct CI-gated modes c_diff_ci / c_after_ci / c_ci (asymmetric-interval upper-arm fix).
+#   Last Phase z4: c_contrib_grey + c_contrib_guar ADDED (new cases, nothing regenerated). The three
+#     pre-existing c_contrib* cases all use the default color_signif = "ignore" -- the CA reading,
+#     which z4 left byte-identical -- so they did NOT move, which is the mechanical proof that the
+#     new adjusted-residual gate and the absolute `residual` scale touch only the two gated policies.
 # Afterwards: review `git diff tests/testthat/_color_golden/` and accept deliberately.
 # See: dev/new_colors_UI.md §13 (Step 0) ; CLAUDE.md golden regeneration protocol.
 

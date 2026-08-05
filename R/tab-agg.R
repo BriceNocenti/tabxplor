@@ -268,6 +268,36 @@ zscore_formula <- function(conf_level) {
   stats::qnorm((1 - conf_level) / 2, lower.tail = FALSE)
 }
 
+#' Convert confidence levels into z thresholds
+#'
+#' @description Turn one or several confidence levels into the two-sided normal (z) thresholds they
+#' correspond to, rounded for readability. It is a convenience for writing the \code{residual} color
+#' break scale (\code{\link{set_color_breaks}}) in the vocabulary you already use elsewhere —
+#' confidence levels — instead of remembering that 95 % is 1.96. The scale itself always stores plain
+#' z magnitudes, so \code{conf_level_to_z(0.95)} and \code{1.96} are strictly interchangeable.
+#'
+#' @param conf_level A numeric vector of confidence levels, each between 0 and 1
+#'   (e.g. \code{c(0.95, 0.99)}).
+#' @param digits Number of digits to round to (default 2). Rounding keeps color legends readable
+#'   (\code{"+1.96"} rather than \code{"+1.959964"}); pass \code{Inf} for the exact values.
+#'
+#' @return A numeric vector of positive z thresholds, the same length as \code{conf_level}.
+#' @export
+#'
+#' @examples
+#' conf_level_to_z(c(0.95, 0.99))
+#'
+#' # the default `residual` break scale (color = "contrib", color_signif = "guaranteed_effect")
+#' conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))
+#'
+#' \donttest{
+#' set_color_breaks(residual = conf_level_to_z(c(0.95, 0.999)))
+#' set_color_breaks(residual = c(2, 3, 4, 6))  # or plain z values, identically
+#' }
+conf_level_to_z <- function(conf_level, digits = 2) {
+  round(zscore_formula(conf_level), digits)
+}
+
 # Wilson score bounds at a given z (internal core, reused by the Newcombe inversion).
 wilson_bounds <- function(p, n, z) {
   d    <- 1 + z^2 / n

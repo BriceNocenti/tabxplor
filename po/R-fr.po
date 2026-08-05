@@ -151,6 +151,30 @@ msgstr "rapport"
 msgid "contribution to Chi2"
 msgstr "contribution au Chi2"
 
+#: fmt_class.R
+msgid "standardized residual"
+msgstr "résidu standardisé"
+
+#: fmt_class.R
+msgid "vs independence"
+msgstr "p. r. à l'indépendance"
+
+#: fmt_class.R
+msgid "all that is significant is colored"
+msgstr "tout ce qui est significatif est coloré"
+
+#: tab_classes.R
+msgid "std. residual"
+msgstr "résidu std."
+
+#: fmt_class.R
+msgid ""
+"Grey: below the significance threshold (%s). The thresholds above are "
+"comparable between tables."
+msgstr ""
+"Grisé : en deçà du seuil de significativité (%s). Les seuils ci-dessus sont "
+"comparables d'un tableau à l'autre."
+
 #: fmt_class.R:3379
 msgid "cells"
 msgstr "cases"
@@ -288,7 +312,7 @@ msgstr "F de Welch"
 
 #: tab-test-display.R:158
 msgid "pvalue"
-msgstr "pvalue"
+msgstr "p-valeur"
 
 #: tab-test-display.R:159
 msgid "; Kish"
@@ -301,7 +325,7 @@ msgstr " ; plan de sondage (survey-design)"
 #: tab-test-display.R:162
 #, c-format
 msgid "pvalue (%s%s)"
-msgstr "pvalue (%s%s)"
+msgstr "p-valeur (%s%s)"
 
 #: tab-test-display.R:169
 msgid "effect size"

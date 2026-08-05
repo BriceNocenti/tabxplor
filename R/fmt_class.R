@@ -126,7 +126,9 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' as a double vector the length of \code{n}. Used to print colors when
 #' \code{color = "contrib"}. The mean contribution of each (sub)table is written on
 #' total rows (then, colors don't print well without total rows).
-#' Calculate with \code{\link{tab_chi2}}.
+#' Calculate with \code{\link{tab_chi2}}. The cell's adjusted standardized residual is not a
+#' field of its own: it is recovered from \code{pvalue} and this field's sign, and readable with
+#' \code{display = "resid"} (see \code{\link{tab}}).
 #' @param var The cells variances, as a double vector the length of \code{n}.
 #' Used with \code{type = "mean"} to calculate confidence intervals.
 #' Calculate with \code{tab_plain}.
@@ -180,7 +182,9 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'   \item \code{"after_ci"}: idem, but cut off the confidence interval from the
 #'   difference first.
 #'   \item \code{"contrib"}: color cells based on their contribution to variance
-#'   (except mean columns, from numeric variables).
+#'   (except mean columns, from numeric variables). Under
+#'   \code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
+#'   residual instead -- see \code{\link{tab}}.
 #' }
 #' @param color_signif How significance gates the color, as a single string
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.
@@ -444,6 +448,9 @@ get_num <- function(x) {
   out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # Phase 12f: model-fit stat (N/R2/AIC/...) -> diff field
   out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
+  # Last Phase z4: DERIVED (no field of its own) -- the adjusted standardized residual behind
+  # `color = "contrib"`'s significance. Read-only: set_num() has no matching arm.
+  out[!nas & display == "resid"  ] <- fmt_resid(x)[!nas & display == "resid"  ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
@@ -1190,7 +1197,11 @@ set_color_signif <- function(x, color_signif) {
 # must be per-cell, not a column attribute).
 
 # Field names accepted inside {}; mapped to the internal get_num() display token by the alias table.
-tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var")
+# Last Phase z4: `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back
+# from the stored p-value + the contribution's sign), exactly as `ci` is derived from its bounds. It is
+# read-only -- get_num() has an arm, set_num() deliberately does not.
+tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var",
+                              "resid")
 # Phase 17d: the internal display token is now the canonical `ratio` (was `rr`). The alias table is
 # READ-SIDE ONLY -- the legacy synonym `rr` (bare stored token / a `{rr}` composite) maps to `ratio`,
 # so old objects still resolve, but nothing produces `rr` and every mask matches the single "ratio".
@@ -1638,6 +1649,21 @@ get_mean_contrib <- function(x) {
   }
 }
 
+# fmt_resid() -- the ADJUSTED STANDARDIZED (Haberman) residual of each cell, DERIVED from the two
+# fields that already store it: the two-sided p-value written by chi2_write_contrib() (magnitude) and
+# the signed contribution (direction). Last Phase z4 chose this over a 20th fmt field because the
+# p-value determines |z| exactly -- they are the same number in two coordinates -- and because it
+# makes it impossible for the colour gate and the displayed residual to disagree.
+# WARNING: it MUST be -qnorm(p/2), never qnorm(1 - p/2): `1 - p/2` is exactly 1 in double precision
+# for any p < 2.2e-16, i.e. for every |z| > 8.2 -- routine in survey-sized tables -- which would
+# saturate the whole tail to Inf. This form is exact down to p ~ 1e-300 (|z| ~ 37).
+# Meaningful on a column that carries a chi2 contribution (`color = "contrib"` / `chi2 = TRUE`);
+# elsewhere `ctr` is NA and the result is NA, so a stray `display = "{resid}"` blanks rather than lies.
+#' @keywords internal
+fmt_resid <- function(x) {
+  sign(get_ctr(x)) * -stats::qnorm(get_pvalue(x) / 2)
+}
+
 # fmt_broadcast_last() -- base-R broadcast of the LAST value of each group to every row of that group,
 # where each TRUE in `boundary` closes a group (the reference / total row sits at the group's end).
 # Replaces the per-getter tibble + dplyr::with_groups(last()) idiom on the colour hot path with one
@@ -1986,6 +2012,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   digits[!nas & display == "n"] <- 0
   digits[!nas & display %in% c("or", "or_pct", "OR", "OR_pct", "est_ci") & # no "var" (used in chi2_table)
            digits < 2L] <- 2L
+  # Last Phase z4: a standardized residual on a pct column would inherit digits = 0 and print "+4"
+  # for a 3.89; one decimal is the SPSS convention and enough to read the +/-2 / +/-3 rule.
+  digits[!nas & display == "resid" & digits < 1L] <- 1L
 
 
   ok <- !na_out & !nas
@@ -2022,9 +2051,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
-  diff_signed   <- ok & display == "diff"
+  # Last Phase z4: `resid` joins the signed mask -- the direction (over- / under-represented) is half
+  # of what a standardized residual says, so it must never print bare.
+  diff_signed   <- ok & display %in% c("diff", "resid")
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
-                                        "OR", "OR_pct", "gof") |             # Phase 12f: gof -> big.mark
+                                        "OR", "OR_pct", "gof", "resid") |    # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
@@ -2045,7 +2076,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # what WOULD desync the bypass from format()'s "+1.2".
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "ci", text = plus_ci,
-                             signed = !nas & display %in% c("ctr", "diff"),
+                             signed = !nas & display %in% c("ctr", "diff", "resid"),
                              ratio  = !nas & display == "ratio"))
   }
 
@@ -2418,7 +2449,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       cells <- which(composite & raw_display == tmpl)
       xc    <- x[cells]
       toks  <- lapply(seq_along(seg$fields), function(i) {
-        xi <- if (i == 1L) xc else set_pvalue(xc, NA_real_)   # stars ride the primary token
+        # Stars ride the primary token, so the others have their p-value blanked. EXCEPT `resid`
+        # (Last Phase z4), which is DERIVED from the p-value -- blanking it would render NA and drop
+        # the whole composite. It cannot draw a star anyway: format() gates stars on the `stars` flag
+        # (primary-only, below) and on fmt_stars_applicable(), which excludes contrib columns.
+        xi <- if (i == 1L || identical(seg$fields[i], "resid")) xc else set_pvalue(xc, NA_real_)
         format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
                stars = isTRUE(stars) && i == 1L, pad = pad)   # the inner tokens pad too
       })
@@ -2696,10 +2731,17 @@ color_scales <- function(x) {
 # for this column type) -> unchanged.
 #   additive       c(0.05, 0.10, 0.20, 0.30) -> c(0, 0.05, 0.15, 0.25)
 #   multiplicative c(1.15, 1.5,  2,    4   ) -> c(1, 1.30, 1.74, 3.48)
+# Last Phase z4: `origin` re-anchors an ADDITIVE offset scale somewhere other than 0. The default
+# (NULL = 0) is the CI-floor reading above. `color = "contrib"` passes the significance threshold
+# z(conf_level): its guaranteed reading scores the ABSOLUTE standardized residual, so the first colour
+# step must sit at the threshold itself and the breaks stay real |z| values a reader can name
+# ("this is a +-3 cell") -- the legend prints these same numbers, so it cannot say "+0.62".
+#   c(1.96, 2.58, 3.89, 6) with origin 1.96 -> unchanged ; at conf 0.99 -> c(2.58, 3.20, 4.51, 6.62)
 #' @keywords internal
-offset_guaranteed_breaks <- function(breaks, center) {
+offset_guaranteed_breaks <- function(breaks, center, origin = NULL) {
   if (length(breaks) == 0L || is.na(breaks[1])) return(breaks)
-  if (identical(center, 1)) breaks / breaks[1] else breaks - breaks[1]
+  if (identical(center, 1)) return(breaks / breaks[1])
+  breaks - breaks[1] + if (is.null(origin)) 0 else origin
 }
 
 # Phase g: the additive (center-0) break scale for a NON-gaussian regression coefficient
@@ -2755,7 +2797,9 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
   # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
   # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
-  md      <- MEASURES[[measure]]
+  # Last Phase z4: read through measure_facts(), which folds in a measure's per-policy override (only
+  # contrib has one: `guaranteed_effect` swaps the relative contribution for the absolute residual).
+  md      <- measure_facts(measure, policy)
   use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "na" = TRUE)
   sc      <- color_scales(x)
   scale   <- if (is_logcoef && measure == "diff") log_odds_scale(sc[["odds_ratio"]])
@@ -2806,9 +2850,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
 
   if (policy == "guaranteed_effect") {
     if (md$sig_source == "pvalue") {
-      # No interval to take a CI-floor of: the guaranteed magnitude IS the contribution, gated by the
-      # residual test. The break-offset below (center 0) then colours EVERY significant cell.
-      score <- raw
+      # Last Phase z4: no interval to take a CI-floor of, so this policy carries contrib's OTHER
+      # reading instead -- the ADJUSTED STANDARDIZED RESIDUAL on the absolute `residual` scale (the
+      # scale swap is the MEASURES `guar` override, applied by measure_facts() above). The score is the
+      # residual itself, in real |z| units, and the break scale is re-anchored to the significance
+      # threshold (break_origin below), so the policy's invariant holds by construction -- a cell is
+      # coloured iff |z| > z(conf_level) -- while the thresholds stay numbers a reader can name.
+      # fmt_resid()'s sign is sign(ctr) = the sign of `raw`, so direction matches the two other policies.
+      score <- fmt_resid(x)
       gate  <- sig_pos | sig_neg
     } else {
     # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
@@ -2879,8 +2928,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # independent and may be asymmetric (Phase 13a). The user cannot express this (0 / 1 are rejected
   # as breaks), so it must be internal. `legend_specs()` reads this same plan, so the legend follows.
   if (identical(policy, "guaranteed_effect")) {
-    over_breaks  <- offset_guaranteed_breaks(over_breaks,  center)
-    under_breaks <- offset_guaranteed_breaks(under_breaks, center)
+    # Last Phase z4: `break_origin` is a declared measure fact (only contrib's `guar` sets it) --
+    # "threshold" re-anchors the offset at z(conf_level) instead of 0, because that reading scores an
+    # absolute standardized residual rather than a CI floor. See offset_guaranteed_breaks().
+    org <- if (identical(md$break_origin, "threshold")) {
+      zscore_formula(getOption("tabxplor.conf_level", 0.95))
+    } else NULL
+    over_breaks  <- offset_guaranteed_breaks(over_breaks,  center, org)
+    under_breaks <- offset_guaranteed_breaks(under_breaks, center, org)
   }
 
   # Phase 16c: a `guaranteed_effect` channel whose scale has a single break per side collapses under
@@ -3071,8 +3126,28 @@ MEASURES <- list(
                  has_ref_lead = FALSE,
                  raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
                  scale = c(std = "contrib", pct = "contrib"),
-                 std_when = "na",       sig_source = "pvalue", gate_row = "totrow")
+                 std_when = "na",       sig_source = "pvalue", gate_row = "totrow",
+                 # Last Phase z4: contrib is the ONE measure whose reading changes with the significance
+                 # policy, so the divergence is a FIELD (an override applied by measure_facts()), never a
+                 # switch arm. `ignore` / `grey_non_signif` colour the RELATIVE contribution (a share of
+                 # this table's chi2 -- the correspondence-analysis reading, which necessarily floats with
+                 # the table); `guaranteed_effect` colours the ADJUSTED STANDARDIZED RESIDUAL on the
+                 # absolute `residual` scale, whose thresholds mean the same thing in every table (the
+                 # SPSS reading). Both readings share ONE significance source: the residual p-value.
+                 guar = list(word = "standardized residual", break_over = "+", break_under = "-",
+                             threshold_mult = FALSE, unit_kind = "none", break_origin = "threshold",
+                             scale = c(std = "residual", pct = "residual")))
 )
+
+# The measure's facts as they apply UNDER A GIVEN POLICY: the MEASURES row, with its `guar` override
+# folded in for `guaranteed_effect`. THE single accessor -- fmt_color_plan() and every legend helper
+# read the facts through it, so the colour plan and the legend that describes it cannot diverge.
+#' @keywords internal
+measure_facts <- function(measure, policy = "ignore") {
+  md <- MEASURES[[measure]]
+  if (is.null(md) || is.null(md$guar) || !identical(policy, "guaranteed_effect")) return(md)
+  utils::modifyList(md, md$guar)
+}
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
 # Phase 13d: the CSS class is not stored -- it is tx_slot_class(ch, c), derived at render time, so a
@@ -3120,13 +3195,17 @@ legend_num <- function(v, lang) {
 }
 
 # a compact reference word for the terse (console) form.
+# Last Phase z4: the reference-free ("indep") baseline word is a per-channel FACT (ref_word, resolved in
+# legend_resolve_spec from the policy-aware MEASURES row), because contrib's two readings name it
+# differently: the CONTRIBUTION is a multiple of the mean cell contribution, the RESIDUAL is a distance
+# from independence itself. Fallback keeps the pre-z4 wording for a spec built without the fact.
 legend_ref_short <- function(spec, lang) {
   ref <- spec$ref
   switch(ref$kind,
          "tot"      = if (!is.na(ref$label) && nzchar(ref$label)) ref$label else gettext("Total"),
          "level"    = if (!is.na(ref$label) && nzchar(ref$label)) ref$label else gettext("ref."),
          "category" = gettext("ref."),
-         "indep"    = gettext("vs the mean"),   # Phase 16d: contrib magnitude is x N of the MEAN contribution
+         "indep"    = if (!is.null(spec$txt$ref_word)) spec$txt$ref_word else gettext("vs the mean"),
          "")
 }
 
@@ -3134,8 +3213,8 @@ legend_ref_short <- function(spec, lang) {
 # each side's glyph is a data field (contrib's "x N on BOTH sides", ratio's x / div, or's N / 1/N). `is_pct`
 # = a factor pct-point diff (x100 units, break_scale); a numeric-mean / coef diff (is_pct FALSE) shows the
 # raw break value, whether it is sd-standardized (SD units) or raw (custom mean_diff breaks).
-legend_break_label <- function(measure, brk, dir, is_pct, lang) {
-  m <- MEASURES[[measure]]
+legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore") {
+  m <- measure_facts(measure, policy)
   if (is.null(m)) return(as.character(brk))
   scale <- if (isTRUE(m$break_scale) && isTRUE(is_pct)) 100 else 1
   glyph <- if (dir < 0L) m$break_under else m$break_over
@@ -3151,7 +3230,7 @@ legend_break_tokens <- function(plan, is_pct, is_mean, channel, lang) {
   mk_side <- function(breaks, slots, dir) {
     lapply(seq_along(breaks), function(l) {
       slot <- slots[l + 1L]
-      lab  <- legend_break_label(measure, breaks[l], dir, is_pct, lang)
+      lab  <- legend_break_label(measure, breaks[l], dir, is_pct, lang, plan$policy)
       if (is.na(slot) || slot == 0L) return(.lg_tok(lab))
       .lg_ctok(lab, slot, channel)
     })
@@ -3169,7 +3248,7 @@ legend_threshold_phrase <- function(plan, is_pct, is_std, lang) {
   if (is.null(plan) || length(plan$over_breaks) == 0L) return(NA_character_)
   brk <- plan$over_breaks[[1]]
   if (is.na(brk)) return(NA_character_)
-  if (isTRUE(MEASURES[[plan$measure]]$threshold_mult)) {   # ratio / OR / contrib
+  if (isTRUE(measure_facts(plan$measure, plan$policy)$threshold_mult)) {   # ratio / OR / contrib
     paste0(.lg_times, legend_num(abs(brk), lang))
   } else {                                                 # diff: symmetric +/- <v> [unit]
     val  <- if (isTRUE(is_pct)) legend_num(abs(brk) * 100, lang) else legend_num(abs(brk), lang)
@@ -3258,8 +3337,9 @@ legend_ref_label <- function(x, col, orientation) {
 # "not significantly different from the Total row". Its baseline is the reference category, exactly as
 # for the multiplicative effects. (Imprecise for a numeric predictor's per-unit beta, whose null is 0
 # -- the same approximation the OR arm has always made.)
-legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_reg = FALSE) {
-  base_kind <- MEASURES[[measure]]$ref_kind          # Phase 16e: the measure's baseline concept, one field
+legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_reg = FALSE,
+                            policy = "ignore") {
+  base_kind <- measure_facts(measure, policy)$ref_kind  # Phase 16e: the measure's baseline concept, one field
   if (identical(base_kind, "indep"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
   # Phase 14w: a regression table has no total row -- every reg column (incl. AME, ci_type "diff", and the
@@ -3346,10 +3426,10 @@ legend_method_phrase <- function(spec, lang) {
 
 # the measure / effect word (reg effect word takes precedence). Phase 16e: MEASURES-driven -- the only
 # non-table special-case is the sd-standardized diff wording (a spec fact, not a measure fact).
-legend_measure_word <- function(measure, is_std, eff_word, lang) {
+legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignore") {
   if (!is.na(eff_word)) return(eff_word)
   if (identical(measure, "diff") && isTRUE(is_std)) return(gettext("standardized difference"))
-  m <- MEASURES[[measure]]
+  m <- measure_facts(measure, policy)
   if (is.null(m)) return(measure)
   if (isTRUE(m$word_i18n)) gettext(m$word) else m$word
 }
@@ -3357,7 +3437,8 @@ legend_measure_word <- function(measure, is_std, eff_word, lang) {
 # above is invisible to it. This dead-code anchor lists the MEASURES$word literals (word_i18n = TRUE) so
 # they land in the .pot and are compiled into the .mo -- runtime lookup then matches. Keep in sync with
 # MEASURES; it is never executed.
-if (FALSE) c(gettext("difference"), gettext("ratio"), gettext("contribution to Chi2"))
+if (FALSE) c(gettext("difference"), gettext("ratio"), gettext("contribution to Chi2"),
+             gettext("standardized residual"))
 
 legend_ucfirst <- function(s) {
   if (!nzchar(s)) return(s)
@@ -3374,7 +3455,7 @@ legend_ucfirst <- function(s) {
 legend_resolve_spec <- function(spec, lang) {
   chan <- function(measure) {
     if (is.na(measure)) return(NULL)
-    md   <- MEASURES[[measure]]
+    md   <- measure_facts(measure, spec$policy)
     subj <- if (!is.na(spec$eff_word)) spec$eff_word
             else if (identical(measure, "or")) "OR" else gettext("cells")
     unit <- switch(md$unit_kind,
@@ -3384,6 +3465,14 @@ legend_resolve_spec <- function(spec, lang) {
                    "")
     list(subject      = subj,
          has_ref_lead = isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg),
+         # Last Phase z4: under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds on
+         # the quantity itself (contrib's standardized residual), not a CI floor -- so the sentence
+         # must not say "after subtracting the margin of error". One declared fact, two wordings.
+         guar_abs     = identical(md$break_origin, "threshold"),
+         # the reference-free baseline word (ref_kind "indep"): "x N of the mean contribution" for the
+         # contribution, a distance from independence for the residual.
+         ref_word     = if (identical(md$unit_kind, "contrib")) gettext("vs the mean")
+                        else gettext("vs independence"),
          unit         = unit)
   }
   spec$txt <- chan(spec$measure_text)
@@ -3406,7 +3495,7 @@ legend_tokens_terse <- function(spec, lang, show_names) {
                                                       colon), bold = TRUE)))
   rs <- legend_ref_short(spec, lang)
   add_channel <- function(plan, prefix, is_bg) {
-    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang)
+    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang, plan$policy)
     bt <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang)
     seq_toks <- c(rev(bt$under), bt$over)
     lbl <- paste0(prefix, mw, if (!is_bg && nzchar(rs)) paste0(" (", rs, ")") else "", colon)
@@ -3422,7 +3511,11 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   pn <- switch(spec$policy,
                "grey_non_signif"   = if (!is.na(thr)) gettextf("grey: non-significant or under %s", thr)
                                      else             gettext("grey: non-significant or small"),
-               "guaranteed_effect" = gettext("all that is significant is colored, error-adjusted"),
+               # Last Phase z4: "error-adjusted" describes a CI floor; the absolute-threshold reading
+               # (contrib's standardized residual) subtracts nothing -- the breaks ARE the quantity.
+               "guaranteed_effect" = if (isTRUE(spec$txt$guar_abs))
+                                       gettext("all that is significant is colored")
+                                     else gettext("all that is significant is colored, error-adjusted"),
                "")
   if (nzchar(pn)) toks <- c(toks, list(.lg_tok(paste0(" [", pn, "]"))))
   toks
@@ -3454,7 +3547,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
                  else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
     # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
     # ("..., after subtracting the margin of error (<method>).") instead of a bare ".".
-    tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect"))
+    tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect") && !isTRUE(cf$guar_abs))
               paste0(cf$unit, ", ", gettextf("after subtracting the margin of error (%s)", spec$method_phrase), ".")
             else paste0(cf$unit, ".")
     c(head_toks, legend_join(side, semi), list(.lg_tok(tail)))
@@ -3473,7 +3566,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
   # a second measure on the background channel (e.g. color = c("diff","ratio")).
   if (!is.null(spec$plan_txt) && !is.null(spec$plan_bg)) {
-    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, lang)
+    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, lang, spec$policy)
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Background colour (%s):", bgw)))))
     bov <- one_side(spec$plan_bg, +1L, TRUE, no_shade = TRUE)
     bun <- one_side(spec$plan_bg, -1L, TRUE, no_shade = TRUE)
@@ -3503,7 +3596,11 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     toks <- c(toks, list(.lg_tok(paste0(" ", note))))
   }
   else if (identical(spec$policy, "guaranteed_effect"))
-    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
+    # Last Phase z4: the absolute-threshold reading (contrib's standardized residual) grades the
+    # quantity itself, so its note names the significance threshold rather than a subtracted margin.
+    toks <- c(toks, list(.lg_tok(paste0(" ", if (isTRUE(spec$txt$guar_abs)) gettextf(
+      "Grey: below the significance threshold (%s). The thresholds above are comparable between tables.",
+      spec$method_phrase) else gettextf(
       "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
   toks
 }
@@ -3670,7 +3767,8 @@ legend_specs <- function(x) {
     # Phase 17c: the emp/model split reads the column's STORED `role` attr (written by the reg builders),
     # not the "Emp." name prefix. Fall back to "model" if an old/hand-built reg column lacks it.
     role     <- if (isTRUE(is_reg)) { r <- get_role(col); if (nzchar(r)) r else "model" } else "model"
-    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg)
+    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg,
+                                policy = policy)
     ci_type  <- get_ci_type(col)
     list(col_var = cv, col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
          measure_text = m_txt, measure_bg = m_bg,

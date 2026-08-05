@@ -283,12 +283,31 @@ The first field in the template is the *primary* one — the value Excel keeps a
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
 
-`color = "contrib"` colors cells by their **contribution to the Chi-squared** — the cells that would stand out in a correspondence analysis :
+See below for the detail of how confidence intervals and colors can be composed.
+
+## Which cells make the table interesting? (`color = "contrib"`)
+
+Every colour you have seen so far compares a cell to a **reference** you chose — the Total row, the
+first row. `color = "contrib"` asks a different question, and needs no reference at all: **which cells
+depart from what we would expect if the two variables were unrelated?** It is the natural way to
+colour a table of raw counts (a count has no reference), and it is what `color = TRUE` picks for one.
+
+There are two useful ways to answer that question, and `color_signif` chooses between them.
+
+### 1. "Which cells build *this* association?" — the default
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, color = "contrib")
-# tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns
+# tab(gss_simple, race, party3, pct = "row", color = "contrib") # works with pct too
 ```
+
+Each cell is coloured by its **share of the table's Chi-squared**, written as a multiple of the average
+cell: `×1` means "this cell carries an average share", `×5` means "five times the average". The strong
+cells are, literally, the ones that make the table's association what it is.
+
+This scale is *relative to this table*: it says how the association is distributed inside it, not how
+big it is. That is exactly what a **correspondence analysis** reads, and it is why this is the default
+reading — but it also means you cannot compare a `×2` here with a `×2` in another table.
 
 If you have met **log-linear models** for contingency tables (Goodman's tradition, familiar from social
 mobility research), this colouring is their descriptive core: the chi-squared *is* the log-linear model
@@ -299,7 +318,48 @@ cohorts — use the [logmult](https://cran.r-project.org/package=logmult) packag
 complex survey designs. (Note that "log-linear" in this sense means models of *cell counts* in a table;
 it is unrelated to `tab_reg(family = "poisson")`, which models an individual outcome.)
 
-See below for the detail of how confidence intervals and colors can be composed.
+### 2. "Which cells are notably off, on a scale I can compare?"
+
+Add `color_signif = "guaranteed_effect"` and the colour switches to the **standardized residual** — how
+many standard errors each cell sits away from what independence predicts:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, color = "contrib", color_signif = "guaranteed_effect")
+```
+
+Read it with the rule you may know from SPSS: beyond **±2** a cell is notable, beyond **±3** strongly
+so. Positive means over-represented, negative under-represented. Unlike the share above, ±3 means the
+same thing in *every* table, so you can compare two tables — and any cell that is not significant stays
+grey.
+
+The middle option, `color_signif = "grey_non_signif"`, keeps the contribution scale of (1) but greys out
+cells that are not significant.
+
+**In one line:** use the default to see *where the association lives*, `guaranteed_effect` to see *which
+cells are individually notable*.
+
+### Showing the numbers
+
+The residual can be printed as well as coloured, with the `display` template (like the
+`"{pct} ({diff})"` example above):
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "contrib",
+    display = "{pct} ({resid})")
+```
+
+Hovering an html table shows both numbers (`contrib:` and `std. residual:`) in the tooltip, whatever
+you display.
+
+**For the record** (the vocabulary, if you need to cite it): the residual is the *adjusted standardized
+residual* of Haberman — SPSS's "adjusted residual", R's `chisq.test()$stdres`. Careful, several tools
+call `(o − e)/√e` "standardized residual" too, but that one is **not** on a ±2 scale: its variance is
+below 1, so it under-states. tabxplor always uses the adjusted one, both for the colours and for the
+greying. Thresholds come from `conf_level`, and with a weight the residual uses the unweighted *n*
+(or the Kish `n_eff`, see [Weights](#weights)) while the contribution itself stays weighted. Cells whose
+expected count is below 1 are left uncoloured — no approximation holds there. And, as everywhere in
+tabxplor, the test is per cell: in a 30-cell table, expect one or two false positives at 5 %
+(±3 is roughly a Bonferroni correction at that size).
 
 ## Hover tooltips (html tables)
 
@@ -373,20 +433,20 @@ The **type** is set by the column variable — a **factor** (percentages are com
 
 Every colored table answers three questions:
 
-- **How to measure deviation?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (weight in the Chi-squared), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
+- **How to measure deviation?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (departure from independence — weight in the Chi-squared, or the standardized residual, see below), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
 - **How confident are we in this measure?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
 - **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, or stacked with, colors.
 
 **The confidence interval used for the colors and stars** compares each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
 
-| type | color     | what the color measures                  | confidence interval (default) |
-|------|-----------|------------------------------------------|-------------------------------|
-| pct  | `diff`    | cell % - reference % (percentage points) | Newcombe hybrid-score         |
-| pct  | `ratio`   | cell % / reference % (relative risk)     | Katz log-risk-ratio           |
-| pct  | `OR`      | empirical odds ratio                     | Woolf log-odds-ratio          |
-| pct  | `contrib` | signed χ² contribution (no reference)    | — (standardized residual)     |
-| mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                     |
-| mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means         |
+| type | color     | what the color measures                  | confidence interval (default)      |
+|------|-----------|------------------------------------------|------------------------------------|
+| pct  | `diff`    | cell % - reference % (percentage points) | Newcombe hybrid-score              |
+| pct  | `ratio`   | cell % / reference % (relative risk)     | Katz log-risk-ratio                |
+| pct  | `OR`      | empirical odds ratio                     | Woolf log-odds-ratio               |
+| pct  | `contrib` | signed χ² contribution (no reference)    | — (adjusted standardized residual) |
+| mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                          |
+| mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means              |
 
 Alternative interval methods (see `?tab_ci`): 
 
@@ -413,14 +473,40 @@ Because they compare to 0 and not to a reference, cell intervals are purely desc
   + `grey_non_signif` colors by the **observed** effect, like "ignore", greying out small deviations, but it also **greys out any large deviation that turns to be non-significant**. Ideal for large samples.
   + `guaranteed_effect` colors by the **guaranteed** effect — the confidence-bound (CI-floor), the **smaller deviation that is assured at a given confidence level** (default 95%) — so its colors are dimmer and conservative, but **all significative differences are colored**, which is ideal for small samples.
 
-| type | color     | `="ignore"`     | `="grey_non_signif"`               | `="guaranteed_effect"`      |
-|------|-----------|-----------------|------------------------------------|-----------------------------|
-| pct  | `diff`    | observed diff   | grey if the diff-CI contains 0     | diff CI-floor               |
-| pct  | `ratio`   | observed ratio  | grey if the ratio-CI contains 1    | ratio CI-floor              |
-| pct  | `OR`      | observed OR     | grey if the OR-CI contains 1       | OR CI-floor                 |
-| pct  | `contrib` | χ² contribution | grey if residual < 1.96 (conf 95%) | residual >= 1.96 (conf 95%) |
-| mean | `diff`    | observed diff   | grey if the diff-CI contains 0     | diff CI-floor               |
-| mean | `ratio`   | observed ratio  | grey if the ratio-CI contains 1    | ratio CI-floor              |
+| type | color     | `="ignore"`     | `="grey_non_signif"`                | `="guaranteed_effect"`                     |
+|------|-----------|-----------------|-------------------------------------|--------------------------------------------|
+| pct  | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
+| pct  | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
+| pct  | `OR`      | observed OR     | grey if the OR-CI contains 1        | OR CI-floor                                |
+| pct  | `contrib` | χ² contribution | idem, grey if \|residual\| < z(95%) | **the residual itself**, `residual` breaks |
+| mean | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
+| mean | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
+
+`contrib` is the one measure whose **unit changes with the policy**, because a contribution has no
+confidence interval to take a floor of. `ignore` and `grey_non_signif` colour the *relative*
+contribution (a share of this table's χ², in multiples of the mean cell — the correspondence-analysis
+reading); `guaranteed_effect` colours the **adjusted standardized residual** on the absolute
+`residual` break scale, whose default `c(1.96, 2.58, 3.89, 6)` is written
+`conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))`. Its *first* value is re-anchored to the
+significance threshold at print time (so every significant cell is coloured, whatever `conf_level`
+says) and the others are read as spacings from it. Both readings share one significance source:
+
+- the **adjusted standardized residual** (Haberman; SPSS's "adjusted residual", `chisq.test()$stdres`),
+  never the Pearson residual `(o − e)/√e`, whose variance is below 1 and which therefore under-rejects;
+- computed the way every interval in tabxplor is: weighted estimate, unweighted *n* base, or Kish
+  `n_eff` under `options(tabxplor.kish_neff = TRUE)`. The contribution itself stays **weighted** — it
+  estimates the population table's structure, while the residual is the test;
+- with cells whose expected count is below 1 left uncoloured (the normal approximation fails there);
+- and per cell, with no multiple-comparison correction — as everywhere else in tabxplor. In a 30-cell
+  table expect one or two false positives at 5 %; the ±3 convention is roughly Bonferroni at that size.
+
+The residual is also readable as a number: `display = "{resid}"` or `"{pct} ({resid})"`, and it always
+appears in the html tooltip.
+
+One expert caveat: colours are computed **per column** at print time, so they cannot see a table-level
+attribute. Every significance threshold inside them (the greying, and the `residual` anchor) therefore
+reads `options(tabxplor.conf_level)`, not a per-call `tab(conf_level =)` — which does drive the printed
+intervals and the stars.
 
 Examples :
 
@@ -430,6 +516,12 @@ tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
 tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
 tab(gss_simple, rincome, party3, color = "contrib")   # works with pct = "row"/"col" too
+#    the same table read as standardized residuals (the +-2 / +-3 scale), with the numbers shown
+tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
+    display = "{n} ({resid})")
+#    a stricter residual ladder, written in confidence levels
+tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
+    color_breaks = list(residual = conf_level_to_z(c(0.99, 0.999, 0.9999))))
 
 # --- numerics: means ------------------------------------------------------
 tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")

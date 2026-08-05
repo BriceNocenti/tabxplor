@@ -378,7 +378,7 @@ or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switc
 their current value.}
 
 \item{brk}{When missing, return the full named list of break scales (\code{pct_diff},
-\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{residual}) -- the same shape
 \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 \code{mean_ratio}) are still accepted.}
@@ -422,15 +422,21 @@ Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you 
 \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 
-Color breaks are a named list of the six measure scales \code{pct_diff},
-\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is
+Color breaks are a named list of the seven measure scales \code{pct_diff},
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib} and
+\code{residual}. Each is
 a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 values, one per color step: \code{pct_diff} colors percentage-point differences,
 \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
 "OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
 default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
-\code{contrib} the chi2 contribution. An empty/\code{NULL} scale drops that measure for its column
-type.
+\code{contrib} the chi2 contribution (in multiples of the mean cell contribution) and
+\code{residual} the adjusted standardized residual, in z units -- the absolute scale
+\code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
+\code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
+1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
+the remaining ones are read as spacings from it. An empty/\code{NULL} scale drops that measure for
+its column type.
 }
 \section{Functions}{
 \itemize{

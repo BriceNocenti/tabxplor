@@ -30,6 +30,14 @@
   or eta²; a small sparse table uses Fisher's exact; `test = "survey"` (with `ids` / `strata` / `fpc` /
   `nest`, or a `survey::svydesign` as `data`) and `options(tabxplor.kish_neff = TRUE)` give design-based /
   effective-sample-size p-values and confidence intervals.
+* **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
+  answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
+  `chisq.test()$stdres`), on the package's usual inference base (unweighted *n*, or Kish `n_eff`).
+  `color_signif = "guaranteed_effect"` switches the colour to that residual on an absolute ±2 / ±3
+  scale that means the same thing in every table, while the default keeps the correspondence-analysis
+  reading (each cell's share of the table's chi-squared). The residual can also be printed
+  (`display = "{pct} ({resid})"`) and appears in html tooltips. New `residual` colour-break scale and
+  `conf_level_to_z()` to write it in confidence levels.
 * **Readable colour legends and footers**, fully translatable to **French**
   (`options(tabxplor.lang = "fr")`, a `lang =` argument, or the R/OS locale).
 * **Labelled-data (`haven`) support.** Value labels become the factor levels;
@@ -77,6 +85,12 @@
   base is now `na = "drop_all"`).
 * A few options got clearer names (`tabxplor.kable_css` → `tabxplor.tab_kable_css`, plus
   `tabxplor.console_theme` / `tabxplor.export_theme`); the old names still work.
+* **`color = "contrib"` with a `color_signif` policy** now tests the adjusted standardized residual
+  rather than the Pearson one, so more cells are (correctly) flagged as significant; with weights it
+  uses the unweighted *n* rather than the sum of weights, which previously made every cell "significant"
+  as soon as weights carried population scale. `color_signif = "guaranteed_effect"` also changes what it
+  colours (the residual, on the new absolute `residual` scale). The default
+  `color_signif = "ignore"` — the correspondence-analysis reading — is unchanged.
 
 ## Bug fixes
 

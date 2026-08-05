@@ -184,7 +184,9 @@ field.}
 as a double vector the length of \code{n}. Used to print colors when
 \code{color = "contrib"}. The mean contribution of each (sub)table is written on
 total rows (then, colors don't print well without total rows).
-Calculate with \code{\link{tab_chi2}}.}
+Calculate with \code{\link{tab_chi2}}. The cell's adjusted standardized residual is not a
+field of its own: it is recovered from \code{pvalue} and this field's sign, and readable with
+\code{display = "resid"} (see \code{\link{tab}}).}
 
 \item{var}{The cells variances, as a double vector the length of \code{n}.
 Used with \code{type = "mean"} to calculate confidence intervals.
@@ -252,7 +254,9 @@ is higher than the difference itself.
 \item \code{"after_ci"}: idem, but cut off the confidence interval from the
 difference first.
 \item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
+(except mean columns, from numeric variables). Under
+\code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
+residual instead -- see \code{\link{tab}}.
 }}
 
 \item{color_signif}{How significance gates the color, as a single string

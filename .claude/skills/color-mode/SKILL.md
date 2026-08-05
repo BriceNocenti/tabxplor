@@ -42,6 +42,19 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `scale = c(std=, pct=)` keys, `std_when`, `sig_source ∈ {bounds,pvalue}`, `gate_row ∈
   {refrow,totrow}`). `fmt_color_plan()` reads them; the only per-measure code left there is policy
   (the diff↔ratio bound rescale + the `guaranteed_effect` floor).
+- **Never read `MEASURES[[m]]` directly** (Last Phase z4) — go through **`measure_facts(m, policy)`**,
+  which folds in a row's optional `guar` list under `guaranteed_effect`. It is the only reason the
+  colour plan and the legend describing it cannot diverge; both call it (1 site in `fmt_color_plan`,
+  5 in the legend, each passing `plan$policy` / `spec$policy`).
+- **`contrib` is the one measure that changes reading with the policy.** `ignore`/`grey_non_signif`
+  score the relative contribution (`ctr / mean_contrib`, `contrib` scale — the CA reading, relative to
+  the table); `guaranteed_effect` scores the ADJUSTED standardized residual (`fmt_resid()`) on the
+  absolute 7th scale `residual`, whose first break is re-anchored to `z(conf_level)` via
+  `offset_guaranteed_breaks(..., origin)` (the `break_origin = "threshold"` fact). Significance for
+  BOTH comes from the stored residual p-value (`contrib_pvalue()` in R/tab.R), computed on the
+  unweighted `n` / Kish `n_eff` base — never the weighted N, never the Pearson residual.
+- **`fmt_resid()`** derives the residual from `pvalue` + `sign(ctr)` — there is no fmt field for it.
+  It MUST be `-qnorm(p/2)`; `qnorm(1 - p/2)` saturates to Inf for every `|z| > 8.2`.
   Numeric standardized diff divides by `sqrt(get_ref_var(x))`.
   **`guaranteed_effect` floor MUST be on the measure's own scale** (the fold's `center`): `diff` → the
   stored diff bound (centre 0); `or` → the native OR bound (centre 1); `ratio` (no native CI) → convert

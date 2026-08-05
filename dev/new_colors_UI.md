@@ -11,6 +11,14 @@
 > `html_24_bit`/`set_color_style`); a per-table `color_breaks=` argument exists. The sections below are
 > kept as historical intent.
 >
+> **ALSO SUPERSEDED IN PART BY LAST PHASE z4 (2026-08-05)** for the `contrib` measure only: its
+> significance is now the ADJUSTED standardized residual (not the Pearson one this brief specified),
+> on the package's inference base; and `guaranteed_effect` no longer scores a contribution at all --
+> it scores that residual on a new, seventh, ABSOLUTE break scale `residual`. The per-policy
+> divergence is a `guar` override FIELD in the `MEASURES` fact table, read through the one
+> `measure_facts(measure, policy)` accessor. Rationale, evidence and the rejected alternatives:
+> `dev/chi2_cell_residuals_and_contributions.md`. The rows below are annotated "(z4)" where they moved.
+>
 > SINGLE STARTING POINT for implementing the redesigned colour/breaks framework (tabxplor 2.0.0,
 > "Phase 5"). This file is self-contained: a fresh session should be able to implement from it alone.
 > It records the WHY, the settled architecture, the full user-facing API, the statistics, the
@@ -238,7 +246,7 @@ All 12 combinations are valid. The only per-measure variation is WHICH significa
 | `diff`               | observed diff, all cells   | observed diff, grey where diff-CI ∋ 0            | diff CI-floor (conservative) |
 | `ratio`              | observed ratio, all cells  | observed ratio, grey where cell=ref not rejected | ratio CI-floor               |
 | `or`                 | observed OR, all cells     | observed OR, grey where OR-CI ∋ 1                | OR CI-floor                  |
-| `contrib`            | χ² contribution share, all | contribution, grey where \|resid\| < z(conf_level)        | significant residuals only   |
+| `contrib`            | χ² contribution share, all | contribution, grey where \|resid\| < z(conf_level)        | the RESIDUAL itself, `residual` scale (z4) |
 
 Significance source per measure:
 
@@ -248,9 +256,12 @@ Significance source per measure:
   channel's own-scale bound (additive for diff, multiplicative for ratio).
 - **`or`** uses its own odds-ratio CI (log-OR Wald; the `tab_logit` model CI later). This is why OR
   gets all three policies (the maintainer's correction to an earlier claim).
-- **`contrib`** uses the standardized Pearson residual (\|r\| > `z(conf_level)`, i.e.
-  `qnorm(1 - (1-conf_level)/2)` = 1.96 at the default 0.95 — via the existing `zscore_formula()`
-  helper, NOT a hardcoded 1.96), from the χ² margins.
+- **`contrib`** uses the **ADJUSTED standardized residual** (Haberman) — `|z| > z(conf_level)`, via
+  `zscore_formula()`, never a hardcoded 1.96. **UPDATED Last Phase z4:** this said "Pearson residual"
+  and the code implemented it, which was wrong: `(o-e)/sqrt(e)` has variance `(1-p_i)(1-p_j) < 1`, so
+  testing it at 1.96 under-rejects (measured 1.10-3.09x too strict). Only the adjusted residual is
+  ~N(0,1). It is also computed on the package's inference base (unweighted `n`, or Kish `n_eff`), not
+  on the weighted N, and cells with an expected count below 1 get no residual at all.
 
 What is special about `contrib`: it is the only measure that tests against **independence** (both
 margins, symmetric in rows↔columns, reference-free), whereas `diff`/`ratio`/`or` test against a chosen
@@ -290,6 +301,7 @@ REJECTED — not worth the extra name; the explicit break above suffices. See W9
 | `mean_diff`  | numeric diff                  | `NULL` → standardized `c(0.2, 0.5, 0.8)` (Glass) | additive (or standardized)         |
 | `mean_ratio` | numeric ratio; also OR breaks | `c(1.15, 1.5, 2, 4)`                             | multiplicative                     |
 | `contrib`    | χ² contribution               | `c(1, 2, 5, 10)`                                 | additive-ratio-to-mean             |
+| `residual`   | χ² adjusted std. residual     | `conf_level_to_z(c(.95,.99,.9999,1-2e-9))`       | additive, in z units (z4)          |
 
 Mirroring is done once at set time (precompute the signed, sorted vector the engine's `findInterval`
 reads). Additive scales mirror `c(x, -x)`; multiplicative scales mirror `c(x, 1/x)` centred at 1.
@@ -365,7 +377,7 @@ matching `z(conf_level)` — so all significance in the table shares one confide
 | `diff`    | `q > brk` / `q < brk`                         | `q > brk & sig_pos` / `q < brk & sig_neg` | `ci_inf > brk` / `ci_sup < brk` (÷ `sd_ref` for numeric) |
 | `ratio`   | `ratio > brk` / `ratio < brk` (recip. breaks) | `+ sig_pos/sig_neg` (shared cell-vs-ref)  | ratio CI-floor vs breaks                                 |
 | `or`      | `or > brk` / `or < brk` (recip.)              | `+ OR-CI excludes 1`                      | OR CI-floor vs breaks                                    |
-| `contrib` | `ctr >= brk*mean_ctr` / `ctr <= brk*mean_ctr` | `+ abs(resid) > z(conf_level)`                        | significant residual, graded                             |
+| `contrib` | `ctr >= brk*mean_ctr` / `ctr <= brk*mean_ctr` | `+ abs(resid) > z(conf_level)`                        | the residual `z` vs the `residual` scale, anchored at `z(conf_level)` (z4) |
 
 For symmetric intervals (means; Wald/AC %) the corrected forms reduce EXACTLY to today's algebra, so
 mean colouring is byte-identical; the % CI-gated modes change (they fix the old upper-arm-asymmetry

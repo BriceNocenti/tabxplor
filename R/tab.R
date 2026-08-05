@@ -131,8 +131,12 @@ NULL
 #'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 #'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 #'   \code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-#'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
-#'   \emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
+#'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid}; the
+#'   first field is the \emph{primary}, shown alone by Excel and used for coloring.
+#'   \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
+#'   standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
+#'   \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
+#'   whether it departs from independence -- the SPSS cell layout. A bare field name is also accepted as a
 #'   shorthand for its single-field template, so \code{display = "ci"} is the same as
 #'   \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 #'   \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
@@ -304,6 +308,25 @@ NULL
 #'   \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
 #'   only cells whose interval clears the threshold, with dimmer, conservative colors.
 #'  }
+#' With \code{color = "contrib"} the three values are three readings of the same departure from
+#' independence, because a contribution has no confidence interval to floor:
+#'  \itemize{
+#'   \item \code{"ignore"} and \code{"grey_non_signif"} color the \strong{relative} contribution
+#'   (a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
+#'   the correspondence-analysis reading, so the scale is relative to the table);
+#'   \item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
+#'   the absolute \code{residual} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
+#'   thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
+#'  }
+#' In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
+#' residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
+#' whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
+#' the package rule -- weighted estimate, unweighted \code{n} base, or Kish \code{n_eff} with
+#' \code{options(tabxplor.kish_neff = TRUE)} -- while the contribution itself stays weighted (it
+#' estimates the population table's structure). Cells whose expected count is below 1 are left
+#' uncolored: the normal approximation does not hold there.
+#' Note that the colors are computed per column at print time, so every significance threshold in
+#' them reads \code{options(tabxplor.conf_level)}, not a per-call \code{conf_level}.
 #' @param color_breaks A per-table override of the colour thresholds, a named list of scales like
 #' \code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
 #' a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
@@ -3935,6 +3958,17 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # DESIGN: copy() before each in-place := derivation below (tabs_pct/diff/mean/rr/or). The
   # aggregated table is shared by reference; without copy() a := would mutate the source and
   # every other derived table too (data.table reference semantics).
+  # Last Phase z4: a COUNTS table (pct = "no") never reaches leaf_wide_pct(), so `n_eff` stayed NA --
+  # silently disabling options(tabxplor.kish_neff) for the one inference a counts table CAN carry: the
+  # chi2 cell residual behind `color = "contrib"` (which is exactly what `color = TRUE`/"auto" picks
+  # for counts). Its base is the subtable itself = leaf_wide_pct's "all" selector, so this is the same
+  # definition of n_eff, not an overload. Percentage tables take the branch below and are untouched;
+  # has_w2 implies the weighted branch above ran, so tabs_wn / tabs_w2 exist.
+  if (pct == "no" && has_w2) {
+    tabs_neff <- leaf_wide_pct(tabs_n, tabs_wn, "all", as.character(tab_vars), cols,
+                               tabs_w2 = tabs_w2)$n_eff
+  }
+
   if (pct != "no") {
     # Phase 9d: percentages + the tot_n base on a numeric matrix (base-R) via leaf_wide_pct(),
     # replacing the copy() + switch(pct) + purrr::map(.SD, ~ ./eval(sym("Total"))) per column.
@@ -5920,37 +5954,79 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
 }
 
 
-# var_contrib_ctr_signed() -- the signed absolute contribution of each cell to the (weighted) chi2,
-# from the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST
-# element as the grand total. comp = "all" first zeroes the intermediate total rows/tabs (all but the
-# last). (The former fmt-vector helper var_contrib() with its "ctr_with_sign" branch was removed in
-# Phase 17a; this plain-vector form, used by chi2_write_contrib(), is the sole live path.)
-var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
-  n <- length(xwn)
+# contrib_zero_inner() -- the comp = "all" prologue shared by the two contribution helpers below:
+# zero the INTERMEDIATE total rows/tabs (all but the last element, which is the grand total) so a
+# comp = "all" pass decomposes the data cells only. A no-op under comp = "tab". Extracted (Last Phase
+# z4) so the contribution and its residual can never disagree about which cells are in the table.
+contrib_zero_inner <- function(xwn, twn, in_totrow, in_tottab, comp) {
   if (comp == "all") {
-    idx <- seq_len(n - 1L)
+    idx <- seq_len(length(xwn) - 1L)
     tor <- in_totrow[idx] | in_tottab[idx]
     xwn[idx] <- dplyr::if_else(tor, 0, xwn[idx])
     twn[idx] <- dplyr::if_else(tor, 0, twn[idx])
   }
+  list(xwn = xwn, twn = twn)
+}
+
+# var_contrib_ctr_signed() -- the signed absolute contribution of each cell to the (weighted) chi2,
+# from the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST
+# element as the grand total. (The former fmt-vector helper var_contrib() with its "ctr_with_sign"
+# branch was removed in Phase 17a; this plain-vector form, used by chi2_write_contrib(), is the sole
+# live path.) DESIGN: the contribution stays WEIGHTED -- it is an ESTIMATE of the population table's
+# inertia decomposition, which is what a weighted correspondence analysis reads (Last Phase z4 §4.4).
+# Its significance is a separate quantity on the package's inference base: contrib_adj_resid().
+var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
+  z   <- contrib_zero_inner(xwn, twn, in_totrow, in_tottab, comp)
+  xwn <- z$xwn; twn <- z$twn
+  n   <- length(xwn)
   observed_freq <- xwn / twn[n]
   expected_freq <- xwn[n] * twn / twn[n]^2
   spread        <- observed_freq - expected_freq
   sign(spread) * spread^2 / expected_freq
 }
 
-# contrib_pvalue() -- the standardized-residual two-sided p-value companion to var_contrib_ctr_signed().
-# `v` is the cell's SIGNED contribution on the FREQUENCY scale = the chi2 contribution divided by N
-# (N = twn[n], the subtable grand total), so the Pearson residual is sign(v)*sqrt(|v|*N), asymptotically
-# N(0,1) under independence, and the two-sided p is 2*pnorm(-sqrt(|v|*N)). Total rows/tabs are margins,
-# not cells -> NA. Written into the `pvalue` field by chi2_write_contrib() so fmt_color_plan() can gate
-# `color = "contrib"` under a significance policy (contrib has NO confidence interval to gate on).
-# Weighted note: like the contribution itself, N and v are weighted -> the residual is approximate under
-# variable weights (anti-conservative), consistent with tabxplor's weighted-inference framework
-# (dev/tabxplor_2.0.0_decisions.md §10/§18); exact for unweighted tables.
-contrib_pvalue <- function(v, twn, in_totrow, in_tottab, comp) {
-  n  <- length(v)
-  pv <- 2 * stats::pnorm(-sqrt(abs(v) * twn[n]))
+# contrib_adj_resid() -- the ADJUSTED STANDARDISED (Haberman 1973) residual of each cell, the signed
+# quantity that both gates and (under `guaranteed_effect`) colours `color = "contrib"`. Same inputs as
+# var_contrib_ctr_signed() plus `n_base`, the INFERENCE base (see chi2_write_contrib):
+#
+#   p_i = twn/N (row marginal)   p_j = xwn[n]/N (column marginal)   e_f = p_i*p_j (expected frequency)
+#   z   = (xwn/N - e_f) * sqrt(n_base) / sqrt(e_f * (1 - p_i) * (1 - p_j))
+#
+# WARNING (Last Phase z4, the two defects this replaces):
+#  1. It is the ADJUSTED residual, not the Pearson one `(o-e)/sqrt(e)` the old gate used. Pearson's
+#     variance is (1-p_i)(1-p_j) < 1, so testing it at 1.96 under-rejects by up to 1/sqrt((1-p_i)(1-p_j))
+#     -- measured 1.10 to 3.09x too strict on one 3x4 table. Only the adjusted residual is ~N(0,1), so
+#     only for it is the +/-1.96 (or the textbook +/-2 / +/-3) rule correct.
+#  2. `n_base` is the UNWEIGHTED n (or the Kish n_eff), never the weighted total. The estimate is
+#     weighted, the base is not -- the same rule as every confidence interval in the package (?tab,
+#     Last Phase s). The old weighted base made every cell p-value 0 as soon as weights carried
+#     population scale.
+# On an unweighted table with n_base = N this reduces EXACTLY to (o-e)/sqrt(e(1-p_i)(1-p_j)), i.e.
+# stats::chisq.test()$stdres (pinned by test-calculations.R).
+# Sparse guard: a cell whose EXPECTED COUNT (e_f * n_base) is below 1 gets NA -- the normal
+# approximation does not hold there (a cell with expected 0.2 otherwise flags at |z| = 6). A 1-row or
+# 1-column table gives (1-p) = 0 -> non-finite -> NA, which is correct (no residual is defined).
+contrib_adj_resid <- function(xwn, twn, n_base, in_totrow, in_tottab, comp) {
+  z   <- contrib_zero_inner(xwn, twn, in_totrow, in_tottab, comp)
+  xwn <- z$xwn; twn <- z$twn
+  n   <- length(xwn)
+  N   <- twn[n]
+  p_i <- twn / N
+  p_j <- xwn[n] / N
+  e_f <- p_i * p_j                       # == xwn[n] * twn / N^2, var_contrib's expected_freq
+  out <- (xwn / N - e_f) * sqrt(n_base) / sqrt(e_f * (1 - p_i) * (1 - p_j))
+  out[e_f * n_base < 1]  <- NA_real_     # sparse: expected count < 1, asymptotics invalid
+  out[!is.finite(out)]   <- NA_real_
+  out
+}
+
+# contrib_pvalue() -- the two-sided p-value of contrib_adj_resid()'s standardized residual. Total
+# rows/tabs are margins, not cells -> NA. Written into the `pvalue` field by chi2_write_contrib() so
+# fmt_color_plan() can gate `color = "contrib"` under a significance policy (contrib has NO confidence
+# interval to gate on), and so the residual itself stays recoverable at render time WITHOUT a new fmt
+# field: |z| = -qnorm(p/2), sign from the signed contribution (fmt_resid(), R/fmt_class.R).
+contrib_pvalue <- function(z, in_totrow, in_tottab, comp) {
+  pv   <- 2 * stats::pnorm(-abs(z))
   prot <- if (comp == "all") in_totrow | in_tottab else in_totrow
   pv[prot] <- NA_real_
   pv[!is.finite(pv)] <- NA_real_
@@ -5990,16 +6066,31 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
   pval_after <- if (do_ctr) purrr::set_names(lapply(fmt_nms, function(nm) get_pvalue(tabs[[nm]])), fmt_nms)
   elig_col  <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) != "mean" &&
                              get_col_var(tabs[[nm]]) != "no_col_var")
+  # Last Phase z4: the residual's INFERENCE BASE, read off the total column's grand-total cell (the
+  # LAST element of each subtable slice, exactly where var_contrib_ctr_signed reads the weighted N).
+  # Kish `n_eff` when opted in and available, else the raw unweighted `n`; the weighted total is used
+  # only as a last-resort fallback (it is what a table built without either would carry). This is the
+  # SAME ladder as every confidence interval in the package (?tab, Last Phase s), so "weighted
+  # estimate, unweighted or effective base" is one rule, not two.
+  kish <- do_ctr && isTRUE(getOption("tabxplor.kish_neff", FALSE))
   for (nm in elig_col) {
     tot_nm <- as.character(tot_cols[[nm]])
     xwn <- get_wn(tabs[[nm]]); twn <- get_wn(tabs[[tot_nm]])
     itr <- is_totrow(tabs[[nm]]); itt <- is_tottab(tabs[[nm]])
+    tn  <- if (do_ctr) get_n(tabs[[tot_nm]])
+    tne <- if (kish)   get_n_eff(tabs[[tot_nm]])
     v   <- var_after[[nm]]
     pv  <- if (do_ctr) pval_after[[nm]]
     for (g in gids) {
       r <- which(gid == g)
       v[r] <- var_contrib_ctr_signed(xwn[r], twn[r], itr[r], itt[r], comp)
-      if (do_ctr) pv[r] <- contrib_pvalue(v[r], twn[r], itr[r], itt[r], comp)
+      if (do_ctr) {
+        last   <- r[length(r)]
+        n_base <- if (kish && !is.na(tne[last])) tne[last] else tn[last]
+        if (is.na(n_base) || n_base <= 0) n_base <- twn[last]
+        zres   <- contrib_adj_resid(xwn[r], twn[r], n_base, itr[r], itt[r], comp)
+        pv[r]  <- contrib_pvalue(zres, itr[r], itt[r], comp)
+      }
     }
     var_after[[nm]] <- v
     if (do_ctr) pval_after[[nm]] <- pv

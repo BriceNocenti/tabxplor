@@ -14,7 +14,10 @@ R/
 │                              fmt_field_names (the 19 fields; Last Phase s +n_eff) + DERIVED fmt_col_attrs (17a: moved here
 │                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
 │                              format/pillar methods, vctrs arithmetic/casting,
-│                              color engine (fmt_color_plan/fmt_color_slots/fmt_color_channels;
+│                              color engine (measure_facts = THE MEASURES accessor, folds a row's `guar`
+│                              per-policy override [z4: contrib only]; fmt_resid = the adjusted std.
+│                              residual DERIVED from pvalue+sign(ctr), no 20th field, backs the `resid`
+│                              display token + tooltip; fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under; 17d: fmt_color_plan
 │                              reads MEASURES for raw/scale/sig_source/gate_row -- no switch arms; legacy
 │                              strings decoded once at the boundary [color_decode_legacy], color_measure_policy
@@ -70,7 +73,7 @@ R/
 │                              gains method welch/student; ci_or = Woolf log-OR for the empirical crude
 │                              OR, used by tab_reg(empirical) AND (14z) tab()'s OR colour via
 │                              tab_apply_reference; RULE B [§48]: numeric CIs are t where a variance is estimated, z
-│                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA; zscore_formula =
+│                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA; zscore_formula (+ z4's exported conf_level_to_z wrapper) =
 │                              the normal quantile, 17a: moved here from tab.R), agg_chi2/agg_anova
 │                              (Last Phase j: both also emit the whole-table EFFECT SIZE -- Cramer's V/phi
 │                              from agg_chi2's uncorrected chi2, eta^2 = SSB/SST from agg_anova) +
@@ -454,7 +457,7 @@ Note: `ref` is **reinterpreted by `pct`** — a reference **row** under `pct="ro
 
 1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
 2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios. *(2.0.0 §18 adds `mean_diff_breaks` `c(0.2, 0.5, 0.8, 1.2)` — sd-standardized differences for the numeric diff mode, Phase 5.)*
-3. **Selection** (the Phase-5 `findInterval` engine in `fmt_class.R`: `fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`/`fmt_channel_codes`, the shared artifact every backend consumes; the old `fmt_color_selection`/`keep_last_break` are gone): per-side fold + `findInterval` over the break scale picks the strongest matching threshold per cell. The 4 measures (`diff`/`ratio`/`or`/`contrib`) each carry their engine facts (raw getter, scale keys, `sig_source`, `gate_row`) in the ONE `MEASURES` fact table (Phase 17d — it now drives BOTH `fmt_color_plan` and the legend; the per-measure switch arms are gone, only the diff↔ratio bound rescale + guaranteed-effect offset stay as policy code). The legacy combined strings (`diff_ci`/`after_ci`/`ci`) are decoded ONCE at the boundary (`color_decode_legacy`) into a clean `(measure, color_signif)` pair — the stored `color` attribute is always a clean measure and the engine never re-parses; `color_measure_policy`/`single0` are deleted (`"ci"` == `after_ci` now).
+3. **Selection** (the Phase-5 `findInterval` engine in `fmt_class.R`: `fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`/`fmt_channel_codes`, the shared artifact every backend consumes; the old `fmt_color_selection`/`keep_last_break` are gone): per-side fold + `findInterval` over the break scale picks the strongest matching threshold per cell. The 4 measures (`diff`/`ratio`/`or`/`contrib`) each carry their engine facts (raw getter, scale keys, `sig_source`, `gate_row`) in the ONE `MEASURES` fact table (Phase 17d — it now drives BOTH `fmt_color_plan` and the legend; the per-measure switch arms are gone, only the diff↔ratio bound rescale + guaranteed-effect offset stay as policy code). Last Phase z4: `MEASURES` is read ONLY through **`measure_facts(measure, policy)`** (1 plan + 5 legend sites), which folds in a row's optional **`guar`** override — `contrib` alone has one, being the one measure whose reading changes with the policy: the relative contribution under `ignore`/`grey_non_signif`, the ABSOLUTE adjusted standardized residual on the 7th break scale `residual` under `guaranteed_effect`. The legacy combined strings (`diff_ci`/`after_ci`/`ci`) are decoded ONCE at the boundary (`color_decode_legacy`) into a clean `(measure, color_signif)` pair — the stored `color` attribute is always a clean measure and the engine never re-parses; `color_measure_policy`/`single0` are deleted (`"ci"` == `after_ci` now).
 
 ### dplyr Integration
 
@@ -1701,18 +1704,73 @@ models (what `predictors = list(...)` invites) is invalid. Two orthogonal routes
 
 #### Last Phase z4 — very last new features: standardised raw chi2 contributions
 
-In tab(), I want to add a way to add standardised raw chi2 contributions, SPSS way. First, I want you to make researches and think about the best overall framework to do that. Read `\dev\tabxplor_missing_features_audit.md`, `dev/new_colors_UI.md` and make web searches. We’ll implement it next.
-- `color = "standardised contrib"` ? We’ll keep `color = "contrib"` anyway, since it’s what matches what a simple correspondence analysis would do.
-- What standardised residuals to use here and how to use them ? What is the standard practice ? If it’s not the same, what is the modern, user-friendly, interpretable practice ? Make very detailed web searches.
-- Would it works well with the three `color_signif` possibilities, in a strong statistical meaning, and is it standard practice ? 
-- Currently, `color_signif` with `color = "contrib"` use raw residuals / absolute chi2 contributions as a threshold to calculate colors, so large cells dominate. I wonder if it’s statistically sound with understandardised residuals (does the >2 = notable rule work here ?) ? On the opposite direction, with standardised residuals and `color_signif`, isn’t there a risk to color highlight meaningless cells (high deviation with small counts) ?
-- Write your detailed report in a new .md file in `dev/`.
+**DONE (2026-08-05).** Full suite green (FAIL 0, WARN 0, SKIP 4, PASS 4400 = +19, the new
+`test-chi2-residuals.R`), plus `test-i18n-fr.R:83` which was **already red at HEAD** and is fixed in
+passing. Design study, measurements and rejected alternatives:
+`dev/chi2_cell_residuals_and_contributions.md`.
 
-#### Last Phase z5 — very last new features: comparison between modelisez effect and observed effect
+**Why.** `color = "contrib"` + a `color_signif` policy had three defects, all measured: the gate tested
+the **Pearson** residual `(o−e)/√e` at 1.96, whose variance is `(1−p_i)(1−p_j) < 1` — measured **1.10 to
+3.09× too strict**, and on `gss_simple` it missed `White / $10000-14999` (Pearson −1.83, adjusted
+**−3.91**); it used the **weighted N**, so population-scale weights made every cell p-value exactly
+**0.000**; and all three policies coloured on a scale internal to one table, so no reading was
+comparable between tables.
 
-In `tab_reg` with `empirical=TRUE`, to reinforce comparison between modelised effect and observed effect, I would want to add a new color measure based on the difference between observed and modelised effect.
-- Observed effects should be the reference columns for comparisons. They should be additive or multiplicative etc. depending on their type.
-- Would there be 
+**What.** One measure, three readings, on ONE significance source (the adjusted standardised /
+Haberman residual = `chisq.test()$stdres`): `ignore` and `grey_non_signif` keep the relative
+contribution (the CA reading, **byte-identical** — proved by the three pre-existing `c_contrib*`
+colour goldens not moving); `guaranteed_effect` now colours the **absolute residual** on a new, 7th
+break scale `residual` (default `conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))` = ±1.96/2.58/3.89/6),
+whose first value `offset_guaranteed_breaks(origin =)` re-anchors on `z(conf_level)` — so the framework
+invariant "every significant cell is coloured" holds while the printed thresholds stay real |z| values.
+The residual is readable: `display = "{pct} ({resid})"` + the html tooltip.
+
+**Integration, not another layer.** The per-policy divergence is a **`guar` override field** in the
+`contrib` MEASURES row, folded in by the ONE new accessor `measure_facts(measure, policy)` that
+replaced all six raw `MEASURES[[...]]` lookups (1 plan + 5 legend) — plan and legend cannot diverge.
+**No new fmt field**: `fmt_resid()` derives the residual from `pvalue` + `sign(ctr)` (⚠ `-qnorm(p/2)`,
+never `qnorm(1 - p/2)`, which saturates for every `|z| > 8.2`), exactly as `ci` is derived from its
+bounds. New exported `conf_level_to_z()` wraps the existing `zscore_formula()`, so a residual ladder can
+be written in confidence levels **with zero change to break management** (the scale always stores z).
+Weighting follows the package rule: the contribution stays weighted (a population estimate), the
+residual uses the unweighted `n` or Kish `n_eff`. Cells with an expected count < 1 get no residual.
+
+**Two findings worth keeping.** (1) `n_eff` was never written on a `pct = "no"` table, silently
+disabling `kish_neff` for exactly the case `color = TRUE` picks `contrib` for — `leaf_wide_pct()` is now
+called on that path with the `"all"` base. (2) The colour engine is per-COLUMN, so it cannot read a
+table attribute: every threshold in it (including the pre-z4 contrib gate) reads
+`options(tabxplor.conf_level)`, not a per-call `tab(conf_level =)`. Pre-existing, now documented in
+`?tab` and both vignettes.
+
+**Conscious regens, both verified minimal.** `_golden/f_color_contrib.rds` — a field-by-field diff over
+all 36 structural goldens showed the ONLY delta is its `pvalue` field, and its rendered output is
+byte-identical. Two colour goldens ADDED (`c_contrib_grey`, `c_contrib_guar`) closing a real coverage
+gap: no gated-contrib rendering was locked before. No display/export snapshot moved.
+
+**Docs.** `?tab` (`color_signif`'s contrib case, `display`'s `resid`, the weighting + conf_level rules),
+`?fmt`, `?set_color_breaks`, `?tabxplor-options`, new `?conf_level_to_z`; a full new **section** in both
+intro vignettes (EN + FR) teaching the two readings use-case-first, plus the expert composition tables;
+`resid` added to both programming vignettes' field lists; `dev/new_colors_UI.md` contrib rows corrected
+(its "Pearson residual" spec was the source of defect 1); `/color-mode` skill; architecture doc; NEWS.
+
+
+---
+
+#### Last Phase z5 — very last new features: comparison between modelised effect and observed effect
+
+In `tab_reg` with `empirical=TRUE`, to reinforce comparison between modelised effect and observed effect, which is a core feature, I want to add a new tab_reg-only color measure based on the difference between observed and modelised effect. You will first write your detailed report in a new .md file in `dev/` and pause. We’ll then only make an actual plan and implement.
+- Observed effects should be the reference columns for comparisons. They should be additive or multiplicative etc. depending on their family / effect. In multi models mode (several outcomes variables), each model must have the right reference column. Comparison with the observed effect must also work for multi predictors lists/in model comparison mode.
+- Is the comparison meaningful and statistically sound for all families and effects, or are there caveats ?
+- What would be the argument(s) the most integrated with the current framework to do that ? `color = "observed"` in public API, then use the current internal framework for references, column attributes, etc. ? Can you think of a more user-friendly, consistent, easily understandable name ? Can it be done without adding new fields and complexity to the code ?
+- Is there a statistically sound way, and preferably a cheap way, to integrate this new kind of comparison with the `color_signif` framework (see `dev/new_colors_UI.md` and `vignettes/tabxplor.Rmd`) ? Is checking both confidence intervals don’t overlap a cheap way ? If not cheap way in the horizon In particular, what would be the robust, modern, statistically sound way ?
+- Could the same framework be used to compare the different models made with `split_var` line-by-line (and not in general/globally like in a LR test), particularly in the case where there is only one outcome variable and auto tab_spread is used ?
+- Can you think of additional ways to enhance comparisons between modelised effects and observed effects in a user-friendly way, to make them interpretable, statistically sound, readable at-a-glance ?
+- Can you think of additional ways to enhance comparisons between different models made with `split_var` in the same way ?
+- Can you think of additional ways to enhance comparisons between different models when several predictors lists are provided in the same way ?
+
+---
+
+
 
 
 

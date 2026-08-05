@@ -270,12 +270,33 @@ Le premier champ du gabarit est le champ *primaire* — la valeur que garde Exce
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
 
-`color = "contrib"` colore les cases selon leur **contribution au Chi2** — les cases qui ressortiraient dans une analyse des correspondances :
+Voir plus bas le détail de la composition des intervalles de confiance et des couleurs.
+
+## Quelles cases font l'intérêt du tableau ? (`color = "contrib"`)
+
+Toutes les couleurs vues jusqu'ici comparent une case à une **référence** que vous avez choisie — la
+ligne Total, la première ligne. `color = "contrib"` pose une autre question, et n'a besoin d'aucune
+référence : **quelles cases s'écartent de ce qu'on attendrait si les deux variables étaient sans
+rapport ?** C'est la façon naturelle de colorer un tableau d'effectifs bruts (un effectif n'a pas de
+référence), et c'est ce que `color = TRUE` y choisit.
+
+Il y a deux manières utiles de répondre, et `color_signif` choisit entre elles.
+
+### 1. « Quelles cases construisent *cette* association ? » — par défaut
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, color = "contrib")
-# tab(gss_simple, race, party3, pct="row", color = "contrib") # fonctionne avec pct ; mais indépendant des lignes/colonnes
+# tab(gss_simple, race, party3, pct = "row", color = "contrib") # fonctionne avec pct aussi
 ```
+
+Chaque case est colorée par sa **part du Chi2 du tableau**, exprimée en multiples de la case moyenne :
+`×1` signifie « cette case porte une part moyenne », `×5` « cinq fois la moyenne ». Les cases fortes
+sont, littéralement, celles qui font l'association du tableau.
+
+Cette échelle est *relative à ce tableau* : elle dit comment l'association s'y répartit, pas quelle est
+son ampleur. C'est exactement ce que lit une **analyse des correspondances**, et c'est pourquoi c'est la
+lecture par défaut — mais cela veut dire aussi qu'un `×2` ici n'est pas comparable à un `×2` dans un
+autre tableau.
 
 Si vous connaissez les **modèles log-linéaires** pour tableaux de contingence (la tradition de Goodman,
 familière aux recherches sur la mobilité sociale), cette coloration en constitue le cœur descriptif : le
@@ -287,7 +308,49 @@ package [logmult](https://cran.r-project.org/package=logmult), qui gère aussi l
 complexes. (Attention : « log-linéaire » désigne ici des modèles des *effectifs des cases* d'un tableau ;
 cela n'a rien à voir avec `tab_reg(family = "poisson")`, qui modélise une variable individuelle.)
 
-Voir plus bas le détail de la composition des intervalles de confiance et des couleurs.
+### 2. « Quelles cases s'écartent nettement, sur une échelle comparable ? »
+
+Ajoutez `color_signif = "guaranteed_effect"` et la couleur passe au **résidu standardisé** : de combien
+d'erreurs-types chaque case s'écarte de ce que prédit l'indépendance.
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, color = "contrib", color_signif = "guaranteed_effect")
+```
+
+Lisez-le avec la règle que vous connaissez peut-être de SPSS : au-delà de **±2** une case est notable,
+au-delà de **±3** elle l'est fortement. Positif = sur-représentée, négatif = sous-représentée. À la
+différence de la part ci-dessus, ±3 signifie la même chose dans *tous* les tableaux : vous pouvez donc en
+comparer deux — et toute case non significative reste grise.
+
+L'option intermédiaire, `color_signif = "grey_non_signif"`, garde l'échelle de contribution du (1) mais
+grise les cases non significatives.
+
+**En une ligne :** le défaut pour voir *où vit l'association*, `guaranteed_effect` pour voir *quelles
+cases sont individuellement notables*.
+
+### Afficher les nombres
+
+Le résidu peut être affiché autant que coloré, avec le gabarit `display` (comme l'exemple
+`"{pct} ({diff})"` plus haut) :
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "contrib",
+    display = "{pct} ({resid})")
+```
+
+Le survol d'un tableau html montre les deux nombres (`contrib :` et `résidu std. :`) dans l'infobulle,
+quel que soit l'affichage choisi.
+
+**Pour mémoire** (le vocabulaire, si vous devez le citer) : il s'agit du *résidu standardisé ajusté* de
+Haberman — le « résidu ajusté » de SPSS, le `chisq.test()$stdres` de R. Attention, plusieurs outils
+appellent aussi `(o − e)/√e` « résidu standardisé », mais celui-là n'est **pas** sur une échelle ±2 : sa
+variance est inférieure à 1, il sous-estime donc. tabxplor utilise toujours le résidu ajusté, pour les
+couleurs comme pour le grisage. Les seuils viennent de `conf_level` ; avec un poids, le résidu utilise
+le *n* non pondéré (ou le `n_eff` de Kish, voir [Pondération](#ponderation)) tandis que la contribution,
+elle, reste pondérée. Les cases dont l'effectif théorique est inférieur à 1 restent non colorées — aucune
+approximation ne tient à ce niveau. Et, comme partout dans tabxplor, le test est fait case par case :
+dans un tableau de 30 cases, attendez-vous à un ou deux faux positifs à 5 % (±3 correspond à peu près à
+une correction de Bonferroni à cette taille).
 
 **Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan de sondage / *design-effect*, et la cas échant peut s’avérer trop étroite : activez la taille d'échantillon effective de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir chaque intervalle de manière plus fiable et faire passer les tests du Chi2 à une correction de Rao–Scott.
 
@@ -362,7 +425,7 @@ Le **type** est fixé par la variable en colonne — une **variable catégoriell
 
 Tout tableau coloré répond à trois questions :
 
-- **Comment mesurer l'écart ?** `color =` choisit ce qu'une couleur *signifie* : `"diff"` (distance à la référence), `"ratio"` (risque relatif pour les pourcentages, rapport de moyennes pour les moyennes), `"contrib"` (poids dans le Chi2), `"OR"` (rapport de cotes). `color = TRUE` en choisit un sensé par type de colonne.
+- **Comment mesurer l'écart ?** `color =` choisit ce qu'une couleur *signifie* : `"diff"` (distance à la référence), `"ratio"` (risque relatif pour les pourcentages, rapport de moyennes pour les moyennes), `"contrib"` (écart à l'indépendance — poids dans le Chi2, ou résidu standardisé, voir plus bas), `"OR"` (rapport de cotes). `color = TRUE` en choisit un sensé par type de colonne.
 - **Quelle confiance a-t-on dans cette mesure ?** Chaque couleur lit un **intervalle de confiance** au seuil `conf_level` (95 % par défaut). Une case est *significative* quand cet intervalle exclut sa valeur neutre — **0** pour une différence, **1** pour un rapport ou un rapport de cotes. Les chiffres entre crochets, les étoiles de significativité et les couleurs utilisent tous ce même intervalle, et par construction ne se contredisent pas.
 - **Comment montrer la significativité ?** `color_signif` — `"ignore"`, `"grey_non_signif"` ou `"guaranteed_effect"` ; `stars = TRUE` pour utiliser des étoiles de significativité en plus des couleurs, ou à leur place.
 
@@ -373,7 +436,7 @@ Tout tableau coloré répond à trois questions :
 | pct  | `diff`    | % case − % référence (points de %)          | score hybride de Newcombe        |
 | pct  | `ratio`   | % case / % référence (risque relatif)       | log-risque relatif de Katz       |
 | pct  | `OR`      | rapport de cotes empirique                  | log-OR de Woolf                  |
-| pct  | `contrib` | contribution χ² signée (sans référence)     | — (résidu standardisé)           |
+| pct  | `contrib` | contribution χ² signée (sans référence)     | — (résidu standardisé ajusté)    |
 | mean | `diff`    | moyenne case − moyenne référence (en écart-type) | *t* de Welch                |
 | mean | `ratio`   | moyenne case / moyenne référence            | rapport de moyennes robuste      |
 
@@ -402,14 +465,43 @@ Parce qu'ils comparent à 0 et non à une référence, les intervalles de case s
   + `grey_non_signif` colore selon l'effet **observé**, comme « ignore », en grisant les petits écarts, mais il **grise aussi tout écart important qui se révèle non significatif**. Idéal pour les grands échantillons.
   + `guaranteed_effect` colore selon l'effet **garanti** — la borne de confiance (le plancher de l'intervalle de confiance), soit **l’écart, plus petit, qui est assuré à un seuil de confiance donné** (95 % par défaut). Ses couleurs sont plus faibles et plus prudentes, mais **toutes les différences significatives sont colorées**, ce qui est idéal pour les petits échantillons.
 
-| type | color     | `="ignore"`      | `="grey_non_signif"`               | `="guaranteed_effect"`         |
-|------|-----------|------------------|------------------------------------|--------------------------------|
-| pct  | `diff`    | diff observée    | gris si l'IC de diff contient 0    | plancher IC de diff            |
-| pct  | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1   | plancher IC de ratio           |
-| pct  | `OR`      | OR observé       | gris si l'IC de l'OR contient 1    | plancher IC de l'OR            |
-| pct  | `contrib` | contribution χ²  | gris si résidu < 1,96 (conf. 95 %) | résidu >= 1,96 (conf. 95 %)    |
-| mean | `diff`    | diff observée    | gris si l'IC de diff contient 0    | plancher IC de diff            |
-| mean | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1   | plancher IC de ratio           |
+| type | color     | `="ignore"`      | `="grey_non_signif"`                | `="guaranteed_effect"`                        |
+|------|-----------|------------------|-------------------------------------|-----------------------------------------------|
+| pct  | `diff`    | diff observée    | gris si l'IC de diff contient 0     | plancher IC de diff                           |
+| pct  | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1    | plancher IC de ratio                          |
+| pct  | `OR`      | OR observé       | gris si l'IC de l'OR contient 1     | plancher IC de l'OR                           |
+| pct  | `contrib` | contribution χ²  | idem, gris si \|résidu\| < z(95 %) | **le résidu lui-même**, seuils `residual`     |
+| mean | `diff`    | diff observée    | gris si l'IC de diff contient 0     | plancher IC de diff                           |
+| mean | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1    | plancher IC de ratio                          |
+
+`contrib` est la seule mesure dont l'**unité change avec la politique**, parce qu'une contribution n'a
+pas d'intervalle de confiance dont prendre le plancher. `ignore` et `grey_non_signif` colorent la
+contribution *relative* (une part du Chi2 de ce tableau, en multiples de la case moyenne — la lecture de
+l'analyse des correspondances) ; `guaranteed_effect` colore le **résidu standardisé ajusté** sur
+l'échelle absolue `residual`, dont le défaut `c(1.96, 2.58, 3.89, 6)` s'écrit
+`conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))`. Sa *première* valeur est ré-ancrée sur le seuil de
+significativité au moment de l'affichage (toute case significative est donc colorée, quel que soit
+`conf_level`), les autres se lisent comme des écarts à partir d'elle. Les deux lectures partagent une
+seule source de significativité :
+
+- le **résidu standardisé ajusté** (Haberman ; le « résidu ajusté » de SPSS, `chisq.test()$stdres`),
+  jamais le résidu de Pearson `(o − e)/√e`, dont la variance est inférieure à 1 et qui sous-rejette donc ;
+- calculé comme tout intervalle dans tabxplor : estimation pondérée, base *n* non pondérée, ou `n_eff` de
+  Kish avec `options(tabxplor.kish_neff = TRUE)`. La contribution, elle, reste **pondérée** — elle estime
+  la structure du tableau dans la population, tandis que le résidu est le test ;
+- les cases dont l'effectif théorique est inférieur à 1 restant non colorées (l'approximation normale n'y
+  tient pas) ;
+- et case par case, sans correction pour comparaisons multiples — comme partout ailleurs dans tabxplor.
+  Dans un tableau de 30 cases, attendez-vous à un ou deux faux positifs à 5 % ; la convention ±3
+  correspond à peu près à un Bonferroni à cette taille.
+
+Le résidu se lit aussi comme un nombre : `display = "{resid}"` ou `"{pct} ({resid})"`, et il figure
+toujours dans l'infobulle html.
+
+Une précision d'expert : les couleurs sont calculées **par colonne** au moment de l'affichage, elles ne
+peuvent donc pas lire un attribut de tableau. Tout seuil de significativité qu'elles utilisent (le
+grisage, et l'ancrage de `residual`) lit donc `options(tabxplor.conf_level)`, et non un
+`tab(conf_level =)` par appel — lequel pilote bien, lui, les intervalles affichés et les étoiles.
 
 Exemples :
 
@@ -419,6 +511,12 @@ tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
 tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
 tab(gss_simple, rincome, party3, color = "contrib")   # fonctionne aussi avec pct = "row"/"col"
+#    le même tableau lu en résidus standardisés (l'échelle +-2 / +-3), avec les nombres affichés
+tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
+    display = "{n} ({resid})")
+#    une échelle de résidus plus stricte, écrite en niveaux de confiance
+tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
+    color_breaks = list(residual = conf_level_to_z(c(0.99, 0.999, 0.9999))))
 
 # --- numériques : moyennes ------------------------------------------------
 tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")

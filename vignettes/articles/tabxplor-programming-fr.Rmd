@@ -87,6 +87,7 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `pvalue`    | p-valeur de significativité par case (alimente les étoiles) |
 | `or`        | rapport de cotes / rapport de risques relatifs |
 | `ctr`       | contribution au Chi2 (`color = "contrib"`) |
+| `resid`     | résidu standardisé ajusté (dérivé de `pvalue`, en lecture seule) |
 | `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
 | `n_eff`     | taille d'échantillon efficace utilisée pour l'intervalle de confiance, avec `options(tabxplor.kish_neff = TRUE)` |
@@ -152,7 +153,7 @@ tabs |> set_display("{pct} ({diff})")
 
 Les règles :
 
-- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`.
+- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`.
 - Le **premier** `{}` est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
 - Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
 - Il s’agit simplement d’un affichage pour les sorties (la console, `tab_kable()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.

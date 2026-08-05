@@ -2221,6 +2221,15 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    "")
   } else blank
 
+  # Last Phase z4: the adjusted standardized residual beside the contribution it gates. Derived from
+  # the stored p-value (fmt_resid), so it exists exactly where a chi2 contribution was computed --
+  # the same cells as `out_ctr`, minus the total rows (a margin has no residual, hence the NA p).
+  cond_resid <- is.finite(fmt_resid(x)) & comparable & !disp == "resid"
+  out_resid <- if (any(cond_resid)) {
+    dplyr::if_else(cond_resid,
+                   paste0(gettext("std. residual"), ": ", tip_num(set_display(x, "resid"))), "")
+  } else blank
+
   cond_n <- !is.na(get_n(x)) & !disp == "n"
   out_n <- if (any(cond_n)) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
@@ -2233,7 +2242,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # ever leaves >4 in a row. Adding a 10th fragment would have broken that assumption. This is exact,
   # for any number of fragments, and drops the NA scrub (an NA fragment is simply not joined).
   frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
-                out_ci, out_ctr, out_n)
+                out_ci, out_ctr, out_resid, out_n)
   out <- rep("", n)
   for (f in frags) {
     k <- !is.na(f) & nzchar(f)
@@ -3543,7 +3552,7 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
 
 # PURPOSE: the canonical color-break representation (Phase 13a) and its accessors.
 # The stored option "tabxplor.color_breaks" is a named list of the six measure scales
-#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib
+#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib, residual
 #   (odds_ratio is the dedicated OR scale, read by the "or" colour measure in fmt_color_plan)
 # each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
 #   - over/under : the two sides, each a list(breaks = <ascending POSITIVE magnitudes>,
@@ -3612,7 +3621,7 @@ parse_color_side <- function(v, name) {
 #     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
-  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib")
+  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "residual")
   if (!name %in% valid) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
                      "i" = "Valid scales: {.val {valid}}."))
@@ -3689,7 +3698,13 @@ default_color_scales <- function() {
     odds_ratio = mk_color_scale("odds_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
     mean_diff  = mk_color_scale("mean_diff",  NULL),
     mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
-    contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10))
+    contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10)),
+    # Last Phase z4: the ABSOLUTE standardized-residual scale, read by color = "contrib" under
+    # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the
+    # ladder documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6.
+    # Unlike `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every
+    # table, which is the whole point of the scale.
+    residual   = mk_color_scale("residual",   conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)))
   )
 }
 # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so pct_ratio /
@@ -3699,15 +3714,21 @@ default_color_scales <- function() {
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors.
-#' @description Color breaks are a named list of the six measure scales \code{pct_diff},
-#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is
+#' @description Color breaks are a named list of the seven measure scales \code{pct_diff},
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib} and
+#' \code{residual}. Each is
 #' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 #' values, one per color step: \code{pct_diff} colors percentage-point differences,
 #' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
 #' "OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
 #' default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
-#' \code{contrib} the chi2 contribution. An empty/\code{NULL} scale drops that measure for its column
-#' type.
+#' \code{contrib} the chi2 contribution (in multiples of the mean cell contribution) and
+#' \code{residual} the adjusted standardized residual, in z units -- the absolute scale
+#' \code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
+#' \code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
+#' 1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
+#' the remaining ones are read as spacings from it. An empty/\code{NULL} scale drops that measure for
+#' its column type.
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 #' their current value.
@@ -3854,7 +3875,7 @@ pop_color_breaks <- function(state) {
 #' Get the breaks currently used to print colors
 #' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
 #' @param brk When missing, return the full named list of break scales (\code{pct_diff},
-#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{residual}) -- the same shape
 #' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 #' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 #' \code{mean_ratio}) are still accepted.
