@@ -51,6 +51,13 @@
   with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
   See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
   `lm_plots()` draw it.
+* **Colour the gap between the modelled and the observed effect.** `tab_reg(empirical = TRUE)` already
+  prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
+  apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
+  `split_var`, `color = "between_groups"` does the same against the first group (effect modification,
+  row by row). The gap is also printable (`display = "{or} (obs {obs})"`) and appears in html tooltips.
+  Beware that part of an **odds-ratio** gap is non-collapsibility rather than confounding — the legend
+  says so, and marginal effects or risk ratios give the collapsible comparison.
 * **Risk ratios, two ways.** With a common outcome an odds ratio is not a "times more likely", and it
   cannot be compared across nested models. `tab_reg(effect = "ame_ratio")` reports the **marginal risk
   ratio** from the usual logistic fit (with the adjusted probability in parentheses), and

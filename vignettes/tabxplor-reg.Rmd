@@ -204,6 +204,58 @@ the crude risk ratio with a Katz interval, never the crude odds ratio. The modif
 reasonable sample (n of at least about 100), and since a quasi-likelihood has no true likelihood its
 footer reports N and a Wald-vs-null test instead of AIC/BIC.
 
+## Colouring what adjustment did
+
+`empirical = TRUE` puts the crude effect next to the modelled one, but comparing them cell by cell is
+tedious on a real table. `color = "adjustment"` colours the **gap** between the two, so a whole table of
+"what did adjusting change?" reads at a glance. Put it on the *background* channel and the text keeps
+showing the effect size, so one look answers both questions:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        empirical = TRUE, color = c("OR", "adjustment"))
+```
+
+Text colour = how strong the adjusted odds ratio is. Background = how far it sits from the observed
+one: one pole means adjustment **strengthened** the effect, the other that it **attenuated** it. The
+first threshold is ×1.1, the classic "a 10% change in the estimate is worth noticing" rule; the rest
+are ×1.25, ×1.5 and ×2 (change them with `set_color_breaks(adj_ratio = ...)`). You do not have to ask
+for `empirical` separately — the colour needs the observed effect, so it turns it on for you.
+
+The direction is measured **from the null**, not up or down. A protective effect (OR below 1) that
+adjustment pulls toward 1 gets the same colour as a risky effect pulled toward 1, which is what you
+want to read: "the other variables explained part of this association" is one statement, whichever
+side of 1 the effect is on.
+
+The same gap is readable as a number when you want the exact values, in the cell or on hover.
+`tab_reg()` has no `display` argument, so set the template on the finished table — the columns that
+have no observed counterpart simply keep their plain display:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
+  set_display("{or} (obs {obs})")
+```
+
+### One warning about odds ratios
+
+An odds ratio changes when you adjust it **even when there is nothing to adjust for**. This is called
+*non-collapsibility*: it is a property of the odds ratio itself, not a sign of confounding. In a
+simulation where the extra variable is independent of the exposure — so there is strictly no
+confounding — the crude odds ratio still moved by about **8%** once adjusted, while the risk ratio moved
+by 0.3% and the marginal effect by essentially nothing. Eight percent is about the size of the first
+colour step, so on the odds-ratio scale a faint background colour may be arithmetic rather than
+confounding. The legend of an exported table says so.
+
+The comparisons that *are* clean are the ones this vignette has already introduced: `effect = "ame"`
+and `effect = "ame_ratio"` (marginal effects), `family = "poisson"` on a binary outcome (risk ratios),
+and the beta of a linear regression. On those scales the gap is confounding by the variables you added
+— nothing else. If reading confounding is the point of your table, prefer one of them:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
+```
+
 ## Grouped-binomial outcomes (a summed score)
 
 When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability. `score_from_lv1()` (see `vignette("tabxplor-programming")`) builds such a score by counting factors at their first level:
@@ -332,6 +384,22 @@ tab_reg(gss_simple,
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "year")
 ```
+
+Reading a row across the groups is the same chore as reading a model against its observed effect, and
+it has the same answer: `color = "between_groups"` colours how far each group's effect sits from the
+**first** group's, on the same row. Where the model-comparison test below says "these models differ"
+once for the whole model, this says *which effects* differ between groups — a per-predictor reading of
+what statisticians call effect modification:
+
+```{r}
+tab_reg(gss_simple, "married", "race", split_var = "party3",
+        color = c("OR", "between_groups"))
+```
+
+The first group is the baseline and stays uncoloured (nothing is compared to itself); reorder the
+levels with `forcats::fct_relevel()` to pick another one. Unlike the model-versus-observed case, the
+groups here are separate people, so a real test of these differences is straightforward — it is on the
+roadmap.
 
 ## Fine-tuning the display, and scaling a predictor
 

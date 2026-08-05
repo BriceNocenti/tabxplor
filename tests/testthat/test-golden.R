@@ -89,6 +89,12 @@
 #   *.rds are regenerated once + the fmt-contract snapshot; the ONLY per-cell delta is the added
 #   all-NA `n_eff` column (kish is OFF by default, so the field is NA and tab_ci coalesces to the
 #   raw base -> CI bounds byte-identical). The DISPLAY _snaps are UNTOUCHED (n_eff is non-displayed).
+# Last Phase z5 (the `adjustment` colour measure): adds a 20th per-cell field `obs` -- the value a
+#   tab_reg cell's estimate is COMPARED TO (its observed/crude counterpart, or a reference group's).
+#   Same shape of change as n_eff above: the RECORD moves, so all *.rds are regenerated once + the
+#   fmt-contract snapshot, and a script proved the only delta is the added all-NA column (a
+#   cross-table never fills `obs`). The DISPLAY _snaps are UNTOUCHED -- `obs` renders only through
+#   an explicit `display = "{obs}"` and a tooltip fragment gated on a non-NA value.
 # ===========================================================================================
 
 cases <- golden_cases()

@@ -97,6 +97,7 @@ A `tabxplor_fmt` cell carries **19 fields** (many are `NA` when the relevant qua
 | `var`       | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n`     | the cell's own base — the count its percentage is computed on |
 | `n_eff`     | effective sample size used for the CI, with `options(tabxplor.kish_neff = TRUE)` |
+| `obs`       | `tab_reg()` only: the observed (crude) effect the modelled one is compared to |
 | `digits`    | number of decimals to display (per cell) |
 | `display`   | which field is shown (per cell) |
 | `in_totrow`, `in_tottab`, `in_refrow` | is the cell in a total row / total table / reference row (logical) |
@@ -159,7 +160,7 @@ tabs |> set_display("{pct} ({diff})")
 
 The rules:
 
-- **Valid fields** are `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid` — the same set as the single-field displays.
+- **Valid fields** are `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs` — the same set as the single-field displays.
 - The **first** token is the *primary* field: it is what `get_num()` returns, the value Excel keeps (Excel shows the primary only), and the field the colours read.
 - A **bare field name** is shorthand for its own template, so `set_display("ci")` is exactly `set_display("{ci}")`.
 - It is a **display overlay** for text output (the console, `tab_kable()`, `tab_md()`): the stored fields are untouched, so you can switch back at any time.

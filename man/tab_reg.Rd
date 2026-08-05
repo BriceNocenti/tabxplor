@@ -174,7 +174,38 @@ the model column's own CI is always design-based (\code{survey::svyglm}) and una
 sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
 \code{color = FALSE} turns colouring off for every column (model and empirical). Power users may pass a
 measure string (\code{"OR"}, \code{"diff"}, \code{"ratio"}, \code{"no"}) to override. \code{color_signif} is the
-significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
+significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
+
+Two measures are \strong{specific to regression tables}, and both are meant for the \emph{background}
+channel so the text keeps showing the effect size — \code{color = c("OR", "adjustment")} answers
+"how strong is this effect?" and "how much did the model change it?" in one glance:
+\itemize{
+\item \code{"adjustment"} — how far each \strong{modelled} effect sits from its \strong{observed} (crude,
+unadjusted) counterpart, i.e. what adjusting for the other predictors did to it. It turns
+\code{empirical = TRUE} on (that is where the observed effect comes from). Thresholds are
+\verb{×1.1 / ×1.25 / ×1.5 / ×2} for ratios and \verb{±2 / ±5 / ±10 / ±20} points for differences, the
+first one being the classic 10\% "change in estimate" rule; set them with
+\code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}). One pole means the model \strong{strengthened} the
+effect (suppression), the other that it \strong{attenuated} it — measured from the null, so a
+protective effect (OR < 1) and a risky one read the same way.
+\item \code{"between_groups"} — with \code{split_var}, how far each group's effect sits from the \strong{first}
+group's, on the same row: a per-predictor reading of effect modification, beside the global
+comparison a likelihood-ratio test gives. Reorder the split variable's levels
+(\code{forcats::fct_relevel()}) to change the baseline group.
+}
+
+The two are mutually exclusive (they share one per-cell slot), and neither is gated by
+\code{color_signif}: they describe the size of a gap between two estimates, which has no test of its
+own here — the model's own interval answers a different question. The gap itself is also
+readable as a number, with \code{display = "\\{or\\} (obs \\{obs\\})"} and in the html tooltip.
+
+\strong{Caveat on odds ratios.} The odds ratio is \emph{non-collapsible}: adjusting for a covariate that
+predicts the outcome moves it away from 1 even with no confounding at all (about +8\% in a
+simulation where the covariate is independent of the exposure — the same size as the first
+colour step). So part of an OR gap is arithmetic, not confounding. The collapsible comparisons
+are \code{effect = "ame"} / \code{"ame_ratio"} (marginal effects), \code{family = "poisson"} on a binary
+outcome (risk ratios) and a gaussian beta; on those the gap is confounding by the adjustment
+set. The legend says so on the odds-ratio path.}
 
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}

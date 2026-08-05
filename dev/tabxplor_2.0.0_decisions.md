@@ -4827,3 +4827,52 @@ a bare symbol, since tab()'s resolved weight is a symbol — identity for tab_re
 Design-based CIs / per-cell survey stars stay §14 (weighted point + n/n_eff); only the omnibus p is
 design-based. jamovi surfaces a `test_robust` selector (classic/kish/survey) + strata/ids — inert until
 the maintainer's `prepare()`.
+
+## 53. Last Phase z5 — colouring the model-vs-observed gap (IMPLEMENTED 2026-08-05)
+
+Full study, measurements and rejected alternatives: `dev/model_vs_observed_effect_colour.md`. The
+maintainer's eight rulings are its §13. Recorded here: what the decisions imply for the architecture.
+
+**The constraint that shapes everything.** The colour engine takes ONE fmt column (`fmt_color_plan(x,
+…)`), and adding a table-level hook would break the invariant that the same object renders to console /
+HTML / Excel / ggplot with a per-medium palette. A cross-column measure therefore resolves at BUILD
+time into a per-cell field — the rule `or` has followed since Phase 1. Hence the 20th field `obs`, not a
+new colour path.
+
+**Why one field and not two.** `adjustment` (vs the observed effect) and `between_groups` (vs the first
+`split_var` group) both need "the value I am compared to". A shared field makes them mutually exclusive;
+the maintainer accepted that, because asking BOTH questions of one cell is the cross-frame case
+`dev/new_colors_UI.md` W6 already flags as coherent-but-niche. The exclusivity is enforced once, in
+`resolve_color_channels()` — and `tab_reg()` now calls that validator instead of repeating its rules,
+which also fixed the fact that `fmt()` casts `color` without validating anything.
+
+**Why the sign is away-from/toward the null.** `est/obs` colours a protective effect backwards: crude
+OR 0.50 attenuated to 0.60 moves UP, while the identical attenuation of a risky 2.00 → 1.67 moves DOWN.
+Scoring `|log est| − |log obs|` makes one pole always "the model strengthened this effect" and the other
+always "it attenuated it", for both signs, and it stays correct through the null.
+
+**Why the additive scale is absolute, not relative.** Measured on `gss_simple`: a +0.0157 absolute shift
+on a −0.0259 crude AME reads as −60.5 %. A relative change is unusable near the null; data units
+(±2/5/10/20 points) are stable and directly readable. The multiplicative scale keeps the ratio, anchored
+on the epidemiological 10 % change-in-estimate rule.
+
+**Why one ladder for both measures.** Measured: real between-group effect ratios on `gss_simple`
+(`married ~ race + rincome` split by `party3` / `year`) land at ×1.1–×1.75, adjustment gaps at
+×1.03–×1.12. `c(1.1, 1.25, 1.5, 2)` reads both, so `adj_ratio`/`adj_diff` are shared rather than
+duplicated per measure.
+
+**Why `color_signif` is neutralised rather than wired.** The stored bounds belong to the MODEL estimate
+and answer "is this effect real?", not "is the gap real?". Gating on them would look like a test and be
+one about something else. A `force_policy` fact + `measure_policy()` (the twin of `measure_facts()`)
+pins both measures to `ignore`, and the legend resolves the policy through the same accessor, so the
+neutralisation cannot drift. The real test is Last Phase z6 — §4 of the study measured the
+influence-function route (SE ratio 1.02 vs an 800-replicate bootstrap, 187× faster, exact against
+`svyglm`), and §4.4 records why it needs its own phase (a second stored quantity + the jamovi digest
+cache does not keep the model frame).
+
+**Why the OR path ships anyway (Q6).** Non-collapsibility is measured at +7.9 % with ZERO confounding —
+the size of the first colour step — so the gap on an odds ratio is partly arithmetic. Restricting the
+measure to collapsible estimands would break the single most common table for a caveat that a sentence
+can carry, so the legend states it on that path only (gated on family + `is_coef`, so
+`exponentiate = FALSE` is covered while AME / RR / IRR / β are not), and the docs name the collapsible
+alternatives — which are exactly the estimands Last Phase z3 added.

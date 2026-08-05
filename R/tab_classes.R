@@ -2230,6 +2230,18 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    paste0(gettext("std. residual"), ": ", tip_num(set_display(x, "resid"))), "")
   } else blank
 
+  # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` / "between_groups".
+  # A stored field, so it exists exactly where tab_reg wrote a counterpart -- NA on every cross-table
+  # and on a Constant / numeric-predictor / multinomial cell, which is also why this cannot collide
+  # with the multinomial `empirical_tips` fragment appended downstream (there `obs` is NA).
+  # The LABEL is read off the column's own stored measure, never guessed from a name.
+  cond_obs <- !is.na(get_obs(x)) & !disp == "obs"
+  out_obs <- if (any(cond_obs)) {
+    lbl <- if ("between_groups" %in% c(get_color(x), get_color_bg(x)))
+      gettext("ref. group") else gettext("obs")
+    dplyr::if_else(cond_obs, paste0(lbl, ": ", tip_num(set_display(x, "obs"))), "")
+  } else blank
+
   cond_n <- !is.na(get_n(x)) & !disp == "n"
   out_n <- if (any(cond_n)) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
@@ -2242,7 +2254,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # ever leaves >4 in a row. Adding a 10th fragment would have broken that assumption. This is exact,
   # for any number of fragments, and drops the NA scrub (an NA fragment is simply not joined).
   frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
-                out_ci, out_ctr, out_resid, out_n)
+                out_ci, out_ctr, out_resid, out_obs, out_n)
   out <- rep("", n)
   for (f in frags) {
     k <- !is.na(f) & nzchar(f)
@@ -3621,12 +3633,13 @@ parse_color_side <- function(v, name) {
 #     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
-  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "residual")
+  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "residual",
+             "adj_ratio", "adj_diff")
   if (!name %in% valid) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
                      "i" = "Valid scales: {.val {valid}}."))
   }
-  center <- if (name %in% c("pct_ratio", "odds_ratio", "mean_ratio")) 1 else 0
+  center <- if (name %in% c("pct_ratio", "odds_ratio", "mean_ratio", "adj_ratio")) 1 else 0
   strict <- name != "contrib"
 
   # NULL / empty: drop the measure, except mean_diff -> standardized default.
@@ -3704,7 +3717,17 @@ default_color_scales <- function() {
     # ladder documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6.
     # Unlike `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every
     # table, which is the whole point of the scale.
-    residual   = mk_color_scale("residual",   conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)))
+    residual   = mk_color_scale("residual",   conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
+    # Last Phase z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
+    # estimate sits from the value it is compared to. SHARED by both measures because they score the
+    # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
+    # adjustment gaps at x1.03-x1.12, so one ladder reads both. The multiplicative anchor is the
+    # epidemiological 10 % change-in-estimate rule; the additive one is in the effect's OWN units
+    # (2 / 5 / 10 / 20 points on an AME or a risk difference) -- a RELATIVE change would explode near
+    # the null (measured: a +0.016 shift on a -0.026 crude AME reads as -60 %).
+    adj_ratio  = mk_color_scale("adj_ratio",  list(over  = c(1.10, 1.25, 1.50, 2.00),
+                                                   under = c(1.10, 1.25, 1.50, 2.00))),
+    adj_diff   = mk_color_scale("adj_diff",   c(0.02, 0.05, 0.10, 0.20))
   )
 }
 # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so pct_ratio /
@@ -3714,9 +3737,9 @@ default_color_scales <- function() {
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors.
-#' @description Color breaks are a named list of the seven measure scales \code{pct_diff},
-#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib} and
-#' \code{residual}. Each is
+#' @description Color breaks are a named list of the nine measure scales \code{pct_diff},
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
+#' \code{residual}, \code{adj_ratio} and \code{adj_diff}. Each is
 #' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 #' values, one per color step: \code{pct_diff} colors percentage-point differences,
 #' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
@@ -3727,8 +3750,11 @@ default_color_scales <- function() {
 #' \code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
 #' \code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
 #' 1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
-#' the remaining ones are read as spacings from it. An empty/\code{NULL} scale drops that measure for
-#' its column type.
+#' the remaining ones are read as spacings from it. \code{adj_ratio} and \code{adj_diff} are the
+#' \code{\link{tab_reg}}-only scales of \code{color = "adjustment"} / \code{"between_groups"} --
+#' how far a modelled effect sits from the observed one (or from the reference group's), as a ratio
+#' of the two effects or as their difference in the effect's own units. An empty/\code{NULL} scale
+#' drops that measure for its column type.
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 #' their current value.

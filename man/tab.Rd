@@ -343,12 +343,16 @@ value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 \code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid}; the
-first field is the \emph{primary}, shown alone by Excel and used for coloring.
+\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid},
+\code{obs}; the first field is the \emph{primary}, shown alone by Excel and used for coloring.
 \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
 standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
 \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
-whether it departs from independence -- the SPSS cell layout. A bare field name is also accepted as a
+whether it departs from independence -- the SPSS cell layout. \code{obs} is
+\code{\link{tab_reg}}-only: the OBSERVED (crude) effect beside the modelled one, so
+\code{\link{set_display}(t, "\{or\} (obs \{obs\})")} on a regression table prints each
+adjusted odds ratio next to the unadjusted one it is compared to (\code{tab_reg} has no
+\code{display} argument of its own; see \code{color = "adjustment"} in \code{?tab_reg}). A bare field name is also accepted as a
 shorthand for its single-field template, so \code{display = "ci"} is the same as
 \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage

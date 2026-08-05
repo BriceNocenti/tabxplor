@@ -422,9 +422,9 @@ Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you 
 \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 
-Color breaks are a named list of the seven measure scales \code{pct_diff},
-\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib} and
-\code{residual}. Each is
+Color breaks are a named list of the nine measure scales \code{pct_diff},
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
+\code{residual}, \code{adj_ratio} and \code{adj_diff}. Each is
 a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 values, one per color step: \code{pct_diff} colors percentage-point differences,
 \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
@@ -435,8 +435,11 @@ default (supply data-unit values for absolute coloring), \code{mean_ratio} the m
 \code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
 \code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
 1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
-the remaining ones are read as spacings from it. An empty/\code{NULL} scale drops that measure for
-its column type.
+the remaining ones are read as spacings from it. \code{adj_ratio} and \code{adj_diff} are the
+\code{\link{tab_reg}}-only scales of \code{color = "adjustment"} / \code{"between_groups"} --
+how far a modelled effect sits from the observed one (or from the reference group's), as a ratio
+of the two effects or as their difference in the effect's own units. An empty/\code{NULL} scale
+drops that measure for its column type.
 }
 \section{Functions}{
 \itemize{

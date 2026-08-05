@@ -46,6 +46,18 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   which folds in a row's optional `guar` list under `guaranteed_effect`. It is the only reason the
   colour plan and the legend describing it cannot diverge; both call it (1 site in `fmt_color_plan`,
   5 in the legend, each passing `plan$policy` / `spec$policy`).
+- **A measure whose baseline is ANOTHER COLUMN** (Last Phase z5: `adjustment` = vs the observed/crude
+  effect, `between_groups` = vs the first `split_var` group) cannot use the row-reference machinery at
+  all -- `fmt_broadcast_last()` groups by runs of `in_refrow` and crosses a split boundary. Its
+  counterpart is written into the per-cell **`obs` field at BUILD time** (`reg_build` /
+  `reg_write_group_obs`, R/tab_reg.R), and `fmt_adjustment_score()` reads it. Three facts drive the
+  rest: `ref_kind = "observed"/"group"` (checked by `measure_own_ref()`, which makes the measure name
+  ITSELF in the legend instead of borrowing the column's effect word, and resolves its reference phrase
+  PER CHANNEL); `std_when = "additive"` (the scale keys off the ESTIMATE's `ci_type`, since `Model_OR`
+  and `Model_AME` are both `type = "row"`); and `force_policy = "ignore"`, applied by
+  **`measure_policy(m, policy)`** -- the twin of `measure_facts()`, called by the plan AND the legend,
+  for a measure with no significance test of its own. Scales `adj_ratio` / `adj_diff`. The SIGN is
+  away-from/toward the NULL, never raw up/down (else a protective effect colours backwards).
 - **`contrib` is the one measure that changes reading with the policy.** `ignore`/`grey_non_signif`
   score the relative contribution (`ctr / mean_contrib`, `contrib` scale — the CA reading, relative to
   the table); `guaranteed_effect` scores the ADJUSTED standardized residual (`fmt_resid()`) on the

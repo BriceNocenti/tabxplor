@@ -204,6 +204,61 @@ un intervalle de Katz, jamais le rapport de cotes brut. La Poisson modifiée dem
 raisonnable (n d'au moins 100 environ), et comme une quasi-vraisemblance n'a pas de vraisemblance au sens
 strict, son pied de tableau indique N et un test de Wald contre le modèle nul plutôt que l'AIC/BIC.
 
+## Colorer ce que l'ajustement a changé
+
+`empirical = TRUE` place l'effet brut à côté de l'effet modélisé, mais les comparer case par case est
+fastidieux sur un vrai tableau. `color = "adjustment"` colore l'**écart** entre les deux : tout un
+tableau de « qu'est-ce que l'ajustement a changé ? » se lit alors d'un coup d'œil. Placez-le sur le
+canal *fond* et le texte continue d'afficher la taille de l'effet, de sorte qu'un seul regard répond
+aux deux questions :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        empirical = TRUE, color = c("OR", "adjustment"))
+```
+
+Couleur du texte = la force du rapport de cotes ajusté. Fond = sa distance à l'effet observé : un pôle
+signifie que l'ajustement a **renforcé** l'effet, l'autre qu'il l'a **atténué**. Le premier seuil est
+×1,1, la règle classique « une variation de 10 % de l'estimation mérite l'attention » ; viennent
+ensuite ×1,25, ×1,5 et ×2 (modifiables avec `set_color_breaks(adj_ratio = ...)`). Inutile de demander
+`empirical` séparément : la couleur a besoin de l'effet observé, elle l'active donc pour vous.
+
+La direction se mesure **par rapport à l'absence d'effet**, et non vers le haut ou vers le bas. Un
+effet protecteur (OR inférieur à 1) que l'ajustement rapproche de 1 reçoit la même couleur qu'un effet
+de risque rapproché de 1, ce qui est bien ce qu'on veut lire : « les autres variables expliquent une
+partie de cette association » est un seul énoncé, de quelque côté de 1 que se trouve l'effet.
+
+Le même écart se lit aussi en chiffres, dans la case ou au survol. `tab_reg()` n'a pas d'argument
+`display`, on pose donc le gabarit sur le tableau construit — les colonnes sans contrepartie observée
+gardent simplement leur affichage habituel :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
+  set_display("{or} (obs {obs})")
+```
+
+### Un avertissement sur les rapports de cotes
+
+Un rapport de cotes change quand on l'ajuste **même lorsqu'il n'y a rien à ajuster**. C'est ce qu'on
+appelle la *non-collapsibilité* : c'est une propriété du rapport de cotes lui-même, pas le signe d'une
+variable de confusion. Dans une simulation où la variable ajoutée est indépendante de l'exposition —
+donc sans aucune confusion — le rapport de cotes brut se déplaçait tout de même d'environ **8 %** une
+fois ajusté, contre 0,3 % pour le rapport de risques et pratiquement rien pour l'effet marginal. Huit
+pour cent, c'est à peu près la taille du premier seuil de couleur : sur l'échelle des rapports de
+cotes, une couleur de fond légère peut donc relever de l'arithmétique plutôt que de la confusion. La
+légende d'un tableau exporté le signale.
+
+Les comparaisons qui *sont* propres sont celles que cette vignette a déjà présentées :
+`effect = "ame"` et `effect = "ame_ratio"` (effets marginaux), `family = "poisson"` sur une variable
+binaire (rapports de risques) et le bêta d'une régression linéaire. Sur ces échelles, l'écart est bien
+la confusion apportée par les variables ajoutées, et rien d'autre. Si lire la confusion est l'objet de
+votre tableau, préférez l'une d'elles :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
+```
+
 ## Variables expliquées binomiales groupées (un score sommé)
 
 Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*. `score_from_lv1()` (voir `vignette("tabxplor-programming")`) construit un tel score en comptant le nombre de variables catégorielles choisies d’après leur première modalité :
@@ -346,6 +401,22 @@ tab_reg(gss_simple,
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "year")
 ```
+
+Lire une ligne d'un groupe à l'autre est la même corvée que comparer un modèle à son effet observé, et
+la réponse est la même : `color = "between_groups"` colore la distance entre l'effet de chaque groupe
+et celui du **premier** groupe, sur la même ligne. Là où le test de comparaison de modèles ci-dessous
+dit « ces modèles diffèrent » une fois pour tout le modèle, ceci dit *quels effets* diffèrent selon les
+groupes — une lecture prédicteur par prédicteur de ce que les statisticiens appellent l'interaction :
+
+```{r}
+tab_reg(gss_simple, "married", "race", split_var = "party3",
+        color = c("OR", "between_groups"))
+```
+
+Le premier groupe sert de référence et reste non coloré (rien n'est comparé à soi-même) ; réordonnez
+les modalités avec `forcats::fct_relevel()` pour en choisir un autre. Contrairement au cas modèle
+contre observé, les groupes réunissent ici des personnes différentes : un vrai test de ces écarts est
+donc simple à construire — il est prévu.
 
 ## Affiner l'affichage, mettre à l'échelle un prédicteur
 

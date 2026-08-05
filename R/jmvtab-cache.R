@@ -160,7 +160,9 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 7L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 8L   # bump on any store-shape change -> discard stale stores
+                            # 8 = Last Phase z5: the fmt record gained the `obs` field, so a tier-3
+                            #     carrier stored by an older session has a 19-field frame.
                             # (7: Last Phase j -- the `test` tibble gained effect_size/es_type/pvalue_exact)
   #   history: 2 = Phase 7f tier-3 `tab3` tier | 3 = Phase 9b-7 carrier | 4 = Phase 17b meta-merge
   #            5 = Phase 17d clean colour attrs | 6 = Phase 17i unified kernel entry list(value,bytes,seq)

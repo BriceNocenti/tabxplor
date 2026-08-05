@@ -11,15 +11,24 @@
 ```
 R/
 ├── fmt_class.R     (~4400 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
-│                              fmt_field_names (the 19 fields; Last Phase s +n_eff) + DERIVED fmt_col_attrs (17a: moved here
+│                              fmt_field_names (the 20 fields; s +n_eff, z5 +obs) + DERIVED fmt_col_attrs (17a: moved here
 │                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color engine (measure_facts = THE MEASURES accessor, folds a row's `guar`
-│                              per-policy override [z4: contrib only]; fmt_resid = the adjusted std.
-│                              residual DERIVED from pvalue+sign(ctr), no 20th field, backs the `resid`
-│                              display token + tooltip; fmt_color_plan/fmt_color_slots/fmt_color_channels;
+│                              per-policy override [z4: contrib only]; measure_policy = its twin, applies
+│                              a row's `force_policy` [z5: adjustment/between_groups have no test of
+│                              their own -> always `ignore`]; measure_own_ref = the z5 predicate "this
+│                              measure's baseline is ANOTHER COLUMN" (it names itself in the legend +
+│                              resolves its ref phrase PER CHANNEL); fmt_resid = the adjusted std.
+│                              residual DERIVED from pvalue+sign(ctr), no field, backs the `resid`
+│                              display token + tooltip; fmt_adjustment_score = the z5 score, ONE helper
+│                              behind both new measures, folded around 1 (ci_type or/ratio) or 0 (diff),
+│                              signed AWAY-FROM/TOWARD THE NULL so a protective effect reads like a risky
+│                              one; fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under; 17d: fmt_color_plan
-│                              reads MEASURES for raw/scale/sig_source/gate_row -- no switch arms; legacy
+│                              reads MEASURES for raw/scale/sig_source/gate_row + z5's std_when="additive"
+│                              (the scale keys off the ESTIMATE's ci_type, since Model_OR and Model_AME
+│                              are both type "row") -- no switch arms; legacy
 │                              strings decoded once at the boundary [color_decode_legacy], color_measure_policy
 │                              + single0 GONE, stored color always clean; broadcast helpers get_ref_field);
 │                              colour legend + footer (16e ONE model): MEASURES table = per-measure facts
@@ -288,7 +297,15 @@ R/
 │                              risk-diff companion CI = two-proportion WALD, matching method_diff="wald"
 │                              + the model AME's Wald so the merged legend names ONE method], gaussian
 │                              mean/diff [diff/SD(Y), type=coef], poisson rate/IRR; multinomial =
-│                              tooltip via reg_empirical_tips -> `empirical_tips` table attr; per-spec
+│                              tooltip via reg_empirical_tips -> `empirical_tips` table attr; z5:
+│                              reg_empirical_columns RETURNS list(cols, effect) -- the crude effect
+│                              vector reg_build writes into each model column's `obs` field [one crude
+│                              block serves every model column when n_dep==1, hence model COMPARISON
+│                              works; per fit when several dependents]; reg_write_group_obs (called at
+│                              THE one point the split groups are parallel tibbles, before vec_rbind)
+│                              fills `obs` with the FIRST group's estimate for color="between_groups",
+│                              keyed by reg_skel_key not position [the compound-formula path builds a
+│                              per-group skeleton]; per-spec
 │                              for a dependents vector). No new fmt fields. 16d: reg_meta$wt (weight
 │                              name for the "Weighted by" footer).
 │                              12h (display): estimate_display= arg -> est_ci token (estimate + visible
@@ -426,7 +443,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 ### Type System
 
-- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **19 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI: Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic) and **11 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
+- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **20 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI: Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Last Phase z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`) and **11 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
 - **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
 - **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns + the `chi2_kish`/`chi2_svy`/`F_kish`/`F_svy` robust discriminators), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise — `color_breaks` per named scale). Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
@@ -1768,7 +1785,98 @@ In `tab_reg` with `empirical=TRUE`, to reinforce comparison between modelised ef
 - Can you think of additional ways to enhance comparisons between different models made with `split_var` in the same way ?
 - Can you think of additional ways to enhance comparisons between different models when several predictors lists are provided in the same way ?
 
+**DONE (2026-08-05), phase 1 (descriptive).** Full suite green (FAIL 0, WARN 0, SKIP 4, PASS 4479 = +79,
+the new `test-adjustment-colour.R` plus the contract updates). Design study, measurements and rejected
+alternatives: `dev/model_vs_observed_effect_colour.md`; the maintainer's eight rulings are its SS13.
+
+**Why it was cheap.** Nothing is computed: `empirical = TRUE` already produces the crude effect for
+exactly the rows the model column occupies, aligned to the same skeleton, on the same scale (the z3 `rr`
+arm exists to guarantee that), on the same complete-case frame. One number had to be CARRIED so the
+per-column colour engine could see it -- the engine takes one fmt column, so a cross-column measure must
+resolve at build time into a field (the same rule `or` has always followed).
+
+**The 20th fmt field `obs`** = "the value this cell's estimate is compared to", on the cell's own scale.
+Written in `reg_build` from `reg_empirical_columns()`, which now returns `list(cols, effect)` -- the
+effect vector is the local the shape was built from, never re-read out of an fmt column by name. One
+crude block serves EVERY model column when there is a single dependent, which is exactly what makes
+model comparison work; one per fit when there are several. NA on the Constant, numeric predictors,
+multinomial/ordinal and every cross-table -> uncoloured by construction.
+
+**Two measures, one helper.** `color = "adjustment"` (vs the observed effect; forces `empirical = TRUE`)
+and `color = "between_groups"` (vs the first `split_var` group). Both are `MEASURES` rows over one
+`fmt_adjustment_score()`, share the two new scales `adj_ratio` (x1.1/1.25/1.5/2, the 10 %
+change-in-estimate rule) / `adj_diff` (2/5/10/20 points -- ABSOLUTE, because a relative change explodes
+near the null: measured -60 % for a +0.016 shift on a -0.026 crude AME), and are ALLOWED on the
+background so `color = c("OR", "adjustment")` shows effect size and attenuation at once. Mutually
+exclusive (one field). **The sign is away-from/toward the NULL**, not raw up/down -- otherwise a
+protective effect colours backwards. **`color_signif` does not apply**: a new `force_policy` fact read
+through `measure_policy()` (the twin of `measure_facts()`) pins them to `ignore`, because the model's own
+interval answers a different question and a real gap test needs phase 2.
+
+**Three defects found and fixed in passing**: `reg_empirical_columns`' `emp_off` compared a length-2
+`color` with `%in%` (an R >= 4.2 error on the two-channel form); `tab_reg`'s `color_auto` did the same
+with `is.na()`; and `tab_reg` never validated `color` at all (`fmt()` casts without checking), so it now
+calls `resolve_color_channels()` -- one validator, not a second copy of its rules.
+
+**Legend.** The reference phrase became PER CHANNEL (`measure_own_ref()`), since these are the only
+measures whose baseline is another column -- the scalar phrase would have described the wrong
+comparison on the background. The Q6 caveat ships as one sentence on the non-collapsible path only
+(measured: +7.9 % crude->adjusted OR with the covariate INDEPENDENT of the exposure, vs +0.26 % for the
+RR), gated on family + `is_coef` so `exponentiate = FALSE` is covered and AME / RR / IRR / beta are not.
+
+**Conscious regen, both proved minimal**: the 36 structural `_golden/*.rds` + `_snaps/fmt-contract.md`
+(a script checked 1787 cells: the ONLY delta is the added all-NA column). `_snaps/golden.md`,
+`_snaps/render-html.md` and `_color_golden/*.rds` did NOT move. `JMVTAB_CACHE_SCHEMA` 7 -> 8.
+
+**Also closed**: the Phase z3 open item -- `msgfmt` is installed now, so `dev/update_translations.R`
+ran and `inst/po/fr/LC_MESSAGES/R-tabxplor.mo` is recompiled (142 translated, 0 fuzzy: the 6 new z5
+strings plus z3's 6, and the two stale "nulll" fuzzies resolved).
+
 ---
+
+#### Last Phase z6 — a significance test for the model-vs-observed gap
+
+Phase z5 colours the SIZE of the gap between a modelled effect and its observed counterpart, and says
+so honestly: `color_signif` is pinned to `ignore` because the gap has no test of its own yet. This
+phase adds one. It is a genuinely separate piece of work -- new statistics, a second stored quantity,
+and a jamovi-cache consequence -- so it runs in the same two steps as z5.
+
+Read first: `dev/model_vs_observed_effect_colour.md` SS4 (why CI overlap is not a test here, the
+validated influence-function route, the rejected alternatives), SS4.4 (why it was deferred), SS9.1 (the
+`split_var` case, where the cheap test is already the sound one) and SS6 (the storage decision).
+
+**Step 1 — study, statistical soundness, architecture questions. Report only, then pause.**
+Write the report in a new `dev/*.md`, in the same shape as z5's: measured evidence, rejected
+alternatives, and a numbered list of decisions for the maintainer. It must answer at least:
+
+- The measurement is settled in principle (SS4.2 measured the stacked influence-function SE against an
+  800-replicate bootstrap: ratio 1.02 unweighted, 1.02 weighted, and it reproduced `svyglm`'s own SE
+  exactly, 187x faster than bootstrapping). Confirm it on the REAL code paths rather than a
+  simulation: survey designs with strata/clusters, `effect = "ame"` (an M-estimator through
+  `marginaleffects`, not a plain GLM score), `family = "poisson"` on a binary outcome (already a
+  sandwich), gaussian, and the crude 2x2 estimator as a saturated GLM. Where does it stop holding?
+- Where does the second quantity live? `ci_inf`/`ci_sup`/`pvalue` are taken by the model estimate,
+  which the cell prints. A 21st field, the free `ctr` on reg columns, or a derived value like
+  `fmt_resid()`? What does `sig_source` become -- a third value, or a new fact?
+- The jamovi consequence (SS4.4): influence functions need the model frame, which `reg_build_digest`
+  deliberately does not keep (it stores coef + vcov so a reference change needs no refit, and that
+  byte-identity is locked by `test-jmvtabreg-cache.R`). Carry a compact summary, degrade to "no gap
+  test" on the digest path, or something else? Do NOT weaken the reref contract.
+- `split_var` is the easy half and should probably ship first: the groups are DISJOINT, so
+  `sqrt(SE_A^2 + SE_B^2)` is exact (measured: bootstrap correlation +0.041, SE ratio 1.012, and a p of
+  0.00319 against the LRT interaction test's 0.00322). Both groups' bounds are already stored, so this
+  needs no new machinery at all -- is it a separate, cheaper phase?
+- What do the three policies then MEAN for these measures? The z4 `contrib` shape is the obvious
+  template: `grey_non_signif` greys a gap that is not significant, `guaranteed_effect` scores |z| of
+  the gap on an absolute residual-style scale through the `guar` override. Confirm or replace it.
+- Multiplicity: a table has many cells and every gap would be tested at `conf_level`, uncorrected --
+  consistent with the rest of the package, but say so.
+- Is the OR path's non-collapsibility a problem for the TEST too? A gap can be significant while being
+  entirely non-collapsibility (SS4.2 measured p = 0.020 with zero confounding). What should the legend
+  and the docs say then?
+
+**Step 2 — plan, then implement.** Only after the maintainer has answered.
+
 
 
 

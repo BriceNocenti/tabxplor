@@ -131,12 +131,16 @@ NULL
 #'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 #'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 #'   \code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-#'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid}; the
-#'   first field is the \emph{primary}, shown alone by Excel and used for coloring.
+#'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid},
+#'   \code{obs}; the first field is the \emph{primary}, shown alone by Excel and used for coloring.
 #'   \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
 #'   standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
 #'   \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
-#'   whether it departs from independence -- the SPSS cell layout. A bare field name is also accepted as a
+#'   whether it departs from independence -- the SPSS cell layout. \code{obs} is
+#'   \code{\link{tab_reg}}-only: the OBSERVED (crude) effect beside the modelled one, so
+#'   \code{\link{set_display}(t, "\{or\} (obs \{obs\})")} on a regression table prints each
+#'   adjusted odds ratio next to the unadjusted one it is compared to (\code{tab_reg} has no
+#'   \code{display} argument of its own; see \code{color = "adjustment"} in \code{?tab_reg}). A bare field name is also accepted as a
 #'   shorthand for its single-field template, so \code{display = "ci"} is the same as
 #'   \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 #'   \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
@@ -868,7 +872,16 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
     text <- norm(v[1])
     bg   <- if (length(v) >= 2L) norm(v[2]) else NA_character_
     if (!is.na(bg) && bg == "") bg <- NA_character_
-    if (!text %in% ok_measure) cli::cli_abort("Unknown color measure {.val {text}}.")
+    if (!text %in% ok_measure) {
+      # Last Phase z5: `adjustment` / `between_groups` score a MODEL estimate against its observed
+      # counterpart, so they exist only on a tab_reg() table. Name them here rather than let a user who
+      # read ?tab_reg get a bare "unknown measure".
+      cli::cli_abort(c(
+        "Unknown color measure {.val {text}}.",
+        "i" = if (text %in% c("adjustment", "between_groups"))
+          "{.val {text}} is a {.fn tab_reg} measure: it compares a model effect to its observed one."
+        else "Valid measures: {.val {c('diff','ratio','contrib','or')}}."))
+    }
     if (!is.na(bg) && !bg %in% c("diff", "ratio")) {
       cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
     }

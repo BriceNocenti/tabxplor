@@ -10,6 +10,10 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Last Phase z5: ALL 36 regenerated -- the record gained a 20th per-cell field `obs` (the value a
+#     tab_reg cell's estimate is compared to). A script proved the ONLY delta is that added, entirely
+#     all-NA column (1787 cells checked): a cross-table never fills it, so every displayed value, CI
+#     bound and table attribute is byte-identical and NO display / colour snapshot moved.
 #   Last Phase z4: f_color_contrib REGENERATED, and it alone -- verified field by field across all 36
 #     cases that the ONLY delta is its `pvalue` field, moving from the Pearson residual to the
 #     adjusted standardized (Haberman) one. Its RENDERED output is byte-identical (that case uses the

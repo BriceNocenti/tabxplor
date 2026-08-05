@@ -57,6 +57,7 @@ fmt(
   or = rep(NA_real_, length(n)),
   tot_n = rep(NA_real_, length(n)),
   n_eff = rep(NA_real_, length(n)),
+  obs = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
@@ -214,6 +215,14 @@ Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)
 weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
 A double vector the length of \code{n}. Non-displayed.}
 
+\item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
+measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
+observed (crude, unadjusted) effect beside a model effect, or -- under
+\code{split_var} with \code{color = "between_groups"} -- the reference group's estimate.
+\code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
+predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
+A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.}
+
 \item{in_totrow}{\code{TRUE} when the cell is part of a total row}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
@@ -349,10 +358,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 19 fields :
+\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 20 fields :
 \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff},
+\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs},
 \code{in_totrow},  \code{in_tottab},
 \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them

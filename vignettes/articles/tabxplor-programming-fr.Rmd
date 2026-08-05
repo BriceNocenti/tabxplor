@@ -91,6 +91,7 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
 | `n_eff`     | taille d'échantillon efficace utilisée pour l'intervalle de confiance, avec `options(tabxplor.kish_neff = TRUE)` |
+| `obs`       | `tab_reg()` seulement : l'effet observé (brut) auquel l'effet modélisé est comparé |
 | `digits`    | nombre de décimales à afficher (par case) |
 | `display`   | quel champ est affiché (par case) |
 | `in_totrow`, `in_tottab`, `in_refrow` | la case est-elle dans une ligne de total / un tableau de total / une ligne de référence (logique) |
@@ -153,7 +154,7 @@ tabs |> set_display("{pct} ({diff})")
 
 Les règles :
 
-- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`.
+- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs`.
 - Le **premier** `{}` est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
 - Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
 - Il s’agit simplement d’un affichage pour les sorties (la console, `tab_kable()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.

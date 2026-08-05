@@ -10,8 +10,8 @@
     Output
        [1] "n"         "display"   "digits"    "wn"        "pct"       "mean"     
        [7] "diff"      "ratio"     "ctr"       "var"       "ci_inf"    "ci_sup"   
-      [13] "pvalue"    "or"        "tot_n"     "n_eff"     "in_totrow" "in_tottab"
-      [19] "in_refrow"
+      [13] "pvalue"    "or"        "tot_n"     "n_eff"     "obs"       "in_totrow"
+      [19] "in_tottab" "in_refrow"
     Code
       cat("\nfield types:\n")
     Output
@@ -25,10 +25,10 @@
         "integer" "character"   "integer"    "double"    "double"    "double" 
              diff       ratio         ctr         var      ci_inf      ci_sup 
          "double"    "double"    "double"    "double"    "double"    "double" 
-           pvalue          or       tot_n       n_eff   in_totrow   in_tottab 
-         "double"    "double"    "double"    "double"   "logical"   "logical" 
-        in_refrow 
-        "logical" 
+           pvalue          or       tot_n       n_eff         obs   in_totrow 
+         "double"    "double"    "double"    "double"    "double"   "logical" 
+        in_tottab   in_refrow 
+        "logical"   "logical" 
     Code
       cat("\ncolumn attributes:\n")
     Output

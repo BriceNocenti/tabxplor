@@ -77,10 +77,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 19 fields :
+#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 20 fields :
 #' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 #' \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff},
+#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs},
 #' \code{in_totrow},  \code{in_tottab},
 #' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 #' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
@@ -148,6 +148,13 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on
 #' weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
 #' A double vector the length of \code{n}. Non-displayed.
+#' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
+#' measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
+#' observed (crude, unadjusted) effect beside a model effect, or -- under
+#' \code{split_var} with \code{color = "between_groups"} -- the reference group's estimate.
+#' \code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
+#' predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
+#' A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
@@ -310,6 +317,7 @@ fmt <- function(n         = integer(),
                 or        = rep(NA_real_, length(n)),
                 tot_n     = rep(NA_real_, length(n)),
                 n_eff     = rep(NA_real_, length(n)),
+                obs       = rep(NA_real_, length(n)),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
@@ -352,6 +360,10 @@ fmt <- function(n         = integer(),
   # Last Phase s: the effective sample size used for this cell's CI (Kish n_eff when opted in,
   # else NA -> tab_ci/num_core fall back to the raw unweighted base). Non-displayed, CI-only.
   n_eff   <- vctrs::vec_recycle(vctrs::vec_cast(n_eff  , double())   , size = max_size)
+  # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` /
+  # "between_groups" (the crude effect, or the reference group's estimate), on the cell's own
+  # scale. NA everywhere else -> those measures score NA -> uncoloured.
+  obs     <- vctrs::vec_recycle(vctrs::vec_cast(obs    , double())   , size = max_size)
 
   # Phase 3a: the public `ci` arg is a symmetric half-width; store it as ABSOLUTE bounds
   # around the estimate the interval is centred on (the difference for diff-type CIs, the mean
@@ -387,7 +399,7 @@ fmt <- function(n         = integer(),
           wn = wn, pct = pct,  mean = mean,
           diff = diff, ratio = ratio, ctr = ctr, var = var,
           ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
-          n_eff = n_eff,
+          n_eff = n_eff, obs = obs,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -431,8 +443,8 @@ get_num <- function(x) {
   # display values and the field each reads: n/(default)->n, wn->wn,
   # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var,
   # ci->get_ci() (the CI half-width, read from the ci_sup bound via the Phase 1a shim),
-  # ratio (canonical; the legacy synonym rr is aliased to it) -> the `ratio` field, or/OR/or_pct->or.
-  # format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
+  # ratio (canonical; the legacy synonym rr is aliased to it) -> the `ratio` field, or/OR/or_pct->or,
+  # obs->obs. format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
   # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
   # sync (see the /vctrs-field skill).
   out     <- get_n(x)
@@ -458,6 +470,10 @@ get_num <- function(x) {
   out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
+  # Last Phase z5: the value this cell is COMPARED TO (the observed/crude effect, or the reference
+  # group's estimate). A real stored field, so -- unlike the derived `resid` -- it round-trips:
+  # set_num() has a matching arm.
+  out[!nas & display == "obs"    ] <- get_obs (x)[!nas & display == "obs"    ]
   # Phase 12h: est_ci = "<estimate> [ci_inf; ci_sup]" (regression OR / beta with a visible interval).
   # The PRIMARY number is the point estimate: the OR (ci_type=="or") or the coefficient (else). ci_type
   # is a per-column scalar attribute, so one branch per column (never mixed within a column).
@@ -495,6 +511,7 @@ set_num <- function(x, value) {
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
   out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
+  out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])  # Last Phase z5
   # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
   est_ci_m <- !nas & display == "est_ci"
   if (any(est_ci_m)) {
@@ -1146,13 +1163,24 @@ resolve_color_channels <- function(color) {
     if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m,
     character(1)))
   if (length(color) > 2L) cli::cli_abort("{.arg color} accepts at most two values (text, background).")
-  ok <- c("diff", "ratio", "contrib", "OR", "")
+  # Last Phase z5: `adjustment` / `between_groups` are tab_reg-only measures (they score the `obs`
+  # field, which only a regression table fills), but they are ordinary measures at the STORAGE
+  # boundary -- and unlike contrib / OR they ARE allowed on the background, which is the whole point of
+  # the headline reading `color = c("OR", "adjustment")`: effect size in the text, what adjustment did
+  # to it in the fill.
+  ok <- c("diff", "ratio", "contrib", "OR", "adjustment", "between_groups", "")
   if (!all(color %in% ok)) {
     cli::cli_abort(c("Unknown color measure {.val {setdiff(color, ok)}}.",
-                     "i" = "Valid measures: {.val {c('diff','ratio','contrib','or')}}."))
+                     "i" = "Valid measures: {.val {c('diff','ratio','contrib','or')}}.",
+                     "i" = "In {.fn tab_reg} also: {.val {c('adjustment','between_groups')}}."))
   }
   if (length(color) == 2L && color[2] %in% c("contrib", "OR")) {
     cli::cli_abort("{.val {color[2]}} is a whole-cell measure; it cannot go on the background channel.")
+  }
+  if (all(c("adjustment", "between_groups") %in% color)) {
+    cli::cli_abort(c(
+      "{.val adjustment} and {.val between_groups} cannot be used together.",
+      "i" = "Both score the same per-cell comparison value, so a cell can carry only one of them."))
   }
   if (length(color) == 2L && color[2] == "") color <- color[1]   # trim an empty bg
   color
@@ -1200,8 +1228,10 @@ set_color_signif <- function(x, color_signif) {
 # Last Phase z4: `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back
 # from the stored p-value + the contribution's sign), exactly as `ci` is derived from its bounds. It is
 # read-only -- get_num() has an arm, set_num() deliberately does not.
+# Last Phase z5: `obs` is a real stored FIELD (the value a reg cell is compared to), so unlike `resid`
+# it is fully round-trippable -- get_num() reads it and set_num() writes it.
 tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var",
-                              "resid")
+                              "resid", "obs")
 # Phase 17d: the internal display token is now the canonical `ratio` (was `rr`). The alias table is
 # READ-SIDE ONLY -- the legacy synonym `rr` (bare stored token / a `{rr}` composite) maps to `ratio`,
 # so old objects still resolve, but nothing produces `rr` and every mask matches the single "ratio".
@@ -1356,6 +1386,7 @@ new_fmt <- function(n         = integer(),
                     or        = rep(NA_real_, length(n)),
                     tot_n     = rep(NA_real_, length(n)),
                     n_eff     = rep(NA_real_, length(n)),
+                    obs       = rep(NA_real_, length(n)),
 
                     in_totrow = rep(FALSE   , length(n)),
                     in_tottab = rep(FALSE   , length(n)),
@@ -1416,7 +1447,7 @@ new_fmt <- function(n         = integer(),
          wn = wn, pct = pct, mean = mean,
          diff = diff, ratio = ratio, ctr = ctr, var = var,
          ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or,
-         tot_n = tot_n, n_eff = n_eff,
+         tot_n = tot_n, n_eff = n_eff, obs = obs,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
@@ -1428,14 +1459,14 @@ new_fmt <- function(n         = integer(),
   #vec_data() return the tibble with all fields
 }
 
-# The 19 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
+# The 20 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
 # DERIVED rather than hand-maintained. (Defect: model_family became a 10th attribute in Phase 15e but
 # was never added to the hand-written fmt_col_attrs -> it was silently dropped on every carrier
 # round-trip / bind.) Adding a FIELD updates this vector (the /vctrs-field checklist forces it);
 # adding an ATTRIBUTE (a new_fmt() formal that is not a field) needs NO change here -- it appears in
 # fmt_col_attrs automatically. Order follows the new_rcrd() list() above; do NOT reorder.
 fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
-                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff",
+                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs",
                      "in_totrow", "in_tottab", "in_refrow")
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
@@ -1600,6 +1631,12 @@ get_tot_n  <- fmt_field_factory("tot_n")
 # @export
 get_n_eff  <- fmt_field_factory("n_eff")
 
+# @describeIn fmt get the "obs" field (Last Phase z5: the value this cell's estimate is COMPARED TO
+# by the tab_reg colour measures -- the observed/crude effect, or the reference group's estimate)
+#' @keywords internal
+# @export
+get_obs    <- fmt_field_factory("obs")
+
 # get_tot_wn(): the cell's OWN WEIGHTED percentage base. This is NOT a stored field -- it is
 # recovered as wn / pct (pct is stored at full precision; only display is rounded), mirroring the
 # way get_ci() recovers the half-width from the stored bounds. For an empty cell (pct == 0) the
@@ -1662,6 +1699,42 @@ get_mean_contrib <- function(x) {
 #' @keywords internal
 fmt_resid <- function(x) {
   sign(get_ctr(x)) * -stats::qnorm(get_pvalue(x) / 2)
+}
+
+# fmt_adjustment_score() -- Last Phase z5: how far a model estimate sits from the value it is COMPARED
+# TO (the `obs` field: the observed/crude effect, or a reference group's estimate). ONE helper behind
+# both `color = "adjustment"` and `color = "between_groups"`; they differ only in what `obs` holds.
+#
+# The comparison rides the estimate's own scale, read ONCE per column from `ci_type` (a scalar
+# attribute, like get_num()'s est_ci arm) -- never a per-cell test:
+#   multiplicative (or / ratio) : the ratio of the two effects, magnitude folded around 1;
+#   additive       (diff)       : their difference, magnitude folded around 0.
+#
+# DESIGN -- the SIGN is "away from vs toward the NULL", not raw up/down. A raw sign colours a
+# protective effect backwards: crude OR 0.50 attenuated to 0.60 moves UP while the identical
+# attenuation of a risky 2.00 -> 1.67 moves DOWN, so the two halves of a diverging palette would mean
+# nothing consistent. Scoring |log est| - |log obs| (|est| - |obs| when additive) makes one pole
+# always "the model STRENGTHENED this effect" (suppression / negative confounding) and the other
+# always "it ATTENUATED it" (the covariates explained part of the raw association), for protective and
+# risky effects alike, and it stays correct through the null (crude 0.90 -> adjusted 1.20 reads as
+# strengthened). The magnitude fed to findInterval is direction-free; only the sign carries the reading.
+#' @keywords internal
+fmt_adjustment_score <- function(x) {
+  cit <- as.character(get_ci_type(x))[1]
+  obs <- get_obs(x)
+  if (cit %in% c("or", "ratio")) {
+    est <- if (identical(cit, "or")) get_or(x) else get_ratio(x)
+    ok  <- is.finite(est) & is.finite(obs) & est > 0 & obs > 0
+    r   <- ifelse(ok, est / obs, NA_real_)
+    mag <- pmax(r, 1 / r)                                    # size of the move, direction-free
+    s   <- sign(abs(log(ifelse(ok, est, NA_real_))) - abs(log(ifelse(ok, obs, NA_real_))))
+    ifelse(s < 0, 1 / mag, mag)                              # centre 1: below 1 = attenuated
+  } else {
+    est <- get_diff(x)
+    ok  <- is.finite(est) & is.finite(obs)
+    s   <- sign(abs(est) - abs(obs))
+    ifelse(ok, abs(est - obs) * s, NA_real_)                 # centre 0: below 0 = attenuated
+  }
 }
 
 # fmt_broadcast_last() -- base-R broadcast of the LAST value of each group to every row of that group,
@@ -1872,6 +1945,11 @@ set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
 #' @keywords internal
 # @export
 set_n_eff   <- fmt_set_field_factory("n_eff"  , cast = double()   )
+# @describeIn fmt set the "obs" field (the value this cell's estimate is compared to -- written by
+# tab_reg's crude-companion / split-group passes, NA everywhere else)
+#' @keywords internal
+# @export
+set_obs     <- fmt_set_field_factory("obs"    , cast = double()   )
 
 
 
@@ -2037,6 +2115,17 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # `ci_bare`, which is what the branches below actually key on.
   ci_mult   <- ci_type %in% c("or", "ratio")
   ci_bare   <- (type == "mean") | ci_mult
+
+  # Last Phase z5: `obs` prints exactly like the estimate it is compared to -- a crude OR reads like
+  # the Model_OR beside it, a crude risk difference like its AME, a crude log(OR) like the raw
+  # coefficient. The scale is a per-COLUMN fact (`ci_type` / `type` are scalar attributes), so this is
+  # ONE branch per column, never a per-cell test: the same shape as get_num()'s est_ci arm.
+  obs_m    <- ok & display == "obs"
+  obs_mult <- ci_mult                          # OR / RR / IRR       -> like `or`  (bare, big.mark, 2 dg)
+  obs_coef <- !ci_mult && type == "coef"       # beta / log(OR)      -> like `coef` (plain)
+  obs_pct  <- !ci_mult && type != "coef"       # AME / risk-diff     -> like `diff` (x100, signed, %)
+  if (obs_mult) digits[obs_m & digits < 2L] <- 2L
+  obs_as_pct <- obs_m & obs_pct
   disp_ci   <- display == "ci" & ci_type %in% c("diff", "ratio") & !nas
   # A ratio interval on a pct column would inherit that column's digits = 0 and print "[1;2]".
   # 2 decimals, exactly like the `or` displays just above: a ratio bracket is the same kind of
@@ -2049,17 +2138,20 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
+  pct_no_ci     <- pct_no_ci | obs_as_pct                     # Last Phase z5
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
   # Last Phase z4: `resid` joins the signed mask -- the direction (over- / under-represented) is half
   # of what a standardized residual says, so it must never print bare.
-  diff_signed   <- ok & display %in% c("diff", "resid")
+  diff_signed   <- (ok & display %in% c("diff", "resid")) | obs_as_pct   # Last Phase z5
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
                                         "OR", "OR_pct", "gof", "resid") |    # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
+  n_wn          <- n_wn | (obs_m & obs_mult)                  # Last Phase z5
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
 
+  pct_or_ci <- pct_or_ci | obs_as_pct                          # Last Phase z5 (x100 + "%")
   out[pct_or_ci] <- out[pct_or_ci] * 100
   digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
 
@@ -2076,7 +2168,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # what WOULD desync the bypass from format()'s "+1.2".
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "ci", text = plus_ci,
-                             signed = !nas & display %in% c("ctr", "diff", "resid"),
+                             signed = (!nas & display %in% c("ctr", "diff", "resid")) | obs_as_pct,
                              ratio  = !nas & display == "ratio"))
   }
 
@@ -2776,8 +2868,10 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # synonym. A non-measure token (e.g. a hand-built column) -> uncoloured.
   measure <- if (color[1] %in% c("or", "OR")) "or" else color[1]
   if (!measure %in% names(MEASURES)) return(NULL)
-  # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute.
-  policy  <- if (!is.null(signif)) signif else get_color_signif(x)
+  # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute. Last Phase
+  # z5: measure_policy() then applies a measure's `force_policy` (a measure with no significance test of
+  # its own always reads under `ignore`); the legend resolves the policy through the same accessor.
+  policy  <- measure_policy(measure, if (!is.null(signif)) signif else get_color_signif(x))
 
   is_mean <- type %in% c("mean", "n")
   # Phase 12c: a "coef" column (gaussian regression beta) colours the STANDARDIZED effect beta/SD(Y)
@@ -2800,7 +2894,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # Last Phase z4: read through measure_facts(), which folds in a measure's per-policy override (only
   # contrib has one: `guaranteed_effect` swaps the relative contribution for the absolute residual).
   md      <- measure_facts(measure, policy)
-  use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "na" = TRUE)
+  # the stored interval's SCALE (a scalar column attribute); also the significance neutral below.
+  cit     <- get_ci_type(x)
+  ci_mult <- cit %in% c("or", "ratio")
+  # Last Phase z5: "additive" keys the scale on the ESTIMATE's own scale rather than on the column kind
+  # -- Model_OR and Model_AME are both type "row", so only ci_type separates a multiplicative effect
+  # from an additive one.
+  use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "additive" = !ci_mult,
+                    "na" = TRUE)
   sc      <- color_scales(x)
   scale   <- if (is_logcoef && measure == "diff") log_odds_scale(sc[["odds_ratio"]])
              else sc[[ md$scale[[if (use_std) "std" else "pct"]] ]]
@@ -2826,8 +2927,6 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the old mismatch: measure "or" + a difference ci_type tested the diff bounds against the OR's
   # neutral 1, so nothing was ever significant. All three scales test the same null (p1 = p2), so
   # whichever interval is stored answers it.
-  cit         <- get_ci_type(x)
-  ci_mult     <- cit %in% c("or", "ratio")
   has_ci      <- cit %in% c("diff", "diff_row", "diff_col", "or", "ratio")
   ci_neutral  <- if (ci_mult) 1 else 0
   sig_pos <- has_ci & get_ci_inf(x) > ci_neutral
@@ -3105,6 +3204,9 @@ fmt_channel_codes <- function(x, theme = "light") {
 #                      "pvalue" (contrib -- no interval, reads the stored standardized-residual p-value).
 #   gate_row           which structural row this measure never colours: "refrow" (a reference level /
 #                      regression intercept is a baseline) | "totrow" (contrib is undefined on a total).
+#   force_policy       (optional, Last Phase z5) the measure has no significance test of its own, so it
+#                      ALWAYS reads under this policy whatever the column's color_signif says -- applied
+#                      by measure_policy(), which the plan and the legend both call.
 MEASURES <- list(
   diff    = list(word = "difference",           word_i18n = TRUE,  break_over = "+",       break_under = "-",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
@@ -3136,7 +3238,28 @@ MEASURES <- list(
                  # SPSS reading). Both readings share ONE significance source: the residual p-value.
                  guar = list(word = "standardized residual", break_over = "+", break_under = "-",
                              threshold_mult = FALSE, unit_kind = "none", break_origin = "threshold",
-                             scale = c(std = "residual", pct = "residual")))
+                             scale = c(std = "residual", pct = "residual"))),
+  # Last Phase z5 -- the two tab_reg-only measures. They score the SAME quantity through the SAME
+  # helper (how far the model estimate sits from the value stored in `obs`) and differ ONLY in what
+  # that value is, hence in the reference the legend names. `std_when = "additive"` selects the scale
+  # from the estimate's own scale rather than from the column kind: an OR / RR / IRR is folded around
+  # 1 on `adj_ratio`, a beta / AME / risk-difference around 0 on `adj_diff`.
+  # `force_policy = "ignore"`: phase 1 is descriptive. The model estimate's own interval answers a
+  # DIFFERENT question ("is this effect real?", not "is the gap real?"), and a valid gap test needs the
+  # joint variance of two estimates fitted on the same rows -- see dev/model_vs_observed_effect_colour.md
+  # SS4. So the policy is neutralised here rather than silently gating on the wrong interval.
+  adjustment     = list(word = "adjustment",    word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
+                 break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
+                 has_ref_lead = TRUE,
+                 raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
+                 std_when = "additive", sig_source = "bounds", gate_row = "refrow",
+                 force_policy = "ignore"),
+  between_groups = list(word = "between groups", word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
+                 break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
+                 has_ref_lead = TRUE,
+                 raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
+                 std_when = "additive", sig_source = "bounds", gate_row = "refrow",
+                 force_policy = "ignore")
 )
 
 # The measure's facts as they apply UNDER A GIVEN POLICY: the MEASURES row, with its `guar` override
@@ -3147,6 +3270,24 @@ measure_facts <- function(measure, policy = "ignore") {
   md <- MEASURES[[measure]]
   if (is.null(md) || is.null(md$guar) || !identical(policy, "guaranteed_effect")) return(md)
   utils::modifyList(md, md$guar)
+}
+
+# The policy a measure ACTUALLY reads under: the column's `color_signif`, unless the measure declares a
+# `force_policy` (a measure with no significance test of its own). Last Phase z5: the twin of
+# measure_facts() -- the plan and the legend both resolve the policy here, so a neutralised measure
+# cannot be coloured under one policy while the legend describes another.
+# Last Phase z5: does this measure's baseline live in ANOTHER COLUMN (the observed effect, a reference
+# group) rather than in a row of its own? Two consequences, both of which would otherwise be
+# hand-repeated: such a measure NAMES ITSELF in the legend (the column's effect word -- "OR", "AME" --
+# is the thing being compared, not what the colour measures), and it resolves its own reference phrase
+# per channel instead of borrowing the text channel's.
+#' @keywords internal
+measure_own_ref <- function(measure) isTRUE(MEASURES[[measure]]$ref_kind %in% c("observed", "group"))
+
+#' @keywords internal
+measure_policy <- function(measure, policy = "ignore") {
+  fp <- MEASURES[[measure]]$force_policy
+  if (is.null(fp)) policy else fp
 }
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
@@ -3342,6 +3483,12 @@ legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_re
   base_kind <- measure_facts(measure, policy)$ref_kind  # Phase 16e: the measure's baseline concept, one field
   if (identical(base_kind, "indep"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
+  # Last Phase z5: these two baselines are NEITHER a total nor a predictor's reference category -- they
+  # are another COLUMN's estimate (the observed effect, or the reference group's). They must be
+  # resolved BEFORE the is_reg branch below, which would otherwise claim "the reference category" for
+  # every reg column and describe the wrong comparison.
+  if (base_kind %in% c("observed", "group"))
+    return(list(kind = base_kind, label = NA_character_, orientation = "row"))
   # Phase 14w: a regression table has no total row -- every reg column (incl. AME, ci_type "diff", and the
   # empirical crude columns) is compared to the predictor's REFERENCE CATEGORY, never "the Total row".
   if (isTRUE(is_reg) || identical(base_kind, "category") || isTRUE(is_coef))
@@ -3358,6 +3505,8 @@ legend_ref_phrase <- function(spec, lang) {
   ref <- spec$ref
   lab <- ref$label
   if (identical(ref$kind, "indep")) return(gettext("independence"))
+  if (identical(ref$kind, "observed")) return(gettext("the observed (crude) effect"))
+  if (identical(ref$kind, "group"))    return(gettext("the reference group"))
   if (identical(ref$kind, "category")) {
     if (!is.na(lab) && nzchar(lab)) return(gettextf("the reference category (%s)", lab))
     return(gettext("the reference category"))
@@ -3370,6 +3519,10 @@ legend_ref_phrase <- function(spec, lang) {
 # the CI-method name (NA when there is none, e.g. contrib).
 legend_method_name <- function(spec) {
   cis <- spec$ci_settings
+  # Last Phase z5: these two measures score a gap between two estimates and run no test of their own,
+  # so there is no interval to name -- checked before the is_reg branch, which would otherwise claim
+  # the MODEL's Wald interval for a comparison that never used it.
+  if (spec$measure_text %in% c("adjustment", "between_groups")) return(NA_character_)
   if (isTRUE(spec$is_reg)) {
     if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
     # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
@@ -3427,7 +3580,7 @@ legend_method_phrase <- function(spec, lang) {
 # the measure / effect word (reg effect word takes precedence). Phase 16e: MEASURES-driven -- the only
 # non-table special-case is the sd-standardized diff wording (a spec fact, not a measure fact).
 legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignore") {
-  if (!is.na(eff_word)) return(eff_word)
+  if (!is.na(eff_word) && !measure_own_ref(measure)) return(eff_word)
   if (identical(measure, "diff") && isTRUE(is_std)) return(gettext("standardized difference"))
   m <- measure_facts(measure, policy)
   if (is.null(m)) return(measure)
@@ -3438,7 +3591,7 @@ legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignor
 # they land in the .pot and are compiled into the .mo -- runtime lookup then matches. Keep in sync with
 # MEASURES; it is never executed.
 if (FALSE) c(gettext("difference"), gettext("ratio"), gettext("contribution to Chi2"),
-             gettext("standardized residual"))
+             gettext("standardized residual"), gettext("adjustment"), gettext("between groups"))
 
 legend_ucfirst <- function(s) {
   if (!nzchar(s)) return(s)
@@ -3463,8 +3616,18 @@ legend_resolve_spec <- function(spec, lang) {
                                else if (isTRUE(spec$is_std)) paste0(" ", gettext("SD")) else "",
                    "contrib" = paste0(" ", gettext("the mean contribution")),
                    "")
+    # Last Phase z5: `adjustment` / `between_groups` are the only measures whose baseline is ANOTHER
+    # COLUMN's estimate rather than a row of this one, so the reference is a per-CHANNEL fact -- the
+    # scalar spec$ref_phrase (resolved for the text measure) would describe the wrong comparison when
+    # one of them rides the background. It also has to survive the is_reg strip just below, which
+    # exists because an ordinary reg effect states its reference in the note, not in the lead.
+    own_ref <- measure_own_ref(measure)
     list(subject      = subj,
-         has_ref_lead = isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg),
+         ref_lead     = if (own_ref)
+           legend_ref_phrase(list(ref = list(kind = md$ref_kind, label = NA_character_)), lang)
+           else NA_character_,
+         has_ref_lead = own_ref ||
+           (isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)),
          # Last Phase z4: under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds on
          # the quantity itself (contrib's standardized residual), not a CI floor -- so the sentence
          # must not say "after subtracting the margin of error". One declared fact, two wordings.
@@ -3541,7 +3704,8 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     cf    <- if (is_bg) spec$bg else spec$txt
     cmp   <- if (dir > 0) .lg_ge else .lg_le
     shade <- if (no_shade) NA_character_ else if (dir > 0) spec$shades[["over"]] else spec$shades[["under"]]
-    lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, spec$ref_phrase)
+    rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # Last Phase z5: per channel
+    lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
              else                 gettextf("%s %s", cf$subject, cmp)
     head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
                  else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
@@ -3557,6 +3721,23 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   if (show_names)  # Phase g: variable names are bold in every medium.
     toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang), " \u2014 "),
                                  bold = TRUE)))
+
+  # Last Phase z5: `adjustment` on an ODDS RATIO needs one sentence of honesty. The odds ratio is
+  # NON-COLLAPSIBLE: adjusting for a covariate that predicts the outcome moves it away from 1 even with
+  # zero confounding (measured +7.9 % on a simulation where the covariate is independent of the
+  # exposure, against +0.26 % for the risk ratio -- dev/model_vs_observed_effect_colour.md SS3). That is
+  # the same order of magnitude as the 10 % first break, so without this the first colour step reads as
+  # confounding when it may be arithmetic. Collapsible estimands (AME, RR, IRR, gaussian beta) are
+  # exempt, which is exactly the point to make: the caveat names the fix by naming who does not need it.
+  adj_ch <- c(spec$measure_text, spec$measure_bg)
+  # `is_coef` covers exponentiate = FALSE (a raw logit coefficient is the same non-collapsible
+  # quantity, logged) -- it must not be read off eff_word there, because legend_reg_adapter()
+  # deliberately neutralises a model column's effect word when a crude sibling shares its measure.
+  if ("adjustment" %in% adj_ch &&
+      isTRUE(spec$model_family %in% c("binomial", "multinomial", "ordinal")) &&
+      (isTRUE(spec$is_coef) || isTRUE(spec$eff_word %in% c("OR", .lg_beta)))) {
+    spec$caveat <- gettext("Part of an odds-ratio gap is non-collapsibility, not confounding: a risk ratio or a marginal effect is the collapsible comparison.")
+  }
 
   is_bg_only <- is.null(spec$plan_txt)
   primary    <- if (is_bg_only) spec$plan_bg else spec$plan_txt
@@ -3602,6 +3783,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
       "Grey: below the significance threshold (%s). The thresholds above are comparable between tables.",
       spec$method_phrase) else gettextf(
       "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
+  if (!is.null(spec$caveat)) toks <- c(toks, list(.lg_tok(paste0(" ", spec$caveat))))
   toks
 }
 
@@ -3775,6 +3957,7 @@ legend_specs <- function(x) {
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
          policy = policy, orientation = orient, ci_type = ci_type,
          is_reg = is_reg, eff_word = eff_word, role = role, ci_settings = cis, shades = shades,
+         model_family = get_model_family(col),        # Last Phase z5: the collapsibility caveat below
          ref = ref)
   })
   specs <- purrr::compact(specs)
@@ -4321,6 +4504,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           or        = get_or      (x),
           tot_n     = get_tot_n   (x),
           n_eff     = get_n_eff   (x),
+          obs       = get_obs     (x),
 
           in_totrow = is_totrow   (x),
           in_refrow = is_refrow   (x),
@@ -4535,6 +4719,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       or      = rep_NA_real,
       tot_n   = rep_NA_real,
       n_eff   = rep_NA_real,
+      obs     = rep_NA_real,
 
       # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
       # arguably it should follow x alone (x - a non-total y should probably stay total).
@@ -4575,6 +4760,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       or     = rep_NA_real,
       tot_n  = rep_NA_real,
       n_eff  = rep_NA_real,
+      obs    = rep_NA_real,
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
@@ -4662,6 +4848,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          or     = NA_real_,
                          tot_n  = NA_real_,
                          n_eff  = NA_real_,
+                         obs    = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
@@ -4697,6 +4884,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           or      = NA_real_,
                           tot_n   = NA_real_,
                           n_eff   = NA_real_,
+                          obs     = NA_real_,
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,

@@ -102,8 +102,9 @@ testthat::test_that("get_color_breaks returns a readable form and round-trips", 
   withr::defer(reset_breaks())
   reset_breaks()
   gb <- get_color_breaks()
+  # Last Phase z5 added adj_ratio / adj_diff (the `adjustment` / `between_groups` measures).
   testthat::expect_named(gb, c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio",
-                               "contrib", "residual"))
+                               "contrib", "residual", "adj_ratio", "adj_diff"))
   testthat::expect_equal(gb$pct_diff, c(0.05, 0.1, 0.2, 0.3))    # symmetric -> plain magnitudes
   testthat::expect_equal(gb$pct_ratio, c(1.5, 2, 4))            # symmetric (Phase 16c) -> plain magnitudes
   testthat::expect_equal(get_color_breaks("pct"),  c(0.05, 0.1, 0.2, 0.3))   # old alias
