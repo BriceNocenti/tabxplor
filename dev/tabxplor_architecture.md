@@ -578,6 +578,28 @@ The colour engine absorbed it with **zero new branches**, via one new `MEASURES`
 
 `reg_gap_se_columns()` (R/tab_reg.R) is the gate and the loop; `set_obs_if()` writes `obs` and `gap_se` together at the ONE point z5 already wrote `obs`. The gate is six facts that already exist, and it returns NULL rather than a partial column, because `fmt_gap_force_policy` reads an all-NA `gap_se` as "no test here": the colour was asked for (`sp$color` -- the test costs ~1/8 of a fit); a crude twin exists (the REG_EMPIRICAL SHAPE ROW, which `two()` now returns beside `cols`/`effect`, and which gained the **`link`** fact driving `g'(mu)`: it sits on the shape, not the family, because a binomial model's crude twin is logit by default, IDENTITY under `effect = "ame"` and LOG under `"ame_ratio"`); a fitted object survives (NULL on jamovi's digest path); **`reg_same_estimand()`** -- the shape's `ci_type` equals the column's, which also closes a z5 defect where `effect = "ame"` + poisson paired an additive count AME with the crude rate RATIO and wrote that ratio into `obs`; the two frames have equal `nrow`, which PROVES row identity (the crude frame's var set is a subset of the model's and both are `reg_complete_frame()` subsets in order) and degrades a comparison model fitted on more rows under the default `na = "drop_by_model"`; and **`reg_estimand_collapsible()`** -- maintainer ruling Q1(b) -- which excludes a CONDITIONAL ODDS RATIO (`effect == "coefficient"` on a `reg_fam_prob()` family, `exponentiate` irrelevant), where the gap moves under adjustment with zero confounding and the test would read "significant" everywhere at survey sizes (measured rejection 1.000 at n = 32000; the same comparison on the collapsible RR scale holds its nominal 0.05).
 
+**Last Phase z9 — the same test on CONTINUOUS predictor rows.** The loop gained a numeric arm. The model
+leg is unchanged (a numeric predictor's skeleton `term` IS the variable name); the crude leg cannot be
+`reg_crude_if_maker()`, whose closed form is cell-indicator arithmetic and needs levels — it is
+`reg_coef_if_maker()` on the row's own **univariable fit**, kept on the crude record only when a spec
+asked for `color = "adjustment"` (a build-time local that never reaches the jamovi `.fit_cache`, whose
+persisted raw fits were Phase o's freeze). Both legs are then the same machinery on two fits solved over
+the same rows, so no new mathematics: verified equal to a hand-stacked influence-function computation to
+1e-12. `multiplier` scales the result by `|k|` — the influence functions are native-scale while the
+stored estimate and `obs` are already scaled and `fmt_gap_raw()` reads the stored values, so the gap is
+`k(b_model - b_crude)` on both the additive and the log branch and the resulting *z* is invariant.
+(`reg_gap_se_of()` / `between_groups` needs no such handling: it RECOVERS the SE from the printed,
+already-scaled interval.) `reg_ame_if_maker()`'s counterfactual gained a numeric arm — `(level, ref)` are
+SHIFTS on the observed *x*, so `(k, 0)` is the *k*-unit forward difference the AME columns display; it
+previously coerced the column to character. That arm is not optional: `reg_estimand_collapsible()`
+already refuses the binomial COEFFICIENT path, so the AME arm is where a binomial continuous-predictor
+gap test actually lives. Measured, the IF-based SE is ~6x smaller than naive quadrature — the
+correlated-estimator property. ⚠ **Partial coverage stays a known reading**: once ANY row of a column
+carries a `gap_se`, a row without one gets NA bounds and `fmt_color_plan()` coerces those to "not
+significant", so under `grey_non_signif` it is GREYED rather than keeping its descriptive colour. That
+predates z9 (a 0 %/100 % crude cell already yields no SE) and coverage is complete in every case
+measured, but it is now more reachable; the honest fix would be a per-row `force_policy`.
+
 `force_policy` therefore did NOT disappear as the study forecast -- it became a PREDICATE ON THE COLUMN, **`fmt_gap_force_policy(x)`** (an all-NA `gap_se` -> `"ignore"`), carried by BOTH gap measures and applied by `measure_policy(measure, policy, x)`, whose one call site is `fmt_color_plan()` (the legend reads `plan$policy`, so it inherits the resolution). That is what implements Q1(b) with no 12th column attribute and no display-string matching, and it fixed a live Phase-A hole: `between_groups` under `method = "profile"` writes no SE and was greying the whole column instead of falling back to the descriptive reading. Two legend consequences: `legend_resolve_spec()`'s `chan()` now resolves each channel under ITS OWN policy (they can genuinely differ -- an OR text channel greying by its Wald interval, an `adjustment` background with no test), and the "Background: the same rule..." clause gates on `spec$plan_bg$policy` instead of the text channel's, retiring a sentence that had been claiming a greying rule that was never applied. ⚠ The influence-function SE is the ROBUST (sandwich / design-based) variance on both legs; it equals the printed crude interval exactly only for the unweighted binomial (Woolf), and differs by a few percent from the pooled-Student `Obs_diff` and quasi-Poisson `Obs_IRR` brackets -- correct for a gap between two differently-specified estimators, and documented. §6's rebuild-from-`(data, coef)` was deliberately NOT built: jamovi's regression `color` is a checkbox, so one clause on the `reref` gate (`!("adjustment" %in% color)`) sends the measure down the refit path instead of adding a second encoding of `reg_fit()`'s model frame for no caller.
 
 The **`at = "reference"` estimand mismatch** was fixed in passing (a z5 defect): there the model cell is a marginal effect AT the reference profile while the crude companion stays marginal over the whole sample, so no `obs` is written at all and `tab_reg()` says why once. The stratum-restricted crude effect would match the estimand but answers a different question (model FIT at one profile, not confounding) on a few percent of the rows. Rationale, measurements and rejected alternatives (CI overlap; Hausman's subtraction, which goes NEGATIVE for logistic): `dev/model_vs_observed_gap_test.md`.
@@ -1141,6 +1163,63 @@ ci_type/colour measure/name — plus the CI method literal) through one `emp_col
 what the legend names" is data, not a hand-synced pair. Multinomial crude companions stay a separate
 tooltip arm (`reg_empirical_tips`). The `predicted_unadjusted` control column was cut (its
 Emp.% == unadjusted-prediction identity survives as a test-only assertion).
+
+**Last Phase z9 — the crude companion of a CONTINUOUS predictor.** Until z9 those rows were blank, and
+that blank was a skeleton **key miss**, not a guard: `reg_empirical_columns()` joins on
+`paste(var, level, sep = "\r")` and a numeric predictor's skeleton row is `var = p, level = p`, so only
+`reg_build()`'s predicate kept it out. The rule the factor arm already applies — *the observed effect is
+the univariable model's effect*, saturated (hence closed-form) for a factor — simply extends, which is
+why `reg_empirical_numeric()` **re-calls `reg_fit()`** rather than hand-rolling: with one predictor and
+the model's own family, `design_spec`, `conf_level`, `method`, `inverse` and `multiplier`, "crude and
+model on the same scale, same power *k*, same CI rule" is structural. (No closed form exists: the
+classical discriminant / exponential-tilt estimators are exact only for a NORMAL predictor and degrade
+to 50–70 % error under skew — measured, `dev/numeric_predictors_crude_counterparts.md` §6.)
+
+One new internal formal, **`reg_fit(drop_extra =)`**: variables joining the complete-case `drop_vars`
+but NOT the formula, so each crude fit lands on exactly the model's population (the documented
+`empirical` contract, and the row identity the gap test's influence functions need). Passing the
+pre-filtered frame as `data` is *not* equivalent — `reg_resolve_design()` computes a PREBUILT design's
+`keep_mask` from `data` itself, and a shorter mask recycles silently. The fit is always NATIVE-scale, so
+ONE fit serves the exponentiated column, its log twin and the gap test.
+
+The numeric rows are spliced in at exactly **two single sites**, both inside `emp_col()`'s twin `two()`
+(`reg_num_overlay()`): the effect column and the returned effect vector. Doing it earlier would be a
+live bug — on the binomial `ame` branch the base and effect columns are built from the SAME `rd_fields`
+list, and `REG_EMPIRICAL$binomial$base` declares `color = "diff"`, so the AME would land in `Obs_%`'s
+`diff` field and **colour a cell that displays nothing**. The estimate field is chosen by the shared
+`fmt_est_field()`/`fmt_est_of()` (fmt_class.R), which retired the third copy of that `ci_type` dispatch.
+The **base cell stays NA**: measured (§4.1), the univariable fit's only base-scale output,
+`P(Y | X = mean X)`, is the marginal rate for EVERY numeric predictor (0.4738 for both `age` and
+`tvhours` against an overall 0.4744) — a cell that looks per-predictor and is not. Its distribution
+(mean, SD, and the mean within each outcome group) rides `empirical_tips` instead, attached to the
+EFFECT column, which has visible content.
+
+**`multiplier` is now the UNIT a continuous effect is reported per, and its default is `"sd"`.** Per one
+unit a numeric row sits inside the first colour break and reads as "no effect" (measured: `age` 0.969
+per year against 0.657 per SD, where the factor contrasts in the same table span 0.66–2.23). Grammar: a
+scalar (`"sd"` / `"2sd"` / a number) applies to every continuous predictor, a named vector overrides per
+variable and the rest keep the scalar; `multiplier = 1` restores per-1-unit. It is resolved **once**, in
+`tab_reg()` (`reg_resolve_multiplier()` / `reg_predictor_sd()`), on the complete cases of the
+**predictors** — deliberately not of the dependent — so one predictor keeps ONE unit across several
+outcomes, across compared models and across `split_var` groups (a per-group SD would make
+`between_groups` compare different quantities: measured 15.91 vs 12.22 across a 2-group split). Four
+consumers see the same frozen numbers: `reg_fit()` (unchanged), `reg_marginal()`
+(`variables = list(v = k)` — a *k*-unit forward difference, measured 0.020322 against `10 ×` the 1-unit
+AME 0.020297; the keyword is never passed through, marginaleffects' own `"sd"` being a centred contrast
+on the SD of its `newdata`), `reg_reref_fit_res()` (`est * k, se * |k|` in `reg_fit()`'s own order and
+expressions — folding *k* into the contrast would compute `sqrt(k² V)` where `reg_fit` computes
+`|k| sqrt(V)`: equal in exact arithmetic, not in IEEE754), and the row label. Because the digest is
+native-scale it is multiplier-independent just as it is reference-independent, so **`multiplier` left
+the reref gate** and a scaling change is a cache HIT — without that, the new default would have killed
+the jamovi fast path for every table with a continuous predictor.
+
+**One stored predictor kind.** `reg_is_factor_var()` (`factor || character || logical`) replaced five
+disagreeing sites, and `reg_meta` gained `predictor_types` (Phase 17 rule 2: the `level == var`
+convention that implicitly marked a numeric row is already broken by `cleannames` and by the multiplier
+relabel). It fixes a measured bug: `glm` names a logical's coefficient `<var>TRUE` while `reg_skeleton()`
+sent it down the numeric arm (`term = <var>`), so a **logical predictor rendered completely blank**.
+`Date`/`POSIXct` stay numeric, where they already worked. ⚠ `haven_labelled` is `is.numeric()`-TRUE, so
+the old predicates agreed there — only `logical` and `Date` ever diverged.
 
 `exponentiate` (default `"nongaussian"`) drives the fmt shape: **multiplicative** OR/IRR → the `or` field,
 `type="row"`, `display="or"`, `ci_type="or"`, `color="OR"` (neutral 1, `1/x` reciprocal); **additive**

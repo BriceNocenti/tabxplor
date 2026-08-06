@@ -63,13 +63,13 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
 
 test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   d <- adj_data()
-  # Constant + a NUMERIC predictor: reg_empirical only covers factor predictors.
+  # The Constant has no crude counterpart. (Last Phase z9: a NUMERIC predictor now HAS one -- its
+  # univariable fit -- so it is no longer part of this list; see the next test.)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
                empirical = TRUE, color = c("OR", "adjustment"))
   o <- get_obs(t$Model_OR)
   testthat::expect_true(is.na(o[[1]]))                              # Constant
-  testthat::expect_true(is.na(o[[length(o)]]))                      # the numeric predictor's row
-  testthat::expect_identical(fmt_color_channels(t$Model_OR)$bg_slot[c(1L, length(o))], c(0L, 0L))
+  testthat::expect_identical(fmt_color_channels(t$Model_OR)$bg_slot[[1L]], 0L)
 
   # multinomial: crude companions are tooltip-only, so there is nothing to compare to.
   t <- tab_reg(d, dependent = "party3", predictors = "race", family = "multinomial", empirical = TRUE)
@@ -79,12 +79,29 @@ test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   testthat::expect_true(all(is.na(get_obs(tab(d, race, party3, color = TRUE)[[2]]))))
 })
 
-test_that("multiplier cannot desync obs (it only scales numeric predictors, which have no twin)", {
+test_that("a NUMERIC predictor gets an obs, and `adjustment` colours it", {
+  # Last Phase z9 inverted this test's premise: the univariable fit IS the numeric row's crude twin.
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
-               empirical = TRUE, multiplier = c(age = 10))
+               empirical = TRUE, color = c("OR", "adjustment"))
   i <- which(as.character(t$var) == "age")
-  testthat::expect_true(all(is.na(get_obs(t$Model_OR)[i])))
+  testthat::expect_true(all(!is.na(get_obs(t$Model_OR)[i])))
+  testthat::expect_true(all(!is.na(get_or(t$Obs_OR)[i])))
+})
+
+test_that("multiplier scales obs by the SAME k as the estimate (SS9 Q6)", {
+  # Both columns go through reg_fit(multiplier=), so an OR^k model cell is compared to an OR^k crude
+  # one -- the desync this test used to be safe from only because numeric rows had no twin at all.
+  d  <- adj_data()
+  t1 <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
+                empirical = TRUE, multiplier = c(age = 1))
+  t10 <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
+                 empirical = TRUE, multiplier = c(age = 10))
+  i <- which(as.character(t1$var) == "age")
+  testthat::expect_equal(get_obs(t10$Model_OR)[i], get_obs(t1$Model_OR)[i]^10, tolerance = 1e-8)
+  testthat::expect_equal(get_or(t10$Model_OR)[i],  get_or(t1$Model_OR)[i]^10,  tolerance = 1e-8)
+  # and the crude column itself is the same k-scaled quantity
+  testthat::expect_equal(get_or(t10$Obs_OR)[i], get_obs(t10$Model_OR)[i], tolerance = 1e-12)
 })
 
 # --- the direction rule ------------------------------------------------------------------------------

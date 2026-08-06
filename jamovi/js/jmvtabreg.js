@@ -243,8 +243,9 @@ var reconcileRefLevels = function(ui, preds) {
 
 // ---- Numeric-predictor scaling (multiplicator) ------------------------------------------
 // Folded into the numeric rows of the reference picker: a numeric predictor has no reference
-// level, so its row instead offers a "x k per unit" input (OR/beta per k units, e.g. per decade
-// of age). Stored by var in the hidden `multiplicator` Array; read by jmvtab_reg_mult_vector()
+// level, so its row instead offers a scaling input: "sd" (the default -- per one standard
+// deviation), "2sd", or a number of units (OR/beta per k units, e.g. per decade of age).
+// Stored by var in the hidden `multiplicator` Array; read by jmvtab_reg_mult_vector()
 // -> tab_reg(multiplicator =). Only numeric rows expose it, so only numeric predictors are ever
 // written (tab_reg validates the names are numeric).
 var multGet = function(ui) {
@@ -318,12 +319,16 @@ var renderRefVarCard = function(ui, frag, v) {
         row.appendChild(b1);
         var wrap = document.createElement("span"); wrap.style.cssText = TABX.multWrap;
         var pre = document.createElement("span"); pre.textContent = "× ";
+        // Last Phase z9: a TEXT input, because the scaling accepts the same three things tab_reg()'s
+        // `multiplier` does -- "sd" (the default), "2sd", or a number of units. A number input could
+        // not express the keywords, and the per-1-unit effect of a continuous predictor is usually
+        // too small to colour at all.
         var inp = document.createElement("input");
-        inp.type = "number"; inp.step = "any"; inp.style.cssText = TABX.multInp;
-        inp.placeholder = "1"; inp.value = multSelected(ui, v);
+        inp.type = "text"; inp.style.cssText = TABX.multInp;
+        inp.placeholder = "sd"; inp.value = multSelected(ui, v);
         inp.addEventListener("change", function() { writeMult(ui, v, inp.value); });
         var suf = document.createElement("span"); suf.style.cssText = TABX.refNote;
-        suf.textContent = " per unit (numeric)";
+        suf.textContent = " per sd / 2sd / n units";
         wrap.appendChild(pre); wrap.appendChild(inp); wrap.appendChild(suf);
         row.appendChild(wrap);
         frag.appendChild(row);

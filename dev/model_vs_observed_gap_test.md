@@ -1,6 +1,8 @@
 # A significance test for the model-vs-observed gap — design study
 
-Date: 2026-08-05. Status: **FULLY IMPLEMENTED** (Phase A 2026-08-06, Phase B 2026-08-06).
+Date: 2026-08-05. Status: **FULLY IMPLEMENTED** (Phase A 2026-08-06, Phase B 2026-08-06)
+— **plus §13, added 2026-08-06, which is RESEARCH ONLY** (Last Phase z10: `adjustment` for ordinal,
+multinomial and summed-score binomials; no R code written, decisions recorded in §13.10).
 Phase A landed the `between_groups` half of §11 -- the 21st field `gap_se`, the `MEASURES` `bounds`
 closure, the three policies, the `residual` -> `zscore` rename (Q4), the `at = "reference"` fix (Q8),
 and §5.3's aggregated `predictor x split_var` test. **Phase B** landed the `adjustment` half: the
@@ -380,10 +382,16 @@ indistinguishable from exact. The naive column is 2–4× too large everywhere.
 
 ### 3.8 Where it stops holding
 
+> **Superseded in part by §13 (Last Phase z10).** The first three "no" rows below are about a missing
+> *crude counterpart*, not about the variance method. §13 measures all three, gives each one, and shows
+> that the gap **test** stays correctly blocked for their coefficient paths by the §4.2(b)
+> collapsibility gate — so what z10 adds is `obs`, plus the test on their marginal (`ame`/`ame_ratio`)
+> paths.
+
 | path                                       | gap test | why                                                                             |
 |--------------------------------------------|----------|---------------------------------------------------------------------------------|
-| multinomial, ordinal                       | **no**   | no crude effect column at all (`obs` already NA) — degrade, as z5 does           |
-| grouped binomial (`trials =`)              | **no**   | no crude 2×2 (`pos_i` NULL) — `obs` already NA                                   |
+| multinomial, ordinal                       | **no**   | no crude effect column at all (`obs` already NA) — degrade, as z5 does. **§13**  |
+| grouped binomial (`trials =`)              | **no**   | no crude 2×2 (`pos_i` NULL) — `obs` already NA. **§13**                          |
 | compound `formula =` escape hatch          | **no**   | no crude companion                                                              |
 | numeric predictors, `multiplier`           | **no**   | no crude twin (see the companion report on numeric predictors) — `obs` NA        |
 | `method = "profile"`                       | caveat   | the printed model CI is profile-likelihood; the gap test is Wald. Different      |
@@ -898,7 +906,450 @@ regretted quietly for years.
   **Maintainer’s decision: fix it**
 ---
 
-## 13. References
+## 13. Last Phase z10 — `adjustment` for ordinal, multinomial and summed-score binomials
+
+Added 2026-08-06. **Status: RESEARCH ONLY** — no R code written. Scope: the three families §3.8 listed
+as having no crude counterpart at all. Every number below was measured on this box today, on
+`gss_simple` (`gss_cat_data_formatting()`, complete cases as stated) or on the stated simulation.
+
+### 13.0 The verdict
+
+**These are not three features. They are one missing fact, plus one display decision, plus one
+unrelated `tab()` feature that the roadmap bundled with them.**
+
+1. **The rule that fills all three is the rule z9 already wrote**: the observed counterpart of a model
+   effect is *the same model fitted with one predictor*. tabxplor uses a closed form wherever that
+   univariable model happens to be **saturated** — which it is for a factor predictor under binomial,
+   `rr`, poisson, gaussian, **grouped binomial and multinomial**, and is *not* under ordinal
+   (proportional odds is a constraint) or for a numeric predictor. So z10 adds **two closed forms and
+   one fit**, and deletes the "which families have crude twins" branching rather than extending it.
+   §13.1.
+2. **Two of the three crude effects already exist in the package, exactly.** The grouped-binomial crude
+   OR is the existing binomial closed form with the counts summed over trials (measured identical to a
+   univariable `glm` to **1.1e-8**); the multinomial crude OR is the existing 2×2 Woolf OR applied to
+   the {category *j*, reference category} × {level, reference level} sub-table — which is **literally
+   what `tab(race, party3, pct = "row", OR = "OR")` prints today** (verified cell by cell). §13.2.
+3. **The gap TEST is already correctly blocked for all three coefficient paths, by code that shipped in
+   z8.** `reg_estimand_collapsible()` refuses `effect = "coefficient"` on any probability-scale family,
+   and the cumulative OR and the multinomial OR are non-collapsible for exactly the reason the binary
+   OR is. Measured with the covariate **independent of the exposure** (zero confounding): the phantom
+   gap is **×1.088** for the cumulative OR and **×1.075 / ×1.039** for the two multinomial contrasts —
+   the size of the first colour break. So z10 ships `obs` (the descriptive gap) for the OR paths and a
+   real test only on the marginal paths. §13.4.
+4. **The gap test on `effect = "ame"` / `"ame_ratio"` is feasible with no new dependency**, via one
+   recipe that also re-describes the existing GLM code: `IF = score · bread`. Verified against
+   `marginaleffects`' own delta-method SE to **8 significant digits**. Two silent traps found and
+   measured (§13.5) — both cost a debug cycle here and would cost one at implementation.
+5. **`tab(OR = "cumOR")` is a good `tab()` feature and a bad source for the reg crude counterpart** —
+   two different quantities, and conflating them is the one white elephant in this phase. It is blocked
+   by an unrelated line: `tab_prepare()` strips the `ordered` class from every factor. That strip is
+   **not** vestigial and **not** about MCA (its FIXME guesses wrong); it guards two real vctrs failures,
+   both in the totals machinery, both reachable only through `tab_vars`. Root-caused in §13.3.
+
+### 13.1 One rule, and what it deletes
+
+> **The observed effect is the model's own effect, fitted with one predictor.**
+> When that univariable model is *saturated*, it has a closed form and tabxplor uses it.
+
+This is not a new rule — it is the rule already in force, stated. z9 established it for numeric
+predictors ("the crude effect for a numeric predictor is the univariable model's effect — which is
+already the rule tabxplor applies to factors, where the univariable model happens to be saturated");
+z10 finishes it. Saturation is decidable from two stored facts:
+
+| family                 | predictor | univariable model is…      | crude effect              |
+|------------------------|-----------|----------------------------|---------------------------|
+| binomial / `rr`        | factor    | **saturated**              | closed form (shipped)     |
+| poisson / quasipoisson | factor    | **saturated**              | closed form (shipped)     |
+| gaussian               | factor    | **saturated**              | closed form (shipped)     |
+| **grouped binomial**   | factor    | **saturated**              | **closed form (z10)**     |
+| **multinomial**        | factor    | **saturated**              | **closed form (z10)**     |
+| **ordinal**            | factor    | *constrained* (prop. odds) | **univariable fit (z10)** |
+| any                    | numeric   | *constrained* (one slope)  | univariable fit (z9)      |
+
+The consequence for the code is a subtraction. Today the absence of a crude twin is encoded **three
+times, in three different shapes**:
+
+- `REG_EMPIRICAL` has no `multinomial` / `ordinal` key, and `reg_empirical_columns()` returns
+  `shape = NULL` on the lookup miss (`tab_reg.R:1483-1486`);
+- `reg_build()` skips the crude block when `positive_level` is NULL, which is how a grouped binomial
+  is recognised — a *side effect* of `reg_fit()` not running `reg_prep_binary()` on that path
+  (`tab_reg.R:2913-2917`);
+- `tab_reg()` informs and sets `empirical <- FALSE` when no outcome is in a hard-coded family list
+  (`tab_reg.R:3980-3987`).
+
+After z10 the first becomes a normal lookup that hits, the second becomes a `shape` row like every
+other, and the third's list shrinks to the genuinely unsupported cases (compound `formula =`, and
+weighted 3+ level outcomes whose marginal paths `marginaleffects` cannot reach). **Phase 17 rule 2
+applies literally here**: "grouped binomial" is currently identified by a missing value on an unrelated
+field, which is guessing, not a stored role. z9 is already adding `reg_meta$predictor_types`; the
+family/effect side wants the same treatment.
+
+### 13.2 The three cases, measured
+
+#### 13.2.1 Grouped binomial (`trials =`) — a closed form, and a one-line blocker
+
+The model is `glm(cbind(succ, trials − succ) ~ x, binomial)`. For a factor `x` the univariable version
+is saturated, so the crude OR is the existing Woolf 2×2 on the **summed** counts.
+
+`gss_simple`, a 3-item summed score (n = 12 939 respondents, 38 817 trials):
+
+```
+        succ   fail        closed form         univariable glm       |diff|
+White  15692  13846
+Black   3620   1960   logOR 0.488375        logOR 0.488375        1.1e-08
+Other   2028   1734   logOR 0.031465        logOR 0.031465
+                      SE    0.030371        SE    0.030370        1.0e-06
+base column (mean proportion per level): 0.5312 / 0.6487 / 0.5391
+```
+
+So `Obs_%` = Σsucc/(Σsucc+Σfail) — "the average share of *yes* answers across the items", which is
+exactly the quantity the roadmap describes — and `Obs_OR` is the same `ci_or()` call the binomial arm
+already makes. **`REG_EMPIRICAL` needs one new key whose rows are the binomial rows verbatim**; the
+producer needs `wpos = Σ w·succ`, `wneg = Σ w·(trials−succ)` where the binary arm has
+`wpos = Σ w[y=1]`, `wneg = Σ w[y=0]`.
+
+The blocker is not statistical. `reg_fit()` sets `positive_level` only when
+`is.null(trials) && is.null(formula)` (`tab_reg.R:989-992`), and `reg_build()` reads that NULL as "no
+crude 2×2" (`tab_reg.R:2917`). A grouped binomial has no positive *level* because its outcome is a
+count — but it does have a positive *event*. Storing the predictor/outcome kind (§13.1) removes the
+inference.
+
+**Over-dispersion is not an objection.** Measured on a deliberately over-dispersed score (a shared
+random intercept across the three items, Pearson dispersion **1.44** against 0.98 for the independent
+version), the closed form and the univariable fit still agree exactly (0.333466 vs 0.333466). Both
+sides make the same binomial assumption, so the *comparison* is unaffected; and when the gap test does
+apply, §13.5's influence function gives the sandwich variance, which is robust to it anyway.
+
+#### 13.2.2 Multinomial — the crude OR is already in the package, twice
+
+For a factor predictor the univariable multinomial is saturated, so
+`log OR(j vs ref | level vs ref) = log(n_ij · n_r,ref / (n_i,ref · n_rj))` with the Woolf SE. Measured
+against `nnet::multinom(party3 ~ race)` on `gss_simple` (n = 21 254):
+
+| quantity       | largest absolute discrepancy, closed form vs `multinom` |
+|----------------|---------------------------------------------------------|
+| log OR         | **1.4e-04** (the optimiser's own tolerance)             |
+| standard error | **4.7e-06**                                             |
+
+And the same numbers come out of `tab()` today:
+
+```r
+tab(gss_simple, race, party3, pct = "row", OR = "OR")
+#          1-Democrat   2-Independent, other   3-Republican
+# White       1 (39%)                1 (20%)        1 (41%)
+# Black          1.00                 1/2.77        1/10.18      <- 0.3614 , 0.0982
+# Other          1.00                   1.09         1/2.82      <- 1.0882 , 0.3544
+```
+
+`?tab`'s own `OR` documentation already calls this "the empirical analogue of the OR (j vs reference)
+from a multinomial `tab_reg()` model". **The crude multinomial OR is therefore not a new statistic; it
+is the one `tab()` prints, reached from the other side.** That is a consistency argument for reusing
+`ci_or()` verbatim rather than writing a multinomial-specific producer.
+
+Nor is the *producer* new. `reg_empirical_tips()` already walks a `(var, level, category)` grid
+computing weighted proportions, Wilson intervals and Newcombe difference intervals — it is
+`reg_empirical()` at a **three-part key** instead of a two-part one. The crude OR is one more column on
+that grid. Worth stating plainly: **`reg_empirical()` and `reg_empirical_tips()` are the same
+computation at two key widths**, and z10 is the moment to merge them rather than add a third.
+
+**What was genuinely blocking multinomial was display, not statistics** — one crude column per model
+column doubles the table width, which is why z5 chose the tooltip. §13.6 resolves it.
+
+#### 13.2.3 Ordinal — no closed form exists, and I measured the three candidates
+
+The literature is unambiguous: the proportional-odds estimator has no closed form and requires
+iteration. Three closed-form substitutes were measured against `MASS::polr(rincome ~ race)` on
+`gss_simple` (n = 12 960, 4 ordered income bands):
+
+| crude estimator                                        | Black   | Other   | ratio vs `polr` (OR scale) |
+|--------------------------------------------------------|---------|---------|----------------------------|
+| univariable `polr` (the model's own estimand)          | -0.4354 | -0.4088 | 1.0000 (by definition)     |
+| mean of the 3 cut-point log ORs                        | -0.4000 | -0.4046 | 1.0360 / 1.0042            |
+| inverse-variance-weighted pooling of the cut-point ORs | -0.4113 | -0.4043 | **1.0244** / 1.0045        |
+| generalized ("win") odds ratio, concordant/discordant  | n/a     | n/a     | **1.0523 / 1.0544**        |
+
+And under a **severe** proportional-odds violation (simulated, true cut-specific βs 0.2 / 0.8 / 1.6,
+n = 8 000): IVW pooling drifts to **×1.028**, win odds to **×1.15** (1.896 vs `polr`'s 2.175).
+
+The decisive control: with the PO model **correctly specified** (simulation, n = 20 000), IVW pooling
+and `polr` agree to **1.0008**. So the 2.4 % seen on real data *is* the proportional-odds violation
+(Brant on that fit: `raceBlack` p = 0.035), not estimator error. That is a genuinely interesting
+diagnostic — and it is exactly why the closed form cannot be the crude counterpart: it would inject a
+**data-dependent** offset of the same order as the first colour break into a measure whose whole job is
+to say how far the model moved the effect.
+
+**Verdict: the ordinal crude counterpart is a univariable `polr` / `svyolr` fit through `reg_fit()`** —
+the same escape z9 took for numeric predictors, for the same reason (Q6: crude and model must be the
+same estimand, same link, same CI rule, same `multiplier`), obtained by construction rather than by a
+mirrored line of code. Cost in §13.7.
+
+### 13.3 `tab(OR = "cumOR")` — a separate feature, and the `ordered` strip
+
+**Maintainer's ruling (§13.10 Q1): per-cut-point, exact.** For an ordinal col_var, cell *(i, j)* holds
+the odds of falling **at or below level j**, for row *i* against the reference row — a plain 2×2 from
+the aggregate with an exact Woolf interval, no pooling, no proportional-odds assumption. It fits
+tabxplor's cell grid with nothing left over, because a *k*-level factor has *k−1* cuts and the last
+column is simply empty:
+
+```
+tab(gss_simple, race, rincome, pct = "row", OR = "cumOR")
+
+          <10k    10-15k   15-25k    25k+
+White     1.00     1.00     1.00       --
+Black     1.385    1.455    1.615      --
+Other     1.490    1.464    1.492      --
+```
+
+Three properties are worth keeping in the docs. It **honours `tab()`'s architecture** — everything from
+the aggregate, no microdata pass, so it is not a second exception beside `tab_robust_overlay()`. It
+reuses `ci_or()` and the `odds_ratio` break scale unchanged, so it is a new *dichotomisation*, not a new
+measure. And the **spread across the row is the proportional-odds diagnostic**, free and visible
+(1.385 → 1.615 above is the same non-proportionality Brant flags at p = 0.035) — which the pooled
+alternative would have averaged away.
+
+It should **not** feed `tab_reg()`'s ordinal crude column. Per cut point it is *k−1* numbers; the model
+column is one. They answer different questions, and §13.2.3 measured what happens if you force one into
+the other's place.
+
+#### The blocker, root-caused
+
+`tab_prepare()` strips `ordered` from every factor (`tab.R:3274-3282`) with a FIXME that guesses at the
+cause: *"ordered factors once triggered an error downstream (likely in MCA / an external step)"*. It is
+not MCA. Measured — every path with an ordered factor, strip disabled:
+
+| path                                                           | result                                                              |
+|----------------------------------------------------------------|---------------------------------------------------------------------|
+| `tab_plain(race, rincome)` — ordered **col_var**               | **OK**                                                              |
+| `tab_plain(rincome, race)` — ordered **row_var**               | **OK**                                                              |
+| ordered on **both** axes                                       | **OK**                                                              |
+| `+ OR`, `format()`, `tab_ci`, `tab_chi2`, `tab_md`, `tab_html` | **OK**                                                              |
+| `tab_counts()`, `tab_reg(family = "ordinal")`                  | **OK**                                                              |
+| `tab_plain(..., tab_vars = rincome)`                           | **ERR** — `leaf_rename_totals()` → `dplyr::if_else()` on the totals |
+| `tab_num(..., tab_vars = rincome)`                             | **ERR** — `Can't combine <ordered> and <factor>` (total-table bind) |
+
+**Two failures, both in the totals machinery, both only through `tab_vars`**: adding a `Total` /
+`Ensemble` level to a grouping column produces a plain factor, and vctrs refuses to combine it with an
+ordered one. The blanket strip is a sledgehammer for a two-site problem. The narrow fix is to add the
+level *to the ordered factor* (`forcats::fct_expand()` preserves the class) at those two sites, or —
+minimally — to strip `ordered` on `tab_vars` only, with the real reason in the comment. Either way the
+FIXME can be closed rather than re-guessed, and `OR = "cumOR"` becomes reachable.
+
+⚠ One consequence to decide consciously: keeping `ordered` alive changes the **class** of user-visible
+grouping columns in the output of every `tab()` on ordered data. Levels and their order are already
+preserved by the strip, so nothing *renders* differently — but `class()` changes, and that is a public
+surface. The `tab_vars`-only strip avoids it entirely for the case that actually breaks.
+
+### 13.4 What the gap test covers here — and why most of it is already correct
+
+`reg_estimand_collapsible(family, effect)` is `!(effect == "coefficient" && reg_fam_prob(family))`, and
+`reg_fam_prob()` is `c("binomial", "multinomial", "ordinal")`. So the two new OR paths are **already
+blocked**, by a gate written before they existed — its own comment even names them ("the multinomial /
+ordinal cumulative logits, which have no crude twin anyway"). Giving them a crude twin does not change
+the ruling; it makes the gate load-bearing where it was previously vacuous.
+
+The measurement that justifies it, run the same way as §4.1 (covariate **independent** of the exposure,
+so there is strictly no confounding and the true gap is zero):
+
+| estimand                                | crude  | adjusted | gap with ZERO confounding |
+|-----------------------------------------|--------|----------|---------------------------|
+| cumulative OR (ordinal, n = 20 000)     | 1.8356 | 1.9974   | **×1.088**                |
+| multinomial OR, category 2 (n = 20 000) | 1.7912 | 1.9249   | **×1.075**                |
+| multinomial OR, category 3              | 1.2224 | 1.2696   | **×1.039**                |
+| *(binary OR, §4.1, for reference)*      | —      | —        | *×1.075*                  |
+
+×1.088 is the first `adj_ratio` break (×1.10) less 1 %. Every one of these cells would light up on a
+large survey for a reason that has nothing to do with adjustment. The gate is right.
+
+**So z10's coefficient paths ship `obs` and no `gap_se`** — which needs no new gate code at all, because
+`fmt_gap_force_policy()` already reads an all-NA `gap_se` column as "no test here" and falls back to the
+descriptive reading. The legend's non-collapsibility caveat (z5 Q6) already fires on
+`reg_fam_prob()`, so it covers the new columns for free.
+
+What remains, and what the maintainer asked for: **the marginal paths.**
+`reg_estimand_collapsible()` allows `effect = "ame"` and `"ame_ratio"` on every family, and both already
+work for multinomial and ordinal (verified: `avg_comparisons(..., type = "probs")` and
+`comparison = "lnratioavg"` both return per-category estimates for `multinom` and `polr`). Those are
+the estimands the roadmap rightly calls "the more common and less confusing way to interpret the model
+here", and they are where a gap test is both valid and wanted.
+
+### 13.5 The influence functions for the marginal paths — one recipe, two traps
+
+`reg_coef_if_maker()` reaches `lm`/`glm`/`svyglm` through `model.matrix()` + `residuals(type =
+"working")`, which no 3+ level fit provides; `reg_ame_if_maker()` additionally needs
+`family(fit)$mu.eta`, which `multinom`/`polr`/`svyolr` do not have. Both correctly return NULL today.
+
+The generalisation is not a new branch per family. Every one of these is an M-estimator, so
+
+> **IF = (per-observation score) · (bread)**, and `reg_if_from_parts()` is already this in
+> GLM-specialised algebra: `X·(W·r)` **is** the score, `solve(X'WX)` **is** the bread.
+
+Control, on a binomial `glm`: `score %*% vcov(fit)` reproduces tabxplor's own `reg_coef_if_maker()` to
+**8 digits** (0.02974828 vs 0.02974827). So the same shape, with a family-specific score, extends the
+module without duplicating it.
+
+**Scores.** Multinomial logit: `Uᵢ,(j) = xᵢ · (1{yᵢ = j} − p̂ᵢⱼ)`, blocks stacked by category — textbook,
+~4 lines. Cumulative logit: with `L = F(ζⱼ − η) − F(ζⱼ₋₁ − η)`,
+`∂logL/∂β = −[f(ζⱼ−η) − f(ζⱼ₋₁−η)]/L · x` and `∂logL/∂ζₖ = [1{k=j}f(ζⱼ−η) − 1{k=j−1}f(ζⱼ₋₁−η)]/L` —
+~10 lines, **verified against a numeric per-observation gradient to 4.3e-10**.
+
+Resulting SEs, against each fit's own model-based SE (the difference *is* the robust-vs-model gap, the
+same relationship z8 measured for GLM):
+
+| fit                               | max relative difference, IF vs model-based |
+|-----------------------------------|--------------------------------------------|
+| `polr(rincome ~ race)`            | 2.1 %                                      |
+| `polr(rincome ~ race + relig)`    | 8.8 %                                      |
+| `multinom(party3 ~ race + relig)` | 5.8 %                                      |
+
+**Trap 1 — `polr`'s bread is not `solve(fit$Hessian)`.** `MASS::polr` optimises over
+`(β, ζ₁, log Δζ)`, so `fit$Hessian` is in *that* parameterisation; `solve(fit$Hessian) != vcov(fit)`,
+and using it gives SEs **39 % too large** while looking entirely plausible. Use `vcov(fit)`, which
+applies the transform's Jacobian. ⚠ For `svyolr` this needs re-checking at implementation: `fit$var` is
+the **design-based sandwich**, not the bread, so substituting it would double-count the design exactly
+as substituting `vcov(svyglm)` would in the existing GLM code.
+
+**Trap 2 — `multinom`'s parameter ordering.** `coef(multinom)` is a (K−1) × p **matrix**; `vcov()` is
+ordered category-major (`"cat2:(Intercept)", "cat2:raceBlack", …`), while `as.vector()` on the
+coefficient matrix is category-*minor*. Getting this backwards produced an AME standard error **2.7×
+too large** with no warning. Costed a debug cycle here; will cost one there.
+
+**The AME jacobian.** `marginaleffects` computes its delta-method SEs from an internal jacobian but
+**does not expose one** as an attribute in the installed version — checked. It must therefore be
+produced locally. A finite-difference jacobian of a locally-computed AME reproduces `marginaleffects`'
+own standard error **exactly**:
+
+```
+AME (ours)                        -0.3363638
+AME (marginaleffects)             -0.3363638   SE 0.00567979
+delta method, our jacobian J V J'              SE 0.00567979     <- 8 significant digits
+influence function  emp + J · IF_theta         SE 0.00576613     <- the robust one, +1.5 %
+cost: 141 ms for 20 parameters (one perturbation serves every contrast in the table)
+```
+
+The `+1.5 %` is the expected robust-vs-model relationship, not an error. An analytic softmax jacobian
+would be roughly 10× faster if the finite-difference cost ever bites; it is not needed to ship.
+
+**Where it stops.** Weighted 3+ level outcomes (`svyolr`, `svyVGAM::svy_vglm`) with `effect = "ame"`
+are already a hard abort in `tab_reg()` because `marginaleffects` has no method for them — so there is
+no marginal path to test there, and nothing degrades that was not already refused.
+
+### 13.6 Display
+
+**Multinomial — `{or} ({obs})` in-cell, `obs` carrying the crude OR** (maintainer's ruling, §13.10 Q4):
+
+```
+3-Republican vs 1-Democrat
+  White      1.00
+  Black      1/8.4  (obs 1/10.2)
+  Other      1/2.4  (obs 1/2.8)
+  hover: crude: 12% (-29 pts [-31; -27])
+```
+
+Three reasons this is the right call beyond saving width. `obs` is *defined* as "the value this cell's
+estimate is compared to, **on the cell's own scale**", so a crude % in an OR cell would break the
+field's contract. The printed bracket then **is** the quantity `color = "adjustment"` scores, so the
+colour and the number can never tell different stories. And the crude percentage is not lost — it stays
+in the `reg_empirical_tips` tooltip, which already exists and already fires for exactly these columns.
+The same treatment applies to `effect = "ame"` (`{diff} ({obs})`) and `"ame_ratio"`
+(`{or} ({obs})`), which the maintainer names as the core multinomial use cases.
+
+**Ordinal and grouped binomial need no display decision.** Ordinal produces a single cumulative-OR
+column, and grouped binomial a single OR column, so each takes ordinary `Obs_*` columns beside the
+model column exactly as binomial does today — `Obs_cumOR`, and `Obs_%` / `Obs_OR`.
+
+### 13.7 Cost
+
+| producer                                      | cost                                          |
+|-----------------------------------------------|-----------------------------------------------|
+| grouped-binomial crude (closed form)          | ~0 (cell sums)                                |
+| multinomial crude (closed form)               | ~0 (cell sums, on a grid that already exists) |
+| **ordinal crude — 4 univariable `polr` fits** | **794 ms** (n = 12 939)                       |
+| *for comparison, the full 4-predictor `polr`* | *323 ms*                                      |
+| multinom / polr coefficient IF                | one score matrix + one `vcov` — negligible    |
+| AME jacobian (finite differences)             | 141 ms per table, 20 parameters               |
+
+The ordinal crude is the one number to watch: **2.5× the model's own cost**, on every interactive jamovi
+round-trip. The maintainer's ruling is to keep it always-on with `empirical = TRUE` (consistency beats a
+per-family knob) and to handle it in a dedicated `tab_reg()` parallelisation phase rather than
+piecemeal — the per-predictor crude fits being embarrassingly parallel and a natural first payload.
+
+### 13.8 Where each piece lands
+
+| piece                                 | home                                                                                    |
+|---------------------------------------|-----------------------------------------------------------------------------------------|
+| grouped-binomial + multinomial shapes | new `REG_EMPIRICAL` keys; rows copied from `binomial`                                   |
+| grouped-binomial producer             | `reg_empirical()` — 2 lines (`Σw·succ` / `Σw·(trials−succ)`)                            |
+| multinomial producer                  | the merged `reg_empirical()`/`reg_empirical_tips()` grid, +`ci_or()`                    |
+| ordinal producer                      | a univariable `reg_fit()`, the shape z9's `reg_empirical_numeric()` established         |
+| "does this fit have a crude twin"     | a **stored** fact, replacing the `positive_level`-is-NULL inference                     |
+| `obs` for all three                   | unchanged — the existing `set_obs_if()` path                                            |
+| `gap_se`, coefficient paths           | **nothing**: the collapsibility gate already returns NULL                               |
+| `gap_se`, marginal paths              | `reg-influence.R` — one `score · bread` core, two new score producers, one AME jacobian |
+| `{or} ({obs})` folding                | `reg_columns_multinom()` — the display grammar already exists                           |
+| `OR = "cumOR"`                        | `tab_apply_reference()`, beside the existing OR block; `ci_or()` reused                 |
+| the `ordered` strip                   | narrowed to `tab_vars`, FIXME closed with the measured cause                            |
+
+### 13.9 Caveats, and what I would push back on
+
+1. **The `Obs_cumOR` column will not always equal what `tab(OR = "cumOR")` shows**, and the docs must
+   say so in one sentence. They are different estimators of related quantities: the reg column is a
+   PO-model cumulative OR (one number, pooling the cuts under an assumption); the `tab()` cells are the
+   *k−1* per-cut ORs with no assumption. When proportional odds holds they agree (measured 1.0008);
+   when it does not, the spread across the `tab()` row is exactly the disagreement. That is a feature,
+   but only if it is named.
+2. **A multinomial `obs` is one crude OR per (level × category)** — *k−1* times more crude numbers than
+   any other family produces. The grid exists (`reg_empirical_tips`), but the merged producer must be
+   keyed on three parts throughout, and `reg_skel_key(var, level, category)` is already the idiom.
+3. **Zero cells.** `ci_or()` is undefined when any 2×2 cell is 0 and returns NA — fine, and already the
+   behaviour. But multinomial sub-tables are *k* times sparser than a binary one, so empty crude cells
+   will be visibly more common. `reg_crude_if_maker()` already returns NULL on a 0 %/100 % cell, so the
+   test degrades correctly; the display just needs to tolerate a blank `(obs …)` fragment.
+4. **`ame_ratio` is probably the better multinomial default, and I am not proposing to make it one.**
+   A +2-point AME means something very different for a 5 % category and a 50 % one, which is precisely
+   the readability problem ratios solve; the maintainer's instinct here is right. But changing what
+   `effect = "ame"` *means* per family would be exactly the kind of family-specific special case this
+   phase exists to remove. Better: document it in the regression vignette as the recommended choice for
+   3+ level outcomes, and let the argument stay honest.
+5. **The gap test's variance is robust on both legs** (§B implementation findings), so for these new
+   columns too the printed crude interval and the interval implied by `gap_se` will differ by a few
+   percent wherever the printed one follows a descriptive convention. Already documented for z8; the
+   new families inherit the same sentence, not a new one.
+6. **Scope honesty**: after z10, the remaining `obs`-less cases are the compound `formula =` escape
+   hatch (no predictor structure to be crude about) and weighted 3+ level marginal paths (no
+   `marginaleffects` method). Both are genuine, and both should be stated in `?tab_reg` rather than
+   left to be rediscovered.
+
+### 13.10 Decisions
+
+Settled by the maintainer on 2026-08-06, before implementation planning:
+
+- **Q1 — what `tab(OR = "cumOR")` computes.** *Per-cut-point, exact* (§13.3): one cumulative OR per
+  cell, closed form from the aggregate, Woolf CI, last column empty. Not a pooled PO-style estimate,
+  and not the source of the reg crude column.
+- **Q2 — scope.** *`obs` **and** the AME gap test* (§13.4, §13.5): ship the observed effect for all
+  three families, and build the `multinom`/`polr` influence functions so `effect = "ame"` /
+  `"ame_ratio"` on 3+ level outcomes gets a real test. The coefficient paths stay blocked by the
+  existing collapsibility gate.
+- **Q3 — the ordinal crude's cost.** *Always on with `empirical = TRUE`* (§13.7). Parallelisation is
+  **not** to be bolted on here: a dedicated `tab_reg()` parallelisation phase should be researched and
+  designed as a whole, with the per-predictor crude fits named as a candidate payload.
+- **Q4 — multinomial display.** *`{or} ({obs})` in-cell, `obs` carrying the crude OR* (§13.6) — "obs is
+  always the counterpart and must be the same kind of quantity" — and implemented for `ame` and
+  `ame_ratio` as well, those being the core multinomial use cases.
+- **Q5 — the `ordered` strip.** Fix the two totals sites with `fct_expand()` so `ordered` survives everywhere (cleaner, but changes the class of grouping columns in every `tab()` output on ordered data ; but since factor is still the second class, it’s the fallback for everything that does not have an ordered method)? §13.3.
+- **Q7 — merging `reg_empirical()` and `reg_empirical_tips()`.** They are one computation at two key
+  widths (§13.2.2), and multinomial needs the three-part one. **Merge now.**
+
+
+Open for the implementation session:
+- **Q6 — `svyolr`'s bread.** `fit$var` is the design-based sandwich, not the inverse information. Is
+  the (β, ζ) bread recoverable from `svyolr`'s stored `Hessian`, or does the weighted ordinal marginal
+  path simply degrade to no test? It is already refused for `effect = "ame"`, so this may be moot.
+
+
+---
+
+## 14. References
 
 ### Comparing estimates from two models on the same data
 

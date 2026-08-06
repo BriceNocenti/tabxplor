@@ -23,7 +23,7 @@ tab_reg(
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,
-  multiplier = NULL,
+  multiplier = "sd",
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
@@ -155,23 +155,32 @@ fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default)
 logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE} uses each
 dependent's observed maximum score. Requires \code{family = "binomial"}.}
 
-\item{empirical}{Logical. If \code{TRUE}, adds the descriptive \strong{crude} (unadjusted, single-predictor)
-companion of the model effect for each factor-predictor level -- the unadjusted bivariate
-association, which IS the modelised quantity when there is a single predictor (the standard "crude
-vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Obs_\%}
-\itemize{
-\item \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME); \strong{gaussian} adds \code{Obs_mean} +
-\code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR}; \strong{multinomial} shows the crude \% +
-difference per category in the HTML tooltip (columns would explode). By design every crude quantity
-is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
-dependent, all predictors and any design variable), so crude and adjusted are directly comparable
-and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
-same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
-ignored (with a message). These crude companion CIs are descriptive, so on weighted data they
+\item{empirical}{Logical. If \code{TRUE}, adds the \strong{observed, unadjusted (univariable)} companion of
+each model effect: with a categorical predictor that is exactly the observed contrast between
+levels; with a continuous predictor it is the univariable slope, which assumes the effect is
+linear on the model's scale — check that (\code{cut()}, splines) before trusting it. It IS the
+modelised quantity when there is a single predictor, so a large crude-versus-adjusted gap signals
+confounding.
+
+Per family: \strong{binomial} adds \verb{Obs_\%} + \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME);
+\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR};
+\strong{multinomial} shows the crude \% + difference per category in the HTML tooltip (columns would
+explode). A continuous predictor fills the \strong{effect} column only: it has no levels, so its base
+cell (\verb{Obs_\%} / \code{Obs_mean} / \code{Obs_rate}) stays empty and its distribution — mean, standard
+deviation, and the mean in each outcome group — appears in the HTML tooltip instead.
+
+By design every crude quantity is computed on \strong{exactly the same complete-case population as the
+model} (listwise-complete on the dependent, all predictors and any design variable), so crude and
+adjusted are directly comparable and not confounded by differing missingness (reproduce it with
+\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). Also works with a vector of dependents. Ordinal has
+no clean crude analogue and is ignored (with a message).
+
+The crude companions of a \strong{categorical} predictor are descriptive, so on weighted data they
 honour \code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size) exactly like \code{\link[=tab]{tab()}};
-the model column's own CI is always design-based (\code{survey::svyglm}) and unaffected. Default
-\code{FALSE}.
-}}
+a \strong{continuous} predictor's companion comes from a univariable fit and therefore uses the model's
+own design-based variance, like the \verb{Model_*} column beside it. On weighted data the two rules
+will not agree to the last digit — they answer the same question under different variance
+assumptions. Default \code{FALSE}.}
 
 \item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
 sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
@@ -269,10 +278,27 @@ passing a formula in \code{dependent} with the terms already coded.}
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
 
-\item{multiplier}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
-predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
-of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
-must be numeric predictors; not available for multinomial / ordinal outcomes.}
+\item{multiplier}{How a \strong{continuous} predictor's effect is scaled — the unit its row reports.
+One unit of a continuous variable is rarely a readable amount (a one-year change in \code{age} barely
+moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
+effect"), so the default is \strong{one standard deviation}.
+
+Give either a \strong{single value}, applied to every continuous predictor, or a \strong{named vector}
+overriding chosen ones (predictors it does not name keep the single-value default). Accepted
+values: \code{"sd"} (the default — per one standard deviation), \code{"2sd"} (per two, i.e. roughly bottom
+to top of the distribution), or a number of units (\code{10} = per decade of age). \code{multiplier = 1}
+restores the per-one-unit reading. The row label names the unit it used, e.g.
+\verb{age (per 1 SD (13.5))}.
+
+Everything scales together: the estimate (\code{OR^k} / \code{beta*k}), its confidence interval, the crude
+\verb{Obs_*} companion and the model-versus-observed comparison; the p-value is unchanged. \strong{Because
+the default is not 1, a continuous predictor's \verb{Model_*} cell does not equal \code{exp(coef(glm(...)))}
+unless you pass \code{multiplier = 1}.} The standard deviation is measured \strong{once}, on the complete
+cases of the predictors (not of the outcome), so one predictor keeps one unit across several
+outcomes, across compared models and across \code{split_var} groups. Names must be continuous
+predictors. Not applied to multinomial / ordinal outcomes, nor to a \code{formula} model (where a
+variable may enter through an interaction or a \code{poly()} basis). A 0/1-coded \strong{numeric} predictor
+gets a "per 1 SD (0.5)" reading — pass such a variable as a factor instead.}
 
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
@@ -375,7 +401,8 @@ list = several models to compare), \code{family} (usually detected), \code{wt} (
 effect \code{"ame"}), \code{estimate_display}, \code{empirical} (crude vs adjusted effect).
 \item \strong{Colors & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level} --- as in \code{\link[=tab]{tab()}}.
 \item \strong{Comparisons & structure}: \code{reference} (baseline levels), \code{compare} / \code{baseline} (model
-comparison test), \code{split_var} (one table per group), \code{multiplier} (effect per \emph{k} units).
+comparison test), \code{split_var} (one table per group), \code{multiplier} (the unit a continuous
+predictor's effect is reported per — one standard deviation by default).
 \item \strong{Survey design}: \code{wt}, \code{ids}, \code{strata}, \code{fpc}, \code{nest}, or pass a prebuilt design as \code{data}.
 \item \strong{Diagnostics}: \code{stats} (footer statistics), and the plots \code{\link[=or_plot]{or_plot()}} / \code{\link[=lm_plots]{lm_plots()}}.
 }

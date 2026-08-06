@@ -19,9 +19,15 @@
 #
 #   reg_if_from_parts(X, W, r)  the ONE formula, as a closure over a contrast
 #   reg_coef_if_maker(fit)      its fit adapter -- lm / glm / svyglm alike
-#   reg_crude_if_maker(...)     the observed side, in closed form (no fit at all)
+#   reg_crude_if_maker(...)     the observed side of a FACTOR row, in closed form (no fit at all)
 #   reg_ame_if_maker(...)       effect = "ame" / "ame_ratio" (the two-term marginal influence function)
 #   reg_if_se(d, design)        design-based when a design exists, IID otherwise
+#
+# Last Phase z9 -- TWO crude paths, by predictor kind. A factor's crude effect is a saturated one-factor
+# GLM, hence the closed form above; a CONTINUOUS predictor has no cells, so its crude leg is
+# reg_coef_if_maker() on the row's own univariable fit (built in R/tab_reg.R). Both legs are then the
+# same machinery over two fits solved on the same rows. reg_ame_if_maker()'s counterfactual therefore
+# takes SHIFTS rather than levels for a numeric column -- see its own contract note.
 #
 # EVERY function here returns NULL rather than a wrong number when its inputs do not support the
 # computation (singular information matrix, absent term, empty cell, unknown link). The caller reads a
@@ -153,6 +159,15 @@ reg_crude_if_maker <- function(data, dependent, family, positive_level, wt, link
 #
 # The counterfactual design matrices are built and released ONE LEVEL AT A TIME: `G` is a p-vector and
 # `g_i` a length-n vector, so peak memory stays X + one counterfactual.
+#
+# CONTRACT of the returned closure `(var, level, ref)`:
+#   * `var` is a FACTOR  -- `level` / `ref` are level LABELS, and the counterfactual sets the whole
+#     column to that level (the classic "everyone at level j vs everyone at the reference").
+#   * `var` is NUMERIC   -- Last Phase z9: `level` / `ref` are SHIFTS added to the observed x, so the
+#     caller passes (k, 0) for a k-unit contrast. That is marginaleffects' own forward difference
+#     `variables = list(v = k)`, which is what the numeric AME column shows. The old code path assigned
+#     `as.character(lv)` unconditionally, turning a numeric column into character -- model.matrix() then
+#     either errored (caught -> NULL, i.e. no test) or built the wrong contrast width.
 #' @keywords internal
 reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
   if (is.null(coef_if)) return(NULL)
@@ -165,10 +180,12 @@ reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
   w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
   sw <- sum(w)
-  cf <- function(lv, var) {                       # the counterfactual model matrix at one level
+  cf <- function(lv, var) {                       # the counterfactual model matrix at one level/shift
     d <- data
     x <- data[[var]]
-    d[[var]] <- if (is.factor(x)) factor(as.character(lv), levels = levels(x)) else as.character(lv)
+    d[[var]] <- if (is.factor(x)) factor(as.character(lv), levels = levels(x))
+                else if (is.numeric(x)) x + as.numeric(lv)
+                else as.character(lv)
     X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
     if (is.null(X) || ncol(X) != length(b)) return(NULL)
     X[, keep, drop = FALSE]

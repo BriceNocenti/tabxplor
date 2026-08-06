@@ -61,6 +61,17 @@
   confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
   (`effect = "ame"` / `"ame_ratio"`) or risk ratios (`family = "poisson"`) for a comparison the test can
   read.
+* **Observed effects for continuous predictors too.** `tab_reg(empirical = TRUE)` used to leave every
+  continuous predictor blank — often the rows where adjustment bites hardest. They now carry their
+  observed (univariable) effect, on the model's own scale, so `color = "adjustment"` and its
+  significance test work there as well. One rule now covers every predictor: the `Obs_*` columns show
+  the **observed, unadjusted (univariable)** effect.
+* **Continuous predictors are now scaled per standard deviation by default** (`multiplier = "sd"`).
+  Per one unit their effect is usually too small to read or to colour — a year of age barely moves an
+  odds ratio, a whole standard deviation multiplies it by 0.66. The row label names the unit
+  (`age (per 1 SD (13.5))`). `multiplier` accepts a single value for all continuous predictors or a
+  named vector overriding some (`"sd"`, `"2sd"`, or a number of units); **`multiplier = 1` restores the
+  per-one-unit reading**, which is what you want when comparing a cell against `exp(coef(glm(...)))`.
 * **Does this predictor act differently between subgroups?** With `split_var`,
   `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
   effect-modification test, asked once for all a predictor's levels, so it carries none of the
@@ -105,6 +116,8 @@
   as soon as weights carried population scale. `color_signif = "guaranteed_effect"` also changes what it
   colours (the residual, on the new absolute `zscore` scale). The default
   `color_signif = "ignore"` — the correspondence-analysis reading — is unchanged.
+* **`tab_reg()` reports a continuous predictor's effect per standard deviation by default**
+  (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
 
@@ -114,6 +127,8 @@
 * **Clearer errors** for an unknown named `ref`, a variable used as both a tab and a row/column variable,
   and an all-zero / all-`NA` weight.
 * The **`lang` argument now works on Linux** (`lang = "fr"` used to return an English legend).
+* In `tab_reg()`, a **logical predictor** rendered as an empty row, and the `Constant` row lost its bold
+  when `empirical = TRUE`.
 
 ## Deprecations
 

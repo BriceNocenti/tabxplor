@@ -32,7 +32,10 @@ test_that("weighted logit with ids/strata matches a hand svyglm (clustered, stra
   des2 <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d01, nest = TRUE)
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des2, family = quasibinomial())
 
-  tab <- tab_logit(d, "y", c("x1", "x2"), wt = "w", ids = "psu", strata = "strata", nest = TRUE)
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", which would compare a per-SD OR to a per-unit coefficient).
+  tab <- tab_logit(d, "y", c("x1", "x2"), wt = "w", ids = "psu", strata = "strata", nest = TRUE,
+                   multiplier = 1)
   tv  <- or_col(tab)
   # skeleton = Constant, x1(ref), x1 mid, x1 hi, x2 -> drop the reference row (OR = 1) for the term match
   hand_or <- exp(stats::coef(hand))
@@ -45,7 +48,7 @@ test_that("a prebuilt survey design passed as `data` equals the hand svyglm", {
   des  <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d01, nest = TRUE)
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
 
-  tab <- tab_logit(des, "y01", c("x1", "x2"))
+  tab <- tab_logit(des, "y01", c("x1", "x2"), multiplier = 1)
   tv  <- or_col(tab)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
 })
@@ -88,7 +91,7 @@ test_that("weighted model comparison emits a design-based Wald row", {
 
 test_that("unweighted tab_logit is unchanged by the design plumbing", {
   d  <- reg_survey_data()
-  t0 <- tab_logit(d, "y", c("x1", "x2"))
+  t0 <- tab_logit(d, "y", c("x1", "x2"), multiplier = 1)
   hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = d, family = binomial())
   tv <- or_col(t0)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
@@ -187,7 +190,8 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
 
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
-  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE))
+  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE,
+                                multiplier = 1))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
@@ -216,7 +220,8 @@ test_that("split_var footer carries per-group GOF", {
 
 test_that("split_var works with survey weights (per-group svyglm)", {
   d <- reg_split_data()
-  t <- tab_logit(d, "y", c("x1", "x2"), wt = "w", split_var = "g", spread_models = FALSE)
+  t <- tab_logit(d, "y", c("x1", "x2"), wt = "w", split_var = "g", spread_models = FALSE,
+                 multiplier = 1)
   expect_s3_class(t, "tabxplor_grouped_tab")
   sub  <- dplyr::filter(d, g == "north")
   des  <- survey::svydesign(ids = ~1, weights = ~w,
@@ -238,7 +243,7 @@ test_that("split_var rejects an invalid grouping column", {
 # --- Phase 12g-iv: multiplier + empirical ----------------------------------------------------
 test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", {
   d <- reg_split_data()
-  t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2")))
+  t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = 1))
   t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x2 = 10)))
   oc  <- grep("^Model_", names(t0), value = TRUE)[1]
   or0  <- vapply(t0[[oc]],  tabxplor::get_num, numeric(1))

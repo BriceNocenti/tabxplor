@@ -5,56 +5,75 @@ paths: ["R/fmt_class.R"]
 allowed-tools: Read, Grep, Edit
 ---
 
-tabxplor_fmt is a vctrs::new_rcrd() with two kinds of members:
+`tabxplor_fmt` is a `vctrs::new_rcrd()` with two kinds of members. **Both lists are single-sourced in
+`R/fmt_class.R` — read them there rather than trusting this file's copy.**
 
-- FIELDS: per-cell, length = length(x), accessed via vctrs::field(). Currently 18:
-  n, display, digits, wn, pct, mean, diff, ratio, ctr, var, ci_inf, ci_sup, pvalue, or,
-  tot_n, in_totrow, in_tottab, in_refrow.
-  NOTE: `ci` is NOT a field — it is derived from ci_inf/ci_sup by get_ci() (a bounds-shim,
-  Phase 1a); the public fmt(ci=) arg and $ci/get_ci() still work. `rr` was renamed `ratio`.
-- ATTRIBUTES: scalar per-column, accessed via attr(). Currently 9:
-  type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif.
-  (`color_signif` added Phase 5 = the significance policy. The Phase-10c `display_spec` attribute
-  was DROPPED in Phase 10i-A: the opt-in COMPOSITE display is now a per-cell `display`-FIELD `{}`
-  template like "{pct} (n={n})", resolved by the shared display_primary()/parse_display_template()/
-  display_recipe_to_template() helpers next to get_num(); parsed only in format().)
+- **FIELDS**: per-cell, length = `length(x)`, accessed via `vctrs::field()`. Currently **21**, listed
+  verbatim in `fmt_field_names` (~L1524):
+  `n, display, digits, wn, pct, mean, diff, ratio, ctr, var, ci_inf, ci_sup, pvalue, or, tot_n,`
+  `n_eff, obs, gap_se, in_totrow, in_tottab, in_refrow`.
+  - `ci` is **not** a field — `get_ci()` derives the half-width from `ci_inf`/`ci_sup` (the Phase 1a
+    bounds-shim); the public `fmt(ci=)` arg and `$ci` still work.
+  - `resid` is **not** a field either — `fmt_resid()` derives the adjusted standardized residual from
+    `pvalue` + `sign(ctr)`. A derived quantity is read-only: it gets a `get_num()` arm and no
+    `set_num()` one. **Prefer deriving over adding a field** when the value is a pure function of
+    existing ones.
+  - `rr` was renamed `ratio` (read-side alias only).
+- **ATTRIBUTES**: scalar per column, accessed via `attr()`. Currently **11**, and the list is
+  **DERIVED**, never hand-written: `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names,
+  "...", "class"))` (~L1533) = `type, comp_all, ref, ci_type, col_var, totcol, refcol, color,`
+  `color_signif, model_family, role`. Adding an attribute to `new_fmt()`'s signature therefore adds it
+  to every rebuild site automatically — that is the point, do not reintroduce a literal list.
 
-Re-grep exact line numbers before editing; the anchors below are approximate.
+Re-grep exact line numbers before editing; the anchors below drift.
 
-## Ordered checklist — ADD a per-cell field X (all in R/fmt_class.R unless noted)
+## Ordered checklist — ADD a per-cell field X (all in `R/fmt_class.R` unless noted)
 
-1. new_fmt() (~L967; new_rcrd() list ~L1037): add the parameter and add `X = X,` to the field list.
-2. fmt() public constructor (~L216): add the parameter; add a vec_cast + vec_recycle line (~L251-266,
-   pattern: `X <- vctrs::vec_recycle(vctrs::vec_cast(X, double()), size = max_size)`); pass `X = X` to
-   new_fmt() (~L277).
-3. Getter/setter via the factories: `get_X <- fmt_field_factory("X")` (~L1086-1138) and
-   `set_X <- fmt_set_field_factory("X", cast = double())` (~L1285-1325). Adjust the cast type.
-4. If X is displayable: extend get_num() (~L317-335) to select X, and add its formatting in
-   format.tabxplor_fmt() (~L1375-1541).
-5. If X drives cell color: extend fmt_color_selection() (~L1894) and color_formula().
-6. Arithmetic — vec_arith.tabxplor_fmt.tabxplor_fmt() (~L3128-3244): decide per operation whether X is
-   carried, reset to NA, or recomputed, for both +/- and */. Also handle fmt.numeric (~L3251) and
-   numeric.fmt (~L3266) if X is numeric data. Rule of thumb from current code: raw data (n, wn) is
-   carried/operated; computed metadata (diff, ci, ctr, var) is reset to NA; pct/mean recomputed when meaningful.
-7. Casting — vec_cast.tabxplor_fmt.tabxplor_fmt() (~L2975-3002): copy X from x. vec_ptype2.*.* (~L2889) only
-   if X is attribute-like. vec_proxy_equal() (~L3074) / vec_proxy_compare() (~L3082) only if X affects equality/ordering.
-8. Populate X where it is computed, in R/tab.R:
-   - tab_plain(): aggregation (~L3050-3209) + the new_fmt() call (~L2642-2681).
-   - tab_pct(): set_*() calls (~L4346-4474).
-   - tab_ci(): CI block (~L4828-4854).
-   - tab_chi2(): var/ctr block (~L4990-5082).
-9. Docs — roxygen in fmt() (~L36-123): add `@param X` and keep the field-count in sync (the roxygen text
-   says "18 fields" — update the count and the field list when you add/remove/rename one).
-10. EXPORT PARITY (critical): format.tabxplor_fmt() is the single source of truth for markdown (tab_md.R:130),
-    knitr/HTML (tab_kable in tab_classes.R:615,639), and console (pillar_shaft). But tab_xl() BYPASSES it: it
-    reads get_num()/get_display()/get_digits() directly (tab_xl.R:539, 587-588) and delegates numeric
-    formatting to Excel. So any display-affecting field needs a matching edit in tab_xl.R. Color is safe —
-    all exporters call the same fmt_color_selection().
-11. Verify: source("tests/testthat.R", encoding = "UTF-8") — especially test-fmt_class.R (creation, printing,
-    c(), arithmetic, casting) and test-tab.R. Then devtools::document().
+1. **`fmt_field_names`** (~L1524): add `"X"`. This is what keeps `fmt_col_attrs` correct.
+2. **`new_fmt()`** (~L1387): add the parameter (default `NULL`) and `X = X,` to the `new_rcrd()` field
+   list. Defaults are filled in the body from the shared `nas`/`fls` vectors — follow that pattern, do
+   not add a per-field `case_when` (Last Phase z6 removed one that cost half the constructor).
+3. **`fmt()`** public constructor (~L304): add the parameter, a `vec_cast` + `vec_recycle` line, and
+   pass `X = X` to `new_fmt()`.
+4. **Getter/setter** via the factories: `get_X <- fmt_field_factory("X")` and
+   `set_X <- fmt_set_field_factory("X", cast = double())`. Mark internal unless it is user contract.
+5. **If X is displayable**: add an arm to `get_num()` (~L455, the authoritative `display` → field map),
+   a matching arm in `set_num()` (~L515) *unless X is derived*, and the rendering in
+   `format.tabxplor_fmt()`. Keep those three in sync — that trio has drifted twice (`or_pct`/`OR_pct`).
+6. **If X drives colour**: the engine is `fmt_color_plan()` → `fmt_color_slots()` →
+   `fmt_color_channels()`/`fmt_channel_codes()`, all driven by the **`MEASURES` fact table** (~L3390).
+   A new measure is ONE row there (`raw`, `scale`, `std_when`, `sig_source`, `bounds`, `gate_row`,
+   `force_policy`, plus the legend facts) — never a new `switch` arm. Read `MEASURES` only through
+   `measure_facts()` / `measure_policy()`. See the `/color-mode` skill.
+7. **Arithmetic** — `vec_arith.tabxplor_fmt.tabxplor_fmt()`: decide per operation whether X is carried,
+   reset to `NA`, or recomputed, for both `+/-` and `*//`; also `fmt.numeric` / `numeric.fmt`. Rule of
+   thumb: raw data (`n`, `wn`) is carried; computed metadata (`diff`, `ci`, `ctr`, `var`, `n_eff`,
+   `obs`, `gap_se`) is reset to `NA`; `pct`/`mean` recomputed when meaningful.
+8. **Casting** — `vec_cast.tabxplor_fmt.tabxplor_fmt()` (3 arms), `vec_ptype2.*`, and the `vec_math`
+   sum/mean arms: copy X from `x`. `vec_proxy_equal()` / `vec_proxy_compare()` only if X affects
+   equality/ordering.
+9. **Populate X where it is computed.** The live producers are `plain_core()` / `num_core()` /
+   `leaf_wide_pct()` / `tab_ci()` / `tab_chi2()` / `tab_apply_reference()` in `R/tab.R`, and
+   `reg_column()` / `reg_marginal_column()` / `reg_empirical_columns()` in `R/tab_reg.R`.
+   `R/tab-steps-legacy.R` holds the superseded `tab_pct()`/`tab_tot()`/`tab_totaltab()` trio — it is
+   NOT on the aggregate path, but it is exported, so check whether it needs the field too.
+10. **Docs** — roxygen in `fmt()`: add `@param X` and keep the field count in sync.
+11. **EXPORT PARITY (critical)**: `format.tabxplor_fmt()` is the single source of truth for markdown
+    (`tab_md.R`), HTML (`tab-render-html.R`) and the console (`pillar_shaft`). `tab_xl()` bypasses it
+    for *values* (it writes `get_num()` raw and lets Excel format) but sources its number-format codes
+    from `format(x, syntax = "excel")`, so a display change no longer needs mirroring there. Colour is
+    safe everywhere — every backend calls `fmt_color_channels()` / `fmt_channel_codes()`.
+12. **Verify**: the CLAUDE.md § Testing recipe (temp runner outside `tests/`, `OMP_NUM_THREADS=1`,
+    `TESTTHAT_CPUS=8`, unsandboxed). A new field **changes the record shape**, so
+    `tests/testthat/_snaps/fmt-contract.md` and all 36 `_golden/*.rds` must be consciously
+    regenerated — prove the delta is only the new all-NA column with
+    `dev/verify_golden_field_delta.R` (that script exists precisely for this). Then
+    `devtools::document()` **unsandboxed** (`NAMESPACE`/`man/` are read-only in the sandbox).
 
 ## For a per-column ATTRIBUTE instead of a field
 
-Add it to new_fmt()'s attribute args (~L1043); reconcile it in vec_ptype2.tabxplor_fmt.tabxplor_fmt()
-(~L2889) and in the vec_arith attribute-merge block (~L3180-3187); add attribute getter/setter
-(pattern near ~L365-904, e.g. get_type()/set_type()).
+Add it to `new_fmt()`'s signature (after the fields) — `fmt_col_attrs` picks it up automatically.
+Then: reconcile it in `vec_ptype2.tabxplor_fmt.tabxplor_fmt()`, in the `vec_arith` attribute-merge
+block and in the `vec_math` sum/mean arms; add a getter/setter (pattern near `get_type()`/`set_type()`).
+An attribute must be present on a STANDALONE extracted column — `format()` and colour have to work on
+`tab$col` outside its table.

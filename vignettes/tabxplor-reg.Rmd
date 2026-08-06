@@ -68,12 +68,16 @@ You rarely set `family` by hand — `tab_reg()` mostly detects it:
 | 3+ level unordered factor | multinomial | one OR column per category vs. the reference |
 | 3+ level ordered factor | ordinal (proportional odds) | cumulative OR |
 
-With `empirical = TRUE`, each model column is joined by a crude/observed companion column showing the *empirical, unadjusted, single-predictor* effect — the effect you would see with no controls at all, "all things being unequal", for that predictor.
+With `empirical = TRUE`, each model column is joined by a crude/observed companion column showing the *observed, unadjusted (univariable)* effect — the effect you would see with no controls at all, "all things being unequal", for that predictor.
 
-- 2 levels logistic (binomial) → observed %, and observed odd-ratios (not modelised: calculated from percentages only)
+One rule covers every case: **the observed effect is the effect of that predictor alone**. With a categorical predictor that is exactly the observed contrast between levels (a percentage difference, an odds ratio computed from the raw percentages). With a *continuous* predictor there is no such shortcut, so it is the univariable slope — which assumes the effect is linear on the model's scale, something worth checking (with `cut()`, or splines) before trusting it.
+
+- 2 levels logistic (binomial) → observed %, and observed odd-ratios
 - 3+ levels logistic (multinomial) → the observed ORs are shown as a tooltip on the model cells in html exports
 - gaussian (linear) → group means and their difference
 - poisson (counts) → observed rate and observed rate ratio
+
+A continuous predictor has no levels, so only its **effect** column is filled; the base column (`Obs_%`, `Obs_mean`, `Obs_rate`) stays empty, and its distribution — mean, standard deviation, and the mean in each outcome group — is shown in the html tooltip instead.
 
 
 ## Logistic regression (a binary factor)
@@ -563,11 +567,19 @@ tab_reg(gss_simple, "married", c("race", "age"), estimate_display = "ci")
 
 For a logistic model you can instead fold the model-adjusted predicted probability (`"prob"`) or the average marginal effect (`"ame"`) into the odds-ratio cell (these two need the `marginaleffects` package). Note the difference: `estimate_display = "ame"` *keeps* the odds-ratio column and adds the AME beside it, whereas `effect = "ame"` (seen above) turns the **whole** column into an AME.
 
-**`multiplier`** rescales a continuous predictor's effect. A one-year change in `age` barely moves the odds, so its odds ratio sits near 1; `multiplier = c(age = 10)` reports the effect **per 10 years** instead (the odds ratio raised to the power 10, with its interval scaled to match):
+**`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row label says which:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"))
+```
+
+Pass a single value to change it for every continuous predictor, or a named vector to override chosen ones — `"sd"`, `"2sd"` (roughly bottom to top of the distribution), or a number of units. `multiplier = 1` gives the raw per-one-unit effect:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 ```
+
+Everything scales together — the estimate, its interval, the observed `Obs_*` companion and the model-versus-observed comparison — and the p-value never changes. Two things worth knowing: because the default is not 1, a continuous predictor's `Model_OR` will **not** match `exp(coef(glm(...)))` unless you ask for `multiplier = 1`; and the standard deviation is measured once, on the predictors' complete cases, so the same variable keeps the same unit across several outcomes, compared models and `split_var` groups.
 
 **`at = "reference"`** evaluates the effect at the reference profile (the abstract population combined the reference level of all predictors) instead of averaging it over the sample — a marginal effect *at the reference* for `effect = "ame"`, or a "category vs. the rest" odds ratio at that profile for a multinomial model:
 

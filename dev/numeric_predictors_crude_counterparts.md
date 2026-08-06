@@ -2,7 +2,28 @@
 
 Round 1: 2026-08-05 (Last Phase z7, item 2). **Round 2: 2026-08-06** — a second research pass driven by
 the maintainer's answers to round 1's open questions, plus the two follow-up questions raised while
-reviewing this file (§0.2). Status: **REPORT ONLY**. No R code written.
+reviewing this file (§0.2). Status: **FULLY IMPLEMENTED** (Last Phase z9, 2026-08-06).
+
+**Implementation corrections to this report** (measured while building it):
+
+1. **§11.3 / §3.3 are wrong about `haven_labelled`.** `is.numeric(haven::labelled(...))` returns TRUE,
+   so `is.factor || is.character` and `!is.numeric` *agree* for it. Only **`logical`** and
+   **`Date`/`POSIXct`** ever diverged — and a logical was doubly broken (the skeleton gave it the
+   numeric arm, `term = <var>`, while `glm` names the coefficient `<var>TRUE`, so it rendered a
+   completely blank row). The shipped predicate is `reg_is_factor_var()` =
+   `is.factor || is.character || is.logical`; Date stays numeric, where it already worked.
+2. **§14.1's overlay point had to move.** Splicing the numeric rows before `emp_col()` is a live bug: on
+   the binomial `ame` branch the base and effect columns are built from the SAME `rd_fields` list, and
+   `REG_EMPIRICAL$binomial$base` declares `color = "diff"` — so the AME would land in `Obs_%`'s `diff`
+   field and colour a cell that displays nothing. It ships inside `two()`, the one place the effect
+   shape is known.
+3. **§13's "two IF paths" is right, and the AME arm is not optional.** `reg_estimand_collapsible()`
+   already refuses the binomial COEFFICIENT gap test, so for the flagship logistic table the numeric
+   gap test lives *entirely* in `reg_ame_if_maker()`'s new numeric counterfactual.
+4. **§10's cost note gained a consequence**: the AME crude counterpart's ~229 ms per predictor is what
+   motivates the `tab_reg()` parallelisation phase the maintainer asked for in Q7 (CLAUDE.md, z9b).
+5. The `n` of a numeric crude cell is `NA`, not the model's *n* — matching the model column's own rule
+   ("whole-model N is in the footer, not a per-cell n:").
 
 Scope: `tab_reg(..., empirical = TRUE)` builds an observed/crude companion beside each model effect —
 but **only for factor predictors**. Numeric predictors get `NA` in both crude columns. This report asks

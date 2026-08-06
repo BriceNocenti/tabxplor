@@ -119,13 +119,21 @@ test_that("digest reref == refit-at-new-reference (display + fields)", {
     list(dep = "tvhours", preds = c("race", "relig"), fam = "gaussian", ref = c(race = "Black")),
     list(dep = "tvhours", preds = c("race", "relig"), fam = "poisson",  ref = c(relig = "8-None")),
     list(dep = "married", preds = c("race", "relig", "age"), fam = "binomial",
-         ref = c(race = "Black", relig = "8-None"))
+         ref = c(race = "Black", relig = "8-None")),
+    # Last Phase z9: `multiplier` left the reref gate (the digest is native-scale, so it is
+    # multiplier-independent). reg_reref_fit_res() must therefore reproduce reg_fit()'s own
+    # `est * k, se * |k|` -- applied in reg_fit's order, before the phi scaling and the Wald finalize.
+    list(dep = "married", preds = c("race", "age"), fam = "binomial",
+         ref = c(race = "Black"), mult = c(age = 10)),
+    list(dep = "tvhours", preds = c("race", "age"), fam = "poisson",
+         ref = c(race = "Black"), mult = c(age = 5))
   )
   for (g in grid) {
-    o     <- reg_opts(dependent = g$dep, predictors = g$preds, family = g$fam, reference = g$ref)
+    o     <- reg_opts(dependent = g$dep, predictors = g$preds, family = g$fam, reference = g$ref,
+                      multiplier = g$mult)
     reref <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs                    # digest fast path
     refit <- quiet(tab_reg(gss, g$dep, g$preds, family = g$fam, reference = g$ref,
-                           cleannames = TRUE))
+                           multiplier = g$mult, cleannames = TRUE))
     expect_identical(reg_render(reref), reg_render(refit),
                      info = paste(g$fam, paste(names(g$ref), collapse = "+")))
     for (f in c("or", "diff", "ci_inf", "ci_sup", "pvalue")) {
@@ -320,4 +328,17 @@ test_that("Phase h: jmvtab_reg_compare_sig() changes with the options, is stable
   o2 <- o1; o2$conf_level <- 0.90
   expect_identical(jmvtab_reg_compare_sig(o1), jmvtab_reg_compare_sig(o1))  # stable
   expect_false(identical(jmvtab_reg_compare_sig(o1), jmvtab_reg_compare_sig(o2)))  # option change -> new sig
+})
+
+
+# --- 8. the scaling picker passes the "sd" keywords through (Last Phase z9) ---------------
+test_that("jmvtab_reg_mult_vector() keeps sd / 2sd as text and numbers as numbers", {
+  mk <- function(...) list(...)
+  expect_null(jmvtab_reg_mult_vector(list()))
+  expect_identical(jmvtab_reg_mult_vector(list(mk(var = "age", k = "10"))), c(age = 10))
+  expect_identical(jmvtab_reg_mult_vector(list(mk(var = "age", k = " SD "))), c(age = "sd"))
+  expect_identical(jmvtab_reg_mult_vector(list(mk(var = "age", k = "2sd"),
+                                               mk(var = "tv",  k = "5"))),
+                   c(age = "2sd", tv = "5"))
+  expect_null(jmvtab_reg_mult_vector(list(mk(var = "age", k = "nonsense"))))
 })

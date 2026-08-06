@@ -45,7 +45,10 @@ test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
 test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the additive coef shape", {
   skip_if_not_installed("broom")
   d   <- reg_data()
-  t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
+  t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
+                 cleannames = FALSE)
   col <- t1[["Model_\u03b2"]]
 
   expect_identical(get_type(col), "coef")
@@ -94,7 +97,9 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   d   <- reg_data()
   # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
-  t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
+  t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
@@ -598,7 +603,9 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame", multiplier = 1,
                  cleannames = FALSE)
   col <- t1[["Model_AME"]]
 
@@ -645,7 +652,9 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame",
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
+  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame", multiplier = 1,
                  cleannames = FALSE)[["Model_AME"]]
   expect_identical(get_type(col), "coef")
   expect_identical(get_ci_type(col), "diff")
@@ -666,7 +675,9 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   d   <- reg_data()
   # suppressWarnings: over-dispersed poisson fixture -> the dispersion flag (asserted in
   # test-tab_reg-footer.R). This test is about the AME scale and its marginaleffects parity.
-  col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
+  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
+  col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   effect = "ame", cleannames = FALSE))[["Model_AME"]]
   expect_identical(get_type(col), "coef")
 
@@ -769,7 +780,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
-                 at = "reference", cleannames = FALSE)
+                 at = "reference", multiplier = 1, cleannames = FALSE)
   col <- t1[["Model_MER"]]                           # the label switches AME -> MER at reference
   expect_identical(get_type(col), "row")
 

@@ -158,18 +158,24 @@ jmvtab_reg_staged <- function(models, predictors) {
 jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 
 # Fold the per-numeric-predictor scaling picker (the jamovi `multiplicator` Array of Group{var, k})
-# into tab_reg()'s named numeric `multiplier`. Blank / non-numeric k dropped; NULL when nothing set.
-# Mirrors jmvtab_reg_ref_vector().
+# into tab_reg()'s `multiplier`. Blank entries dropped; NULL when nothing set -> tab_reg's own default
+# ("sd") applies. Mirrors jmvtab_reg_ref_vector().
+# Last Phase z9: the keywords "sd" / "2sd" pass THROUGH as text (they used to be coerced with
+# as.numeric() and silently dropped), so the picker can offer the per-SD scaling the R default uses.
+# A character vector is returned as soon as one entry is a keyword -- tab_reg() parses both.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_mult_vector <- function(multiplicator) {
   if (length(multiplicator) == 0L) return(NULL)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
   vars <- vapply(multiplicator, get1, character(1), k = "var")
-  ks   <- suppressWarnings(as.numeric(vapply(multiplicator, get1, character(1), k = "k")))
-  keep <- !is.na(vars) & nzchar(vars) & !is.na(ks)
+  raw  <- trimws(vapply(multiplicator, get1, character(1), k = "k"))
+  kw   <- tolower(raw) %in% c("sd", "1sd", "2sd")
+  num  <- suppressWarnings(as.numeric(raw))
+  keep <- !is.na(vars) & nzchar(vars) & (kw | !is.na(num))
   if (!any(keep)) return(NULL)
-  stats::setNames(ks[keep], vars[keep])
+  if (any(kw[keep])) stats::setNames(ifelse(kw[keep], tolower(raw[keep]), raw[keep]), vars[keep])
+  else               stats::setNames(num[keep], vars[keep])
 }
 
 

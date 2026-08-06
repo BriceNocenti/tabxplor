@@ -456,10 +456,10 @@ get_num <- function(x) {
   # display values and the field each reads: n/(default)->n, wn->wn,
   # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var,
   # ci->get_ci() (the CI half-width, read from the ci_sup bound via the Phase 1a shim),
-  # ratio (canonical; the legacy synonym rr is aliased to it) -> the `ratio` field, or/OR/or_pct->or,
-  # obs->obs. format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
-  # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
-  # sync (see the /vctrs-field skill).
+  # ratio (canonical; the legacy synonym rr is aliased to it) -> the `ratio` field,
+  # or/OR/or_pct/OR_pct->or, obs->obs. format.tabxplor_fmt() renders these plus the CI/label variants
+  # (pct_ci, mean_ci, or_pct, OR_pct). When adding a display value, keep this map, set_num() and
+  # format() in sync (see the /vctrs-field skill).
   out     <- get_n(x)
   # Phase 10i-A: resolve composite templates ("{pct} (n={n})") to their PRIMARY field before the
   # dispatch masks -- byte-identical (and one fixed grepl) when the column carries no composite.
@@ -482,7 +482,10 @@ get_num <- function(x) {
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
   out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
-  out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
+  # Last Phase z9: BOTH spellings, as format() has always matched (`c("or_pct", "OR_pct")`). "OR_pct"
+  # is written verbatim by the jamovi display ComboBox, and the missing arm made such a cell fall
+  # through to the raw count.
+  out[!nas & display %in% c("or_pct", "OR_pct")] <- get_or(x)[!nas & display %in% c("or_pct", "OR_pct")]
   # Last Phase z5: the value this cell is COMPARED TO (the observed/crude effect, or the reference
   # group's estimate). A real stored field, so -- unlike the derived `resid` -- it round-trips:
   # set_num() has a matching arm.
@@ -523,7 +526,11 @@ set_num <- function(x, value) {
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
-  out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
+  # Last Phase z9: ONE mask for target and value. The value side read only "or", so a column displaying
+  # "OR" fed a length-0 value into a non-empty target. Same pass adds the or_pct/OR_pct arms get_num()
+  # and format() already had -- the three maps are meant to stay in sync (see the /vctrs-field skill).
+  or_m <- !nas & display %in% c("or", "OR", "or_pct", "OR_pct")
+  out[or_m] <- set_or(x[or_m], value[or_m])
   out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])  # Last Phase z5
   # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
   est_ci_m <- !nas & display == "est_ci"
@@ -1788,13 +1795,27 @@ fmt_resid <- function(x) {
 #   est / obs / ok  the two values and where both are usable;
 #   sign  the NULL DIRECTION: +1 when the estimate is FURTHER from the null than `obs` (the model
 #         strengthened the effect), -1 when nearer (it attenuated it), 0 when equal.
+
+# fmt_est_field() / fmt_est_of() -- Last Phase z9: WHICH field holds a column's point estimate, keyed on
+# its declared `ci_type`. ONE rule: an "or" column keeps its estimate in `or`, a "ratio" column in
+# `ratio` (an Obs_rate column is ci_type "ratio"), everything else -- a beta, an AME, a risk difference,
+# a logged OR/RR/IRR -- in `diff`. It was written out three times (here, reg_write_group_gap()'s local
+# est_of, and the crude numeric overlay would have been a fourth), which is one encoding too many for a
+# fact that decides where a number is READ and WRITTEN.
+#' @keywords internal
+fmt_est_field <- function(ci_type)
+  switch(as.character(ci_type)[1], "or" = "or", "ratio" = "ratio", "diff")
+
+#' @keywords internal
+fmt_est_of <- function(x)
+  switch(fmt_est_field(get_ci_type(x)), "or" = get_or(x), "ratio" = get_ratio(x), get_diff(x))
+
 #' @keywords internal
 fmt_gap_parts <- function(x) {
   cit  <- as.character(get_ci_type(x))[1]
   mult <- cit %in% c("or", "ratio")
   obs  <- get_obs(x)
-  est  <- if (identical(cit, "or")) get_or(x) else
-          if (identical(cit, "ratio")) get_ratio(x) else get_diff(x)
+  est  <- fmt_est_of(x)
   if (mult) {
     ok <- is.finite(est) & is.finite(obs) & est > 0 & obs > 0
     s  <- sign(abs(log(ifelse(ok, est, NA_real_))) - abs(log(ifelse(ok, obs, NA_real_))))
