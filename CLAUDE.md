@@ -1879,7 +1879,7 @@ report rather than assuming the answer still holds.
 
 #### Last Phase z7 — research for possible final new features
 
-I want you to do full researches, both in web searches and the current code, about three possible new features for 2.0.0, and create three different new .md file in `dev/`. Do not hesitate to test some ideas in temporary scripts. 
+I want you to do full researches, both in web searches and the current code, about three possible new features for 2.0.0, and create three different new .md file in `dev/`. Do not hesitate to test some ideas in temporary scripts.
 
 ##### 1. A significance test for the model-vs-observed gap
 Phase z5 colours the SIZE of the gap between a modelled effect and its observed counterpart, and says
@@ -1933,7 +1933,16 @@ What black and white text formatting, visually striking, are shared by html and 
 
 #### Last Phase z8 — a significance test for the model-vs-observed gap
 
-**Step 2 — plan, then implement what has been chosen from z7.**
+Plan and implement from `dev/model_vs_observed_gap_test.md`, written in Phase z7-1. Look at the "## 12. Open questions for the maintainer" session for the "Maintainer’s decision" on each item.
+
+##### Phase A — `between_groups` (small; no new statistics)
+
+##### Phase B — `adjustment` (the influence functions)
+
+
+
+
+
 
 
 
