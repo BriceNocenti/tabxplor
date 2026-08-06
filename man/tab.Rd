@@ -130,7 +130,7 @@ independence, because a contribution has no confidence interval to floor:
 (a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
 the correspondence-analysis reading, so the scale is relative to the table);
 \item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
-the absolute \code{residual} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
+the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
 thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
 }
 In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted

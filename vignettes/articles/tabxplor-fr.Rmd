@@ -470,7 +470,7 @@ Parce qu'ils comparent à 0 et non à une référence, les intervalles de case s
 | pct  | `diff`    | diff observée    | gris si l'IC de diff contient 0     | plancher IC de diff                           |
 | pct  | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1    | plancher IC de ratio                          |
 | pct  | `OR`      | OR observé       | gris si l'IC de l'OR contient 1     | plancher IC de l'OR                           |
-| pct  | `contrib` | contribution χ²  | idem, gris si \|résidu\| < z(95 %) | **le résidu lui-même**, seuils `residual`     |
+| pct  | `contrib` | contribution χ²  | idem, gris si \|résidu\| < z(95 %) | **le résidu lui-même**, seuils `zscore`     |
 | mean | `diff`    | diff observée    | gris si l'IC de diff contient 0     | plancher IC de diff                           |
 | mean | `ratio`   | rapport observé  | gris si l'IC de ratio contient 1    | plancher IC de ratio                          |
 
@@ -478,7 +478,7 @@ Parce qu'ils comparent à 0 et non à une référence, les intervalles de case s
 pas d'intervalle de confiance dont prendre le plancher. `ignore` et `grey_non_signif` colorent la
 contribution *relative* (une part du Chi2 de ce tableau, en multiples de la case moyenne — la lecture de
 l'analyse des correspondances) ; `guaranteed_effect` colore le **résidu standardisé ajusté** sur
-l'échelle absolue `residual`, dont le défaut `c(1.96, 2.58, 3.89, 6)` s'écrit
+l'échelle absolue `zscore`, dont le défaut `c(1.96, 2.58, 3.89, 6)` s'écrit
 `conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))`. Sa *première* valeur est ré-ancrée sur le seuil de
 significativité au moment de l'affichage (toute case significative est donc colorée, quel que soit
 `conf_level`), les autres se lisent comme des écarts à partir d'elle. Les deux lectures partagent une
@@ -500,7 +500,7 @@ toujours dans l'infobulle html.
 
 Une précision d'expert : les couleurs sont calculées **par colonne** au moment de l'affichage, elles ne
 peuvent donc pas lire un attribut de tableau. Tout seuil de significativité qu'elles utilisent (le
-grisage, et l'ancrage de `residual`) lit donc `options(tabxplor.conf_level)`, et non un
+grisage, et l'ancrage de `zscore`) lit donc `options(tabxplor.conf_level)`, et non un
 `tab(conf_level =)` par appel — lequel pilote bien, lui, les intervalles affichés et les étoiles.
 
 Exemples :
@@ -516,7 +516,7 @@ tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_e
     display = "{n} ({resid})")
 #    une échelle de résidus plus stricte, écrite en niveaux de confiance
 tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
-    color_breaks = list(residual = conf_level_to_z(c(0.99, 0.999, 0.9999))))
+    color_breaks = list(zscore = conf_level_to_z(c(0.99, 0.999, 0.9999))))
 
 # --- numériques : moyennes ------------------------------------------------
 tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")

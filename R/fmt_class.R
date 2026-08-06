@@ -77,10 +77,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 20 fields :
+#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 21 fields :
 #' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 #' \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs},
+#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs}, \code{gap_se},
 #' \code{in_totrow},  \code{in_tottab},
 #' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 #' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
@@ -155,6 +155,13 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' \code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
 #' predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
 #' A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.
+#' @param gap_se The standard error of the GAP between this cell's estimate and \code{obs},
+#' on the estimate's own test scale (the log-ratio when \code{ci_type} is \code{"or"} or
+#' \code{"ratio"}, the plain difference when \code{"diff"}). Written by \code{tab_reg} where
+#' the two estimates are independent (\code{split_var} groups), so that
+#' \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
+#' else, which leaves the significance policies inert there.
+#' A double vector the length of \code{n}. Non-displayed.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
@@ -318,6 +325,7 @@ fmt <- function(n         = integer(),
                 tot_n     = rep(NA_real_, length(n)),
                 n_eff     = rep(NA_real_, length(n)),
                 obs       = rep(NA_real_, length(n)),
+                gap_se    = rep(NA_real_, length(n)),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
@@ -364,6 +372,11 @@ fmt <- function(n         = integer(),
   # "between_groups" (the crude effect, or the reference group's estimate), on the cell's own
   # scale. NA everywhere else -> those measures score NA -> uncoloured.
   obs     <- vctrs::vec_recycle(vctrs::vec_cast(obs    , double())   , size = max_size)
+  # Last Phase z8: the SE of the GAP between the estimate and `obs`, on the estimate's own test
+  # scale (log-ratio for or/ratio, plain difference for diff). Written only where the two are
+  # independent (split_var groups); NA elsewhere -> the gap has no interval -> the significance
+  # policies stay inert on those cells. Non-displayed.
+  gap_se  <- vctrs::vec_recycle(vctrs::vec_cast(gap_se , double())   , size = max_size)
 
   # Phase 3a: the public `ci` arg is a symmetric half-width; store it as ABSOLUTE bounds
   # around the estimate the interval is centred on (the difference for diff-type CIs, the mean
@@ -399,7 +412,7 @@ fmt <- function(n         = integer(),
           wn = wn, pct = pct,  mean = mean,
           diff = diff, ratio = ratio, ctr = ctr, var = var,
           ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
-          n_eff = n_eff, obs = obs,
+          n_eff = n_eff, obs = obs, gap_se = gap_se,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -1384,6 +1397,7 @@ new_fmt <- function(n         = integer(),
                     tot_n     = NULL,
                     n_eff     = NULL,
                     obs       = NULL,
+                    gap_se    = NULL,
 
                     in_totrow = NULL,
                     in_tottab = NULL,
@@ -1418,7 +1432,7 @@ new_fmt <- function(n         = integer(),
   #   purrr::map(length) |> print()
   # cat("\n")
 
-  # Last Phase z6: the 17 unset fields share ONE `NA` vector instead of allocating one each.
+  # Last Phase z6: the 18 unset fields share ONE `NA` vector instead of allocating one each.
   #   R's copy-on-write makes this invisible -- any `field<-` / vec_slice / arithmetic duplicates
   #   the touched field alone -- but a freshly built record costs 1 allocation, not 17 (measured
   #   at 1e6 cells: 9.9 MB instead of 129.7 MB; about half the sharing survives the pipeline).
@@ -1451,6 +1465,7 @@ new_fmt <- function(n         = integer(),
   if (is.null(tot_n )) tot_n  <- nas
   if (is.null(n_eff )) n_eff  <- nas
   if (is.null(obs   )) obs    <- nas
+  if (is.null(gap_se)) gap_se <- nas
   if (is.null(in_totrow)) in_totrow <- fls
   if (is.null(in_tottab)) in_tottab <- fls
   if (is.null(in_refrow)) in_refrow <- fls
@@ -1481,7 +1496,7 @@ new_fmt <- function(n         = integer(),
          wn = wn, pct = pct, mean = mean,
          diff = diff, ratio = ratio, ctr = ctr, var = var,
          ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or,
-         tot_n = tot_n, n_eff = n_eff, obs = obs,
+         tot_n = tot_n, n_eff = n_eff, obs = obs, gap_se = gap_se,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
@@ -1493,14 +1508,14 @@ new_fmt <- function(n         = integer(),
   #vec_data() return the tibble with all fields
 }
 
-# The 20 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
+# The 21 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
 # DERIVED rather than hand-maintained. (Defect: model_family became a 10th attribute in Phase 15e but
 # was never added to the hand-written fmt_col_attrs -> it was silently dropped on every carrier
 # round-trip / bind.) Adding a FIELD updates this vector (the /vctrs-field checklist forces it);
 # adding an ATTRIBUTE (a new_fmt() formal that is not a field) needs NO change here -- it appears in
 # fmt_col_attrs automatically. Order follows the new_rcrd() list() above; do NOT reorder.
 fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
-                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs",
+                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs", "gap_se",
                      "in_totrow", "in_tottab", "in_refrow")
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
@@ -1622,16 +1637,24 @@ get_ci_moe <- function(x) {
   ctr <- ci_center(x)
   pmax(ctr - get_ci_inf(x), get_ci_sup(x) - ctr)
 }
+# stars_from_pvalue(): the star LADDER alone -- p-values to glyphs, per the two options. Split out
+# (Last Phase z8) so a p-value with no fmt cell behind it (the aggregated interaction test's footer
+# line) reads the same ladder as every cell instead of a second copy of the thresholds.
+#' @keywords internal
+stars_from_pvalue <- function(p) {
+  brk <- sort(getOption("tabxplor.signif_levels", c(0.10, 0.05, 0.01)), decreasing = TRUE)
+  lab <- getOption("tabxplor.signif_labels", c("*", "**", "***"))
+  out <- c("", lab)[rowSums(outer(p, brk, `<`), na.rm = TRUE) + 1L]
+  out[is.na(p)] <- ""
+  out
+}
+
 # get_stars(): per-cell significance glyphs from the stored `pvalue` (universal CI-inclusion,
 # so they always agree with the interval bracket). Thresholds/labels are options; "" where the
 # pvalue is NA (cell CIs, non-diff cells, or stars opted out). See §20.
 #' @keywords internal
 get_stars  <- function(x, p = get_pvalue(x)) {
-  brk <- sort(getOption("tabxplor.signif_levels", c(0.10, 0.05, 0.01)), decreasing = TRUE)
-  lab <- getOption("tabxplor.signif_labels", c("*", "**", "***"))
-  nb  <- rowSums(outer(p, brk, `<`), na.rm = TRUE)
-  out <- c("", lab)[nb + 1L]
-  out[is.na(p)] <- ""
+  out <- stars_from_pvalue(p)
   # Phase 17c: a footer cell (a "gof" stat, a "pvalue" test row, or a "blank" filler) now carries a real
   # `pvalue` field (honest storage), but it is NOT a "different from the reference" comparison, so it must
   # never print a star -- nor flip prep's has_stars / tab_xl's star padding. format() already excludes
@@ -1670,6 +1693,12 @@ get_n_eff  <- fmt_field_factory("n_eff")
 #' @keywords internal
 # @export
 get_obs    <- fmt_field_factory("obs")
+
+# @describeIn fmt get the "gap_se" field (Last Phase z8: the standard error of the gap between this
+# cell's estimate and `obs`, on the estimate's own test scale -- NA wherever the gap has no test)
+#' @keywords internal
+# @export
+get_gap_se <- fmt_field_factory("gap_se")
 
 # get_tot_wn(): the cell's OWN WEIGHTED percentage base. This is NOT a stored field -- it is
 # recovered as wn / pct (pct is stored at full precision; only display is rounded), mirroring the
@@ -1752,23 +1781,106 @@ fmt_resid <- function(x) {
 # always "it ATTENUATED it" (the covariates explained part of the raw association), for protective and
 # risky effects alike, and it stays correct through the null (crude 0.90 -> adjusted 1.20 reads as
 # strengthened). The magnitude fed to findInterval is direction-free; only the sign carries the reading.
+# fmt_gap_parts() -- Last Phase z8: the ONE decomposition of the estimate-vs-`obs` comparison, read
+# once per column from `ci_type` and shared by the score, its interval and its p-value, so those three
+# can never describe different quantities. Returns:
+#   mult  the estimate is multiplicative (or / ratio) -> neutral 1, else additive -> neutral 0;
+#   est / obs / ok  the two values and where both are usable;
+#   sign  the NULL DIRECTION: +1 when the estimate is FURTHER from the null than `obs` (the model
+#         strengthened the effect), -1 when nearer (it attenuated it), 0 when equal.
+#' @keywords internal
+fmt_gap_parts <- function(x) {
+  cit  <- as.character(get_ci_type(x))[1]
+  mult <- cit %in% c("or", "ratio")
+  obs  <- get_obs(x)
+  est  <- if (identical(cit, "or")) get_or(x) else
+          if (identical(cit, "ratio")) get_ratio(x) else get_diff(x)
+  if (mult) {
+    ok <- is.finite(est) & is.finite(obs) & est > 0 & obs > 0
+    s  <- sign(abs(log(ifelse(ok, est, NA_real_))) - abs(log(ifelse(ok, obs, NA_real_))))
+  } else {
+    ok <- is.finite(est) & is.finite(obs)
+    s  <- sign(abs(est) - abs(obs))
+  }
+  list(mult = mult, est = est, obs = obs, ok = ok, sign = s)
+}
+
+# fmt_adjustment_score() -- Last Phase z5: how far a model estimate sits from the value it is COMPARED
+# TO (the `obs` field: the observed/crude effect, or a reference group's estimate). ONE helper behind
+# both `color = "adjustment"` and `color = "between_groups"`; they differ only in what `obs` holds.
+#
+# The comparison rides the estimate's own scale, read ONCE per column from `ci_type` (a scalar
+# attribute, like get_num()'s est_ci arm) -- never a per-cell test:
+#   multiplicative (or / ratio) : the ratio of the two effects, magnitude folded around 1;
+#   additive       (diff)       : their difference, magnitude folded around 0.
+#
+# DESIGN -- the SIGN is "away from vs toward the NULL", not raw up/down. A raw sign colours a
+# protective effect backwards: crude OR 0.50 attenuated to 0.60 moves UP while the identical
+# attenuation of a risky 2.00 -> 1.67 moves DOWN, so the two halves of a diverging palette would mean
+# nothing consistent. Scoring |log est| - |log obs| (|est| - |obs| when additive) makes one pole
+# always "the model STRENGTHENED this effect" (suppression / negative confounding) and the other
+# always "it ATTENUATED it" (the covariates explained part of the raw association), for protective and
+# risky effects alike, and it stays correct through the null (crude 0.90 -> adjusted 1.20 reads as
+# strengthened). The magnitude fed to findInterval is direction-free; only the sign carries the reading.
 #' @keywords internal
 fmt_adjustment_score <- function(x) {
-  cit <- as.character(get_ci_type(x))[1]
-  obs <- get_obs(x)
-  if (cit %in% c("or", "ratio")) {
-    est <- if (identical(cit, "or")) get_or(x) else get_ratio(x)
-    ok  <- is.finite(est) & is.finite(obs) & est > 0 & obs > 0
-    r   <- ifelse(ok, est / obs, NA_real_)
+  p <- fmt_gap_parts(x)
+  if (p$mult) {
+    r   <- ifelse(p$ok, p$est / p$obs, NA_real_)
     mag <- pmax(r, 1 / r)                                    # size of the move, direction-free
-    s   <- sign(abs(log(ifelse(ok, est, NA_real_))) - abs(log(ifelse(ok, obs, NA_real_))))
-    ifelse(s < 0, 1 / mag, mag)                              # centre 1: below 1 = attenuated
+    ifelse(p$sign < 0, 1 / mag, mag)                         # centre 1: below 1 = attenuated
   } else {
-    est <- get_diff(x)
-    ok  <- is.finite(est) & is.finite(obs)
-    s   <- sign(abs(est) - abs(obs))
-    ifelse(ok, abs(est - obs) * s, NA_real_)                 # centre 0: below 0 = attenuated
+    ifelse(p$ok, abs(p$est - p$obs) * p$sign, NA_real_)      # centre 0: below 0 = attenuated
   }
+}
+
+# fmt_gap_raw() -- Last Phase z8: the SIGNED gap on the estimate's own TEST scale (the log-ratio when
+# multiplicative, the plain difference when additive). This -- not the score -- is what `gap_se` is the
+# standard error OF, so the two must be read from the same decomposition.
+#' @keywords internal
+fmt_gap_raw <- function(x) {
+  p <- fmt_gap_parts(x)
+  if (p$mult) ifelse(p$ok, log(p$est) - log(p$obs), NA_real_)
+  else        ifelse(p$ok, p$est - p$obs           , NA_real_)
+}
+
+# fmt_gap_bounds() -- Last Phase z8: the confidence interval OF THE SCORE, so every existing branch of
+# fmt_color_plan() works on it unchanged (it is the `bounds` fact of the two gap measures; every other
+# measure keeps the stored ci_inf/ci_sup).
+#
+# DESIGN -- why the interval is re-signed rather than passed through raw. The score's sign is the NULL
+# DIRECTION (away from / toward the null) while a raw gap interval is signed up/down; the two disagree
+# for a protective effect. Handing the raw interval to the engine would then break BOTH policies:
+# `grey_non_signif` matches the score's direction against sig_pos/sig_neg, and `guaranteed_effect`
+# takes the bound nearest the neutral as the coloured magnitude. Folding the interval of |gap| back
+# with the score's own sign makes both correct with no measure-specific branch:
+#   * a gap interval excluding 0 puts BOTH bounds strictly on the score's side  -> significant, same
+#     direction as the colour;
+#   * one covering 0 pins the near bound exactly at the neutral                 -> not significant;
+#   * the bound nearest the neutral IS the guaranteed gap ("moved by at least x1.1"), already signed.
+# WARNING: the threshold reads options(tabxplor.conf_level), like every other threshold in the colour
+# engine -- colours are computed per COLUMN at print time and cannot see a per-call conf_level.
+#' @keywords internal
+fmt_gap_bounds <- function(x) {
+  p    <- fmt_gap_parts(x)
+  se   <- get_gap_se(x)
+  g    <- if (p$mult) ifelse(p$ok, log(p$est) - log(p$obs), NA_real_)
+          else        ifelse(p$ok, p$est - p$obs           , NA_real_)
+  ok   <- is.finite(g) & is.finite(se) & se > 0 & !is.na(p$sign)
+  half <- zscore_formula(getOption("tabxplor.conf_level", 0.95)) * se
+  lo   <- ifelse(ok, p$sign * pmax(0, abs(g) - half), NA_real_)   # magnitude interval of |gap|,
+  hi   <- ifelse(ok, p$sign * (abs(g) + half)       , NA_real_)   #   re-signed by the null direction
+  if (p$mult) { lo <- exp(lo); hi <- exp(hi) }                    # centre 1 (exp is monotone)
+  list(lo = pmin(lo, hi), hi = pmax(lo, hi))
+}
+
+# fmt_gap_p() -- the two-sided p of the gap (z on the test scale). Display only: the colour reads the
+# interval above, so the two agree by construction. NA wherever `gap_se` is.
+#' @keywords internal
+fmt_gap_p <- function(x) {
+  g  <- fmt_gap_raw(x)
+  se <- get_gap_se(x)
+  ifelse(is.finite(g) & is.finite(se) & se > 0, 2 * stats::pnorm(-abs(g / se)), NA_real_)
 }
 
 # fmt_broadcast_last() -- base-R broadcast of the LAST value of each group to every row of that group,
@@ -1984,6 +2096,11 @@ set_n_eff   <- fmt_set_field_factory("n_eff"  , cast = double()   )
 #' @keywords internal
 # @export
 set_obs     <- fmt_set_field_factory("obs"    , cast = double()   )
+# @describeIn fmt set the "gap_se" field (the SE of the estimate-vs-`obs` gap, written by tab_reg
+# where the two estimates are independent -- NA everywhere else)
+#' @keywords internal
+# @export
+set_gap_se  <- fmt_set_field_factory("gap_se" , cast = double()   )
 
 
 
@@ -2953,7 +3070,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
   }
 
-  # Significance from the stored bounds. Phase 14b: it is a property of the INTERVAL, not of the
+  # Significance from the measure's interval. Phase 14b: it is a property of the INTERVAL, not of the
   # measure being coloured -- an interval is significant when it excludes ITS OWN neutral (0 for the
   # additive diff* scales, 1 for the multiplicative "or"/"ratio" ones). This was keyed on the measure,
   # which held only while each measure had exactly one possible ci_type; now that `ratio` can own the
@@ -2961,10 +3078,15 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the old mismatch: measure "or" + a difference ci_type tested the diff bounds against the OR's
   # neutral 1, so nothing was ever significant. All three scales test the same null (p1 = p2), so
   # whichever interval is stored answers it.
+  # Last Phase z8: WHICH interval is a declared measure fact (`bounds`, defaulted by measure_facts to
+  # the stored ci_inf/ci_sup). The gap measures derive theirs from `gap_se`, already folded onto the
+  # score's own scale and sign -- so this block, the floor block below and the direction match in
+  # `grey_non_signif` all keep working with no measure-specific branch.
+  bd          <- md$bounds(x)
   has_ci      <- cit %in% c("diff", "diff_row", "diff_col", "or", "ratio")
   ci_neutral  <- if (ci_mult) 1 else 0
-  sig_pos <- has_ci & get_ci_inf(x) > ci_neutral
-  sig_neg <- has_ci & get_ci_sup(x) < ci_neutral
+  sig_pos <- has_ci & bd$lo > ci_neutral
+  sig_neg <- has_ci & bd$hi < ci_neutral
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 
@@ -2984,7 +3106,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   if (policy == "guaranteed_effect") {
     if (md$sig_source == "pvalue") {
       # Last Phase z4: no interval to take a CI-floor of, so this policy carries contrib's OTHER
-      # reading instead -- the ADJUSTED STANDARDIZED RESIDUAL on the absolute `residual` scale (the
+      # reading instead -- the ADJUSTED STANDARDIZED RESIDUAL on the absolute `zscore` scale (the
       # scale swap is the MEASURES `guar` override, applied by measure_facts() above). The score is the
       # residual itself, in real |z| units, and the break scale is re-anchored to the significance
       # threshold (break_origin below), so the policy's invariant holds by construction -- a cell is
@@ -2996,8 +3118,8 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
     # around the right centre. The stored bounds may be on ANOTHER scale: only one interval is stored
     # per column (the primary/text measure's), and the second channel derives from it.
-    floor_q <- dplyr::case_when(sig_pos ~ get_ci_inf(x),
-                                sig_neg ~ get_ci_sup(x),
+    floor_q <- dplyr::case_when(sig_pos ~ bd$lo,
+                                sig_neg ~ bd$hi,
                                 TRUE    ~ NA_real_)
     # `diff` and `ratio` are two views of ONE cell-vs-reference comparison: both are affine in the
     # cell proportion with the reference held at its point estimate (ratio - 1 = diff / p_ref). So a
@@ -3234,8 +3356,12 @@ fmt_channel_codes <- function(x, theme = "light") {
 #   scale              named c(std=, pct=) of color_scales() keys; `std_when` picks which (see below).
 #   std_when           which column kinds take the `std` scale key: "std_diff" (is_mean || coef, factor
 #                      pct otherwise) | "mean" (is_mean) | "na" (both keys equal -> selector inert).
-#   sig_source         where significance comes from: "bounds" (the stored ci_inf/ci_sup interval) |
+#   sig_source         where significance comes from: "bounds" (an interval, read through `bounds`) |
 #                      "pvalue" (contrib -- no interval, reads the stored standardized-residual p-value).
+#   bounds             (optional, Last Phase z8) closure(x) -> list(lo, hi), THE interval the two
+#                      significance policies read. Absent = the stored ci_inf/ci_sup (every measure whose
+#                      interval the table carries); the gap measures derive theirs from `gap_se`.
+#                      measure_facts() fills the default, so a new row needs this only when it differs.
 #   gate_row           which structural row this measure never colours: "refrow" (a reference level /
 #                      regression intercept is a baseline) | "totrow" (contrib is undefined on a total).
 #   force_policy       (optional, Last Phase z5) the measure has no significance test of its own, so it
@@ -3268,42 +3394,51 @@ MEASURES <- list(
                  # switch arm. `ignore` / `grey_non_signif` colour the RELATIVE contribution (a share of
                  # this table's chi2 -- the correspondence-analysis reading, which necessarily floats with
                  # the table); `guaranteed_effect` colours the ADJUSTED STANDARDIZED RESIDUAL on the
-                 # absolute `residual` scale, whose thresholds mean the same thing in every table (the
+                 # absolute `zscore` scale, whose thresholds mean the same thing in every table (the
                  # SPSS reading). Both readings share ONE significance source: the residual p-value.
                  guar = list(word = "standardized residual", break_over = "+", break_under = "-",
                              threshold_mult = FALSE, unit_kind = "none", break_origin = "threshold",
-                             scale = c(std = "residual", pct = "residual"))),
+                             scale = c(std = "zscore", pct = "zscore"))),
   # Last Phase z5 -- the two tab_reg-only measures. They score the SAME quantity through the SAME
   # helper (how far the model estimate sits from the value stored in `obs`) and differ ONLY in what
   # that value is, hence in the reference the legend names. `std_when = "additive"` selects the scale
   # from the estimate's own scale rather than from the column kind: an OR / RR / IRR is folded around
   # 1 on `adj_ratio`, a beta / AME / risk-difference around 0 on `adj_diff`.
-  # `force_policy = "ignore"`: phase 1 is descriptive. The model estimate's own interval answers a
-  # DIFFERENT question ("is this effect real?", not "is the gap real?"), and a valid gap test needs the
-  # joint variance of two estimates fitted on the same rows -- see dev/model_vs_observed_effect_colour.md
-  # SS4. So the policy is neutralised here rather than silently gating on the wrong interval.
+  # Both derive their interval from the stored `gap_se` (Last Phase z8), so both read `color_signif`
+  # normally -- except `adjustment`, whose gap SE needs the joint variance of two estimates fitted on
+  # the SAME rows (influence functions, dev/model_vs_observed_gap_test.md SS3) and is not written yet:
+  # it keeps `force_policy = "ignore"` until then rather than gate on an absent interval. The split
+  # groups of `between_groups` are DISJOINT, so its SE is exact by quadrature -- no override.
   adjustment     = list(word = "adjustment",    word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
-                 std_when = "additive", sig_source = "bounds", gate_row = "refrow",
-                 force_policy = "ignore"),
+                 std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
+                 gate_row = "refrow", force_policy = "ignore"),
   between_groups = list(word = "between groups", word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
-                 std_when = "additive", sig_source = "bounds", gate_row = "refrow",
-                 force_policy = "ignore")
+                 std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
+                 gate_row = "refrow")
 )
 
+# The default `bounds` fact: the interval the column STORES. Every measure but the two gap ones reads
+# it, so it lives here once instead of on each row (measure_facts fills it in).
+#' @keywords internal
+fmt_stored_bounds <- function(x) list(lo = get_ci_inf(x), hi = get_ci_sup(x))
+
 # The measure's facts as they apply UNDER A GIVEN POLICY: the MEASURES row, with its `guar` override
-# folded in for `guaranteed_effect`. THE single accessor -- fmt_color_plan() and every legend helper
-# read the facts through it, so the colour plan and the legend that describes it cannot diverge.
+# folded in for `guaranteed_effect` and its `bounds` default filled. THE single accessor --
+# fmt_color_plan() and every legend helper read the facts through it, so the colour plan and the legend
+# that describes it cannot diverge.
 #' @keywords internal
 measure_facts <- function(measure, policy = "ignore") {
   md <- MEASURES[[measure]]
-  if (is.null(md) || is.null(md$guar) || !identical(policy, "guaranteed_effect")) return(md)
-  utils::modifyList(md, md$guar)
+  if (is.null(md)) return(md)
+  if (!is.null(md$guar) && identical(policy, "guaranteed_effect")) md <- utils::modifyList(md, md$guar)
+  if (is.null(md$bounds)) md$bounds <- fmt_stored_bounds
+  md
 }
 
 # The policy a measure ACTUALLY reads under: the column's `color_signif`, unless the measure declares a
@@ -3540,7 +3675,9 @@ legend_ref_phrase <- function(spec, lang) {
   lab <- ref$label
   if (identical(ref$kind, "indep")) return(gettext("independence"))
   if (identical(ref$kind, "observed")) return(gettext("the observed (crude) effect"))
-  if (identical(ref$kind, "group"))    return(gettext("the reference group"))
+  # Last Phase z8: "...'s effect", not just "the reference group" -- with the significance policies live
+  # the note reads "significantly different from ...", and what differs is the EFFECT, not the group.
+  if (identical(ref$kind, "group"))    return(gettext("the reference group's effect"))
   if (identical(ref$kind, "category")) {
     if (!is.na(lab) && nzchar(lab)) return(gettextf("the reference category (%s)", lab))
     return(gettext("the reference category"))
@@ -3550,13 +3687,18 @@ legend_ref_phrase <- function(spec, lang) {
   gettextf("the %s %s", lab, base)                 # EN "the Total row"; FR "la %2$s %1$s" -> "la ligne Total"
 }
 
-# the CI-method name (NA when there is none, e.g. contrib).
-legend_method_name <- function(spec) {
+# the CI-method name (NA when there is none, e.g. contrib). Last Phase z8: `measure` defaults to the
+# text channel's but is passed explicitly per channel by legend_resolve_spec -- a gap measure on the
+# background names ITS OWN test, not the text channel's model interval.
+legend_method_name <- function(spec, measure = spec$measure_text) {
   cis <- spec$ci_settings
-  # Last Phase z5: these two measures score a gap between two estimates and run no test of their own,
-  # so there is no interval to name -- checked before the is_reg branch, which would otherwise claim
-  # the MODEL's Wald interval for a comparison that never used it.
-  if (spec$measure_text %in% c("adjustment", "between_groups")) return(NA_character_)
+  # Last Phase z5 / z8: these measures score a GAP between two estimates, so the model's own Wald
+  # interval (which the is_reg branch below would claim) is never the right name. `between_groups`
+  # compares two DISJOINT subpopulations, so it has an interval of its own -- the standard test for a
+  # difference between two independent estimates; `adjustment` still has none (see MEASURES).
+  if (identical(measure, "between_groups"))
+    return(gettext("z test on the difference between two independent estimates"))
+  if (identical(measure, "adjustment")) return(NA_character_)
   if (isTRUE(spec$is_reg)) {
     if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
     # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
@@ -3572,8 +3714,8 @@ legend_method_name <- function(spec) {
     }
     return(gettext("Wald interval"))
   }
-  if (identical(spec$measure_text, "or")) return(gettext("Wald interval on the log odds-ratio"))
-  if (identical(spec$measure_text, "contrib")) return(NA_character_)
+  if (identical(measure, "or")) return(gettext("Wald interval on the log odds-ratio"))
+  if (identical(measure, "contrib")) return(NA_character_)
   # 14v-ii: a mean names the method actually used, from ci_settings. A ratio-of-means (ci_type "ratio")
   # is one of the dispersion-ladder intervals (robust / quasi / naive Poisson); a mean difference is
   # Welch or pooled Student (method_mean_diff).
@@ -3605,9 +3747,9 @@ legend_method_name <- function(spec) {
 }
 
 # "<method>, 95% confidence" (or just the confidence text when there is no method name).
-legend_method_phrase <- function(spec, lang) {
+legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
   conf <- gettextf("%s%% confidence", legend_num(spec$ci_settings$conf_level * 100, lang))
-  m    <- legend_method_name(spec)
+  m    <- legend_method_name(spec, measure)
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
 
@@ -3670,6 +3812,10 @@ legend_resolve_spec <- function(spec, lang) {
          # contribution, a distance from independence for the residual.
          ref_word     = if (identical(md$unit_kind, "contrib")) gettext("vs the mean")
                         else gettext("vs independence"),
+         # Last Phase z8: the interval NAME is per channel for the same reason the reference is -- a
+         # gap measure on the background runs its own test, so the "after subtracting the margin of
+         # error (...)" tail must not borrow the text channel's model interval.
+         method_phrase = legend_method_phrase(spec, lang, measure),
          unit         = unit)
   }
   spec$txt <- chan(spec$measure_text)
@@ -3746,7 +3892,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
     # ("..., after subtracting the margin of error (<method>).") instead of a bare ".".
     tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect") && !isTRUE(cf$guar_abs))
-              paste0(cf$unit, ", ", gettextf("after subtracting the margin of error (%s)", spec$method_phrase), ".")
+              paste0(cf$unit, ", ", gettextf("after subtracting the margin of error (%s)", cf$method_phrase), ".")
             else paste0(cf$unit, ".")
     c(head_toks, legend_join(side, semi), list(.lg_tok(tail)))
   }
@@ -3817,6 +3963,15 @@ legend_tokens_prose <- function(spec, lang, show_names) {
       "Grey: below the significance threshold (%s). The thresholds above are comparable between tables.",
       spec$method_phrase) else gettextf(
       "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
+  # Last Phase z8: the note above states ONE comparison (the text channel's). A gap measure on the
+  # background compares something else, by a test of its own, so it needs one clause of its own --
+  # otherwise the note silently claims the model's interval greyed the fill.
+  if (!identical(spec$policy, "ignore") && !is.null(spec$plan_txt) && !is.null(spec$plan_bg) &&
+      !is.null(spec$bg) && !is.na(spec$bg$ref_lead)) {
+    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
+      "Background: the same rule, applied to the gap with %s (%s).",
+      spec$bg$ref_lead, spec$bg$method_phrase)))))
+  }
   if (!is.null(spec$caveat)) toks <- c(toks, list(.lg_tok(paste0(" ", spec$caveat))))
   toks
 }
@@ -3865,9 +4020,16 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # standalone file never re-parse, so they were unaffected). `&#42;` renders as `*` in every
       # browser but is never an emphasis delimiter to pandoc (it round-trips it as an escaped literal,
       # the same path that keeps the in-cell stars alive).
+      # Last Phase z8: the html arm also entity-encodes `&` and `<` -- the interaction line carries
+      # p-values like "<0.01%", and a bare `<` in a raw-html footer is at the mercy of whatever parser
+      # or sanitizer sees it next. `&` FIRST, or it would double-escape the `&#42;` written just after.
       txt <- tk$t
       if (identical(medium, "md")   && isTRUE(tk$esc)) txt <- gsub("*", "\\*", txt, fixed = TRUE)
-      if (identical(medium, "html") && isTRUE(tk$esc)) txt <- gsub("*", "&#42;", txt, fixed = TRUE)
+      if (identical(medium, "html") && isTRUE(tk$esc)) {
+        txt <- gsub("&", "&amp;", txt, fixed = TRUE)
+        txt <- gsub("<", "&lt;" , txt, fixed = TRUE)
+        txt <- gsub("*", "&#42;", txt, fixed = TRUE)
+      }
       if (!bold) return(txt)
       if (identical(medium, "console")) return(cli::style_bold(txt))
       if (identical(medium, "html"))    return(paste0("<b>", txt, "</b>"))
@@ -4183,6 +4345,10 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
     streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
   for (rl in reg_model_lines(x, lg)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")  # Last Phase w: translated per family
+  # Last Phase z8: the aggregated effect-modification test (predictor x split_var) -- table-wide, so it
+  # rides the stream footer like the weight / Model: lines rather than the per-column footer rows.
+  # `esc = TRUE`: the p-values carry significance stars, which pandoc would read as emphasis.
+  for (il in reg_interaction_lines(x, lg)) if (nzchar(il)) push(list(.lg_tok(il, esc = TRUE)), "reg")
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
   # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
   sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")
@@ -4539,6 +4705,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           tot_n     = get_tot_n   (x),
           n_eff     = get_n_eff   (x),
           obs       = get_obs     (x),
+          gap_se    = get_gap_se  (x),
 
           in_totrow = is_totrow   (x),
           in_refrow = is_refrow   (x),
@@ -4754,6 +4921,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       tot_n   = rep_NA_real,
       n_eff   = rep_NA_real,
       obs     = rep_NA_real,
+      gap_se  = rep_NA_real,
 
       # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
       # arguably it should follow x alone (x - a non-total y should probably stay total).
@@ -4795,6 +4963,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       tot_n  = rep_NA_real,
       n_eff  = rep_NA_real,
       obs    = rep_NA_real,
+      gap_se = rep_NA_real,
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
@@ -4883,6 +5052,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          tot_n  = NA_real_,
                          n_eff  = NA_real_,
                          obs    = NA_real_,
+                         gap_se = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
@@ -4919,6 +5089,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           tot_n   = NA_real_,
                           n_eff   = NA_real_,
                           obs     = NA_real_,
+                          gap_se  = NA_real_,
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,

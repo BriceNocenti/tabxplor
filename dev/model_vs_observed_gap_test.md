@@ -1,7 +1,20 @@
 # A significance test for the model-vs-observed gap — design study
 
-Date: 2026-08-05. Status: **REPORT ONLY** (Last Phase z7, item 1 / the study half of Last Phase z8).
-No code written; the plan and the implementation are a separate step.
+Date: 2026-08-05. Status: **PHASE A IMPLEMENTED** (2026-08-06). The `between_groups` half of §11 has
+landed -- the 21st field `gap_se`, the `MEASURES` `bounds` closure, the three policies, the
+`residual` -> `zscore` rename (Q4), the `at = "reference"` fix (Q8), and §5.3's aggregated
+`predictor x split_var` test, which the maintainer pulled forward into this phase. **Phase B**
+(`adjustment`, the influence functions of §3) is still a report.
+
+Two implementation findings worth reading before Phase B:
+  * The `bounds` closure must return the interval OF THE SCORE, not the raw gap interval: the score's
+    sign is the null direction while the raw interval is signed up/down, and they disagree for a
+    protective effect. Re-folding |gap| with the score's sign makes every existing plan branch work
+    with no measure-specific code, which is what §7.2 promised but not quite how it described it.
+  * §5.3's "interaction ROW in the GOF footer" is not implementable as a row: every footer row is keyed
+    to exactly one model column, `reg_spread_models()` re-keys per split group, and `reg_footer_spec()`
+    is a fixed discriminator->label list that cannot carry one label per predictor. It ships as a
+    table-wide footer LINE through `tab_footer_streams()` instead.
 
 Scope: give the two Last-Phase-z5 colour measures — `color = "adjustment"` (model estimate vs its
 observed/crude counterpart) and `color = "between_groups"` (a `split_var` group vs the reference

@@ -95,6 +95,12 @@
 #   fmt-contract snapshot, and a script proved the only delta is the added all-NA column (a
 #   cross-table never fills `obs`). The DISPLAY _snaps are UNTOUCHED -- `obs` renders only through
 #   an explicit `display = "{obs}"` and a tooltip fragment gated on a non-NA value.
+# Last Phase z8 (the gap's significance test): adds a 21st per-cell field `gap_se` -- the standard
+#   error of the estimate-vs-`obs` gap. Same shape again: all *.rds regenerated once + the
+#   fmt-contract snapshot, with dev/verify_golden_field_delta.R (now committed, instead of rewritten
+#   each phase) proving over 1787 cells that the added all-NA column is the only delta. The DISPLAY
+#   _snaps are UNTOUCHED: `gap_se` is non-displayed (no token), and it can only be non-NA on a
+#   tab_reg split table, which no golden case builds.
 # ===========================================================================================
 
 cases <- golden_cases()

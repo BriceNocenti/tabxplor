@@ -53,9 +53,7 @@ word.**
    `Obs_rate` (the *base* column) shows the outcome per predictor level. A numeric predictor has no
    levels, and the only well-defined descriptive analogue — `mean(X | Y)` — is **conditioned the other
    way round and measured in the predictor's units**. Putting it in the same column is the field
-   overload the codebase's own rules forbid. **Recommendation: leave the base column `NA` and put
-   `mean(X | Y)` in the html tooltip**, reusing `reg_empirical_tips` exactly as multinomial crude
-   numbers already do. §5.
+   overload the codebase's own rules forbid. **Recommendation: leave the base column `NA` and put `mean(X | Y)` in the html tooltip**, reusing `reg_empirical_tips` exactly as multinomial crude numbers already do. §5.
 6. **And one honest semantic cost.** For a factor the univariable fit is *saturated*, so `Obs_OR` is a
    genuinely observed 2×2 contrast with no functional-form assumption. For a numeric it assumes
    **linearity on the link scale**. The column would then mix "observed" and "univariable model". The
@@ -348,14 +346,20 @@ Three coherent resolutions:
 
 - **Q1 — ship it?** §3 and §4 say yes; the cost is one fit per numeric predictor and one documented
   sentence. Recommended.
+  **Maintainer’s decision: ship it**
 - **Q2 — the base column.** `NA` + tooltip (recommended, §5 option 1), `NA` alone, or something else?
+  **Maintainer’s decision: more study is needed here.** Not having the same level of polish for numeric predictors compared to factors would be a no-go for many regressions users. Since tabxplor framework allows different `display` fields on the same column, it’s actually possible to print both percentages and means on the same column, the user can differenciate percentages with the % symbol, every numeric predictor is on it’s own scale anyway, etc. The question is: what degraded features or white elephants would such a decision introduce (a column can only have on `type`, one `color`, etc.) ? Colors breaks and scale ? Would there be a way to use something inspired from the `color = c("diff", "ratio")` syntax, first value being text color, second value being background color, to use two scales for one column, with only text color for factors, only background colors for numeric ? Would it be reliable, and how to adapt it to the use case ? Or would the colors be wrong anyway due to other column attributes like type ?
 - **Q3 — the wording.** Adopt the single rule of §6 — "`Obs_*` = the unadjusted (univariable) effect;
   exactly observed for a categorical predictor, a univariable slope for a continuous one" — in
   `?tab_reg`, the regression vignette (EN + FR) and the legend? Recommended; it shortens the docs.
+  **Maintainer’s decision: couln’t quantitative social sciences colleagues agree that a raw mean on a numeric variable, or ratio of means, or difference of means, is actually "observed", even if "non-linearity on the link scale" make the whole observed mean a bit meaningless, and user shall anyway test every numeric variable for linearity and other assumptions before keeping it in a regression model (proof : it could be computed via `tab()` without model fit ?) ? So mix vocabulary to signify it’s the same, observed, unadjusted, univariable ? Or would it be a no-go for statistical colleagues ?**
 - **Q4 — weighting** (§9): Kish-rescale the numeric crude SE (recommended), go design-based, or
   document the split?
+  **Maintainer’s decision: Kish-rescale the numeric crude SE**
 - **Q5 — order.** This is largely independent of the z8 gap test, but they share `reg_empirical`'s
   producer and the `multiplier` rule. Ship this **first** (it is smaller and it is a visible gap in a
   headline feature), or after?
+  **Maintainer’s decision: z8 gap test was already introduced for factors, but postponed for numeric predictors. Implement it now.**
 - **Q6 — the `multiplier` rule** (§8): confirm that the numeric crude effect is raised to the same
   power k as the model's. There is no defensible alternative, but it must be a conscious fixture.
+  **Maintainer’s decision: the numeric crude effect obviously shall be raised at the same power for comparison. In every possible case, the empirical counterpart should match exactly the modelised effects, otherwise the whole observed versus modelised comparison is meaningless.**

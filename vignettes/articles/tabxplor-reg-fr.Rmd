@@ -406,17 +406,74 @@ Lire une ligne d'un groupe à l'autre est la même corvée que comparer un modè
 la réponse est la même : `color = "between_groups"` colore la distance entre l'effet de chaque groupe
 et celui du **premier** groupe, sur la même ligne. Là où le test de comparaison de modèles ci-dessous
 dit « ces modèles diffèrent » une fois pour tout le modèle, ceci dit *quels effets* diffèrent selon les
-groupes — une lecture prédicteur par prédicteur de ce que les statisticiens appellent l'interaction :
+groupes — une lecture prédicteur par prédicteur de ce que les statisticiens appellent l'interaction.
+
+Les groupes réunissent ici des personnes différentes : l'écart entre deux de leurs effets peut donc
+être testé — et il l'est, si bien que `color_signif` fonctionne comme partout ailleurs. Avec
+`"grey_non_signif"`, une couleur de fond signifie alors « c'est vraiment un effet différent, pas
+seulement du bruit » :
 
 ```{r}
-tab_reg(gss_simple, "married", "race", split_var = "party3",
-        color = c("OR", "between_groups"))
+tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
+        color = c("OR", "between_groups"), color_signif = "grey_non_signif")
 ```
 
-Le premier groupe sert de référence et reste non coloré (rien n'est comparé à soi-même) ; réordonnez
-les modalités avec `forcats::fct_relevel()` pour en choisir un autre. Contrairement au cas modèle
-contre observé, les groupes réunissent ici des personnes différentes : un vrai test de ces écarts est
-donc simple à construire — il est prévu.
+Couleur du texte = la force de l'effet dans ce groupe. Couleur de fond = la distance à l'effet du
+premier groupe sur la même ligne, grisée lorsque l'écart pourrait être dû au hasard. Le premier groupe
+sert de référence et reste vide (rien n'est comparé à soi-même) ; réordonnez les modalités avec
+`forcats::fct_relevel()` pour en choisir un autre. Survoler une case du tableau html donne les chiffres
+exacts : l'effet de l'autre groupe, la taille de l'écart, son intervalle de confiance et son p.
+
+Le bas de tableau a gagné une ligne au passage : **un test par prédicteur**, qui demande « ce
+prédicteur agit-il différemment selon les groupes ? » pour toutes ses modalités à la fois. C'est la
+version agrégée de la même question, et c'est celle qu'il faut citer — parce qu'elle est posée une
+fois, et non une fois par case. Elle s'obtient aussi seule, sans les couleurs, avec
+`stats = c("n", "interaction")`.
+
+### Trois façons de se tromper
+
+**Une case colorée signale un écart sur *cette mesure*, pas la preuve que la cause diffère.** Les
+groupes peuvent différer simplement parce que le phénomène est plus rare chez les uns, ou plus
+variable — et alors leurs effets diffèrent sur toutes les échelles, rapports de cotes, rapports de
+risques et effets marginaux confondus. Aucune échelle n'y échappe : la lecture doit donc être prudente
+plutôt qu'astucieuse.
+
+**Il faut donc lire la forme d'ensemble, pas la case isolée.** Si toute une colonne est décalée dans le
+même sens, les groupes diffèrent probablement de niveau ou de variabilité — c'est une propriété du
+groupe, pas du prédicteur. Si **une seule ligne** ressort quand les autres restent sages, voilà à quoi
+ressemble une vraie interaction. Les couleurs sont utiles justement parce qu'elles rendent cette forme
+visible d'un coup d'œil. Ajouter `empirical = TRUE` affiche la fréquence de base de chaque groupe
+(`Obs_%`), ce qui tranche le plus souvent la question.
+
+**Chaque case est testée pour elle-même, sans correction pour le nombre de tests.** Dans un tableau
+comptant sept comparaisons, environ un tableau sur cinq affichera une case colorée à tort. La ligne du
+bas de tableau y échappe : elle pose une seule question par prédicteur.
+
+### Pour mémoire : ce qui est exactement testé
+
+Les deux groupes sont disjoints, donc les deux estimations sont indépendantes et l'erreur-type de leur
+différence vaut `sqrt(SE_A² + SE_B²)` — le test classique de la différence entre deux estimations
+indépendantes (Altman & Bland 2003). Les deux erreurs-types sont relues dans les intervalles de
+confiance que le tableau affiche déjà : le test et les intervalles imprimés ne peuvent donc pas se
+contredire. L'écart est mesuré sur l'échelle propre de l'effet — le log du rapport pour un rapport de
+cotes, de risques ou de taux, la différence simple pour un bêta ou un effet marginal — et comparé à un
+seuil normal (z), légèrement conservateur sur petits effectifs.
+
+Les trois politiques lisent ce même intervalle :
+
+| `color_signif` | ce que montre le fond |
+|----------------|-----------------------|
+| `"ignore"` (défaut dans `tab()`) | la taille de l'écart, coloré qu'il soit significatif ou non |
+| `"grey_non_signif"` (défaut dans `tab_reg()`) | la même chose, grisée si l'intervalle de l'écart contient « aucune différence » |
+| `"guaranteed_effect"` | le **plancher** de l'écart : « ces deux effets diffèrent d'au moins ×1,1 » |
+
+Deux détails utiles. Les **étoiles** de significativité dans les cases continuent de lire le p de
+chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celui de l'écart ; le p de l'écart est
+dans l'infobulle. Et le test agrégé du bas de tableau est un test du rapport de vraisemblance (un test
+F pour les modèles linéaires et quasi, un test de Wald fondé sur le plan de sondage avec des poids —
+la même règle que `compare =` ci-dessous), calculé sur un modèle groupé supplémentaire, et portant sur
+les **coefficients** : avec `effect = "ame"` les cases montrent des effets marginaux tandis que le bas
+de tableau teste les coefficients, deux questions proches mais distinctes, et la ligne le précise.
 
 ## Affiner l'affichage, mettre à l'échelle un prédicteur
 

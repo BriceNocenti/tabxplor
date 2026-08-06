@@ -825,27 +825,27 @@ about the jamovi digest path (§4.4).
 
 - **Q1 — name.** `"adjustment"` (recommended) or something else? It is public API, and it is the word
   the vignette will teach.
-  + Maintainer’s decision : `"adjustment"`
+  **Maintainer’s decision : `"adjustment"`**
 - **Q2 — storage.** Option A (20th field `obs`, unlocks the token + tooltip + phase 2) or Option B
   (reuse the free `ratio` field, cheaper today, forecloses those)?
-  + Maintainer’s decision : go for `obs` field.
+  **Maintainer’s decision : go for `obs` field.**
 - **Q3 — the additive break scale.** Absolute in the effect's own units (recommended), SD-standardised,
   or relative-with-a-floor (not recommended)? §7.2.
-  + Maintainer’s decision : absolute in the effect's own units
+  **Maintainer’s decision : absolute in the effect's own units**
 - **Q4 — direction.** Toward/away from the null (recommended) or raw up/down? §7.3.
-  + Maintainer’s decision : Toward/away from the null
+  **Maintainer’s decision : Toward/away from the null**
 - **Q5 — background channel.** Allow `color = c("OR", "adjustment")` (recommended — it is the headline
   reading) or keep whole-cell measures text-only as `contrib`/`or` are?
-  + Maintainer’s decision : Allow `color = c("OR", "adjustment")`
+  **Maintainer’s decision : Allow `color = c("OR", "adjustm**ent")`****
 - **Q6 — the OR path.** Ship it with a caveat (recommended), or restrict the measure to collapsible
   families and tell OR users to switch to `effect = "ame"` / `family = "poisson"`?
-  + Maintainer’s decision : Ship it with a caveat
+  **Maintainer’s decision : Ship it with a caveat**
 - **Q7 — scope.** Is the `split_var` group-vs-group contrast (§9) in z5, or its own phase? The
   statistics are settled either way; the work is a reference-group rule plus a break scale.
-  + Maintainer’s decision : we do thWe `split_var` group-vs-group contrast (§9) now.
+  **Maintainer’s decision : we do thWe `split_var` group-vs-group contrast (§9) now.**
 - **Q8 — phase 2.** Is a significance test for the gap wanted at all, given §4.4's jamovi-cache
   consequence, or is the descriptive change-in-estimate the honest scope?
-  + Maintainer’s decision : yes, it sounds useful but need more research, please add it as the next phase in @CLAUDE.md (with reference to `dev/model_vs_observed_effect_colour.md`), and frame the instructions like the current thread with 1) study, statitical soundness and architecture questions ; 2) plan for implementation and implement.
+  **Maintainer’s decision : yes, it sounds useful but need more research, please add it as the next phase in @CLAUDE.md** (with reference to `dev/model_vs_observed_effect_colour.md`), and frame the instructions like the current thread with 1) study, statitical soundness and architecture questions ; 2) plan for implementation and implement.
 
 ---
 

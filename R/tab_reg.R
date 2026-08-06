@@ -344,6 +344,42 @@ reg_model_lines <- function(x, lang = NULL) {
   })
 }
 
+# Last Phase z8: the AGGREGATED effect-modification test, as one footer line per model -- the
+# table-wide companion of the per-cell `between_groups` colour ("does this predictor act differently
+# between groups?", once per predictor, for all its levels together, with no per-cell multiplicity).
+# It is a LINE, not footer rows: a pooled test belongs to no single model column, which is the only
+# thing the footer-row machinery can key on (see reg_interaction_rows). Rendered by
+# tab_footer_streams() beside the weight / "Model:" lines, so every backend gets it from one producer.
+#
+# The mention "on the coefficients" is added ONLY when the cells are not coefficients (effect = "ame" /
+# "ame_ratio"): there the footer tests whether the model COEFFICIENTS differ between groups while the
+# colours score the difference in marginal effects -- related, but not the same null. On a coefficient
+# table the words would be noise.
+#' @keywords internal
+reg_interaction_lines <- function(x, lang = NULL) {
+  tt <- get_test(x)
+  if (is.null(tt) || nrow(tt) == 0) return(character(0))
+  it <- tt[tt$test %in% reg_interaction_types(), , drop = FALSE]
+  if (nrow(it) == 0) return(character(0))
+  meta <- get_reg_meta(x)
+  sv   <- if (is.null(meta)) NA_character_ else meta$split_var
+  with_legend_lang(lang, function(lg) {
+    tname <- c(interact_lr = gettext("likelihood ratio"), interact_f = gettext("F test"),
+               interact_wald = gettext("Wald test"))
+    on_coef <- !is.null(meta) && isTRUE(meta$effect %in% c("ame", "ame_ratio"))
+    # split() by a FACTOR of first-appearance order, so several models keep their column order.
+    vapply(split(seq_len(nrow(it)), factor(it$col_var, levels = unique(it$col_var))), function(idx) {
+      d     <- it[idx, , drop = FALSE]
+      items <- paste0(d$row_var, " p = ", test_fmt_pvalue(d$pvalue), stars_from_pvalue(d$pvalue))
+      kind  <- unname(tname[d$test[1]]); if (is.na(kind)) kind <- gettext("Wald test")
+      what  <- if (on_coef) gettextf("%s on the coefficients", kind) else kind
+      head  <- if (!is.na(sv) && nzchar(sv)) gettextf("Interaction with %s (%s):", sv, what)
+               else                          gettextf("Interaction (%s):", what)
+      enc2utf8(paste0(head, " ", paste(items, collapse = ", "), "."))
+    }, character(1), USE.NAMES = FALSE)
+  })
+}
+
 # Phase 14w: the reg table's TITLE / caption (Excel title + sheet, md/kable caption). Single model:
 # "<Family>: <dep> by <p1>, <p2> +N more". Comparison: "<Family>s (models comparison): <dep>, '<ref>'
 # (<effect>)" -- the reference level + effect that would otherwise be written nowhere (item 4).
@@ -831,12 +867,17 @@ reg_relevel_design <- function(design, reference, relevelable) {
 # the CI and the stars are exact duals. method="profile" (unweighted glm) swaps to confint + LR p.
 reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                     inverse_two_level_factors, conf_level, method,
-                    trials = NULL, formula = NULL, multiplier = NULL) {
-  drop_vars <- unique(c(dependent, predictors, reg_design_vars(design_spec)))
+                    trials = NULL, formula = NULL, multiplier = NULL, cross = NULL) {
+  # Last Phase z8: `cross` (a split_var) makes the POOLED interaction fit `y ~ (x1 + x2) * g`, used
+  # only by reg_interaction_rows(). It goes through this whole function rather than the `formula =`
+  # escape hatch precisely so it inherits the binary prep, the grouped-binomial cbind, the family
+  # objects, the "rr" -> svyglm route and the design resolution; `formula =` deliberately disables the
+  # first two. `cross` joins drop_vars so the pooled complete-case frame matches the per-group ones.
+  drop_vars <- unique(c(dependent, predictors, cross, reg_design_vars(design_spec)))
   mdata     <- reg_complete_frame(data, drop_vars)
 
-  fac_preds <- predictors[purrr::map_lgl(
-    predictors, ~ is.factor(mdata[[.]]) || is.character(mdata[[.]])
+  fac_preds <- c(predictors, cross)[purrr::map_lgl(
+    c(predictors, cross), ~ is.factor(mdata[[.]]) || is.character(mdata[[.]])
   )]
   if (length(fac_preds) > 0L) {
     # Phase 14r: coerce factor/character predictors to UNORDERED factors. An ORDERED predictor makes
@@ -924,9 +965,9 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     formula                                            # compound escape-hatch: fit verbatim
   } else {
     resp <- if (grouped) "cbind(`.gb_succ`, `.gb_fail`)" else paste0("`", dependent, "`")
-    stats::as.formula(paste0(
-      resp, " ~ ", paste0("`", predictors, "`", collapse = " + ")
-    ))
+    rhs  <- paste0("`", predictors, "`", collapse = " + ")
+    if (!is.null(cross)) rhs <- paste0("(", rhs, ") * `", cross, "`")   # z8: the pooled interaction fit
+    stats::as.formula(paste0(resp, " ~ ", rhs))
   }
 
   # Last Phase z3: "rr" ALWAYS fits through svyglm, weighted or not. A Poisson likelihood on a 0/1
@@ -1781,8 +1822,11 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
            if (family == "ordinal") s <- c(s, "brant_po"); s }  # Phase 14q Item I
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
+  # "interaction" (Last Phase z8) is not produced by reg_glance -- it is read straight off `stats` by
+  # reg_build's split block -- but it belongs to this vocabulary so a user vector does not drop it.
   valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
-             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion", "brant_po")
+             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion", "brant_po",
+             "interaction")
   stats[stats %in% valid]
 }
 
@@ -1945,6 +1989,103 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 }
 
 
+# --- Last Phase z8: the aggregated effect-modification test (predictor x split_var) -----------------
+# The per-cell `between_groups` colour says how big each group difference is, one cell at a time; this
+# says ONCE per predictor whether its effect differs between groups at all -- the textbook test, and
+# aggregated, so it carries no multiplicity inflation. ONE extra pooled fit `y ~ (predictors) * g`
+# through reg_fit(cross =), then per predictor:
+#   * unweighted -> drop1(scope = the interaction terms), LR (Chisq) or F for gaussian/quasi -- one
+#     call, per-term and order-independent, which anova(fit)'s Type-I sequence is not;
+#   * weighted / "rr" -> survey::regTermTest() per predictor, no refit.
+# The LR/F-vs-Wald split is reg_compare_rows()'s own rule (use_f / use_wald), so the two extra-fit
+# footer tests never disagree about what a weighted model may claim.
+#
+# DESIGN -- these rows are deliberately ABSENT from reg_footer_spec(). A footer ROW is keyed to exactly
+# one model column and reg_spread_models() re-keys per split group; a POOLED test belongs to neither,
+# and one row per predictor cannot be expressed by a fixed discriminator->label list anyway. So the
+# rows stay pure data (read by reg_interaction_line, rendered as a table-wide footer STREAM like the
+# weight / "Model:" lines), and both row consumers, which filter on names(reg_footer_spec()), ignore
+# them -- the existing GOF footer is untouched. `row_var` carries the predictor (its canonical meaning
+# in the crosstab arm); `col_var` the fit's first column, so several models each get their own line.
+#' @keywords internal
+reg_interaction_types <- function() c("interact_lr", "interact_f", "interact_wald")
+
+#' @keywords internal
+reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_first_col) {
+  weighted <- shared$weighted
+  row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
+    tibble::tibble(row_var = predictor, col_var = col_var, test = test, statistic = statistic,
+                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
+
+  rows <- purrr::map(seq_along(specs), function(i) {
+    sp <- specs[[i]]
+    # No pooled interaction for the engines that are not a single glm/svyglm equation (multinomial /
+    # ordinal have their own fitters), nor for the compound-formula escape hatch (the interaction of an
+    # arbitrary formula is ill-defined). Degrade to no row, never to a wrong one.
+    if (sp$family %in% c("multinomial", "ordinal") || isTRUE(sp$compound)) return(NULL)
+    preds <- sp$predictors
+    if (length(preds) == 0L) return(NULL)
+    f <- tryCatch(reg_fit(data, sp$dependent, preds, sp$family, shared$design_spec, sp$do_exp,
+                          if (is.null(sp$inverse)) shared$inverse_two_level_factors else sp$inverse,
+                          shared$conf_level, "wald", trials = sp$trials, formula = NULL,
+                          multiplier = NULL, cross = split_var),
+                  error = function(e) NULL)
+    if (is.null(f) || is.null(f$fit)) return(NULL)
+    fit      <- f$fit
+    use_f    <- sp$family %in% c("gaussian", "quasipoisson")
+    use_wald <- weighted || sp$family == "rr"
+    # WARNING: take the interaction terms from the FIT's own term.labels, verbatim -- never rebuild
+    # them. terms() orders the parts of an interaction by the variable's position in the formula, so a
+    # hand-built "age:party3" comes back as "party3:age" and drop1() then rejects the scope. Both
+    # drop1() and regTermTest() accept the labels as a CHARACTER vector, which skips the re-parse.
+    have  <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
+    inter <- have[grepl(":", have, fixed = TRUE)]
+    keyed <- vapply(inter, function(tl) {
+      parts <- gsub("`", "", strsplit(tl, ":", fixed = TRUE)[[1]], fixed = TRUE)
+      if (length(parts) == 2L && split_var %in% parts) setdiff(parts, split_var)[1] else NA_character_
+    }, character(1), USE.NAMES = FALSE)
+    ok      <- !is.na(keyed) & keyed %in% preds
+    terms_i <- inter[ok]
+    keep    <- keyed[ok]
+    if (length(terms_i) == 0L) return(NULL)
+
+    if (use_wald) {
+      purrr::map2(keep, terms_i, function(pv, tm) {
+        e <- tryCatch({
+          rt <- suppressWarnings(survey::regTermTest(fit, tm))
+          list(stat = as.numeric(rt$Ftest), df1 = as.numeric(rt$df),
+               df2 = as.numeric(rt$ddf), p = as.numeric(rt$p))
+        }, error = function(e) NULL)
+        if (is.null(e) || is.na(e$p)) return(NULL)
+        row("interact_wald", fit_first_col[[i]], pv, e$stat, e$df1, e$df2, e$p, f$nobs)
+      })
+    } else {
+      d1 <- tryCatch(suppressWarnings(
+        stats::drop1(fit, scope = terms_i, test = if (use_f) "F" else "Chisq")),
+        error = function(e) NULL)
+      if (is.null(d1)) return(NULL)
+      p_col <- grep("^Pr\\(", names(d1), value = TRUE)
+      if (!length(p_col)) return(NULL)
+      m <- match(terms_i, rownames(d1))
+      purrr::map(seq_along(keep), function(k) {
+        j <- m[[k]]
+        if (is.na(j)) return(NULL)
+        p <- suppressWarnings(as.numeric(d1[[p_col[1]]][j]))
+        if (is.na(p)) return(NULL)
+        stat <- suppressWarnings(as.numeric(d1[[if (use_f) "F value" else "LRT"]][j]))
+        row(if (use_f) "interact_f" else "interact_lr", fit_first_col[[i]], keep[[k]],
+            stat, suppressWarnings(as.numeric(d1[["Df"]][j])),
+            if (use_f) suppressWarnings(as.numeric(stats::df.residual(fit))) else NA_real_,
+            p, f$nobs)
+      })
+    }
+  })
+  rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
+  if (length(rows) == 0) return(reg_gof)
+  dplyr::bind_rows(reg_gof, dplyr::bind_rows(rows))
+}
+
+
 # === Phase 15b: jamovi live-UI fit cache -- digest + reference reparametrization =================
 # A factor-predictor reference change is a LINEAR reparametrization of the SAME fit (likelihood,
 # fitted values and dispersion are invariant), so the whole table at any reference is recomputable
@@ -2047,6 +2188,29 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level) {
 # empirical/model columns -> "{col_level}_{level}"); the base col_var (the shared outcome) is read off
 # the pivoted column and prefixed. Console tells the models apart by that name suffix (col_var is not
 # shown there); html / Excel get the two-line span + borders.
+# reg_gap_se_of() -- Last Phase z8: recover a column's per-cell standard error, on the estimate's own
+# TEST scale, from the Wald interval it already stores. `reg_wald_finalize()` exponentiates before
+# storing, so a multiplicative interval must be logged back first -- the SE of an OR / RR / IRR lives on
+# the log scale, which is also the scale the gap and `gap_se` are measured on.
+#
+# DESIGN -- z, not the interval's own critical value. `reg_wald_crit()` uses z only when the dispersion
+# is fixed (unweighted binomial / poisson, unscaled) and t on df.residual otherwise, and `df.residual`
+# is not recoverable at the one point where the split groups are still parallel tibbles. Dividing by z
+# is therefore EXACT on the fixed-dispersion path and inflates the recovered SE by t/z elsewhere --
+# 0.09 % at n = 1500 with 5 parameters, i.e. conservative and negligible. dev/model_vs_observed_gap_
+# test.md SS4.5 measured that a t reference changes the gap test by nothing at any n, so the gap test
+# is a z test throughout.
+#' @keywords internal
+reg_gap_se_of <- function(col, crit) {
+  lo <- get_ci_inf(col); hi <- get_ci_sup(col)
+  if (as.character(get_ci_type(col))[1] %in% c("or", "ratio")) {
+    ok <- is.finite(lo) & is.finite(hi) & lo > 0 & hi > 0
+    ifelse(ok, (log(hi) - log(lo)) / (2 * crit), NA_real_)
+  } else {
+    ifelse(is.finite(lo) & is.finite(hi), (hi - lo) / (2 * crit), NA_real_)
+  }
+}
+
 #' @keywords internal
 # Last Phase z5: fill each group's `obs` field with the REFERENCE GROUP's estimate for the same row, so
 # `color = "between_groups"` reads the per-row effect-modification contrast. `parts` is the list of
@@ -2058,20 +2222,34 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level) {
 # rows in a different order -- measured. A key match degrades to NA there (uncoloured) instead of
 # silently pairing the wrong rows. The reference group's own cells get NA: a group is not compared to
 # itself. Non-fmt columns and groups with no counterpart are left untouched.
-reg_write_group_obs <- function(parts, sl, color) {
+#
+# Last Phase z8: the same pass writes `gap_se`, so `color_signif` applies. The two groups are DISJOINT
+# samples, so the gap's variance is the plain sum -- sqrt(SE_i^2 + SE_ref^2), the standard test for a
+# difference between two independent estimates (Altman & Bland 2003). Both SEs come from the intervals
+# the table already prints, which is what makes the test and the printed intervals impossible to
+# disagree. A profile-likelihood interval is asymmetric and is NOT est +/- crit*se, so `method =
+# "profile"` writes no SE (the gap keeps its descriptive colour, and the policies stay inert).
+reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald") {
   if (!"between_groups" %in% color || length(parts) < 2L) return(parts)
   key_of <- function(d) reg_skel_key(as.character(d$var), as.character(d$levels))
   ref_d  <- parts[[1L]]$data                                  # the FIRST split level is the baseline
   ref_k  <- key_of(ref_d)
   fmt_nm <- names(ref_d)[purrr::map_lgl(ref_d, is_fmt)]
+  crit   <- if (identical(method, "profile")) NA_real_ else zscore_formula(conf_level)
+  # the estimate a column stores, dispatched on its ci_type exactly as fmt_adjustment_score() does
+  # (an `Obs_rate` column is ci_type "ratio" and keeps its estimate in `ratio`, not `diff`).
+  est_of <- function(col) switch(as.character(get_ci_type(col))[1],
+                                 "or" = get_or(col), "ratio" = get_ratio(col), get_diff(col))
   for (i in seq_along(parts)) {
     d <- parts[[i]]$data
     m <- if (i == 1L) rep(NA_integer_, nrow(d)) else match(key_of(d), ref_k)
     for (nm in intersect(fmt_nm, names(d))) {
       if (!is_fmt(d[[nm]])) next
-      est <- if (identical(as.character(get_ci_type(ref_d[[nm]]))[1], "or")) get_or(ref_d[[nm]])
-             else get_diff(ref_d[[nm]])
-      d[[nm]] <- set_obs(d[[nm]], est[m])
+      d[[nm]] <- set_obs(d[[nm]], est_of(ref_d[[nm]])[m])
+      if (!is.na(crit)) {
+        se_ref <- reg_gap_se_of(ref_d[[nm]], crit)[m]
+        d[[nm]] <- set_gap_se(d[[nm]], sqrt(reg_gap_se_of(d[[nm]], crit)^2 + se_ref^2))
+      }
     }
     parts[[i]]$data <- d
   }
@@ -2096,11 +2274,17 @@ reg_spread_models <- function(t, split_var, sl) {
   # is_split = TRUE (tripled) and matched cells by a col_var that no longer exists (empty). Re-key each
   # group's GOF rows onto that group's spread column NAME and clear `row_var` -> ONE block, each cell
   # placed under its subpopulation's column (like the single-column non-split footer).
+  # Last Phase z8: re-key ONLY the per-group GOF block. The interaction rows (row_var = a PREDICTOR,
+  # not a split level) are a pooled, table-wide test read by reg_interaction_line() -- keying them to a
+  # group's column would be wrong, and the `col_of_group[row_var]` lookup would silently drop them.
   if (!is.null(test) && nrow(test) > 0 && !is.null(test$row_var) && any(nzchar(test$row_var))) {
-    g_col <- col_of_group[test$row_var]
-    test  <- test[!is.na(g_col), , drop = FALSE]
-    test$col_var <- unname(g_col[!is.na(g_col)])
-    test$row_var <- ""
+    gof   <- test$test %in% reg_footer_test_types()
+    part  <- test[gof, , drop = FALSE]
+    g_col <- col_of_group[part$row_var]
+    part  <- part[!is.na(g_col), , drop = FALSE]
+    part$col_var <- unname(g_col[!is.na(g_col)])
+    part$row_var <- ""
+    test <- dplyr::bind_rows(part, test[!gof, , drop = FALSE])
     s <- set_test(s, test)
   }
   s
@@ -2157,10 +2341,24 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     # It cannot be done with the existing reference machinery: fmt_broadcast_last() groups by runs of
     # in_refrow, which cross the split boundary (measured: north's rows get south's intercept).
     # the measure lives on the SPECS (Phase 17h: specs are the truth), not on a scalar formal.
-    parts <- reg_write_group_obs(parts, sl, unique(unlist(purrr::map(specs, "color"))))
+    # Last Phase z8: the same pass writes `gap_se` (the groups are disjoint -> quadrature is exact),
+    # which is what lets `color_signif` apply to the gap.
+    color_ms <- unique(unlist(purrr::map(specs, "color")))
+    parts <- reg_write_group_gap(parts, color_ms, conf_level = conf_level, method = method)
     combined <- vctrs::vec_rbind(!!!purrr::map(parts, "data"))
     tests    <- purrr::list_rbind(purrr::compact(purrr::map(parts, "test")))
     if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
+    # Last Phase z8: the AGGREGATED companion of the per-cell gap colour -- one pooled interaction test
+    # per predictor. Opt-in via stats = c(..., "interaction"), and automatic under
+    # `color = "between_groups"` (the same "state an intent, the pipeline computes what it needs" rule
+    # that makes `color = "adjustment"` turn on `empirical`). Costs one extra fit per spec, which is why
+    # it is not on by default. This is the ONE place with the full data, every spec and `shared`.
+    if ("between_groups" %in% color_ms ||
+        (is.character(shared$stats) && "interaction" %in% shared$stats)) {
+      fit_cols <- unique(tests$col_var[tests$test %in% reg_footer_test_types()])
+      if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
+      tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
+    }
     grouped <- combined |>
       new_tab(subtext = subtext, test = tests,
               meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
@@ -2435,7 +2633,14 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # `{obs}` display token / the html tooltip print. NULL for a fit with no crude companion
   # (multinomial, ordinal, grouped-binomial) -> `obs` stays NA -> those cells stay uncoloured.
   emp_eff_of <- function(fi) if (is.na(fi) || is.null(emp_by_fit[[fi]])) NULL else emp_by_fit[[fi]]$effect
-  set_obs_if <- function(col, eff) if (is.null(eff)) col else set_obs(col, eff)
+  # Last Phase z8 (a z5 defect): `at = "reference"` makes the model cell a marginal effect AT THE
+  # REFERENCE PROFILE, while the crude companion stays a MARGINAL effect over the whole sample -- two
+  # different estimands, so their difference is not "what adjustment did". The stratum-restricted crude
+  # effect would match the estimand but answers a different question (model FIT at one profile, not
+  # confounding) on a few percent of the rows, so no `obs` is attached at all: the cells stay
+  # uncoloured, `{obs}` blanks, and tab_reg() says why once.
+  at_profile <- identical(at, "reference")
+  set_obs_if <- function(col, eff) if (is.null(eff) || at_profile) col else set_obs(col, eff)
   # one crude companion before all model columns when there is a single dependent (byte-identical
   # layout, incl. a model-comparison list -- all its models share the dependent); per-fit before each
   # fit's first model column when several dependents (names suffixed so they do not collide).
@@ -2718,6 +2923,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   per-group tables are stacked into one grouped table (grouped by `split_var`), sharing the
 #'   variable/level stub. Use [tab_spread()] on `split_var` to pivot the groups into side-by-side
 #'   columns for an easy across-group comparison. A level absent from a group shows empty cells.
+#'   Two readings of "does this effect hold in every subgroup?" come with it:
+#'   `color = "between_groups"` colours (and tests) each effect against the first group's, row by row,
+#'   and `stats = c(..., "interaction")` adds the aggregated test, once per predictor.
 #' @param multiplier Optional named numeric vector `c(var = k)` rescaling a **continuous**
 #'   predictor's effect to a k-unit change (e.g. `c(age = 10)` shows the odds ratio / beta per decade
 #'   of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
@@ -2743,8 +2951,21 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 #'   also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 #'   (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"dispersion"`, `"r2"`, `"r2_adj"`,
-#'   `"f_model"`, `"sigma"`), or `FALSE` / `"none"` to hide the footer. Weighted models show a reduced,
-#'   survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
+#'   `"f_model"`, `"sigma"`, `"interaction"`), or `FALSE` / `"none"` to hide the footer.
+#'
+#'   `"interaction"` is different from the others: with `split_var`, it adds one **aggregated
+#'   effect-modification test per predictor** — "does this predictor act differently between the
+#'   groups?", asked once for all its levels together, so it carries none of the multiplicity of the
+#'   per-cell `color = "between_groups"` colours. It is printed as a footer line rather than a footer
+#'   row (a pooled test belongs to no single model column), and it costs one extra model fit.
+#'   `color = "between_groups"` turns it on for you. It is a likelihood-ratio test (an F test for
+#'   linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
+#'   `compare`) on the model **coefficients** — so under `effect = "ame"` / `"ame_ratio"` the footer
+#'   and the colours answer related but distinct questions, and the line says so. Multinomial and
+#'   ordinal outcomes get no such test.
+#'
+#'   Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
+#'   (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 #' @param compare Add a **model-comparison** footer row (only with several models / dependents).
 #'   `"none"` (default) adds nothing; `"baseline"` tests each model against the `baseline` column;
 #'   `"sequential"` tests each model against the previous one. Uses a likelihood-ratio test (F for
@@ -2782,12 +3003,24 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   * `"between_groups"` — with `split_var`, how far each group's effect sits from the **first**
 #'     group's, on the same row: a per-predictor reading of effect modification, beside the global
 #'     comparison a likelihood-ratio test gives. Reorder the split variable's levels
-#'     (`forcats::fct_relevel()`) to change the baseline group.
+#'     (`forcats::fct_relevel()`) to change the baseline group. It also adds the **aggregated**
+#'     interaction test to the footer (see `stats`).
 #'
-#'   The two are mutually exclusive (they share one per-cell slot), and neither is gated by
-#'   `color_signif`: they describe the size of a gap between two estimates, which has no test of its
-#'   own here — the model's own interval answers a different question. The gap itself is also
-#'   readable as a number, with `display = "\{or\} (obs \{obs\})"` and in the html tooltip.
+#'   The two are mutually exclusive (they share one per-cell slot). The gap itself is readable as a
+#'   number, with `display = "\{or\} (obs \{obs\})"`, and the html tooltip adds its confidence interval
+#'   and p-value.
+#'
+#'   **Significance.** `color_signif` applies to `"between_groups"`: the two `split_var` groups are
+#'   different people, so the gap's standard error is `sqrt(SE_A² + SE_B²)` — recovered from the two
+#'   Wald intervals the table already prints, which is why the colours can never contradict them —
+#'   and the usual policies follow (`"grey_non_signif"` greys a gap whose interval covers "no
+#'   difference"; `"guaranteed_effect"` colours its floor, i.e. "this effect differs by at least
+#'   ×1.1"). It does **not** apply to `"adjustment"`, whose two estimates come from the same rows: a
+#'   valid test there needs their joint variance, which is not computed yet. Note that a difference
+#'   between two groups is a difference in *that effect measure*; groups with different base rates or
+#'   more variable outcomes can show different effects on every scale without the underlying cause
+#'   differing. Each cell is tested on its own, with no multiple-comparison correction — the footer's
+#'   aggregated test is the multiplicity-free reading.
 #'
 #'   **Caveat on odds ratios.** The odds ratio is *non-collapsible*: adjusting for a covariate that
 #'   predicts the outcome moves it away from 1 even with no confounding at all (about +8% in a
@@ -3179,14 +3412,34 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
-  # These two measures have no significance test of their own (the model's own interval answers a
-  # different question), so they always read under `ignore` -- MEASURES$force_policy, applied by
-  # measure_policy(). Say so once rather than let a `color_signif` look effective.
-  if (any(c("adjustment", "between_groups") %in% color) &&
-      !is.null(color_signif) && !identical(color_signif, "ignore")) {
-    cli::cli_inform(c("i" = paste0("{.arg color_signif} does not apply to {.val ",
-                                   "{intersect(c('adjustment','between_groups'), color)}}: it scores the ",
-                                   "gap between two estimates, which has no test of its own (yet).")))
+  # Last Phase z8: at the reference profile the model cell is a marginal effect AT that profile while
+  # the observed columns stay marginal over the whole sample -- comparable side by side as description,
+  # but not cell by cell, so no `obs` is written and the gap colours stay off (see reg_build).
+  if (isTRUE(empirical) && identical(at, "reference")) {
+    cli::cli_inform(c("i" = paste0("{.code at = \"reference\"} evaluates the model at the reference ",
+                                   "profile, while the observed columns stay marginal over the whole ",
+                                   "sample: the two are shown side by side, but not compared cell by ",
+                                   "cell ({.code color = \"adjustment\"} and {.code \"{{obs}}\"} stay empty).")))
+  }
+  # Last Phase z8: `between_groups` now HAS a test of its own (the two split groups are disjoint, so the
+  # gap SE is exact by quadrature -- reg_write_group_gap), and reads `color_signif` normally.
+  # `adjustment` compares two estimates fitted on the SAME rows, whose joint variance needs influence
+  # functions (dev/model_vs_observed_gap_test.md SS3): still neutralised by MEASURES$force_policy, and
+  # said once rather than letting a `color_signif` look effective.
+  # Last Phase z8: `between_groups` also gets the AGGREGATED companion of its per-cell colours -- one
+  # pooled interaction test per predictor, in the footer. Automatic here for discoverability (and
+  # because the two readings belong together); `stats = c(..., "interaction")` asks for it without the
+  # colours. It costs one extra model fit per model, so say so.
+  if ("between_groups" %in% color && !is.null(split_var) &&
+      !(is.character(stats) && "interaction" %in% stats)) {
+    cli::cli_inform(c("i" = paste0("{.code color = \"between_groups\"} also adds the aggregated ",
+                                   "interaction test to the footer (one extra model fit). Ask for it ",
+                                   "without the colours with {.code stats = c(..., \"interaction\")}.")))
+  }
+  if ("adjustment" %in% color && !is.null(color_signif) && !identical(color_signif, "ignore")) {
+    cli::cli_inform(c("i" = paste0("{.arg color_signif} does not apply to {.val adjustment}: it scores ",
+                                   "the gap between a model effect and its observed counterpart, both ",
+                                   "estimated on the same rows, which has no test of its own (yet).")))
   }
   # Last Phase z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
   # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`

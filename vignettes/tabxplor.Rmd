@@ -478,7 +478,7 @@ Because they compare to 0 and not to a reference, cell intervals are purely desc
 | pct  | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
 | pct  | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
 | pct  | `OR`      | observed OR     | grey if the OR-CI contains 1        | OR CI-floor                                |
-| pct  | `contrib` | χ² contribution | idem, grey if \|residual\| < z(95%) | **the residual itself**, `residual` breaks |
+| pct  | `contrib` | χ² contribution | idem, grey if \|residual\| < z(95%) | **the residual itself**, `zscore` breaks |
 | mean | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
 | mean | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
 
@@ -486,7 +486,7 @@ Because they compare to 0 and not to a reference, cell intervals are purely desc
 confidence interval to take a floor of. `ignore` and `grey_non_signif` colour the *relative*
 contribution (a share of this table's χ², in multiples of the mean cell — the correspondence-analysis
 reading); `guaranteed_effect` colours the **adjusted standardized residual** on the absolute
-`residual` break scale, whose default `c(1.96, 2.58, 3.89, 6)` is written
+`zscore` break scale, whose default `c(1.96, 2.58, 3.89, 6)` is written
 `conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))`. Its *first* value is re-anchored to the
 significance threshold at print time (so every significant cell is coloured, whatever `conf_level`
 says) and the others are read as spacings from it. Both readings share one significance source:
@@ -504,7 +504,7 @@ The residual is also readable as a number: `display = "{resid}"` or `"{pct} ({re
 appears in the html tooltip.
 
 One expert caveat: colours are computed **per column** at print time, so they cannot see a table-level
-attribute. Every significance threshold inside them (the greying, and the `residual` anchor) therefore
+attribute. Every significance threshold inside them (the greying, and the `zscore` anchor) therefore
 reads `options(tabxplor.conf_level)`, not a per-call `tab(conf_level =)` — which does drive the printed
 intervals and the stars.
 
@@ -521,7 +521,7 @@ tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_e
     display = "{n} ({resid})")
 #    a stricter residual ladder, written in confidence levels
 tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
-    color_breaks = list(residual = conf_level_to_z(c(0.99, 0.999, 0.9999))))
+    color_breaks = list(zscore = conf_level_to_z(c(0.99, 0.999, 0.9999))))
 
 # --- numerics: means ------------------------------------------------------
 tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")

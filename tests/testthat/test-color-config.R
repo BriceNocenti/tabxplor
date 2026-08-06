@@ -89,9 +89,9 @@ testthat::test_that("get_color_breaks(type = 'all') gives the signed / reciproca
   testthat::expect_equal(get_color_breaks("contrib", "all"), c(-10, -5, -2, -1, 1, 2, 5, 10))
   # Last Phase z4: the absolute standardized-residual scale (color = "contrib" +
   # color_signif = "guaranteed_effect"), written in confidence levels but STORED as plain z.
-  testthat::expect_equal(get_color_breaks("residual", "all"),
+  testthat::expect_equal(get_color_breaks("zscore", "all"),
                          c(-6, -3.89, -2.58, -1.96, 1.96, 2.58, 3.89, 6))
-  testthat::expect_equal(mk_color_scale("residual", c(2, 3))$center, 0)
+  testthat::expect_equal(mk_color_scale("zscore", c(2, 3))$center, 0)
   # pct_ratio symmetric default (Phase 16c): both sides c(NA, 1.5, 2, 4) -> breaks 1.5, 2, 4
   testthat::expect_equal(get_color_breaks("pct_ratio", "all"), c(1/4, 1/2, 1/1.5, 1.5, 2, 4))
   # odds_ratio (Phase 16c): the dedicated OR scale, symmetric
@@ -104,7 +104,7 @@ testthat::test_that("get_color_breaks returns a readable form and round-trips", 
   gb <- get_color_breaks()
   # Last Phase z5 added adj_ratio / adj_diff (the `adjustment` / `between_groups` measures).
   testthat::expect_named(gb, c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio",
-                               "contrib", "residual", "adj_ratio", "adj_diff"))
+                               "contrib", "zscore", "adj_ratio", "adj_diff"))
   testthat::expect_equal(gb$pct_diff, c(0.05, 0.1, 0.2, 0.3))    # symmetric -> plain magnitudes
   testthat::expect_equal(gb$pct_ratio, c(1.5, 2, 4))            # symmetric (Phase 16c) -> plain magnitudes
   testthat::expect_equal(get_color_breaks("pct"),  c(0.05, 0.1, 0.2, 0.3))   # old alias

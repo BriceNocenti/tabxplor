@@ -18,7 +18,7 @@ A numeric vector of positive z thresholds, the same length as \code{conf_level}.
 }
 \description{
 Turn one or several confidence levels into the two-sided normal (z) thresholds they
-correspond to, rounded for readability. It is a convenience for writing the \code{residual} color
+correspond to, rounded for readability. It is a convenience for writing the \code{zscore} color
 break scale (\code{\link{set_color_breaks}}) in the vocabulary you already use elsewhere —
 confidence levels — instead of remembering that 95 \% is 1.96. The scale itself always stores plain
 z magnitudes, so \code{conf_level_to_z(0.95)} and \code{1.96} are strictly interchangeable.
@@ -26,11 +26,11 @@ z magnitudes, so \code{conf_level_to_z(0.95)} and \code{1.96} are strictly inter
 \examples{
 conf_level_to_z(c(0.95, 0.99))
 
-# the default `residual` break scale (color = "contrib", color_signif = "guaranteed_effect")
+# the default `zscore` break scale (color = "contrib", color_signif = "guaranteed_effect")
 conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))
 
 \donttest{
-set_color_breaks(residual = conf_level_to_z(c(0.95, 0.999)))
-set_color_breaks(residual = c(2, 3, 4, 6))  # or plain z values, identically
+set_color_breaks(zscore = conf_level_to_z(c(0.95, 0.999)))
+set_color_breaks(zscore = c(2, 3, 4, 6))  # or plain z values, identically
 }
 }

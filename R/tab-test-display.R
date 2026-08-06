@@ -208,8 +208,12 @@ reg_footer_spec <- function() list(
 )
 reg_footer_test_types <- function() names(reg_footer_spec())
 reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))
+# Last Phase z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
+# table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
+# (stats = FALSE) is still a reg table, so the arm detection must know them.
 is_reg_footer <- function(test_tbl)
-  !is.null(test_tbl) && nrow(test_tbl) > 0 && any(test_tbl$test %in% reg_footer_test_types())
+  !is.null(test_tbl) && nrow(test_tbl) > 0 &&
+  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types()))
 
 # A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
 # `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the

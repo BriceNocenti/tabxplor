@@ -36,7 +36,7 @@
   `color_signif = "guaranteed_effect"` switches the colour to that residual on an absolute ±2 / ±3
   scale that means the same thing in every table, while the default keeps the correspondence-analysis
   reading (each cell's share of the table's chi-squared). The residual can also be printed
-  (`display = "{pct} ({resid})"`) and appears in html tooltips. New `residual` colour-break scale and
+  (`display = "{pct} ({resid})"`) and appears in html tooltips. New `zscore` colour-break scale and
   `conf_level_to_z()` to write it in confidence levels.
 * **Readable colour legends and footers**, fully translatable to **French**
   (`options(tabxplor.lang = "fr")`, a `lang =` argument, or the R/OS locale).
@@ -55,9 +55,15 @@
   prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
   apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
   `split_var`, `color = "between_groups"` does the same against the first group (effect modification,
-  row by row). The gap is also printable (`display = "{or} (obs {obs})"`) and appears in html tooltips.
-  Beware that part of an **odds-ratio** gap is non-collapsibility rather than confounding — the legend
-  says so, and marginal effects or risk ratios give the collapsible comparison.
+  row by row) — there `color_signif` applies, so a group difference can be greyed when it is no bigger
+  than chance, and the html tooltip gives the gap's confidence interval and p-value. The gap is also
+  printable (`display = "{or} (obs {obs})"`). Beware that part of an **odds-ratio** gap is
+  non-collapsibility rather than confounding — the legend says so, and marginal effects or risk ratios
+  give the collapsible comparison.
+* **Does this predictor act differently between subgroups?** With `split_var`,
+  `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
+  effect-modification test, asked once for all a predictor's levels, so it carries none of the
+  multiplicity of a per-cell reading. `color = "between_groups"` turns it on for you.
 * **Risk ratios, two ways.** With a common outcome an odds ratio is not a "times more likely", and it
   cannot be compared across nested models. `tab_reg(effect = "ame_ratio")` reports the **marginal risk
   ratio** from the usual logistic fit (with the adjusted probability in parentheses), and
@@ -96,7 +102,7 @@
   rather than the Pearson one, so more cells are (correctly) flagged as significant; with weights it
   uses the unweighted *n* rather than the sum of weights, which previously made every cell "significant"
   as soon as weights carried population scale. `color_signif = "guaranteed_effect"` also changes what it
-  colours (the residual, on the new absolute `residual` scale). The default
+  colours (the residual, on the new absolute `zscore` scale). The default
   `color_signif = "ignore"` — the correspondence-analysis reading — is unchanged.
 
 ## Bug fixes

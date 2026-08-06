@@ -58,6 +58,7 @@ fmt(
   tot_n = rep(NA_real_, length(n)),
   n_eff = rep(NA_real_, length(n)),
   obs = rep(NA_real_, length(n)),
+  gap_se = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
@@ -223,6 +224,14 @@ observed (crude, unadjusted) effect beside a model effect, or -- under
 predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
 A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.}
 
+\item{gap_se}{The standard error of the GAP between this cell's estimate and \code{obs},
+on the estimate's own test scale (the log-ratio when \code{ci_type} is \code{"or"} or
+\code{"ratio"}, the plain difference when \code{"diff"}). Written by \code{tab_reg} where
+the two estimates are independent (\code{split_var} groups), so that
+\code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
+else, which leaves the significance policies inert there.
+A double vector the length of \code{n}. Non-displayed.}
+
 \item{in_totrow}{\code{TRUE} when the cell is part of a total row}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
@@ -358,10 +367,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 20 fields :
+\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 21 fields :
 \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
 \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs},
+\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs}, \code{gap_se},
 \code{in_totrow},  \code{in_tottab},
 \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them

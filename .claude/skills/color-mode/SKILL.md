@@ -61,7 +61,7 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
 - **`contrib` is the one measure that changes reading with the policy.** `ignore`/`grey_non_signif`
   score the relative contribution (`ctr / mean_contrib`, `contrib` scale — the CA reading, relative to
   the table); `guaranteed_effect` scores the ADJUSTED standardized residual (`fmt_resid()`) on the
-  absolute 7th scale `residual`, whose first break is re-anchored to `z(conf_level)` via
+  absolute 7th scale `zscore`, whose first break is re-anchored to `z(conf_level)` via
   `offset_guaranteed_breaks(..., origin)` (the `break_origin = "threshold"` fact). Significance for
   BOTH comes from the stored residual p-value (`contrib_pvalue()` in R/tab.R), computed on the
   unweighted `n` / Kish `n_eff` base — never the weighted N, never the Pearson residual.

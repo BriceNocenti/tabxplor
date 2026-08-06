@@ -57,7 +57,10 @@ of character vectors (one model per element, its name labelling the column). Lea
 \code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
 per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
 variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
-columns for an easy across-group comparison. A level absent from a group shows empty cells.}
+columns for an easy across-group comparison. A level absent from a group shows empty cells.
+Two readings of "does this effect hold in every subgroup?" come with it:
+\code{color = "between_groups"} colours (and tests) each effect against the first group's, row by row,
+and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}
 
 \item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
 (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
@@ -191,13 +194,25 @@ protective effect (OR < 1) and a risky one read the same way.
 \item \code{"between_groups"} — with \code{split_var}, how far each group's effect sits from the \strong{first}
 group's, on the same row: a per-predictor reading of effect modification, beside the global
 comparison a likelihood-ratio test gives. Reorder the split variable's levels
-(\code{forcats::fct_relevel()}) to change the baseline group.
+(\code{forcats::fct_relevel()}) to change the baseline group. It also adds the \strong{aggregated}
+interaction test to the footer (see \code{stats}).
 }
 
-The two are mutually exclusive (they share one per-cell slot), and neither is gated by
-\code{color_signif}: they describe the size of a gap between two estimates, which has no test of its
-own here — the model's own interval answers a different question. The gap itself is also
-readable as a number, with \code{display = "\\{or\\} (obs \\{obs\\})"} and in the html tooltip.
+The two are mutually exclusive (they share one per-cell slot). The gap itself is readable as a
+number, with \code{display = "\\{or\\} (obs \\{obs\\})"}, and the html tooltip adds its confidence interval
+and p-value.
+
+\strong{Significance.} \code{color_signif} applies to \code{"between_groups"}: the two \code{split_var} groups are
+different people, so the gap's standard error is \verb{sqrt(SE_A² + SE_B²)} — recovered from the two
+Wald intervals the table already prints, which is why the colours can never contradict them —
+and the usual policies follow (\code{"grey_non_signif"} greys a gap whose interval covers "no
+difference"; \code{"guaranteed_effect"} colours its floor, i.e. "this effect differs by at least
+×1.1"). It does \strong{not} apply to \code{"adjustment"}, whose two estimates come from the same rows: a
+valid test there needs their joint variance, which is not computed yet. Note that a difference
+between two groups is a difference in \emph{that effect measure}; groups with different base rates or
+more variable outcomes can show different effects on every scale without the underlying cause
+differing. Each cell is tested on its own, with no multiple-comparison correction — the footer's
+aggregated test is the multiplicity-free reading.
 
 \strong{Caveat on odds ratios.} The odds ratio is \emph{non-collapsible}: adjusting for a covariate that
 predicts the outcome moves it away from 1 even with no confounding at all (about +8\% in a
@@ -239,8 +254,21 @@ square, the overall F-test and the residual SD; other models show N, the likelih
 versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}), or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
-survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+\code{"f_model"}, \code{"sigma"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+
+\code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
+effect-modification test per predictor} — "does this predictor act differently between the
+groups?", asked once for all its levels together, so it carries none of the multiplicity of the
+per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
+row (a pooled test belongs to no single model column), and it costs one extra model fit.
+\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
+linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
+\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
+and the colours answer related but distinct questions, and the line says so. Multinomial and
+ordinal outcomes get no such test.
+
+Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
+(design-based Wald test, Nagelkerke pseudo-R square, AIC).}
 
 \item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
 \code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;

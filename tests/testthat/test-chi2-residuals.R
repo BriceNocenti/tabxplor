@@ -10,7 +10,7 @@
 #      every confidence interval in the package uses (?tab, Last Phase s).
 #   4. The three `color_signif` policies each read a DIFFERENT, documented quantity:
 #      ignore / grey_non_signif = the relative contribution (the CA reading, byte-identical to
-#      pre-z4); guaranteed_effect = the absolute residual on the `residual` break scale.
+#      pre-z4); guaranteed_effect = the absolute residual on the `zscore` break scale.
 #   5. The `resid` display token + tooltip expose the number, derived from the stored p-value
 #      (no fmt field of its own) -- including inside a `{}` composite, whose non-primary tokens
 #      have their p-value blanked (which would have rendered NA before the resid exception).
@@ -124,7 +124,7 @@ testthat::test_that("the three color_signif policies read three documented quant
   testthat::expect_equal(pl$over_breaks, c(1, 2, 5, 10))
   testthat::expect_equal(fmt_color_plan(mk("grey_non_signif")[[col]])$score, expect_ctr)
 
-  # guaranteed_effect scores the ABSOLUTE residual, on the `residual` scale anchored at z(conf_level)
+  # guaranteed_effect scores the ABSOLUTE residual, on the `zscore` scale anchored at z(conf_level)
   tg <- mk("guaranteed_effect")
   pg <- fmt_color_plan(tg[[col]])
   testthat::expect_equal(pg$score, fmt_resid(tg[[col]]))
@@ -219,8 +219,8 @@ testthat::test_that("conf_level_to_z converts and rounds", {
   testthat::expect_equal(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)), c(1.96, 2.58, 3.89, 6))
   testthat::expect_equal(conf_level_to_z(0.95, digits = Inf), stats::qnorm(0.975))
   # it is a plain converter: the scale stores z, so these two are interchangeable
-  testthat::expect_equal(mk_color_scale("residual", conf_level_to_z(c(0.95, 0.99))),
-                         mk_color_scale("residual", c(1.96, 2.58)))
+  testthat::expect_equal(mk_color_scale("zscore", conf_level_to_z(c(0.95, 0.99))),
+                         mk_color_scale("zscore", c(1.96, 2.58)))
 })
 
 testthat::test_that("the confidence level moves the guaranteed_effect thresholds, keeping spacing", {

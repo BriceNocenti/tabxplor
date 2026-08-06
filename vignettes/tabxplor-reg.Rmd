@@ -389,17 +389,69 @@ Reading a row across the groups is the same chore as reading a model against its
 it has the same answer: `color = "between_groups"` colours how far each group's effect sits from the
 **first** group's, on the same row. Where the model-comparison test below says "these models differ"
 once for the whole model, this says *which effects* differ between groups — a per-predictor reading of
-what statisticians call effect modification:
+what statisticians call effect modification.
+
+Here the groups are separate people, so the difference between two of their effects can be tested — and
+it is, so `color_signif` works as everywhere else. Add `"grey_non_signif"` and a background colour then
+means "this really is a different effect, not just noise":
 
 ```{r}
-tab_reg(gss_simple, "married", "race", split_var = "party3",
-        color = c("OR", "between_groups"))
+tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
+        color = c("OR", "between_groups"), color_signif = "grey_non_signif")
 ```
 
-The first group is the baseline and stays uncoloured (nothing is compared to itself); reorder the
-levels with `forcats::fct_relevel()` to pick another one. Unlike the model-versus-observed case, the
-groups here are separate people, so a real test of these differences is straightforward — it is on the
-roadmap.
+Text colour = how strong the effect is inside that group. Background = how far it sits from the first
+group's effect on the same row, greyed out when the difference could be chance. The first group is the
+baseline and stays blank (nothing is compared to itself); reorder the levels with
+`forcats::fct_relevel()` to pick another one. Hovering a cell in the html table gives the exact numbers:
+the other group's effect, the size of the gap, its confidence interval and its p-value.
+
+The footer gained a line at the same time: **one test per predictor**, asking "does this predictor act
+differently between the groups?" for all its levels at once. That is the aggregated version of the same
+question, and it is the one to quote — because it is asked once, not once per cell. You can ask for it
+alone, without the colours, with `stats = c("n", "interaction")`.
+
+### Three ways to get this wrong
+
+**A coloured cell is a difference in *that measure*, not proof that the cause differs.** Groups can
+differ because the outcome is simply rarer in one of them, or more variable — and then their effects
+differ on every scale, odds ratios, risk ratios and marginal effects alike. There is no scale that
+escapes this, so the reading has to be careful rather than clever.
+
+**So read the pattern, not the single cell.** If a whole column is shifted the same way, the groups
+probably differ in level or in variability — that is a property of the group, not of the predictor. If
+**one row** stands out while the others sit still, that is what genuine effect modification looks like.
+The colours are useful precisely because they make that shape visible at a glance. Adding
+`empirical = TRUE` shows each group's base rate (`Obs_%`), which usually settles the question.
+
+**Each cell is tested on its own, with no correction for the number of tests.** In a table with seven
+comparisons, about one table in five will show a spurious coloured cell. The footer line is free of
+this: it asks one question per predictor.
+
+### For the record: what exactly is tested
+
+The two groups are disjoint samples, so the two estimates are independent and the standard error of
+their difference is `sqrt(SE_A² + SE_B²)` — the textbook test for a difference between two independent
+estimates (Altman & Bland 2003). Both standard errors are read back from the confidence intervals the
+table already prints, so the test and the printed intervals cannot disagree. The difference is measured
+on the effect's own scale — the log-ratio for an odds ratio, a risk ratio or an incidence-rate ratio,
+the plain difference for a beta or a marginal effect — and compared to a normal (z) threshold, which is
+mildly conservative in small samples.
+
+The three policies read that same interval:
+
+| `color_signif` | what the background shows |
+|----------------|---------------------------|
+| `"ignore"` (default in `tab()`) | the size of the gap, coloured whether or not it is significant |
+| `"grey_non_signif"` (default in `tab_reg()`) | the same, greyed unless the gap's interval excludes "no difference" |
+| `"guaranteed_effect"` | the **floor** of the gap: "these two effects differ by at least ×1.1" |
+
+Two details worth knowing. The significance **stars** in the cells keep reading each estimate's own
+p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip.
+And the footer's aggregated test is a likelihood-ratio test (an F test for linear and quasi models, a
+design-based Wald test when you supply survey weights — the same rule as `compare =` below) computed on
+one extra pooled model, on the **coefficients**: with `effect = "ame"` the cells show marginal effects
+while the footer tests the coefficients, two related but distinct questions, and the line says so.
 
 ## Fine-tuning the display, and scaling a predictor
 

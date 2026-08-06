@@ -141,10 +141,14 @@ test_that("several dependents: each fit takes its OWN crude block", {
 
 # --- between_groups ----------------------------------------------------------------------------------
 
+# Last Phase z8 pinned `color_signif = "ignore"` here: it is the DESCRIPTIVE reading this file locks
+# (z5's), and it is now one policy among three -- tab_reg()'s default became grey_non_signif, which
+# greys a gap the new test finds non-significant. The policies themselves are tested in
+# test-between-groups-gap.R.
 test_that("between_groups carries the reference group's estimate, stacked AND spread", {
   d <- adj_data()
   sp <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c("OR", "between_groups"))
+                family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore")
   fmt_cols <- names(sp)[vapply(sp, is_fmt, logical(1))]
   testthat::expect_length(fmt_cols, 3L)                            # one column per group
   ref <- get_or(sp[[fmt_cols[[1]]]])
@@ -156,7 +160,8 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
   testthat::expect_true(any(fmt_color_channels(sp[[fmt_cols[[3]]]])$bg_slot > 0L))
 
   st <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c("OR", "between_groups"), spread_models = FALSE)
+                family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore",
+                spread_models = FALSE)
   col <- st[[names(st)[vapply(st, is_fmt, logical(1))][[1]]]]
   k   <- length(ref)
   testthat::expect_true(all(is.na(get_obs(col)[seq_len(k)])))      # first group's block
@@ -188,7 +193,9 @@ test_that("color = 'adjustment' turns empirical on, and the two measures are exc
   testthat::expect_error(tab(d, race, party3, color = "adjustment"), "tab_reg")
 })
 
-test_that("color_signif does not apply: the measure always reads under `ignore`", {
+# Last Phase z8: `adjustment` alone keeps force_policy -- its two estimates share the same rows, so
+# the gap SE needs influence functions (phase B). `between_groups` lost it (disjoint groups).
+test_that("color_signif does not apply to `adjustment`: it always reads under `ignore`", {
   d <- adj_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
@@ -202,6 +209,13 @@ test_that("color_signif does not apply: the measure always reads under `ignore`"
   testthat::expect_identical(
     tabxplor:::fmt_color_plan(t$Model_OR, "text", color = get_color(t$Model_OR))$policy,
     "guaranteed_effect")
+  # ... while `between_groups` now HONOURS the policy (its gap has a test of its own)
+  b  <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
+                                 family = "binomial", color = c("OR", "between_groups"),
+                                 color_signif = "guaranteed_effect"))
+  bc <- b[[names(b)[vapply(b, is_fmt, logical(1))][[2]]]]
+  testthat::expect_identical(
+    tabxplor:::fmt_color_plan(bc, "bg", color = get_color_bg(bc))$policy, "guaranteed_effect")
 })
 
 test_that("the legend names each channel's own baseline, and warns only on a non-collapsible scale", {

@@ -59,7 +59,10 @@ level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not
 \code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
 per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
 variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
-columns for an easy across-group comparison. A level absent from a group shows empty cells.}
+columns for an easy across-group comparison. A level absent from a group shows empty cells.
+Two readings of "does this effect hold in every subgroup?" come with it:
+\code{color = "between_groups"} colours (and tests) each effect against the first group's, row by row,
+and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}
 
 \item{multiplier}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
 predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
@@ -98,8 +101,21 @@ square, the overall F-test and the residual SD; other models show N, the likelih
 versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}), or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
-survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+\code{"f_model"}, \code{"sigma"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+
+\code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
+effect-modification test per predictor} — "does this predictor act differently between the
+groups?", asked once for all its levels together, so it carries none of the multiplicity of the
+per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
+row (a pooled test belongs to no single model column), and it costs one extra model fit.
+\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
+linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
+\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
+and the colours answer related but distinct questions, and the line says so. Multinomial and
+ordinal outcomes get no such test.
+
+Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
+(design-based Wald test, Nagelkerke pseudo-R square, AIC).}
 
 \item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
 estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any

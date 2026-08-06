@@ -1661,8 +1661,14 @@ reg_footer_lines <- function(tabs) {
   # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
   # vars / empirical_tips / ci_settings / reg_meta named one by one; is_reg detection must not depend on
   # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
+  # Last Phase z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
+  # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
+  # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these
+  # rows left, `reg` above is empty and this function returns early.
+  it <- test_tbl[test_tbl$test %in% reg_interaction_types(), , drop = FALSE]
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
-    attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
+    attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs),
+                 test = if (nrow(it) > 0) it else NULL),
     regroup = group_chr,
     row_role = function(g) vapply(stats_present, function(s) spec[[s]]$kind, character(1)))  # "gof"/"pvalue"
 }
@@ -2242,6 +2248,24 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_obs, paste0(lbl, ": ", tip_num(set_display(x, "obs"))), "")
   } else blank
 
+  # Last Phase z8: the GAP itself -- its size, its confidence interval and its p-value -- wherever
+  # tab_reg wrote a `gap_se`. This is where the interval belongs: three numbers are too much for a
+  # cell, and the colour IS the display (no `{}` token was added). Read through the very helpers the
+  # colour engine reads, so the hover and the fill can never disagree.
+  cond_gap <- !is.na(get_gap_se(x)) & !is.na(get_obs(x))
+  out_gap <- if (any(cond_gap)) {
+    sc   <- fmt_adjustment_score(x)
+    bd   <- fmt_gap_bounds(x)
+    pv   <- test_fmt_pvalue(fmt_gap_p(x))
+    mult <- as.character(get_ci_type(x))[1] %in% c("or", "ratio")
+    num  <- function(v) if (mult) paste0("\u00d7", formatC(v, format = "f", digits = 2))
+            else sprintf("%+.2f", v)
+    dplyr::if_else(cond_gap & is.finite(sc) & is.finite(bd$lo) & !is.na(pv),
+                   paste0(gettext("gap"), ": ", num(sc), " [", num(bd$lo), "; ", num(bd$hi),
+                          "], p = ", pv),
+                   "")
+  } else blank
+
   cond_n <- !is.na(get_n(x)) & !disp == "n"
   out_n <- if (any(cond_n)) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
@@ -2254,7 +2278,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # ever leaves >4 in a row. Adding a 10th fragment would have broken that assumption. This is exact,
   # for any number of fragments, and drops the NA scrub (an NA fragment is simply not joined).
   frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
-                out_ci, out_ctr, out_resid, out_obs, out_n)
+                out_ci, out_ctr, out_resid, out_obs, out_gap, out_n)
   out <- rep("", n)
   for (f in frags) {
     k <- !is.na(f) & nzchar(f)
@@ -3564,7 +3588,7 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
 
 # PURPOSE: the canonical color-break representation (Phase 13a) and its accessors.
 # The stored option "tabxplor.color_breaks" is a named list of the six measure scales
-#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib, residual
+#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib, zscore
 #   (odds_ratio is the dedicated OR scale, read by the "or" colour measure in fmt_color_plan)
 # each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
 #   - over/under : the two sides, each a list(breaks = <ascending POSITIVE magnitudes>,
@@ -3633,7 +3657,7 @@ parse_color_side <- function(v, name) {
 #     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
-  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "residual",
+  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "zscore",
              "adj_ratio", "adj_diff")
   if (!name %in% valid) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
@@ -3712,12 +3736,12 @@ default_color_scales <- function() {
     mean_diff  = mk_color_scale("mean_diff",  NULL),
     mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
     contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10)),
-    # Last Phase z4: the ABSOLUTE standardized-residual scale, read by color = "contrib" under
+    # Last Phase z4: the ABSOLUTE z scale, read by color = "contrib" under
     # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the
     # ladder documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6.
     # Unlike `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every
     # table, which is the whole point of the scale.
-    residual   = mk_color_scale("residual",   conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
+    zscore     = mk_color_scale("zscore",     conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
     # Last Phase z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
     # estimate sits from the value it is compared to. SHARED by both measures because they score the
     # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
@@ -3739,14 +3763,14 @@ default_color_scales <- function() {
 #' @describeIn tab_many set the breaks used to print colors.
 #' @description Color breaks are a named list of the nine measure scales \code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
-#' \code{residual}, \code{adj_ratio} and \code{adj_diff}. Each is
+#' \code{zscore}, \code{adj_ratio} and \code{adj_diff}. Each is
 #' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 #' values, one per color step: \code{pct_diff} colors percentage-point differences,
 #' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
 #' "OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
 #' default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
 #' \code{contrib} the chi2 contribution (in multiples of the mean cell contribution) and
-#' \code{residual} the adjusted standardized residual, in z units -- the absolute scale
+#' \code{zscore} an absolute z scale (the adjusted standardized residual) -- the absolute scale
 #' \code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
 #' \code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
 #' 1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
@@ -3901,7 +3925,7 @@ pop_color_breaks <- function(state) {
 #' Get the breaks currently used to print colors
 #' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
 #' @param brk When missing, return the full named list of break scales (\code{pct_diff},
-#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{residual}) -- the same shape
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{zscore}) -- the same shape
 #' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 #' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 #' \code{mean_ratio}) are still accepted.

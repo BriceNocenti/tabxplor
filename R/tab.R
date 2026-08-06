@@ -319,7 +319,7 @@ NULL
 #'   (a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
 #'   the correspondence-analysis reading, so the scale is relative to the table);
 #'   \item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
-#'   the absolute \code{residual} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
+#'   the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
 #'   thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
 #'  }
 #' In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
@@ -3331,7 +3331,7 @@ fmt_materialize_col <- function(frame, meta) do.call(new_fmt, c(frame, meta))
 #   is_fmt  : logical over the data columns (rebuild order + fmt/factor split).
 #   factors : the non-fmt columns, passed through WHOLE (length-nrow, own attrs kept).
 #   fmt     : named list, one entry per fmt column = list(frame, meta) -- frame = as.list(vec_data())
-#             (the 19 raw fields, exact types), meta = the fmt_col_attrs read by exact name.
+#             (the 21 raw fields, exact types), meta = the fmt_col_attrs read by exact name.
 #   attrs   : attributes(tab) VERBATIM (class / names / row.names / subtext / test / groups).
 # fmt_wrap(carrier) is the exact inverse: materialize each fmt column via the single
 # fmt_materialize_col() seam, pass the factor columns through, restore `attrs` wholesale.
@@ -3361,7 +3361,7 @@ fmt_wrap <- function(carrier) {
 }
 
 # fmt_stack_frames() -- Phase 9b-6 (Boundary B): ROW-BIND fmt columns on PLAIN field-frames. `frames`
-# is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 19 raw fields);
+# is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 21 raw fields);
 # concat field-by-field with vctrs::vec_c (type-stable, so L1 holds: int+int -> int, NA_integer_ vs
 # NA_real_ preserved) and materialize ONCE via the fmt_materialize_col() seam with the supplied `meta`
 # (the fmt_col_attrs). This replaces a vec_rbind over the tabxplor_fmt RECORDS (which casts +

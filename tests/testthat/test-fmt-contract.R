@@ -5,19 +5,21 @@
 #       Last Phase s added `n_eff` (-> 19): the effective sample size used for a cell's CI
 #       (Kish n_eff when opted in, else NA -> the CI falls back to the raw unweighted base);
 #       Last Phase z5 added `obs` (-> 20): the value a tab_reg cell's estimate is COMPARED TO by
-#       `color = "adjustment"` / "between_groups" (the observed effect, or the reference group's).
+#       `color = "adjustment"` / "between_groups" (the observed effect, or the reference group's);
+#       Last Phase z8 added `gap_se` (-> 21): the standard error of that gap, which is what lets the
+#       `color_signif` policies apply to `between_groups`.
 # KEY CONSTRAINTS:
 #   - This test is DELIBERATELY BRITTLE. Update it ONLY when intentionally adding, removing,
 #     or renaming a field/attribute of tabxplor_fmt -- follow the `/vctrs-field` skill.
-#   - The hardcoded vectors below ARE the contract (the 20-field baseline). `ci` is no
+#   - The hardcoded vectors below ARE the contract (the 21-field baseline). `ci` is no
 #     longer a stored field: it is derived from the `ci_inf`/`ci_sup` bounds by get_ci()
 #     (bounds-shim), and the public `fmt(ci=)` arg maps a symmetric half-width onto them.
 # See: CLAUDE.md > 2.0.0 roadmap (Phase 1) and Design Decisions > Type System.
 
-# The 20 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
+# The 21 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
 fmt_contract_fields <- c(
   "n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
-  "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs",
+  "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs", "gap_se",
   "in_totrow", "in_tottab", "in_refrow"
 )
 
@@ -26,7 +28,7 @@ fmt_contract_field_types <- c(
   n = "integer", display = "character", digits = "integer", wn = "double",
   pct = "double", mean = "double", diff = "double", ratio = "double", ctr = "double",
   var = "double", ci_inf = "double", ci_sup = "double", pvalue = "double", or = "double",
-  tot_n = "double", n_eff = "double", obs = "double",
+  tot_n = "double", n_eff = "double", obs = "double", gap_se = "double",
   in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
 )
 
@@ -49,7 +51,7 @@ fmt_contract_attr_defaults <- list(
 testthat::test_that("fmt has exactly the contracted fields, in order", {
   x <- fmt(1)
   testthat::expect_identical(vctrs::fields(x), fmt_contract_fields)
-  testthat::expect_length(vctrs::fields(x), 20L)
+  testthat::expect_length(vctrs::fields(x), 21L)
 })
 
 testthat::test_that("each fmt field has the contracted storage type", {

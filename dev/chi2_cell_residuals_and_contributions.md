@@ -1,8 +1,10 @@
 # Standardised χ² cell residuals in tabxplor — design study
 
 Date: 2026-08-05 (rev. 3 — maintainer's framing + the three decisions of §9 taken). Status:
-**REPORT ONLY** (Last Phase z4, step 1). No code written; the plan and the implementation are a
-separate step.
+**IMPLEMENTED** (Last Phase z4). One naming drift since: the break scale this report calls `residual`
+shipped under that name and was renamed **`zscore`** in Last Phase z8 (it is a z scale, and a second
+measure could want it). Read every `residual` scale key below as `zscore`; the statistic itself is
+still the adjusted standardized residual.
 
 Rev. 2 re-organised the report around **which real question each quantity answers** rather than
 around "what is mathematically available". Rev. 3 records the maintainer's three rulings (§9) and
@@ -37,7 +39,7 @@ Four changes deliver it:
    (or Kish-effective) base — instead of on the weighted N. Today, population-scale weights make every
    stored cell p-value literally **0.000** (measured), which makes `color_signif` unusable on real
    survey data.
-3. **`guaranteed_effect` scores the residual on a new absolute `residual` break scale** (default
+3. **`guaranteed_effect` scores the residual on a new absolute `zscore` break scale** (default
    `c(2, 3, 4, 6)`) — the maintainer's ruling: `|z|` is comparable *across* tables where the ×-mean
    contribution is intrinsically relative to one, and ±2/±3 is what SPSS-trained readers know. §5.3.
 4. **The residual becomes readable**: shown in the HTML tooltip, and printable in cells via the
@@ -297,7 +299,7 @@ symmetry: **a table needs an absolute reading somewhere.** `× the mean contribu
 relative to its own table, so two tables can never be compared on it; `|z|` can. And ±2/±3 is the
 scale SPSS-trained readers already have in their heads. Placing that reading on the `guaranteed_effect`
 policy — rather than on a second measure — keeps one measure name, and a user who wants the relative
-scale *with* significance still has `grey_non_signif` (and may set a `residual` scale of their own if
+scale *with* significance still has `grey_non_signif` (and may set a `zscore` scale of their own if
 they want to reshape the ladder).
 
 The cost, accepted knowingly and to be documented: the colour **units change with the policy**
@@ -404,7 +406,7 @@ and a surprise for any user reading `$pvalue` with `mutate()`.
 |---|---------------------------------------------------------------------------------|---------------------------------------|------------------------------------|
 | 1 | `contrib_pvalue()` computes the **adjusted** residual                           | yes (more cells survive the gate)     | `R/tab.R`                          |
 | 2 | that residual uses the **unweighted / `n_eff`** base, from weighted proportions | yes (weighted tables stop saturating) | `R/tab.R`                          |
-| 3 | `guaranteed_effect` scores `\|z\|` against a new **`residual` break scale**     | yes (new absolute reading)            | `R/fmt_class.R`, `R/tab_classes.R` |
+| 3 | `guaranteed_effect` scores `\|z\|` against a new **`zscore` break scale**     | yes (new absolute reading)            | `R/fmt_class.R`, `R/tab_classes.R` |
 | 4 | `resid` display token + HTML tooltip                                            | yes (opt-in / additive)               | `R/fmt_class.R`, `R/tab_classes.R` |
 | 5 | legend wording + `?tab` + vignette + NEWS                                       | yes                                   | docs                               |
 
@@ -576,7 +578,7 @@ different χ² must get the same slot — the property that motivated the ruling
 | file                                 | change                                                                                                                                                                                                                                                                                                                               |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `R/tab.R`                            | `contrib_pvalue()` → adjusted residual + the `n`/`n_eff` base; `chi2_write_contrib()` passes the margins and `get_n()`/`get_n_eff()`                                                                                                                                                                                                 |
-| `R/fmt_class.R`                      | `fmt_color_plan()`: `guaranteed_effect` scores `z` on the `residual` scale (+ the offset decision, §5.3); `tabxplor_display_fields` + the `resid` read arm in `get_num()`/`format()`; legend wording per policy; gettext anchor                                                                                                      |
+| `R/fmt_class.R`                      | `fmt_color_plan()`: `guaranteed_effect` scores `z` on the `zscore` scale (+ the offset decision, §5.3); `tabxplor_display_fields` + the `resid` read arm in `get_num()`/`format()`; legend wording per policy; gettext anchor                                                                                                      |
 | `R/tab_classes.R`                    | `default_color_scales()` + the `valid` scale whitelist (~L3615) gain `residual`; `set_color_breaks()`/`get_color_breaks()` docs; tooltip shows the residual (~L2215)                                                                                                                                                                 |
 | `po/R-fr.po`                         | *résidu standardisé ajusté* + the new legend line                                                                                                                                                                                                                                                                                    |
 | tests                                | `test-color-golden.R` (conscious regen), `test-color-config.R` (the 7th scale validates), `test-calculations.R` (parity vs `$stdres`, kish ratio, weight-scale invariance), `test-color-engine.R` (edge cases: `\|z\| = z_α`, `p = 0` → `z = Inf`, `e < 1`, cross-table comparability), `test-display-grammar.R` (the `resid` token) |
@@ -611,7 +613,7 @@ gate (§3.4); sparse cells with `e < 1` ungated (§5.6).
 
 One micro-decision is deliberately left to the plan step because both answers are defensible and it
 is pure implementation: whether `guaranteed_effect` skips `offset_guaranteed_breaks()` for the
-`residual` scale (thresholds exactly as typed — recommended) or keeps it and scores `|z| − z_α`
+`zscore` scale (thresholds exactly as typed — recommended) or keeps it and scores `|z| − z_α`
 (thresholds shift with `conf_level`). §5.3.
 
 ---
