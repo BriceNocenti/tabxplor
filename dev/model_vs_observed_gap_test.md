@@ -1,20 +1,49 @@
 # A significance test for the model-vs-observed gap — design study
 
-Date: 2026-08-05. Status: **PHASE A IMPLEMENTED** (2026-08-06). The `between_groups` half of §11 has
-landed -- the 21st field `gap_se`, the `MEASURES` `bounds` closure, the three policies, the
-`residual` -> `zscore` rename (Q4), the `at = "reference"` fix (Q8), and §5.3's aggregated
-`predictor x split_var` test, which the maintainer pulled forward into this phase. **Phase B**
-(`adjustment`, the influence functions of §3) is still a report.
+Date: 2026-08-05. Status: **FULLY IMPLEMENTED** (Phase A 2026-08-06, Phase B 2026-08-06).
+Phase A landed the `between_groups` half of §11 -- the 21st field `gap_se`, the `MEASURES` `bounds`
+closure, the three policies, the `residual` -> `zscore` rename (Q4), the `at = "reference"` fix (Q8),
+and §5.3's aggregated `predictor x split_var` test. **Phase B** landed the `adjustment` half: the
+influence functions of §3 in the new `R/reg-influence.R`, gated to collapsible estimands per the Q1(b)
+ruling.
 
-Two implementation findings worth reading before Phase B:
-  * The `bounds` closure must return the interval OF THE SCORE, not the raw gap interval: the score's
-    sign is the null direction while the raw interval is signed up/down, and they disagree for a
-    protective effect. Re-folding |gap| with the score's sign makes every existing plan branch work
+Implementation findings, in the order they matter:
+
+  * **(A)** The `bounds` closure must return the interval OF THE SCORE, not the raw gap interval: the
+    score's sign is the null direction while the raw interval is signed up/down, and they disagree for
+    a protective effect. Re-folding |gap| with the score's sign makes every existing plan branch work
     with no measure-specific code, which is what §7.2 promised but not quite how it described it.
-  * §5.3's "interaction ROW in the GOF footer" is not implementable as a row: every footer row is keyed
-    to exactly one model column, `reg_spread_models()` re-keys per split group, and `reg_footer_spec()`
-    is a fixed discriminator->label list that cannot carry one label per predictor. It ships as a
-    table-wide footer LINE through `tab_footer_streams()` instead.
+  * **(A)** §5.3's "interaction ROW in the GOF footer" is not implementable as a row: every footer row
+    is keyed to exactly one model column, `reg_spread_models()` re-keys per split group, and
+    `reg_footer_spec()` is a fixed discriminator->label list that cannot carry one label per predictor.
+    It ships as a table-wide footer LINE through `tab_footer_streams()` instead.
+  * **(B)** `reg_fit()` does **not** need to return its design: `svyglm` already stores
+    `fit$survey.design`, and every path with a design goes through `svyglm`. One `inherits()`, no
+    signature change. A prebuilt `svyrep.design` needs `withReplicates`, not `svyrecvar`, so it degrades.
+  * **(B)** The influence function is held as `(U, A⁻¹)`, never as their product. `U = X·(W·r)` is a pure
+    ROW scaling, so `(U %*% c)ᵢ == (Wᵢrᵢ)·(X %*% c)ᵢ` (verified to 1.7e-18) — every contrast costs one
+    length-n allocation and the second `n × p` matrix of §8 is never built at all.
+  * **(B)** `force_policy` became a PREDICATE ON THE COLUMN (`fmt_gap_force_policy`: an all-NA `gap_se`
+    reads under `ignore`) rather than being deleted as §7.3 forecast. That is what implements the Q1(b)
+    ruling without a 12th column attribute and without matching a display string — and it fixed a live
+    Phase-A hole, since `between_groups` under `method = "profile"` writes no SE and was greying the
+    whole column.
+  * **(B)** §2.1's "the crude side IS the printed interval" is exact only for the **unweighted
+    binomial** case (influence-function SE == Woolf, to 7 digits). Elsewhere the influence function
+    gives the ROBUST (sandwich / design-based) variance while the printed crude interval follows
+    tabxplor's descriptive conventions -- measured 0.061772 vs the pooled-Student 0.059906 for
+    `Obs_diff` (+3 %), and 0.038568 vs the quasi-Poisson 0.038850 for `Obs_IRR`. That is the correct
+    variance for a gap between two differently-specified estimators, not a defect; documented in
+    `?tab_reg` and the vignette's expert section.
+  * **(B)** A z5 defect closed in passing: `reg_empirical_columns()` ignores `effect` on the poisson
+    branch, so `effect = "ame"` paired an ADDITIVE count AME with the crude rate RATIO and z5 wrote
+    that ratio into `obs`. `reg_same_estimand()` (the shape row's `ci_type` against the column's) now
+    gates both `obs` and its gap SE -- checked against all nine live family × effect combinations, it
+    fires on that one and on nothing else.
+  * **(B)** §6's rebuild-from-`(data, coef)` was NOT built. jamovi's regression `color` option is a
+    checkbox, so `"adjustment"` cannot reach the reref path; one clause on the `reref` gate
+    (`!("adjustment" %in% color)`) makes asking for it take the refit path instead. Building the arm
+    would have meant a second encoding of `reg_fit()`'s model frame for no caller.
 
 Scope: give the two Last-Phase-z5 colour measures — `color = "adjustment"` (model estimate vs its
 observed/crude counterpart) and `color = "between_groups"` (a `split_var` group vs the reference

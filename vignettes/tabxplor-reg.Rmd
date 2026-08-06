@@ -256,6 +256,104 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
 ```
 
+### Is the gap bigger than noise?
+
+A background colour tells you the model *moved* an effect. It does not, on its own, tell you the move
+is real: with 20 000 respondents a tiny shift is solid, with 300 a large one may be luck. `color_signif`
+answers that, exactly as it does everywhere else in `tabxplor` — add `"grey_non_signif"` and a coloured
+background now means "the model really changed this effect":
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        family = "poisson", empirical = TRUE,
+        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+```
+
+Here `family = "poisson"` on a binary outcome gives **risk ratios**, one of the clean scales from the
+previous section. Text colour = how strong the adjusted risk ratio is. Background = how far it sits
+from the observed one, greyed out when that distance could be chance. Hovering a cell in the html table
+gives the exact numbers: the observed effect, the size of the gap, its confidence interval and its
+p-value.
+
+**One example is worth the whole explanation.** Read the `race` block of that table, comparing each
+group with white respondents, before and after holding income and religion equal:
+
+| scale | Black vs White | Other vs White |
+|:------------------------------|---------------:|---------------:|
+| odds ratio, crude → model | 0.41 → 0.39 | 0.90 → 1.01 |
+| risk ratio, crude → model | 0.59 → 0.59 | 0.95 → 1.01 |
+| did the risk ratio really move? | **no** (p = 0.5) | **yes** (p < 0.001) |
+
+Two different stories, and the test separates them. For Black respondents nothing moves: their much
+lower marriage rate is *not* explained by income or religion — it survives the adjustment untouched.
+For the "Other" group the crude 5% deficit disappears once income and religion are held equal, and the
+gap between the two numbers is far too big to be luck: that difference *was* explained by them.
+
+Notice that the odds ratios move too — including for Black respondents, where the risk ratio says
+nothing happened. That is the non-collapsibility of the previous section, showing up as a phantom
+"change". It is why `color_signif` is **not applied to plain odds ratios**: `tab_reg()` leaves those
+colours descriptive and says so once, pointing at `effect = "ame"`, `effect = "ame_ratio"` or
+`family = "poisson"`.
+
+The greying earns its keep on smaller samples. With 20 000 respondents almost every visible move is
+real; on 2 000 the same table keeps one background colour out of three:
+
+```{r}
+set.seed(1)
+small <- gss_simple[sample(nrow(gss_simple), 2000), ]
+tab_reg(small, "married", c("race", "rincome", "relig"),
+        family = "poisson", empirical = TRUE,
+        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+```
+
+### Three ways to get this wrong
+
+**"The two confidence intervals overlap, so nothing changed."** They almost always overlap, because the
+model and the observed effect are computed from the *same people* and move together (a correlation of
+0.5 to 0.9). Reading the overlap would declare "no change" essentially always. The test in the table
+does the right thing instead: it measures the difference directly, which is why its interval is much
+narrower than you would guess from the two printed ones.
+
+**"A significant gap proves confounding."** It proves the two numbers differ by more than noise. Why
+they differ is your reading, not the table's — and on a non-collapsible scale part of the difference is
+arithmetic, which is the whole point of the previous section.
+
+**"Every coloured cell counts."** Each cell is tested on its own, with no correction for the number of
+tests. In a table with seven comparisons, about one in five will show a spurious coloured cell. Read
+the pattern — a whole block of predictors shifting the same way — rather than one isolated cell.
+
+### For the record: what exactly is tested
+
+The null is that the modelled and observed effects are equal, on the effect's own scale: the log-ratio
+for a risk ratio, an odds ratio or an incidence-rate ratio, the plain difference for a beta or a
+marginal effect. That is the scale the colour already folds around, so the test and the colour cannot
+drift apart.
+
+The two estimates come from the same rows, so they are correlated and their difference has a smaller
+standard error than either alone. The correct variance is the sampling variance of the difference of
+their *influence functions* — what Stata calls seemingly-unrelated estimation (Weesie 1999; Mize, Doan
+& Long 2019 is the sociological statement). Two things make it exact rather than approximate here:
+every observed effect `tabxplor` prints *is* the coefficient of a saturated one-predictor model, so its
+influence function is a closed-form expression whose standard error is the interval already shown; and
+with survey weights or a design the variance goes through `survey`'s own linearization, so strata,
+clusters and finite-population corrections are respected. The reference distribution is the normal
+(z), which is mildly conservative in small samples.
+
+The three policies read that same interval:
+
+| `color_signif` | what the background shows |
+|----------------|---------------------------|
+| `"ignore"` (default in `tab()`) | the size of the gap, coloured whether or not it is significant |
+| `"grey_non_signif"` (default in `tab_reg()`) | the same, greyed unless the gap's interval excludes "no change" |
+| `"guaranteed_effect"` | the **floor** of the gap: "adjustment moved this effect by at least ×1.1" |
+
+Three details worth knowing. The significance **stars** in the cells keep reading each estimate's own
+p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip. The
+direction is measured from the null, so a protective effect pulled toward 1 colours like a risky one
+pulled toward 1. And the test needs both estimates computed on the same people: at `at = "reference"`,
+or when a compared model drops different missing rows than the observed columns (use
+`na = "drop_all_models"`), the colours stay descriptive.
+
 ## Grouped-binomial outcomes (a summed score)
 
 When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability. `score_from_lv1()` (see `vignette("tabxplor-programming")`) builds such a score by counting factors at their first level:

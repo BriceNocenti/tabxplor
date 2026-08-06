@@ -55,11 +55,12 @@
   prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
   apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
   `split_var`, `color = "between_groups"` does the same against the first group (effect modification,
-  row by row) — there `color_signif` applies, so a group difference can be greyed when it is no bigger
-  than chance, and the html tooltip gives the gap's confidence interval and p-value. The gap is also
-  printable (`display = "{or} (obs {obs})"`). Beware that part of an **odds-ratio** gap is
-  non-collapsibility rather than confounding — the legend says so, and marginal effects or risk ratios
-  give the collapsible comparison.
+  row by row). `color_signif` applies to both, so a gap can be greyed when it is no bigger than chance,
+  and the html tooltip gives its confidence interval and p-value. The gap is also printable
+  (`display = "{or} (obs {obs})"`). Part of an **odds-ratio** gap is non-collapsibility rather than
+  confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
+  (`effect = "ame"` / `"ame_ratio"`) or risk ratios (`family = "poisson"`) for a comparison the test can
+  read.
 * **Does this predictor act differently between subgroups?** With `split_var`,
   `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
   effect-modification test, asked once for all a predictor's levels, so it carries none of the

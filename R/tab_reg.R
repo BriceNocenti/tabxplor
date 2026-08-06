@@ -163,6 +163,18 @@ reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
 # (log_odds_scale) rather than the SD-standardized mean_diff scale. gaussian is the only family out.
 reg_fam_logscale <- function(f)
   f %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial", "rr")
+# Last Phase z8-B (SS4.2, maintainer ruling Q1(b)): is the DISPLAYED estimand COLLAPSIBLE -- i.e. does a
+# zero model-vs-observed gap mean "no confounding"? Everything tabxplor shows is, EXCEPT a CONDITIONAL
+# ODDS RATIO: the coefficient of a probability-scale model (the binomial logit; the multinomial /
+# ordinal cumulative logits, which have no crude twin anyway). `exponentiate` is irrelevant -- a raw
+# logit coefficient is the same estimand, logged. Marginalising (effect = "ame" / "ame_ratio") or
+# changing the link (family = "poisson" -> the "rr" modified Poisson) makes it collapsible. Measured
+# (dev/model_vs_observed_gap_test.md SS4.1): with the covariate INDEPENDENT of the exposure -- so
+# strictly no confounding -- the conditional-OR gap test rejects at 1.000 for n = 32000 while every
+# collapsible scale holds its nominal 0.05. This is the FIRST place the collapsibility ladder z3 and z5
+# built is USED rather than merely documented.
+reg_estimand_collapsible <- function(family, effect)
+  !(identical(effect, "coefficient") && reg_fam_prob(family))
 
 # Auto-detect the model family from the outcome (a message is emitted). The safe data-driven rules
 # (S37 D2): 0/1 or any 2-level outcome -> binomial; an ORDERED factor with 3+ levels -> ordinal
@@ -1170,9 +1182,24 @@ reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, desig
 #   poisson  : emp_base = weighted mean(count | level) (crude rate), emp_ratio = crude rate-ratio.
 # emp_diff is always emp_base - ref emp_base (risk- or mean-difference). Returns a tibble keyed by
 # (var, level): emp_base, emp_diff, emp_ratio, emp_var, emp_n (unweighted cell count).
+# reg_crude_y() -- Last Phase z8-B: the outcome ON THE SCALE THE CRUDE ESTIMATOR AVERAGES. For a binary
+# outcome that is the 0/1 indicator of the positive level, which needs reg_prep_binary()'s own recode
+# mirrored (the model frame has been through it; the raw `data` the crude block reads has not, so
+# as.character(0/1) would never match the label and the crude base would silently be 0 -- the pre-14v-ii
+# bug). Otherwise the numeric value. ONE definition, shared by reg_empirical()'s cell means and
+# reg_crude_if_maker()'s residuals -- else the influence function could be built around a different `y`
+# than the estimate it is the standard error OF.
+#' @keywords internal
+reg_crude_y <- function(data, dependent, family, positive_level) {
+  yv <- data[[dependent]]
+  if (!reg_fam_binary(family)) return(as.numeric(yv))
+  if (is.numeric(yv) && all(stats::na.omit(yv) %in% c(0, 1)))
+    yv <- factor(yv, levels = c(0, 1), labels = c(paste0("Not ", dependent), dependent))
+  as.numeric(as.character(yv) == positive_level)
+}
+
 reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt) {
   w  <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
-  yv <- data[[dependent]]
   bin <- reg_fam_binary(family)
   # Last Phase s: the crude companion CIs honour Kish n_eff like tab()'s descriptive CIs (opt-in +
   # weighted). We carry a SEPARATE effective-n (`n_ci`) for the interval; the displayed `n` stays the
@@ -1183,12 +1210,8 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
     ne <- wsum^2 / w2
     if (is.finite(ne)) ne else as.double(raw)
   }
-  # A 0/1 numeric outcome is fit as the labelled factor c("Not <dep>", "<dep>") with positive_level =
-  # "<dep>" (reg_prep_binary). reg_empirical sees the RAW data, so mirror that recode -- else
-  # as.character(0/1) never matches the label and the crude base is silently 0 (pre-14v-ii bug).
-  if (bin && is.numeric(yv) && all(stats::na.omit(yv) %in% c(0, 1)))
-    yv <- factor(yv, levels = c(0, 1), labels = c(paste0("Not ", dependent), dependent))
-  if (bin) pos  <- as.character(yv) == positive_level else ynum <- as.numeric(yv)
+  yb <- reg_crude_y(data, dependent, family, positive_level)   # the shared outcome recode
+  if (bin) pos <- yb == 1 else ynum <- yb
   purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
     ok <- !is.na(x) & !is.na(w) & (if (bin) !is.na(pos) else !is.na(ynum))
@@ -1245,32 +1268,39 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
 # (`or_log` / `irr_log`) used when the model is NOT exponentiated -- a coef-shaped column carrying
 # log(OR) / log(IRR) with a logged CI, so the crude companion matches the raw model coefficient (same
 # link scale, same log_odds_scale colour). reg_empirical_columns picks the twin by `do_exp`.
+# Last Phase z8-B: each EFFECT row also carries the `link` of the crude estimator it describes -- the
+# one fact reg_crude_if_maker() needs to write its closed-form influence function (g'(mu) = 1/(mu(1-mu))
+# logit | 1/mu log | 1 identity). It sits on the SHAPE row, not on the family, because the crude link
+# follows the chosen ESTIMAND: a binomial model shows a logit-scale OR by default, an IDENTITY-link risk
+# difference under effect = "ame", and a LOG-link risk ratio under "ame_ratio" (which reuses
+# REG_EMPIRICAL$rr$rr verbatim -- the very reuse that makes a per-family link impossible). A `base` row
+# is descriptive, never an effect, so its link is NA.
 REG_EMPIRICAL <- list(
   binomial = list(
     method_diff = "wald",
-    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR"),
-    or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff")),
+    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = "identity"),
+    or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR",   link = "logit"),
+    or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff", link = "logit")),
   # Last Phase z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
   # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
   # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
   # of the whole feature: the observed companion must be on the same scale as the model column.
   rr = list(
     method_diff = "wald",
-    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    rr     = list(nm = "Obs_RR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR"),
-    rr_log = list(nm = "Obs_log(RR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff")),
+    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = "identity"),
+    rr     = list(nm = "Obs_RR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR",   link = "log"),
+    rr_log = list(nm = "Obs_log(RR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff", link = "log")),
   gaussian = list(
     method_mean_diff = "student",
-    base = list(nm = "Obs_mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = ""),
-    diff = list(nm = "Obs_diff", type = "coef", display = "coef", digits = 2L, ref = NA_character_,  ci_type = "diff",  color = "diff")),
+    base = list(nm = "Obs_mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = "",     link = NA_character_),
+    diff = list(nm = "Obs_diff", type = "coef", display = "coef", digits = 2L, ref = NA_character_,  ci_type = "diff",  color = "diff", link = "identity")),
   poisson = list(
     method_mean_ratio = "quasipoisson",
-    base    = list(nm = "Obs_rate",     type = "mean", display = "mean", digits = 2L, ref = "1",           ci_type = "ratio", color = "ratio"),
-    irr     = list(nm = "Obs_IRR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR"),
-    irr_log = list(nm = "Obs_log(IRR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff"))
+    base    = list(nm = "Obs_rate",     type = "mean", display = "mean", digits = 2L, ref = "1",           ci_type = "ratio", color = "ratio", link = NA_character_),
+    irr     = list(nm = "Obs_IRR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR",    link = "log"),
+    irr_log = list(nm = "Obs_log(IRR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff",  link = "log"))
 )
 
 # The base+effect fmt columns aligned to the skeleton, for reg_build to prepend before the model column.
@@ -1284,7 +1314,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   fam_key <- if (family == "quasipoisson") "poisson" else family
   fam <- REG_EMPIRICAL[[fam_key]]
   # multinomial is tooltip-only; ordinal unsupported -> no crude columns and no `obs` counterpart.
-  if (is.null(fam)) return(list(cols = list(), effect = NULL))
+  if (is.null(fam)) return(list(cols = list(), effect = NULL, shape = NULL))
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
   # uncoloured too (else the table shows coloured empirical columns beside plain model columns).
   # `color[1]`: the measure may be a length-2 (text, background) vector since Last Phase z5's
@@ -1320,8 +1350,12 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   # an OR, log(OR) beside a raw coefficient, a risk difference beside an AME). reg_build writes it into
   # the model columns' `obs` field, which backs `color = "adjustment"` and the `{obs}` display token.
   # Taken from the local the shape was built from -- never re-read out of the fmt column by name.
+  # Last Phase z8-B: the effect SHAPE ROW travels with it. `two()` already received it at all seven
+  # return sites and discarded it; returning it gives the gap test both facts it needs -- `link` (the
+  # crude estimator's link) and `ci_type` (proof that the crude and model columns are the SAME
+  # estimand) -- and any future shape fact for free, with no new element to thread.
   two <- function(a, b, eff) list(cols   = stats::setNames(list(a$col, b$col), c(a$shape$nm, b$shape$nm)),
-                                  effect = eff)
+                                  effect = eff, shape = b$shape)
 
   # binomial + "rr" (modified Poisson) share every BASE fact -- a crude risk and its Wald risk-difference
   # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Last Phase z3).
@@ -1400,7 +1434,92 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$irr_log),
                log(ratio)))
   }
-  list(cols = list(), effect = NULL)
+  list(cols = list(), effect = NULL, shape = NULL)
+}
+
+# === the model-vs-observed GAP standard error (Last Phase z8-B) =====================================
+
+# reg_same_estimand() -- do the crude companion and the model column measure the SAME thing? Both
+# declare their scale as a `ci_type` (the shape row's, the column attribute's), so this is one fact
+# comparison rather than a family/effect table kept in sync. It gates BOTH `obs` and its gap SE, which
+# closes a z5 defect: reg_empirical_columns() ignores `effect` on the poisson branch, so
+# effect = "ame" paired an ADDITIVE count AME ("diff") with the crude rate RATIO ("or") and z5 scored
+# the difference of two scales. Checked against all nine live family x effect combinations: it fires on
+# that one and on nothing else.
+#' @keywords internal
+reg_same_estimand <- function(shape, col)
+  !is.null(shape) &&
+  identical(as.character(shape$ci_type)[1], as.character(get_ci_type(col))[1])
+
+# reg_gap_se_columns() -- the standard error of the gap between ONE fit's effect and its observed
+# (crude) counterpart, per skeleton row, so `color = "adjustment"` reads `color_signif` like every other
+# measure. The maths lives in R/reg-influence.R; this is the gate and the loop.
+#
+# DESIGN -- the gate is six facts, each already stored somewhere, and it returns NULL rather than a
+# partial column: a gap SE without an honest premise is worse than none, because MEASURES' force_policy
+# closure reads an all-NA `gap_se` as "no test here" and falls back to the descriptive reading.
+#   * `sp$color`          nobody reads it otherwise, and it costs ~1/8 of a fit (SS8).
+#   * `shape`             the crude twin's REG_EMPIRICAL row: absent = no observed effect at all
+#                         (multinomial, ordinal, grouped binomial) -> `obs` is already NA.
+#   * `f$fit`             NULL on the jamovi digest path, where the fitted object was distilled away.
+#   * ci_type match       the crude and model columns must be the SAME estimand. This also closes a z5
+#                         defect: reg_empirical_columns() ignores `effect` on the poisson branch, so
+#                         effect = "ame" pairs an ADDITIVE count AME with a MULTIPLICATIVE crude rate
+#                         ratio -- z5 wrote that ratio into `obs` and scored a gap between two scales.
+#   * nrow match          both estimators must solve their equations on the SAME observations. The
+#                         crude frame drops on `union_predictors`, the model on its own; the first is a
+#                         SUBSET of the second, so equal row counts PROVE row identity (and both come
+#                         from reg_complete_frame()'s drop_na, which preserves order).
+#   * collapsible         maintainer ruling Q1(b): a conditional odds ratio moves under adjustment even
+#                         with zero confounding, so at survey sizes the test would be "significant"
+#                         everywhere for a reason no reader would take it for (SS4.1-SS4.3).
+# `method = "profile"` is deliberately NOT a clause: between_groups RECOVERS its SE from the printed
+# interval and a profile bracket is not est +/- crit*se, but adjustment COMPUTES its own -- profile
+# there only means the printed model CI and the gap test are different quantities (SS3.8, documented).
+#' @keywords internal
+reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_preds,
+                               effect, at, wt) {
+  if (!"adjustment" %in% sp$color)                              return(NULL)
+  if (is.null(shape) || is.null(f$fit) || is.null(f$data))      return(NULL)
+  if (isTRUE(sp$compound) || identical(at, "reference"))        return(NULL)
+  if (!reg_same_estimand(shape, model_col))                     return(NULL)
+  if (!identical(nrow(mdata), nrow(f$data)))                    return(NULL)
+  if (!reg_estimand_collapsible(sp$family, effect))             return(NULL)
+  # svyrecvar is the linearization estimator; a REPLICATE-weights design needs withReplicates instead,
+  # so degrade rather than report a linearization variance for a design that did not ask for one.
+  des <- if (inherits(f$fit, "svyglm")) f$fit$survey.design else NULL
+  if (inherits(des, "svyrep.design"))                           return(NULL)
+
+  coef_if <- reg_coef_if_maker(f$fit)
+  if (is.null(coef_if)) return(NULL)
+  marginal <- effect %in% c("ame", "ame_ratio")
+  model_if <- if (marginal)
+    reg_ame_if_maker(f$fit, f$data, wt, ratio = identical(effect, "ame_ratio"), coef_if = coef_if)
+  else coef_if
+  crude_if <- reg_crude_if_maker(mdata, sp$dependent, sp$family, f$positive_level, wt, shape$link)
+  if (is.null(model_if) || is.null(crude_if)) return(NULL)
+
+  n_rows  <- nrow(skeleton)
+  out     <- rep(NA_real_, n_rows)
+  ref_of  <- function(v) { r <- skeleton$level[skeleton$var == v & skeleton$is_ref]
+                           if (length(r)) as.character(r[[1]]) else NA_character_ }
+  in_mod  <- skeleton$var %in% sp$predictors
+  # WARNING: one length-n difference vector at a time -- never an n x p matrix of them (SS8).
+  for (k in which(in_mod & skeleton$var %in% fac_preds & !skeleton$is_ref)) {
+    v <- as.character(skeleton$var[k]); r <- ref_of(v)
+    if (is.na(r)) next
+    im <- if (marginal) model_if(v, as.character(skeleton$level[k]), r) else {
+      tm <- skeleton$term[k]
+      if (is.na(tm)) next
+      L <- stats::setNames(1, tm)                       # the display data is already releveled
+      coef_if(L)
+    }
+    if (is.null(im)) next
+    ic <- crude_if(v, as.character(skeleton$level[k]), r)
+    if (is.null(ic) || length(ic) != length(im)) next
+    out[k] <- reg_if_se(im - ic, des)
+  }
+  if (all(is.na(out))) NULL else out
 }
 
 # Multinomial crude tooltip data (Phase 14v / 14v-ii): one column per outcome CATEGORY would explode the
@@ -2624,6 +2743,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           scv    <- reg_shared_col_var(fam_i, dep_i, pos_i, cleannames)
           cols_i$cols <- purrr::map(cols_i$cols, ~ set_col_var(.x, scv))
         }
+        # Last Phase z8-B: the crude block also carries what the GAP TEST needs -- the frame it was
+        # computed on and the factor predictors it covers. Both are locals here and nowhere else, and
+        # the test is per (model column, crude block): in comparison mode ONE observed block serves
+        # several models, each with its own fit, so the covariance differs per model though `obs` does
+        # not. Keeping them on the record is what lets the column loop below stay one call.
+        cols_i$frame     <- mdata_i
+        cols_i$fac_preds <- fac_preds_e
         emp_by_fit[[i]] <- cols_i
       }
     }
@@ -2632,7 +2758,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # each model column's `obs` field below. It is what `color = "adjustment"` scores and what the
   # `{obs}` display token / the html tooltip print. NULL for a fit with no crude companion
   # (multinomial, ordinal, grouped-binomial) -> `obs` stays NA -> those cells stay uncoloured.
-  emp_eff_of <- function(fi) if (is.na(fi) || is.null(emp_by_fit[[fi]])) NULL else emp_by_fit[[fi]]$effect
+  # Last Phase z8-B: the whole crude RECORD travels (effect + shape + frame), because its gap SE needs
+  # the last two; `obs` and `gap_se` are then written together or not at all.
+  emp_of <- function(fi) if (is.na(fi) || is.null(emp_by_fit[[fi]])) NULL else emp_by_fit[[fi]]
   # Last Phase z8 (a z5 defect): `at = "reference"` makes the model cell a marginal effect AT THE
   # REFERENCE PROFILE, while the crude companion stays a MARGINAL effect over the whole sample -- two
   # different estimands, so their difference is not "what adjustment did". The stratum-restricted crude
@@ -2640,7 +2768,18 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # confounding) on a few percent of the rows, so no `obs` is attached at all: the cells stay
   # uncoloured, `{obs}` blanks, and tab_reg() says why once.
   at_profile <- identical(at, "reference")
-  set_obs_if <- function(col, eff) if (is.null(eff) || at_profile) col else set_obs(col, eff)
+  # `fi` = the fit this COLUMN came from (not the crude block's -- they differ in comparison mode).
+  set_obs_if <- function(col, e, fi) {
+    if (is.null(e) || at_profile) return(col)
+    if (!reg_same_estimand(e$shape, col)) return(col)     # z5 defect: same scale, or nothing
+    col <- set_obs(col, e$effect)
+    g <- reg_gap_se_columns(fits[[fi]], specs[[fi]], col, skeleton, e$shape, e$frame,
+                            e$fac_preds, effect, at, design_spec$wt)
+    if (is.null(g)) col else set_gap_se(col, g)
+  }
+  # a fit's columns (a multinomial / per-category fit owns several) -- hoisted above both branches so
+  # ONE set_obs_if() serves them.
+  fit_of_col <- rep(seq_along(fit_ncol), times = fit_ncol)
   # one crude companion before all model columns when there is a single dependent (byte-identical
   # layout, incl. a model-comparison list -- all its models share the dependent); per-fit before each
   # fit's first model column when several dependents (names suffixed so they do not collide).
@@ -2656,18 +2795,19 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   if (n_dep <= 1L) {
     if (!is.null(emp_by_fit[[1]])) tab <- add_emp_cols(tab, emp_by_fit[[1]]$cols, "")
     # ONE crude block serves every model column here -- which is exactly what makes `adjustment` work
-    # in model-comparison mode: each model is scored against the same observed effect.
-    eff1 <- emp_eff_of(1L)
-    for (i in seq_along(built)) tab[[labels[i]]] <- set_obs_if(built[[i]]$col, eff1)
+    # in model-comparison mode: each model is scored against the same observed effect. Its gap SE
+    # still comes from each column's OWN fit (the two estimators' covariance is per model).
+    emp1 <- emp_of(1L)
+    for (i in seq_along(built))
+      tab[[labels[i]]] <- set_obs_if(built[[i]]$col, emp1, fit_of_col[i])
   } else {
     # several dependents: each fit has its OWN crude block, so map every column back to its fit
     # (fit_first_idx marks a fit's FIRST column; a multinomial fit owns several).
-    fit_of_col <- rep(seq_along(fit_ncol), times = fit_ncol)
     for (i in seq_along(built)) {
       fi <- match(i, fit_first_idx)                        # non-NA at a fit's first column
       if (!is.na(fi) && !is.null(emp_by_fit[[fi]]))
         tab <- add_emp_cols(tab, emp_by_fit[[fi]]$cols, specs[[fi]]$dependent)
-      tab[[labels[i]]] <- set_obs_if(built[[i]]$col, emp_eff_of(fit_of_col[i]))
+      tab[[labels[i]]] <- set_obs_if(built[[i]]$col, emp_of(fit_of_col[i]), fit_of_col[i])
     }
   }
 
@@ -3010,17 +3150,41 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   number, with `display = "\{or\} (obs \{obs\})"`, and the html tooltip adds its confidence interval
 #'   and p-value.
 #'
-#'   **Significance.** `color_signif` applies to `"between_groups"`: the two `split_var` groups are
-#'   different people, so the gap's standard error is `sqrt(SE_A² + SE_B²)` — recovered from the two
-#'   Wald intervals the table already prints, which is why the colours can never contradict them —
-#'   and the usual policies follow (`"grey_non_signif"` greys a gap whose interval covers "no
-#'   difference"; `"guaranteed_effect"` colours its floor, i.e. "this effect differs by at least
-#'   ×1.1"). It does **not** apply to `"adjustment"`, whose two estimates come from the same rows: a
-#'   valid test there needs their joint variance, which is not computed yet. Note that a difference
-#'   between two groups is a difference in *that effect measure*; groups with different base rates or
-#'   more variable outcomes can show different effects on every scale without the underlying cause
-#'   differing. Each cell is tested on its own, with no multiple-comparison correction — the footer's
-#'   aggregated test is the multiplicity-free reading.
+#'   **Significance.** Both measures test their own gap, and the usual policies then follow —
+#'   `"grey_non_signif"` greys a gap whose interval covers "no change"; `"guaranteed_effect"` colours
+#'   its floor, i.e. "the two differ by at least ×1.1". They use different standard errors, because
+#'   they compare different things:
+#'
+#'   * `"between_groups"` compares two `split_var` groups, which are **different people**, so the gap's
+#'     standard error is `sqrt(SE_A² + SE_B²)` — recovered from the two Wald intervals the table
+#'     already prints, which is why the colours can never contradict them.
+#'   * `"adjustment"` compares two estimates fitted on the **same rows**, which are correlated, so its
+#'     standard error is the sampling variance of the difference of their influence functions (the
+#'     "seemingly unrelated estimation" of Weesie 1999 / Mize, Doan & Long 2019). With survey weights
+#'     or a design it is design-based (strata, clusters and FPC respected).
+#'
+#'   The `"adjustment"` test is only computed where a zero gap really means "no confounding" — that is,
+#'   on a **collapsible** effect measure: an average marginal effect (`effect = "ame"`), a marginal risk
+#'   ratio (`effect = "ame_ratio"`), a risk ratio (`family = "poisson"` on a binary outcome), an
+#'   incidence-rate ratio, or a linear β. A **conditional odds ratio** is not collapsible: adjusting it
+#'   moves it away from 1 even when the extra variable is independent of the exposure, so at survey
+#'   sizes every row would test "significant" for a reason that is not confounding. There the colours
+#'   stay descriptive, `color_signif` is ignored, and `tab_reg()` says so once. The test is also skipped
+#'   when the two estimates cannot be compared cell by cell: at `at = "reference"`, and when a compared
+#'   model's complete cases differ from the observed columns' (use `na = "drop_all_models"`).
+#'
+#'   Two things to keep in mind. A difference between two groups, or before and after adjustment, is a
+#'   difference in *that effect measure*: groups with different base rates or more variable outcomes can
+#'   show different effects on every scale without the underlying cause differing. And each cell is
+#'   tested on its own, with no multiple-comparison correction — with seven comparisons about one table
+#'   in five shows a spurious coloured cell, so read the pattern rather than the single cell (for
+#'   `"between_groups"`, the footer's aggregated test is the multiplicity-free reading).
+#'
+#'   The gap test uses the **robust (sandwich)** variance on both sides, which is what a comparison of
+#'   two differently-specified estimators needs. For an unweighted binomial odds ratio that is exactly
+#'   the Woolf interval the `Obs_OR` column prints; elsewhere it can differ slightly from the printed
+#'   descriptive intervals, which follow `tab()`'s own conventions (pooled Student *t* for a mean
+#'   difference, unweighted *n* under `wt`).
 #'
 #'   **Caveat on odds ratios.** The odds ratio is *non-collapsible*: adjusting for a covariate that
 #'   predicts the outcome moves it away from 1 even with no confounding at all (about +8% in a
@@ -3028,7 +3192,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   colour step). So part of an OR gap is arithmetic, not confounding. The collapsible comparisons
 #'   are `effect = "ame"` / `"ame_ratio"` (marginal effects), `family = "poisson"` on a binary
 #'   outcome (risk ratios) and a gaussian beta; on those the gap is confounding by the adjustment
-#'   set. The legend says so on the odds-ratio path.
+#'   set. The legend says so on the odds-ratio path, and it is why the significance test above is
+#'   computed only on the collapsible scales.
 #' @param stars Logical (default `TRUE` for regression tables, where significance stars are standard).
 #'   When `FALSE`, the per-cell p-value is dropped and no stars are shown (colours still read the CI).
 #' @param na How missing values are handled across models. `"drop_by_model"` (default) drops `NA`
@@ -3436,10 +3601,31 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "interaction test to the footer (one extra model fit). Ask for it ",
                                    "without the colours with {.code stats = c(..., \"interaction\")}.")))
   }
-  if ("adjustment" %in% color && !is.null(color_signif) && !identical(color_signif, "ignore")) {
-    cli::cli_inform(c("i" = paste0("{.arg color_signif} does not apply to {.val adjustment}: it scores ",
-                                   "the gap between a model effect and its observed counterpart, both ",
-                                   "estimated on the same rows, which has no test of its own (yet).")))
+  # Last Phase z8-B: `adjustment` now HAS a test (the difference of the two estimators' influence
+  # functions -- R/reg-influence.R), on every COLLAPSIBLE estimand. On a conditional odds ratio it is
+  # deliberately not computed: adjusting an OR moves it away from 1 even with zero confounding, so the
+  # test is a valid test of a statement no reader makes (measured rejection 1.000 at n = 32000 with the
+  # covariate independent of the exposure -- dev/model_vs_observed_gap_test.md SS4.1). Say it once, and
+  # name the three routes that make the same comparison collapsible, rather than let a `color_signif`
+  # look effective. The colours stay descriptive there (MEASURES' force_policy predicate).
+  if ("adjustment" %in% color && !is.null(color_signif) && !identical(color_signif, "ignore") &&
+      !any(vapply(families_vec, reg_estimand_collapsible, logical(1), effect = effect))) {
+    cli::cli_inform(c("i" = paste0("{.arg color_signif} does not apply to an odds-ratio {.val adjustment} ",
+                                   "gap: part of it is non-collapsibility, not confounding. Use ",
+                                   "{.code effect = \"ame\"} or {.code \"ame_ratio\"}, or ",
+                                   "{.code family = \"poisson\"} (risk ratios), for a gap the test can ",
+                                   "read.")))
+  }
+  # Last Phase z8-B: the gap test needs BOTH estimates computed on the same observations. With the
+  # default per-model NA drop a compared model can be fitted on more rows than the shared observed
+  # block, so those columns keep the descriptive colour -- said once here (the build cannot, it recurses
+  # per split group), on the cheap pre-condition rather than after the fact.
+  if ("adjustment" %in% color && identical(na, "drop_by_model") &&
+      (is_comparison || length(dependent) > 1L)) {
+    cli::cli_inform(c("i" = paste0("Each model uses its own complete cases, so a model fitted on more ",
+                                   "rows than the observed columns keeps the descriptive gap colour. ",
+                                   "Use {.code na = \"drop_all_models\"} to compare them on one ",
+                                   "population.")))
   }
   # Last Phase z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
   # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`
@@ -3478,11 +3664,17 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # multinomial / ordinal / split / multiplier / trials / model comparison) keeps the refit path.
   # Phase 15e: an all-glm mixed table keeps the digest fast-path (each spec caches its own family's
   # digest); any multinomial/ordinal outcome degrades the whole table to the cached raw-fit path.
+  # Last Phase z8-B: `color = "adjustment"`'s gap test needs the FITTED object (influence functions),
+  # which the digest deliberately discards -- so asking for it takes the refit path rather than getting
+  # a silently untested colour. One clause, not a rebuild-from-coef arm: jamovi's reg `color` is a
+  # checkbox (jamovi/jmvtabreg.a.yaml), so no live-UI call can reach here with the measure today, and
+  # building the arm would mean a second encoding of reg_fit()'s model frame for no caller. The recipe
+  # is in dev/model_vs_observed_gap_test.md SS6 if the option ever becomes a list.
   reref <- !is.null(.fit_cache) && effect == "coefficient" && !mnl_vsrest &&
     estimate_display %in% c("value", "ci") && method == "wald" &&
     all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")) &&
     !formula_mode && is.null(split_var) && is.null(multiplier) && is.null(trials) &&
-    compare == "none" && !is_comparison
+    compare == "none" && !is_comparison && !("adjustment" %in% color)
 
   if (!is.null(reference) && !reref) {
     # A multinomial's baseline is the OUTCOME factor's first level, so `reference` keyed by the

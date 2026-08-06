@@ -1883,6 +1883,24 @@ fmt_gap_p <- function(x) {
   ifelse(is.finite(g) & is.finite(se) & se > 0, 2 * stats::pnorm(-abs(g / se)), NA_real_)
 }
 
+# fmt_gap_force_policy() -- Last Phase z8-B: the `force_policy` of BOTH gap measures (see MEASURES), as
+# a PREDICATE ON THE COLUMN rather than a constant. A gap measure has a test exactly where tab_reg
+# could write a `gap_se` for it, so "is there a test in this column?" is ONE read of the field the test
+# itself produced -- no measure has to be told twice which paths are honest, and no engine has to guess
+# an estimand from a rendered label or a display string.
+#
+# It covers, in one rule, every case where the gap has no interval: `adjustment` on a CONDITIONAL ODDS
+# RATIO (maintainer ruling Q1(b): non-collapsible, so the test would read "significant" everywhere for
+# a reason that is not confounding), on a model whose fitted object was distilled away (jamovi's digest
+# path), on a model-comparison column fitted on different rows, and on any engine with no crude twin;
+# plus `between_groups` under `method = "profile"`, whose asymmetric bounds are not est +/- crit*se so
+# no SE can be recovered -- which without this read as `grey_non_signif` and greyed the WHOLE column
+# (measured).
+#
+# Byte-identical wherever a `gap_se` exists: NULL leaves the column's own `color_signif` in place.
+#' @keywords internal
+fmt_gap_force_policy <- function(x) if (all(is.na(get_gap_se(x)))) "ignore" else NULL
+
 # fmt_broadcast_last() -- base-R broadcast of the LAST value of each group to every row of that group,
 # where each TRUE in `boundary` closes a group (the reference / total row sits at the group's end).
 # Replaces the per-getter tibble + dplyr::with_groups(last()) idiom on the colour hot path with one
@@ -3022,7 +3040,10 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute. Last Phase
   # z5: measure_policy() then applies a measure's `force_policy` (a measure with no significance test of
   # its own always reads under `ignore`); the legend resolves the policy through the same accessor.
-  policy  <- measure_policy(measure, if (!is.null(signif)) signif else get_color_signif(x))
+  # Last Phase z8-B: `force_policy` may be a predicate on the COLUMN (a gap measure has a test exactly
+  # where a `gap_se` was written), so the column is passed in. The legend reads `plan$policy` off the
+  # plan this returns, so it inherits the resolution rather than repeating it.
+  policy  <- measure_policy(measure, if (!is.null(signif)) signif else get_color_signif(x), x)
 
   is_mean <- type %in% c("mean", "n")
   # Phase 12c: a "coef" column (gaussian regression beta) colours the STANDARDIZED effect beta/SD(Y)
@@ -3405,22 +3426,24 @@ MEASURES <- list(
   # from the estimate's own scale rather than from the column kind: an OR / RR / IRR is folded around
   # 1 on `adj_ratio`, a beta / AME / risk-difference around 0 on `adj_diff`.
   # Both derive their interval from the stored `gap_se` (Last Phase z8), so both read `color_signif`
-  # normally -- except `adjustment`, whose gap SE needs the joint variance of two estimates fitted on
-  # the SAME rows (influence functions, dev/model_vs_observed_gap_test.md SS3) and is not written yet:
-  # it keeps `force_policy = "ignore"` until then rather than gate on an absent interval. The split
-  # groups of `between_groups` are DISJOINT, so its SE is exact by quadrature -- no override.
+  # normally -- WHERE tab_reg could write one. Where it could not, `force_policy` (now a predicate on
+  # the column, fmt_gap_force_policy) makes the measure read under `ignore`, i.e. descriptively. The
+  # two SEs come from different mathematics: `between_groups` compares DISJOINT split groups, so
+  # quadrature on the printed intervals is exact; `adjustment` compares two estimates fitted on the
+  # SAME rows, so its SE needs the difference of their influence functions (R/reg-influence.R,
+  # dev/model_vs_observed_gap_test.md SS3).
   adjustment     = list(word = "adjustment",    word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
                  std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
-                 gate_row = "refrow", force_policy = "ignore"),
+                 gate_row = "refrow", force_policy = fmt_gap_force_policy),
   between_groups = list(word = "between groups", word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
                  std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
-                 gate_row = "refrow")
+                 gate_row = "refrow", force_policy = fmt_gap_force_policy)
 )
 
 # The default `bounds` fact: the interval the column STORES. Every measure but the two gap ones reads
@@ -3454,8 +3477,12 @@ measure_facts <- function(measure, policy = "ignore") {
 measure_own_ref <- function(measure) isTRUE(MEASURES[[measure]]$ref_kind %in% c("observed", "group"))
 
 #' @keywords internal
-measure_policy <- function(measure, policy = "ignore") {
+measure_policy <- function(measure, policy = "ignore", x = NULL) {
   fp <- MEASURES[[measure]]$force_policy
+  if (is.null(fp)) return(policy)
+  # Last Phase z8-B: a `force_policy` may be a PREDICATE ON THE COLUMN rather than a constant (see
+  # fmt_gap_force_policy). With no column to ask, the caller's policy stands.
+  if (is.function(fp)) fp <- if (is.null(x)) NULL else fp(x)
   if (is.null(fp)) policy else fp
 }
 
@@ -3693,12 +3720,15 @@ legend_ref_phrase <- function(spec, lang) {
 legend_method_name <- function(spec, measure = spec$measure_text) {
   cis <- spec$ci_settings
   # Last Phase z5 / z8: these measures score a GAP between two estimates, so the model's own Wald
-  # interval (which the is_reg branch below would claim) is never the right name. `between_groups`
-  # compares two DISJOINT subpopulations, so it has an interval of its own -- the standard test for a
-  # difference between two independent estimates; `adjustment` still has none (see MEASURES).
+  # interval (which the is_reg branch below would claim) is never the right name -- each has a test of
+  # its own, and they are DIFFERENT tests. `between_groups` compares two DISJOINT subpopulations, so
+  # the two estimates are independent and quadrature is exact; `adjustment` compares two estimates
+  # fitted on the SAME rows, so its variance is the difference of their influence functions, which is
+  # the only quantity carrying the covariance between them (R/reg-influence.R).
   if (identical(measure, "between_groups"))
     return(gettext("z test on the difference between two independent estimates"))
-  if (identical(measure, "adjustment")) return(NA_character_)
+  if (identical(measure, "adjustment"))
+    return(gettext("z test on the difference between two estimates fitted on the same sample"))
   if (isTRUE(spec$is_reg)) {
     if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
     # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
@@ -3782,9 +3812,15 @@ legend_ucfirst <- function(s) {
 # call at the (few) use sites -- it is a MEASURES lookup, not a switch, and the text vs background channels
 # feed it different eff_word, matching the historical wording exactly.
 legend_resolve_spec <- function(spec, lang) {
-  chan <- function(measure) {
+  # Last Phase z8-B: each channel resolves its facts under ITS OWN policy. `spec$policy` is the text
+  # channel's, and since a gap measure's force_policy became a per-column predicate the two channels
+  # can genuinely differ (an OR text channel greying by its Wald interval, an `adjustment` background
+  # with no test in this column reading descriptively). Resolved once here, per channel, as everything
+  # else in this spec is.
+  chan <- function(measure, policy = spec$policy) {
     if (is.na(measure)) return(NULL)
-    md   <- measure_facts(measure, spec$policy)
+    if (is.null(policy)) policy <- spec$policy
+    md   <- measure_facts(measure, policy)
     subj <- if (!is.na(spec$eff_word)) spec$eff_word
             else if (identical(measure, "or")) "OR" else gettext("cells")
     unit <- switch(md$unit_kind,
@@ -3818,8 +3854,8 @@ legend_resolve_spec <- function(spec, lang) {
          method_phrase = legend_method_phrase(spec, lang, measure),
          unit         = unit)
   }
-  spec$txt <- chan(spec$measure_text)
-  spec$bg  <- chan(spec$measure_bg)
+  spec$txt <- chan(spec$measure_text, spec$plan_txt$policy)
+  spec$bg  <- chan(spec$measure_bg,   spec$plan_bg$policy)
   spec$ref_phrase       <- legend_ref_phrase(spec, lang)
   spec$method_phrase    <- legend_method_phrase(spec, lang)
   primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
@@ -3913,8 +3949,13 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # `is_coef` covers exponentiate = FALSE (a raw logit coefficient is the same non-collapsible
   # quantity, logged) -- it must not be read off eff_word there, because legend_reg_adapter()
   # deliberately neutralises a model column's effect word when a crude sibling shares its measure.
+  # Last Phase z8-B: `reg_fam_prob()` (R/tab_reg.R), not the family list written out -- it WAS the exact
+  # body of that predicate, i.e. the third copy the z3 predicate block exists to prevent. The legend
+  # cannot see `effect`, so it reads the same rule off COLUMN facts: a probability-scale family whose
+  # column is a coefficient (is_coef covers exponentiate = FALSE; eff_word the exponentiated twin). Keep
+  # set-identical to reg_estimand_collapsible(), which states it from the build side.
   if ("adjustment" %in% adj_ch &&
-      isTRUE(spec$model_family %in% c("binomial", "multinomial", "ordinal")) &&
+      isTRUE(reg_fam_prob(spec$model_family)) &&
       (isTRUE(spec$is_coef) || isTRUE(spec$eff_word %in% c("OR", .lg_beta)))) {
     spec$caveat <- gettext("Part of an odds-ratio gap is non-collapsibility, not confounding: a risk ratio or a marginal effect is the collapsible comparison.")
   }
@@ -3966,7 +4007,12 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # Last Phase z8: the note above states ONE comparison (the text channel's). A gap measure on the
   # background compares something else, by a test of its own, so it needs one clause of its own --
   # otherwise the note silently claims the model's interval greyed the fill.
-  if (!identical(spec$policy, "ignore") && !is.null(spec$plan_txt) && !is.null(spec$plan_bg) &&
+  # Last Phase z8-B: the gate reads the BACKGROUND's own resolved policy, not `spec$policy` (which is
+  # the TEXT channel's). They differ exactly when the background is a gap measure with no test in this
+  # column -- and there the clause was claiming a greying rule that was never applied (a false sentence
+  # shipping since z5, when `adjustment` was pinned to `ignore` while the text channel was not).
+  if (!identical(spec$plan_bg$policy, "ignore") &&
+      !is.null(spec$plan_txt) && !is.null(spec$plan_bg) &&
       !is.null(spec$bg) && !is.na(spec$bg$ref_lead)) {
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
       "Background: the same rule, applied to the gap with %s (%s).",

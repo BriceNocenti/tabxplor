@@ -10,7 +10,9 @@
 #   - The colour SIGN is "away from vs toward the null", not raw up/down: a protective effect
 #     (OR < 1) attenuated toward 1 must land on the SAME pole as a risky effect attenuated toward 1.
 #     That is the whole reason the score is not est/obs.
-#   - `color_signif` does not apply (MEASURES$force_policy = "ignore"): phase 1 is descriptive.
+#   - `color_signif` applies only where a `gap_se` exists (MEASURES$force_policy, a predicate on the
+#     column since Last Phase z8-B). On a conditional odds ratio it never does -- see below and
+#     test-adjustment-gap.R, which owns the significance half.
 # See: dev/model_vs_observed_effect_colour.md (SS3 collapsibility, SS4 significance, SS7 the engine).
 
 adj_data <- function() {
@@ -193,15 +195,19 @@ test_that("color = 'adjustment' turns empirical on, and the two measures are exc
   testthat::expect_error(tab(d, race, party3, color = "adjustment"), "tab_reg")
 })
 
-# Last Phase z8: `adjustment` alone keeps force_policy -- its two estimates share the same rows, so
-# the gap SE needs influence functions (phase B). `between_groups` lost it (disjoint groups).
-test_that("color_signif does not apply to `adjustment`: it always reads under `ignore`", {
+# Last Phase z8-B: `force_policy` is a PREDICATE ON THE COLUMN for both gap measures -- a gap measure
+# reads under `ignore` exactly where no `gap_se` was written. On a CONDITIONAL ODDS RATIO that is by
+# design (maintainer ruling Q1(b): the gap is part non-collapsibility, so the test would read
+# "significant" everywhere); on a collapsible estimand the policy applies normally -- see
+# test-adjustment-gap.R for that half.
+test_that("color_signif does not apply to an odds-ratio `adjustment` gap: it reads under `ignore`", {
   d <- adj_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
                  empirical = TRUE, color = c("OR", "adjustment"),
                  color_signif = "guaranteed_effect"),
     "color_signif")
+  testthat::expect_true(all(is.na(get_gap_se(t$Model_OR))))    # the reason it reads under `ignore`
   pl <- tabxplor:::fmt_color_plan(t$Model_OR, "bg", color = get_color_bg(t$Model_OR))
   testthat::expect_identical(pl$policy, "ignore")
   testthat::expect_identical(pl$measure, "adjustment")

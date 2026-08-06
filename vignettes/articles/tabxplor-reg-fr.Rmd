@@ -259,6 +259,110 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
 ```
 
+### L'écart est-il plus grand que le hasard ?
+
+Une couleur de fond vous dit que le modèle a *déplacé* un effet. Elle ne dit pas, à elle seule, que ce
+déplacement est réel : avec 20 000 enquêtés un petit décalage est solide, avec 300 un grand décalage
+peut n'être que de la chance. `color_signif` répond à cette question, exactement comme partout ailleurs
+dans `tabxplor` — ajoutez `"grey_non_signif"` et un fond coloré signifie désormais « le modèle a
+vraiment changé cet effet » :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
+        family = "poisson", empirical = TRUE,
+        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+```
+
+Ici `family = "poisson"` sur une variable binaire donne des **rapports de risques**, l'une des échelles
+propres de la section précédente. Couleur du texte = la force du rapport de risques ajusté. Fond = sa
+distance à l'effet observé, grisée quand cette distance peut relever du hasard. Survoler une cellule
+dans le tableau html donne les chiffres exacts : l'effet observé, la taille de l'écart, son intervalle
+de confiance et sa p-valeur.
+
+**Un exemple vaut toute l'explication.** Lisez le bloc `race` de ce tableau, qui compare chaque groupe
+aux enquêtés blancs, avant et après avoir mis le revenu et la religion à égalité :
+
+| échelle | Noirs vs Blancs | Autres vs Blancs |
+|:----------------------------------|----------------:|-----------------:|
+| rapport de cotes, brut → modélisé | 0,41 → 0,39 | 0,90 → 1,01 |
+| rapport de risques, brut → modélisé | 0,59 → 0,59 | 0,95 → 1,01 |
+| le rapport de risques a-t-il vraiment bougé ? | **non** (p = 0,5) | **oui** (p < 0,001) |
+
+Deux histoires différentes, et le test les sépare. Pour les enquêtés noirs, rien ne bouge : leur taux
+de mariage bien plus faible n'est *pas* expliqué par le revenu ou la religion — il survit intact à
+l'ajustement. Pour le groupe « Autres », le déficit brut de 5 % disparaît une fois le revenu et la
+religion tenus égaux, et l'écart entre les deux chiffres est bien trop grand pour être fortuit : cette
+différence-là *était* expliquée par eux.
+
+Remarquez que les rapports de cotes bougent aussi — y compris pour les enquêtés noirs, là où le rapport
+de risques dit que rien ne s'est passé. C'est la non-collapsibilité de la section précédente, qui
+apparaît sous la forme d'un « changement » fantôme. C'est pourquoi `color_signif` n'est **pas appliqué
+aux rapports de cotes simples** : `tab_reg()` y laisse les couleurs descriptives et le signale une
+fois, en renvoyant à `effect = "ame"`, `effect = "ame_ratio"` ou `family = "poisson"`.
+
+Le grisage prend toute sa valeur sur les petits échantillons. Avec 20 000 enquêtés, presque tout
+déplacement visible est réel ; sur 2 000, le même tableau ne garde qu'une couleur de fond sur trois :
+
+```{r}
+set.seed(1)
+small <- gss_simple[sample(nrow(gss_simple), 2000), ]
+tab_reg(small, "married", c("race", "rincome", "relig"),
+        family = "poisson", empirical = TRUE,
+        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+```
+
+### Trois façons de se tromper
+
+**« Les deux intervalles de confiance se recouvrent, donc rien n'a changé. »** Ils se recouvrent
+presque toujours, parce que le modèle et l'effet observé sont calculés sur *les mêmes personnes* et
+varient ensemble (une corrélation de 0,5 à 0,9). Lire le recouvrement conclurait « aucun changement »
+pratiquement à chaque fois. Le test du tableau fait la bonne chose : il mesure directement la
+différence, ce qui explique que son intervalle soit bien plus étroit que ne le laisseraient croire les
+deux intervalles imprimés.
+
+**« Un écart significatif prouve la confusion. »** Il prouve que les deux nombres diffèrent de plus que
+le bruit. *Pourquoi* ils diffèrent relève de votre lecture, pas du tableau — et sur une échelle non
+collapsible, une partie de la différence est arithmétique, ce qui est tout l'objet de la section
+précédente.
+
+**« Chaque cellule colorée compte. »** Chaque cellule est testée pour elle-même, sans correction pour
+le nombre de tests. Dans un tableau à sept comparaisons, environ un sur cinq affichera une cellule
+colorée à tort. Lisez la configuration d'ensemble — tout un bloc de prédicteurs qui se déplace dans le
+même sens — plutôt qu'une cellule isolée.
+
+### Pour mémoire : ce qui est exactement testé
+
+L'hypothèse nulle est l'égalité de l'effet modélisé et de l'effet observé, sur l'échelle propre de
+l'effet : le log du rapport pour un rapport de risques, un rapport de cotes ou un rapport de taux
+d'incidence ; la différence simple pour un bêta ou un effet marginal. C'est l'échelle autour de
+laquelle la couleur se replie déjà, de sorte que le test et la couleur ne peuvent pas diverger.
+
+Les deux estimations proviennent des mêmes lignes : elles sont donc corrélées, et leur différence a une
+erreur type plus petite que chacune prise séparément. La variance correcte est celle de la différence
+de leurs *fonctions d'influence* — ce que Stata appelle l'estimation « apparemment non reliée » (Weesie
+1999 ; Mize, Doan & Long 2019 en est l'énoncé sociologique). Deux choses la rendent ici exacte plutôt
+qu'approchée : tout effet observé qu'affiche `tabxplor` *est* le coefficient d'un modèle saturé à un
+seul prédicteur, si bien que sa fonction d'influence a une forme close dont l'erreur type est
+l'intervalle déjà affiché ; et avec des pondérations d'enquête ou un plan de sondage, la variance passe
+par la linéarisation de `survey`, qui respecte strates, grappes et correction de population finie. La
+loi de référence est la loi normale (z), légèrement conservatrice sur petits échantillons.
+
+Les trois politiques lisent ce même intervalle :
+
+| `color_signif` | ce que montre le fond |
+|----------------|------------------------|
+| `"ignore"` (défaut dans `tab()`) | la taille de l'écart, colorée qu'il soit significatif ou non |
+| `"grey_non_signif"` (défaut dans `tab_reg()`) | la même chose, grisée si l'intervalle de l'écart contient « aucun changement » |
+| `"guaranteed_effect"` | le **plancher** de l'écart : « l'ajustement a déplacé cet effet d'au moins ×1,1 » |
+
+Trois détails à connaître. Les **étoiles** de significativité dans les cellules continuent de lire la
+p-valeur de chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celle de l'écart ; la
+p-valeur de l'écart est dans l'infobulle. La direction se mesure par rapport à la valeur nulle : un
+effet protecteur ramené vers 1 se colore comme un effet risqué ramené vers 1. Enfin, le test exige que
+les deux estimations portent sur les mêmes personnes : avec `at = "reference"`, ou quand un modèle
+comparé écarte d'autres valeurs manquantes que les colonnes observées (utilisez
+`na = "drop_all_models"`), les couleurs restent descriptives.
+
 ## Variables expliquées binomiales groupées (un score sommé)
 
 Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*. `score_from_lv1()` (voir `vignette("tabxplor-programming")`) construit un tel score en comptant le nombre de variables catégorielles choisies d’après leur première modalité :

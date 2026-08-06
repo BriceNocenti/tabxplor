@@ -202,17 +202,42 @@ The two are mutually exclusive (they share one per-cell slot). The gap itself is
 number, with \code{display = "\\{or\\} (obs \\{obs\\})"}, and the html tooltip adds its confidence interval
 and p-value.
 
-\strong{Significance.} \code{color_signif} applies to \code{"between_groups"}: the two \code{split_var} groups are
-different people, so the gap's standard error is \verb{sqrt(SE_A² + SE_B²)} — recovered from the two
-Wald intervals the table already prints, which is why the colours can never contradict them —
-and the usual policies follow (\code{"grey_non_signif"} greys a gap whose interval covers "no
-difference"; \code{"guaranteed_effect"} colours its floor, i.e. "this effect differs by at least
-×1.1"). It does \strong{not} apply to \code{"adjustment"}, whose two estimates come from the same rows: a
-valid test there needs their joint variance, which is not computed yet. Note that a difference
-between two groups is a difference in \emph{that effect measure}; groups with different base rates or
-more variable outcomes can show different effects on every scale without the underlying cause
-differing. Each cell is tested on its own, with no multiple-comparison correction — the footer's
-aggregated test is the multiplicity-free reading.
+\strong{Significance.} Both measures test their own gap, and the usual policies then follow —
+\code{"grey_non_signif"} greys a gap whose interval covers "no change"; \code{"guaranteed_effect"} colours
+its floor, i.e. "the two differ by at least ×1.1". They use different standard errors, because
+they compare different things:
+\itemize{
+\item \code{"between_groups"} compares two \code{split_var} groups, which are \strong{different people}, so the gap's
+standard error is \verb{sqrt(SE_A² + SE_B²)} — recovered from the two Wald intervals the table
+already prints, which is why the colours can never contradict them.
+\item \code{"adjustment"} compares two estimates fitted on the \strong{same rows}, which are correlated, so its
+standard error is the sampling variance of the difference of their influence functions (the
+"seemingly unrelated estimation" of Weesie 1999 / Mize, Doan & Long 2019). With survey weights
+or a design it is design-based (strata, clusters and FPC respected).
+}
+
+The \code{"adjustment"} test is only computed where a zero gap really means "no confounding" — that is,
+on a \strong{collapsible} effect measure: an average marginal effect (\code{effect = "ame"}), a marginal risk
+ratio (\code{effect = "ame_ratio"}), a risk ratio (\code{family = "poisson"} on a binary outcome), an
+incidence-rate ratio, or a linear β. A \strong{conditional odds ratio} is not collapsible: adjusting it
+moves it away from 1 even when the extra variable is independent of the exposure, so at survey
+sizes every row would test "significant" for a reason that is not confounding. There the colours
+stay descriptive, \code{color_signif} is ignored, and \code{tab_reg()} says so once. The test is also skipped
+when the two estimates cannot be compared cell by cell: at \code{at = "reference"}, and when a compared
+model's complete cases differ from the observed columns' (use \code{na = "drop_all_models"}).
+
+Two things to keep in mind. A difference between two groups, or before and after adjustment, is a
+difference in \emph{that effect measure}: groups with different base rates or more variable outcomes can
+show different effects on every scale without the underlying cause differing. And each cell is
+tested on its own, with no multiple-comparison correction — with seven comparisons about one table
+in five shows a spurious coloured cell, so read the pattern rather than the single cell (for
+\code{"between_groups"}, the footer's aggregated test is the multiplicity-free reading).
+
+The gap test uses the \strong{robust (sandwich)} variance on both sides, which is what a comparison of
+two differently-specified estimators needs. For an unweighted binomial odds ratio that is exactly
+the Woolf interval the \code{Obs_OR} column prints; elsewhere it can differ slightly from the printed
+descriptive intervals, which follow \code{tab()}'s own conventions (pooled Student \emph{t} for a mean
+difference, unweighted \emph{n} under \code{wt}).
 
 \strong{Caveat on odds ratios.} The odds ratio is \emph{non-collapsible}: adjusting for a covariate that
 predicts the outcome moves it away from 1 even with no confounding at all (about +8\% in a
@@ -220,7 +245,8 @@ simulation where the covariate is independent of the exposure — the same size 
 colour step). So part of an OR gap is arithmetic, not confounding. The collapsible comparisons
 are \code{effect = "ame"} / \code{"ame_ratio"} (marginal effects), \code{family = "poisson"} on a binary
 outcome (risk ratios) and a gaussian beta; on those the gap is confounding by the adjustment
-set. The legend says so on the odds-ratio path.}
+set. The legend says so on the odds-ratio path, and it is why the significance test above is
+computed only on the collapsible scales.}
 
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
