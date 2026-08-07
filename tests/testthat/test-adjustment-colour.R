@@ -5,8 +5,10 @@
 #       the value the neighbouring Obs_* column stores in its own estimate field, already on the model
 #       column's scale -- so these tests compare the two fields directly rather than re-deriving.
 # KEY CONSTRAINTS:
-#   - `obs` is NA wherever there is no counterpart (Constant, numeric predictors, multinomial,
-#     ordinal, cross-tables) -> those cells must stay UNCOLOURED, never coloured on a stale value.
+#   - `obs` is NA wherever there is no counterpart -> those cells must stay UNCOLOURED, never coloured
+#     on a stale value. Last Phase z9 gave numeric predictors one (their univariable fit) and z10 gave
+#     the last three families one, so what is left is the Constant, the compound-formula escape hatch,
+#     and cross-tables.
 #   - The colour SIGN is "away from vs toward the null", not raw up/down: a protective effect
 #     (OR < 1) attenuated toward 1 must land on the SAME pole as a risky effect attenuated toward 1.
 #     That is the whole reason the score is not est/obs.
@@ -71,12 +73,40 @@ test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   testthat::expect_true(is.na(o[[1]]))                              # Constant
   testthat::expect_identical(fmt_color_channels(t$Model_OR)$bg_slot[[1L]], 0L)
 
-  # multinomial: crude companions are tooltip-only, so there is nothing to compare to.
-  t <- tab_reg(d, dependent = "party3", predictors = "race", family = "multinomial", empirical = TRUE)
-  testthat::expect_true(all(is.na(get_obs(t[[3]]))))
+  # a compound formula has no predictor structure to be crude about -- the one remaining gap.
+  t <- suppressMessages(tab_reg(d, married ~ race * age, family = "binomial",
+                                empirical = TRUE, color = c("OR", "adjustment")))
+  testthat::expect_true(all(is.na(get_obs(t[[ncol(t)]]))))
 
   # a plain cross-table never fills the field.
   testthat::expect_true(all(is.na(get_obs(tab(d, race, party3, color = TRUE)[[2]]))))
+})
+
+test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Last Phase z10)", {
+  # z10 inverted this test's premise: the univariable multinomial IS saturated, so its crude OR is the
+  # {category j, reference category} x {level, reference level} Woolf ratio -- which is exactly what
+  # tab(pct = "row", OR = "OR") prints. Each model column carries its own category's `obs`.
+  skip_if_not_installed("nnet")
+  d <- adj_data()
+  t <- suppressMessages(tab_reg(d, dependent = "party3", predictors = "race",
+                                family = "multinomial", empirical = TRUE, cleannames = FALSE))
+  mcols <- setdiff(names(t), c("var", "levels"))
+  testthat::expect_gt(length(mcols), 1L)
+  obs <- lapply(mcols, function(nm) get_obs(t[[nm]]))
+  testthat::expect_true(all(vapply(obs, function(o) any(!is.na(o)), logical(1))))
+  # the categories really differ -- one shared vector would be the bug this keys against
+  testthat::expect_false(isTRUE(all.equal(obs[[1]], obs[[2]])))
+
+  # ... and each equals the crude OR tab() shows for that category
+  ct <- tab(d, race, party3, pct = "row", OR = "OR", na = "drop", ref2 = 1)
+  lv <- levels(forcats::fct_drop(stats::na.omit(d$race)))
+  for (j in seq_along(mcols)) {
+    cat_j <- sub(" vs .*$", "", mcols[[j]])
+    if (!cat_j %in% names(ct)) next
+    got  <- get_obs(t[[mcols[[j]]]])[match(lv, as.character(t$levels))]
+    want <- get_or(ct[[cat_j]])[match(lv, as.character(ct[[1]]))]
+    testthat::expect_equal(unname(got), unname(want), tolerance = 1e-8)
+  }
 })
 
 test_that("a NUMERIC predictor gets an obs, and `adjustment` colours it", {

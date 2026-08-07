@@ -151,6 +151,14 @@ the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} m
 \item \code{"no"}: by default, no OR are calculated.
 \item \code{"OR"}: print OR (instead of percentages).
 \item \code{"OR_pct"}: print OR, with percentages in bracket.
+\item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
+\emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
+row. This is the descriptive analogue of a proportional-odds (\code{\link[=tab_reg]{tab_reg()}} \code{family = "ordinal"})
+model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
+points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
+the departure from proportional odds -- visible and free. Needs \code{pct = "row"} and an
+\code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
+OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
 }
 Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
 \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
@@ -452,6 +460,12 @@ documented on \code{\link[=tab_ci]{tab_ci()}}.
 }
 The package-wide display, color and statistics defaults are \code{options()}, listed at
 \link{tabxplor-options}. \code{tab()} is a friendly wrapper around the more powerful \code{\link[=tab_many]{tab_many()}}.
+
+\strong{Ordered factors.} Since v2.0.0 the \code{ordered} class survives the whole pipeline (it
+used to be stripped at preparation), which is what lets \code{OR = "cumOR"} pick its col_vars by
+class. One consequence worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
+levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as the
+greatest levels. They are labels, not points on the scale.
 
 \strong{Weighted confidence intervals.} With a weight (\code{wt}), by default a cell confidence
 interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted

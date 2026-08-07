@@ -61,6 +61,20 @@
   confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
   (`effect = "ame"` / `"ame_ratio"`) or risk ratios (`family = "poisson"`) for a comparison the test can
   read.
+* **Every outcome now has an observed counterpart.** `tab_reg(empirical = TRUE)` used to go quiet on
+  three families. A **summed score** (`trials =`) now shows its mean score plus the odds ratio of the
+  summed items; an **ordinal** outcome shows `Obs_cumOR`, the cumulative odds ratio of the same model
+  with one predictor; a **multinomial** outcome would need one crude column per category, so its
+  observed effect is folded into the model cell instead — `2.31 (obs 2.05)`. `color = "adjustment"`
+  therefore works everywhere, and on the marginal paths (`effect = "ame"` / `"ame_ratio"`) of a 3+ level
+  outcome the gap now carries a real significance test. One rule covers all of it: *the observed effect
+  is the model's own effect, fitted with a single predictor*.
+* **`tab(OR = "cumOR")`** — the descriptive twin of that ordinal model: one **cumulative odds ratio per
+  cut point** ("at or below level j") for an `ordered` col_var, with no proportional-odds assumption.
+  The spread of the odds ratios across a row *is* the departure from proportional odds.
+* **`ordered` factors now survive `tab()`.** They used to be silently stripped to plain factors. Note
+  that the synthetic `Total` / `Ensemble` / `NA` levels are appended after the real ones, so on an
+  ordered grouping column they compare as the greatest levels — they are labels, not scale points.
 * **Observed effects for continuous predictors too.** `tab_reg(empirical = TRUE)` used to leave every
   continuous predictor blank — often the rows where adjustment bites hardest. They now carry their
   observed (univariable) effect, on the model's own scale, so `color = "adjustment"` and its
@@ -129,6 +143,10 @@
 * The **`lang` argument now works on Linux** (`lang = "fr"` used to return an English legend).
 * In `tab_reg()`, a **logical predictor** rendered as an empty row, and the `Constant` row lost its bold
   when `empirical = TRUE`.
+* `color = TRUE` with `OR = TRUE` and **two or more factor `col_vars`** silently coloured on the
+  difference instead of the odds ratio.
+* HTML **tooltips no longer repeat what the cell already prints**: a composite cell (`"{pct} (n={n})"`,
+  or an average-marginal-effect cell) used to show its own bracket again on hover.
 
 ## Deprecations
 

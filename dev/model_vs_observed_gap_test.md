@@ -908,7 +908,8 @@ regretted quietly for years.
 
 ## 13. Last Phase z10 — `adjustment` for ordinal, multinomial and summed-score binomials
 
-Added 2026-08-06. **Status: RESEARCH ONLY** — no R code written. Scope: the three families §3.8 listed
+Added 2026-08-06. **Status: FULLY IMPLEMENTED (Last Phase z10, 2026-08-07).** Every ruling in §13.10
+landed; the implementation findings are recorded at the end of this section. Original research below. Scope: the three families §3.8 listed
 as having no crude counterpart at all. Every number below was measured on this box today, on
 `gss_simple` (`gss_cat_data_formatting()`, complete cases as stated) or on the stated simulation.
 
@@ -1416,3 +1417,43 @@ Open for the implementation session:
 `dev/poisson_vs_logistic_binary_outcome.md` (z3 — why a collapsible scale is available at all),
 `dev/new_colors_UI.md` (the colour framework brief),
 `dev/empty_vctrs_fields_sparse_record.md` (z6 — the field-count threshold this phase tests).
+
+
+### 13.11 Implementation findings (Last Phase z10, 2026-08-07)
+
+Everything §13 forecast held, with five corrections and two defects found by building it.
+
+1. **`solve(polr$Hessian)` is worse than §13.5 measured.** The doc said "39 % too large"; on the
+   `gss_cat` fixture used here the discrepancy against `vcov()` reaches **99 %**. The rule is unchanged
+   (always `vcov()`), but the failure is louder than advertised.
+2. **The category-ordering trap is closed structurally, not by care.** `reg_score_multinom()` NAMES its
+   columns and returns NULL unless they equal `rownames(vcov(fit))` — so the category-major/minor
+   confusion cannot produce a wrong number, only no test.
+3. **The local AME is exact.** §13.5 predicted "8 significant digits"; measured, the local
+   softmax/cumulative-logit AME reproduces `marginaleffects::avg_comparisons()` to **10 decimals**, and
+   its influence-function SE sits 0.4 % above marginaleffects' delta-method one (the empirical-averaging
+   term, the expected direction).
+4. **`from = "fit"` had to cover more than ordinal.** §13.8 assigned the ordinal producer to a
+   univariable `reg_fit()`; in practice `reg_empirical_numeric()` generalised into `reg_empirical_fit()`
+   keyed by SKELETON ROW, because an ordinal FACTOR predictor yields one estimate per level, not one per
+   variable. That is also what made the numeric and ordinal arms one code path instead of two.
+5. **The grid needed a `draws` base.** §13.2.1's summed-count Woolf is right, but the CI base of a
+   grouped-binomial PROPORTION is `n × trials`, not `n` — a separate column (`emp_n_draw`) beside the
+   per-respondent `emp_n_ci` the mean score uses. Without it the crude interval was silently too wide.
+
+**Two defects the phase surfaced and fixed.** (a) `color = TRUE` + `OR = TRUE` with ≥2 factor col_vars
+resolved to the DIFFERENCE colour, because `tab-resolve.R`'s `auto_or` indexed a scalar with a logical
+over col_vars — deleted by moving `OR` onto the settings spine. (b) The html tooltip gated its lines on
+`display_primary()`, i.e. the first token only, so every composite cell repeated its own bracket on
+hover; `fmt_display_shows()` now reads the whole template. Both shipped before z10.
+
+**Two things §13 got right that are worth restating.** The multinomial crude OR really is the number
+`tab(pct = "row", OR = "OR")` prints — verified cell by cell to 1e-8, which is the strongest available
+evidence that the two sides of the package agree on what "observed" means. And the closed-form crude
+influence function for a multinomial AME reproduces the textbook two-proportion risk-difference standard
+error exactly (1e-10), so the observed leg of the gap test is the interval the table already shows.
+
+**§13.10 Q6 (svyolr's bread) is closed as moot**, exactly as §13.5 anticipated: `reg_score_polr()`
+refuses `svyolr` (its `fit$var` is the design-based sandwich, not the inverse information), and
+`tab_reg()` already aborts a weighted 3+ level outcome with `effect = "ame"`, so no marginal path exists
+there to test.

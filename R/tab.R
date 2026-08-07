@@ -216,6 +216,14 @@ NULL
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
+#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
+#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
+#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
+#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
+#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
+#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
+#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
+#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
 #' }
 #' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
 #' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
@@ -383,6 +391,12 @@ NULL
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
 #' @details
+#' \strong{Ordered factors.} Since v2.0.0 the \code{ordered} class survives the whole pipeline (it
+#' used to be stripped at preparation), which is what lets \code{OR = "cumOR"} pick its col_vars by
+#' class. One consequence worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
+#' levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as the
+#' greatest levels. They are labels, not points on the scale.
+#'
 #' \strong{Weighted confidence intervals.} With a weight (\code{wt}), by default a cell confidence
 #' interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
 #' proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
@@ -1156,6 +1170,14 @@ finalize_one_col <- function(col, spec) {
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
+#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
+#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
+#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
+#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
+#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
+#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
+#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
+#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
 #' }
 #' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
 #' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
@@ -1411,7 +1433,7 @@ new_ctx <- function(...) {
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
     # lean-ctx field whose absence was previously covered by an exists() guard
-    cached_tests = NULL,
+    cached_tests = NULL, OR_vect = NULL,
     # Phase k: variable labels (name -> label) captured in tab_setup for the opt-in name display-swap
     var_labels = character()
   )
@@ -1579,7 +1601,7 @@ tab_rowvar_ctxs <- function(ctx) {
   #  - the `rows` scalar columns (former atomic per_rv fields, still flat in ctx for the pre-slice
   #    stages / jmvtab), the per-pair pct_vect/ref_vect (now `pairs`), and na_text/na_num/fine_num.
   row_scalar <- setdiff(names(rows), "row_var")
-  per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect",
+  per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect", "OR_vect",
                   "na_text", "na_num", "fine_num", row_scalar)
   shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused"))]
   shared <- shared[!grepl("_quo$", names(shared))]
@@ -1595,11 +1617,46 @@ tab_rowvar_ctxs <- function(ctx) {
     u$settings      <- list(rows = rows[i, ], cols = ctx$settings$cols, pairs = pairs[keep, ])
     u$pct_vect      <- pairs$pct[keep]                             # this row_var's per-col_var vectors
     u$ref_vect      <- pairs$ref[keep]
+    u$OR_vect       <- pairs$OR[keep]                              # z10: resolved per pair (cumOR)
     u$na_text       <- ctx$na_text[[i]]
     u$na_num        <- ctx$na_num[[i]]
     u$fine_num      <- ctx$fine_num[[rv]]                          # by NAME (NULL when no numeric cols)
     c(shared, u)
   })
+}
+
+
+# or_cum_ok() / or_resolve_cum() -- Last Phase z10: THE `OR = "cumOR"` eligibility rule, in one place.
+#
+# A cumulative odds ratio dichotomises a col_var at each cut point ("at or below level j"), which is
+# only meaningful on an ORDERED scale, and needs at least 3 levels to say anything a plain OR does not
+# (a 2-level factor has one cut, i.e. the ordinary OR). It also reads the ROW distribution, so it is a
+# `pct = "row"` quantity. An ineligible pair DEGRADES to "no" rather than aborting: a table can mix an
+# ordered and a nominal col_var, and only the ordered one has cut points. One message site, two
+# reasons -- the "make them ordered" hint the user needs, and the pct one.
+#' @keywords internal
+#' @noRd
+or_cum_ok <- function(x) is.ordered(x) && nlevels(x) >= 3L
+
+#' @keywords internal
+#' @noRd
+or_resolve_cum <- function(or, pct, col_vars_cumor, col_vars_text) {
+  v <- vctrs::vec_recycle(or, length(col_vars_cumor))
+  if (!any(v == "cumOR")) return(v)
+  want <- v == "cumOR"
+  bad_class <- want & !col_vars_cumor
+  bad_pct   <- want &  col_vars_cumor & pct != "row"
+  if (any(bad_class)) cli::cli_inform(c(
+    "i" = paste0("{.code OR = \"cumOR\"} needs an {.cls ordered} col_var with 3+ levels; ",
+                 "{cli::qty(sum(bad_class))} {?it is/they are} skipped here."),
+    "i" = "{.code data |> dplyr::mutate(x = factor(x, levels = c(...), ordered = TRUE))}"
+  ))
+  if (any(bad_pct)) cli::cli_inform(c(
+    "i" = paste0("{.code OR = \"cumOR\"} cumulates each row's distribution, so it needs ",
+                 "{.code pct = \"row\"}; skipped here.")
+  ))
+  v[bad_class | bad_pct] <- "no"
+  v
 }
 
 
@@ -1705,6 +1762,11 @@ tab_setup <- function(ctx) {
   col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))
   col_vars_text <- purrr::map_lgl(pos_col_vars,
                                   ~ is.factor(data[[.x]]) || is.character(data[[.x]]))
+  # Last Phase z10: which col_vars `OR = "cumOR"` may apply to -- an ORDERED factor with 3+ levels,
+  # since "at or below level j" is only meaningful on a scale. Read from the RAW data here, i.e.
+  # before tab_prepare()'s lump/cleannames pass, which is why the ordered class only has to survive
+  # as far as tab_setup() for the feature to work (it now survives the whole pipeline anyway).
+  col_vars_cumor <- purrr::map_lgl(pos_col_vars, ~ or_cum_ok(data[[.x]]))
 
   # wt_quo arrives from ctx (defused in tab_build); resolve to a bare symbol or character().
   if (quo_miss_na_null_empty_no(wt_quo)) {
@@ -1842,7 +1904,7 @@ tab_setup <- function(ctx) {
   # vectorised `pct == "row" & OR %in% ...` recycles and warns when the counts don't divide (e.g. 3x4).
   # Two independent scalar reductions are byte-identical (all(A & B) == all(A) && all(B) for any lengths)
   # without the recycle. Twin of the Phase 9a fix at tab_assemble_tables (~L1859).
-  if (all(pct == "row") && all(OR %in% c("OR", "or", "OR_pct", "or_pct"))) {
+  if (all(pct == "row") && all(OR %in% c("OR", "or", "OR_pct", "or_pct", "cumOR"))) {
     tot_cols_type <- "no_delete"
   }
 
@@ -1889,6 +1951,14 @@ tab_setup <- function(ctx) {
       purrr::map(ref, ~ rep(.x, length(col_vars)))
     }
 
+  # Last Phase z10: OR_vect -- per row_var, a per-col_var OR vector, the OR analogue of ref_vect.
+  # DESIGN: `OR` is a per-ROW_VAR argument but `OR = "cumOR"` is only meaningful on an ORDERED
+  # col_var with 3+ levels under row percentages, so eligibility is a property of the PAIR. The
+  # settings spine is exactly where the two axes are allowed to meet (17e rule 4), so the resolved
+  # value lives on `pairs`; `rows$OR` keeps the REQUESTED value (the tot_cols_type reductions and
+  # the jamovi cache tuple read it). Every other OR value broadcasts unchanged -> byte-identical.
+  OR_vect <- purrr::map2(OR, pct_vect, ~ or_resolve_cum(.x, .y, col_vars_cumor, col_vars_text))
+
 
   #Unique arguments :
   total_names <- vctrs::vec_recycle(total_names, 2)
@@ -1905,7 +1975,7 @@ tab_setup <- function(ctx) {
   # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
   # the leaf tot/totaltab forcing) deliberately stays in the leaf builders below.
   # See dev/tabxplor_argument_computation_map.md.
-  .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
+  .settings     <- tab_resolve_settings(color = color, OR = OR_vect, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
@@ -1955,7 +2025,8 @@ tab_setup <- function(ctx) {
       col_var = rep(cv_chr, times = length(rv_chr)),
       is_text = rep(unname(col_vars_text), times = length(rv_chr)),
       pct     = unlist(pct_vect, use.names = FALSE),
-      ref     = unlist(ref_vect, use.names = FALSE)
+      ref     = unlist(ref_vect, use.names = FALSE),
+      OR      = unlist(OR_vect , use.names = FALSE)
     )
   )
 
@@ -2252,6 +2323,8 @@ tab_transform <- function(ctx) {
   # guards are gone. ref_vect (a tab_setup product) defaults to the scalar-ref broadcast over col_vars
   # only if a hand-built ctx reached transform without it.
   if (is.null(ref_vect)) ref_vect <- rep(ref, length(col_vars))
+  # z10: same rule for OR_vect (the per-pair OR, "cumOR" already resolved against each col_var).
+  if (is.null(OR_vect))  OR_vect  <- rep(OR , length(col_vars))
   cached_test <- if (is.null(cached_tests)) NULL else cached_tests[[row_var]]
 
   # Phase 17f: the pipeline calls the resolved-args CORES directly (num_resolve/num_core and
@@ -2302,9 +2375,9 @@ tab_transform <- function(ctx) {
   if (sum(col_vars_text) != 0) {
     text <- purrr::pmap(
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
-           pct_vect[col_vars_text], ref_vect[col_vars_text]),
-      function(.col_var, .digits, .na, .pct, .ref) {
-        r_pl <- plain_resolve(.pct, .ref, ref2, OR, .na, totaltab_name, total_names,
+           pct_vect[col_vars_text], ref_vect[col_vars_text], OR_vect[col_vars_text]),
+      function(.col_var, .digits, .na, .pct, .ref, .OR) {
+        r_pl <- plain_resolve(.pct, .ref, ref2, .OR, .na, totaltab_name, total_names,
                               c("row", "col"), comp, color_diff_OR, .digits, totaltab, tv_syms)
         plain_core(
           data, rv, .col_var, tv_syms, wt_sym,
@@ -3271,15 +3344,14 @@ tab_prepare <-
     #     as.factor
     #   ))
 
-    # Strip the `ordered` class from factors. Pragmatic: ordered factors once triggered an
-    # error downstream (likely in MCA / an external step), and dropping the class was the
-    # simplest fix. FIXME(future): keep `ordered` instead, to support ordinal-specific
-    # behaviours/options — remove this once the downstream error is pinned down.
-    data <- data |>
-      dplyr::mutate(dplyr::across(
-        where(is.ordered),
-        ~ `class<-`(., class(.)[class(.) != "ordered"])
-      ))
+    # Last Phase z10: the blanket `ordered`-strip that used to live here is GONE. Its FIXME guessed at
+    # MCA; the real cause, measured, was two vctrs bind sites in the TOTALS machinery, both reachable
+    # only through `tab_vars` -- adding a "Total"/"Ensemble" level produced a plain factor that vctrs
+    # then refused to combine with an ordered one. Both are fixed at the source (leaf_rename_totals()
+    # here, num_rollup() in R/tab-agg.R), so ordered factors now survive the whole pipeline, which is
+    # what makes `OR = "cumOR"` able to select its col_vars by class.
+    # WARNING (public surface): a table's grouping columns now come back `ordered`, with "NA" and
+    # "Total"/"Ensemble" appended as the GREATEST levels -- they are labels, not scale points.
 
     # Remove unused levels : time taker
     # data <- data |>  #Remove unused levels anyway
@@ -3465,6 +3537,14 @@ fmt_stack_frames <- function(frames, meta) {
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
+#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
+#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
+#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
+#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
+#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
+#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
+#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
+#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
 #' }
 #' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
 #' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
@@ -3612,7 +3692,7 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
   #pct
   stopifnot(pct %in% c("no", "row", "col", "all", "all_tabs"))
   if (is.logical(OR)) if(OR) OR <- "OR" else OR <- "no"
-  stopifnot(OR %in% c("no", "OR", "OR_pct", "or", "or_pct"))
+  stopifnot(OR %in% c("no", "OR", "OR_pct", "or", "or_pct", "cumOR"))
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
   if (color != "no" & ref == "no") {
@@ -4007,7 +4087,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
       # 14z: compute the OR interval only when a colour policy or stars needs it (else a NULL tabs_totn
       # skips it in tab_apply_reference -> no ci_type/bounds change, so existing ignore-OR tables stay
       # byte-identical). color_signif reads the bounds; stars read the (want_p-gated) pvalue.
-      or_want_ci <- (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) &&
+      or_want_ci <- (OR %in% c("OR", "OR_pct", "or", "or_pct", "cumOR") | color %in% c("or", "OR")) &&
         (!identical(color_signif[1], "ignore") || isTRUE(stars))
       ref_res <- tab_apply_reference(
         tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp, OR = OR,
@@ -4068,7 +4148,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # former per-column case_when/if_else/switch. NA_reals (built above at length nrow(tabs_n)) is
   # reused for every all-NA field (identical values, one allocation instead of ~6 per column).
   display_1 <- dplyr::case_when(
-    pct %in% c("row", "col") & OR %in% c("OR", "or") ~ "or",
+    pct %in% c("row", "col") & OR %in% c("OR", "or", "cumOR") ~ "or",
     pct != "no" & OR %in% c("OR_pct", "or_pct")      ~ "or_pct",
     pct != "no"                                      ~ "pct",
     length(wt) != 0                                  ~ "wn" ,
@@ -4346,8 +4426,34 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     set_cols(tabs_mean, P / Pref)   # with pct, tabs_mean is the *2 rule ratio, not a difference
 
 
-    # Odds ratio (when pct = "row")
-    if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
+    # Last Phase z10: CUMULATIVE odds ratio -- one cut point per column ("at or below level j"), for
+    # row i against the reference row. A k-level ordered col_var has k-1 cuts, so the last column is
+    # empty by construction (P(Y <= last) == 1 -> infinite odds), which is exactly how it fits the
+    # cell grid with nothing left over. Everything comes from the AGGREGATE (no microdata pass), and
+    # it reuses ci_or() + the `odds_ratio` break scale unchanged -- a new DICHOTOMISATION, not a new
+    # measure. The spread across a row IS the proportional-odds diagnostic, visible and free.
+    # WARNING: the `na = "keep"` column is excluded from the cumulation. It is appended AFTER the real
+    # levels by fct_na_value_to_level(), and "at or below NA" is not a cut point.
+    if (OR == "cumOR") {
+      lv <- which(!nm %in% c("Total", "NA"))
+      Pc <- matrix(NA_real_, n, k)
+      if (length(lv) >= 2L) {
+        U <- upper.tri(matrix(0, length(lv), length(lv)), diag = TRUE) * 1     # the cumulator
+        Pc[, lv] <- P[, lv, drop = FALSE] %*% U
+        Pc[, lv[length(lv)]] <- NA_real_                       # the degenerate last cut
+      }
+      Oc <- Pc / (1 - Pc)                                      # cumulative odds
+      tabs_rr <- data.table::copy(tabs_pct)
+      set_cols(tabs_rr, Oc)
+      tabs_or <- data.table::copy(tabs_pct)
+      set_cols(tabs_or, Oc / Oc[ra, , drop = FALSE])
+      refcols_vector <- rep(FALSE, k)      # no reference COLUMN: every column is its own cut, ref2 unused
+      or_cells <- function(N) {
+        A <- Pc * N; B <- (1 - Pc) * N
+        list(a = A, b = B, c = A[ra, , drop = FALSE], d = B[ra, , drop = FALSE])
+      }
+
+    } else if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
       # Phase 16c: PER-COLUMN reference index. For a BINARY col_var (exactly 2 non-Total level columns)
       # each level's OR is computed against the OTHER level (the two columns are reciprocals, neither is
@@ -4365,6 +4471,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
         ref_col_idx <- rep(if (ok_ref2) as.integer(ridx0) else NA_integer_, k)
         if (binary) { ref_col_idx[lv[1]] <- lv[2]; ref_col_idx[lv[2]] <- lv[1] }
         RR <- P / P[, ref_col_idx, drop = FALSE]
+        or_cells <- function(N) {
+          PN <- P * N
+          list(a = PN, b = PN[, ref_col_idx, drop = FALSE],
+               c = (P * N)[ra, , drop = FALSE],
+               d = ((P * N)[ra, , drop = FALSE])[, ref_col_idx, drop = FALSE])
+        }
       } else {
         warning(paste0(
           "in ref2 = '", ref2, "' , no columns were found as reference for comparison ; ",
@@ -4438,6 +4550,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
         set_cols(tabs_or, matrix(NA_real_, n, k))
       }
       ref_col_idx <- rep(which(refcols_vector)[1], k)
+      if (!is.na(ref_col_idx[1])) or_cells <- function(N) {
+        PN <- P * N
+        list(a = PN, b = PN[, ref_col_idx, drop = FALSE],
+             c = (P * N)[ra, , drop = FALSE],
+             d = ((P * N)[ra, , drop = FALSE])[, ref_col_idx, drop = FALSE])
+      }
     }
   }
 
@@ -4454,8 +4572,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
   # gives the CI-inversion pvalue (want_p = stars) that duals with the bracket, like the modelled OR.
   or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
   if (!is.null(tabs_totn) && exists("tabs_or", inherits = FALSE) &&
-      exists("ref_col_idx", inherits = FALSE) && exists("ra", inherits = FALSE) &&
-      !is.null(refrows) && any(!is.na(ref_col_idx))) {
+      exists("or_cells", inherits = FALSE) && !is.null(refrows)) {
     N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
     # Last Phase s: swap in the effective base (Kish n_eff) where it is finite (opt-in); off-kish
     # tabs_neff is NULL -> N is the unweighted base, byte-identical.
@@ -4463,12 +4580,11 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       Ne <- as.matrix(tabs_neff[, nm, with = FALSE]) * 1.0
       N[is.finite(Ne)] <- Ne[is.finite(Ne)]
     }
-    PN <- P * N
-    A  <- PN                                         # a = level j, this row      (positive cell)
-    B  <- PN[, ref_col_idx, drop = FALSE]            # b = reference level, this row  (negative cell)
-    Cc <- P[ra, , drop = FALSE] * N[ra, , drop = FALSE]   # c = level j, ref row
-    D  <- Cc[, ref_col_idx, drop = FALSE]            # d = reference level, ref row
-    oc <- ci_or(as.vector(A), as.vector(B), as.vector(Cc), as.vector(D),
+    # z10: the 2x2 is supplied BY THE ARM that built the odds ratio (a closure over its own
+    # reference structure), so this block has no branch at all -- one ci_or() call for three OR
+    # flavours. `a`/`b` = the level's (positive, negative) legs in this row, `c`/`d` the ref row's.
+    cl <- or_cells(N)
+    oc <- ci_or(as.vector(cl$a), as.vector(cl$b), as.vector(cl$c), as.vector(cl$d),
                 conf_level = conf_level, want_p = isTRUE(stars))
     OINF <- matrix(oc$inf, n, k); OSUP <- matrix(oc$sup, n, k); OPV <- matrix(oc$pvalue, n, k)
     # No interval on a reference position (OR = 1 there by construction): the ref row and any
@@ -6430,13 +6546,21 @@ leaf_totrow_tottab <- function(tabs, row_var, tab_vars) {
 leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totaltab, totaltab_name,
                                tottab_vector, totrow_vector) {
   #Rename totals
+  # Last Phase z10: both renames are MASK-ASSIGNMENTS on the expanded factor, not `dplyr::if_else()`.
+  # if_else built its `true =` branch as a fresh factor / character, so an ORDERED input hit
+  # "Can't combine <factor> and <ordered>" -- the real cause behind the old blanket ordered-strip in
+  # tab_prepare(). fct_expand() + `[<-` keeps the class (ordered or not) by construction.
+  # WARNING: `sort(unique(.))` below is load-bearing, NOT tidying. The old `true =` branch was a
+  # CHARACTER vector, so factor() sorted the new labels alphabetically; dropping the sort silently
+  # reorders the total rows of every grouped table.
   if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
     tabs <- tabs |> dplyr::mutate(dplyr::across(
       tidyselect::all_of(as.character(tab_vars)),
-      ~ dplyr::if_else(tottab_vector,
-                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
-                       false = .) |>
-        forcats::fct_drop()
+      ~ {
+        z <- forcats::fct_expand(., totaltab_name)
+        z[tottab_vector] <- totaltab_name
+        forcats::fct_drop(z)
+      }
     ))
   }
 
@@ -6447,15 +6571,15 @@ leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totalt
                                                        purrr::set_names("Total", total_names[1])))
   } else {
     tabs <- tabs |>
-      tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE) |>
+      tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE)
+    totrow_labels <- paste(total_names[1], tabs$tabs_tot_names)
+    tabs <- tabs |>
       dplyr::mutate(
-        !!row_var := dplyr::if_else(
-          totrow_vector,
-          true  = paste(total_names[1], .data$tabs_tot_names) |>
-            forcats::fct_expand(levels(!!row_var)) |>
-            forcats::fct_relevel(levels(!!row_var)),
-          false = !!row_var) |>
-          forcats::fct_drop()
+        !!row_var := {
+          z <- forcats::fct_expand(!!row_var, sort(unique(totrow_labels)))
+          z[totrow_vector] <- totrow_labels[totrow_vector]
+          forcats::fct_drop(z)
+        }
       ) |>
       dplyr::select(-"tabs_tot_names")
   }

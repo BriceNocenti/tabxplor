@@ -331,13 +331,24 @@ test_that("multinomial empirical: tooltip-only via the empirical_tips attribute;
   expect_null(tabxplor:::get_empirical_tips(ct))
 })
 
-test_that("ordinal empirical is ignored with a message (no clean crude analogue)", {
+test_that("ordinal empirical is the UNIVARIABLE proportional-odds fit (Obs_cumOR)", {
+  # Last Phase z10 inverted this test's premise. Proportional odds is a CONSTRAINT, so the univariable
+  # ordinal model is not saturated and has no closed form -- but it is still "the model's own effect
+  # fitted with one predictor", which is the rule every other family follows. The closed-form
+  # substitutes were measured to drift 2.4-5.4 % (the PO violation itself), which is why a fit is the
+  # only honest crude counterpart here.
+  skip_if_not_installed("MASS")
   d <- emp_data()
-  expect_message(
-    t <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", empirical = TRUE,
-                                  cleannames = FALSE)),
-    "not available")
-  expect_false(any(grepl("^Emp\\.", names(t))))
+  t <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal",
+                                empirical = TRUE, cleannames = FALSE))
+  expect_true("Obs_cumOR" %in% names(t))
+
+  dm <- tidyr::drop_na(d[, c("spectrum", "race")])
+  uni <- suppressWarnings(MASS::polr(spectrum ~ race, data = dm))
+  i   <- which(as.character(t$var) == "race" & !is_refrow(t[["Obs_cumOR"]]))
+  expect_equal(unname(get_or(t[["Obs_cumOR"]])[i]), unname(exp(stats::coef(uni))),
+               tolerance = 1e-6)
+  expect_gt(length(i), 0L)
 })
 
 test_that("display = 'ratio' renders the ratio field; legacy 'rr' still works", {

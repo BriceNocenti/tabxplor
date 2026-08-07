@@ -94,11 +94,23 @@ modelised quantity when there is a single predictor, so a large crude-versus-adj
 confounding.
 
 Per family: \strong{binomial} adds \verb{Obs_\%} + \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME);
-\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR};
-\strong{multinomial} shows the crude \% + difference per category in the HTML tooltip (columns would
-explode). A continuous predictor fills the \strong{effect} column only: it has no levels, so its base
-cell (\verb{Obs_\%} / \code{Obs_mean} / \code{Obs_rate}) stays empty and its distribution — mean, standard
-deviation, and the mean in each outcome group — appears in the HTML tooltip instead.
+\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR}; a
+\strong{grouped binomial} (\verb{trials =}) adds \code{Obs_mean} — the mean \emph{score} — plus \code{Obs_OR}, the odds
+ratio of the summed counts; an \strong{ordinal} outcome adds a single \code{Obs_cumOR}, the cumulative odds
+ratio of a univariable proportional-odds fit. A \strong{multinomial} outcome would need one crude
+column per outcome category, so its crude effect is folded into the model cell instead —
+\verb{2.31 (obs 2.05)} — with the crude \% + difference per category in the HTML tooltip. A continuous
+predictor fills the \strong{effect} column only: it has no levels, so its base cell stays empty and its
+distribution — mean, standard deviation, and the mean in each outcome group — goes to the tooltip.
+
+The rule behind all of that is one sentence: \emph{the observed effect is the model's own effect,
+fitted with a single predictor}. Where that univariable model happens to be \strong{saturated} (a
+categorical predictor under every family except ordinal) it has a closed form and is computed
+directly; otherwise it is a real fit, so the crude column shares the model's family, link,
+confidence-interval method and \code{multiplier} by construction. The only outcomes left with no
+observed counterpart at all are the compound-\code{formula} escape hatch (there is no predictor
+structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3+ level outcome (no
+\code{marginaleffects} method).
 
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
 model} (listwise-complete on the dependent, all predictors and any design variable), so crude and

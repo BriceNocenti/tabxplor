@@ -1275,6 +1275,24 @@ display_primary <- function(display) {
   display
 }
 
+# fmt_display_shows() -- does a cell's display ALREADY show this field, anywhere in its template?
+#
+# Last Phase z10: the html tooltip suppressed a line by testing display_primary(), i.e. the FIRST token
+# only -- so every composite cell repeated its own bracket on hover. It shipped that way: an AME column
+# reading "{diff} ({pct})" printed the adjusted percentage in the cell AND again in the tooltip, and the
+# reg_marginal_column WARNING about the "prob_ratio" reference template was that same bug patched at one
+# producer. One helper on the EXISTING template parser fixes it at the gate for every field at once.
+#' @keywords internal
+fmt_display_shows <- function(display, token) {
+  out  <- !is.na(display) & display == token
+  comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
+  if (any(comp)) {
+    for (tmpl in unique(display[comp]))
+      out[comp & display == tmpl] <- token %in% parse_display_template(tmpl)$fields
+  }
+  out
+}
+
 # Split ONE template into ordered segments (called once per unique template in a column, which are
 # ~uniform). Returns pieces (literals + {token}s in order), is_tok (which pieces are field tokens),
 # and fields (the alias-resolved internal tokens, in order). A degenerate template with no {field}
@@ -2651,9 +2669,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
           stringi::stri_pad(reffmt, suppressWarnings(max(stringi::stri_length(reffmt), na.rm = TRUE)),
                            pad = pad)
         )
-        out[disp_or] <- ifelse(refer & !is.na(reffmt), paste0(one, " (", reffmt, ")"), vals)
+        # z10: `!is.na(or_val)` -- a reference cell with NO odds ratio must not claim "1". Byte-identical
+        # for every OR flavour whose reference cell is 1 by construction; it is the cumulative OR's
+        # degenerate last cut ("at or below the top level" is certain) that has a reference row and no
+        # ratio, and would otherwise print the raw "NA" beside the reference percentage.
+        out[disp_or] <- ifelse(refer & !is.na(or_val) & !is.na(reffmt),
+                               paste0(one, " (", reffmt, ")"), vals)
       } else {                                               # pure model-OR: bare "1" on ref rows
-        out[disp_or] <- ifelse(refer, one, vals)
+        out[disp_or] <- ifelse(refer & !is.na(or_val), one, vals)
       }
     }
 

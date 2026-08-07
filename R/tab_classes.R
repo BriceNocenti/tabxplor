@@ -1145,6 +1145,14 @@ tab_stack_tables <- function(tables) {
         lapply(fmt_col_attrs, function(a) attr(common, a, exact = TRUE)), fmt_col_attrs)
       fmt_stack_frames(frames, meta)
     } else {
+      # Last Phase z10: stacking several row_vars puts DIFFERENT variables' levels in one display
+      # column, so an `ordered` class on it would claim an order across variables that does not exist
+      # -- and vctrs rightly refuses to combine two ordered factors with different level sets (or an
+      # ordered one with a plain factor). Drop the class here, at the one place the axes are merged;
+      # a single-row_var table keeps its ordered column untouched.
+      if (length(pieces) > 1L && any(purrr::map_lgl(pieces, is.ordered)))
+        pieces <- purrr::map(pieces, function(p)
+          if (is.ordered(p)) factor(p, levels = levels(p), ordered = FALSE) else p)
       do.call(vctrs::vec_c, pieces)                        # factor level union / plain concat
     }
   })
@@ -2113,6 +2121,11 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # Phase 10i-A: a composite cell ("{pct} (n={n})") suppresses the tooltip line for its PRIMARY
   # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
   disp    <- display_primary(get_display(x))
+  # Last Phase z10: `shows(field)` = "the cell ALREADY prints this field", tested over the WHOLE
+  # template rather than its first token -- so a composite ("{diff} ({pct})", "{or} ({obs})") no longer
+  # repeats its own bracket on hover. `disp` stays for the tokens that are not fmt FIELDS (pct_ci,
+  # mean_ci, gof, blank), which a template can never contain.
+  shows   <- function(field) fmt_display_shows(get_display(x), field)
 
   # Phase 14b: format() right-pads a column to its widest cell so the numbers align in the TABLE; in
   # a prose tooltip that pad is noise ("ratio:   x1"). Every interpolated value goes through this.
@@ -2181,17 +2194,17 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   out_ci   <- switch(ci_type, "cell" = out_ci, "")
 
   cond_pct <- type %in% c("col", "row", "all", "all_tabs") &
-    !is.na(get_pct(x)) & !disp %in% c("pct", "pct_ci")
+    !is.na(get_pct(x)) & !shows("pct") & !disp %in% c("pct_ci")
   out_pct <- if (any(cond_pct)) {
     dplyr::if_else(cond_pct, tip_num(set_display(x, "pct")), "")
   } else blank
 
-  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !disp %in% c("mean", "mean_ci")
+  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !shows("mean") & !disp %in% c("mean_ci")
   out_mean <- if (any(cond_mean)) {
     dplyr::if_else(cond_mean, tip_num(set_display(x, "mean")), "")
   } else blank
 
-  cond_sd <- type == "mean" & !is.na(get_var(x)) & !disp == "var"
+  cond_sd <- type == "mean" & !is.na(get_var(x)) & !shows("var")
   out_sd <- if (any(cond_sd)) {
     vr <- get_var(x)                                   # get_var()/get_digits(), not the `$` proxy pull
     dplyr::if_else(
@@ -2212,7 +2225,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   } else blank
 
   cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &
-    !disp %in% c("or", "OR", "or_pct", "OR_pct")
+    !shows("or") & !disp %in% c("or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")
   } else blank
@@ -2230,7 +2243,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # Last Phase z4: the adjusted standardized residual beside the contribution it gates. Derived from
   # the stored p-value (fmt_resid), so it exists exactly where a chi2 contribution was computed --
   # the same cells as `out_ctr`, minus the total rows (a margin has no residual, hence the NA p).
-  cond_resid <- is.finite(fmt_resid(x)) & comparable & !disp == "resid"
+  cond_resid <- is.finite(fmt_resid(x)) & comparable & !shows("resid")
   out_resid <- if (any(cond_resid)) {
     dplyr::if_else(cond_resid,
                    paste0(gettext("std. residual"), ": ", tip_num(set_display(x, "resid"))), "")
@@ -2238,10 +2251,11 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` / "between_groups".
   # A stored field, so it exists exactly where tab_reg wrote a counterpart -- NA on every cross-table
-  # and on a Constant / numeric-predictor / multinomial cell, which is also why this cannot collide
-  # with the multinomial `empirical_tips` fragment appended downstream (there `obs` is NA).
+  # and on a Constant / compound-formula cell. Last Phase z10: a MULTINOMIAL cell now has one, printed
+  # IN-CELL as "{or} ({obs})", so `shows("obs")` suppresses this line there and the `empirical_tips`
+  # fragment appended downstream (the crude PERCENTAGE) stays the only extra hover text.
   # The LABEL is read off the column's own stored measure, never guessed from a name.
-  cond_obs <- !is.na(get_obs(x)) & !disp == "obs"
+  cond_obs <- !is.na(get_obs(x)) & !shows("obs")
   out_obs <- if (any(cond_obs)) {
     lbl <- if ("between_groups" %in% c(get_color(x), get_color_bg(x)))
       gettext("ref. group") else gettext("obs")
@@ -2266,7 +2280,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    "")
   } else blank
 
-  cond_n <- !is.na(get_n(x)) & !disp == "n"
+  cond_n <- !is.na(get_n(x)) & !shows("n")
   out_n <- if (any(cond_n)) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
   } else blank

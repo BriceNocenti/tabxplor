@@ -1160,9 +1160,104 @@ because the reref/digest fit carries no `$data`). The crude-companion columns ar
 **`REG_EMPIRICAL`** fact table (per family: base + effect column SHAPE — fmt type/display/digits/ref/
 ci_type/colour measure/name — plus the CI method literal) through one `emp_col()` builder; `ci_settings`'
 `method_mean_diff`/`method_mean_ratio` read straight from `REG_EMPIRICAL`, so "the empirical CI matches
-what the legend names" is data, not a hand-synced pair. Multinomial crude companions stay a separate
-tooltip arm (`reg_empirical_tips`). The `predicted_unadjusted` control column was cut (its
+what the legend names" is data, not a hand-synced pair. The `predicted_unadjusted` control column was cut (its
 Emp.% == unadjusted-prediction identity survives as a test-only assertion).
+
+**Last Phase z10 — the last three families, and one rule instead of six inferences.** `empirical = TRUE`
+was silent on grouped binomial (`trials =`), multinomial and ordinal. Those were not three features but
+one missing fact, and the fix is mostly SUBTRACTION. The rule z9 stated now covers everything: *the
+observed effect is the model's own effect, fitted with ONE predictor*; where that univariable model is
+**saturated** it has a closed form, otherwise it is a real fit. `reg_crude_saturated(crude_key,
+is_factor)` states exactly that (a factor predictor, under any family except ordinal), so nothing
+re-derives it.
+
+**The stored fact.** `reg_crude_key(family, trials, compound)` — the `REG_EMPIRICAL` key, or NA — is
+computed ONCE at spec construction and stored on the spec (mirrored into `reg_meta$crude_keys`). It
+retired six inferences in three different shapes: a duplicated family whitelist in `reg_build`, a
+hand-written `quasipoisson -> poisson` alias, a lookup-miss return, a second silent fallthrough, a third
+family list in `tab_reg()`, and — worst — `positive_level`-is-NULL used as a proxy for "grouped binomial
+or compound formula", which is a SIDE EFFECT of `reg_fit()` skipping `reg_prep_binary()` on that path,
+not a statement about crude twins (Phase 17 rule 2). Grouped-ness is now a role, so `trials` never has
+to enter `reg_meta`. **`reg_crude_shape(crude_key, effect, do_exp)`** is the twin selection rule, read by
+both the column builder and the footer wording (`reg_crude_in_cell()`), so the two cannot drift; each
+family declares its coefficient-scale row as `coef` / `coef_log`.
+
+**One merged grid.** `reg_empirical()` is now keyed **(var, level, category)** and absorbed
+`reg_empirical_tips()`, which is deleted: they were the same computation at two key widths (the tips'
+`sum(w[m & y == cat]) / sum(w[m])` is bit-identical to the old binary branch's `wpos/(wpos+wneg)`), and
+the tips version was simply the general K-category form. Two PARTS, because one family needs both at
+once: a CATEGORICAL part (the weighted share + its Wilson interval, its difference from the reference
+LEVEL + Newcombe, the two 2×2 legs `emp_wpos`/`emp_wneg` against the reference CATEGORY, and the odds
+and risk ratios built from them) and a NUMERIC part (weighted mean + variance). That is why the old
+`emp_base` had to split into `emp_prop` / `emp_mean`: a grouped binomial shows a mean SCORE beside a
+summed-count OR. ⚠ `emp_ratio` divides by the reference level's own `wpos/wneg`, not by the
+algebraically-equal `prop/prop[ref_cat]` — the last bit differs, and an OR of 1−1e−16 renders as `1/1`.
+`reg_crude_yw()` generalises `reg_crude_y()` into the ONE description of "what the crude estimator
+averages, and with what weights": a grouped-binomial row is a CLUSTER of `trials` draws (`y = succ/tr`,
+weight `w*tr`, so `sum(w*tr*y) = sum(w*succ)` is exactly the summed 2×2 leg, and `reg_if_se()` summing
+over ROWS gives the cluster-robust variance the model leg also has); a categorical outcome contributes
+the indicator of one category.
+
+**Three shape facts, not a fifth arm.** A shape row may declare `visible = FALSE` (its number rides
+IN-CELL via `obs` instead of drawing an `Obs_*` column), `per_category = TRUE` (one crude effect per
+outcome category) and `from = "fit"`. `two()` became **`emit()`**, accepting 0, 1 or 2 columns — ordinal
+emits ONE (a cumulative OR has no base share), multinomial ZERO. `reg_empirical_numeric()` generalised
+to **`reg_empirical_fit()`**, keyed by skeleton row rather than by variable, and called with *every*
+predictor under an ordinal outcome (proportional odds is a CONSTRAINT: the closed-form substitutes drift
+2.4–5.4 %, and the drift IS the PO violation — a data-dependent offset the size of the first colour
+break). The crude EFFECT is returned as a list keyed by outcome category (`""` for a single-column fit),
+and `set_obs_if()` looks it up by the column's already-stored `emp_key`. ⚠ `l[[""]]` is a
+subscript-out-of-bounds ERROR in R, so every such lookup goes through `cat_get()`.
+
+**Display.** Where the crude effect draws no column, `set_obs_if()` folds it into the model cell as
+`"{or} ({obs})"` / `"{diff} ({obs})"` — driven by `shape_visible()`, never by a family name. Three
+reasons: `obs` is defined on the cell's OWN scale, so the bracket is the same kind of quantity as the
+estimate; the printed bracket then IS what `color = "adjustment"` scores, so number and colour cannot
+tell different stories; and the crude percentage is not lost (it stays in `empirical_tips`).
+`reg_model_note()` gains an `obs_in_cell` clause so the footer names the bracket. This also required
+fixing a shipping bug: `tab_kable_print_tooltip()` gated its lines on `display_primary()`, the FIRST
+token only, so every composite cell repeated its own bracket on hover (an AME cell showed the adjusted
+% in the cell and again in the tooltip). **`fmt_display_shows(display, token)`** — one helper on the
+existing template parser — replaced the six primary-only gates.
+
+**The gap test.** The coefficient paths of multinomial / ordinal stay blocked by
+`reg_estimand_collapsible()` (they are conditional odds ratios), which needed no new code: an all-NA
+`gap_se` already reads as `ignore`. Their MARGINAL paths get a real test, from a new score-based core in
+`R/reg-influence.R`. `reg_coef_if_maker()` dispatches: `multinom`/`polr` have no working residuals or
+IRLS weights, so they go through **`reg_if_from_score(S, bread)`**. ⚠ The two cores are deliberately NOT
+merged — `reg_if_from_parts()` exists to avoid ever materialising `U = X*(W*r)` (peak memory ONE `n×p`),
+and a multinomial score has no such structure. Two traps, both closed structurally rather than by
+comment: `vcov(multinom)` is CATEGORY-MAJOR while `as.vector(coef())` is category-minor (measured: 2.7×
+wrong SE), so the score columns are NAMED and a mismatch returns NULL; and `polr`'s bread is
+`vcov(fit)`, never `solve(fit$Hessian)` — `polr` optimises over `(β, ζ₁, log Δζ)`, and substituting the
+Hessian was measured up to 2× wrong here. `reg_ame_if_cat_maker()` adds the marginal IF per outcome
+category, its jacobian by central differences of a LOCAL predicted-probability function
+(`reg_prob_engine()`: softmax / cumulative logit). That local predictor is not a second implementation —
+it is the same arithmetic the score functions already need, one producer with two consumers — and it is
+policed the way `reg_crude_if_maker()` is: a test pins it to `marginaleffects::avg_comparisons()`, which
+it reproduces to 10 decimals. `svyolr` is refused (its `fit$var` is the design-based sandwich, not the
+bread), which is moot: `tab_reg()` already aborts a weighted 3+ level outcome with `effect = "ame"`.
+
+**`tab(OR = "cumOR")` and the `ordered` un-block.** The descriptive twin: for an ORDERED col_var with 3+
+levels under `pct = "row"`, cell *(i, j)* is the odds of falling at or below level *j* for row *i*
+against the reference row — a plain 2×2 from the AGGREGATE with the exact Woolf interval, no
+proportional-odds assumption. A *k*-level scale has *k−1* cuts, so the last column is empty by
+construction, and the spread across a row IS the PO diagnostic. Nothing new in `fmt_class.R`: same `or`
+field, `ci_type = "or"`, `odds_ratio` scale — a new *dichotomisation*, not a new measure. Eligibility is
+per PAIR, so it resolves onto **`settings$pairs$OR`** (17e's spine exists for exactly this); an
+ineligible pair degrades to `"no"` with one message. That move also deleted a live bug:
+`tab-resolve.R`'s `auto_or` indexed the per-row_var SCALAR `OR` with a logical over col_vars, so with ≥2
+factor col_vars `color = "auto"` silently resolved an OR table to `"diff"`. The shared Woolf block was
+INVERTED rather than branched: each OR arm supplies its own 2×2 as a closure (`or_cells(N)`), so the CI
+block is one `ci_or()` call for three OR flavours. The blanket `ordered`-strip in `tab_prepare()` is
+gone; its FIXME guessed at MCA, but the measured cause was two vctrs bind sites in the TOTALS machinery,
+both reachable only through `tab_vars` — `leaf_rename_totals()`'s two `if_else`s (now mask-assignments
+on an expanded factor; ⚠ `sort(unique(.))` there is load-bearing, the old character branch sorted
+alphabetically) and `num_rollup()`, which now gives every rollup piece ONE shared ptype (vctrs refuses
+two ordered factors with different level sets). `tab_stack_tables()` un-orders the merged `levels`
+column when several row_vars are stacked: different variables' orders are incomparable. Public-surface
+change, accepted consciously: grouping columns come back `ordered`, with `NA` / `Total` appended as the
+GREATEST levels — labels, not scale points.
 
 **Last Phase z9 — the crude companion of a CONTINUOUS predictor.** Until z9 those rows were blank, and
 that blank was a skeleton **key miss**, not a guard: `reg_empirical_columns()` joins on

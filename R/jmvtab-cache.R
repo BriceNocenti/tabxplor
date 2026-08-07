@@ -977,7 +977,7 @@ jmvtab_build <- function(data, opts, store) {
   # it drives the cache tuple, the armed build AND the reref (which recomputes the diff CI + pvalue only
   # when ci != "no"). Without it, an explicit ci = "no" + stars would arm a pvalue the reref never refreshes.
   if (isTRUE(opts$stars) && identical(ci, "no") &&
-      !(opts$OR %in% c("OR", "or", "OR_pct", "or_pct")) &&
+      !(opts$OR %in% c("OR", "or", "OR_pct", "or_pct", "cumOR")) &&
       (has_num_col || opts$pct %in% c("row", "col"))) ci <- "diff"
 
   ce <- new.env(parent = emptyenv())

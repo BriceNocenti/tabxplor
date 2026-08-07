@@ -94,7 +94,19 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
     agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols, keyby = by]
   }
   if (length(drop_keys) > 0)    roll[, (drop_keys) := "Total"]
-  if (length(tab_vars_chr) > 0) roll[, (tab_vars_chr) := lapply(.SD, as.factor), .SDcols = tab_vars_chr]
+  # Last Phase z10: one SHARED ptype per tab_var, taken from the source aggregate. vctrs refuses to
+  # combine two ORDERED factors with different level sets, so the map_dfr over the grouping sets
+  # (R/tab.R, num_core) died on an ordered tab_var: the sets that keep it carry levels(src), the sets
+  # that collapse it to "Total" carried only "Total". Byte-identical unordered -- the first grouping
+  # set keeps the full source levels, so vctrs' appearance-order union already yielded
+  # c(levels(src), "Total"); a NON-factor source keeps the old as.factor() exactly.
+  if (length(tab_vars_chr) > 0) for (v in tab_vars_chr) {
+    src <- agg[[v]]
+    data.table::set(roll, j = v, value = if (is.factor(src)) {
+      factor(as.character(roll[[v]]), levels = unique(c(levels(src), "Total")),
+             ordered = is.ordered(src))
+    } else as.factor(roll[[v]]))
+  }
   roll
 }
 

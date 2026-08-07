@@ -71,13 +71,23 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   ci_ratio_req <- ci == "ratio"
   if (any(ci_ratio_req)) ci[ci_ratio_req] <- "diff"
 
+  # Last Phase z10: `OR` arrives EITHER as a per-row_var atomic vector (tab_counts, the deprecated
+  # step path, the tests) OR, from tab_setup(), as a per-row_var LIST of per-col_var vectors -- the
+  # grain `OR = "cumOR"` needs, since eligibility is a property of the col_var (an `ordered` factor).
+  # Normalise to the list form ONCE here so every predicate below is written at a single grain.
+  # This also FIXES a live bug: `auto_or` indexed the per-row_var SCALAR with `.y[col_vars_text]`, so
+  # with >= 2 factor col_vars it read `"OR"[c(TRUE, TRUE)]` == c("OR", NA) -> FALSE -> `color = "auto"`
+  # silently resolved an OR table to "diff".
+  if (!is.list(OR)) OR <- purrr::map(OR, ~ vctrs::vec_recycle(.x, length(col_vars_text)))
+  or_values <- c("OR", "OR_pct", "or", "or_pct", "cumOR")
+
   # Hoisted out of the `color = "auto"` case_when below, because the Phase 14a `color_signif`
   # forcing needs the SAME predicates and must run BEFORE it (see there).
   pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
   auto_or    <- purrr::map2_lgl(
     pct_vect, OR,
     ~ all(.x[col_vars_text] %in% c("row", "col") &
-            .y[col_vars_text] %in% c("OR", "OR_pct", "or", "or_pct"))
+            .y[col_vars_text] %in% or_values)
   )
   num_only   <- sum(col_vars_text) == 0
 
@@ -165,7 +175,9 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   # NB: `or_on` (not `auto_or`) -- OR reaches this pass as a LOGICAL (it is stringified only in the leaf,
   # tab_plain), so `auto_or`'s string test is FALSE for it and cannot be reused to exclude OR here.
   if (isTRUE(stars)) {
-    or_on <- if (is.logical(OR)) OR else OR %in% c("OR", "or", "OR_pct", "or_pct")
+    # z10: per-row_var, over that row_var's col_vars -- `any()`, because a single OR col_var already
+    # carries its own ci_type = "or" bounds and forcing "diff" would overwrite them.
+    or_on <- purrr::map_lgl(OR, ~ if (is.logical(.x)) any(.x) else any(.x %in% or_values))
     ci[ci == "no" & !or_on & (num_only | pct_rowcol)] <- "diff"
   }
 

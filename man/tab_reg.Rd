@@ -163,11 +163,23 @@ modelised quantity when there is a single predictor, so a large crude-versus-adj
 confounding.
 
 Per family: \strong{binomial} adds \verb{Obs_\%} + \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME);
-\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR};
-\strong{multinomial} shows the crude \% + difference per category in the HTML tooltip (columns would
-explode). A continuous predictor fills the \strong{effect} column only: it has no levels, so its base
-cell (\verb{Obs_\%} / \code{Obs_mean} / \code{Obs_rate}) stays empty and its distribution — mean, standard
-deviation, and the mean in each outcome group — appears in the HTML tooltip instead.
+\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR}; a
+\strong{grouped binomial} (\verb{trials =}) adds \code{Obs_mean} — the mean \emph{score} — plus \code{Obs_OR}, the odds
+ratio of the summed counts; an \strong{ordinal} outcome adds a single \code{Obs_cumOR}, the cumulative odds
+ratio of a univariable proportional-odds fit. A \strong{multinomial} outcome would need one crude
+column per outcome category, so its crude effect is folded into the model cell instead —
+\verb{2.31 (obs 2.05)} — with the crude \% + difference per category in the HTML tooltip. A continuous
+predictor fills the \strong{effect} column only: it has no levels, so its base cell stays empty and its
+distribution — mean, standard deviation, and the mean in each outcome group — goes to the tooltip.
+
+The rule behind all of that is one sentence: \emph{the observed effect is the model's own effect,
+fitted with a single predictor}. Where that univariable model happens to be \strong{saturated} (a
+categorical predictor under every family except ordinal) it has a closed form and is computed
+directly; otherwise it is a real fit, so the crude column shares the model's family, link,
+confidence-interval method and \code{multiplier} by construction. The only outcomes left with no
+observed counterpart at all are the compound-\code{formula} escape hatch (there is no predictor
+structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3+ level outcome (no
+\code{marginaleffects} method).
 
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
 model} (listwise-complete on the dependent, all predictors and any design variable), so crude and
@@ -234,6 +246,11 @@ sizes every row would test "significant" for a reason that is not confounding. T
 stay descriptive, \code{color_signif} is ignored, and \code{tab_reg()} says so once. The test is also skipped
 when the two estimates cannot be compared cell by cell: at \code{at = "reference"}, and when a compared
 model's complete cases differ from the observed columns' (use \code{na = "drop_all_models"}).
+
+That ruling covers the \strong{3+ level outcomes} too, and it is the reason they behave as they do: a
+multinomial or ordinal \emph{coefficient} is a conditional odds ratio, so those columns show the
+observed effect but carry no test. Their \strong{marginal} paths (\code{effect = "ame"} / \code{"ame_ratio"}) are
+collapsible and do get one, per outcome category.
 
 Two things to keep in mind. A difference between two groups, or before and after adjustment, is a
 difference in \emph{that effect measure}: groups with different base rates or more variable outcomes can

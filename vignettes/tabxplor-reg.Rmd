@@ -395,6 +395,85 @@ tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "am
 With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips, available at mouse hover of a cell.
 
 
+## Every outcome now has an observed counterpart
+
+`empirical = TRUE` answers one question — **"how much of this association survives once I adjust for the rest?"** — and until recently it went quiet on exactly the outcomes where that question bites hardest. It now works for every kind of outcome, and the rule behind it is a single sentence:
+
+> The observed effect is **the model's own effect, fitted with one predictor**.
+
+That is worth saying plainly, because it is what makes the comparison fair. The crude number is not "a percentage" and the modelled one "a coefficient" — they are the *same quantity*, computed the same way, on the *same people* (the same complete cases), and shown on the same scale. Only the list of predictors differs. So the distance between them measures adjustment, and nothing else.
+
+### An ordered outcome: what changes when you adjust
+
+Income here is an **ordered** factor, so it is fit as a proportional-odds model. `Obs_cumOR` is the same model with one predictor at a time:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "relig"),
+        empirical = TRUE, color = c("OR", "adjustment"))
+```
+
+Read a row left to right: the observed cumulative odds ratio, then the modelled one, with the **background** colouring the gap between them. Being Black is associated with lower income (`1/1.54` observed), and adjusting for religion barely moves it (`1/1.51`) — the association is not explained by religion. Compare Buddhist/Hinduist, where the effect *grows* once race and the other groups are held constant: adjustment can strengthen an association as easily as it can wash one away.
+
+### A nominal outcome: the crude number rides in the cell
+
+A multinomial model already spends one column per outcome category, so a second set of columns would double the table. The observed effect is printed **in the cell instead**, in parentheses:
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
+        empirical = TRUE, color = c("OR", "adjustment"))
+```
+
+`0.41 (0.41)` means "modelled 0.41, observed 0.41" — nothing to see. `0.08 (0.10)` means adjustment pulled the effect a little toward 1. The footer says which number is which, and hovering a cell (in an HTML export) adds the crude percentages behind it.
+
+### A summed score
+
+With `trials =`, the observed columns are the average share of "yes" answers expressed two ways: `Obs_mean` is the plain **mean score**, and `Obs_OR` the odds ratio of the summed items.
+
+```{r}
+gss_simple |>
+  score_from_lv1("score", vars_list = c("married", "income25k")) |>
+  tab_reg("score", c("race", "age"), family = "binomial", trials = 2,
+          empirical = TRUE, color = c("OR", "adjustment"))
+```
+
+### How to read it — and how not to
+
+Three habits are worth acquiring.
+
+**A gap is a clue, not a verdict.** "Adjusting for religion halved this effect" is a sentence about your model, not about the world: it holds for *these* covariates, measured *this* way. A different set of controls gives a different gap.
+
+**Do not read a gap as "the true effect minus the biased one".** Both numbers are estimates. If the crude one is based on few people it will wander, and the gap wanders with it. That is what the greying is for (below).
+
+**Watch the scale, especially with odds ratios.** An odds ratio changes when you add a predictor *even if that predictor has nothing to do with the exposure* — a purely mathematical property called non-collapsibility. So on the odds-ratio columns above, part of every gap is arithmetic, not confounding, and the colours stay purely descriptive: they show the size of the move without claiming it is significant. If you want a gap you can test, ask for a collapsible measure — a risk ratio (`family = "poisson"` on a binary outcome) or a marginal effect (`effect = "ame"`), which is also the friendlier quantity to explain:
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
+        effect = "ame", empirical = TRUE, color = c("diff", "adjustment"),
+        color_signif = "grey_non_signif")
+```
+
+Now the cell reads "modelled effect in percentage points, observed one in parentheses", and a background that stays grey means the two are not distinguishable from noise.
+
+### For the record: which paths carry a test, and with which standard error
+
+The `"adjustment"` colour always shows the **size** of the gap. Whether it also *tests* it depends on one property of the effect measure, and the table decides for you:
+
+| what you asked for | observed effect | gap tested? |
+|---|---|---|
+| `effect = "ame"` / `"ame_ratio"`, any family | yes | **yes** |
+| `family = "poisson"` on a binary outcome (risk ratios) | yes | **yes** |
+| Poisson incidence-rate ratios, linear β | yes | **yes** |
+| odds ratios — binomial, multinomial, ordinal cumulative | yes | no (non-collapsible) |
+| a compound `formula =` | no | no |
+| a *weighted* 3+ level outcome with `effect = "ame"` | yes | no (`marginaleffects` has no method) |
+
+Where there is no test, `color_signif` is ignored for that channel and the colours read descriptively — the table never pretends to a significance it does not have.
+
+Where there **is** one, the two estimates were fitted on the same rows, so they are correlated and the standard error of their difference is smaller than `sqrt(SE₁² + SE₂²)` would suggest. tabxplor uses the sampling variance of the difference of the two **influence functions** (Weesie 1999; Mize, Doan & Long 2019), design-based when there are survey weights. For a 3+ level outcome the modelled leg is the score of the multinomial or cumulative logit times its own variance matrix, and the observed leg is a closed form — the same one that produces the crude interval the table prints. The three `color_signif` policies then read that one interval exactly as they do everywhere else in tabxplor: `"ignore"` colours the gap regardless, `"grey_non_signif"` greys it unless the interval excludes "no change", and `"guaranteed_effect"` colours the *floor* of the gap ("adjustment moved this by at least ×1.1").
+
+Two limits, stated rather than hidden. Each cell is tested on its own, with no multiple-comparison correction, so read the pattern rather than the one bright cell. And the test uses the robust (sandwich) variance on both sides — which is the right thing for comparing two differently-specified estimators, but means it can differ by a few percent from the descriptive interval printed beside it.
+
+
 ## Linear regression (a numeric outcome)
 
 A continuous outcome gives plain linear regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
