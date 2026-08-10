@@ -30,10 +30,23 @@
 # "auto" is a RENDER intent (follow the reader's colour scheme), never a palette. Every palette lookup
 # must funnel through here: get_color_style(theme = "auto") would build the key "text_auto", find no
 # palette, and error on a length-0 vector.
+# z11: "print" IS a palette (a real key `text_print`/`bg_print`), so it passes through untouched --
+# which is why this function needed no change for it.
 #' @keywords internal
 tx_palette_theme <- function(theme) {
   if (is.null(theme) || is.na(theme[1])) return("light")
   if (identical(theme[1], "auto")) "light" else theme[1]
+}
+
+# The theme VALUE vocabulary and its one alias, Last Phase z11. tx_getOption() resolves option NAME
+# synonyms; a VALUE alias needs this. "print" says WHY (the destination medium) and leaves room for the
+# palette to change; "bw" says HOW and is the obvious guess -- accepted silently and canonicalised here,
+# so exactly ONE spelling ever reaches the palette keys. Two callers: resolve_export_opts() (so
+# options(tabxplor.theme = "bw") works too) and tx_css_render().
+#' @keywords internal
+tx_resolve_theme <- function(theme) {
+  theme <- match.arg(theme[1], c("light", "dark", "auto", "print", "bw"))
+  if (identical(theme, "bw")) "print" else theme
 }
 
 # The chrome colours (everything that is NOT a colour-measure slot), per theme. ONE literal table:
@@ -49,13 +62,20 @@ tx_palette_theme <- function(theme) {
 # stays the text colour, so it softens with it.
 #' @keywords internal
 tx_chrome_hex <- function(theme = "light") {
-  if (identical(tx_palette_theme(theme), "dark")) {
-    list(text = "#CECDC3", grey = "#707070", grey2 = "#EEEEEE",
-         bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)")
-  } else {
+  switch(
+    tx_palette_theme(theme),
+    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#EEEEEE",
+                bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
+    # z11: the light chrome, with ONE deliberate change. `grey` (a non-significant cell under
+    # color_signif = "grey_non_signif") must stay readable ON the print background fills: #9f9f9f is
+    # 1.41:1 on the darkest fill #B8B8B8, i.e. invisible; #595959 is 3.53:1 on it and 7.0:1 on white,
+    # still plainly "greyed" against the pure black of a significant cell. `grey2` stays #111111 so an
+    # UNCOLOURED table prints byte-identically to the light theme. `hover` is meaningless on paper.
+    print = list(text = "#000000", grey = "#595959", grey2 = "#111111",
+                 bg = "#ffffff", border = "#000000", hover = "transparent"),
     list(text = "#000000", grey = "#9f9f9f", grey2 = "#111111",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
-  }
+  )
 }
 
 # The chrome of a page tabxplor ITSELF builds -- there are exactly two: the standalone page
@@ -130,21 +150,42 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 tx_dark_hooks  <- c("body.quarto-dark",  "[data-bs-theme=dark]",  "[data-theme=dark]", "html.dark")
 tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=light]")
 
-# The theme-independent rule table: one row per (selector, property), carrying BOTH hex. Built from the
-# same slot vocabulary the cells use. `chrome = FALSE` gives colour rules only (the tab_md contract:
-# bare class selectors the user maps in their own editor CSS).
+# The typographic declarations one theme's face adds ON TOP of the CSS baseline, Last Phase z11.
+# DESIGN: tx_css_render()'s static `.p1,...,.m4{font-weight:bold;}` rule IS the light palette's face
+# expressed as CSS, so it is THE BASELINE and a theme states a face property only where it DIVERGES
+# from it. Two consequences fall out with no branching: light/dark emit "" everywhere (their face IS
+# the baseline -- tx_css_layer() drops empty values, so they are byte-identical and the static rule
+# keeps being emitted exactly once, outside the cascade), and `print` can say "not bold" on its italic
+# slots (the bare `.m1` ties the static rule on specificity and wins on SOURCE ORDER, the scoped
+# `.tabxplor-tab .m1` wins outright).
+#' @keywords internal
+tx_face_decls <- function(face, base, s) {
+  d <- function(f, b, yes, no) if (identical(f[s], b[s])) "" else if (isTRUE(f[s])) yes else no
+  c("font-weight"     = d(face$bold,      base$bold,      "bold",      "normal"),
+    "font-style"      = d(face$italic,    base$italic,    "italic",    "normal"),
+    "text-decoration" = d(face$underline, base$underline, "underline", "none"))
+}
+
+# The theme-independent rule table: one row per (selector, property), carrying the value of EVERY theme
+# (light / dark / print). Built from the same slot vocabulary the cells use. `chrome = FALSE` gives
+# colour rules only (the tab_md contract: bare class selectors the user maps in their own editor CSS).
 #' @keywords internal
 tx_css_rules <- function(chrome = TRUE) {
   sel <- character(0); prop <- character(0); lt <- character(0); dk <- character(0)
-  add <- function(s, p, l, d) {
-    sel  <<- c(sel, s); prop <<- c(prop, p); lt <<- c(lt, l); dk <<- c(dk, d)
+  pr  <- character(0)
+  # `pr` (print) defaults to "" = "this rule has no print value", which tx_css_layer() drops.
+  add <- function(s, p, l, d, pv = "") {
+    sel  <<- c(sel, s); prop <<- c(prop, p); lt <<- c(lt, l); dk <<- c(dk, d); pr <<- c(pr, pv)
   }
 
   if (isTRUE(chrome)) {
     cl <- tx_chrome_hex("light")
     cd <- tx_chrome_hex("dark")
-    add(".tabxplor-tab", "color",      cl$text,  cd$text)
-    add(".tabxplor-tab", "background", cl$bg,    cd$bg)
+    # WARNING (z11): every CHROME row must state its print value EXPLICITLY. A "" would let the
+    # underlying layer survive into the @media print block, so a dark page would print white-on-#222.
+    cp <- tx_chrome_hex("print")
+    add(".tabxplor-tab", "color",      cl$text,  cd$text,  cp$text)
+    add(".tabxplor-tab", "background", cl$bg,    cd$bg,    cp$bg)
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND. `border-right:1px solid`
     # would reset border-right-color to `currentColor` = the CELL's palette hex (a +20% cell drew a
@@ -153,14 +194,14 @@ tx_css_rules <- function(chrome = TRUE) {
     # geometry off inline styles: that removed the inline half and left the shorthand half. Longhands
     # (border-*-style / border-*-width) are what make this rule load-bearing -- keep it that way; the
     # invariant is locked by test-render-html.R ("no border shorthand in the stylesheet").
-    add(".tabxplor-tab th,.tabxplor-tab td", "border-color", cl$border, cd$border)
-    add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover)
-    add(tx_cell_sel("g1"), "color", cl$grey,  cd$grey)
-    add(tx_cell_sel("g2"), "color", cl$grey2, cd$grey2)
+    add(".tabxplor-tab th,.tabxplor-tab td", "border-color", cl$border, cd$border, cp$border)
+    add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover, cp$hover)
+    add(tx_cell_sel("g1"), "color", cl$grey,  cd$grey,  cp$grey)
+    add(tx_cell_sel("g2"), "color", cl$grey2, cd$grey2, cp$grey2)
     # Phase 15d: the table title -- FULL-contrast in both themes (pure black in light, white in dark), not
     # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
     # where it is the maintainer's requested pure black.
-    add(".tabxplor-caption", "color", "#000000", "#FFFFFF")
+    add(".tabxplor-caption", "color", "#000000", "#FFFFFF", "#000000")
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop
@@ -169,13 +210,20 @@ tx_css_rules <- function(chrome = TRUE) {
   for (ch in c("text", "bg")) {
     pl   <- get_color_style("color_code", type = ch, theme = "light")
     pd   <- get_color_style("color_code", type = ch, theme = "dark")
+    pp   <- get_color_style("color_code", type = ch, theme = "print")
+    fb   <- get_color_style("face", type = ch, theme = "light")   # THE baseline (see tx_face_decls)
+    fp   <- get_color_style("face", type = ch, theme = "print")
     prp  <- if (ch == "text") "color" else "background-color"
     for (s in 1:8) {
-      add(tx_cell_sel(tx_slot_class(ch, s)), prp,
-          toupper(unname(pl[s])), toupper(unname(pd[s])))
+      csel <- tx_cell_sel(tx_slot_class(ch, s))
+      add(csel, prp, toupper(unname(pl[s])), toupper(unname(pd[s])), toupper(unname(pp[s])))
+      # z11: the print face, as its divergence from the baseline. The bg channel emits nothing (its
+      # print face equals its light face), so no per-channel special case is needed here.
+      fd <- tx_face_decls(fp, fb, s)
+      for (k in names(fd)) add(csel, k, "", "", fd[[k]])
     }
   }
-  list(sel = sel, prop = prop, light = lt, dark = dk)
+  list(sel = sel, prop = prop, light = lt, dark = dk, print = pr)
 }
 
 # DESIGN: every CELL colour class is emitted under TWO selectors -- bare (".p1") AND scoped
@@ -199,13 +247,19 @@ tx_hook_sel <- function(sel, hooks) {
   }, character(1), USE.NAMES = FALSE)
 }
 
-tx_css_layer <- function(rules, which = c("light", "dark"), hooks = NULL, indent = "") {
+tx_css_layer <- function(rules, which = c("light", "dark", "print"), hooks = NULL, indent = "") {
   which <- match.arg(which)
-  hex   <- rules[[which]]
-  keep  <- !is.na(hex) & nzchar(hex)
+  # z11: `val` (not `hex`) -- a rule's value is a hex on a colour row and a keyword on a face row
+  # ("bold" / "italic" / "normal"). The empty-value drop below is what makes the face rows free for
+  # light/dark: their face IS the CSS baseline, so they carry "" and never reach the layer.
+  val   <- rules[[which]]
+  keep  <- !is.na(val) & nzchar(val)
   if (!any(keep)) return(character(0))
   s    <- rules$sel[keep]
-  decl <- paste0(rules$prop[keep], ":", hex, ";")
+  # WARNING (z11): `val[keep]`, not `val`. This was latent -- until the face rows arrived, EVERY rule
+  # carried a value in every theme, so `keep` was all-TRUE and the unsubset vector happened to line up.
+  # The first rule that applies to one theme only made it recycle silently onto the wrong selectors.
+  decl <- paste0(rules$prop[keep], ":", val[keep], ";")
   # Fold the declarations of one selector into a single block (`.tabxplor-tab{color:X;background:Y;}`),
   # keeping first-appearance order. Purely cosmetic on the light layer; it matters under "auto", where
   # every rule is emitted four times with long hook selectors.
@@ -224,14 +278,17 @@ tx_css_layer <- function(rules, which = c("light", "dark"), hooks = NULL, indent
 # WARNING: do not reorder. Layer 3 before 4 and both after 2 is what makes an explicit host toggle
 # (Quarto's body.quarto-dark) override the reader's OS preference in BOTH directions.
 #' @keywords internal
-tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
-  theme  <- match.arg(theme[1], c("light", "dark", "auto"))
+tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = TRUE) {
+  theme  <- tx_resolve_theme(theme)
   # Theme-INDEPENDENT, so it belongs here rather than in the rule table (which is emitted once per
   # cascade layer under "auto"). Phase 14c: a text-coloured cell is bold in every other medium
-  # (tab_export_prep's `bold = !is.na(text_hex) | ref_alltot` drives kableExtra AND the html engine's
-  # inline weight), so the stylesheet must carry it for the one medium that has no other way to say
-  # it: tab_md(), whose cells are bare `[42%]{.p2}` spans. Harmlessly redundant on the html engine.
+  # (tab_export_prep's `bold` drives kableExtra AND the html engine's inline weight), so the stylesheet
+  # must carry it for the one medium that has no other way to say it: tab_md(), whose cells are bare
+  # `[42%]{.p2}` spans. Harmlessly redundant on the html engine.
   # The background classes stay unbolded, exactly like the cells: a fill alone does not bold.
+  # z11: this rule IS the light palette's face (get_color_style("face", "text", "light")$bold, all TRUE
+  # -- asserted by test-print-palette.R), which is what lets tx_face_decls() treat it as THE baseline
+  # and emit only a theme's divergences. So it stays exactly here, emitted once outside the cascade.
   bold_slots <- paste0(paste0(".", tx_slot_class("text", 1:8), collapse = ","), "{font-weight:bold;}")
   static <- c(bold_slots, if (isTRUE(chrome)) c(
     # Phase 14e: the html engine's GEOMETRY lives here, not inline on every cell. An inline style
@@ -436,7 +493,33 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     tx_css_layer(rules, theme)
   }
 
-  paste0(c(static, body), collapse = "\n")
+  paste0(c(static, body, tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
+}
+
+# The black-and-white publication palette as an AT-RULE, Last Phase z11: a page rendered in colour
+# PRINTS (or saves to PDF) publication-ready, with no argument and no user awareness. Emitted last, so
+# at equal specificity it wins on source order.
+# WARNING 1: under theme = "auto" the un-hooked layer is NOT enough. Cascade layers 3/4 are
+# hook-prefixed (`body.quarto-dark .tabxplor-tab .p1` = (0,3,1)) and out-specify a plain
+# `.tabxplor-tab .p1` (0,2,0) WHATEVER the source order, so a Quarto-dark page would print dark. The
+# hooked twin below matches their specificity and then wins on order. Do not remove it.
+# WARNING 2: every browser DROPS background-color when printing unless the reader ticks "Background
+# graphics", so without print-color-adjust the grey fills would silently vanish and only the typography
+# would reach the paper.
+#' @keywords internal
+tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
+  if (!isTRUE(print_rules)) return(character(0))
+  inner <- c(
+    if (isTRUE(chrome))
+      "  .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
+    # theme = "print" already IS the print palette: re-stating it would be dead weight.
+    if (!identical(theme, "print")) c(
+      tx_css_layer(rules, "print", indent = "  "),
+      if (identical(theme, "auto"))
+        tx_css_layer(rules, "print", hooks = c(tx_light_hooks, tx_dark_hooks), indent = "  "))
+  )
+  if (!length(inner)) return(character(0))
+  c("@media print {", inner, "}")
 }
 
 # === SECTION: the public generator =================================================================
@@ -499,12 +582,19 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' background-coloured value), `.tx-span` (the variable-name header row), `.tx-foot` (the footnote).
 #' Rows carry `.tx-bt`/`.tx-bb`/`.tx-bb2` (top / bottom / thick-bottom rules).
 #'
-#' @param theme `"light"`, `"dark"`, or -- opt-in -- `"auto"` to follow the reader's colour scheme
-#'   (their operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3,
-#'   Tailwind). Defaults to `getOption("tabxplor.theme")`, i.e. `"light"`: a dark table is always a
+#' @param theme `"light"`, `"dark"`, `"print"` (the black-and-white publication palette; `"bw"` is
+#'   accepted as a synonym), or -- opt-in -- `"auto"` to follow the reader's colour scheme (their
+#'   operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind).
+#'   Defaults to `getOption("tabxplor.theme")`, i.e. `"light"`: a dark table is always a
 #'   deliberate choice. `"auto"` emits every rule four times (a light base, the OS media query, then
 #'   both toggle directions), which is also what lets [tab_kable()]'s own Viewer page force the
 #'   editor's theme -- see its `theme` argument.
+#' @param print_rules Also emit the black-and-white publication palette inside an `@media print`
+#'   block, so a coloured page prints (or saves to PDF) publication-ready with no further action.
+#'   Defaults to `getOption("tabxplor.print_rules")`. Set to `FALSE` if your printer is a colour one
+#'   and the colours are the point. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and 6 KB to
+#'   an `"auto"` one (where the rules must also be emitted against the page-toggle hooks, which would
+#'   otherwise out-specify them).
 #' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see [tab()]).
 #' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,
@@ -520,10 +610,15 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' cat(tab_css(theme = "auto"))
 #' cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
 tab_css <- function(theme = NULL, color_type = lifecycle::deprecated(), chrome = TRUE,
-                    style_tag = TRUE, file = NULL) {
+                    style_tag = TRUE, file = NULL, print_rules = NULL) {
   if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_css(color_type)")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
-  css <- tx_css_render(tx_css_rules(chrome = chrome), o$theme, chrome = chrome)
+  # z11: NULL -> option is the package idiom (cf. engine / popover / css / tooltips), and it is why
+  # tab_html()/tab_md() need NO argument of their own -- they call tab_css() internally, so a user with
+  # a colour printer sets options(tabxplor.print_rules = FALSE) once for a whole document.
+  if (is.null(print_rules)) print_rules <- getOption("tabxplor.print_rules", TRUE)
+  css <- tx_css_render(tx_css_rules(chrome = chrome), o$theme, chrome = chrome,
+                       print_rules = print_rules)
   if (isTRUE(style_tag)) css <- paste0("<style>\n", css, "\n</style>")
   if (!is.null(file)) {
     writeLines(css, file)

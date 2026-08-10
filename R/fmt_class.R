@@ -3352,11 +3352,18 @@ fmt_color_channels <- function(x) {
        bg_slot   = fmt_color_slots(x, pl$bg))
 }
 
-# The single slot -> hex mapping shared by the exporters (tab_kable / tab_plot / tab_xl). Returns the
-# per-cell colour code of BOTH channels (NA where uncoloured on that channel), plus the raw slot
-# vectors (for bold / gate decisions). The text channel uses the "text" palette, the background
-# channel the "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console
-# and exports render identical colours. (fmt_get_color_code stays single-channel for the golden.)
+# The single slot -> APPEARANCE mapping shared by the exporters (tab_kable / tab_plot / tab_xl).
+# Returns the per-cell rendering of BOTH channels: the colour code (NA where uncoloured on that
+# channel), the raw slot vectors (for gate decisions), and -- Last Phase z11 -- the per-cell FACE
+# (bold / italic / underline). The text channel uses the "text" palette, the background channel the
+# "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console and exports
+# render identical colours. (fmt_get_color_code stays single-channel for the golden.)
+# DESIGN (z11): the face is the palette's answer to "how is this slot drawn", the twin of the hex, and
+# it is what lets a monochrome palette exist at all -- five backends used to infer "bold" from "has a
+# hex", which collapses when every text hex is black. The colour palettes answer bold-on-every-text-slot
+# and nothing on the background ones, i.e. exactly how they have always been drawn, so this is
+# byte-identical for light/dark. THE ENGINE STAYS THEME-BLIND: slots are computed above without knowing
+# the theme, and only this boundary turns a slot into an appearance.
 #' @keywords internal
 fmt_channel_codes <- function(x, theme = "light") {
   n  <- length(x)
@@ -3373,7 +3380,28 @@ fmt_channel_codes <- function(x, theme = "light") {
   text[tsel] <- toupper(unname(text_styles[ch$text_slot[tsel]]))
   bg[bsel]   <- toupper(unname(bg_styles[ch$bg_slot[bsel]]))
 
-  list(text = text, bg = bg, text_slot = ch$text_slot, bg_slot = ch$bg_slot)
+  # Broadcast the palette's 8 slot faces onto the cells; slot 0 (uncoloured) keeps FALSE throughout.
+  slot_face <- function(slot, type) {
+    f   <- get_color_style("face", type = type, theme = theme)
+    sel <- slot > 0L
+    out <- list(bold = logical(n), italic = logical(n), underline = logical(n))
+    for (k in names(out)) out[[k]][sel] <- f[[k]][slot[sel]]
+    out
+  }
+
+  list(text = text, bg = bg, text_slot = ch$text_slot, bg_slot = ch$bg_slot,
+       text_face = slot_face(ch$text_slot, "text"),
+       bg_face   = slot_face(ch$bg_slot,   "bg"))
+}
+
+# Does this theme's palette need its face emitted as MARKUP (<b>/<i>/<u>) rather than only as CSS?
+# TRUE for "print": the two destinations that matter for a publication table -- GitHub's markdown
+# sanitizer (strips class AND style) and an HTML -> Word paste (keeps character formatting, drops
+# stylesheets) -- carry tags and nothing else. FALSE for the colour palettes, whose meaning is the
+# colour itself, so their markup is byte-unchanged.
+#' @keywords internal
+fmt_face_semantic <- function(theme = "light") {
+  isTRUE(get_color_style("face", type = "text", theme = theme)$semantic)
 }
 
 
@@ -3605,16 +3633,33 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
 # the coloured break tokens of one channel, split over / under (each a list of tokens). Slot 0 (a
 # scale that skips an intensity via NA) -> a plain, uncoloured token. The token carries the palette
 # slot; its colour (hex) or class is resolved per medium at render time.
-legend_break_tokens <- function(plan, is_pct, is_mean, channel, lang) {
+legend_break_tokens <- function(plan, is_pct, is_mean, channel, lang, theme = "light") {
   if (is.null(plan)) return(list(over = list(), under = list()))
   measure <- plan$measure
+  # Last Phase z11: the legend must not promise a distinction the cells do not make. Typography
+  # honestly supports 2 levels per side, so the print palette gives slots 1&2 (and 3&4) the SAME
+  # rendering; a token whose full rendering repeats the previous one is dropped, and the survivor is
+  # the LOWER threshold -- "bold = at least +5 points", which is what the appearance means. Byte-
+  # identical under the colour palettes: their four hexes per side are all distinct, so nothing
+  # collapses. This is deliberately NOT a cap inside fmt_color_slots() -- the ENGINE must stay
+  # theme-blind (dev/black_and_white_publication_palette.md SS4.3).
+  fam <- if (identical(channel, "text")) "text" else "bg"
+  hex <- get_color_style("color_code", type = fam, theme = theme)
+  fc  <- get_color_style("face",       type = fam, theme = theme)
+  look <- function(slot) paste(hex[slot], fc$bold[slot], fc$italic[slot], fc$underline[slot])
   mk_side <- function(breaks, slots, dir) {
-    lapply(seq_along(breaks), function(l) {
+    prev <- NA_character_
+    out  <- list()
+    for (l in seq_along(breaks)) {
       slot <- slots[l + 1L]
       lab  <- legend_break_label(measure, breaks[l], dir, is_pct, lang, plan$policy)
-      if (is.na(slot) || slot == 0L) return(.lg_tok(lab))
-      .lg_ctok(lab, slot, channel)
-    })
+      if (is.na(slot) || slot == 0L) { out <- c(out, list(.lg_tok(lab))); prev <- NA_character_; next }
+      key <- look(slot)
+      if (!is.na(prev) && identical(key, prev)) next     # same rendering as the previous break
+      prev <- key
+      out  <- c(out, list(.lg_ctok(lab, slot, channel)))
+    }
+    out
   }
   list(over  = mk_side(plan$over_breaks,  plan$over_slots,  +1L),
        under = mk_side(plan$under_breaks, plan$under_slots, -1L))
@@ -3646,19 +3691,29 @@ legend_join <- function(toks, sep) {
   out
 }
 
-# default palette -> baked colour-shade names; a custom palette (set_color_palette) -> NA (generic,
-# the coloured break-words carry the meaning). The over side of the default palette is teal->blue,
-# the under side gold->red, in both light and dark, so the names are hue-descriptive and theme-free.
-legend_shade_names <- function() {
+# default palette -> baked shade names; a custom palette (set_color_palette) -> NA (generic, the
+# coloured break-words carry the meaning). The over side of the default palette is teal->blue, the
+# under side gold->red, in both light and dark, so those names are hue-descriptive and theme-free.
+# Last Phase z11: returns one pair PER CHANNEL, because the print palette names two different things --
+# its text side is a TYPOGRAPHY ("Bold" / "Italic") and its background side a grey fill. The split is
+# not cosmetic: legend_tokens_prose()'s one_side() passes no_shade = FALSE for a BACKGROUND-ONLY
+# coloured column, so a single pair would have made such a table announce "Bold:" about grey fills.
+legend_shade_names <- function(theme = "light") {
+  if (identical(tx_palette_theme(theme), "print")) {
+    # Curated palette, so these are always right (no is_default dance): they describe the face table.
+    return(list(text = c(over = gettext("Bold"),       under = gettext("Italic")),
+                bg   = c(over = gettext("Grey fill"),  under = gettext("Grey fill"))))
+  }
   is_default <- tryCatch({
     b <- get0("base", envir = tabxplor_palette_env)
     is.null(b) || (identical(b$text_colors,     default_text_colors) &&
                    identical(b$text_colors_neg, default_text_colors_neg))
   }, error = function(e) FALSE)
-  if (isTRUE(is_default))
+  pair <- if (isTRUE(is_default))
     c(over = gettext("Shades of blue"), under = gettext("Shades of yellow to red"))
   else
     c(over = NA_character_, under = NA_character_)
+  list(text = pair, bg = pair)
 }
 
 # Phase 14w: a regression column's effect word (OR / IRR / beta / AME / MER), DERIVED from the table
@@ -3919,7 +3974,8 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   rs <- legend_ref_short(spec, lang)
   add_channel <- function(plan, prefix, is_bg) {
     mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang, plan$policy)
-    bt <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang)
+    bt <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang,
+                             spec$theme %||% "light")
     seq_toks <- c(rev(bt$under), bt$over)
     lbl <- paste0(prefix, mw, if (!is_bg && nzchar(rs)) paste0(" (", rs, ")") else "", colon)
     c(list(.lg_tok(lbl)), legend_join(seq_toks, " "))
@@ -3955,7 +4011,8 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
   one_side <- function(plan, dir, is_bg, no_shade = FALSE) {
     if (is.null(plan)) return(NULL)
-    bt   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang)
+    bt   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang,
+                             spec$theme %||% "light")
     side <- if (dir > 0) bt$over else bt$under
     if (length(side) == 0) return(NULL)
     # Phase 16e: subject / has_ref_lead / unit are resolved per channel in legend_resolve_spec (coef / OR /
@@ -3963,7 +4020,8 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     # is a unit suffix, not a lead). The template just reads them.
     cf    <- if (is_bg) spec$bg else spec$txt
     cmp   <- if (dir > 0) .lg_ge else .lg_le
-    shade <- if (no_shade) NA_character_ else if (dir > 0) spec$shades[["over"]] else spec$shades[["under"]]
+    sh    <- spec$shades[[if (is_bg) "bg" else "text"]]
+    shade <- if (no_shade) NA_character_ else if (dir > 0) sh[["over"]] else sh[["under"]]
     rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # Last Phase z5: per channel
     lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
              else                 gettextf("%s %s", cf$subject, cmp)
@@ -4090,17 +4148,30 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
   slot_hex <- function(slot, ch)
     toupper(unname(get_color_style("color_code", type = fam(ch), theme = pal)[slot]))
   is_colored_tok <- function(tk) isTRUE(colored) && !is.na(tk$c) && tk$c > 0L
-  # text-colour break-word OR flagged name -> bold; background break-word -> plain.
-  is_bold_tok <- function(tk)
-    (is_colored_tok(tk) && !identical(tk$ch, "bg")) || isTRUE(tk$b)
+  # Last Phase z11: the break-word wears the SAME face as the cells it describes -- read from the
+  # palette, not inferred. `(coloured & ch != "bg")` was a sixth hex/slot->bold heuristic, and here it
+  # was not merely cosmetic: the html branch writes `font-weight:bold` INLINE, which beats the
+  # stylesheet, so under `print` every under-representation break-word would have rendered bold while
+  # its cells rendered italic -- exactly the legend/cell disagreement the slot vocabulary exists to
+  # prevent. The colour palettes report bold on every text slot and nothing on the bg ones, i.e.
+  # bit-for-bit the old expression.
+  tok_face <- function(tk, k) {
+    if (!is_colored_tok(tk)) return(FALSE)
+    isTRUE(get_color_style("face", type = fam(tk$ch), theme = pal)[[k]][tk$c])
+  }
+  is_bold_tok  <- function(tk) tok_face(tk, "bold") || isTRUE(tk$b)
+  semantic     <- fmt_face_semantic(pal)
+  is_ital_tok  <- function(tk) tok_face(tk, "italic")
+  is_under_tok <- function(tk) tok_face(tk, "underline")
   if (identical(medium, "runs")) {
     return(lapply(tokens, function(tk) {
       col <- if (is_colored_tok(tk)) slot_hex(tk$c, tk$ch) else NA_character_
-      list(text = tk$t, color = col, bold = is_bold_tok(tk))
+      list(text = tk$t, color = col, bold = is_bold_tok(tk),
+           italic = is_ital_tok(tk), underline = is_under_tok(tk))
     }))
   }
   parts <- vapply(tokens, function(tk) {
-    bold <- is_bold_tok(tk)
+    bold <- is_bold_tok(tk); ital <- is_ital_tok(tk); und <- is_under_tok(tk)
     if (!is_colored_tok(tk)) {
       # plain token: a variable name (bold) or footer text (stars, weight line...). The stars token is
       # `esc`-flagged: escape `*` so pandoc does not read `***`/`*` as emphasis (user subtext is left raw).
@@ -4130,7 +4201,11 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # `theme` is an argument, so the palette must follow it -- reading the option here silently
       # rendered a legend the caller never asked for (it disagreed with slot_hex above).
       style <- get_color_style("crayon", type = fam(tk$ch), theme = pal)[[tk$c]]
-      if (bold) cli::style_bold(style(tk$t)) else style(tk$t)
+      out <- style(tk$t)
+      if (bold) out <- cli::style_bold(out)
+      if (ital) out <- cli::style_italic(out)
+      if (und)  out <- cli::style_underline(out)
+      out
     } else if (identical(medium, "html")) {
       # DESIGN: the span is emitted inline rather than via kableExtra::text_spec() (byte-unstable across
       # kableExtra releases). Legend tokens are package-generated ("+5", "x2", "1/1.5"), so they need no
@@ -4138,29 +4213,43 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # break-word carries a slot CLASS (theme-toggle-safe in the table's <tfoot>); kableExtra keeps hex.
       # Phase g: weight is per-channel -- `font-weight:bold` only on the text channel (the .o*/.u* bg
       # classes are deliberately not bold, mirroring filled cells, which a fill alone does not bold).
-      wt <- if (bold) "font-weight:bold;" else ""
+      # z11: the face is the palette's, so a monochrome break-word says italic/underline rather than
+      # colour. `font-weight` is stated EXPLICITLY when the palette says not-bold -- this span is
+      # inline, so it must override the stylesheet's own `.p1..m4{font-weight:bold}` baseline.
+      wt <- if (bold) "font-weight:bold;" else if (identical(tk$ch, "text")) "font-weight:normal;" else ""
+      if (ital) wt <- paste0(wt, "font-style:italic;")
+      if (und)  wt <- paste0(wt, "text-decoration:underline;")
+      # z11: a palette whose meaning is TYPOGRAPHY writes the break-word as markup too, exactly as the
+      # cells do -- a sanitizer that strips `class` and `style` (GitHub) or a paste into Word keeps the
+      # tags, so the legend still describes itself. No-op under the colour palettes.
+      lab <- if (semantic) html_face_wrap(tk$t, bold, ital, und) else tk$t
       if (isTRUE(classes)) {
         cls <- tx_slot_class(tk$ch, tk$c)
         if (identical(tk$ch, "text"))
-          paste0("<span class=\"", cls, "\" style=\"", wt, "\">", tk$t, "</span>")
+          paste0("<span class=\"", cls, "\" style=\"", wt, "\">", lab, "</span>")
         else paste0("<span class=\"", cls, "\" style=\"", wt, "border-radius:4px;",
-                    "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
+                    "padding-right:4px;padding-left:4px;\">", lab, "</span>")
       } else {
         hex <- slot_hex(tk$c, tk$ch)
         if (identical(tk$ch, "text"))
-          paste0("<span style=\"", wt, "color:", hex, " !important;\">", tk$t, "</span>")
+          paste0("<span style=\"", wt, "color:", hex, " !important;\">", lab, "</span>")
         else
           paste0("<span style=\"", wt, "background-color:", hex,
                  " !important;border-radius:4px;padding-right:4px;padding-left:4px;\">",
-                 tk$t, "</span>")
+                 lab, "</span>")
       }
     } else if (identical(medium, "md")) {
       # `**` on top of the .p*/.m* stylesheet bold makes the TEXT break-words stand out in the RAW
       # markdown too; the .o*/.u* background channel is plain (Phase g) -> bracketed span without `**`.
+      # z11: a monochrome palette's under-side is ITALIC, so the raw markdown says `*[..]{.m1}*`.
       cls <- tx_slot_class(tk$ch, tk$c)
       if (!nzchar(cls)) tk$t
-      else if (bold)   paste0("**[", tk$t, "]{.", cls, "}**")
-      else             paste0("[", tk$t, "]{.", cls, "}")
+      else {
+        out <- paste0("[", tk$t, "]{.", cls, "}")
+        if (ital) out <- paste0("*", out, "*")
+        if (bold) out <- paste0("**", out, "**")
+        out
+      }
     } else tk$t
   }, character(1))
   paste0(parts, collapse = "")
@@ -4168,7 +4257,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
 
 # ---- build the per col_var specs -------------------------------------------------------------------
 #' @keywords internal
-legend_specs <- function(x) {
+legend_specs <- function(x, theme = "light") {
   is_f <- purrr::map_lgl(x, is_fmt)
   ct   <- get_color(x); cbg <- get_color_bg(x)
   keep <- is_f & ((!is.na(ct)  & !ct  %in% c("no", "")) |
@@ -4182,7 +4271,7 @@ legend_specs <- function(x) {
   meta   <- get_reg_meta(x)
   is_reg <- !is.null(meta)                            # Phase 14w: robust, survives footer materialisation
   cis    <- get_ci_settings(x); if (is.null(cis)) cis <- default_ci_settings()
-  shades <- legend_shade_names()
+  shades <- legend_shade_names(theme)
   # Phase 16d: the mean_diff scale in force (pushed per render). Its `std` flag decides whether a numeric
   # mean / regression-coef diff is sd-standardized (SD units) or raw (custom breaks -> std FALSE). This
   # is the SAME source fmt_color_plan() reads, so the legend can never disagree with the cells.
@@ -4243,6 +4332,7 @@ legend_specs <- function(x) {
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
          policy = policy, orientation = orient, ci_type = ci_type,
          is_reg = is_reg, eff_word = eff_word, role = role, ci_settings = cis, shades = shades,
+         theme = theme,
          model_family = get_model_family(col),        # Last Phase z5: the collapsibility caveat below
          ref = ref)
   })
@@ -4318,9 +4408,11 @@ legend_name_list <- function(names, max_n = 6L, lang = "en") {
 # (concatenates them with the plain footer lines) share ONE legend core. Returns a list of token-lists,
 # empty when nothing is coloured. Built under the render language (with_legend_lang). The specs are resolved
 # ONCE here (legend_resolve_spec), so grouping-by-body and the assemblers both read plain fields.
-legend_streams <- function(x, style, lang) {
+legend_streams <- function(x, style, lang, theme = "light") {
   with_legend_lang(lang, function(lg) {
-    specs <- legend_specs(x)
+    # z11: `theme` reaches here for ONE reason -- the shade NAMES a palette gives its two directions
+    # ("Shades of blue" / "Bold"). Everything else the legend needs is theme-free.
+    specs <- legend_specs(x, theme)
     if (length(specs) == 0) return(list())
     specs <- lapply(specs, function(s) legend_resolve_spec(s, lg))
     grp   <- legend_group_by_body(specs, style, lg)
@@ -4388,7 +4480,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
   if (is.null(theme))      theme      <- tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light")
-  streams <- legend_streams(x, style, lang)
+  streams <- legend_streams(x, style, lang, theme)
   if (length(streams) == 0) return(NULL)
   render_streams(streams, medium, theme, colored, classes)
 }
@@ -4428,7 +4520,7 @@ legend_export_style <- function() {
 }
 
 tab_footer_streams <- function(x, style = "prose", lang = NULL,
-                               subtext = character(0), legend = TRUE) {
+                               subtext = character(0), legend = TRUE, theme = "light") {
   lg      <- legend_resolve_lang(lang)
   streams <- list()
   push <- function(tokens, role) if (length(tokens))
@@ -4439,7 +4531,7 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   # rides the stream footer like the weight / Model: lines rather than the per-column footer rows.
   # `esc = TRUE`: the p-values carry significance stars, which pandoc would read as emphasis.
   for (il in reg_interaction_lines(x, lg)) if (nzchar(il)) push(list(.lg_tok(il, esc = TRUE)), "reg")
-  if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
+  if (isTRUE(legend)) for (toks in legend_streams(x, style, lg, theme)) push(toks, "legend")
   # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
   sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")
   for (s in subtext) if (nzchar(s)) push(list(.lg_tok(s)), "subtext")

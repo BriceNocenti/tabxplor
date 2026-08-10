@@ -82,7 +82,7 @@ set_color_style(
 )
 
 get_color_style(
-  mode = c("crayon", "color_code"),
+  mode = c("crayon", "color_code", "face"),
   type = NULL,
   theme = NULL,
   ...
@@ -356,8 +356,9 @@ under-represented (\code{*_colors_neg}) sides.}
 already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
 theme, and the dark fills read there as-is.}
 
-\item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
-one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)}
+\item{theme}{\code{"light"}, \code{"dark"}, or \code{"print"} (the black-and-white publication
+palette); defaults to the current setting. The export theme \code{"auto"} resolves to
+\code{"light"} here, a palette being always one definite thing.}
 
 \item{type}{Default \code{"positive"} returns a readable form: a plain vector of magnitudes
 when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to
@@ -371,7 +372,11 @@ over- and 4 under-represented colours are mapped onto \code{set_color_palette()}
 
 \item{mode}{By default, \code{get_color_style} returns a list of terminal (ANSI) coloring
 functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
-\code{"color_code"} to return html color codes.}
+\code{"color_code"} to return html color codes, or \code{"face"} to return the palette's
+TYPOGRAPHY -- a list \code{bold} / \code{italic} / \code{underline} of 8 logicals each (plus a
+\code{semantic} flag), which is how \code{theme = "print"} says "over-represented cells are bold,
+under-represented ones italic". The colour palettes report bold on every text slot and nothing on
+the background ones, i.e. exactly how they have always been drawn.}
 
 \item{...}{Scales passed individually and named, e.g.
 \code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
@@ -407,7 +412,8 @@ A single logical.
 Sets the internal color palettes (invisibly) and the option
 \code{"tabxplor.color_style_theme"}.
 
-A list of 8 terminal (ANSI) color-style functions, or a vector of 8 color html codes.
+A list of 8 terminal (ANSI) color-style functions, a vector of 8 color html codes, or
+(\code{mode = "face"}) the palette's typography record.
 
 Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
 it invisibly.

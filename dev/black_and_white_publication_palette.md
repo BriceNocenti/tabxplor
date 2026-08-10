@@ -1,6 +1,8 @@
 # A black-and-white "publication ready" palette — design study
 
-Date: 2026-08-05. Status: **REPORT ONLY** (Last Phase z7, item 3). No code written.
+Date: 2026-08-05. Status: **IMPLEMENTED** (Last Phase z11, 2026-08-10). The maintainer's rulings on
+§10's open questions and the findings that changed the design during implementation are in **§12**,
+at the end of this file — read it before trusting §5-§9, which is the pre-implementation study.
 
 Scope: an opt-in monochrome rendering of tabxplor's colour measures for print/publication, shared by
 the HTML and Excel (and, by paste, Word) exports. The console keeps its colours.
@@ -500,3 +502,101 @@ Worth an opt-out (`tab_css(print_rules = FALSE)`) for a user whose colour printe
 `dev/color_blind_palettes_guide.md` (the CVD work this extends — greyscale is the limiting case of the
 same problem), `dev/design_new_colors_UI_decision_process.md`, `R/tab-css.R` (the one CSS generator),
 `R/tab_xl.R` §`xl_build_styles`, `R/tab_classes.R` §palettes.
+
+---
+
+## 12. Rulings and implementation findings (Last Phase z11, 2026-08-10)
+
+### 12.1 The maintainer's rulings on §10
+
+| §10 | ruling |
+|-----|--------|
+| Q1 default scheme | **ONE** palette. Text channel = typography, background channel = a grey ramp carrying **its own** measure's magnitude. `print_marks` and `print_shaded` are NOT shipped |
+| Q2 the switch | **`theme = "print"`**, with `"bw"` a silent alias. Zero new arguments on any exporter |
+| Q3 direction mnemonic | over = **bold**, under = *italic*; the second level adds an underline (§6.1 as written) |
+| Q4 `levels` + `pmin` | **rejected** — see 12.2 |
+| Q5 `@media print` | **on by default**, `tab_css(print_rules = FALSE)` / `options(tabxplor.print_rules = FALSE)` opts out |
+| Q6 stars vs marks | moot: no marks shipped |
+| Q7 scope | html + Excel + markdown + `tab_plot` (bold/italic only there — `fontface` has no underline) |
+| Q8 in 2.0.0? | yes, whole |
+
+**Why Q1 dissolved §6.3's conflict.** The study feared a shaded variant because the fill would
+re-encode the text measure's magnitude. In tabxplor it cannot: the fill IS a second measure's own
+channel. So `color = "diff"` alone renders purely typographic (Elsevier-safe by construction) and
+`color = TRUE` adds grey fills for the ratio only. One palette covers both of §6's cases, and no
+"refuse or fall back when two channels are active" rule is needed.
+
+### 12.2 What changed from §7, and why
+
+**§4.3's `levels` + `pmin` was NOT built** — it would have made `fmt_color_slots()` theme-aware, and
+the engine's theme-blindness is the property that keeps `_color_golden` and `_golden` immovable. The
+palette expresses its 2-level ceiling by giving slots 1&2 (and 3&4) the same face record, and
+**`legend_break_tokens()` drops a break-word whose full rendering `(hex, bold, italic, underline)`
+repeats the previous one**, keeping the LOWER threshold ("bold = at least +5 points"). Byte-identical
+under the colour palettes, whose four hexes per side are all distinct.
+
+**§7.2's `style`/`levels` env slots became ONE `mode` on the existing accessor.** `e$face` sits beside
+`e$hex`, `get_color_style(mode = "face", type, theme)` reads it through the same key construction, and
+`fmt_channel_codes()` returns `text_face`/`bg_face` beside the hex. No second lookup function, no
+NULL-vs-record branching anywhere downstream.
+
+**The real find: SIX hex→bold derivations, not one.** §7.2 flagged only `tab-css.R`'s static rule. The
+others were `fmt_col_ann()`'s `bold = !is.na(text_hex) | keep_black`, `tab_xl`'s hard-wired
+`bold = TRUE` on coloured cells, `tab_plot`'s `!font %in% c(text, grey, grey2)`, and
+`legend_render_line()`'s `is_colored_tok(tk) && tk$ch != "bg"`. The last was not cosmetic: that branch
+writes `font-weight:bold` **inline**, which beats the stylesheet — so an unfixed legend would have
+printed bold break-words over italic cells. (A seventh, the console `pillar_shaft`, is deliberately
+out of scope: the console reads a different option and `set_color_palette(theme=)` still accepts only
+light/dark/auto.) The palette declaring the face removed five of them.
+
+**§7.2's "the static `bold_slots` rule must move into the palette record" — it did not have to.** That
+rule IS the light palette's face expressed as CSS, so it is the **baseline**: `tx_face_decls()` emits a
+face declaration only where a theme DIVERGES from it. Light/dark then emit nothing (byte-identical, and
+the rule stays emitted exactly once outside the cascade, which `test-render-html.R` locks), while print
+can say `font-weight:normal` on its italic slots. `test-print-palette.R` asserts the baseline, so the
+diff can never become illegitimate silently.
+
+### 12.3 Three things that would have shipped broken
+
+1. **`@media print` does not work under `theme = "auto"` with one layer.** Cascade layers 3/4 are
+   hook-prefixed (`body.quarto-dark .tabxplor-tab .p1` = specificity 0,3,1) and out-specify a plain
+   `.tabxplor-tab .p1` (0,2,0) *whatever* the source order — a Quarto-dark page would have printed
+   dark. `tx_print_block()` emits a second, hook-prefixed layer.
+2. **Browsers drop `background-color` when printing** unless the reader ticks "Background graphics", so
+   the grey fills silently never reached paper. Fixed with `print-color-adjust: exact` on `.tx-pill`.
+3. **`build_palettes()`'s 8-bit branch would have crashed in the RStudio console.** `palette_8bit` has
+   no print key, so `purrr::map(NULL, …)` yields an empty style list and every slot lookup aborts.
+
+### 12.4 A latent bug the phase surfaced
+
+`tx_css_layer()` subsetted `rules$prop` by `keep` but used the **unsubset** value vector. Correct only
+while every rule carried a value in every theme (so `keep` was always all-TRUE); the first
+theme-specific rule made it recycle onto the wrong selectors. Fixed to `val[keep]`.
+
+### 12.5 The README consequence
+
+GitHub's markdown sanitizer strips `class` **and** `style` from raw html — the reason README tables have
+always been colourless there. It keeps `<b>`/`<i>`/`<u>`, and so does a paste into Word (the study's
+§4.1: "investing in the HTML rendering is what buys Word"). So the face record carries a **`semantic`**
+flag, and when it is TRUE the html engine wraps cells — and the legend wraps its break-words — in real
+tags beside the CSS classes. `README.Rmd` now sets `options(tabxplor.theme = "print")`, so its tables
+are readable on GitHub *and* on the pkgdown home, with the prose and the hero screenshot teaching that
+colour is the default for exploration.
+
+### 12.6 Markdown needed no code at all
+
+`md_span_attr()` emits slot classes only and `tab_md`'s `is_bold` is ROW-based, so a coloured cell's
+bold has ALWAYS come from the stylesheet — for light and dark too. With `tab_md(css = TRUE)` the
+default, print reaches markdown through `tab_css()` alone, and the pipe grid is byte-identical between
+themes (asserted). §7.2's proposed `**`/`*` literals were therefore not written: they would have dragged
+`md_color_cell()`'s alignment maths (`num_width` / `attr_width` / `split_at`) into a per-slot-face prefix
+width, and the HTML→Word route already carries the meaning via 12.5.
+
+### 12.7 Not built, deliberately
+
+`set_color_palette()` gained **no** formal for the print greys: its validator is
+`is.character(v) && length(v) == 4` with no L\*/contrast check, so a formal could silently reintroduce
+the very defect §1 measured; it would cover the greys but not the face; and composing the print palette
+from a literal rather than from `e$base` gives the byte-property that a user's `set_color_palette()`
+provably cannot alter print output (asserted). The escape hatch is the documented one: ordinary CSS
+after `tab_css()`.

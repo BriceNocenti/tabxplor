@@ -333,7 +333,10 @@ testthat::test_that("tab_md_css emits the slot colour rules, chrome-free", {
 testthat::test_that("tab_md_css theme = 'auto' adds the media block; 'light' does not", {
   testthat::expect_true(grepl("@media (prefers-color-scheme: dark)",
                               tab_md_css(theme = "auto"), fixed = TRUE))
-  testthat::expect_false(grepl("@media", tab_md_css(theme = "light"), fixed = TRUE))
+  # z11: `@media print` (the publication palette) now rides every stylesheet; what "light" must not
+  # emit is the AUTO cascade's colour-scheme query.
+  testthat::expect_false(grepl("@media (prefers-color-scheme", tab_md_css(theme = "light"),
+                               fixed = TRUE))
 })
 
 testthat::test_that("the stylesheet is TABLE-INDEPENDENT", {

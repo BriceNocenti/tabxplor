@@ -144,6 +144,27 @@ html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
   out
 }
 
+# Wrap a cell's html in the palette's TYPOGRAPHY as real MARKUP, Last Phase z11.
+# WHY, when the stylesheet already says the same thing: the two destinations that matter for a
+# publication table carry tags and nothing else. GitHub's markdown sanitizer strips `class` AND `style`
+# from raw html (which is why README tables are colourless there), and an HTML -> Word paste keeps
+# character formatting but no stylesheet. tabxplor has no .docx writer, so the paste IS the Word route.
+# `<b>`/`<i>`/`<u>` are not inline STYLES, so the "no inline colour" invariant (test-render-html.R) and
+# the "restyle with ordinary CSS" contract both stand -- a user can still unbold with
+# `.tabxplor-tab b {font-weight:normal}`.
+# Gated on the palette's own `semantic` flag, so the colour themes emit nothing and stay byte-identical.
+#' @keywords internal
+html_face_wrap <- function(html, bold, italic, underline) {
+  n <- length(html)
+  g <- function(v) if (length(v) == n) v %in% TRUE else logical(n)
+  bold <- g(bold); italic <- g(italic); underline <- g(underline)
+  # Innermost first, so the nesting reads <b><i><u>x</u></i></b>.
+  if (any(underline)) html[underline] <- paste0("<u>", html[underline], "</u>")
+  if (any(italic))    html[italic]    <- paste0("<i>", html[italic],    "</i>")
+  if (any(bold))      html[bold]      <- paste0("<b>", html[bold],      "</b>")
+  html
+}
+
 render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popover,
                                      html_font, full_width, get_data, in_knitr, ...) {
   tabs  <- rd$tab
@@ -175,6 +196,10 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   color_font <- purrr::map(rd$ann, "font")
   color_back <- purrr::map(rd$ann, "back")
   color_bold <- purrr::map(rd$ann, "bold")
+  # z11: the palette's typography beyond weight. All-FALSE under the colour palettes, and cell_spec()
+  # pastes "" for a FALSE italic/underline (its own defaults), so those stay byte-identical.
+  color_ital <- purrr::map(rd$ann, "face_italic")
+  color_und  <- purrr::map(rd$ann, "face_underline")
 
   # Unified fmt-across (was two any_bg branches): background = NULL when the table has no bg channel is
   # identical to omitting it (cell_spec default), so ONE branch reproduces both byte-for-byte.
@@ -195,6 +220,8 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
         kableExtra::cell_spec(
           txt, escape = FALSE,
           bold       = boldc,
+          italic     = color_ital[[colnm]] %||% FALSE,
+          underline  = color_und[[colnm]]  %||% FALSE,
           color      = color_font[[colnm]],
           background = if (any_bg) color_back[[colnm]] else NULL,
           # Phase 14b: pre-built (tab_tooltip_attrs) so both engines share one placement; cell_spec()
@@ -293,12 +320,15 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
 # Vectorised, dependency-free <table>: one style string per column, one per row, cells built as
 # per-column vectors then concatenated with do.call(paste0, .). Returns the BARE <table> string; the
 # <style> block (which carries the whole theme -- see the file header) is hoisted ONCE by
-# tab_kable_join(). Nothing here reads `meta$theme`.
+# tab_kable_join(). COLOUR never reaches the markup here; the one thing that does is a palette's
+# TYPOGRAPHY, and only when the palette declares it must survive without a stylesheet (z11's
+# `semantic` flag -- see html_face_wrap). That reads the RESOLVED palette theme, never `meta$theme`.
 #' @keywords internal
 render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data) {
   tab   <- rd$tab
   roles <- rd$roles
   ann   <- rd$ann
+  semantic_face <- fmt_face_semantic(meta$theme_cols$theme %||% "light")
   nm    <- names(tab)
   cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
   n_row <- nrow(tab)
@@ -393,6 +423,14 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
+    # z11: a palette whose meaning is TYPOGRAPHY writes it as markup too, so it survives a stylesheet-
+    # less destination (GitHub, a Word paste). `bold_cell` rather than a$face_bold, so the structural
+    # reference/total bold travels as well. No-op under the colour palettes (semantic_face = FALSE).
+    if (semantic_face) {
+      cell_html <- html_face_wrap(cell_html, bold_cell,
+                                  if (is.null(a)) NULL else a$face_italic,
+                                  if (is.null(a)) NULL else a$face_underline)
+    }
     # Phase 14e: a background-coloured cell wraps its text in a PILL (an inline span, rounded, hugging
     # the text) instead of flooding the whole <td>. Full-cell fills read as a heavy blocky grid, and
     # they also swallow the row-hover highlight (a child's background always paints over its row's).

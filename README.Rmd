@@ -17,6 +17,11 @@ knitr::opts_chunk$set(
 library(tabxplor)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
+# The tables below are rendered in the black-and-white PUBLICATION palette rather than in colour.
+# Reason: GitHub's markdown sanitizer strips `class` and `style` from raw html, so colours cannot
+# reach a README reader there -- while <b>/<i>/<u>, which this palette writes, do. One setting, and
+# both the GitHub page and the pkgdown home show the same readable tables.
+options(tabxplor.theme = "print")
 options(tabxplor.tab_kable_tooltips = FALSE)
 # Pin the language, BOTH ways -- this English README must not depend on who builds it (knitting it
 # on the maintainer's fr_FR.UTF-8 box otherwise yields French legends, captions and GOF labels).
@@ -41,7 +46,7 @@ set_color_palette(theme = "light")
 
 `tabxplor` makes cross-tables readable at a glance, for data exploration. One line of code builds a table with percentages, weighted counts, confidence intervals and tests — and **colors highlight the cells that stand out from the total, only when the difference is statistically solid**. You spot the structure of your data immediately, instead of scanning numbers row by row.
 
-- **Colors encode effect size *and* significance** at once: the stronger the difference, the deeper the color; non-significant cells stay uncolored (or greyed).
+- **Colors encode effect size *and* significance** at once: the stronger the difference, the deeper the color; non-significant cells stay uncolored (or greyed). A black-and-white `theme = "print"` renders the same reading for journals.
 - **Cells are rich values**: each one carries its count, percentage, confidence interval and reference behind the displayed number — tables are `tibble`s you can keep working on with `dplyr`.
 - **The same colors follow you everywhere**: console, html, Excel, markdown/Quarto and plots.
 - **Regression tables too**: `tab_reg()` presents logistic and other models with the same visual language, next to the observed percentages.
@@ -50,10 +55,10 @@ set_color_palette(theme = "light")
 ![A color-coded tabxplor cross-table in the console](man/figures/README-hero.jpg)
 
 ```{r css, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+cat(tab_css(theme = "print"))
 ```
 
-*Note for GitHub readers: the tables below lose their colors here — see the [package website](https://bricenocenti.github.io/tabxplor/) for the full colored version.*
+*The tables below are shown in tabxplor's publication-ready black-and-white scheme (`theme = "print"`): **bold** for over-represented cells, *italic* for under-represented ones. **Colors are the default**, and the right choice for exploring — see the screenshot above, or the [package website](https://bricenocenti.github.io/tabxplor/); GitHub simply strips them from a README.*
 
 ## Installation
 
@@ -95,7 +100,10 @@ Any table exports with its colors to Excel, html or markdown, and can be drawn a
 ``` r
 tab(gss, marital, race, pct = "row", color = "diff") |> tab_export()  # "html"
 tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl()      # Excel
+tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl(theme = "print")  # black & white
 ```
+
+A colored html table also *prints*, or saves to PDF, in that black-and-white scheme on its own.
 
 ## Learn more
 

@@ -13,6 +13,14 @@
 * **Dark mode.** `theme = "auto"` on `tab_html()` / `tab_md()` / `tab_css()` / `tab_export()` follows
   whoever is reading the table (their browser, or the editor for the Viewer). The console also
   auto-detects a dark editor (RStudio and Positron).
+* **A black-and-white publication palette.** `theme = "print"` (on `tab_html()` / `tab_md()` /
+  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically — bold for
+  over-represented cells, italic for under-represented ones, an underline for the strongest threshold,
+  a grey fill for a second measure — because a greyscale print turns the two colour directions into the
+  same shades of grey. It reaches Excel as real font attributes, and is written as `<b>`/`<i>`/`<u>`
+  markup as well as CSS, so it survives a paste into Word. Every stylesheet also carries it in an
+  `@media print` block, so a coloured html table already prints publication-ready
+  (`options(tabxplor.print_rules = FALSE)` to opt out).
 * **A new, dependency-free HTML engine, now the default** for `tab_html()` (about 3× faster and much
   lighter than kableExtra, which becomes optional). Its geometry is CSS classes, so your own CSS can
   restyle it.

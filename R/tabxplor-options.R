@@ -47,9 +47,14 @@
 #'     ANSI bold at a fixed glyph width), `FALSE` in RStudio and unknown consoles (there bold is drawn
 #'     wider and would break column alignment). Override it for your own front-end / font.}
 #'   \item{`tabxplor.theme` (alias `tabxplor.export_theme`)}{the *export* theme, `"light"` (default),
-#'     `"dark"` or `"auto"` (follow the reader). `"auto"` needs a stylesheet, so only
-#'     `tab_kable(engine = "html")`, [tab_md()] and [tab_css()] honour it; static backends resolve it
-#'     to `"light"`.}
+#'     `"dark"`, `"print"` (the black-and-white publication palette; `"bw"` is a synonym) or `"auto"`
+#'     (follow the reader). `"auto"` needs a stylesheet, so only `tab_kable(engine = "html")`,
+#'     [tab_md()] and [tab_css()] honour it; static backends resolve it to `"light"`. `"print"` reaches
+#'     every backend, Excel included.}
+#'   \item{`tabxplor.print_rules`}{`TRUE` (default): every stylesheet [tab_css()] emits also carries the
+#'     black-and-white publication palette inside an `@media print` block, so a table rendered in colour
+#'     **prints** (or saves to PDF) publication-ready with no further action. Set `FALSE` if your printer
+#'     is a colour one and the colours are the point.}
 #' }
 #'
 #' @section Statistics and confidence intervals:

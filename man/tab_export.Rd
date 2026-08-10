@@ -35,6 +35,9 @@ inverse (colours follow the theme). \code{"auto"} follows the reader's colour sc
 and any dark-mode toggle of the host page), which needs a stylesheet: it works for
 \code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
+\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
+cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
+readable in a greyscale print, where the colour palette's two directions become the same shade.
 Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 
 \item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses

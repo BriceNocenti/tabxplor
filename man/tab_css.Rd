@@ -9,13 +9,15 @@ tab_css(
   color_type = lifecycle::deprecated(),
   chrome = TRUE,
   style_tag = TRUE,
-  file = NULL
+  file = NULL,
+  print_rules = NULL
 )
 }
 \arguments{
-\item{theme}{\code{"light"}, \code{"dark"}, or -- opt-in -- \code{"auto"} to follow the reader's colour scheme
-(their operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3,
-Tailwind). Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a
+\item{theme}{\code{"light"}, \code{"dark"}, \code{"print"} (the black-and-white publication palette; \code{"bw"} is
+accepted as a synonym), or -- opt-in -- \code{"auto"} to follow the reader's colour scheme (their
+operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind).
+Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a
 deliberate choice. \code{"auto"} emits every rule four times (a light base, the OS media query, then
 both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
 editor's theme -- see its \code{theme} argument.}
@@ -30,6 +32,13 @@ is what \code{tab_md()} wants: bare selectors you can map in your own editor's C
 \item{style_tag}{Wrap the CSS in a \verb{<style>} tag (default \code{TRUE}).}
 
 \item{file}{Optional path to write to instead of returning.}
+
+\item{print_rules}{Also emit the black-and-white publication palette inside an \verb{@media print}
+block, so a coloured page prints (or saves to PDF) publication-ready with no further action.
+Defaults to \code{getOption("tabxplor.print_rules")}. Set to \code{FALSE} if your printer is a colour one
+and the colours are the point. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and 6 KB to
+an \code{"auto"} one (where the rules must also be emitted against the page-toggle hooks, which would
+otherwise out-specify them).}
 }
 \value{
 The CSS, invisibly when \code{file} is given. Printed as-is by \code{knitr} with \code{results = "asis"}.

@@ -399,6 +399,19 @@ tab_css(theme = "auto")   # à émettre une fois, en haut du document
 
 Tous les styles sont ensuite modifiables via du CSS ordinaire (largeurs de colonnes, polices, etc.) ; voir `?tab_css` pour les classes de rôle (`.tx-rv`, `.tx-tot`, `.tx-num`).
 
+### Noir et blanc, pour la publication
+
+Les couleurs servent à explorer. Pour une revue, `theme = "print"` restitue la même lecture en noir et blanc : **les cases sur-représentées en gras**, *les sous-représentées en italique*, un soulignement pour le seuil le plus fort, et un aplat de gris pour une seconde mesure. La légende nomme alors la typographie, et non plus les teintes.
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+  tab_html(theme = "print")
+```
+
+Ce n'est pas qu'une affaire de goût : converties en clarté, les deux directions de la palette de couleurs donnent *les mêmes* nuances de gris, si bien qu'une impression en niveaux de gris perd entièrement l'opposition sur-représenté / sous-représenté. Le rendu fonctionne dans tous les exports — `tab_html()`, `tab_md()` et `tab_xl()` (véritables gras / italique / soulignement dans le tableur) — et la typographie est écrite sous forme de balises `<b>`/`<i>`/`<u>` en plus du CSS : elle survit donc aussi à un copier-coller dans Word.
+
+**Il est rarement nécessaire de le demander.** Chaque feuille de style embarque déjà cette palette dans un bloc `@media print` : un tableau html en couleurs s'*imprime* — ou s'enregistre en PDF depuis le navigateur — directement prêt pour la publication. Utiliser `options(tabxplor.print_rules = FALSE)` si l'imprimante est en couleurs et que les couleurs sont justement le propos.
+
 ## Travailler avec le résultat
 
 `tab()` renvoie un `tibble` (de classe `tabxplor_tab`), donc les verbes `dplyr` fonctionnent tels quels. En réordonnant les lignes, le prédicat `is_totrow()` est utilisé en interne pour garder les lignes Total en place :

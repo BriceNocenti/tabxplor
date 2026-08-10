@@ -407,6 +407,19 @@ tab_css(theme = "auto")   # emit once, near the top of the document
 
 Nothing is written inline on a cell, so any look is overridable with plain CSS afterwards (column widths, fonts…); see `?tab_css` for the role classes (`.tx-rv`, `.tx-tot`, `.tx-num`).
 
+### Black and white, for publication
+
+Colors are for exploring. For a journal, `theme = "print"` renders the same reading in black and white: **over-represented cells in bold**, *under-represented ones in italic*, an underline for the strongest threshold, and a grey fill for a second measure. The legend names the typography instead of the hues.
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+  tab_html(theme = "print")
+```
+
+This is not merely a taste: converted to lightness, the two directions of the color palette come out as the *same* shades of grey, so a grayscale print loses over-vs-under entirely. It works in every export — `tab_html()`, `tab_md()` and `tab_xl()` (real bold/italic/underline in the spreadsheet) — and the typography is written as `<b>`/`<i>`/`<u>` markup as well as CSS, so it also survives a paste into Word.
+
+**You rarely need to ask for it.** Every stylesheet already carries this palette in an `@media print` block, so a colored html table *prints* — or saves to PDF from your browser — publication-ready on its own. Set `options(tabxplor.print_rules = FALSE)` if your printer is a color one and the colors are the point.
+
 ## Working with the result
 
 `tab()` returns a `tibble` (of class `tabxplor_tab`), so `dplyr` verbs just work. Use the helper `is_totrow()` to keep the Total row in place when you re-order (it flags total rows, so sorting on it first sends them to the bottom):

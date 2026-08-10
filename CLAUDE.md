@@ -166,7 +166,18 @@ R/
 │                              separators as md_blank_row() (fully-ASCII, :empty) that tab_css() collapses
 │                              to 1px rules; plain keeps dash rows (byte-clean GFM). The ::: div ships for
 │                              ANY styled table (not only css=TRUE) so a doc-level tab_css() reaches it
-├── tab-css.R        (~250 L) Phase 13d: THE one CSS generator, shared by tab_md + tab_kable("html").
+├── tab-css.R        (~290 L) Phase 13d: THE one CSS generator, shared by tab_md + tab_kable("html").
+│                              z11: the rule table carries THREE theme columns (light/dark/print) plus
+│                              FACE rows (font-weight/style/text-decoration) emitted only where a theme
+│                              DIVERGES from the static bold_slots baseline (tx_face_decls) -- so
+│                              light/dark stay byte-identical and print can say "not bold";
+│                              tx_resolve_theme() = the theme VALUE vocabulary + the "bw"->"print"
+│                              alias (2 callers); tx_chrome_hex() gains a print arm (grey #595959, the
+│                              only one readable on the fills); tx_print_block() = the @media print
+│                              emission (default on) -- under theme="auto" it MUST also emit a
+│                              hook-prefixed layer (layers 3/4 are (0,3,1) and out-specify it) and
+│                              carry print-color-adjust:exact (browsers drop fills when printing).
+│                              WARNING: tx_css_layer() subsets its VALUE by `keep` -- was latent.
 │                              x2: tx_cell_sel = every CELL colour class emitted bare + scoped
 │                              (".p1,.tabxplor-tab .p1") so (0,2,0) beats Bootstrap hosts'
 │                              .table>:not(caption)>*>* (0,1,1) cell rules (pkgdown/Quarto wash-out).
@@ -2256,13 +2267,75 @@ New `tests/testthat/test-z10-crude-families.R` (66) + `test-cumor-ordered.R` (34
 with a "how to read it, and how not to" and an expert annex on which paths carry a test and with which
 standard error), `po/R-fr.po` + `.mo` recompiled.
 
-#### Last Phase z11 — `tab_reg()` parallelisation
+
+#### Last Phase z11 — black and white publication palette
+
+Implement `dev/black_and_white_publication_palette.md`
+
+**DONE (2026-08-10).** Full suite green (FAIL 0, WARN 0, SKIP 4, PASS 4900 = +81, the new
+`test-print-palette.R`). The ONLY snapshot that moved is `_snaps/golden.md`, and consciously: **zero
+removed lines**, 400 added = 16 blocks x the same 25-line `@media print` block. Rulings + implementation
+findings: `dev/black_and_white_publication_palette.md` SS12.
+
+**Why it exists is a measurement, not a taste.** Converted to CIE L\*, the shipped light background
+ramps are 97/93/90/82 (over) and 97/93/89/82 (under) -- **the same greyscale ramp** -- and on the text
+channel over-1 and under-2 are both 62. A greyscale print, which is how most journal readers see a
+table, loses the over/under distinction entirely on the fill and partly on the text. Desaturating IS
+that conversion, so the answer is a separate palette.
+
+**The keystone was a subtraction.** SIX sites derived "this cell is bold" from "this cell has a colour
+hex", and all of them collapse when every text hex is black: the static CSS rule, `fmt_col_ann()`'s
+`bold`, `tab_xl`'s hard-wired `bold = TRUE`, `tab_plot`'s hex-membership test, `legend_render_line()`'s
+`is_bold_tok` (**not** cosmetic -- it writes `font-weight:bold` INLINE, which beats the stylesheet, so
+an unfixed legend would have printed bold break-words over italic cells), and the console `pillar_shaft`
+(deliberately out of scope). **The palette now DECLARES the face** -- `tx_palette_faces()`, 8 slot
+renderings per (family, theme), `e$face` beside `e$hex`, read through the SAME accessor
+(`get_color_style(mode = "face")`) -- and five heuristics are gone. Light/dark answer bold-on-all-8 /
+nothing-on-bg, i.e. today's rendering as data, which is what made every backend refactor byte-identical:
+the gate was the whole suite green with **zero** snapshot movement before `@media print` was switched on.
+
+**One palette, two channels, no new argument.** `theme = "print"` (alias `"bw"`): text channel =
+typography (over bold / under italic / 2nd level underlined), background channel = one grey ramp
+IDENTICAL on both sides -- greyscale cannot diverge, so the fill carries its own measure's magnitude and
+direction is read off the cell's own typography (Bertin). The study's SS6.3 conflict cannot arise here
+because the fill is a *second measure's* channel, so `color = "diff"` alone is purely typographic
+(Elsevier-safe) and `color = TRUE` adds fills only for the ratio. `"print"` reaches EVERY backend
+including Excel (real `<i>`/`<u>` font attributes) -- unlike `"auto"` it is a palette, not a render
+intent. **Markdown needed no code at all**: its cells are bare slot spans whose bold has always come
+from the stylesheet, so `tab_md(css = TRUE)` carries print for free (pipe grid byte-identical, asserted).
+
+**`@media print` is on by default**, so a coloured page prints publication-ready unasked
+(`options(tabxplor.print_rules = FALSE)` opts out; `tab_html`/`tab_md` need no argument, they inherit it
+through `tab_css()`). Three things that would have shipped broken: under `theme = "auto"` the block must
+ALSO be emitted hook-prefixed (cascade layers 3/4 are (0,3,1) and out-specify it whatever the source
+order -- a Quarto-dark page would have printed dark); browsers DROP `background-color` when printing
+without `print-color-adjust: exact`; and `build_palettes()`'s 8-bit branch would have crashed the
+RStudio console (`palette_8bit` has no print key). Also fixed a **latent** bug the phase exposed:
+`tx_css_layer()` subsetted `prop` by `keep` but used the unsubset value vector -- correct only while
+every rule had a value in every theme.
+
+**Rejected**: SS4.3's `levels` + `pmin` (it would make `fmt_color_slots()` theme-aware; instead the
+palette repeats a face and `legend_break_tokens()` collapses break-words that render identically, so the
+legend reads "bold = at least +5 points"); a `set_color_palette()` formal for the greys (its validator
+cannot check an L\*/contrast invariant, and composing print from a literal gives the byte-property that
+a user's palette provably cannot alter print output); `print_marks` / `print_shaded`.
+
+**Maintainer-directed**: because GitHub strips `class` **and** `style` from raw html (and a Word paste
+keeps tags, not stylesheets), the face carries a `semantic` flag and is emitted as real `<b>`/`<i>`/`<u>`
+markup as well as CSS. `README.Rmd` now renders its tables with `theme = "print"` -- readable on GitHub
+AND on the pkgdown home -- while the prose and the hero screenshot teach that colour is the default for
+exploration. Docs: a subsection in both intro vignettes (EN + FR), `?tab_html`/`?tab_xl`/`?tab_export`/
+`?tab_plot`/`?tab_css`/`?tabxplor-options`, NEWS, `po/R-fr.po` + `.mo` recompiled (156 translated, 0
+fuzzy).
+
+
+#### Last Phase z12 — `tab_reg()` parallelisation
 
 `tab()` has had a parallel row-axis since Phase 8/9a (`R/tab-parallel.R`: `tab_pmap()` + trampoline,
 the named `"tabxplor"` mirai pool, `tab_build_one()` as the per-row_var worker, Suggests-only).
 `tab_reg()` has nothing, and the work it does is increasingly fit-bound. Research and design it **as a
 whole** — pick the level of parallelisation after real measurement, rather than bolting a pool onto
-whichever producer happened to get slow. Write the study in a new `dev/*.md`, then plan and implement.
+whichever producer happened to get slow. Write the study in a new `dev/*.md`, pause ; then only plan and implement.
 
 **Candidate payloads** (measure each; they have very different granularity and shipping cost):
 - **Per-predictor crude fits.** z9's numeric `Obs_*` (univariable `glm` ~10.4 ms each, but
@@ -2297,9 +2370,13 @@ whichever producer happened to get slow. Write the study in a new `dev/*.md`, th
 a second Suggests-guard idiom would be exactly the ad-hoc layer Phase 17 removed.
 
 
-#### Last Phase z12 — black and white publication palette
 
-Implement `dev/black_and_white_publication_palette.md`
+
+
+
+
+
+---
 
 ### Reference — bugs, benchmarks, perf
 

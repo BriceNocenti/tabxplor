@@ -48,9 +48,14 @@ NOT the export theme (\code{tabxplor.theme} / \code{tabxplor.export_theme}).}
 ANSI bold at a fixed glyph width), \code{FALSE} in RStudio and unknown consoles (there bold is drawn
 wider and would break column alignment). Override it for your own front-end / font.}
 \item{\code{tabxplor.theme} (alias \code{tabxplor.export_theme})}{the \emph{export} theme, \code{"light"} (default),
-\code{"dark"} or \code{"auto"} (follow the reader). \code{"auto"} needs a stylesheet, so only
-\code{tab_kable(engine = "html")}, \code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it
-to \code{"light"}.}
+\code{"dark"}, \code{"print"} (the black-and-white publication palette; \code{"bw"} is a synonym) or \code{"auto"}
+(follow the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = "html")},
+\code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}. \code{"print"} reaches
+every backend, Excel included.}
+\item{\code{tabxplor.print_rules}}{\code{TRUE} (default): every stylesheet \code{\link[=tab_css]{tab_css()}} emits also carries the
+black-and-white publication palette inside an \verb{@media print} block, so a table rendered in colour
+\strong{prints} (or saves to PDF) publication-ready with no further action. Set \code{FALSE} if your printer
+is a colour one and the colours are the point.}
 }
 }
 

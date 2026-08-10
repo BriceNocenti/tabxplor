@@ -24,7 +24,11 @@ tab_plot(
 \item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}.}
 
 \item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
-black table with white text.}
+black table with white text.
+\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
+cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
+readable in a greyscale print, where the colour palette's two directions become the same shade.
+(\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)}
 
 \item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}

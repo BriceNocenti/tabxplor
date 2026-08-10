@@ -86,11 +86,14 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     # which read font/back/bold only.
     text_slot <- codes$text_slot
     bg_slot   <- codes$bg_slot
+    face      <- codes$text_face
   } else {
     text_hex  <- rep(NA_character_, length(col))
     bg_hex    <- rep(NA_character_, length(col))
     text_slot <- integer(length(col))
     bg_slot   <- integer(length(col))
+    face      <- list(bold = logical(length(col)), italic = logical(length(col)),
+                      underline = logical(length(col)))
   }
 
   list(
@@ -107,11 +110,22 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     text_slot  = text_slot,
     bg_slot    = bg_slot,
     keep_black = keep_black,
+    # Last Phase z11: the palette's own TYPOGRAPHY for this cell's text slot, kept FLAT (three vectors,
+    # not a nested list) because tx_transpose_render() flips per-cell logicals with a flat helper.
+    # These are the MEASURE's face only -- `keep_black` (the structural reference/total bold) is folded
+    # into `bold` below and deliberately not into these, since tab_plot's structural bolding is a
+    # row/column SET, not a per-cell flag.
+    face_bold      = face$bold,
+    face_italic    = face$italic,
+    face_underline = face$underline,
     font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
                             keep_black       ~ theme_cols$text,
                             TRUE             ~ grey_this),
     back = dplyr::if_else(is.na(bg_hex), "none", bg_hex),
-    bold = !is.na(text_hex) | keep_black,
+    # z11: was `!is.na(text_hex) | keep_black` -- a HEX heuristic that collapses in a palette whose
+    # every text hex is black. The palette declares it now. Byte-identical for light/dark, where
+    # face_bold is TRUE at exactly the slots that carry a hex.
+    bold = face$bold | keep_black,
     has_color = has_col || has_bgc,
     has_bgc   = has_bgc
   )
@@ -666,7 +680,10 @@ rd_footer <- function(src, medium, theme = NULL, want_legend = TRUE,
                       subtext = character(0), lang = NULL, classes = FALSE) {
   suppressWarnings(render_footer(
     tab_footer_streams(src, style = legend_export_style(), lang = lang,
-                       subtext = subtext, legend = want_legend),
+                       subtext = subtext, legend = want_legend,
+                       # z11: the shade NAMES are a palette fact, decided while the tokens are built --
+                       # a print legend says "Bold"/"Italic" where a colour one says "Shades of blue".
+                       theme = tx_palette_theme(theme)),
     medium = medium, theme = theme, classes = classes))
 }
 
@@ -715,6 +732,9 @@ roles_totblock_edges <- function(in_block) {
 # WARNING (Phase 14l): `color_type` is GONE. It was the 2nd positional arg, so every call site was
 # converted to NAMED arguments in the same change -- do NOT reintroduce a positional call, it would
 # shift every later toggle silently (color -> color_type, color_legend -> color, ...).
+# NOTE (Last Phase z11): the allow_auto gate below tests "auto" SPECIFICALLY, so the new "print" theme
+# reaches every backend including the static ones (tab_xl, tab_plot) -- which is right: "print" is a
+# palette, not a render intent, and Excel is exactly where a publication table is wanted.
 #' @keywords internal
 resolve_export_opts <- function(theme = NULL,
                                 color = TRUE, color_legend = TRUE,
@@ -722,7 +742,7 @@ resolve_export_opts <- function(theme = NULL,
                                 var_names = NULL,
                                 allow_auto = FALSE) {
   if (is.null(theme)) theme <- tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light")
-  theme <- match.arg(theme[1], c("light", "dark", "auto"))
+  theme <- tx_resolve_theme(theme)
   if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
   if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")
   var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))

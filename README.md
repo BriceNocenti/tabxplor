@@ -1,44 +1,31 @@
+---
+output:
+  github_document:
+    html_preview: false
+always_allow_html: true
+---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
+
 
 # tabxplor
 
 <!-- badges: start -->
-
-[![CRAN
-status](https://www.r-pkg.org/badges/version/tabxplor)](https://CRAN.R-project.org/package=tabxplor)
+[![CRAN status](https://www.r-pkg.org/badges/version/tabxplor)](https://CRAN.R-project.org/package=tabxplor)
 [![R-CMD-check](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml)
-[![Codecov test
-coverage](https://codecov.io/gh/BriceNocenti/tabxplor/graph/badge.svg)](https://app.codecov.io/gh/BriceNocenti/tabxplor)
+[![Codecov test coverage](https://codecov.io/gh/BriceNocenti/tabxplor/graph/badge.svg)](https://app.codecov.io/gh/BriceNocenti/tabxplor)
 <!-- badges: end -->
 
-`tabxplor` makes cross-tables readable at a glance, for data
-exploration. One line of code builds a table with percentages, weighted
-counts, confidence intervals and tests — and **colors highlight the
-cells that stand out from the total, only when the difference is
-statistically solid**. You spot the structure of your data immediately,
-instead of scanning numbers row by row.
+`tabxplor` makes cross-tables readable at a glance, for data exploration. One line of code builds a table with percentages, weighted counts, confidence intervals and tests — and **colors highlight the cells that stand out from the total, only when the difference is statistically solid**. You spot the structure of your data immediately, instead of scanning numbers row by row.
 
-- **Colors encode effect size *and* significance** at once: the stronger
-  the difference, the deeper the color; non-significant cells stay
-  uncolored (or greyed).
-- **Cells are rich values**: each one carries its count, percentage,
-  confidence interval and reference behind the displayed number — tables
-  are `tibble`s you can keep working on with `dplyr`.
-- **The same colors follow you everywhere**: console, html, Excel,
-  markdown/Quarto and plots.
-- **Regression tables too**: `tab_reg()` presents logistic and other
-  models with the same visual language, next to the observed
-  percentages.
-- Weighted and survey data are supported throughout, and a
-  point-and-click [jamovi](https://www.jamovi.org/) module is available.
+- **Colors encode effect size *and* significance** at once: the stronger the difference, the deeper the color; non-significant cells stay uncolored (or greyed). A black-and-white `theme = "print"` renders the same reading for journals.
+- **Cells are rich values**: each one carries its count, percentage, confidence interval and reference behind the displayed number — tables are `tibble`s you can keep working on with `dplyr`.
+- **The same colors follow you everywhere**: console, html, Excel, markdown/Quarto and plots.
+- **Regression tables too**: `tab_reg()` presents logistic and other models with the same visual language, next to the observed percentages.
+- Weighted and survey data are supported throughout, and a point-and-click [jamovi](https://www.jamovi.org/) module is available.
 
-<figure>
-<img src="man/figures/README-hero.jpg"
-alt="A color-coded tabxplor cross-table in the console" />
-<figcaption aria-hidden="true">A color-coded tabxplor cross-table in the
-console</figcaption>
-</figure>
+![A color-coded tabxplor cross-table in the console](man/figures/README-hero.jpg)
 
 <style>
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
@@ -78,31 +65,32 @@ console</figcaption>
 .popover-body,.popover-content{padding:6px;white-space:nowrap;}
 .tabxplor-tab{color:#000000;background:#ffffff;}
 .tabxplor-tab th,.tabxplor-tab td{border-color:#000000;}
-.tabxplor-tab tbody tr:hover{background:#FFFCE5;}
-.g1,.tabxplor-tab .g1{color:#9f9f9f;}
+.tabxplor-tab tbody tr:hover{background:transparent;}
+.g1,.tabxplor-tab .g1{color:#595959;}
 .g2,.tabxplor-tab .g2{color:#111111;}
 .tabxplor-caption{color:#000000;}
-.p1,.tabxplor-tab .p1{color:#02A5B3;}
-.p2,.tabxplor-tab .p2{color:#0891C9;}
-.p3,.tabxplor-tab .p3{color:#0267C7;}
-.p4,.tabxplor-tab .p4{color:#300DFD;}
-.m1,.tabxplor-tab .m1{color:#DCA331;}
-.m2,.tabxplor-tab .m2{color:#DE7C01;}
-.m3,.tabxplor-tab .m3{color:#DD5301;}
-.m4,.tabxplor-tab .m4{color:#D60103;}
-.o1,.tabxplor-tab .o1{background-color:#DFFCFF;}
-.o2,.tabxplor-tab .o2{background-color:#D7EFFF;}
-.o3,.tabxplor-tab .o3{background-color:#CEE3FF;}
-.o4,.tabxplor-tab .o4{background-color:#BBCCFF;}
-.u1,.tabxplor-tab .u1{background-color:#FFF4E1;}
-.u2,.tabxplor-tab .u2{background-color:#FFE6D3;}
-.u3,.tabxplor-tab .u3{background-color:#FFD7C8;}
-.u4,.tabxplor-tab .u4{background-color:#FFBAAF;}
+.p1,.tabxplor-tab .p1{color:#000000;}
+.p2,.tabxplor-tab .p2{color:#000000;}
+.p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
+.p4,.tabxplor-tab .p4{color:#000000;text-decoration:underline;}
+.m1,.tabxplor-tab .m1{color:#000000;font-weight:normal;font-style:italic;}
+.m2,.tabxplor-tab .m2{color:#000000;font-weight:normal;font-style:italic;}
+.m3,.tabxplor-tab .m3{color:#000000;font-weight:normal;font-style:italic;text-decoration:underline;}
+.m4,.tabxplor-tab .m4{color:#000000;font-weight:normal;font-style:italic;text-decoration:underline;}
+.o1,.tabxplor-tab .o1{background-color:#F5F5F5;}
+.o2,.tabxplor-tab .o2{background-color:#E4E4E4;}
+.o3,.tabxplor-tab .o3{background-color:#D0D0D0;}
+.o4,.tabxplor-tab .o4{background-color:#B8B8B8;}
+.u1,.tabxplor-tab .u1{background-color:#F5F5F5;}
+.u2,.tabxplor-tab .u2{background-color:#E4E4E4;}
+.u3,.tabxplor-tab .u3{background-color:#D0D0D0;}
+.u4,.tabxplor-tab .u4{background-color:#B8B8B8;}
+@media print {
+  .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+}
 </style>
 
-*Note for GitHub readers: the tables below lose their colors here — see
-the [package website](https://bricenocenti.github.io/tabxplor/) for the
-full colored version.*
+*The tables below are shown in tabxplor's publication-ready black-and-white scheme (`theme = "print"`): **bold** for over-represented cells, *italic* for under-represented ones. **Colors are the default**, and the right choice for exploring — see the screenshot above, or the [package website](https://bricenocenti.github.io/tabxplor/); GitHub simply strips them from a README.*
 
 ## Installation
 
@@ -116,9 +104,8 @@ devtools::install_github("BriceNocenti/tabxplor")
 
 ## A quick look
 
-A simple cross-table with row percentages: shades of blue mean the cell
-is over-represented compared to the total row, shades of red mean it is
-under-represented, and the legend below the table says by how much.
+A simple cross-table with row percentages: shades of blue mean the cell is over-represented compared to the total row, shades of red mean it is under-represented, and the legend below the table says by how much.
+
 
 ``` r
 gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
@@ -126,1030 +113,74 @@ gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
 tab(gss, race, party3, pct = "row", color = "diff")
 ```
 
-<table class="tabxplor-tab">
+<table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="4">party3</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">race</th><th class="tx-r tx-num">1-Democrat</th><th class="tx-r tx-num">2-Independent,<br>other</th><th class="tx-r tx-num">3-Republican</th><th class="tx-r tx-num">NA</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">White</td><td class="tx-r tx-num m1"><i>39%</i></td><td class="tx-r tx-num g1">21%</td><td class="tx-r tx-num p1 tx-b"><b>40%</b></td><td class="tx-r tx-num g1">1%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b"><b>100%<span style="font-weight:normal;"> (n=16 395)</span></b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">Black</td><td class="tx-r tx-num p3 tx-b"><b><u>75%</u></b></td><td class="tx-r tx-num g1">16%</td><td class="tx-r tx-num m3"><i><u>8%</u></i></td><td class="tx-r tx-num g1">1%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b"><b>100%<span style="font-weight:normal;"> (n= 3 129)</span></b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">Other</td><td class="tx-r tx-num g1">48%</td><td class="tx-r tx-num p2 tx-b"><b>32%</b></td><td class="tx-r tx-num m2"><i>18%</i></td><td class="tx-r tx-num g1">1%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b"><b>100%<span style="font-weight:normal;"> (n= 1 959)</span></b></td></tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv"><b>Total</b></td><td class="tx-r tx-num tx-b"><b>45%</b></td><td class="tx-r tx-num tx-b"><b>21%</b></td><td class="tx-r tx-num tx-b"><b>33%</b></td><td class="tx-r tx-num tx-b"><b>1%</b></td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b"><b>100%<span style="font-weight:normal;"> (n=21 483)</span></b></td></tr></tbody><tfoot><tr><td colspan="6"><div class="tx-foot">Bold: cells ≥ the Total row <span class="p1" style="font-weight:bold;"><b>+5</b></span>; <span class="p3" style="font-weight:bold;text-decoration:underline;"><b><u>+20</u></b></span> points. Italic: cells ≤ the Total row <span class="m1" style="font-weight:normal;font-style:italic;"><i>-5</i></span>; <span class="m3" style="font-weight:normal;font-style:italic;text-decoration:underline;"><i><u>-20</u></i></span> points.</div></td></tr></tfoot></table>
 
-<thead>
 
-<tr>
 
-<th class="tx-span" colspan="1">
+Several column variables can be crossed at once — handy for series of survey questions, keeping only the level of interest. With `color_signif = "grey_non_signif"`, cells that are *not* significantly different from the total are greyed out, so every colored (or black) figure is a solid one. Use `wt =` for weighted or survey data.
 
-</th>
-
-<th class="tx-span" colspan="4">
-
-party3
-</th>
-
-<th class="tx-span" colspan="1">
-
-</th>
-
-</tr>
-
-<tr>
-
-<th class="tx-l tx-br tx-bl tx-rv">
-
-race
-</th>
-
-<th class="tx-r tx-num">
-
-1-Democrat
-</th>
-
-<th class="tx-r tx-num">
-
-2-Independent,<br>other
-</th>
-
-<th class="tx-r tx-num">
-
-3-Republican
-</th>
-
-<th class="tx-r tx-num">
-
-NA
-</th>
-
-<th class="tx-r tx-num tx-br tx-bl tx-tot">
-
-Total
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-White
-</td>
-
-<td class="tx-r tx-num m1 tx-b">
-
-39%
-</td>
-
-<td class="tx-r tx-num g1">
-
-21%
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-40%
-</td>
-
-<td class="tx-r tx-num g1">
-
-1%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n=16 395)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Black
-</td>
-
-<td class="tx-r tx-num p3 tx-b">
-
-75%
-</td>
-
-<td class="tx-r tx-num g1">
-
-16%
-</td>
-
-<td class="tx-r tx-num m3 tx-b">
-
-8%
-</td>
-
-<td class="tx-r tx-num g1">
-
-1%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n= 3 129)</span>
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Other
-</td>
-
-<td class="tx-r tx-num g1">
-
-48%
-</td>
-
-<td class="tx-r tx-num p2 tx-b">
-
-32%
-</td>
-
-<td class="tx-r tx-num m2 tx-b">
-
-18%
-</td>
-
-<td class="tx-r tx-num g1">
-
-1%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n= 1 959)</span>
-</td>
-
-</tr>
-
-<tr class="tx-b tx-bt tx-bb tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Total
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-45%
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-21%
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-33%
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-1%
-</td>
-
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
-
-100%<span style="font-weight:normal;"> (n=21 483)</span>
-</td>
-
-</tr>
-
-</tbody>
-
-<tfoot>
-
-<tr>
-
-<td colspan="6">
-
-<div class="tx-foot">
-
-Shades of blue: cells ≥ the Total row <span class="p1"
-style="font-weight:bold;">+5</span>; <span class="p2"
-style="font-weight:bold;">+10</span>; <span class="p3"
-style="font-weight:bold;">+20</span>; <span class="p4"
-style="font-weight:bold;">+30</span> points. Shades of yellow to red:
-cells ≤ the Total row <span class="m1"
-style="font-weight:bold;">-5</span>; <span class="m2"
-style="font-weight:bold;">-10</span>; <span class="m3"
-style="font-weight:bold;">-20</span>; <span class="m4"
-style="font-weight:bold;">-30</span> points.
-
-</div>
-
-</td>
-
-</tr>
-
-</tfoot>
-
-</table>
-
-Several column variables can be crossed at once — handy for series of
-survey questions, keeping only the level of interest. With
-`color_signif = "grey_non_signif"`, cells that are *not* significantly
-different from the total are greyed out, so every colored (or black)
-figure is a solid one. Use `wt =` for weighted or survey data.
 
 ``` r
 tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
     color = "diff", color_signif = "grey_non_signif")
 ```
 
-<table class="tabxplor-tab">
+<table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="1">married</th><th class="tx-span" colspan="1">income25k</th><th class="tx-span" colspan="1">black</th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">relig</th><th class="tx-r tx-num tx-br">01-Married</th><th class="tx-r tx-num tx-br">01-$25000 or<br>more</th><th class="tx-r tx-num tx-br">01-Black</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">1-Protestant</td><td class="tx-r tx-num tx-br g1">50%</td><td class="tx-r tx-num tx-br g1">32%</td><td class="tx-r tx-num tx-br p1 tx-b"><b>21%</b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">2-Catholic</td><td class="tx-r tx-num tx-br g1">50%</td><td class="tx-r tx-num tx-br g1">35%</td><td class="tx-r tx-num tx-br m2"><i>4%</i></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">3-Other christian</td><td class="tx-r tx-num tx-br g1">44%</td><td class="tx-r tx-num tx-br g1">35%</td><td class="tx-r tx-num tx-br g1">18%</td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">4-Jewish</td><td class="tx-r tx-num tx-br g1">51%</td><td class="tx-r tx-num tx-br p1 tx-b"><b>43%</b></td><td class="tx-r tx-num tx-br m2"><i>3%</i></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">5-Buddhist/Hinduist</td><td class="tx-r tx-num tx-br g1">51%</td><td class="tx-r tx-num tx-br p2 tx-b"><b>47%</b></td><td class="tx-r tx-num tx-br m1"><i>5%</i></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">6-Muslim</td><td class="tx-r tx-num tx-br g1">53%</td><td class="tx-r tx-num tx-br g1">32%</td><td class="tx-r tx-num tx-br p2 tx-b"><b>34%</b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">7-Other</td><td class="tx-r tx-num tx-br m1"><i>37%</i></td><td class="tx-r tx-num tx-br g1">37%</td><td class="tx-r tx-num tx-br g1">13%</td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">8-None</td><td class="tx-r tx-num tx-br m2"><i>37%</i></td><td class="tx-r tx-num tx-br g1">37%</td><td class="tx-r tx-num tx-br g1">11%</td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">NA</td><td class="tx-r tx-num tx-br g1">45%</td><td class="tx-r tx-num tx-br m2"><i>15%</i></td><td class="tx-r tx-num tx-br g1">18%</td></tr>
+<tr class="tx-b tx-bt tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv"><b>Total</b></td><td class="tx-r tx-num tx-br tx-b"><b>47%</b></td><td class="tx-r tx-num tx-br tx-b"><b>34%</b></td><td class="tx-r tx-num tx-br tx-b"><b>15%</b></td></tr></tbody><tfoot><tr><td colspan="4"><div class="tx-foot">Bold: cells ≥ the Total row <span class="p1" style="font-weight:bold;"><b>+5</b></span>; <span class="p3" style="font-weight:bold;text-decoration:underline;"><b><u>+20</u></b></span> points. Italic: cells ≤ the Total row <span class="m1" style="font-weight:normal;font-style:italic;"><i>-5</i></span>; <span class="m3" style="font-weight:normal;font-style:italic;text-decoration:underline;"><i><u>-20</u></i></span> points. Coloured: significantly different from the Total row (Newcombe score interval, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ±5 points.</div></td></tr></tfoot></table>
 
-<thead>
 
-<tr>
 
-<th class="tx-span" colspan="1">
+The same visual language extends to regression models: `tab_reg()` detects a binary outcome and fits a logistic regression, coloring odds ratios by strength and greying the non-significant ones, with a possible comparison between modelised quantities and their crude observed empirical counterparts.
 
-</th>
-
-<th class="tx-span" colspan="1">
-
-married
-</th>
-
-<th class="tx-span" colspan="1">
-
-income25k
-</th>
-
-<th class="tx-span" colspan="1">
-
-black
-</th>
-
-</tr>
-
-<tr>
-
-<th class="tx-l tx-br tx-bl tx-rv">
-
-relig
-</th>
-
-<th class="tx-r tx-num tx-br">
-
-01-Married
-</th>
-
-<th class="tx-r tx-num tx-br">
-
-01-\$25000 or<br>more
-</th>
-
-<th class="tx-r tx-num tx-br">
-
-01-Black
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-1-Protestant
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-50%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-32%
-</td>
-
-<td class="tx-r tx-num tx-br p1 tx-b">
-
-21%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-2-Catholic
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-50%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-35%
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-4%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-3-Other christian
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-44%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-35%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-18%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-4-Jewish
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-51%
-</td>
-
-<td class="tx-r tx-num tx-br p1 tx-b">
-
-43%
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-3%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-5-Buddhist/Hinduist
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-51%
-</td>
-
-<td class="tx-r tx-num tx-br p2 tx-b">
-
-47%
-</td>
-
-<td class="tx-r tx-num tx-br m1 tx-b">
-
-5%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-6-Muslim
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-53%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-32%
-</td>
-
-<td class="tx-r tx-num tx-br p2 tx-b">
-
-34%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-7-Other
-</td>
-
-<td class="tx-r tx-num tx-br m1 tx-b">
-
-37%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-37%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-13%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-8-None
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-37%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-37%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-11%
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-NA
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-45%
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-15%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-18%
-</td>
-
-</tr>
-
-<tr class="tx-b tx-bt tx-bb tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Total
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-47%
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-34%
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-15%
-</td>
-
-</tr>
-
-</tbody>
-
-<tfoot>
-
-<tr>
-
-<td colspan="4">
-
-<div class="tx-foot">
-
-Shades of blue: cells ≥ the Total row <span class="p1"
-style="font-weight:bold;">+5</span>; <span class="p2"
-style="font-weight:bold;">+10</span>; <span class="p3"
-style="font-weight:bold;">+20</span>; <span class="p4"
-style="font-weight:bold;">+30</span> points. Shades of yellow to red:
-cells ≤ the Total row <span class="m1"
-style="font-weight:bold;">-5</span>; <span class="m2"
-style="font-weight:bold;">-10</span>; <span class="m3"
-style="font-weight:bold;">-20</span>; <span class="m4"
-style="font-weight:bold;">-30</span> points. Coloured: significantly
-different from the Total row (Newcombe score interval, 95% confidence),
-by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±5 points.
-
-</div>
-
-</td>
-
-</tr>
-
-</tfoot>
-
-</table>
-
-The same visual language extends to regression models: `tab_reg()`
-detects a binary outcome and fits a logistic regression, coloring odds
-ratios by strength and greying the non-significant ones, with a possible
-comparison between modelised quantities and their crude observed
-empirical counterparts.
 
 ``` r
 tab_reg(gss, dependent = "married", predictors = c("race", "age", "rincome"), empirical = TRUE)
 ```
 
-<div class="tabxplor-caption">
+<div class="tabxplor-caption">Logistic regression: married by race, age +1 more</div><table class="tabxplor-tab tx-has-stars"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">married: 01-Married</th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">levels</th><th class="tx-r tx-num">Obs_%</th><th class="tx-r tx-num">Obs_OR</th><th class="tx-r tx-num tx-br">Model_OR</th></tr></thead><tbody><tr class="tx-b tx-bb2"><td class="tx-l tx-br tx-bl tx-rv"><b>Reference population</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b>1/4.09***</b></td></tr>
+<tr class="tx-b"><td class="tx-l tx-br tx-bl tx-rv"><b>White</b></td><td class="tx-r tx-num tx-b"><b>52%   </b></td><td class="tx-r tx-num tx-b"><b>1   </b></td><td class="tx-r tx-num tx-br tx-b"><b>1   </b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">Black</td><td class="tx-r tx-num m3"><i><u>31%***</u></i></td><td class="tx-r tx-num m3"><i><u>1/2.45***</u></i></td><td class="tx-r tx-num tx-br m3"><i><u>1/2.22***</u></i></td></tr>
+<tr class="tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Other</td><td class="tx-r tx-num g1">49%*  </td><td class="tx-r tx-num g1">1/1.11*  </td><td class="tx-r tx-num tx-br g1">1.08   </td></tr>
+<tr class="tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">age (per 1 SD (13.5))</td><td class="tx-r tx-num g1"></td><td class="tx-r tx-num p1 tx-b"><b>1.46***</b></td><td class="tx-r tx-num tx-br p1 tx-b"><b>1.40***</b></td></tr>
+<tr class="tx-b"><td class="tx-l tx-br tx-bl tx-rv"><b>1-Lt $10000</b></td><td class="tx-r tx-num tx-b"><b>37%   </b></td><td class="tx-r tx-num tx-b"><b>1   </b></td><td class="tx-r tx-num tx-br tx-b"><b>1   </b></td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">2-$10000 to 14999</td><td class="tx-r tx-num g1">41%** </td><td class="tx-r tx-num p1 tx-b"><b>1.21** </b></td><td class="tx-r tx-num tx-br g1">1.15*  </td></tr>
+<tr><td class="tx-l tx-br tx-bl tx-rv">3-$15000 to 24999</td><td class="tx-r tx-num p1 tx-b"><b>43%***</b></td><td class="tx-r tx-num p1 tx-b"><b>1.33***</b></td><td class="tx-r tx-num tx-br p1 tx-b"><b>1.28***</b></td></tr>
+<tr class="tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">4-$25000 or more</td><td class="tx-r tx-num p2 tx-b"><b>55%***</b></td><td class="tx-r tx-num p3 tx-b"><b><u>2.14***</u></b></td><td class="tx-r tx-num tx-br p2 tx-b"><b>1.85***</b></td></tr>
+<tr class="tx-b tx-bt"><td class="tx-l tx-br tx-bl tx-rv"><b>N</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b>12 990</b></td></tr>
+<tr class="tx-b"><td class="tx-l tx-br tx-bl tx-rv"><b>LR vs null</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b><0.01%</b></td></tr>
+<tr class="tx-b"><td class="tx-l tx-br tx-bl tx-rv"><b>McFadden R2</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b>0.049</b></td></tr>
+<tr class="tx-b"><td class="tx-l tx-br tx-bl tx-rv"><b>AIC</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b>17 129</b></td></tr>
+<tr class="tx-b tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv"><b>BIC</b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-b"><b></b></td><td class="tx-r tx-num tx-br tx-b"><b>17 181</b></td></tr></tbody><tfoot><tr><td colspan="4"><div class="tx-foot">Model: logistic regression; odds ratios (vs the reference category).<br><b>Obs_% — </b>Bold: cells ≥ <span class="p1" style="font-weight:bold;"><b>+5</b></span>; <span class="p3" style="font-weight:bold;text-decoration:underline;"><b><u>+20</u></b></span> points. Italic: cells ≤ <span class="m1" style="font-weight:normal;font-style:italic;"><i>-5</i></span>; <span class="m3" style="font-weight:normal;font-style:italic;text-decoration:underline;"><i><u>-20</u></i></span> points. Coloured: significantly different from the reference category (Wald interval, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ±5 points.<br><b>Obs_OR, Model_OR — </b>Bold: OR ≥ <span class="p1" style="font-weight:bold;"><b>1.2</b></span>; <span class="p3" style="font-weight:bold;text-decoration:underline;"><b><u>2</u></b></span>. Italic: OR ≤ <span class="m1" style="font-weight:normal;font-style:italic;"><i>1/1.2</i></span>; <span class="m3" style="font-weight:normal;font-style:italic;text-decoration:underline;"><i><u>1/2</u></i></span>. Coloured: significantly different from the reference category (Wald interval on the log odds-ratio, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ×1.2.<br>&#42;&#42;&#42;: significantly different from the reference category (in bold) at the 99% confidence level; &#42;&#42;: at the 95% level; &#42;: at the 90% level; no star: not significant.</div></td></tr></tfoot></table>
 
-Logistic regression: married by race, age +1 more
 
-</div>
-
-<table class="tabxplor-tab tx-has-stars">
-
-<thead>
-
-<tr>
-
-<th class="tx-span" colspan="1">
-
-</th>
-
-<th class="tx-span" colspan="3">
-
-married: 01-Married
-</th>
-
-</tr>
-
-<tr>
-
-<th class="tx-l tx-br tx-bl tx-rv">
-
-levels
-</th>
-
-<th class="tx-r tx-num">
-
-Obs\_%
-</th>
-
-<th class="tx-r tx-num">
-
-Obs_OR
-</th>
-
-<th class="tx-r tx-num tx-br">
-
-Model_OR
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr class="tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Reference population
-</td>
-
-<td class="tx-r tx-num g1">
-
-</td>
-
-<td class="tx-r tx-num g1">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-1/4.09\*\*\*
-</td>
-
-</tr>
-
-<tr class="tx-b">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-White
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-52%   
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-1   
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-1   
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Black
-</td>
-
-<td class="tx-r tx-num m3 tx-b">
-
-31%\*\*\*
-</td>
-
-<td class="tx-r tx-num m3 tx-b">
-
-1/2.45\*\*\*
-</td>
-
-<td class="tx-r tx-num tx-br m3 tx-b">
-
-1/2.22\*\*\*
-</td>
-
-</tr>
-
-<tr class="tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-Other
-</td>
-
-<td class="tx-r tx-num g1">
-
-49%\*  
-</td>
-
-<td class="tx-r tx-num g1">
-
-1/1.11\*  
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-1.08   
-</td>
-
-</tr>
-
-<tr class="tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-age
-</td>
-
-<td class="tx-r tx-num g1">
-
-</td>
-
-<td class="tx-r tx-num g1">
-
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-1.03\*\*\*
-</td>
-
-</tr>
-
-<tr class="tx-b">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-1-Lt \$10000
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-37%   
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-1   
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-1   
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-2-\$10000 to 14999
-</td>
-
-<td class="tx-r tx-num g1">
-
-41%\*\* 
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-1.21\*\* 
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-1.15\*  
-</td>
-
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-3-\$15000 to 24999
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-43%\*\*\*
-</td>
-
-<td class="tx-r tx-num p1 tx-b">
-
-1.33\*\*\*
-</td>
-
-<td class="tx-r tx-num tx-br p1 tx-b">
-
-1.28\*\*\*
-</td>
-
-</tr>
-
-<tr class="tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-4-\$25000 or more
-</td>
-
-<td class="tx-r tx-num p2 tx-b">
-
-55%\*\*\*
-</td>
-
-<td class="tx-r tx-num p3 tx-b">
-
-2.14\*\*\*
-</td>
-
-<td class="tx-r tx-num tx-br p2 tx-b">
-
-1.85\*\*\*
-</td>
-
-</tr>
-
-<tr class="tx-b tx-bt">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-N
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-12 990
-</td>
-
-</tr>
-
-<tr class="tx-b">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-LR vs null
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-\<0.01%
-</td>
-
-</tr>
-
-<tr class="tx-b">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-McFadden R2
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-0.049
-</td>
-
-</tr>
-
-<tr class="tx-b">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-AIC
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-17 129
-</td>
-
-</tr>
-
-<tr class="tx-b tx-bb tx-bb2">
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-BIC
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-b">
-
-</td>
-
-<td class="tx-r tx-num tx-br tx-b">
-
-17 181
-</td>
-
-</tr>
-
-</tbody>
-
-<tfoot>
-
-<tr>
-
-<td colspan="4">
-
-<div class="tx-foot">
-
-Model: logistic regression; odds ratios (vs the reference
-category).<br><b>Obs\_% — </b>Shades of blue: cells ≥ <span class="p1"
-style="font-weight:bold;">+5</span>; <span class="p2"
-style="font-weight:bold;">+10</span>; <span class="p3"
-style="font-weight:bold;">+20</span>; <span class="p4"
-style="font-weight:bold;">+30</span> points. Shades of yellow to red:
-cells ≤ <span class="m1" style="font-weight:bold;">-5</span>;
-<span class="m2" style="font-weight:bold;">-10</span>; <span class="m3"
-style="font-weight:bold;">-20</span>; <span class="m4"
-style="font-weight:bold;">-30</span> points. Coloured: significantly
-different from the reference category (Wald interval, 95% confidence),
-by at least the first colour threshold. Uncoloured: either not
-significant, or a difference under ±5 points.<br><b>Obs_OR, Model_OR —
-</b>Shades of blue: OR ≥ <span class="p1"
-style="font-weight:bold;">1.2</span>; <span class="p2"
-style="font-weight:bold;">1.5</span>; <span class="p3"
-style="font-weight:bold;">2</span>; <span class="p4"
-style="font-weight:bold;">4</span>. Shades of yellow to red: OR ≤
-<span class="m1" style="font-weight:bold;">1/1.2</span>;
-<span class="m2" style="font-weight:bold;">1/1.5</span>;
-<span class="m3" style="font-weight:bold;">1/2</span>; <span class="m4"
-style="font-weight:bold;">1/4</span>. Coloured: significantly different
-from the reference category (Wald interval on the log odds-ratio, 95%
-confidence), by at least the first colour threshold. Uncoloured: either
-not significant, or a difference under ×1.2.<br>\*\*\*: significantly
-different from the reference category (in bold) at the 99% confidence
-level; \*\*: at the 95% level; \*: at the 90% level; no star: not
-significant.
-
-</div>
-
-</td>
-
-</tr>
-
-</tfoot>
-
-</table>
 
 ## Export your tables
 
-Any table exports with its colors to Excel, html or markdown, and can be
-drawn as a plot:
+Any table exports with its colors to Excel, html or markdown, and can be drawn as a plot:
 
 ``` r
 tab(gss, marital, race, pct = "row", color = "diff") |> tab_export()  # "html"
 tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl()      # Excel
+tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl(theme = "print")  # black & white
 ```
+
+A colored html table also *prints*, or saves to PDF, in that black-and-white scheme on its own.
 
 ## Learn more
 
-- [Introduction to
-  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor.html)
-  — the place to start (*aussi disponible [en
-  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html)*).
-- [Regression tables with
-  tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html)
-  (*aussi disponible [en
-  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html)*).
-- [Programming with
-  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.html)
-  — many tables at once, custom workflows, options (*aussi disponible
-  [en
-  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html)*).
+- [Introduction to tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor.html) — the place to start (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html)*).
+- [Regression tables with tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html) (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html)*).
+- [Programming with tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.html) — many tables at once, custom workflows, options (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html)*).
 
-No code needed: the tabxplor modules for the free statistical
-spreadsheet [jamovi](https://www.jamovi.org/) offer the same tables
-(Crosstables and Regressions) in a point-and-click interface.
+No code needed: the tabxplor modules for the free statistical spreadsheet [jamovi](https://www.jamovi.org/) offer the same tables (Crosstables and Regressions) in a point-and-click interface.

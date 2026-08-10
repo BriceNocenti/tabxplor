@@ -65,6 +65,9 @@
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
+#'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
+#'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
+#'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #' @param html_24_bit Kept for a uniform exporter signature; inert for Excel (always 24-bit).
 #' @param color Set to \code{FALSE} to export without colours (monochrome).
 #' @param color_legend Should the color legends be printed with the subtexts ?
@@ -542,10 +545,17 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     a <- ann[[names(tab)[ci]]]
     if (is.null(a$text_slot)) return(NULL)
     rows <- seq_along(a$text_slot) + data_row0
+    # z11: the palette's FACE rides beside the hex. It used to be hard-wired `bold = TRUE` below --
+    # true of every colour palette, false of a monochrome one whose under-cells are italic.
     dplyr::bind_rows(
-      tibble::tibble(col = as.integer(ci), row = rows, slot = a$text_slot, hex = a$text_hex, channel = "text"),
-      tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   hex = a$bg_hex,   channel = "bg"))
-  }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), hex = character(), channel = character())
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$text_slot, hex = a$text_hex,
+                     bold = a$face_bold, italic = a$face_italic, underline = a$face_underline,
+                     channel = "text"),
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   hex = a$bg_hex,
+                     bold = FALSE, italic = FALSE, underline = FALSE, channel = "bg"))
+  }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), hex = character(),
+                         bold = logical(), italic = logical(), underline = logical(),
+                         channel = character())
   colour <- dplyr::filter(colour, .data$slot > 0L)
 
   subtext_clean <- subtext[!is.na(subtext) & subtext != ""]
@@ -561,7 +571,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                      color = NA_character_) {
     if (!length(rows) || !length(cols)) return(NULL)
     g <- tidyr::expand_grid(row = as.integer(rows), col = as.integer(cols))
-    dplyr::mutate(g, name = name, size = size, bold = bold, color = color)
+    dplyr::mutate(g, name = name, size = size, bold = bold, italic = FALSE, underline = FALSE,
+                  color = color)
   }
   txt_colour <- dplyr::filter(colour, .data$channel == "text")
   fonts <- dplyr::bind_rows(
@@ -571,18 +582,25 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows
     mk_src(start, 1L, bold = TRUE, size = 12),                                   # title
     mk_src(subtext_rows, 1L, size = o$text_size_subtext),                        # subtext
+    # text-channel colour AND face (z11: `bold` was hard-wired TRUE here). A reference row that is also
+    # an under-slot cell ends up bold+italic -- `any(bold)` doing its job, the structural bold winning
+    # over the measure's non-bold; that union is the intended reading, not a special case.
     if (nrow(txt_colour)) tibble::tibble(row = txt_colour$row, col = txt_colour$col,
-                                         name = NA_character_, size = NA_real_, bold = TRUE,
-                                         color = txt_colour$hex)                 # text-channel colour
+                                         name = NA_character_, size = NA_real_,
+                                         bold = txt_colour$bold, italic = txt_colour$italic,
+                                         underline = txt_colour$underline,
+                                         color = txt_colour$hex)
   )
   if (nrow(fonts)) {
     fonts <- fonts |>
       dplyr::group_by(.data$row, .data$col) |>
       dplyr::summarise(
-        name  = c(name[!is.na(name)], NA_character_)[1],
-        size  = c(size[!is.na(size)], NA_real_)[1],
-        bold  = any(.data$bold),
-        color = c(color[!is.na(color)], NA_character_)[1],
+        name      = c(name[!is.na(name)], NA_character_)[1],
+        size      = c(size[!is.na(size)], NA_real_)[1],
+        bold      = any(.data$bold),
+        italic    = any(.data$italic),
+        underline = any(.data$underline),
+        color     = c(color[!is.na(color)], NA_character_)[1],
         .groups = "drop")
   }
 
@@ -705,6 +723,10 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   cells$fname  <- dplyr::coalesce(fonts$name[fm],  o$font_text)
   cells$fsize  <- dplyr::coalesce(fonts$size[fm],  as.double(o$text_size))
   cells$fbold  <- !is.na(fm) & fonts$bold[fm]
+  # z11: the palette's face beyond weight. Constant FALSE under the colour palettes, so the style
+  # partition, its ordering and hence the emitted font ids are unchanged there.
+  cells$fital  <- !is.na(fm) & fonts$italic[fm]
+  cells$fund   <- !is.na(fm) & fonts$underline[fm]
   cells$fcolor <- fonts$color[fm]
   # overlay per-cell fill
   lm <- if (nrow(bg_fill)) match(bkey, paste(bg_fill$row, bg_fill$col, sep = ":")) else rep(NA_integer_, nrow(cells))
@@ -714,16 +736,18 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   extra <- dplyr::bind_rows(
     tibble::tibble(row = title_row, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
                    ah = NA_character_, av = "", aw = FALSE, ar = 0L,
-                   fname = o$font_text, fsize = 12, fbold = TRUE, fcolor = NA_character_, fill = NA_character_),
+                   fname = o$font_text, fsize = 12, fbold = TRUE, fital = FALSE, fund = FALSE,
+                   fcolor = NA_character_, fill = NA_character_),
     if (length(subtext_rows)) tibble::tibble(row = subtext_rows, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
                    ah = "left", av = "center", aw = FALSE, ar = 0L,
                    fname = o$font_text, fsize = as.double(o$text_size_subtext), fbold = FALSE,
-                   fcolor = NA_character_, fill = NA_character_))
+                   fital = FALSE, fund = FALSE, fcolor = NA_character_, fill = NA_character_))
   cells <- dplyr::bind_rows(cells, extra)
 
   # group into distinct styles + coalesce each style's cells to the fewest multi-area dims
   cells |>
-    dplyr::group_by(.data$fname, .data$fsize, .data$fbold, .data$fcolor, .data$fill,
+    dplyr::group_by(.data$fname, .data$fsize, .data$fbold, .data$fital, .data$fund,
+                    .data$fcolor, .data$fill,
                     .data$bt, .data$bb, .data$bl, .data$br,
                     .data$ah, .data$av, .data$aw, .data$ar) |>
     dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop")
@@ -754,11 +778,16 @@ xl_style_registrar <- function(wb) {
   # font box in Excel read "DejaVu Sans Condensed (Body)". Never let `scheme` back in.
   # WARNING: `scheme` is safely absent from the dedup key below ONLY because it is a constant. A
   # per-font scheme would need `key` to grow a field, or two different fonts would collide onto one id.
-  font_id <- function(name, size, bold, color) {
-    key <- paste(name, size, bold, color, sep = "\r")
+  # z11: `italic`/`underline` carry the print palette's typography (its under-cells are italic, its
+  # second intensity level underlined). Constant FALSE for the colour palettes, so the key partition
+  # and hence the emitted font ids are unchanged there.
+  font_id <- function(name, size, bold, color, italic = FALSE, underline = FALSE) {
+    key <- paste(name, size, bold, italic, underline, color, sep = "\r")
     if (is.null(fc[[key]])) {
       args <- list(name = name, sz = as.character(size), scheme = "")
-      if (isTRUE(bold))   args$b     <- "1"
+      if (isTRUE(bold))      args$b <- "1"
+      if (isTRUE(italic))    args$i <- "1"
+      if (isTRUE(underline)) args$u <- "single"
       if (!is.na(color))  args$color <- xl_color(color)
       nm <- paste0("txf", uid()); sm$add(do.call(openxlsx2::create_font, args), nm)
       fc[[key]] <- sm$get_font_id(nm)
@@ -790,8 +819,9 @@ xl_style_registrar <- function(wb) {
     bc[[key]]
   }
   # composed cell xf: dedup on the full (font, fill, border, alignment) tuple.
-  xf_id <- function(fname, fsize, fbold, fcolor, fill, bt, bb, bl, br, ah, av, aw, ar) {
-    fid <- font_id(fname, fsize, fbold, fcolor)
+  xf_id <- function(fname, fsize, fbold, fcolor, fill, bt, bb, bl, br, ah, av, aw, ar,
+                    fital = FALSE, fund = FALSE) {
+    fid <- font_id(fname, fsize, fbold, fcolor, fital, fund)
     lid <- fill_id(fill)
     bid <- border_id(bt, bb, bl, br)
     key <- paste(fid, lid, bid, ah, av, aw, ar, sep = "\r")
@@ -823,7 +853,8 @@ xl_apply_styles <- function(wb, s, styles, reg) {
       if (!is.na(r$ah)) r$ah else "",
       if (nzchar(r$av)) r$av else "",
       if (isTRUE(r$aw)) "1" else "",
-      if (r$ar != 0L) as.character(r$ar) else "")
+      if (r$ar != 0L) as.character(r$ar) else "",
+      isTRUE(r$fital), isTRUE(r$fund))
     xlb_set_cell_style(wb, s, r$dims, xf)
   }
   invisible(wb)

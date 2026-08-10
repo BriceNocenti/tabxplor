@@ -113,6 +113,11 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   text_slot_d <- slot_int("text_slot")
   bg_slot_d   <- slot_int("bg_slot")
   bold_d      <- slot_lgl("bold")
+  # z11: the palette's typography, flipped like any other per-cell logical (constant FALSE for the
+  # colour palettes). Without these a TRANSPOSED table would lose the print scheme in html AND Excel.
+  facebold_d  <- slot_lgl("face_bold")
+  faceital_d  <- slot_lgl("face_italic")
+  faceund_d   <- slot_lgl("face_underline")
   refalltot_d <- slot_lgl("ref_alltot")
   # font / back are the RESOLVED per-cell hex (theme grey folded in) -- tab_plot reads these, not slots.
   font_d      <- slot_chr("font", NA_character_)
@@ -211,6 +216,8 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
          text_slot  = text_slot_d[[c]], bg_slot = bg_slot_d[[c]],
          font = font_d[[c]], back = back_d[[c]],
          bold = bold_d[[c]],
+         face_bold = facebold_d[[c]], face_italic = faceital_d[[c]],
+         face_underline = faceund_d[[c]],
          has_color = any(hascol_src),
          has_bgc   = any(hasbgc_src))
   }), dnames)

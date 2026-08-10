@@ -68,7 +68,16 @@ Positron's, best-effort).
 }
 \code{"auto"} needs \code{engine = "html"} (kableExtra's themes are baked at render time); asking it of
 the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
-i.e. \code{"light"} -- a dark table is always a deliberate choice.}
+i.e. \code{"light"} -- a dark table is always a deliberate choice.
+
+\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
+cells in bold, under-represented ones in italic, an underline for the strongest threshold, and a
+grey fill for a second colour measure. It exists because a greyscale print loses the colour
+palette's direction entirely (both background ramps convert to the same shades of grey). The
+typography is written as real \verb{<b>}/\verb{<i>}/\verb{<u>} markup as well as CSS, so it survives a
+stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
+it: any coloured table already \strong{prints} in this scheme, see \code{\link{tab_css}}'s
+\code{print_rules}.}
 
 \item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
 the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}

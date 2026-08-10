@@ -150,7 +150,10 @@ xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) 
   for (r in runs) {
     if (!nzchar(r$text)) next
     col   <- if (!is.na(r$color)) xl_color(r$color) else NULL
+    # z11: `italic`/`underline` carry the print palette's typography into the Excel legend, so the
+    # rich-text break-word wears the same face as the cells. FALSE everywhere under a colour palette.
     piece <- openxlsx2::fmt_txt(r$text, color = col, bold = isTRUE(r$bold),
+                                italic = isTRUE(r$italic), underline = isTRUE(r$underline),
                                 size = size, font = font)
     rt <- if (is.null(rt)) piece else rt + piece
   }

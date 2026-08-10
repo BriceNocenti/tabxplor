@@ -181,6 +181,13 @@ tx_getOption <- function(names, default = NULL) {
   # resolved in R rather than by the browser: only R can see the editor around the pane.
   options("tabxplor.theme" = "light")
 
+  # Last Phase z11: also emit the black-and-white publication palette inside an `@media print` block,
+  # so a page rendered in colour PRINTS (or saves to PDF) publication-ready with no user action. On by
+  # default because the alternative is worse than it looks: converted to CIE lightness, the colour
+  # palette's two background directions are the SAME grey ramp, so a greyscale print silently loses the
+  # over/under distinction entirely. FALSE for someone whose colour printer is the point.
+  options("tabxplor.print_rules" = TRUE)
+
   # Phase 13d: whether tab_kable(engine = "html") inlines the stylesheet with each table (TRUE =
   # self-contained: Viewer, jamovi, standalone .html). Set FALSE in a many-table .Rmd/.qmd that emits
   # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.

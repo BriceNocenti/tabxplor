@@ -25,6 +25,9 @@
 #'   and any dark-mode toggle of the host page), which needs a stylesheet: it works for
 #'   \code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 #'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
+#'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
+#'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
+#'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.
 #' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).

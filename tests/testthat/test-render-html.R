@@ -127,12 +127,15 @@ testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
   cs <- function(th) as.character(tab_kable(tb, engine = "html", theme = th))
 
   light <- cs("light")
-  testthat::expect_false(grepl("@media", light, fixed = TRUE))
+  # z11: "@media" alone is no longer the marker -- every stylesheet now carries an `@media print`
+  # block (the publication palette). What a STATIC theme must not emit is the AUTO cascade: the
+  # prefers-color-scheme query and the page-toggle hooks.
+  testthat::expect_false(grepl("@media (prefers-color-scheme", light, fixed = TRUE))
   testthat::expect_false(grepl("quarto", light, fixed = TRUE))
   testthat::expect_true(grepl(".tabxplor-tab{color:#000000;background:#ffffff;}", light, fixed = TRUE))
 
   dark <- cs("dark")
-  testthat::expect_false(grepl("@media", dark, fixed = TRUE))
+  testthat::expect_false(grepl("@media (prefers-color-scheme", dark, fixed = TRUE))
   # Phase 14e: dark is #CECDC3 on #222222 -- pure white on near-black is a glare-y contrast for body
   # text. Read the values from tx_chrome_hex() rather than re-hardcoding them here.
   dk <- tabxplor:::tx_chrome_hex("dark")
@@ -150,12 +153,13 @@ testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
 testthat::test_that("the generated CSS is syntactically valid in every mode", {
   # A single malformed rule makes the browser drop it -- and, inside @media, potentially the whole
   # block -- with no error anywhere. No selector-presence test catches that, so check the shape.
-  for (chrome in c(TRUE, FALSE)) for (th in c("light", "dark", "auto")) {
+  # z11: "print" joins the list, and `@media print {` joins the at-rule opener stripped below.
+  for (chrome in c(TRUE, FALSE)) for (th in c("light", "dark", "auto", "print")) {
     css <- tab_css(theme = th, chrome = chrome, style_tag = FALSE)
     lab <- paste0(th, if (chrome) "/chrome" else "/md")
     testthat::expect_identical(lengths(regmatches(css, gregexpr("[{]", css))),
                                lengths(regmatches(css, gregexpr("[}]", css))), label = lab)
-    body <- trimws(gsub("@media \\(prefers-color-scheme: dark\\) \\{|^\\}$", "",
+    body <- trimws(gsub("@media (print|\\(prefers-color-scheme: dark\\)) \\{|^\\}$", "",
                         strsplit(css, "\n")[[1]]))
     body <- body[nzchar(body)]
     testthat::expect_true(all(grepl("^[^{}]+\\{([-a-z]+:[^;{}]+;)+\\}$", body)), label = lab)
@@ -443,7 +447,7 @@ testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured ce
   # styles and recorded the bug as fixed; that removed the INLINE half only, and three docs + NEWS
   # repeated the claim for two phases while a +20% cell kept drawing a blue border. Nothing tested it.
   # Both halves are locked here: the CSS uses longhands only, and a real cell carries both classes.
-  for (th in c("light", "dark", "auto")) {
+  for (th in c("light", "dark", "auto", "print")) {
     css <- tab_css(theme = th, style_tag = FALSE)
     testthat::expect_no_match(css, "border-(top|right|bottom|left)\\s*:", label = th)
     # ... and the rule that must therefore win is present, for every theme in the file
