@@ -140,8 +140,10 @@ the package rule -- weighted estimate, unweighted \code{n} base, or Kish \code{n
 \code{options(tabxplor.kish_neff = TRUE)} -- while the contribution itself stays weighted (it
 estimates the population table's structure). Cells whose expected count is below 1 are left
 uncolored: the normal approximation does not hold there.
-Note that the colors are computed per column at print time, so every significance threshold in
-them reads \code{options(tabxplor.conf_level)}, not a per-call \code{conf_level}.}
+Colors are computed per column at print time; since 2.0.0 each column records the confidence level
+it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
+never recorded one (a hand-built \code{\link{fmt}}) falls back to
+\code{options(tabxplor.conf_level)}.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
 for a binary variable the usual odds ratio; for a variable with 3 levels or more,

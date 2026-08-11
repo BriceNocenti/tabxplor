@@ -186,26 +186,60 @@ test_that("no gap_se where the gap has no honest test", {
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
 })
 
-test_that("a model fitted on different rows than the observed block gets no gap SE", {
-  # In comparison mode the crude block is built on the UNION of predictors while each model drops its
-  # own NA rows, so a smaller model is fitted on MORE people -- the stacked-M-estimator premise fails.
+# Last Phase z13 (D1). Before it, the crude block was built on the UNION of predictors while each model
+# dropped its own NA rows, so a smaller model was fitted on MORE people. The framework detected that
+# (it withheld the gap SE) and coloured the gap anyway -- so `m1 = race`, which IS the crude model and
+# whose true adjustment gap is exactly zero, rendered a coloured cell claiming a 16 % move. Two halves:
+# the default now puts every model of an outcome on one population, and where they still differ the
+# `obs` write is gated by the same predicate that gates the test.
+adjgap_inc_data <- function() {
   d <- gapb_data()
   d$inc <- factor(dplyr::case_when(d$rincome %in% c("Not applicable", "No answer", "Don't know",
                                                     "Refused") ~ NA_character_,
                                    d$rincome %in% "$25000 or more" ~ "hi", TRUE ~ "lo"),
                   levels = c("lo", "hi"))
+  d
+}
+adjgap_mods <- list(m1 = "race", m2 = c("race", "inc"))
+
+test_that("D1: every compared model shares its outcome's population, so every column is testable", {
+  d <- adjgap_inc_data()
   testthat::expect_true(any(is.na(d$inc)))                       # the fixture must actually bite
-  t <- suppressMessages(tab_reg(d, "married", predictors = list(m1 = "race", m2 = c("race", "inc")),
+  t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods,
                                 family = "poisson", empirical = TRUE, color = c("OR", "adjustment")))
   fc <- grep("^m1|^m2", names(t), value = TRUE)
   testthat::expect_length(fc, 2L)
-  testthat::expect_true(all(is.na(get_gap_se(t[[fc[[1]]]]))))    # m1: more rows than the crude block
-  testthat::expect_false(all(is.na(get_gap_se(t[[fc[[2]]]]))))   # m2: the same rows
-  # ... and the message names the fix
+  # both models now solve their equations on the crude block's rows -> both carry a real gap SE (D5:
+  # one significance policy governs the table instead of two).
+  for (nm in fc) testthat::expect_false(all(is.na(get_gap_se(t[[nm]]))))
+  # m1 IS the crude model: its estimate and its `obs` are the same number, so the gap is exactly 0 and
+  # nothing is coloured. That equality is the whole of D1.
+  # the union skeleton also carries m2's `inc` rows, which m1 does not estimate -> exclude them
+  i <- which(!is_refrow(t[[fc[[1]]]]) & as.character(t$var) != "Constant" &
+               !is.na(get_or(t[[fc[[1]]]])))
+  testthat::expect_gt(length(i), 0L)
+  testthat::expect_equal(get_or(t[[fc[[1]]]])[i], get_obs(t[[fc[[1]]]])[i], tolerance = 1e-8)
+  testthat::expect_equal(tabxplor:::fmt_adjustment_score(t[[fc[[1]]]])[i], rep(1, length(i)),
+                         tolerance = 1e-8)
+  testthat::expect_true(all(fmt_color_channels(t[[fc[[1]]]])$bg_slot == 0L))
+})
+
+test_that("D1: under the opt-in per-model drop, a model on other rows gets NO obs at all", {
+  d <- adjgap_inc_data()
+  t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
+                                family = "poisson", empirical = TRUE, color = c("OR", "adjustment")))
+  fc <- grep("^m1|^m2", names(t), value = TRUE)
+  # m1 is fitted on more rows than the observed block -> no observed value, hence no colour and no
+  # test. It used to keep the colour while losing only the test.
+  testthat::expect_true(all(is.na(get_obs(t[[fc[[1]]]]))))
+  testthat::expect_true(all(is.na(get_gap_se(t[[fc[[1]]]]))))
+  testthat::expect_true(all(fmt_color_channels(t[[fc[[1]]]])$bg_slot == 0L))
+  testthat::expect_false(all(is.na(get_obs(t[[fc[[2]]]]))))      # m2: the same rows
+  # ... and the choice is named
   testthat::expect_message(
-    tab_reg(d, "married", predictors = list(m1 = "race", m2 = c("race", "inc")),
+    tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
             family = "poisson", empirical = TRUE, color = c("OR", "adjustment")),
-    "drop_all_models")
+    "drop_by_model")
 })
 
 test_that("a crude companion on another scale writes neither obs nor a gap SE (a z5 defect)", {
@@ -342,4 +376,48 @@ test_that("every exporter renders an adjustment-tested table without error", {
   testthat::expect_no_error(tab_md(t))
   testthat::expect_no_error(tab_html(t))
   testthat::expect_no_error(utils::capture.output(print(t)))
+})
+
+# --- Last Phase z13 (D3): the gap interval follows the table's conf_level -----------------------------
+
+test_that("D3: conf_level reaches the gap interval, not only the printed one", {
+  skip_if_not_installed("broom")
+  d <- gapb_data()
+  w <- function(cl) {
+    t <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
+                                  empirical = TRUE, color = c("OR", "adjustment"),
+                                  color_signif = "grey_non_signif", conf_level = cl,
+                                  cleannames = FALSE))
+    x <- t[["Model_RR"]]
+    b <- tabxplor:::fmt_gap_bounds(x)
+    i <- which(is.finite(b$lo))[[1]]
+    # the FAR bound is |gap| + z*se on the log scale, never clamped (the near one pins at the neutral
+    # when the interval covers it), so its distance from the gap is exactly the half-width. Which of
+    # lo/hi is the far one depends on the score's sign, which fmt_gap_bounds() re-orders by magnitude.
+    far <- max(abs(log(b$lo[i])), abs(log(b$hi[i])))
+    c(model = log(get_ci_sup(x)[i]) - log(get_ci_inf(x)[i]),
+      gap   = far - abs(tabxplor:::fmt_gap_raw(x)[i]))
+  }
+  a <- w(0.95); b <- w(0.99)
+  # z5/z8 manufactured the gap interval in the colour engine, which read the OPTION -- so the printed
+  # interval and the stars moved to 99 % while the gap greying silently stayed at 95 %.
+  testthat::expect_gt(b[["gap"]], a[["gap"]])
+  testthat::expect_equal(b[["gap"]] / a[["gap"]],
+                         tabxplor:::zscore_formula(0.99) / tabxplor:::zscore_formula(0.95),
+                         tolerance = 1e-8)
+  testthat::expect_identical(get_conf_level(t_dummy <- fmt(1, conf_level = 0.9)), 0.9)
+})
+
+test_that("D3: an unrecorded level stays unknown through a bind (it must not bake in the option)", {
+  a <- fmt(1); b <- fmt(2)
+  testthat::expect_true(is.na(tabxplor:::fmt_conf_level_attr(a)))
+  withr::local_options(tabxplor.conf_level = 0.99)
+  # the RESOLVED read follows the option ...
+  testthat::expect_identical(get_conf_level(a), 0.99)
+  # ... but a reconcile must carry "unknown" forward, or a later options() change would stop applying
+  testthat::expect_true(is.na(tabxplor:::fmt_conf_level_attr(c(a, b))))
+  # two columns built at DIFFERENT levels reconcile to unknown, never to one of the two
+  x <- fmt(1, conf_level = 0.95); y <- fmt(2, conf_level = 0.99)
+  testthat::expect_identical(tabxplor:::fmt_conf_level_attr(c(x, x)), 0.95)
+  testthat::expect_true(is.na(tabxplor:::fmt_conf_level_attr(c(x, y))))
 })

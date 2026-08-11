@@ -48,3 +48,18 @@ test_that("or_plot() errors on a table with no odds-ratio column", {
   skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   expect_error(or_plot(tab(reg_plot_data(), race, marital)), "odds-ratio")
 })
+
+test_that("Last Phase z13: or_plot() tells a model column from its observed twin by ROLE", {
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  d <- reg_plot_data()
+  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
+  or_cols <- names(t)[vapply(t, function(c) is_fmt(c) && identical(get_ci_type(c), "or"), logical(1))]
+  testthat::expect_true("Obs_OR" %in% or_cols)          # the fixture must actually have both
+  testthat::expect_true("Model_OR" %in% or_cols)
+  # ONE model column -> no "several columns" message, and the model one is the default. The old filter
+  # matched the pre-Phase-g "Emp." prefix, so Obs_OR counted as a model column: the message fired and
+  # whichever came first was plotted.
+  testthat::expect_no_message(p <- or_plot(t))
+  testthat::expect_s3_class(p, "gtable")
+})

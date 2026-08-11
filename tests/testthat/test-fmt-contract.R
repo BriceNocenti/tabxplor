@@ -45,7 +45,10 @@ fmt_contract_field_types <- c(
 fmt_contract_attr_defaults <- list(
   type = "n", comp_all = NA, ref = "", ci_type = "",
   col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
-  model_family = "", role = ""
+  model_family = "", role = "",
+  # Last Phase z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
+  # colour engine falls back to options(tabxplor.conf_level), i.e. the pre-z13 behaviour.
+  conf_level = NA_real_
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

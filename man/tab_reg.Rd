@@ -16,6 +16,7 @@ tab_reg(
   exponentiate = TRUE,
   trials = NULL,
   empirical = FALSE,
+  add_n = TRUE,
   color = TRUE,
   color_signif = NULL,
   stars = TRUE,
@@ -27,7 +28,7 @@ tab_reg(
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
-  na = c("drop_by_model", "drop_all_models"),
+  na = c("drop_by_outcome", "drop_by_model", "drop_all"),
   estimate_display = c("value", "ci", "prob", "ame"),
   cleannames = NULL,
   subtext = "",
@@ -69,8 +70,10 @@ are handled correctly (no normalisation) and the point estimates match the weigh
 \item{family}{The model family, \strong{resolved per dependent} so several outcomes with different
 families can share one table (one effect column-group each). \code{"auto"} (default) detects each
 outcome: a binary (-> \code{"binomial"}), an ordered 3+ level (-> \code{"ordinal"}), a nominal 3+ level
-(-> \code{"multinomial"}), or a continuous (-> \code{"gaussian"}) outcome, emitting a message; an integer
-count stays ambiguous and must be named (for that outcome only). Set it explicitly with
+(-> \code{"multinomial"}), or any other numeric (-> \code{"gaussian"}) outcome, emitting a message. An
+integer-valued numeric reads as \code{"gaussian"} too --- age in years, years of schooling, a summed
+score and income in whole units are all integers, and a linear model always fits --- with the
+message naming \code{"poisson"} for a genuine count. Set it explicitly with
 \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} / \code{"quasipoisson"} (counts),
 \code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level). A \strong{scalar} applies to every
 dependent; a \strong{vector} aligned to \code{dependent}, or a \strong{named} vector keyed by dependent
@@ -184,7 +187,11 @@ structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
 model} (listwise-complete on the dependent, all predictors and any design variable), so crude and
 adjusted are directly comparable and not confounded by differing missingness (reproduce it with
-\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). Also works with a vector of dependents. Ordinal has
+\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). That is what the default \code{na = "drop_by_outcome"}
+guarantees, including when several models are compared. Under \code{na = "drop_by_model"} a model
+fitted on rows the observed block does not cover gets \strong{no} observed value at all --- no \code{obs},
+no \code{color = "adjustment"}, no gap test --- because the distance between two such estimates would
+be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 no clean crude analogue and is ignored (with a message).
 
 The crude companions of a \strong{categorical} predictor are descriptive, so on weighted data they
@@ -193,6 +200,13 @@ a \strong{continuous} predictor's companion comes from a univariable fit and the
 own design-based variance, like the \verb{Model_*} column beside it. On weighted data the two rules
 will not agree to the last digit — they answer the same question under different variance
 assumptions. Default \code{FALSE}.}
+
+\item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
+\strong{unadjusted count} behind each predictor level on the model's own complete cases --- the numbers
+a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The
+Constant row shows the model N. Continuous predictors are left blank: on a listwise-complete frame
+their count is the model N for every one of them. Unlike \code{\link[=tab]{tab()}}'s \code{add_n}, this is a real column
+rather than a display option, because only the model frame knows the counts.}
 
 \item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
 sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
@@ -206,16 +220,20 @@ channel so the text keeps showing the effect size — \code{color = c("OR", "adj
 \itemize{
 \item \code{"adjustment"} — how far each \strong{modelled} effect sits from its \strong{observed} (crude,
 unadjusted) counterpart, i.e. what adjusting for the other predictors did to it. It turns
-\code{empirical = TRUE} on (that is where the observed effect comes from). Thresholds are
-\verb{×1.1 / ×1.25 / ×1.5 / ×2} for ratios and \verb{±2 / ±5 / ±10 / ±20} points for differences, the
-first one being the classic 10\% "change in estimate" rule; set them with
-\code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}). One pole means the model \strong{strengthened} the
+\code{empirical = TRUE} on (that is where the observed effect comes from). The ladder follows the
+estimate's own scale, so a threshold means the same thing in every table: \verb{×1.1 / ×1.25 / ×1.5 / ×2} for a ratio (odds, risk or rate), \verb{±2 / ±5 / ±10 / ±20} \strong{points} for a
+probability-scale marginal effect, and \verb{±0.05 / ±0.1 / ±0.2 / ±0.4} \strong{standard deviations of
+the outcome} for an effect in the outcome's own units (a linear beta, a count marginal
+effect) --- otherwise the same model on an outcome recorded in hours, minutes or days would
+read three different ways. The first ratio threshold is the classic 10\% "change in estimate"
+rule, a convention rather than a decision rule; set them all with
+\code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}, \code{adj_diff_std}). One pole means the model \strong{strengthened} the
 effect (suppression), the other that it \strong{attenuated} it — measured from the null, so a
 protective effect (OR < 1) and a risky one read the same way.
 \item \code{"between_groups"} — with \code{split_var}, how far each group's effect sits from the \strong{first}
 group's, on the same row: a per-predictor reading of effect modification, beside the global
-comparison a likelihood-ratio test gives. Reorder the split variable's levels
-(\code{forcats::fct_relevel()}) to change the baseline group. It also adds the \strong{aggregated}
+comparison a likelihood-ratio test gives. Pick the baseline group with \code{reference} keyed by the
+split variable (e.g. \code{reference = c(race = "Black")}). It also adds the \strong{aggregated}
 interaction test to the footer (see \code{stats}).
 }
 
@@ -244,8 +262,9 @@ incidence-rate ratio, or a linear β. A \strong{conditional odds ratio} is not c
 moves it away from 1 even when the extra variable is independent of the exposure, so at survey
 sizes every row would test "significant" for a reason that is not confounding. There the colours
 stay descriptive, \code{color_signif} is ignored, and \code{tab_reg()} says so once. The test is also skipped
-when the two estimates cannot be compared cell by cell: at \code{at = "reference"}, and when a compared
-model's complete cases differ from the observed columns' (use \code{na = "drop_all_models"}).
+when the two estimates cannot be compared cell by cell: at \code{at = "reference"}, and under
+\code{na = "drop_by_model"} when a compared model's complete cases differ from the observed columns'
+(there the observed value is withheld altogether, so nothing is coloured either).
 
 That ruling covers the \strong{3+ level outcomes} too, and it is the reason they behave as they do: a
 multinomial or ordinal \emph{coefficient} is a conditional odds ratio, so those columns show the
@@ -258,6 +277,22 @@ show different effects on every scale without the underlying cause differing. An
 tested on its own, with no multiple-comparison correction — with seven comparisons about one table
 in five shows a spurious coloured cell, so read the pattern rather than the single cell (for
 \code{"between_groups"}, the footer's aggregated test is the multiplicity-free reading).
+
+Where a row carries no test at all — a group with an empty cell leaves no recoverable standard
+error, and \code{method = "profile"} bounds are not \verb{estimate ± critical value × SE} — the cell stays
+uncoloured under \code{"grey_non_signif"} and the legend says that some rows are untested (the HTML
+tooltip shows which: an untested cell has no gap line).
+
+\strong{On what the comparison is.} This reports how much two numbers differ and whether that
+difference exceeds noise; it does not detect confounding. The change-in-estimate criterion it
+operationalises is contested as a \emph{confounder-selection rule} — the 10\% cut-off is a convention,
+not a threshold with a decision-theoretic basis — so read a coloured cell as "adjustment moved
+this effect", not as "this variable is a confounder". For a formal treatment of the crude-versus-
+adjusted difference see Clogg, Petkova & Haritou (1995) and Allison's (1995) comment; for nested
+logit models, where part of the change is rescaling rather than confounding, see the KHB
+decomposition (Karlson, Holm & Breen 2012; Kohler, Karlson & Holm 2011). The collapsible routes
+this function offers (\code{effect = "ame"} / \code{"ame_ratio"}, \code{family = "poisson"}) are what the
+literature calls \strong{marginal standardization} (g-computation).
 
 The gap test uses the \strong{robust (sandwich)} variance on both sides, which is what a comparison of
 two differently-specified estimators needs. For an unweighted binomial odds ratio that is exactly
@@ -277,7 +312,11 @@ computed only on the collapsible scales.}
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
-\item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
+\item{conf_level}{Confidence level for the intervals. Default \code{0.95}. It drives every interval in
+the table, the significance stars, and the greying under \code{color_signif} --- including the
+model-vs-observed gap interval, which is computed at print time from the stored standard error and
+is stored on each column so it follows this argument rather than
+\code{options("tabxplor.conf_level")}.}
 
 \item{method}{How the interval and p-value are computed. \code{"wald"} (default) uses the Wald interval
 and the Wald z / t test: fast, matches standard software output, and the only option for weighted
@@ -323,7 +362,16 @@ square, the overall F-test and the residual SD; other models show N, the likelih
 versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+
+\code{"global"} (in the default set) adds one \strong{overall test per predictor} --- "is this variable
+associated with the outcome at all?", the question a block of stars against a reference category
+cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
+predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
+that cell's own p-value), as a footer line rather than a footer row, and it costs \strong{no extra
+model fit}: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
+models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
+get no such test.
 
 \code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
 effect-modification test per predictor} — "does this predictor act differently between the
@@ -349,12 +397,17 @@ message.}
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}
 
-\item{na}{How missing values are handled across models. \code{"drop_by_model"} (default) drops \code{NA}
-rows per model (each model / dependent uses its own complete cases). \code{"drop_all_models"} fits every
-model on ONE shared complete-case population (rows with no \code{NA} on any predictor / dependent /
-design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
-this \strong{changes all estimates} (shared population), hence opt-in. Ignored for a prebuilt survey
-design.}
+\item{na}{Which rows each model is fitted on — the grain at which missing values are dropped.
+\code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
+population (no \code{NA} on the outcome, on any predictor of any model in the call, or on a design
+variable); a second outcome keeps its own rows. That is what makes the comparisons in the table
+honest: the observed columns (\code{empirical}) are then computed on exactly the model's rows, and
+nested models get equal N so the likelihood-ratio comparison can run instead of degrading to an
+AIC difference. \code{"drop_by_model"} lets each model use its own complete cases — every model then
+keeps as many rows as it can, at the price of comparability: models fitted on different people
+get no observed effect at all (no \code{obs}, no \code{color = "adjustment"}, no gap test), because the
+distance between two such estimates is listwise deletion rather than adjustment.
+\code{"drop_all"} shares one population across the whole call, all outcomes included.}
 
 \item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
 estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
@@ -453,6 +506,14 @@ grouped binomial when you pass \code{trials} (the number of items). Power users 
 formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)} -- driving the model
 directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
 }
+\section{Out of scope}{
+
+\code{tab_reg()} covers linear, logistic, Poisson, multinomial and ordinal models, with survey designs.
+Three families of models are deliberately \strong{not} supported, and are unlikely to be: \strong{survival /
+Cox} models, \strong{mixed / multilevel} models, and pooling over \strong{multiply-imputed} datasets. Fit
+those with their own packages.
+}
+
 \examples{
   data <- gss_cat_data_formatting()
   # a subset keeps the examples fast: fitting these models on all 21,483 rows costs well over
@@ -497,4 +558,20 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
   tab_reg(reg_data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
 }
 
+}
+\references{
+Clogg, C. C., Petkova, E. & Haritou, A. (1995). Statistical Methods for Comparing Regression
+Coefficients between Models. \emph{American Journal of Sociology}, 100(5), 1261-1293. (With
+Allison, P. D. (1995), \emph{ibid.} 1294-1305.) --- the crude-versus-adjusted comparison
+\code{color = "adjustment"} implements, generalised here to GLMs, survey designs and marginal effects.
+
+Karlson, K. B., Holm, A. & Breen, R. (2012). Comparing Regression Coefficients Between Same-sample
+Nested Models Using Logit and Probit. \emph{Sociological Methodology}, 42(1), 286-313. --- the KHB
+decomposition, which separates confounding from rescaling in nested logit models.
+
+Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies with Binary Data.
+\emph{American Journal of Epidemiology}, 159(7), 702-706.
+
+Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
+\emph{BMJ}, 326, 219. --- the \code{color = "between_groups"} test.
 }

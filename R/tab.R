@@ -337,8 +337,10 @@ NULL
 #' \code{options(tabxplor.kish_neff = TRUE)} -- while the contribution itself stays weighted (it
 #' estimates the population table's structure). Cells whose expected count is below 1 are left
 #' uncolored: the normal approximation does not hold there.
-#' Note that the colors are computed per column at print time, so every significance threshold in
-#' them reads \code{options(tabxplor.conf_level)}, not a per-call \code{conf_level}.
+#' Colors are computed per column at print time; since 2.0.0 each column records the confidence level
+#' it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
+#' never recorded one (a hand-built \code{\link{fmt}}) falls back to
+#' \code{options(tabxplor.conf_level)}.
 #' @param color_breaks A per-table override of the colour thresholds, a named list of scales like
 #' \code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
 #' a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
@@ -2593,6 +2595,12 @@ tab_assemble_tables <- function(ctx) {
                              var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
   # Phase 17b: the three 2.0.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
   meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
+  # Last Phase z13 (D3): project the call's confidence level onto every fmt column. `meta$ci_settings`
+  # records it for the legend, but the colour engine is per COLUMN and never sees the table -- so
+  # without this stamp every threshold in it falls back to the global option, and a table built at
+  # conf_level = 0.99 prints 99 % intervals while greying at 95 %. Stamped whatever `ci` says: the
+  # level is also the alpha of the contrib significance gate and of the p-value cell.
+  tab <- tab_stamp_conf_level(tab, conf_level)
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
@@ -4264,6 +4272,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
                     meta = list(vars = vars_attr))
   }
 
+  # Last Phase z13 (D3): see num_core -- the level on every fmt column, for the per-column colour engine.
+  result <- tab_stamp_conf_level(result, conf_level)
+
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else the fmt table.
   if (df || num) leaf_extract_raw(result, df, num, row_var) else result
 }
@@ -5385,6 +5396,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
 
+  # Last Phase z13 (D3): the level this leaf's intervals were built at, on every fmt column -- the
+  # colour engine is per column and cannot see the call's `conf_level`. Stamped in the LEAF so a direct
+  # tab_num() carries it too; the pipeline restamps the same value at tab_assemble_tables().
+  result <- tab_stamp_conf_level(result, conf_level)
+
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else return the
   # PRE-FINALISE fmt table (colour is finalised once by the caller: the public tab_num() wrapper).
   if (df || num) leaf_extract_raw(result, df, num, row_var) else result
@@ -5806,6 +5822,11 @@ tab_ci <- function(tabs,
                      })
   }
 
+
+  # Last Phase z13 (D3): this step COMPUTES the intervals, so it owns their level -- otherwise
+  # tab_plain() |> tab_ci(conf_level = 0.99) would store 99 % bounds under the leaf's 95 % stamp and
+  # the engine would grey at the wrong level.
+  tabs <- tab_stamp_conf_level(tabs, conf_level)
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, test = test)

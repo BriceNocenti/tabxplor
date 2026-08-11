@@ -1,6 +1,7 @@
 # Stress test of the regression comparison framework — findings
 
-Date: 2026-08-10. **Status: RESEARCH ONLY — no R source was modified.** Every number below was
+Date: 2026-08-10. **Status: FULLY IMPLEMENTED (Last Phase z13, 2026-08-11) — see §11.**
+Originally: research only, no R source modified. Every number below was
 measured on this box today with `devtools::load_all()` at HEAD (`b6efb08`, Last Phase z10), on
 `gss_cat_data_formatting()` (a `set.seed(1)` sample of 4 000 or 6 000 rows, stated per probe).
 Scratch scripts were one-off and are not kept; each finding carries the code that reproduces it.
@@ -659,3 +660,86 @@ Ordered by value per line of code. All of them ride machinery that already exist
 - `dev/numeric_predictors_crude_counterparts.md` (z9) — numeric crude twins, `multiplier`.
 - `dev/poisson_vs_logistic_binary_outcome.md` (z3) — the RR routes and the Goodman terminology trap.
 - `dev/new_colors_UI.md` — the per-cell significance position (W11) this report checks against.
+
+
+---
+
+## 11. Implementation (Last Phase z13, 2026-08-11)
+
+All eleven defects closed, plus the two §7 items the maintainer opted into. Suite green in both
+locales (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 4979; CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`:
+FAIL 0, SKIP 8, PASS 4962). The only snapshot that moved is `_snaps/fmt-contract.md` (the column-
+attribute list); the 36 structural `_golden/*.rds` were regenerated with the delta proved minimal over
+1787 cells. `_snaps/golden.md`, `_snaps/render-html.md` and every `_color_golden/*.rds` are untouched.
+
+### The maintainer's rulings (they decide §9)
+
+| # | ruling |
+|---|--------|
+| Q1 (D1) | A shared complete-case population becomes the DEFAULT; per-model becomes the opt-in exception. AND gate `obs` where the populations differ. "Shared" means per OUTCOME by default. |
+| Q2 (D2) | Dispatch the gap scale from the estimate's own scale. |
+| Q3 (D3) | Add the 12th column attribute `conf_level`. |
+| Q4 (D4) | Glyphs and threshold form follow the SELECTED SCALE. |
+| D8 | Honest legend wording only — no engine change, no extra message. |
+| Q6 (D10) | integer outcome → gaussian; align jamovi to R, not the reverse. |
+| Q9 (§7) | Ship `n` per level (`add_n = TRUE`) and `stats = "global"` (on by default). |
+
+### Two corrections to this report, established during implementation
+
+- **D1's "the colour path is silent" is wrong.** `tab_reg()` already emitted the `drop_all_models`
+  advice on exactly that path, asserted by `test-adjustment-gap.R:189`. What was missing was the GATE.
+- **One defect this report does not list**, in the same framework: `or_plot()` filtered crude columns
+  with `grepl("^Emp\\.")`, a prefix Phase g renamed to `Obs_`, so every crude column had counted as a
+  model one since — both for the default pick and for the "Several odds-ratio columns" message. Now
+  reads the stored `role` (Phase 17c), which exists precisely so nothing matches a rendered label.
+
+### What each fix turned out to be
+
+- **D1/D5** — `na` became a three-value family named for the grain at which rows are dropped
+  (`drop_by_outcome` / `drop_by_model` / `drop_all`), and it needed NO new mechanism: z9's
+  `reg_fit(drop_extra =)` is exactly "variables the fit must be complete on without modelling", so the
+  shared population is `drop_extra = all_predictors`. The old `drop_all_models` pre-pass on `data` is
+  gone, and with it the "ignored for a prebuilt survey design" caveat — a pre-filtered frame breaks a
+  prebuilt design's keep_mask, `drop_extra` does not. `reg_same_frame()` is the twin of
+  `reg_same_estimand()` and gates the same two things; it reads `f$nobs` when `f$data` is absent, so
+  the jamovi digest path keeps its `obs`. D5 dissolved: every column of an outcome now carries a test.
+- **D2** — the (c)-vs-(d) discrimination is NOT `reg_fam_prob(model_family)`: a poisson count AME and a
+  raw poisson coefficient are byte-identical in `(type, ci_type, model_family)`, and `is_logcoef`
+  claims both. The separator is `var` — var(Y) is written exactly on the columns whose estimate lives
+  in the outcome's own units, which is also the SD the standardization needs. `fmt_gap_scale_key()`'s
+  ORDER is therefore the contract. A log-scale coefficient reads `log_odds_scale(adj_ratio)`: the same
+  helper, so a user's `set_color_breaks(adj_ratio =)` reaches both twins.
+- **D4** — deriving the glyphs from `plan$center` was rejected after evaluation: 2 of the 4 legacy
+  measures (`or`, `contrib`) need an exception, and it cannot express `break_scale` or `unit_kind`. The
+  per-scale override (`by_scale`, folded by `measure_facts(measure, policy, scale_key)`) mirrors the
+  existing `guar` mechanism and is byte-identical for every pre-z13 measure BY CONSTRUCTION. It also
+  let `contrib`'s `guar` shed the glyph entries its scale swap already implied.
+- **D3** — the raw/resolved accessor split is load-bearing: the six reconcilers read
+  `fmt_conf_level_attr()` so a bind carries "unknown" forward, the four engine thresholds read
+  `get_conf_level()`. `vec_ptype2` needs the `is.na()` guard (two NAs compare NA; a bare `if (NA)`
+  errors — the `same_comp` trap, second instance).
+- **D7** — the "this column IS the baseline" predicate must key on the stored `obs` being empty, not on
+  the plan's gate: under `grey_non_signif` a fully comparable column with no significant gap also
+  gates nothing, and must still show its ladder.
+- **D11** — the dead-write gate must read `fmt_color_attr()` (the whole length-≤2 vector), not
+  `get_color()`: a gap measure almost always rides the BACKGROUND channel.
+- **§7.1** — `add_n = TRUE` shifts every positional column reference in the reg tests. The fix was a
+  shared role-aware selector (`tests/testthat/helper-reg.R`), not 50 patched call sites. Two engine
+  consequences were mandatory: `reg_spread_models()` must skip role "n" when keying the GOF footer,
+  and the `[dep]` bracket strip must cover it. Under `split_var + spread_models` the spread columns
+  are now named `Model_OR_<group>` rather than `<group>`, and each group gains its N.
+- **§7.2** — `reg_interaction_rows()` and the global test are the SAME computation (a per-predictor
+  term test on a fit) differing only in which fit and which terms are dropped, so the ladder, the
+  drop1 handling and the row shape were extracted into `reg_term_tests()`, and the two line renderers
+  into `reg_term_test_line()`. The global test costs no extra fit and is emitted only for terms with
+  2+ coefficients (a 1-df term's global p IS its cell's p).
+
+### Still open
+
+- §7.3-7.5 (Cox/survival, mixed models, multiple imputation) are now stated as **out of scope** in
+  `?tab_reg` and both vignettes, rather than left as an apparent omission.
+- §8.2 (a crude-vs-adjusted overlay in `or_plot()`) was NOT taken (maintainer's scope choice); only
+  the stale-prefix repair landed.
+- **Maintainer step:** `jamovi/jmvtabreg.a.yaml` changed (the three `na` values + the new default), so
+  `jmvtools::prepare()` must regenerate `R/jmvtabreg.h.R`. Until then the live UI keeps the old
+  `drop_by_model` default, which is still a valid value — no breakage, just the old behaviour.

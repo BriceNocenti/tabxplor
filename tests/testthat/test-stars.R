@@ -51,7 +51,7 @@ testthat::test_that("stars = TRUE forces ci = 'diff' when ci is unset (Phase 16f
   testthat::expect_true(any(grepl("\\*", format(tf$White, stars = TRUE))))
 
   tn <- tab(gss, marital, tvhours, stars = TRUE)                       # numeric mean, NO ci set
-  ncol <- names(tn)[vapply(tn, is_fmt, logical(1))][[1]]
+  ncol <- reg_fmt_cols(tn)[[1]]
   testthat::expect_true(any(!is.na(get_pvalue(tn[[ncol]]))))
 
   # byte-safety: the default (no stars) still stores no pvalue, so ordinary tables are unchanged
@@ -76,7 +76,7 @@ testthat::test_that("tab_reg() shows stars by default; stars = FALSE strips the 
   testthat::skip_if_not_installed("broom")
   d <- gss |> dplyr::mutate(m = factor(dplyr::if_else(marital == "Married", "Married", "No")))
   r1  <- tab_reg(d, "m", c("race", "rincome"), family = "binomial")
-  orc <- names(r1)[vapply(r1, is_fmt, logical(1))][[1]]
+  orc <- reg_fmt_cols(r1)[[1]]
   testthat::expect_true(any(!is.na(get_pvalue(r1[[orc]]))))
   testthat::expect_true(any(grepl("\\*", format(r1[[orc]], stars = TRUE))))
 

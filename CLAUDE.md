@@ -11,11 +11,23 @@
 ```
 R/
 ├── fmt_class.R     (~4400 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
-│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (17a: moved here
+│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (12 attrs;
+│                              z13 +conf_level = the level THIS column was built at, so the engine's four
+│                              thresholds stop reading the global option -- TWO accessors, and the split is
+│                              load-bearing: fmt_conf_level_attr (RAW, the 6 reconcilers, so a bind carries
+│                              "unknown" forward) vs get_conf_level (resolved, option fallback); stamped by
+│                              ONE tab_stamp_conf_level() sweep per build tail) (17a: moved here
 │                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color engine (measure_facts = THE MEASURES accessor, folds a row's `guar`
 │                              per-policy override [z4: contrib only] + defaults its `bounds` [z8];
+│                              per-policy `guar` override + (z13) its per-SCALE `by_scale` one, folded from
+│                              the plan's new `scale_key` -- so the legend's glyphs/unit follow the scale
+│                              ACTUALLY used (D4), byte-identical for every pre-z13 measure by construction;
+│                              fmt_gap_scale_key = D2's dispatch, and its ORDER is the contract (a poisson
+│                              count AME and a raw poisson coef are identical in type/ci_type/model_family,
+│                              only `var` separates them); legend_gap_baseline = "this column IS the
+│                              baseline" (keys on the stored `obs` being empty, never on the plan's gate);
 │                              measure_policy(measure, policy, x) = its twin, applies a row's
 │                              `force_policy` -- z8-B: a PREDICATE ON THE COLUMN for both gap measures
 │                              (fmt_gap_force_policy: an all-NA `gap_se` = no test here -> `ignore`),
@@ -384,6 +396,22 @@ R/
 │                              (factor/character/LOGICAL) = the ONE predictor-kind predicate replacing
 │                              5 disagreeing sites (fixes a logical predictor rendering blank);
 │                              reg_meta gains predictor_types + the resolved multiplier
+│                              z13: `na` is a THREE-value family (drop_by_outcome default / drop_by_model /
+│                              drop_all) implemented through reg_fit(drop_extra=) -- no pre-pass on `data`
+│                              (which breaks a PREBUILT design's keep_mask), so the "ignored for a survey
+│                              design" caveat is gone; reg_same_frame() = the twin of reg_same_estimand,
+│                              gating `obs` as well as its gap SE (a model on other rows had kept the
+│                              descriptive colour); reg_color_notes() = THE producer of "the colour you
+│                              asked for cannot be computed here" (4 hand-written blocks + 2 silent cases
+│                              -> 1 table, two kinds: no-colour / no-test); reg_term_tests() +
+│                              reg_term_test_line() = the shared core of the interaction test and the new
+│                              per-predictor GLOBAL one (`stats = "global"`, IN THE DEFAULT SET, no extra
+│                              fit, terms with 2+ coefficients only) -- a footer LINE, so its
+│                              discriminators must be registered in is_reg_footer + reg_footer_lines'
+│                              carve-out + tab_footer_streams; reg_level_counts() + `add_n = TRUE` = the N
+│                              per predictor level, a BUILT column (role "n", read by or_plot's model pick,
+│                              reg_spread_models' GOF key and the [dep] strip); reg_detect_family: any
+│                              numeric -> gaussian (integers included), matching the jamovi selector
 ├── reg-influence.R  (~450 L) Last Phase z8-B: influence functions + the SE of the gap between two
 │                              estimators on the SAME rows (the covariance no arithmetic on the two
 │                              printed intervals recovers). Pure matrix math; the package's ONLY
@@ -523,7 +551,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 ### Type System
 
-- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI: Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Last Phase z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Last Phase z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **11 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
+- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI: Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Last Phase z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Last Phase z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **12 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11; Last Phase z13 added `conf_level` → 12). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
 - **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
 - **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns + the `chi2_kish`/`chi2_svy`/`F_kish`/`F_svy` robust discriminators), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise — `color_breaks` per named scale). Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
@@ -2328,8 +2356,73 @@ exploration. Docs: a subsection in both intro vignettes (EN + FR), `?tab_html`/`
 `?tab_plot`/`?tab_css`/`?tabxplor-options`, NEWS, `po/R-fr.po` + `.mo` recompiled (156 translated, 0
 fuzzy).
 
+#### Last Phase z12 — regression assumptions plots
 
-#### Last Phase z12 — `tab_reg()` parallelisation
+I want to add assumptions tests and plots to be more rigorous about regressions, for both numeric outcomes, and numeric predictors ? Please completely remove `lm_plots()` alias, and create a generalised version `reg_assumptions_plots()` of it working for all kind of models. I want you to do full researches, both in web searches, the current code and BeyondMLR bookdown, and create a new .md file in `dev/` with the best design, architecture and workflow for this function. Do not hesitate to test some ideas in temporary scripts if needed.
+- My main source about assumptions of models and implementations in R is `~/BeyondMLR` bookdown, cloned github repo containing the whole book chapters with code for plots, exercice, data, etc. (`01-Introduction.Rmd`, `02-Beyond-Most-Least-Squares.Rmd`, `03-Distribution-Theory.Rmd`, `04-Poisson-Regression.Rmd`, `05-Generalized-Linear-Models.Rmd`, `06-Logistic-Regression.Rmd`). When it’s not `ggplot2` is should be translated to `ggplot2`. Also check other web sources for good practices and visually striking ways to teach models assumptions.
+- I want you to think about the more user-friendly architecture and design possible, the one that would create a really smooth model building workflow, clear and easy to learn, without friction. Would it be better ? : 1. to pass the `tabxplor_tab` directly and re-pass the base dataframe to access microdata ; 2. to not pass the tabxplor_tab() but mimic it’s interface ; 3. to ask for it inside `tab_reg()` directly ? ; 4. something else ?
+- I would want the plots to be pedagogical, with a meaningful title, translated in French, as a good teaching instrument for literary students, and visually polished. It should use facets or grid_arrange in a visually clear way.
+
+#### Last Phase z13 — resolve model comparison problems and inconsistencies
+
+Fix D1-D11 in `dev/reg_comparison_framework_stress_test.md` to integrate the whole package ecosystem in a user-friendly way.
+
+**DONE (2026-08-11).** Suite green in BOTH locales (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 4979;
+CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`: FAIL 0, SKIP 8, PASS 4962). The ONLY snapshot that moved is
+`_snaps/fmt-contract.md` (the column-attribute list); the 36 structural `_golden/*.rds` were
+regenerated with the delta proved minimal over 1787 cells by `dev/verify_golden_field_delta.R` (taught
+here to prove an ATTRIBUTE delta, not only a field one). `_snaps/golden.md`, `_snaps/render-html.md`
+and every `_color_golden/*.rds` are untouched. Rulings + implementation findings:
+`dev/reg_comparison_framework_stress_test.md` §11.
+
+**The statistics were sound; the boundary leaked.** Every fix is a fact single-sourced where it had
+been duplicated, or a claim the table could not support — no new estimand.
+
+- **D1/D5 (severe).** `m1 = race` — the crude model itself, whose true gap is exactly zero — rendered
+  ÷1.16, because the crude block used the union frame while each model used its own complete cases.
+  The framework KNEW (it withheld the test on that clause) and coloured anyway. `na` became a
+  three-value family (`drop_by_outcome` default / `drop_by_model` / `drop_all`) needing **no new
+  mechanism**: z9's `reg_fit(drop_extra =)` is exactly "complete on, without modelling". The old
+  pre-pass on `data` is DELETED — pre-filtering breaks a prebuilt design's keep_mask, `drop_extra` does
+  not — and with it the "ignored for a survey design" caveat. `reg_same_frame()` (reading `f$nobs` when
+  `f$data` is absent, so jamovi's digest path keeps `obs`) now gates `obs` as well as `gap_se`. D5
+  dissolved: every column of an outcome carries a test, so one policy governs the table.
+- **D2/D4.** The gap ladder follows the ESTIMATE's own scale (`fmt_gap_scale_key`), so hours / minutes
+  / days colour identically; new `adj_diff_std` scale (`0.05/0.1/0.2/0.4` SD, the probability ladder
+  re-expressed — NOT Cohen's, which measures an effect rather than a gap between two). ⚠ The dispatch
+  ORDER is the contract: `reg_fam_prob()` is the WRONG separator (a poisson count AME and a raw poisson
+  coefficient are identical in `type`/`ci_type`/`model_family`; only `var` tells them apart). Glyphs
+  and unit now come from the SELECTED scale via a per-scale `by_scale` override folded by
+  `measure_facts(measure, policy, scale_key)` — the `guar` mechanism generalised, byte-identical for
+  every pre-z13 measure BY CONSTRUCTION (deriving from `plan$center` was evaluated and rejected: 2 of 4
+  legacy measures need an exception). `contrib`'s `guar` shed the entries its scale swap implied.
+- **D3.** 12th column attribute `conf_level`; all four engine thresholds follow the call, killing z4's
+  general limitation, not only the gap case.
+- **D6/D9/D10.** ONE refusal reporter (`reg_color_notes`, 4 blocks + 2 silent cases → 1 table);
+  degenerate `split_var` groups abort naming the group AND the variable; any numeric outcome
+  auto-detects as gaussian (integers included), R and jamovi finally agreeing.
+- **D7/D8/D11.** A baseline column says "reference group" instead of printing a ladder no cell of it
+  can reach; `reference = c(race = "Black")` now picks the split baseline; the grey note admits
+  "or not tested" where a column is only partly testable; a reg table's stars line covers the
+  `Constant`; `obs`/`gap_se` are written only where a gap measure reads them (the gate must read
+  `fmt_color_attr()`, the whole ≤2 vector — a gap almost always rides the BACKGROUND).
+- **§7 (opted in).** `add_n = TRUE` — the N per predictor level, a BUILT column (the count needs the
+  model frame); `stats = "global"` in the DEFAULT set — the per-predictor overall test, no extra fit,
+  sharing `reg_term_tests()`/`reg_term_test_line()` with the interaction one. Positional column
+  selection in the reg tests moved to `tests/testthat/helper-reg.R`'s role-aware `reg_fmt_cols()`.
+- **Unlisted defect, same framework:** `or_plot()` filtered crude columns with `grepl("^Emp\\.")`, a
+  prefix Phase g renamed to `Obs_` — so every crude column had counted as a model one. Now `get_role()`.
+- **Docs:** `?tab_reg` (`na`, `add_n`, `stats`, `family`, `conf_level`, the colour ladder, an
+  out-of-scope section for Cox/mixed/MI, and the missing Clogg–Petkova–Haritou + KHB citations), both
+  reg vignettes (the stars-vs-colour four-row table in the main text, "attenuated" not "explained"),
+  both intro vignettes (`conf_level` now reaches the colours), NEWS, `po/R-fr.po` + `.mo` recompiled
+  (162 translated, 0 fuzzy).
+- **OPEN — maintainer step:** `jamovi/jmvtabreg.a.yaml` changed (three `na` values + the new default),
+  so `jmvtools::prepare()` must regenerate `R/jmvtabreg.h.R`. Until then the live UI keeps
+  `drop_by_model`, still a valid value — no breakage, just the old behaviour. `js/jmvtabreg.js`'s
+  `detectFamily` (integer → gaussian) is inert until the rebuild too.
+
+#### Last Phase zxx — `tab_reg()` parallelisation
 
 `tab()` has had a parallel row-axis since Phase 8/9a (`R/tab-parallel.R`: `tab_pmap()` + trampoline,
 the named `"tabxplor"` mirai pool, `tab_build_one()` as the per-row_var worker, Suggests-only).

@@ -88,7 +88,8 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
 
   # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks)
-  expect_setequal(unique(tst$test), c("n", "r2", "r2_adj", "f_model", "sigma"))
+  expect_setequal(setdiff(unique(tst$test), tabxplor:::reg_global_types()),   # z13: a LINE, not a row
+                  c("n", "r2", "r2_adj", "f_model", "sigma"))
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   g  <- broom::glance(stats::lm(tvhours ~ age + race, data = dm))
   expect_equal(gv("r2"),      g$r.squared,     tolerance = 1e-6)
@@ -142,13 +143,29 @@ test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-
 test_that("compare falls back to Delta-AIC (with a message) when N differs across models", {
   skip_if_not_installed("broom")
   d <- reg_data()                                        # tvhours has NAs -> different N than race-only
+  # Last Phase z13 (D1): the DEFAULT `na = "drop_by_outcome"` now puts both models on one population, so
+  # the likelihood-ratio test fires -- which is the point of that default. The AIC fallback is what the
+  # opt-in per-model drop still needs, so that is what this test exercises.
   expect_message(
     mc <- multi_logit(d, "married",
                       models = list(a = "race", b = c("race", "tvhours")),
-                      compare = "baseline", cleannames = FALSE),
+                      compare = "baseline", cleannames = FALSE, na = "drop_by_model"),
     "not nested or N differs"
   )
   expect_true("compare_baseline_aic" %in% get_test(mc)$test)
+})
+
+test_that("D1: the shared-population default makes the likelihood-ratio comparison fire", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  mc <- suppressMessages(multi_logit(d, "married",
+                                     models = list(a = "race", b = c("race", "tvhours")),
+                                     compare = "baseline", cleannames = FALSE))
+  tt <- get_test(mc)
+  expect_true(any(grepl("^compare_", tt$test)))
+  expect_false("compare_baseline_aic" %in% tt$test)      # a real test, not the degraded difference
+  # equal N is the reason it can: both models are fitted on the same people
+  expect_equal(length(unique(tt$n[tt$test == "n"])), 1L)
 })
 
 test_that("compare no-ops (message) for a single model", {
@@ -242,4 +259,56 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   # greying still makes the coloured cells pop
   data_rows <- !refr & !footer
   expect_false(all(ann_e$keep_black[data_rows]))
+})
+
+# ---- Last Phase z13 (SS7.2): the per-predictor global test ------------------------------------------
+
+test_that("stats='global' IS drop1() on the fit already in hand, as a footer line", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
+                                cleannames = FALSE))
+  tt <- get_test(t)
+  g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
+  expect_setequal(g$row_var, c("race", "rincome"))       # one per multi-level predictor
+  expect_identical(unique(g$test), "global_lr")
+
+  # the numbers ARE drop1's, no extra fit involved
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(rincome))
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
+  dm$race <- forcats::fct_drop(dm$race); dm$rincome <- forcats::fct_drop(dm$rincome)
+  fit <- stats::glm(married ~ race + rincome, data = dm, family = stats::binomial())
+  d1  <- stats::drop1(fit, scope = c("race", "rincome"), test = "Chisq")
+  expect_equal(g$pvalue[match(rownames(d1)[-1], g$row_var)],
+               d1[["Pr(>Chi)"]][-1], tolerance = 1e-8)
+  expect_equal(g$statistic[match(rownames(d1)[-1], g$row_var)],
+               d1[["LRT"]][-1], tolerance = 1e-8)
+
+  # it is a table-wide LINE, not a GOF row: the footer block is untouched
+  expect_false(any(tabxplor:::reg_global_types() %in%
+                     names(tabxplor:::reg_footer_spec())))
+  line <- tabxplor:::reg_global_lines(t, "en")
+  expect_length(line, 1L)
+  expect_match(line, "race p = ")
+  # and it reaches every medium through the shared footer stream
+  expect_true(grepl("Overall association", tab_md(t, print = FALSE), fixed = TRUE))
+})
+
+test_that("the global test skips 1-df terms, unsupported engines and stats = FALSE", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # a numeric predictor's overall p IS its single cell's p -- a line for it would be noise
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                cleannames = FALSE))
+  g <- get_test(t); g <- g[g$test %in% tabxplor:::reg_global_types(), ]
+  expect_setequal(g$row_var, "race")
+  # opt out
+  t0 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE,
+                                 cleannames = FALSE))
+  expect_length(tabxplor:::reg_global_lines(t0, "en"), 0L)
+  # an engine with no drop1/regTermTest degrades to no line, never to an error (the z8 contract)
+  skip_if_not_installed("nnet")
+  tm <- suppressMessages(suppressWarnings(
+    tab_reg(d, "marital", "race", family = "multinomial", cleannames = FALSE)))
+  expect_length(tabxplor:::reg_global_lines(tm, "en"), 0L)
 })

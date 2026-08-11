@@ -109,7 +109,7 @@ test_that("multinomial draws NO Obs_* column: the crude number rides in-cell", {
   t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                 cleannames = FALSE))
   expect_false(any(grepl("^Obs_", names(t))))
-  x <- t[[3]]
+  x <- t[[reg_fmt_cols(t)[[1]]]]
   expect_true(any(grepl("{obs}", get_display(x), fixed = TRUE)))
   # ... and the rendered cell really shows two numbers
   expect_true(any(grepl("(", format(x), fixed = TRUE)))
@@ -123,7 +123,7 @@ test_that("the in-cell fold does not duplicate itself in the html tooltip", {
   d <- z10_data()
   t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                 cleannames = FALSE))
-  tips <- tabxplor:::tab_kable_print_tooltip(t[[3]])
+  tips <- tabxplor:::tab_kable_print_tooltip(t[[reg_fmt_cols(t)[[1]]]])
   expect_false(any(grepl("obs:", tips, fixed = TRUE)))     # already in the cell
 })
 
@@ -169,11 +169,11 @@ test_that("the marginal paths of a 3+ level outcome get a real gap SE", {
     t <- suppressMessages(tab_reg(d, "party3", c("race", "mar3"), family = "multinomial",
                                   effect = eff, empirical = TRUE,
                                   color = c("OR", "adjustment"), cleannames = FALSE))
-    g <- get_gap_se(t[[3]])
+    g <- get_gap_se(t[[reg_fmt_cols(t)[[1]]]])
     expect_true(any(!is.na(g)))
     expect_true(all(g[!is.na(g)] > 0))
     # every non-reference, in-model row is covered
-    expect_equal(sum(!is.na(g)), sum(!is_refrow(t[[3]]) & as.character(t$var) != "Constant"))
+    expect_equal(sum(!is.na(g)), sum(!is_refrow(t[[reg_fmt_cols(t)[[1]]]]) & as.character(t$var) != "Constant"))
   }
 })
 
@@ -183,11 +183,11 @@ test_that("the coefficient path of a 3+ level outcome stays blocked (non-collaps
   t <- suppressMessages(tab_reg(d, "party3", c("race", "mar3"), family = "multinomial",
                                 empirical = TRUE, color = c("OR", "adjustment"),
                                 cleannames = FALSE))
-  expect_true(all(is.na(get_gap_se(t[[3]]))))               # obs yes, test no
-  expect_true(any(!is.na(get_obs(t[[3]]))))
+  expect_true(all(is.na(get_gap_se(t[[reg_fmt_cols(t)[[1]]]]))))               # obs yes, test no
+  expect_true(any(!is.na(get_obs(t[[reg_fmt_cols(t)[[1]]]]))))
   # ... so the column reads under `ignore`, whatever policy was asked for (an all-NA gap_se is what
   # MEASURES$adjustment$force_policy reads as "no test here").
-  expect_identical(tabxplor:::resolve_color_channel_plans(t[[3]])$bg$policy, "ignore")
+  expect_identical(tabxplor:::resolve_color_channel_plans(t[[reg_fmt_cols(t)[[1]]]])$bg$policy, "ignore")
 })
 
 test_that("the multinom / polr scores are the right ones (colSums 0, SE near the model's)", {

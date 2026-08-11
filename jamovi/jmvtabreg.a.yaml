@@ -198,16 +198,20 @@ options:
       title: na
       type: List
       options:
-        - title: "drop by model (per-model complete cases)"
+        - title: "one population per outcome (recommended)"
+          name:  drop_by_outcome
+        - title: "each model on its own complete cases"
           name:  drop_by_model
-        - title: "drop all models (one shared population)"
-          name:  drop_all_models
-      default: drop_by_model
+        - title: "one population for the whole analysis"
+          name:  drop_all
+      default: drop_by_outcome
       description:
           R: >
-           "drop by model" fits each model / outcome on its own complete cases; "drop all
-           models" uses one shared complete-case population across all predictors (equal N;
-           changes the estimates), which a valid likelihood-ratio comparison test needs.
+           "drop_by_outcome" (default) fits every model OF ONE OUTCOME on the same complete
+           cases, which is what makes the observed columns comparable to the model beside them
+           and lets the likelihood-ratio comparison run; "drop_by_model" gives each model its
+           own complete cases (a model on a different population then gets no observed effect);
+           "drop_all" shares one population across every outcome as well.
 
     # Phase h: a model comparison (>=2 models) is heavy -- refitting every model on each live edit is
     # what froze the panel. So with several models the table computes ONLY on this button: the user

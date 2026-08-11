@@ -223,8 +223,12 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
 
 Couleur du texte = la force du rapport de cotes ajusté. Fond = sa distance à l'effet observé : un pôle
 signifie que l'ajustement a **renforcé** l'effet, l'autre qu'il l'a **atténué**. Le premier seuil est
-×1,1, la règle classique « une variation de 10 % de l'estimation mérite l'attention » ; viennent
-ensuite ×1,25, ×1,5 et ×2 (modifiables avec `set_color_breaks(adj_ratio = ...)`). Inutile de demander
+×1,1, la convention classique « une variation de 10 % de l'estimation mérite l'attention » ; viennent
+ensuite ×1,25, ×1,5 et ×2 (modifiables avec `set_color_breaks(adj_ratio = ...)`). Un effet *additif*
+reçoit une échelle additive : des points de pourcentage pour un effet marginal sur une probabilité
+(`±2 / ±5 / ±10 / ±20`), et des écarts-types de la variable expliquée pour un β linéaire
+(`±0,05 / ±0,1 / ±0,2 / ±0,4`) — le même modèle se lit donc de la même façon que la variable soit
+enregistrée en heures, en minutes ou en jours. Inutile de demander
 `empirical` séparément : la couleur a besoin de l'effet observé, elle l'active donc pour vous.
 
 La direction se mesure **par rapport à l'absence d'effet**, et non vers le haut ou vers le bas. Un
@@ -357,15 +361,29 @@ Les trois politiques lisent ce même intervalle :
 |----------------|------------------------|
 | `"ignore"` (défaut dans `tab()`) | la taille de l'écart, colorée qu'il soit significatif ou non |
 | `"grey_non_signif"` (défaut dans `tab_reg()`) | la même chose, grisée si l'intervalle de l'écart contient « aucun changement » |
-| `"guaranteed_effect"` | le **plancher** de l'écart : « l'ajustement a déplacé cet effet d'au moins ×1,1 » |
+| `"guaranteed_effect"` | le **plancher** de l'écart : « l'ajustement a déplacé cet effet d'au moins ×1,1 » (sur une échelle additive, « d'au moins 2 points ») |
 
-Trois détails à connaître. Les **étoiles** de significativité dans les cellules continuent de lire la
-p-valeur de chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celle de l'écart ; la
-p-valeur de l'écart est dans l'infobulle. La direction se mesure par rapport à la valeur nulle : un
-effet protecteur ramené vers 1 se colore comme un effet risqué ramené vers 1. Enfin, le test exige que
-les deux estimations portent sur les mêmes personnes : avec `at = "reference"`, ou quand un modèle
-comparé écarte d'autres valeurs manquantes que les colonnes observées (utilisez
-`na = "drop_all_models"`), les couleurs restent descriptives.
+**Les étoiles et la couleur ne disent pas la même chose, et c'est la combinaison qui est utile.** Les
+étoiles continuent de lire la p-valeur de chaque estimation — « cet effet diffère-t-il de 1 ? » — et la
+couleur celle de l'écart. Les quatre combinaisons se rencontrent dans un même petit tableau :
+
+| modalité | étoiles | p (effet) | p (écart) | colorée |
+|---|---|---|---|---|
+| Noirs | \*\*\* | 0,0000 | 0,0058 | non — l'écart est sous le premier seuil |
+| Catholiques | — | 0,2960 | 0,0000 | **oui** |
+| Musulmans | \* | 0,0570 | 0,5585 | non |
+| Sans religion | \*\*\* | 0,0000 | 0,0000 | oui |
+
+Lisez *étoilé et non coloré* comme un effet **robuste** — l'ajustement ne l'a presque pas touché — et
+*non étoilé et coloré* comme un effet que **seul le tableau brut montrait**. Les catholiques sont la
+ligne instructive : aucun effet à rapporter, mais l'ajustement l'a beaucoup déplacé, et
+significativement.
+
+Deux détails encore. La direction se mesure par rapport à la valeur nulle : un effet protecteur ramené
+vers 1 se colore comme un effet risqué ramené vers 1. Et le test exige que les deux estimations portent
+sur les mêmes personnes : avec `at = "reference"`, ou avec `na = "drop_by_model"` quand un modèle
+comparé écarte d'autres valeurs manquantes que les colonnes observées, la comparaison n'est pas faite du
+tout. (Par défaut elle l'est toujours — voir plus bas.)
 
 ## Variables expliquées binomiales groupées (un score sommé)
 
@@ -413,6 +431,10 @@ Avec `empirical = TRUE`, les différences brutes/observées/non ajustées et les
 > L'effet observé, c'est **l'effet du modèle lui-même, ajusté avec un seul prédicteur**.
 
 Cela mérite d'être dit clairement, parce que c'est ce qui rend la comparaison honnête. Le nombre brut n'est pas « un pourcentage » et celui du modèle « un coefficient » : c'est la *même quantité*, calculée de la même façon, sur les *mêmes personnes* (les mêmes cas complets), et affichée sur la même échelle. Seule la liste des prédicteurs change. La distance entre les deux mesure donc l'ajustement, et rien d'autre.
+
+Les « mêmes personnes », c'est le comportement par défaut, pas un espoir : `na = "drop_by_outcome"` donne à tous les modèles d'une même variable expliquée une seule population de cas complets, si bien qu'un modèle comparé ne peut pas être ajusté sur des lignes que les colonnes observées ne couvrent pas. Si vous demandez `na = "drop_by_model"`, un modèle portant sur une autre population n'obtient **aucun** effet observé : mieux vaut une cellule vide qu'un « écart » qui n'est en réalité qu'une différence de valeurs manquantes.
+
+Un mot sur la lecture. La couleur dit de combien deux nombres diffèrent, et le grisé si cette différence dépasse le bruit. Elle ne dit pas « voici un facteur de confusion » : le premier seuil de 10 % est une convention, pas une règle de décision, et une partie de l'écart entre deux rapports de cotes est arithmétique plutôt que confusionnelle (voir l'annexe). « Cet effet a été **atténué** par l'ajustement » est la lecture sûre ; « expliqué par » ne l'est pas.
 
 ### Une variable expliquée ordonnée : ce que change l'ajustement
 
@@ -652,7 +674,7 @@ Les trois politiques lisent ce même intervalle :
 |----------------|-----------------------|
 | `"ignore"` (défaut dans `tab()`) | la taille de l'écart, coloré qu'il soit significatif ou non |
 | `"grey_non_signif"` (défaut dans `tab_reg()`) | la même chose, grisée si l'intervalle de l'écart contient « aucune différence » |
-| `"guaranteed_effect"` | le **plancher** de l'écart : « ces deux effets diffèrent d'au moins ×1,1 » |
+| `"guaranteed_effect"` | le **plancher** de l'écart : « ces deux effets diffèrent d'au moins ×1,1 » (sur une échelle additive, « d'au moins 2 points ») |
 
 Deux détails utiles. Les **étoiles** de significativité dans les cases continuent de lire le p de
 chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celui de l'écart ; le p de l'écart est
@@ -725,3 +747,5 @@ lm_plots(m)
 - `vignette("tabxplor")` — les tableaux croisés et les repères de couleur.
 - `?tab_reg` pour chaque argument (groupés par usage), et `?tab_reg` &rarr; *Details* pour les choix de modélisation.
 - `survey::svydesign()` pour les plans de sondage complexes (calibration, poids de réplication, corrections de population finie, etc.).
+- **Hors périmètre**, et à ajuster avec leurs propres packages : les modèles de survie / de Cox, les modèles mixtes (multiniveaux) et l'agrégation sur des données multi-imputées.
+- Sur la comparaison d'un coefficient brut et d'un coefficient ajusté, la référence canonique est Clogg, Petkova & Haritou (1995, *AJS* 100(5)), avec le commentaire d'Allison dans le même numéro — c'est ce que calcule `color = "adjustment"`, généralisé ici aux GLM, aux plans de sondage et aux effets marginaux. Pour les modèles logit emboîtés, la décomposition KHB (Karlson, Holm & Breen 2012) sépare la part du changement qui relève de la confusion de celle qui relève du changement d'échelle.

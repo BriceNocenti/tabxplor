@@ -1682,7 +1682,7 @@ reg_footer_lines <- function(tabs) {
   # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
   # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these
   # rows left, `reg` above is empty and this function returns early.
-  it <- test_tbl[test_tbl$test %in% reg_interaction_types(), , drop = FALSE]
+  it <- test_tbl[test_tbl$test %in% c(reg_interaction_types(), reg_global_types()), , drop = FALSE]
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs),
                  test = if (nrow(it) > 0) it else NULL),
@@ -3788,13 +3788,18 @@ parse_color_side <- function(v, name) {
 #' @keywords internal
 mk_color_scale <- function(name, values) {
   valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "zscore",
-             "adj_ratio", "adj_diff")
+             "adj_ratio", "adj_diff", "adj_diff_std")
   if (!name %in% valid) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
                      "i" = "Valid scales: {.val {valid}}."))
   }
   center <- if (name %in% c("pct_ratio", "odds_ratio", "mean_ratio", "adj_ratio")) 1 else 0
   strict <- name != "contrib"
+  # Which scales express their breaks in SD units. `mean_diff` is standardized only on its NULL-default
+  # arm -- supplying data-unit values there is how a user asks for absolute colouring. `adj_diff_std`
+  # (Last Phase z13) is standardized BY DEFINITION: it exists so an additive gap on an arbitrary-unit
+  # outcome has a ladder meaning the same thing in every table, which raw units cannot express.
+  std <- identical(name, "adj_diff_std")
 
   # NULL / empty: drop the measure, except mean_diff -> standardized default.
   if (is.null(values) || (is.numeric(values) && length(values) == 0L)) {
@@ -3803,7 +3808,7 @@ mk_color_scale <- function(name, values) {
       return(list(center = 0, strict = TRUE, std = TRUE, over = side, under = side))
     }
     empty <- list(breaks = numeric(0), slots = integer(0))
-    return(list(center = center, strict = strict, std = FALSE, over = empty, under = empty))
+    return(list(center = center, strict = strict, std = std, over = empty, under = empty))
   }
 
   # over/under list form: explicit per-side magnitudes, no mirror.
@@ -3815,7 +3820,7 @@ mk_color_scale <- function(name, values) {
     }
     over  <- parse_color_side(if (is.null(values$over))  numeric(0) else values$over,  name)
     under <- parse_color_side(if (is.null(values$under)) numeric(0) else values$under, name)
-    return(list(center = center, strict = strict, std = FALSE, over = over, under = under))
+    return(list(center = center, strict = strict, std = std, over = over, under = under))
   }
 
   if (!is.numeric(values)) {
@@ -3854,7 +3859,7 @@ mk_color_scale <- function(name, values) {
     parsed <- parse_color_side(to_mag(values, side), name)
     over <- parsed; under <- parsed
   }
-  list(center = center, strict = strict, std = FALSE, over = over, under = under)
+  list(center = center, strict = strict, std = std, over = over, under = under)
 }
 
 #' @keywords internal
@@ -3881,7 +3886,18 @@ default_color_scales <- function() {
     # the null (measured: a +0.016 shift on a -0.026 crude AME reads as -60 %).
     adj_ratio  = mk_color_scale("adj_ratio",  list(over  = c(1.10, 1.25, 1.50, 2.00),
                                                    under = c(1.10, 1.25, 1.50, 2.00))),
-    adj_diff   = mk_color_scale("adj_diff",   c(0.02, 0.05, 0.10, 0.20))
+    adj_diff   = mk_color_scale("adj_diff",   c(0.02, 0.05, 0.10, 0.20)),
+    # Last Phase z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
+    # a count AME. `adj_diff`'s absolute ladder is calibrated on a PROBABILITY (2/5/10/20 points) and
+    # applying it verbatim to a beta made the reading depend on the unit: measured on the same model,
+    # tvhours in minutes saturated every cell at the deepest break while the same variable in days left
+    # the whole feature dark. Standardized by SD(Y) it means the same thing in every table.
+    # The ladder is the probability one re-expressed in SD units: a probability's SD is at most 0.5, so
+    # 2/5/10/20 points is 0.04/0.10/0.20/0.40 SD -- rounded to 0.05 at the first step, which keeps the
+    # 1:2:4:8 doubling and agrees with `adj_ratio`'s x1.10 anchor (a 10 % move on a typical 0.5 SD
+    # effect IS 0.05 SD). NOT Cohen's 0.2/0.5/0.8: that measures an EFFECT, while this measures the gap
+    # between two effects, which z5 measured at x1.03-x1.12 -- entirely below Cohen's first break.
+    adj_diff_std = mk_color_scale("adj_diff_std", c(0.05, 0.10, 0.20, 0.40))
   )
 }
 # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so pct_ratio /
@@ -3891,9 +3907,9 @@ default_color_scales <- function() {
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors.
-#' @description Color breaks are a named list of the nine measure scales \code{pct_diff},
+#' @description Color breaks are a named list of the ten measure scales \code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
-#' \code{zscore}, \code{adj_ratio} and \code{adj_diff}. Each is
+#' \code{zscore}, \code{adj_ratio}, \code{adj_diff} and \code{adj_diff_std}. Each is
 #' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 #' values, one per color step: \code{pct_diff} colors percentage-point differences,
 #' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
@@ -3904,10 +3920,15 @@ default_color_scales <- function() {
 #' \code{color = "contrib"} switches to under \code{color_signif = "guaranteed_effect"}. Its default
 #' \code{c(1.96, 2.58, 3.89, 6)} is written as \code{\link{conf_level_to_z}(c(0.95, 0.99, 0.9999,
 #' 1 - 2e-9))}, and its FIRST value is re-anchored to the significance threshold at print time, so
-#' the remaining ones are read as spacings from it. \code{adj_ratio} and \code{adj_diff} are the
+#' the remaining ones are read as spacings from it. \code{adj_ratio}, \code{adj_diff} and
+#' \code{adj_diff_std} are the
 #' \code{\link{tab_reg}}-only scales of \code{color = "adjustment"} / \code{"between_groups"} --
-#' how far a modelled effect sits from the observed one (or from the reference group's), as a ratio
-#' of the two effects or as their difference in the effect's own units. An empty/\code{NULL} scale
+#' how far a modelled effect sits from the observed one (or from the reference group's). Which one a
+#' column reads follows the estimate's own scale: \code{adj_ratio} for a multiplicative effect (odds /
+#' risk / rate ratio), \code{adj_diff} for a probability-scale marginal effect (in percentage points),
+#' and \code{adj_diff_std} for an additive effect in the outcome's own units (a gaussian beta, a count
+#' marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
+#' whatever unit the outcome is recorded in. An empty/\code{NULL} scale
 #' drops that measure for its column type.
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep

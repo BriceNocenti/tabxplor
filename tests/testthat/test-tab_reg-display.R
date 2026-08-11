@@ -7,7 +7,8 @@ reg_data <- function() {
   forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
 }
-first_fmt <- function(t) t[[names(t)[vapply(t, is_fmt, logical(1))][1]]]
+# Last Phase z13: skip the per-level `n` column (add_n = TRUE by default) -- see helper-reg.R.
+first_fmt <- function(t) reg_first_fmt(t)
 
 # ---- estimate_display = "ci" : visible confidence-interval bracket ---------------------------
 

@@ -394,7 +394,10 @@ var familyLabelsFor = function(c) {
 // count -> poisson that the R side leaves to an explicit pick). Stored explicitly so the backend never
 // re-detects (and never aborts on an integer count).
 var detectFamily = function(c) {
-    if (!c || c.levels === null) return (c && c.dataType === "decimal") ? "gaussian" : "poisson";
+    // Last Phase z13 (D10): ANY numeric detects as gaussian, integer-valued included -- age in years, a
+    // summed score and income in whole units are all integers, and a linear model always fits. Matches
+    // reg_detect_family() on the R side exactly; poisson stays one click away in familyOptionsFor().
+    if (!c || c.levels === null) return "gaussian";
     if (c.levels.length === 2) return "binomial";
     if (c.mt === "ordinal")    return "ordinal";
     return "multinomial";

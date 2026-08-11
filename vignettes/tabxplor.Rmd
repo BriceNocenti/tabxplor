@@ -516,10 +516,11 @@ says) and the others are read as spacings from it. Both readings share one signi
 The residual is also readable as a number: `display = "{resid}"` or `"{pct} ({resid})"`, and it always
 appears in the html tooltip.
 
-One expert caveat: colours are computed **per column** at print time, so they cannot see a table-level
-attribute. Every significance threshold inside them (the greying, and the `zscore` anchor) therefore
-reads `options(tabxplor.conf_level)`, not a per-call `tab(conf_level =)` — which does drive the printed
-intervals and the stars.
+Colours are computed **per column** at print time, so they cannot see a table-level attribute — but each
+column now records the confidence level it was built at, so every significance threshold inside them
+(the greying, and the `zscore` anchor) follows the call's `conf_level`, like the printed intervals and
+the stars. `options(tabxplor.conf_level)` remains the fallback for a column that never recorded one (a
+hand-built `fmt()`).
 
 Examples :
 

@@ -511,10 +511,12 @@ seule source de significativité :
 Le résidu se lit aussi comme un nombre : `display = "{resid}"` ou `"{pct} ({resid})"`, et il figure
 toujours dans l'infobulle html.
 
-Une précision d'expert : les couleurs sont calculées **par colonne** au moment de l'affichage, elles ne
-peuvent donc pas lire un attribut de tableau. Tout seuil de significativité qu'elles utilisent (le
-grisage, et l'ancrage de `zscore`) lit donc `options(tabxplor.conf_level)`, et non un
-`tab(conf_level =)` par appel — lequel pilote bien, lui, les intervalles affichés et les étoiles.
+Les couleurs sont calculées **par colonne** au moment de l'affichage, elles ne peuvent donc pas lire un
+attribut de tableau — mais chaque colonne enregistre désormais le seuil de confiance auquel elle a été
+construite, si bien que tout seuil de significativité qu'elles utilisent (le grisage, et l'ancrage de
+`zscore`) suit le `conf_level` de l'appel, comme les intervalles affichés et les étoiles.
+`options(tabxplor.conf_level)` reste le recours pour une colonne qui n'en a jamais enregistré (un
+`fmt()` construit à la main).
 
 Exemples :
 

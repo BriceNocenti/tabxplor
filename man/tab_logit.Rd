@@ -17,13 +17,14 @@ tab_logit(
   split_var = NULL,
   multiplier = "sd",
   empirical = FALSE,
+  add_n = TRUE,
   conf_level = getOption("tabxplor.conf_level", 0.95),
   method = c("wald", "profile"),
   stats = NULL,
   estimate_display = c("value", "ci", "prob", "ame"),
   color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
   stars = TRUE,
-  na = c("drop_by_model", "drop_all_models"),
+  na = c("drop_by_outcome", "drop_by_model", "drop_all"),
   cleannames = NULL,
   subtext = "",
   spread_models = TRUE
@@ -115,7 +116,11 @@ structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
 model} (listwise-complete on the dependent, all predictors and any design variable), so crude and
 adjusted are directly comparable and not confounded by differing missingness (reproduce it with
-\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). Also works with a vector of dependents. Ordinal has
+\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). That is what the default \code{na = "drop_by_outcome"}
+guarantees, including when several models are compared. Under \code{na = "drop_by_model"} a model
+fitted on rows the observed block does not cover gets \strong{no} observed value at all --- no \code{obs},
+no \code{color = "adjustment"}, no gap test --- because the distance between two such estimates would
+be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 no clean crude analogue and is ignored (with a message).
 
 The crude companions of a \strong{categorical} predictor are descriptive, so on weighted data they
@@ -125,7 +130,18 @@ own design-based variance, like the \verb{Model_*} column beside it. On weighted
 will not agree to the last digit — they answer the same question under different variance
 assumptions. Default \code{FALSE}.}
 
-\item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
+\item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
+\strong{unadjusted count} behind each predictor level on the model's own complete cases --- the numbers
+a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The
+Constant row shows the model N. Continuous predictors are left blank: on a listwise-complete frame
+their count is the model N for every one of them. Unlike \code{\link[=tab]{tab()}}'s \code{add_n}, this is a real column
+rather than a display option, because only the model frame knows the counts.}
+
+\item{conf_level}{Confidence level for the intervals. Default \code{0.95}. It drives every interval in
+the table, the significance stars, and the greying under \code{color_signif} --- including the
+model-vs-observed gap interval, which is computed at print time from the stored standard error and
+is stored on each column so it follows this argument rather than
+\code{options("tabxplor.conf_level")}.}
 
 \item{method}{How the interval and p-value are computed. \code{"wald"} (default) uses the Wald interval
 and the Wald z / t test: fast, matches standard software output, and the only option for weighted
@@ -139,7 +155,16 @@ square, the overall F-test and the residual SD; other models show N, the likelih
 versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+
+\code{"global"} (in the default set) adds one \strong{overall test per predictor} --- "is this variable
+associated with the outcome at all?", the question a block of stars against a reference category
+cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
+predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
+that cell's own p-value), as a footer line rather than a footer row, and it costs \strong{no extra
+model fit}: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
+models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
+get no such test.
 
 \code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
 effect-modification test per predictor} — "does this predictor act differently between the
@@ -170,12 +195,17 @@ only odds ratios whose confidence interval excludes 1 and greys the rest.}
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
-\item{na}{How missing values are handled across models. \code{"drop_by_model"} (default) drops \code{NA}
-rows per model (each model / dependent uses its own complete cases). \code{"drop_all_models"} fits every
-model on ONE shared complete-case population (rows with no \code{NA} on any predictor / dependent /
-design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
-this \strong{changes all estimates} (shared population), hence opt-in. Ignored for a prebuilt survey
-design.}
+\item{na}{Which rows each model is fitted on — the grain at which missing values are dropped.
+\code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
+population (no \code{NA} on the outcome, on any predictor of any model in the call, or on a design
+variable); a second outcome keeps its own rows. That is what makes the comparisons in the table
+honest: the observed columns (\code{empirical}) are then computed on exactly the model's rows, and
+nested models get equal N so the likelihood-ratio comparison can run instead of degrading to an
+AIC difference. \code{"drop_by_model"} lets each model use its own complete cases — every model then
+keeps as many rows as it can, at the price of comparability: models fitted on different people
+get no observed effect at all (no \code{obs}, no \code{color = "adjustment"}, no gap test), because the
+distance between two such estimates is listwise deletion rather than adjustment.
+\code{"drop_all"} shares one population across the whole call, all outcomes included.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

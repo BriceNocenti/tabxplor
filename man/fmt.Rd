@@ -71,7 +71,8 @@ fmt(
   color = "",
   color_signif = "ignore",
   model_family = "",
-  role = ""
+  role = "",
+  conf_level = NA_real_
 )
 
 is_fmt(x)
@@ -288,6 +289,13 @@ different families, each column keeping its own effect wording.}
 \item{role}{For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a
 model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
 on cross-tables. Read by the colour legend to name each column's effect without matching its label.}
+
+\item{conf_level}{The confidence level this column's stored interval and its significance
+thresholds were computed at, as a single number in (0, 1). \code{NA} (the default) means
+"unknown": every threshold in the colour engine then falls back to
+\code{options("tabxplor.conf_level")}. It is stored per COLUMN because colours are resolved per
+column at print time and cannot see the table's \code{conf_level} argument -- without it a table
+built at a 99 percent level would be greyed at 95 percent.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 

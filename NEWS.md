@@ -104,6 +104,10 @@
   `tab_reg(family = "poisson")` on a **binary** outcome fits a **modified Poisson** regression (robust
   standard errors) whose coefficients are risk ratios. Both are opt-in — a binary outcome still defaults
   to logistic — and `empirical = TRUE` gives the matching crude `Obs_RR`.
+* **Regression tables now show the numbers behind the estimates.** An `n` column gives each predictor
+  level its unadjusted count (`add_n = FALSE` to drop it), and the footer answers "is this variable
+  associated with the outcome at all?" with one overall test per multi-level predictor (it costs no
+  extra model fit; `stats = FALSE` or an explicit `stats =` vector opts out).
 * **`tab_export()`** — one entry point for every export format. **`tab_html()`** is the new name for
   `tab_kable()` (kept as a permanent alias). **`tab_css()`** generates one stylesheet for a whole document;
   its cell-colour rules survive Bootstrap-based host pages (pkgdown, Quarto), which style table cells
@@ -117,6 +121,22 @@
 
 ## Changes that may affect existing code
 
+* **`tab_reg()` fits every model of an outcome on the same people, by default.** The new
+  `na = "drop_by_outcome"` shares one complete-case population across the models of a given outcome
+  (`"drop_by_model"` restores the per-model drop, `"drop_all"` shares one across the whole call). This
+  is what makes the observed (`empirical = TRUE`) columns comparable to the model beside them, and it
+  lets the likelihood-ratio comparison run where it used to degrade to an AIC difference; it also
+  changes N, and therefore the estimates, when compared models have different missingness. Where the
+  populations still differ, no observed effect is attached at all — a coloured "gap" would be listwise
+  deletion rather than adjustment.
+* **`tab_reg(family = "auto")` reads an integer-valued outcome as gaussian** instead of refusing to
+  guess, so age in years, a summed score or income in whole units no longer need an explicit family
+  (the message names `"poisson"` for a genuine count).
+* **The `color = "adjustment"` / `"between_groups"` thresholds now follow the estimate's own scale**:
+  a difference in the outcome's own units is compared in standard deviations of that outcome
+  (`adj_diff_std`), so the same model on an outcome recorded in hours, minutes or days reads the same
+  way. Their break labels are signed (`+2`, `-5`) on an additive scale instead of `×0.02`.
+* **`conf_level` now reaches the gap greying** as well as the printed intervals and the stars.
 * **Excel export now uses `openxlsx2`** (Suggests) instead of `openxlsx`.
 * **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
   re-exported** — use the base `|>` pipe (or load `magrittr`/`dplyr`). `kableExtra` and `DescTools` move to

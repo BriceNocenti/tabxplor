@@ -84,7 +84,10 @@ test_that("binomial: model + empirical columns share ONE outcome col_var; model 
   skip_if_not_installed("broom")
   t   <- tab_reg(w14_data(), "married", c("race", "rincome"), family = "binomial",
                  empirical = TRUE, cleannames = FALSE)
-  fmt <- names(t)[purrr::map_lgl(t, tabxplor:::is_fmt)]
+  # Last Phase z13: reg_fmt_cols() drops the per-level `n` column (add_n = TRUE by default) -- this
+  # test is about the OUTCOME span shared by the model and its crude companions, and `n` is a row
+  # descriptor that deliberately carries its own col_var so a border separates it.
+  fmt <- reg_fmt_cols(t)
   expect_setequal(fmt, c("Obs_%", "Obs_OR", "Model_OR"))
   cvs <- purrr::map_chr(t[fmt], ~ tabxplor:::get_col_var(.x)[1])
   expect_equal(length(unique(cvs)), 1L)                       # one span, no border between them
@@ -101,7 +104,7 @@ test_that("multinomial: category names drop the repeated ': OR'; one shared col_
   skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   t   <- tab_reg(w14_mnl(), "party3", "race", family = "multinomial", cleannames = FALSE)
-  fmt <- names(t)[purrr::map_lgl(t, tabxplor:::is_fmt)]
+  fmt <- reg_fmt_cols(t)
   expect_false(any(grepl(": OR$", fmt)))                       # stripped
   expect_true(all(grepl(" vs ", fmt)))                         # "<cat> vs <ref>"
   cvs <- unique(purrr::map_chr(t[fmt], ~ tabxplor:::get_col_var(.x)[1]))

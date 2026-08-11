@@ -64,7 +64,10 @@ test_that("weighted footer is the reduced survey set (n / wald_null / nagelkerke
   d   <- reg_survey_data()
   tab <- tab_logit(d, "y", c("x1", "x2"), wt = "w")
   tst <- tabxplor:::get_test(tab)
-  expect_setequal(unique(tst$test), c("n", "wald_null", "nagelkerke_r2", "aic"))
+  # Last Phase z13: the per-predictor global test rides the same tibble but renders as a footer LINE,
+  # so it is not part of the GOF ROW set this asserts.
+  expect_setequal(setdiff(unique(tst$test), tabxplor:::reg_global_types()),
+                  c("n", "wald_null", "nagelkerke_r2", "aic"))
   # no naive glm stats leak in under weights
   expect_false(any(c("lr_null", "mcfadden_r2", "bic", "dispersion", "r2") %in% tst$test))
 })

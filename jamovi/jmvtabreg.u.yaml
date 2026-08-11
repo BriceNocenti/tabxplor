@@ -148,11 +148,15 @@ children:
                   - type: RadioButton
                     name: na_1
                     optionName: na
-                    optionPart: drop_by_model
+                    optionPart: drop_by_outcome
                   - type: RadioButton
                     name: na_2
                     optionName: na
-                    optionPart: drop_all_models
+                    optionPart: drop_by_model
+                  - type: RadioButton
+                    name: na_3
+                    optionName: na
+                    optionPart: drop_all
       # Phase h: with >=2 models the table computes only on this click (no live refit while picking).
       - type: LayoutBox
         margin: large

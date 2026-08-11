@@ -640,7 +640,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # span row already names the outcome, so the exported level header strips it. Role-driven (17c): only
   # "model"/"emp" columns are touched, never a crosstab level that happens to hold brackets.
   for (j in which(is_level)) {
-    if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp"))
+    # Last Phase z13: "n" too -- the per-level count column is disambiguated across dependents by the
+    # same bracket, for the same reason (the console needs to tell two outcomes' counts apart).
+    if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp", "n"))
       clean[j] <- sub(" \\[[^]]*\\]$", "", clean[j])
   }
   # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning

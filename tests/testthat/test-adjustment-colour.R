@@ -57,10 +57,10 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
               exponentiate = FALSE, empirical = TRUE), "Model_\u03b2", "Obs_log(OR)", get_diff)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"),
                family = "binomial", effect = "ame", empirical = TRUE)
-  chk(t, names(t)[[5]], "Obs_diff", get_diff)
+  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_diff", get_diff)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"),
                family = "binomial", effect = "ame_ratio", empirical = TRUE)
-  chk(t, names(t)[[5]], "Obs_RR", get_or)
+  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RR", get_or)
 })
 
 test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
@@ -90,7 +90,7 @@ test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Last Phase z10
   d <- adj_data()
   t <- suppressMessages(tab_reg(d, dependent = "party3", predictors = "race",
                                 family = "multinomial", empirical = TRUE, cleannames = FALSE))
-  mcols <- setdiff(names(t), c("var", "levels"))
+  mcols <- reg_fmt_cols(t)
   testthat::expect_gt(length(mcols), 1L)
   obs <- lapply(mcols, function(nm) get_obs(t[[nm]]))
   testthat::expect_true(all(vapply(obs, function(o) any(!is.na(o)), logical(1))))
@@ -198,7 +198,7 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
   d <- adj_data()
   sp <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
                 family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore")
-  fmt_cols <- names(sp)[vapply(sp, is_fmt, logical(1))]
+  fmt_cols <- reg_fmt_cols(sp)
   testthat::expect_length(fmt_cols, 3L)                            # one column per group
   ref <- get_or(sp[[fmt_cols[[1]]]])
   testthat::expect_true(all(is.na(get_obs(sp[[fmt_cols[[1]]]]))))  # not compared to itself
@@ -211,7 +211,7 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
   st <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
                 family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore",
                 spread_models = FALSE)
-  col <- st[[names(st)[vapply(st, is_fmt, logical(1))][[1]]]]
+  col <- st[[reg_fmt_cols(st)[[1]]]]
   k   <- length(ref)
   testthat::expect_true(all(is.na(get_obs(col)[seq_len(k)])))      # first group's block
   testthat::expect_equal(get_obs(col)[k + seq_len(k)], ref)        # second group's block
@@ -221,7 +221,7 @@ test_that("between_groups is off by default and needs no empirical companion", {
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
                family = "binomial")                                 # no `color` -> auto
-  testthat::expect_true(all(vapply(t[vapply(t, is_fmt, logical(1))],
+  testthat::expect_true(all(vapply(t[reg_fmt_cols(t)],
                                    function(c) all(is.na(get_obs(c))), logical(1))))
 })
 
@@ -266,7 +266,7 @@ test_that("color_signif does not apply to an odds-ratio `adjustment` gap: it rea
   b  <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
                                  family = "binomial", color = c("OR", "between_groups"),
                                  color_signif = "guaranteed_effect"))
-  bc <- b[[names(b)[vapply(b, is_fmt, logical(1))][[2]]]]
+  bc <- b[[reg_fmt_cols(b)[[2]]]]
   testthat::expect_identical(
     tabxplor:::fmt_color_plan(bc, "bg", color = get_color_bg(bc))$policy, "guaranteed_effect")
 })
@@ -309,7 +309,7 @@ test_that("{obs} renders bare and in a composite, and round-trips through get_nu
   # an AME column's obs is a probability difference -> x100, signed, "%" (both media agree)
   a <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
                effect = "ame", empirical = TRUE)
-  ac <- a[[names(a)[[5]]]]
+  ac <- a[[grep("^Model_", names(a), value = TRUE)[[1]]]]
   testthat::expect_true(any(grepl("%$", format(set_display(ac, "obs")))))
   testthat::expect_true(any(grepl("^\\+", stringi::stri_trim(format(set_display(ac, "obs"))))))
   aok <- !is.na(get_obs(ac))            # an empty cell writes no number, so its code is irrelevant
@@ -369,4 +369,52 @@ test_that("every exporter renders an adjustment-coloured table without error", {
   testthat::expect_no_error(print(t))
   skip_if_not_installed("openxlsx2")
   testthat::expect_no_error(tab_xl(t, path = withr::local_tempfile(fileext = ".xlsx"), open = FALSE))
+})
+
+# --- Last Phase z13 (D2 / D4): the gap ladder reads the ESTIMATE's own scale -------------------------
+
+test_that("D2: the additive gap is unit-invariant (hours / minutes / days colour identically)", {
+  skip_if_not_installed("broom")
+  d <- adj_data()
+  d$tv_hr  <- d$tvhours
+  d$tv_min <- d$tvhours * 60
+  d$tv_day <- d$tvhours / 24
+  slots <- function(v) {
+    t  <- suppressMessages(suppressWarnings(
+      tab_reg(d, v, c("race", "party3"), family = "gaussian",
+              empirical = TRUE, color = c("diff", "adjustment"), cleannames = FALSE)))
+    mc <- grep("^Model_", names(t), value = TRUE)[[1]]
+    fmt_color_channels(t[[mc]])$bg_slot
+  }
+  s_hr <- slots("tv_hr")
+  testthat::expect_true(any(s_hr > 0L))                    # the fixture must actually colour something
+  # z5 scored the raw difference against an ABSOLUTE ladder calibrated for percentage points, so the
+  # same substantive adjustment saturated in minutes and vanished in days. Standardized by SD(Y), the
+  # reading no longer depends on the unit the outcome happens to be recorded in.
+  testthat::expect_identical(slots("tv_min"), s_hr)
+  testthat::expect_identical(slots("tv_day"), s_hr)
+})
+
+test_that("D4: the gap's break glyphs follow the selected scale, not the measure", {
+  skip_if_not_installed("broom")
+  d   <- adj_data()
+  leg <- function(t) paste(tab_color_legend(t, medium = "plain", style = "terse"), collapse = " | ")
+
+  # multiplicative estimate -> a multiplicative ladder
+  t_mult <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
+                                     empirical = TRUE, color = c("OR", "adjustment"),
+                                     cleannames = FALSE))
+  l_mult <- leg(t_mult)
+  testthat::expect_match(l_mult, "\u00d71.1", fixed = TRUE)   # x1.1
+  testthat::expect_match(l_mult, "\u00f71.1", fixed = TRUE)   # div 1.1
+
+  # additive estimate -> a signed ladder in the outcome's SD, never "x0.05"
+  t_add <- suppressMessages(suppressWarnings(
+    tab_reg(d, "tvhours", c("race", "party3"), family = "gaussian",
+            empirical = TRUE, color = c("diff", "adjustment"), cleannames = FALSE)))
+  # "+0.05" can only come from the gap ladder: `diff`'s own standardized breaks are 0.2/0.5/0.8.
+  l_add <- leg(t_add)
+  testthat::expect_match(l_add, "+0.05", fixed = TRUE)
+  testthat::expect_match(l_add, "-0.05", fixed = TRUE)
+  testthat::expect_false(grepl("\u00d70.05", l_add, fixed = TRUE))  # the z5 rendering of "+0.05"
 })

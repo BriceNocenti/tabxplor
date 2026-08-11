@@ -38,7 +38,7 @@ gap_tab <- function(d, policy = "ignore", preds = "race", ...)
 test_that("gap_se equals the quadrature of the two groups' model SEs", {
   d  <- gap_data()
   sp <- gap_tab(d)
-  fc <- names(sp)[vapply(sp, is_fmt, logical(1))]
+  fc <- reg_fmt_cols(sp)
   testthat::expect_length(fc, 3L)
 
   hand <- function(g) {
@@ -49,33 +49,33 @@ test_that("gap_se equals the quadrature of the two groups' model SEs", {
   # skeleton rows are Constant, then race Other (the reference level, no SE) / Black / White
   for (g in c("Dem", "Rep")) {
     expected <- sqrt(hand(g)^2 + se_ref^2)
-    got      <- get_gap_se(sp[[g]])
+    got      <- get_gap_se(sp[[reg_group_col(sp, g)]])
     testthat::expect_equal(got[c(1L, 3L, 4L)], unname(expected), tolerance = 1e-6)
     testthat::expect_true(is.na(got[2L]))                   # the reference level has no interval
   }
-  testthat::expect_true(all(is.na(get_gap_se(sp[["Ind"]]))))  # a group is not compared to itself
+  testthat::expect_true(all(is.na(get_gap_se(sp[[reg_group_col(sp, "Ind")]]))))  # a group is not compared to itself
 })
 
 test_that("gap_se is NA on every table that has no counterpart", {
   d <- gap_data()
   # a crosstab
   ct <- tab(d, race, party3, pct = "row")
-  testthat::expect_true(all(vapply(ct[vapply(ct, is_fmt, logical(1))],
+  testthat::expect_true(all(vapply(ct[reg_fmt_cols(ct)],
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
   # a reg table with no split_var
   t <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", family = "binomial"))
   testthat::expect_true(all(is.na(get_gap_se(t$Model_OR))))
   # profile-likelihood bounds are not est +/- crit*se, so no SE is recovered from them
   pr <- gap_tab(d, method = "profile")
-  testthat::expect_true(all(is.na(get_gap_se(pr[["Dem"]]))))
+  testthat::expect_true(all(is.na(get_gap_se(pr[[reg_group_col(pr, "Dem")]]))))
 })
 
 test_that("the gap p-value is the z test of the quadrature SE", {
   d  <- gap_data()
   sp <- gap_tab(d)
-  g  <- log(get_or(sp[["Rep"]])) - log(get_obs(sp[["Rep"]]))
-  testthat::expect_equal(fmt_gap_p(sp[["Rep"]]),
-                         2 * stats::pnorm(-abs(g / get_gap_se(sp[["Rep"]]))))
+  g  <- log(get_or(sp[[reg_group_col(sp, "Rep")]])) - log(get_obs(sp[[reg_group_col(sp, "Rep")]]))
+  testthat::expect_equal(fmt_gap_p(sp[[reg_group_col(sp, "Rep")]]),
+                         2 * stats::pnorm(-abs(g / get_gap_se(sp[[reg_group_col(sp, "Rep")]]))))
 })
 
 # --- A. the three policies ------------------------------------------------------------------------
@@ -84,8 +84,8 @@ test_that("`ignore` is byte-identical to the descriptive z5 reading", {
   d  <- gap_data()
   sp <- gap_tab(d, "ignore")
   # the score, hence the slot, uses only `obs` -- gap_se cannot move it
-  for (nm in names(sp)[vapply(sp, is_fmt, logical(1))]) {
-    col  <- sp[[nm]]
+  for (nm in reg_fmt_cols(sp)) {
+    col  <- sp[[reg_group_col(sp, nm)]]
     bare <- set_gap_se(col, rep(NA_real_, length(col)))
     testthat::expect_identical(fmt_color_channels(col)$bg_slot,
                                fmt_color_channels(bare)$bg_slot)
@@ -98,10 +98,10 @@ test_that("`grey_non_signif` greys exactly the non-significant gaps", {
   gn <- gap_tab(d, "grey_non_signif")
   seen <- 0L
   for (nm in c("Dem", "Rep")) {
-    p   <- fmt_gap_p(gn[[nm]])
+    p   <- fmt_gap_p(gn[[reg_group_col(gn, nm)]])
     sig <- !is.na(p) & p < 0.05
-    s_i <- fmt_color_channels(ig[[nm]])$bg_slot
-    s_g <- fmt_color_channels(gn[[nm]])$bg_slot
+    s_i <- fmt_color_channels(ig[[reg_group_col(ig, nm)]])$bg_slot
+    s_g <- fmt_color_channels(gn[[reg_group_col(gn, nm)]])$bg_slot
     testthat::expect_true(all(s_g[!sig] == 0L))       # every non-significant cell is grey
     testthat::expect_identical(s_g[sig], s_i[sig])    # a significant one keeps the observed intensity
     seen <- seen + sum(sig & s_i > 0L)
@@ -117,11 +117,11 @@ test_that("`guaranteed_effect` colours the CI FLOOR of the gap, on the null-dire
   for (nm in c("Dem", "Rep")) {
     # is_refrow excludes the regression Constant (a baseline is never an effect -- MEASURES$gate_row),
     # which the gap test can perfectly well find significant.
-    p   <- fmt_gap_p(gu[[nm]])
-    sig <- !is.na(p) & p < 0.05 & !is_refrow(gu[[nm]])
+    p   <- fmt_gap_p(gu[[reg_group_col(gu, nm)]])
+    sig <- !is.na(p) & p < 0.05 & !is_refrow(gu[[reg_group_col(gu, nm)]])
     if (!any(sig)) next
-    s_i <- fmt_color_channels(ig[[nm]])$bg_slot
-    s_g <- fmt_color_channels(gu[[nm]])$bg_slot
+    s_i <- fmt_color_channels(ig[[reg_group_col(ig, nm)]])$bg_slot
+    s_g <- fmt_color_channels(gu[[reg_group_col(gu, nm)]])$bg_slot
     testthat::expect_true(all(s_g[!sig] == 0L))
     testthat::expect_true(all(s_g[sig] > 0L))         # coloured <=> significant, the mode's invariant
     # the floor is dimmer than the point estimate, and on the SAME side of the palette
@@ -152,9 +152,15 @@ test_that("the legend names the gap's own test, per channel", {
   l   <- leg(gap_tab(d, "guaranteed_effect"))
   testthat::expect_true(any(grepl("reference group's effect", l, fixed = TRUE)))
   testthat::expect_true(any(grepl("two independent estimates", l, fixed = TRUE)))
-  # the background's own tail must NOT borrow the model's interval name
-  bg <- sub(".*Background colour", "", l[[1]])
+  # the background's own tail must NOT borrow the model's interval name. Last Phase z13 (D7): pick the
+  # line that HAS a background -- the reference group's own column now says "reference group" instead of
+  # printing a ladder no cell of it can reach, and forms its own legend line.
+  with_bg <- grep("the reference group's effect", l, fixed = TRUE, value = TRUE)
+  testthat::expect_gt(length(with_bg), 0L)
+  bg <- sub(".*Background colour", "", with_bg[[1]])
   testthat::expect_true(grepl("two independent estimates", bg, fixed = TRUE))
+  # ... and the baseline column says what it is, rather than naming unreachable thresholds
+  testthat::expect_true(any(grepl("reference group", l, fixed = TRUE)))
 })
 
 test_that("the tooltip carries the gap, its interval and its p", {
@@ -272,7 +278,47 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
                  effect = "ame", at = "reference", empirical = TRUE),
     "reference profile")
-  mcol <- names(t)[vapply(t, is_fmt, logical(1))][[1]]
+  mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
   testthat::expect_true("Obs_%" %in% names(t))          # the crude columns are still shown
+})
+
+# --- Last Phase z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------
+
+test_that("D7: `reference` picks the split_var baseline instead of the first level", {
+  skip_if_not_installed("broom")
+  d  <- gap_data()
+  # the baseline group is the one with no `obs` (a group is not compared to itself)
+  base_of <- function(t) {
+    fc <- reg_fmt_cols(t)
+    fc[vapply(fc, function(nm) all(is.na(get_obs(t[[reg_group_col(t, nm)]]))), logical(1))]
+  }
+  b0 <- base_of(gap_tab(d))
+  b1 <- base_of(gap_tab(d, reference = c(party3 = "Rep")))
+  testthat::expect_true(grepl("Ind", b0[[1]], fixed = TRUE))   # the first level, by default
+  testthat::expect_true(grepl("Rep", b1[[1]], fixed = TRUE))   # ... and it is choosable
+  # z5/z8 sent `reference = NULL` into the split recursion and left split_var out of the relevelable
+  # set, so the only way to move the baseline was to relevel the data upstream.
+  testthat::expect_false(identical(b0, b1))
+})
+
+test_that("D11: obs / gap_se are written only where a gap measure reads them", {
+  skip_if_not_installed("broom")
+  d  <- gap_data()
+  sp <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "poisson",
+                                 empirical = TRUE, color = c("OR", "between_groups"),
+                                 spread_models = FALSE))
+  fc <- reg_fmt_cols(sp)
+  mdl <- fc[get_role(sp[fc]) == "model"]
+  emp <- fc[get_role(sp[fc]) == "emp"]
+  testthat::expect_gt(length(mdl), 0L)
+  testthat::expect_gt(length(emp), 0L)
+  # the model columns declare the measure, so they carry the comparison...
+  testthat::expect_true(any(vapply(mdl, function(nm) any(!is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), logical(1))))
+  # ... the Obs_* companions colour on their own diff / OR measure and never read `obs`: writing it
+  # there stored a value with no consumer, and put an "obs:" tooltip line on the observed column itself.
+  for (nm in emp) {
+    testthat::expect_true(all(is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), info = nm)
+    testthat::expect_true(all(is.na(get_gap_se(sp[[reg_group_col(sp, nm)]]))), info = nm)
+  }
 })

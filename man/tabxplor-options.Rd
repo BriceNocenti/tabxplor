@@ -79,7 +79,9 @@ unaffected. For a full design-based whole-table test (clusters / strata) use \co
 with \verb{wt =}/\verb{strata =}/\verb{ids =}, or pass a \code{survey::svydesign} as \code{data}.}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
-overrides it.}
+overrides it: since 2.0.0 each column records the level it was built at, so the colour
+thresholds follow the argument and this option is the fallback for a column that never recorded
+one (a hand-built \code{\link[=fmt]{fmt()}}, or a table from an older session).}
 \item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
 \code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
 one-line form the console uses). The console itself is always terse.}

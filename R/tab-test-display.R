@@ -213,7 +213,7 @@ reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, chara
 # (stats = FALSE) is still a reg table, so the arm detection must know them.
 is_reg_footer <- function(test_tbl)
   !is.null(test_tbl) && nrow(test_tbl) > 0 &&
-  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types()))
+  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types(), reg_global_types()))
 
 # A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
 # `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the

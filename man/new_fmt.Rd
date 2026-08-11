@@ -37,6 +37,7 @@ new_fmt(
   color_signif = "ignore",
   model_family = "",
   role = "",
+  conf_level = NA_real_,
   ...,
   class = character()
 )

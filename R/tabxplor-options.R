@@ -76,7 +76,9 @@
 #'     with `wt =`/`strata =`/`ids =`, or pass a \code{survey::svydesign} as `data`.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
-#'     overrides it.}
+#'     overrides it: since 2.0.0 each column records the level it was built at, so the colour
+#'     thresholds follow the argument and this option is the fallback for a column that never recorded
+#'     one (a hand-built [fmt()], or a table from an older session).}
 #'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
 #'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
 #'     one-line form the console uses). The console itself is always terse.}

@@ -26,11 +26,17 @@ test_that("tab_reg(family='binomial') is identical to tab_logit()", {
   expect_equal(get_pvalue(t1[["Model_OR"]]), get_pvalue(t2[["Model_OR"]]))
 })
 
-test_that("family='auto' detects binary -> binomial (message) and ambiguous integer aborts", {
+test_that("family='auto' detects binary -> binomial, and an integer outcome -> gaussian", {
   skip_if_not_installed("broom")
   d <- reg_data()
   expect_message(tab_reg(d, "married", "race", cleannames = FALSE), "binary")
-  expect_error(tab_reg(d, "tvhours", "race"), "auto-detect|family")   # integer count is ambiguous
+  # Last Phase z13 (D10): an integer-valued numeric used to abort as "ambiguous", which caught every
+  # integer-STORED continuous outcome -- age in years, a Likert sum, income in whole units. It now
+  # reads as gaussian (which always fits) and the message names poisson for a genuine count. The R side
+  # and the jamovi family selector agree on that rule.
+  expect_message(t <- tab_reg(d, "tvhours", "race"), "gaussian")
+  expect_message(tab_reg(d, "tvhours", "race"), "poisson")            # ... naming the count alternative
+  expect_identical(get_model_family(t[["Model_\u03b2"]]), "gaussian")
 })
 
 test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
@@ -202,8 +208,10 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
   mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
                                   family = c("binomial", "poisson"), cleannames = FALSE))
   meta <- get_reg_meta(mix)
-  or_col  <- mix[[grep("married", names(mix), value = TRUE)[1]]]
-  irr_col <- mix[[grep("tvhours", names(mix), value = TRUE)[1]]]
+  # Last Phase z13: reg_fmt_cols() skips the per-level `n` columns, which also carry a "[dep]" bracket.
+  mixc    <- reg_fmt_cols(mix)
+  or_col  <- mix[[grep("married", mixc, value = TRUE)[1]]]
+  irr_col <- mix[[grep("tvhours", mixc, value = TRUE)[1]]]
   expect_identical(get_model_family(irr_col), "poisson")
   # the per-column effect word reads the column's OWN family, not the table scalar
   expect_identical(tabxplor:::legend_reg_eff_word(or_col,  meta), "OR")
@@ -215,7 +223,7 @@ test_that("Phase 17c: reg columns carry a stored `role` (model vs emp), not an '
   m <- suppressWarnings(tab_reg(reg_data(), "married", c("age", "race"),
                                 family = "binomial", empirical = TRUE, cleannames = FALSE))
   role <- tabxplor:::get_role(m)
-  fmt_cols <- names(m)[purrr::map_lgl(m, is_fmt)]
+  fmt_cols <- reg_fmt_cols(m)                            # z13: the `n` column has its own role
   emp   <- fmt_cols[startsWith(fmt_cols, "Obs_")]        # the crude companion columns
   model <- setdiff(fmt_cols, emp)                        # the model-estimate column(s)
   expect_true(length(emp) >= 1L && length(model) >= 1L)
@@ -286,8 +294,11 @@ test_that("family accepts a named vector; auto-detection is per dependent (ambig
                  family = c(tvhours = "gaussian", married = "binomial"), cleannames = FALSE)
   expect_identical(get_model_family(mix[["Model_OR [married]"]]),   "binomial")
   expect_identical(get_model_family(mix[["Model_\u03b2 [tvhours]"]]), "gaussian")
-  # auto on an ambiguous integer count aborts naming THAT outcome, not a table-wide "must be binary"
-  expect_error(tab_reg(d, c("married", "tvhours"), "race"), "tvhours")
+  # Last Phase z13 (D10): auto-detection resolves each outcome on its own -- binary -> binomial,
+  # integer-valued numeric -> gaussian -- so a mixed pair needs no explicit `family` at all.
+  auto <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race", cleannames = FALSE))
+  expect_identical(get_model_family(auto[["Model_OR [married]"]]), "binomial")
+  expect_identical(get_model_family(auto[["Model_\u03b2 [tvhours]"]]), "gaussian")
 })
 
 test_that("mixed-family table exports through md / kable without error", {
@@ -911,7 +922,7 @@ test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fall
   r <- tab_reg(d, "married",
                predictors = list(small = c("race", "age"), complete = c("race", "age", "rincome")),
                family = "binomial", compare = "baseline", baseline = "complete",
-               na = "drop_all_models", cleannames = FALSE)
+               na = "drop_all", cleannames = FALSE)
   cmp <- get_test(r) |> dplyr::filter(grepl("^compare", test))
   expect_true("compare_baseline" %in% cmp$test)            # LR test
   expect_false(any(grepl("_aic$", cmp$test)))              # NOT the AIC fallback
@@ -922,7 +933,7 @@ test_that("na = 'drop_all' fits every model on one shared complete-case populati
   d <- reg_2dep_data()                                     # rincome has NAs -> N would differ per model
   r <- tab_reg(d, "married",
                predictors = list(a = "race", b = c("race", "rincome")),
-               family = "binomial", stats = "n", na = "drop_all_models", cleannames = FALSE)
+               family = "binomial", stats = "n", na = "drop_all", cleannames = FALSE)
   ns <- get_test(r) |> dplyr::filter(test == "n")
   expect_equal(length(unique(ns$statistic)), 1L)           # both models share N
 })
@@ -941,4 +952,45 @@ test_that("Phase h: a predictor dropped from one comparison model keeps its refe
   prep <- tab_export_prep(r, backend = "kable")
   bold <- if (!is.null(prep$tables)) prep$tables[[1]]$bold_rows else prep$bold_rows
   expect_true(all(which(race_ref) %in% bold))
+})
+
+# ---- Last Phase z13 (SS7.1): the N behind each predictor level -------------------------------------
+
+test_that("add_n gives every predictor level its unadjusted N, on the model's own frame", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                cleannames = FALSE))
+  expect_true("n" %in% names(t))
+  expect_identical(which(names(t) == "n"), 3L)              # right after var / levels
+  expect_identical(tabxplor:::get_role(t[["n"]]), "n")      # a stored role, not a name match
+
+  # the numbers ARE counts of the model's complete cases -- the same frame the crude companion uses,
+  # so an Obs_* block and this column can never count different people
+  fr <- tidyr::drop_na(d[, c("married", "race", "age")])
+  nn <- get_n(t[["n"]])
+  expect_equal(nn[as.character(t$var) == "Constant"], nrow(fr))
+  race_rows <- as.character(t$var) == "race"
+  expect_equal(sort(nn[race_rows]),
+               sort(unname(as.integer(table(forcats::fct_drop(fr$race))))))
+  expect_equal(sum(nn[race_rows]), nrow(fr))
+  # a numeric predictor's count would be nrow(frame) for every one of them -> deliberately blank
+  expect_true(all(is.na(nn[as.character(t$var) == "age"])))
+
+  # it exists WITHOUT empirical = TRUE (where the number used to live, tooltip-only), and opts out
+  expect_false("n" %in% names(suppressMessages(
+    tab_reg(d, "married", "race", family = "binomial", add_n = FALSE, cleannames = FALSE))))
+})
+
+test_that("add_n does not disturb the reference-row bold", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE))
+  # tab_bold_rows() ANDs in_refrow across every DISCRIMINATING column, so a column that omitted the
+  # flag would silently un-bold every reference row -- the defect Last Phase h fixed for the crude
+  # companions. Check the flag, and the rendering it drives.
+  expect_true(any(is_refrow(t[["n"]])))
+  expect_identical(is_refrow(t[["n"]]), is_refrow(t[["Model_OR"]]))
+  md <- tab_md(t, print = FALSE)
+  expect_true(grepl("\\*\\*Other\\*\\*", md))          # the reference level, still bold
 })

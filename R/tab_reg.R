@@ -184,6 +184,72 @@ reg_fam_logscale <- function(f)
 reg_estimand_collapsible <- function(family, effect)
   !(identical(effect, "coefficient") && reg_fam_prob(family))
 
+# Last Phase z13 (D6): THE producer of "the colour you asked for cannot be computed here". Before it,
+# four refusals said so in four hand-written blocks in tab_reg()'s body and two said nothing at all --
+# a table that looked as if `color =` had simply been ignored. The rule is now uniform and testable in
+# isolation: a requested colour measure that cannot be scored, or cannot be TESTED, names its reason
+# once. Each reason is one entry here, not a new block at a call site.
+#
+# It runs BEFORE the build on purpose: the build recurses per split group and per spec, so it would say
+# the same thing many times, and every fact needed is a pre-condition (the family, the effect, the crude
+# key, the axis) rather than a result.
+#
+# `no_colour` = no `obs` will be attached, so the measure paints nothing; `no_test` = `obs` is there and
+# the descriptive colour works, but `color_signif` cannot apply. The distinction matters to the reader:
+# the first is an empty feature, the second a deliberate one.
+#' @keywords internal
+reg_color_notes <- function(color, color_signif, effect, at, split_var, na, na_explicit,
+                            families, crude_keys, do_exp, empirical = FALSE) {
+  notes <- character(0)
+  # Interpolated HERE, where the locals the messages name are in scope: the caller only emits them, so
+  # a `{.val {bare}}` resolved in its frame would be an error, not a message.
+  add   <- function(...) notes <<- c(notes, cli::format_inline(paste0(...)))
+  gap   <- intersect(c("adjustment", "between_groups"), color)
+  if (length(gap) == 0L && !isTRUE(empirical)) return(notes)
+
+  if ("between_groups" %in% gap && is.null(split_var)) {
+    add("{.code color = \"between_groups\"} compares each effect to the first group's, so it needs ",
+        "{.arg split_var} to say what the groups are. Without it nothing is coloured.")
+  }
+  if (identical(at, "reference")) {
+    add("{.code at = \"reference\"} evaluates the model at the reference profile, while the ",
+        "observed columns stay marginal over the whole sample: the two are shown side by side, ",
+        "but not compared cell by cell ({.code color = \"adjustment\"} and {.code \"{{obs}}\"} ",
+        "stay empty).")
+  }
+  if ("adjustment" %in% gap) {
+    # A MARGINAL model effect needs a marginal crude twin. REG_EMPIRICAL declares which families have
+    # one, so the question is asked of the fact table -- not of a family list kept in sync with it:
+    # if asking for the marginal shape returns the coefficient shape, there is none, and
+    # reg_same_estimand() will (rightly) refuse to pair an additive AME with a crude ratio.
+    if (effect %in% c("ame", "ame_ratio")) {
+      keys <- unique(stats::na.omit(crude_keys))
+      bare <- keys[vapply(keys, function(k) identical(reg_crude_shape(k, effect, do_exp),
+                                                      reg_crude_shape(k, "coefficient", do_exp)),
+                          logical(1))]
+      if (length(bare)) {
+        add("{.code effect = {.val {effect}}} has no observed counterpart on the same scale for ",
+            "{.val {bare}} (its crude effect is a ratio, the marginal effect a difference), so ",
+            "{.code color = \"adjustment\"} stays empty there. Use {.code effect = \"coefficient\"} ",
+            "to compare them.")
+      }
+    }
+    if (!is.null(color_signif) && !identical(color_signif, "ignore") &&
+        !any(vapply(families, reg_estimand_collapsible, logical(1), effect = effect))) {
+      add("{.arg color_signif} does not apply to an odds-ratio {.val adjustment} gap: part of it is ",
+          "non-collapsibility, not confounding. Use {.code effect = \"ame\"} or {.code \"ame_ratio\"}, ",
+          "or {.code family = \"poisson\"} (risk ratios), for a gap the test can read.")
+    }
+    # Last Phase z13 (D1): only on an explicit choice -- the default already shares the population.
+    if (na_explicit && identical(na, "drop_by_model")) {
+      add("{.code na = \"drop_by_model\"} lets each model use its own complete cases, so a model ",
+          "fitted on rows the observed columns do not cover gets no observed effect at all (no ",
+          "colour, no test): their distance would be listwise deletion, not adjustment.")
+    }
+  }
+  notes
+}
+
 # Last Phase z10: `crude_key` -- THE stored fact "which observed counterpart does this model have?".
 # It is the REG_EMPIRICAL key, or NA when there is none. Before z10 the same question was asked by
 # inference in six places, in three different shapes: a missing REG_EMPIRICAL key, a hand-written
@@ -328,10 +394,16 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
 
 # Auto-detect the model family from the outcome (a message is emitted). The safe data-driven rules
 # (S37 D2): 0/1 or any 2-level outcome -> binomial; an ORDERED factor with 3+ levels -> ordinal
-# (proportional-odds); an UNORDERED factor / character with 3+ levels -> multinomial; a non-integer
-# numeric -> gaussian. An integer/count with 3+ values stays ambiguous (poisson vs grouped-binomial
-# vs gaussian) and must be named explicitly. A binary outcome is ALWAYS binomial here: the modified
-# Poisson (risk-ratio) path is opt-in via an explicit family = "poisson" (Last Phase z3).
+# (proportional-odds); an UNORDERED factor / character with 3+ levels -> multinomial; a numeric ->
+# gaussian. A binary outcome is ALWAYS binomial here: the modified Poisson (risk-ratio) path is opt-in
+# via an explicit family = "poisson" (Last Phase z3).
+#
+# Last Phase z13 (D10): the gaussian branch used to require a NON-INTEGER numeric, so every
+# integer-stored continuous outcome -- age in years, years of schooling, income in whole units, a
+# Likert sum -- fell through to the abort. That is one of the two commonest outcome kinds, and it made
+# the R side disagree with the jamovi selector, which had to pick something. Both now answer gaussian
+# and name `family = "poisson"` for a genuine count: gaussian always fits (poisson refuses negatives),
+# and reading an integer outcome as a count is the rarer intent, not the safer default.
 reg_detect_family <- function(data, dependent) {
   y <- data[[dependent]]
   u <- unique(stats::na.omit(y))
@@ -355,9 +427,12 @@ reg_detect_family <- function(data, dependent) {
     )))
     return("multinomial")
   }
-  if (is.numeric(y) && any(y %% 1 != 0, na.rm = TRUE)) {
+  if (is.numeric(y)) {
     cli::cli_inform(c("i" = paste0(
-      "{.val {dependent}}: continuous outcome detected -> {.code family = \"gaussian\"} (linear)."
+      "{.val {dependent}}: continuous outcome detected -> {.code family = \"gaussian\"} (linear)",
+      if (!any(y %% 1 != 0, na.rm = TRUE))
+        "; it is integer-valued, so {.code family = \"poisson\"} if it is a count" else "",
+      "."
     )))
     return("gaussian")
   }
@@ -541,6 +616,37 @@ reg_model_lines <- function(x, lang = NULL) {
 # colours score the difference in marginal effects -- related, but not the same null. On a coefficient
 # table the words would be noise.
 #' @keywords internal
+# Last Phase z13: the per-predictor GLOBAL test's footer line -- the same shape as the interaction one
+# (one line per model, "<predictor> p = ..." items), differing only in its head. Rendered by the shared
+# reg_term_test_line() so the two cannot drift.
+#' @keywords internal
+reg_global_lines <- function(x, lang = NULL) {
+  reg_term_test_line(x, reg_global_types(),
+                     tname = c(global_lr = "likelihood ratio", global_f = "F test",
+                               global_wald = "Wald test"),
+                     head_fn = function(kind, lg) gettextf("Overall association (%s):", kind),
+                     lang = lang)
+}
+
+# The shared renderer of a per-predictor footer test line. `tname` maps each discriminator to its test
+# NAME (translated at render); `head_fn` builds the line's head from that name.
+#' @keywords internal
+reg_term_test_line <- function(x, types, tname, head_fn, lang = NULL) {
+  tt <- get_test(x)
+  if (is.null(tt) || nrow(tt) == 0) return(character(0))
+  it <- tt[tt$test %in% types, , drop = FALSE]
+  if (nrow(it) == 0) return(character(0))
+  with_legend_lang(lang, function(lg) {
+    nm <- vapply(tname, gettext, character(1))
+    vapply(split(seq_len(nrow(it)), factor(it$col_var, levels = unique(it$col_var))), function(idx) {
+      d     <- it[idx, , drop = FALSE]
+      items <- paste0(d$row_var, " p = ", test_fmt_pvalue(d$pvalue), stars_from_pvalue(d$pvalue))
+      kind  <- unname(nm[d$test[1]]); if (is.na(kind)) kind <- gettext("Wald test")
+      enc2utf8(paste0(head_fn(kind, lg), " ", paste(items, collapse = ", "), "."))
+    }, character(1), USE.NAMES = FALSE)
+  })
+}
+
 reg_interaction_lines <- function(x, lang = NULL) {
   tt <- get_test(x)
   if (is.null(tt) || nrow(tt) == 0) return(character(0))
@@ -1429,6 +1535,40 @@ reg_crude_yw <- function(data, dependent, crude_key, positive_level = NULL, wt =
        draws = rep(1, nrow(data)), num = yn, num_w = w)
 }
 
+# reg_level_counts() -- Last Phase z13 (SS7.1): the N behind each predictor level, on the model's own
+# complete-case frame, aligned to the skeleton. STROBE asks for the unadjusted numbers behind an
+# association and both comparable packages always print them; tabxplor already HAD the number (it is
+# `emp_n` in reg_empirical()'s grid) but only under `empirical = TRUE`, only for families with a crude
+# twin, and only in the html tooltip. This is its family-free generalisation: the two cannot disagree,
+# both being counts of rows of the same frame.
+#
+# NA on a numeric predictor's row and on the Constant is deliberate: on a listwise-complete frame that
+# count is nrow(frame) for EVERY numeric predictor, so a per-row cell would look specific and not be
+# (the same reasoning z9 applied to the crude base cell). The Constant row shows the model N, which is
+# the denominator every other cell is a part of.
+#' @keywords internal
+reg_level_counts <- function(frame, skeleton, wt = NULL) {
+  n  <- rep(NA_integer_, nrow(skeleton))
+  wn <- rep(NA_real_,    nrow(skeleton))
+  w  <- if (!is.null(wt) && wt %in% names(frame)) as.numeric(frame[[wt]]) else NULL
+  n[skeleton$var == "Constant"] <- nrow(frame)
+  if (!is.null(w)) wn[skeleton$var == "Constant"] <- sum(w, na.rm = TRUE)
+  for (v in setdiff(unique(skeleton$var), "Constant")) {
+    if (!v %in% names(frame) || !reg_is_factor_var(frame[[v]])) next
+    lv  <- as.character(frame[[v]])
+    idx <- which(skeleton$var == v)
+    m   <- match(as.character(skeleton$level)[idx], lv)   # a level absent from the frame stays NA
+    cnt <- tapply(rep(1L, length(lv)), lv, sum)
+    n[idx] <- as.integer(cnt[as.character(skeleton$level)[idx]])
+    n[idx][is.na(m)] <- NA_integer_
+    if (!is.null(w)) {
+      wcnt <- tapply(w, lv, sum, na.rm = TRUE)
+      wn[idx] <- as.numeric(wcnt[as.character(skeleton$level)[idx]])
+    }
+  }
+  list(n = n, wn = if (is.null(w)) rep(NA_real_, nrow(skeleton)) else wn)
+}
+
 # The zero-row shape of reg_empirical()'s long tibble -- ONE definition, so the empty case cannot drift
 # from the populated one (Last Phase z9).
 #' @keywords internal
@@ -2079,6 +2219,29 @@ reg_same_estimand <- function(shape, col)
   !is.null(shape) &&
   identical(as.character(shape$ci_type)[1], as.character(get_ci_type(col))[1])
 
+# reg_same_frame() -- were the model and its crude companion fitted on the SAME observations? The crude
+# frame drops on `union_predictors` (+ whatever `na` shares), the model on its own predictors; the first
+# is a SUBSET of the second, so equal row counts PROVE row identity -- both come from
+# reg_complete_frame()'s drop_na, which preserves order.
+#
+# Last Phase z13 (D1): the TWIN of reg_same_estimand, and it gates the same two things. It used to be an
+# inline clause in reg_gap_se_columns only, so a model fitted on more rows than the observed block got no
+# TEST but kept its descriptive COLOUR -- the code knew the two numbers were not comparable and coloured
+# their difference anyway. Under the default `na = "drop_by_outcome"` it is true by construction; it
+# still fires under `na = "drop_by_model"` and on the compound-formula path, which is exactly where a
+# colour would otherwise assert an adjustment that is really listwise deletion.
+#
+# `nobs` IS nrow(mdata) on every fit record (reg_fit and its 3+ level siblings all set it that way), and
+# it survives the jamovi digest path where the fitted object -- and with it `$data` -- was distilled
+# away. Reading it there keeps `obs` (hence the `{obs}` display and its tooltip) alive in the live UI,
+# where the frames cannot differ anyway: `reref` requires a single non-comparison model, so its
+# predictors ARE the union.
+#' @keywords internal
+reg_same_frame <- function(mdata, f) {
+  n_fit <- if (!is.null(f$data)) nrow(f$data) else f$nobs
+  !is.null(n_fit) && !is.na(n_fit) && identical(as.integer(nrow(mdata)), as.integer(n_fit))
+}
+
 # reg_gap_se_columns() -- the standard error of the gap between ONE fit's effect and its observed
 # (crude) counterpart, per skeleton row, so `color = "adjustment"` reads `color_signif` like every other
 # measure. The maths lives in R/reg-influence.R; this is the gate and the loop.
@@ -2094,10 +2257,8 @@ reg_same_estimand <- function(shape, col)
 #                         defect: reg_empirical_columns() ignores `effect` on the poisson branch, so
 #                         effect = "ame" pairs an ADDITIVE count AME with a MULTIPLICATIVE crude rate
 #                         ratio -- z5 wrote that ratio into `obs` and scored a gap between two scales.
-#   * nrow match          both estimators must solve their equations on the SAME observations. The
-#                         crude frame drops on `union_predictors`, the model on its own; the first is a
-#                         SUBSET of the second, so equal row counts PROVE row identity (and both come
-#                         from reg_complete_frame()'s drop_na, which preserves order).
+#   * same frame          both estimators must solve their equations on the SAME observations
+#                         (reg_same_frame, shared with the `obs` write itself since z13).
 #   * collapsible         maintainer ruling Q1(b): a conditional odds ratio moves under adjustment even
 #                         with zero confounding, so at survey sizes the test would be "significant"
 #                         everywhere for a reason no reader would take it for (SS4.1-SS4.3).
@@ -2112,7 +2273,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   if (is.null(shape) || is.null(f$fit) || is.null(f$data))      return(NULL)
   if (isTRUE(sp$compound) || identical(at, "reference"))        return(NULL)
   if (!reg_same_estimand(shape, model_col))                     return(NULL)
-  if (!identical(nrow(mdata), nrow(f$data)))                    return(NULL)
+  if (!reg_same_frame(mdata, f))                                return(NULL)
   if (!reg_estimand_collapsible(sp$family, effect))             return(NULL)
   # svyrecvar is the linearization estimator; a REPLICATE-weights design needs withReplicates instead,
   # so degrade rather than report a linearization variance for a design that did not ask for one.
@@ -2614,13 +2775,17 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
            if (family == "poisson" || grouped) s <- c(s, "dispersion")
            if (family == "ordinal") s <- c(s, "brant_po"); s }  # Phase 14q Item I
+  # Last Phase z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
+  # at all?" is the question a multi-level factor block leaves unanswered, and it costs no extra fit.
+  # It renders as a footer LINE, so it adds no row to the GOF block.
+  default <- c(default, "global")
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
   # "interaction" (Last Phase z8) is not produced by reg_glance -- it is read straight off `stats` by
   # reg_build's split block -- but it belongs to this vocabulary so a user vector does not drop it.
   valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
              "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion", "brant_po",
-             "interaction")
+             "interaction", "global")
   stats[stats %in% valid]
 }
 
@@ -2841,38 +3006,100 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
     ok      <- !is.na(keyed) & keyed %in% preds
     terms_i <- inter[ok]
     keep    <- keyed[ok]
-    if (length(terms_i) == 0L) return(NULL)
 
-    if (use_wald) {
-      purrr::map2(keep, terms_i, function(pv, tm) {
-        e <- tryCatch({
-          rt <- suppressWarnings(survey::regTermTest(fit, tm))
-          list(stat = as.numeric(rt$Ftest), df1 = as.numeric(rt$df),
-               df2 = as.numeric(rt$ddf), p = as.numeric(rt$p))
-        }, error = function(e) NULL)
-        if (is.null(e) || is.na(e$p)) return(NULL)
-        row("interact_wald", fit_first_col[[i]], pv, e$stat, e$df1, e$df2, e$p, f$nobs)
-      })
-    } else {
-      d1 <- tryCatch(suppressWarnings(
-        stats::drop1(fit, scope = terms_i, test = if (use_f) "F" else "Chisq")),
-        error = function(e) NULL)
-      if (is.null(d1)) return(NULL)
-      p_col <- grep("^Pr\\(", names(d1), value = TRUE)
-      if (!length(p_col)) return(NULL)
-      m <- match(terms_i, rownames(d1))
-      purrr::map(seq_along(keep), function(k) {
-        j <- m[[k]]
-        if (is.na(j)) return(NULL)
-        p <- suppressWarnings(as.numeric(d1[[p_col[1]]][j]))
-        if (is.na(p)) return(NULL)
-        stat <- suppressWarnings(as.numeric(d1[[if (use_f) "F value" else "LRT"]][j]))
-        row(if (use_f) "interact_f" else "interact_lr", fit_first_col[[i]], keep[[k]],
-            stat, suppressWarnings(as.numeric(d1[["Df"]][j])),
-            if (use_f) suppressWarnings(as.numeric(stats::df.residual(fit))) else NA_real_,
-            p, f$nobs)
-      })
-    }
+    reg_term_tests(fit, keep, terms_i, use_f, use_wald,
+                   types = c(wald = "interact_wald", f = "interact_f", lr = "interact_lr"),
+                   col_var = fit_first_col[[i]], nobs = f$nobs, row = row)
+  })
+  rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
+  if (length(rows) == 0) return(reg_gof)
+  dplyr::bind_rows(reg_gof, dplyr::bind_rows(rows))
+}
+
+# THE per-predictor term test (Last Phase z13). Two callers ask different QUESTIONS of the same
+# computation, so it lives once: the aggregated interaction test (predictor x split_var, on a pooled
+# fit) and the per-predictor global test (the predictor's own term, on the model's own fit). They
+# differ only in which fit and which terms are dropped -- everything below (the Wald / F / LR ladder,
+# the drop1 column-name handling, the row shape) was identical.
+#
+# WARNING: `terms` must come from the FIT's own term.labels, verbatim. terms() orders the parts of an
+# interaction by the variable's position in the formula, so a hand-built "age:party3" comes back as
+# "party3:age" and drop1() then rejects the scope. Both drop1() and regTermTest() take the labels as a
+# CHARACTER vector, which skips the re-parse.
+#' @keywords internal
+reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, nobs, row) {
+  if (length(terms) == 0L) return(NULL)
+  if (use_wald) {
+    return(purrr::map2(preds, terms, function(pv, tm) {
+      e <- tryCatch({
+        rt <- suppressWarnings(survey::regTermTest(fit, tm))
+        list(stat = as.numeric(rt$Ftest), df1 = as.numeric(rt$df),
+             df2 = as.numeric(rt$ddf), p = as.numeric(rt$p))
+      }, error = function(e) NULL)
+      if (is.null(e) || is.na(e$p)) return(NULL)
+      row(types[["wald"]], col_var, pv, e$stat, e$df1, e$df2, e$p, nobs)
+    }))
+  }
+  d1 <- tryCatch(suppressWarnings(
+    stats::drop1(fit, scope = terms, test = if (use_f) "F" else "Chisq")),
+    error = function(e) NULL)
+  if (is.null(d1)) return(NULL)
+  p_col <- grep("^Pr\\(", names(d1), value = TRUE)
+  if (!length(p_col)) return(NULL)
+  m <- match(terms, rownames(d1))
+  purrr::map(seq_along(preds), function(k) {
+    j <- m[[k]]
+    if (is.na(j)) return(NULL)
+    p <- suppressWarnings(as.numeric(d1[[p_col[1]]][j]))
+    if (is.na(p)) return(NULL)
+    stat <- suppressWarnings(as.numeric(d1[[if (use_f) "F value" else "LRT"]][j]))
+    row(types[[if (use_f) "f" else "lr"]], col_var, preds[[k]],
+        stat, suppressWarnings(as.numeric(d1[["Df"]][j])),
+        if (use_f) suppressWarnings(as.numeric(stats::df.residual(fit))) else NA_real_,
+        p, nobs)
+  })
+}
+
+# Last Phase z13 (SS7.2): the per-predictor GLOBAL test -- "is this variable associated with the
+# outcome at all?", the one answer a block of 7 stars against a reference category cannot give, and
+# the item a gtsummary user reaches for first (`add_global_p`). tabxplor's audience is almost entirely
+# multi-level categorical predictors, so it is in the DEFAULT stats set.
+#
+# It costs NO extra fit: the model is already in hand (unlike the interaction test, which needs a
+# pooled one), so this is regTermTest() on the stored vcov where a design exists and drop1() on the
+# existing fit otherwise. Emitted only for terms carrying 2+ coefficients: a 1-df term's global p IS
+# the single cell's p, already starred, so a line for it would be noise.
+#' @keywords internal
+reg_global_types <- function() c("global_lr", "global_f", "global_wald")
+
+#' @keywords internal
+reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
+  weighted <- shared$weighted
+  row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
+    tibble::tibble(row_var = predictor, col_var = col_var, test = test, statistic = statistic,
+                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
+
+  rows <- purrr::map(seq_along(specs), function(i) {
+    sp <- specs[[i]]
+    if (sp$family %in% c("multinomial", "ordinal") || isTRUE(sp$compound)) return(NULL)
+    f <- fits[[i]]
+    if (is.null(f) || is.null(f$fit)) return(NULL)            # the jamovi digest path keeps no fit
+    fit  <- f$fit
+    have <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
+    asg  <- tryCatch(stats::coef(fit), error = function(e) NULL)
+    if (is.null(asg)) return(NULL)
+    df_of <- tryCatch({
+      a <- attr(stats::model.matrix(fit), "assign")
+      vapply(seq_along(have), function(k) sum(a == k), integer(1))
+    }, error = function(e) rep(NA_integer_, length(have)))
+    keep    <- have %in% sp$predictors & !is.na(df_of) & df_of >= 2L
+    terms_i <- have[keep]
+    if (length(terms_i) == 0L) return(NULL)
+    reg_term_tests(fit, terms_i, terms_i,
+                   use_f = sp$family %in% c("gaussian", "quasipoisson"),
+                   use_wald = weighted || sp$family == "rr",
+                   types = c(wald = "global_wald", f = "global_f", lr = "global_lr"),
+                   col_var = fit_first_col[[i]], nobs = f$nobs, row = row)
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
   if (length(rows) == 0) return(reg_gof)
@@ -3054,6 +3281,13 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
     m <- if (i == 1L) rep(NA_integer_, nrow(d)) else match(key_of(d), ref_k)
     for (nm in intersect(fmt_nm, names(d))) {
       if (!is_fmt(d[[nm]])) next
+      # Last Phase z13 (D11): only where a gap measure can READ them. This wrote `obs`/`gap_se` on every
+      # fmt column, including the `Obs_*` companions, which colour on their own `diff`/`or` measure and
+      # never consult either -- a stored value with no consumer (and an "obs:" tooltip line on a column
+      # whose whole point is that it IS the observed effect).
+      # fmt_color_attr, not get_color: the measure is length <= 2 and a gap almost always rides the
+      # BACKGROUND channel (`color = c("OR", "between_groups")`), which get_color() does not see.
+      if (!any(c("adjustment", "between_groups") %in% fmt_color_attr(d[[nm]]))) next
       d[[nm]] <- set_obs(d[[nm]], est_of(ref_d[[nm]])[m])
       if (!is.na(crit)) {
         se_ref <- reg_gap_se_of(ref_d[[nm]], crit)[m]
@@ -3076,6 +3310,10 @@ reg_spread_models <- function(t, split_var, sl) {
     if (!length(matches)) next
     g <- matches[which.max(nchar(matches))]            # longest match disambiguates nested levels
     s[[nm]] <- set_col_var(s[[nm]], paste0(g, "<br>", get_col_var(s[[nm]])))
+    # Last Phase z13: the `n` column comes FIRST, so "first spread fmt column" would key every group's
+    # GOF block under its counts. It is a row descriptor, never a model column -- its stored role says
+    # so (SS7.1), which is exactly why the role is stored.
+    if (identical(get_role(s[[nm]]), "n")) next
     if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
   }
   # Last Phase m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
@@ -3170,6 +3408,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
     }
     grouped <- combined |>
+      tab_stamp_conf_level(conf_level) |>          # Last Phase z13 (D3): the per-column level
       new_tab(subtext = subtext, test = tests,
               meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
                                              method_diff = method),
@@ -3213,7 +3452,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       sp_dox   <- sp$do_exp
       thunk <- function() reg_fit(data, sp$dependent, sp$predictors, sp_fam, design_spec, sp_dox,
                                   inv_sp, conf_level, method,
-                                  trials = sp$trials, formula = sp$formula, multiplier = multiplier)
+                                  trials = sp$trials, formula = sp$formula, multiplier = multiplier,
+                                  drop_extra = na_shared_vars)
       # .fit_cache present but not on the reref path (ame / profile / mnl-vs-rest / compound): cache the
       # RAW reg_fit result keyed on the (already display-referenced) data -> a reference change refits.
       if (is.null(.fit_cache)) thunk()
@@ -3377,6 +3617,17 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   reg_gof <- reg_compare_rows(reg_gof, fits, specs, family, weighted = weighted,
                               fit_first_col = fit_first_col, compare = compare, baseline = baseline,
                               conf_level = conf_level)
+  # Last Phase z13 (SS7.2): the per-predictor global test, from the fits already in hand. In the
+  # default stats set (reg_footer_stats), so a table of multi-level factor predictors answers "is this
+  # variable associated at all?" without being asked. Rows, then a footer LINE (reg_global_lines).
+  # In the DEFAULT set, so NULL / "all" / TRUE ask for it; FALSE / "none" and an explicit vector that
+  # omits it do not. (The interaction test is opt-in only, hence its narrower gate.)
+  want_global <- is.null(stats) || identical(stats, "all") || isTRUE(stats) ||
+    (is.character(stats) && "global" %in% stats)
+  if (want_global)
+    reg_gof <- reg_global_rows(reg_gof, fits, specs,
+                               list(weighted = weighted, design_spec = design_spec),
+                               fit_first_col)
 
   disp_levels <- reg_cleanup(skeleton$level, cleannames)
   # multiplier (Phase 12g / 15d): relabel the display level of each scaled numeric predictor so the row
@@ -3399,6 +3650,30 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
+  # Last Phase z13 (SS7.1): the N behind each predictor level, right after the labels -- where STROBE
+  # reads it and where the comparable packages put it. It is a BUILT column, not a `render_extras`
+  # display intent like tab()'s own `add_n`: the count needs the model's complete-case frame, which
+  # exists only here, and tab_add_n_pct() folds into a Total cell that a reg table does not have.
+  # `n_frame_of()` is the same frame the crude companion uses (emp_frame_of, hoisted below), so the
+  # column and the `Obs_*` block can never count different people. One column when there is a single
+  # outcome -- every compared model shares it, since z13's default puts them on one population.
+  if (isTRUE(add_n)) {
+    n_dep_all <- length(unique(purrr::map_chr(specs, "dependent")))
+    for (i in seq_along(specs)) {
+      dep_i <- specs[[i]]$dependent
+      if (i > 1L && n_dep_all <= 1L) break
+      if (dep_i %in% purrr::map_chr(specs[seq_len(i - 1L)], "dependent")) next
+      cnt <- reg_level_counts(reg_complete_frame(data, c(dep_i, union_predictors,
+                                                         reg_design_vars(design_spec))),
+                              skeleton, wt = design_spec$wt)
+      nm  <- if (n_dep_all > 1L) paste0("n [", dep_i, "]") else "n"
+      tab[[nm]] <- fmt(n = cnt$n, wn = cnt$wn, type = "n", display = "n", digits = 0L,
+                       color = "", color_signif = "ignore", col_var = "n", comp_all = FALSE,
+                       # in_refrow is NOT decorative: tab_bold_rows() ANDs it across every
+                       # discriminating column, so omitting it would un-bold every reference row.
+                       in_refrow = skeleton$is_ref, model_family = specs[[i]]$family, role = "n")
+    }
+  }
   # empirical (Phase 12g / 14v): the descriptive crude (unadjusted, single-predictor) companion of the
   # model effect -- a base descriptive column + a crude-effect column mirroring the model's measure &
   # colour scale (reg_empirical_columns). Built PER FIT (per dependent), so it works with a vector of
@@ -3414,8 +3689,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # comparing; in comparison mode it is the shared population. Recomputed from `data` (fits[[i]]$data is
   # NULL on the reref/digest path). On this listwise-complete frame reg_empirical()'s per-predictor NA
   # filter is a no-op, so the crude reference level / n exactly match the model.
+  # Last Phase z13 (D1): `na_shared_vars` is the same extra-completeness set reg_fit() receives above,
+  # so under the default this frame IS the model's own frame -- crude and adjusted on the same rows by
+  # construction, not by coincidence. Under `na = "drop_by_model"` it is empty and the crude block keeps
+  # its union population, which is why `obs` is then gated (reg_same_frame).
   emp_frame_of <- function(dep)
-    reg_complete_frame(data, c(dep, union_predictors, reg_design_vars(design_spec)))
+    reg_complete_frame(data, c(dep, union_predictors, na_shared_vars,
+                               reg_design_vars(design_spec)))
   if (isTRUE(empirical)) {
     fac_preds_e <- factor_preds
     # Last Phase z9: numeric predictors get a crude column too, from the univariable fit. Excluded in
@@ -3514,6 +3794,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     col <- bi$col
     if (is.null(e) || at_profile) return(col)
     if (!reg_same_estimand(e$shape, col)) return(col)     # z5 defect: same scale, or nothing
+    # Last Phase z13 (D1): ...and the same PEOPLE, or nothing. A model fitted on rows the crude block
+    # does not cover has a "gap" that is listwise deletion, not adjustment -- the same predicate that
+    # withholds its test therefore withholds the value the colour would score.
+    if (!reg_same_frame(e$frame, fits[[fi]])) return(col)
     key <- if (is.null(bi$emp_key)) "" else as.character(bi$emp_key)
     ev  <- cat_get(e$effect, key)
     if (is.null(ev)) return(col)
@@ -3665,6 +3949,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
+    # Last Phase z13 (D3): the level every interval in this table was built at, on each fmt column --
+    # the colour engine is per column and cannot read meta$ci_settings. It is what makes the gap
+    # interval (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`.
+    tab_stamp_conf_level(conf_level) |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
                         # Phase k: variable labels for the opt-in name display-swap (absent when none).
@@ -3758,8 +4046,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param family The model family, **resolved per dependent** so several outcomes with different
 #'   families can share one table (one effect column-group each). `"auto"` (default) detects each
 #'   outcome: a binary (-> `"binomial"`), an ordered 3+ level (-> `"ordinal"`), a nominal 3+ level
-#'   (-> `"multinomial"`), or a continuous (-> `"gaussian"`) outcome, emitting a message; an integer
-#'   count stays ambiguous and must be named (for that outcome only). Set it explicitly with
+#'   (-> `"multinomial"`), or any other numeric (-> `"gaussian"`) outcome, emitting a message. An
+#'   integer-valued numeric reads as `"gaussian"` too --- age in years, years of schooling, a summed
+#'   score and income in whole units are all integers, and a linear model always fits --- with the
+#'   message naming `"poisson"` for a genuine count. Set it explicitly with
 #'   `"gaussian"` (linear), `"binomial"` (logistic), `"poisson"` / `"quasipoisson"` (counts),
 #'   `"multinomial"` (nominal 3+ level), `"ordinal"` (ordered 3+ level). A **scalar** applies to every
 #'   dependent; a **vector** aligned to `dependent`, or a **named** vector keyed by dependent
@@ -3848,7 +4138,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
 #'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE` uses each
 #'   dependent's observed maximum score. Requires `family = "binomial"`.
-#' @param conf_level Confidence level for the intervals. Default `0.95`.
+#' @param conf_level Confidence level for the intervals. Default `0.95`. It drives every interval in
+#'   the table, the significance stars, and the greying under `color_signif` --- including the
+#'   model-vs-observed gap interval, which is computed at print time from the stored standard error and
+#'   is stored on each column so it follows this argument rather than
+#'   `options("tabxplor.conf_level")`.
 #' @param method How the interval and p-value are computed. `"wald"` (default) uses the Wald interval
 #'   and the Wald z / t test: fast, matches standard software output, and the only option for weighted
 #'   models. `"profile"` uses the profile-likelihood interval ([stats::confint()], needs `MASS`) and
@@ -3920,7 +4214,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   By design every crude quantity is computed on **exactly the same complete-case population as the
 #'   model** (listwise-complete on the dependent, all predictors and any design variable), so crude and
 #'   adjusted are directly comparable and not confounded by differing missingness (reproduce it with
-#'   [dplyr::filter()] + [tab()] on the same rows). Also works with a vector of dependents. Ordinal has
+#'   [dplyr::filter()] + [tab()] on the same rows). That is what the default `na = "drop_by_outcome"`
+#'   guarantees, including when several models are compared. Under `na = "drop_by_model"` a model
+#'   fitted on rows the observed block does not cover gets **no** observed value at all --- no `obs`,
+#'   no `color = "adjustment"`, no gap test --- because the distance between two such estimates would
+#'   be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 #'   no clean crude analogue and is ignored (with a message).
 #'
 #'   The crude companions of a **categorical** predictor are descriptive, so on weighted data they
@@ -3929,13 +4227,28 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   own design-based variance, like the `Model_*` column beside it. On weighted data the two rules
 #'   will not agree to the last digit — they answer the same question under different variance
 #'   assumptions. Default `FALSE`.
+#' @param add_n Logical, default `TRUE`. Add an `n` column, right after the level labels, holding the
+#'   **unadjusted count** behind each predictor level on the model's own complete cases --- the numbers
+#'   a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The
+#'   Constant row shows the model N. Continuous predictors are left blank: on a listwise-complete frame
+#'   their count is the model N for every one of them. Unlike [tab()]'s `add_n`, this is a real column
+#'   rather than a display option, because only the model frame knows the counts.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
 #'   versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
 #'   also show the Pearson dispersion). Pass a character vector to pick and order the statistics
 #'   (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"dispersion"`, `"r2"`, `"r2_adj"`,
-#'   `"f_model"`, `"sigma"`, `"interaction"`), or `FALSE` / `"none"` to hide the footer.
+#'   `"f_model"`, `"sigma"`, `"global"`, `"interaction"`), or `FALSE` / `"none"` to hide the footer.
+#'
+#'   `"global"` (in the default set) adds one **overall test per predictor** --- "is this variable
+#'   associated with the outcome at all?", the question a block of stars against a reference category
+#'   cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
+#'   predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
+#'   that cell's own p-value), as a footer line rather than a footer row, and it costs **no extra
+#'   model fit**: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
+#'   models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
+#'   get no such test.
 #'
 #'   `"interaction"` is different from the others: with `split_var`, it adds one **aggregated
 #'   effect-modification test per predictor** — "does this predictor act differently between the
@@ -3978,16 +4291,21 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'
 #'   * `"adjustment"` — how far each **modelled** effect sits from its **observed** (crude,
 #'     unadjusted) counterpart, i.e. what adjusting for the other predictors did to it. It turns
-#'     `empirical = TRUE` on (that is where the observed effect comes from). Thresholds are
-#'     `×1.1 / ×1.25 / ×1.5 / ×2` for ratios and `±2 / ±5 / ±10 / ±20` points for differences, the
-#'     first one being the classic 10% "change in estimate" rule; set them with
-#'     [set_color_breaks()] (`adj_ratio`, `adj_diff`). One pole means the model **strengthened** the
+#'     `empirical = TRUE` on (that is where the observed effect comes from). The ladder follows the
+#'     estimate's own scale, so a threshold means the same thing in every table: `×1.1 / ×1.25 /
+#'     ×1.5 / ×2` for a ratio (odds, risk or rate), `±2 / ±5 / ±10 / ±20` **points** for a
+#'     probability-scale marginal effect, and `±0.05 / ±0.1 / ±0.2 / ±0.4` **standard deviations of
+#'     the outcome** for an effect in the outcome's own units (a linear beta, a count marginal
+#'     effect) --- otherwise the same model on an outcome recorded in hours, minutes or days would
+#'     read three different ways. The first ratio threshold is the classic 10% "change in estimate"
+#'     rule, a convention rather than a decision rule; set them all with
+#'     [set_color_breaks()] (`adj_ratio`, `adj_diff`, `adj_diff_std`). One pole means the model **strengthened** the
 #'     effect (suppression), the other that it **attenuated** it — measured from the null, so a
 #'     protective effect (OR < 1) and a risky one read the same way.
 #'   * `"between_groups"` — with `split_var`, how far each group's effect sits from the **first**
 #'     group's, on the same row: a per-predictor reading of effect modification, beside the global
-#'     comparison a likelihood-ratio test gives. Reorder the split variable's levels
-#'     (`forcats::fct_relevel()`) to change the baseline group. It also adds the **aggregated**
+#'     comparison a likelihood-ratio test gives. Pick the baseline group with `reference` keyed by the
+#'     split variable (e.g. `reference = c(race = "Black")`). It also adds the **aggregated**
 #'     interaction test to the footer (see `stats`).
 #'
 #'   The two are mutually exclusive (they share one per-cell slot). The gap itself is readable as a
@@ -4014,8 +4332,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   moves it away from 1 even when the extra variable is independent of the exposure, so at survey
 #'   sizes every row would test "significant" for a reason that is not confounding. There the colours
 #'   stay descriptive, `color_signif` is ignored, and `tab_reg()` says so once. The test is also skipped
-#'   when the two estimates cannot be compared cell by cell: at `at = "reference"`, and when a compared
-#'   model's complete cases differ from the observed columns' (use `na = "drop_all_models"`).
+#'   when the two estimates cannot be compared cell by cell: at `at = "reference"`, and under
+#'   `na = "drop_by_model"` when a compared model's complete cases differ from the observed columns'
+#'   (there the observed value is withheld altogether, so nothing is coloured either).
 #'
 #'   That ruling covers the **3+ level outcomes** too, and it is the reason they behave as they do: a
 #'   multinomial or ordinal *coefficient* is a conditional odds ratio, so those columns show the
@@ -4028,6 +4347,22 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   tested on its own, with no multiple-comparison correction — with seven comparisons about one table
 #'   in five shows a spurious coloured cell, so read the pattern rather than the single cell (for
 #'   `"between_groups"`, the footer's aggregated test is the multiplicity-free reading).
+#'
+#'   Where a row carries no test at all — a group with an empty cell leaves no recoverable standard
+#'   error, and `method = "profile"` bounds are not `estimate ± critical value × SE` — the cell stays
+#'   uncoloured under `"grey_non_signif"` and the legend says that some rows are untested (the HTML
+#'   tooltip shows which: an untested cell has no gap line).
+#'
+#'   **On what the comparison is.** This reports how much two numbers differ and whether that
+#'   difference exceeds noise; it does not detect confounding. The change-in-estimate criterion it
+#'   operationalises is contested as a *confounder-selection rule* — the 10% cut-off is a convention,
+#'   not a threshold with a decision-theoretic basis — so read a coloured cell as "adjustment moved
+#'   this effect", not as "this variable is a confounder". For a formal treatment of the crude-versus-
+#'   adjusted difference see Clogg, Petkova & Haritou (1995) and Allison's (1995) comment; for nested
+#'   logit models, where part of the change is rescaling rather than confounding, see the KHB
+#'   decomposition (Karlson, Holm & Breen 2012; Kohler, Karlson & Holm 2011). The collapsible routes
+#'   this function offers (`effect = "ame"` / `"ame_ratio"`, `family = "poisson"`) are what the
+#'   literature calls **marginal standardization** (g-computation).
 #'
 #'   The gap test uses the **robust (sandwich)** variance on both sides, which is what a comparison of
 #'   two differently-specified estimators needs. For an unweighted binomial odds ratio that is exactly
@@ -4045,12 +4380,17 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   computed only on the collapsible scales.
 #' @param stars Logical (default `TRUE` for regression tables, where significance stars are standard).
 #'   When `FALSE`, the per-cell p-value is dropped and no stars are shown (colours still read the CI).
-#' @param na How missing values are handled across models. `"drop_by_model"` (default) drops `NA`
-#'   rows per model (each model / dependent uses its own complete cases). `"drop_all_models"` fits every
-#'   model on ONE shared complete-case population (rows with no `NA` on any predictor / dependent /
-#'   design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
-#'   this **changes all estimates** (shared population), hence opt-in. Ignored for a prebuilt survey
-#'   design.
+#' @param na Which rows each model is fitted on — the grain at which missing values are dropped.
+#'   `"drop_by_outcome"` (default) gives every model **of one outcome** the same complete-case
+#'   population (no `NA` on the outcome, on any predictor of any model in the call, or on a design
+#'   variable); a second outcome keeps its own rows. That is what makes the comparisons in the table
+#'   honest: the observed columns (`empirical`) are then computed on exactly the model's rows, and
+#'   nested models get equal N so the likelihood-ratio comparison can run instead of degrading to an
+#'   AIC difference. `"drop_by_model"` lets each model use its own complete cases — every model then
+#'   keeps as many rows as it can, at the price of comparability: models fitted on different people
+#'   get no observed effect at all (no `obs`, no `color = "adjustment"`, no gap test), because the
+#'   distance between two such estimates is listwise deletion rather than adjustment.
+#'   `"drop_all"` shares one population across the whole call, all outcomes included.
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
@@ -4109,17 +4449,39 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   tab_reg(reg_data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
 #' }
 #'
+#' @section Out of scope:
+#' `tab_reg()` covers linear, logistic, Poisson, multinomial and ordinal models, with survey designs.
+#' Three families of models are deliberately **not** supported, and are unlikely to be: **survival /
+#' Cox** models, **mixed / multilevel** models, and pooling over **multiply-imputed** datasets. Fit
+#' those with their own packages.
+#'
+#' @references
+#' Clogg, C. C., Petkova, E. & Haritou, A. (1995). Statistical Methods for Comparing Regression
+#' Coefficients between Models. *American Journal of Sociology*, 100(5), 1261-1293. (With
+#' Allison, P. D. (1995), *ibid.* 1294-1305.) --- the crude-versus-adjusted comparison
+#' `color = "adjustment"` implements, generalised here to GLMs, survey designs and marginal effects.
+#'
+#' Karlson, K. B., Holm, A. & Breen, R. (2012). Comparing Regression Coefficients Between Same-sample
+#' Nested Models Using Logit and Probit. *Sociological Methodology*, 42(1), 286-313. --- the KHB
+#' decomposition, which separates confounding from rescaling in nested logit models.
+#'
+#' Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies with Binary Data.
+#' *American Journal of Epidemiology*, 159(7), 702-706.
+#'
+#' Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
+#' *BMJ*, 326, 219. --- the `color = "between_groups"` test.
+#'
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = NULL, 
                     family = "auto", 
                     effect = c("coefficient", "ame", "ame_ratio"), at = c("average", "reference"),
                     exponentiate = TRUE, 
-                    trials = NULL, empirical = FALSE,
+                    trials = NULL, empirical = FALSE, add_n = TRUE,
                     color = TRUE, color_signif = NULL, stars = TRUE, 
                     conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, multiplier = "sd",
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
-                    na = c("drop_by_model", "drop_all_models"),
+                    na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     estimate_display = c("value", "ci", "prob", "ame"),
                     cleannames = NULL, subtext = "", spread_models = TRUE,
                     ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
@@ -4129,6 +4491,10 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   at      <- match.arg(at)
   compare <- match.arg(compare)
   estimate_display <- match.arg(estimate_display)
+  # Last Phase z13: the un-supplied default is the whole vector, so its length IS "the user did not
+  # choose" -- read before match.arg collapses it. The `na` advice messages fire on a CHOICE, never on
+  # the default (which is the very thing they would advise).
+  na_explicit <- length(na) == 1L
   na      <- match.arg(na)
   # Fallback FALSE matches .onLoad's default and tab()'s read sites (the option is always set to FALSE
   # on load, so this only bites if someone unsets it; TRUE here was an inconsistency, not an intent).
@@ -4156,7 +4522,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
               ids = ids, strata = strata, fpc = fpc, nest = nest, exponentiate = exponentiate,
               effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
               reference = reference, inverse_two_level_factors = inverse_two_level_factors,
-              split_var = split_var, multiplier = multiplier, empirical = empirical,
+              split_var = split_var, multiplier = multiplier, empirical = empirical, add_n = add_n,
               stats = stats, compare = compare, baseline = baseline,
               estimate_display = estimate_display, color = color, color_signif = color_signif,
               stars = stars, na = na, cleannames = cleannames, subtext = subtext)
@@ -4426,15 +4792,6 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
-  # Last Phase z8: at the reference profile the model cell is a marginal effect AT that profile while
-  # the observed columns stay marginal over the whole sample -- comparable side by side as description,
-  # but not cell by cell, so no `obs` is written and the gap colours stay off (see reg_build).
-  if (isTRUE(empirical) && identical(at, "reference")) {
-    cli::cli_inform(c("i" = paste0("{.code at = \"reference\"} evaluates the model at the reference ",
-                                   "profile, while the observed columns stay marginal over the whole ",
-                                   "sample: the two are shown side by side, but not compared cell by ",
-                                   "cell ({.code color = \"adjustment\"} and {.code \"{{obs}}\"} stay empty).")))
-  }
   # Last Phase z8: `between_groups` now HAS a test of its own (the two split groups are disjoint, so the
   # gap SE is exact by quadrature -- reg_write_group_gap), and reads `color_signif` normally.
   # `adjustment` compares two estimates fitted on the SAME rows, whose joint variance needs influence
@@ -4450,31 +4807,18 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "interaction test to the footer (one extra model fit). Ask for it ",
                                    "without the colours with {.code stats = c(..., \"interaction\")}.")))
   }
-  # Last Phase z8-B: `adjustment` now HAS a test (the difference of the two estimators' influence
-  # functions -- R/reg-influence.R), on every COLLAPSIBLE estimand. On a conditional odds ratio it is
-  # deliberately not computed: adjusting an OR moves it away from 1 even with zero confounding, so the
-  # test is a valid test of a statement no reader makes (measured rejection 1.000 at n = 32000 with the
-  # covariate independent of the exposure -- dev/model_vs_observed_gap_test.md SS4.1). Say it once, and
-  # name the three routes that make the same comparison collapsible, rather than let a `color_signif`
-  # look effective. The colours stay descriptive there (MEASURES' force_policy predicate).
-  if ("adjustment" %in% color && !is.null(color_signif) && !identical(color_signif, "ignore") &&
-      !any(vapply(families_vec, reg_estimand_collapsible, logical(1), effect = effect))) {
-    cli::cli_inform(c("i" = paste0("{.arg color_signif} does not apply to an odds-ratio {.val adjustment} ",
-                                   "gap: part of it is non-collapsibility, not confounding. Use ",
-                                   "{.code effect = \"ame\"} or {.code \"ame_ratio\"}, or ",
-                                   "{.code family = \"poisson\"} (risk ratios), for a gap the test can ",
-                                   "read.")))
-  }
-  # Last Phase z8-B: the gap test needs BOTH estimates computed on the same observations. With the
-  # default per-model NA drop a compared model can be fitted on more rows than the shared observed
-  # block, so those columns keep the descriptive colour -- said once here (the build cannot, it recurses
-  # per split group), on the cheap pre-condition rather than after the fact.
-  if ("adjustment" %in% color && identical(na, "drop_by_model") &&
-      (is_comparison || length(dependent) > 1L)) {
-    cli::cli_inform(c("i" = paste0("Each model uses its own complete cases, so a model fitted on more ",
-                                   "rows than the observed columns keeps the descriptive gap colour. ",
-                                   "Use {.code na = \"drop_all_models\"} to compare them on one ",
-                                   "population.")))
+  # Last Phase z13 (D6): every "the colour you asked for cannot be computed / cannot be tested here"
+  # comes from ONE producer, so the rule is uniform -- before it, four cases said so in four blocks here
+  # and two said nothing at all. `crude_keys` is the stored per-outcome fact z10 introduced.
+  for (note in reg_color_notes(
+    color, color_signif, effect, at, split_var, na, na_explicit,
+    families = families_vec,
+    crude_keys = vapply(dependent, function(d)
+      reg_crude_key(family_for(d), trials_for(d), formula_mode), character(1)),
+    do_exp = do_exp, empirical = empirical)) {
+    # `{note}` substitutes the already-interpolated string as a VALUE -- passing it as the template
+    # would glue it a second time, and one of these notes legitimately prints a literal "{obs}".
+    cli::cli_inform(c("i" = "{note}"))
   }
   # Last Phase z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
   # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`
@@ -4491,20 +4835,27 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
 
-  # Phase 14u (L2): na = "drop_all_models" fits every model on ONE shared complete-case population -- the
-  # union of all predictors + the dependent + design vars -- so genuinely-nested models get EQUAL N and
-  # the LR comparison fires (the default per-model "drop_by_model" NA drop can make N differ -> the AIC
-  # fallback). It CHANGES all estimates (shared population), hence opt-in. Not applied to a prebuilt
-  # survey design (subsetting is the design's own concern).
-  if (identical(na, "drop_all_models") && !formula_mode) {
-    if (!is.null(design_obj)) {
-      cli::cli_inform(c("i" = '{.code na = "drop_all_models"} is ignored for a prebuilt survey design.'))
-    } else {
-      keep_vars <- intersect(unique(c(dependent, all_predictors, wt, ids, strata, fpc, split_var)),
-                             names(data))
-      data <- tidyr::drop_na(data, tidyselect::all_of(keep_vars))
-    }
-  }
+  # Last Phase z13 (D1): WHICH ROWS every model of the call is fitted on -- resolved ONCE here into the
+  # extra variables each fit must be complete on, and consumed by reg_build through reg_fit(drop_extra=).
+  # That mechanism (Phase z9) exists for exactly this: variables joining the complete-case drop without
+  # joining the formula, and it is the ONLY sound route -- pre-filtering `data` instead breaks a PREBUILT
+  # design's keep_mask (reg_resolve_design computes it from `data` itself). So the old `drop_all_models`
+  # pre-pass, and its "ignored for a prebuilt survey design" caveat, are both gone.
+  #
+  # "drop_by_outcome" (the default) makes every model OF ONE OUTCOME share a population, which is what
+  # makes the crude companion comparable: reg_build's emp_frame_of() is then the model's own frame, so
+  # "crude and adjusted are computed on the same people" is structural rather than checked. It also
+  # equalises N across nested models, so the likelihood-ratio comparison fires instead of degrading to
+  # an AIC difference. A second outcome keeps its own rows (comparing outcomes is not what the call
+  # asked for); "drop_all" opts into one population for the whole call.
+  # The design variables need no mention: reg_fit's own drop_vars already carries reg_design_vars(),
+  # and split_var needs none either (the split filters its group before fitting).
+  na_shared_vars <- if (formula_mode) character(0) else
+    intersect(unique(switch(na,
+                            "drop_by_model"   = character(0),
+                            "drop_by_outcome" = all_predictors,
+                            "drop_all"        = c(all_predictors, dependent))),
+              names(data))
 
   # Phase 15b (jamovi live reref): with a `.fit_cache`, a single-equation GLM coefficient table can be
   # recomputed at any factor-predictor reference from ONE canonical fit (reg_build_digest) -- no refit.
@@ -4535,7 +4886,12 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
     # keep its order -> never releveled; predictor contrasts are releveled for every family. Phase 15e:
     # relevel every predictor + the MULTINOMIAL outcomes (per-dependent family).
-    relevelable <- union(all_predictors, dependent[families_vec == "multinomial"])
+    # Last Phase z13 (D7): and the SPLIT variable. `color = "between_groups"` compares every effect to
+    # the FIRST split level's, so which level that is is a reference choice like any other -- but
+    # `reference = c(race = "Black")` was silently dropped for it (split_var is not a predictor), and
+    # the only way to move the baseline was to relevel the data upstream. One name in this union.
+    relevelable <- union(union(all_predictors, split_var),
+                         dependent[families_vec == "multinomial"])
     if (!is.null(design_obj)) {
       design_obj <- reg_relevel_design(design_obj, reference, relevelable)  # relevel inside the design
       data       <- design_obj$variables
@@ -4601,6 +4957,37 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     }
     if (!is.factor(data[[split_var]]) && !is.character(data[[split_var]])) {
       cli::cli_abort("{.arg split_var} {.val {split_var}} must be a factor or character column.")
+    }
+    # Last Phase z13 (D9): a group in which the outcome or a predictor has ONE value cannot be fitted --
+    # `contrasts can only be applied to factors with 2 or more levels`, or "the dependent must be
+    # binary", both wrapped in purrr's `In index: 1.` noise, naming neither the group nor the variable.
+    # Splitting by a coarsening of a predictor (race / black) is a common first attempt, so check it
+    # here, where both names are in scope, in the shape tab() uses for its own degenerate inputs.
+    if (!formula_mode) {
+      sl   <- levels(forcats::fct_drop(as.factor(data[[split_var]])))
+      vars <- intersect(unique(c(dependent, all_predictors)), names(data))
+      bad  <- purrr::map(sl, function(g) {
+        sub <- data[!is.na(data[[split_var]]) & data[[split_var]] == g, vars, drop = FALSE]
+        if (nrow(sub) == 0L) return(stats::setNames(list(character(0)), g))
+        flat <- vars[vapply(sub, function(v) length(unique(stats::na.omit(v))) < 2L, logical(1))]
+        stats::setNames(list(flat), g)
+      })
+      bad <- purrr::flatten(bad)
+      bad <- bad[lengths(bad) > 0L | vapply(sl, function(g) sum(!is.na(data[[split_var]]) &
+                                                               data[[split_var]] == g) == 0L,
+                                            logical(1))]
+      if (length(bad) > 0L) {
+        grp <- names(bad)[[1]]
+        vb  <- bad[[1]]
+        cli::cli_abort(c(
+          "{.arg split_var} {.val {split_var}}: no model can be fitted within {.val {grp}}.",
+          "x" = if (length(vb) == 0L) "That group has no rows left."
+                else "{cli::qty(vb)}{.val {vb}} {?has/have} a single value there, so {?it/they} \\
+                      cannot be a model term.",
+          "i" = "Drop or merge that group (e.g. with {.fn forcats::fct_lump} or a {.fn filter}), \\
+                 or split by a variable that varies within every group."
+        ))
+      }
     }
   }
 
@@ -4689,7 +5076,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     stats = stats, compare = compare, baseline = baseline, multiplier = multiplier,
     multiplier_label = multiplier_label,
     empirical = empirical, estimate_display = estimate_display, spread_models = spread_models,
-    var_labels = reg_var_labels)
+    var_labels = reg_var_labels, na_shared_vars = na_shared_vars, add_n = add_n)
   res <- reg_build(data, specs, shared, split_var = split_var,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
 
@@ -4767,12 +5154,12 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 tab_logit <- function(data, dependent, predictors, wt = NULL,
                       ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                       inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
-                      empirical = FALSE,
+                      empirical = FALSE, add_n = TRUE,
                       conf_level = getOption("tabxplor.conf_level", 0.95),
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                      stars = TRUE, na = c("drop_by_model", "drop_all_models"),
+                      stars = TRUE, na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                       cleannames = NULL, subtext = "", spread_models = TRUE) {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
@@ -4781,7 +5168,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplier = multiplier, empirical = empirical,
+          multiplier = multiplier, empirical = empirical, add_n = add_n,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
@@ -4823,13 +5210,13 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 multi_logit <- function(data, dependent, models, wt = NULL,
                         ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                         inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
-                        empirical = FALSE,
+                        empirical = FALSE, add_n = TRUE,
                         conf_level = getOption("tabxplor.conf_level", 0.95),
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         estimate_display = c("value", "ci", "prob", "ame"),
                         color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                        stars = TRUE, na = c("drop_by_model", "drop_all_models"),
+                        stars = TRUE, na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                         cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   compare      <- match.arg(compare)
@@ -4841,7 +5228,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
   stopifnot(is.character(dependent), length(dependent) >= 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplier = multiplier, empirical = empirical,
+          multiplier = multiplier, empirical = empirical, add_n = add_n,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,
           estimate_display = estimate_display,

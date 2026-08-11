@@ -18,7 +18,7 @@ reg_opts <- function(...) {
     fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial", exponentiate = TRUE,
     effect = "coefficient", at = "average", estimate_display = "value",
     inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
-    method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "drop_by_model",
+    method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "drop_by_outcome",
     cleannames = TRUE, stats = NULL, subtext = "",
     compare = "none", baseline = 1L, multiplier = NULL, trials = NULL
   ), list(...))
@@ -235,7 +235,7 @@ test_that("compare = baseline adds a comparison footer row", {
   gss <- gss_reg()
   o   <- reg_opts(predictors = list(small = c("race", "age"),
                                     full  = c("race", "age", "rincome")),
-                  family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all_models")
+                  family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all")
   t   <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
   cmp <- get_test(t) |> dplyr::filter(grepl("^compare", test))
   expect_gte(nrow(cmp), 1L)

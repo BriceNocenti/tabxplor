@@ -146,8 +146,10 @@ test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispers
   expect_true(all(c("n", "wald_null") %in% tt$test))
   # a quasi-likelihood has no AIC/BIC/McFadden; binary Pearson dispersion is just mean(1-mu).
   expect_false(any(c("aic", "bic", "mcfadden_r2", "lr_null", "dispersion") %in% tt$test))
+  # z13: "global" (the per-predictor overall test) joins every default set -- it renders as a footer
+  # LINE, so it adds no GOF row and none of the quasi-likelihood stats above.
   expect_equal(reg_footer_stats("rr", weighted = FALSE, grouped = FALSE, stats = NULL),
-               c("n", "wald_null"))
+               c("n", "wald_null", "global"))
 })
 
 test_that("method='profile' is refused for a modified Poisson and degrades to the robust Wald", {

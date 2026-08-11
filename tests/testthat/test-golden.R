@@ -101,6 +101,14 @@
 #   each phase) proving over 1787 cells that the added all-NA column is the only delta. The DISPLAY
 #   _snaps are UNTOUCHED: `gap_se` is non-displayed (no token), and it can only be non-NA on a
 #   tab_reg split table, which no golden case builds.
+# Last Phase z13 (D3): adds a 12th per-column ATTRIBUTE `conf_level` -- the level a column's interval
+#   and its significance thresholds were computed at, so the per-column colour engine stops falling
+#   back to the global option. Not a field, so the record SHAPE is unchanged; but the attribute rides
+#   every column, so all *.rds are regenerated once + the fmt-contract snapshot.
+#   dev/verify_golden_field_delta.R (extended here to prove an ATTRIBUTE delta as well) checked over
+#   1787 cells that every field and every pre-existing attribute is bit-identical and that the new one
+#   is 0.95 everywhere -- which is exactly options("tabxplor.conf_level"), and why the DISPLAY _snaps
+#   are UNTOUCHED: resolving the stamp gives the same number the option gave.
 # ===========================================================================================
 
 cases <- golden_cases()

@@ -239,10 +239,15 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
   d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
   tl <- tab_logit(d, "married", c("race", "relig"))
   tmp <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp, open = FALSE, replace = TRUE)
-  or_col <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)[[2]]
+  # Last Phase z13: column 2 is the per-level `n` (add_n = TRUE by default); the OR column follows it.
+  xl_col <- function(f) {
+    df <- openxlsx2::wb_to_df(openxlsx2::wb_load(f), col_names = FALSE)
+    df[[ncol(df)]]
+  }
+  or_col <- xl_col(tmp)
   testthat::expect_true(any(grepl("1/", or_col, fixed = TRUE)))             # reciprocal text present
   tmp2 <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp2, open = FALSE, replace = TRUE, or_numeric = TRUE)
-  or_col2 <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp2), col_names = FALSE)[[2]]
+  or_col2 <- xl_col(tmp2)
   num <- suppressWarnings(as.numeric(or_col2))
   testthat::expect_true(any(!is.na(num) & num > 0))                        # real numbers now
 })

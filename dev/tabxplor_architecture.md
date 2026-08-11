@@ -59,7 +59,8 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `color` | character | Color scheme (length 1 text, or 2 with a background channel): "no", "diff", "ratio", "contrib", "or", "OR", … |
 | `color_signif` | character | Significance policy: `"ignore"` / `"grey_non_signif"` / `"guaranteed_effect"` |
 | `model_family` | character | Phase 15e: a reg column's own family (`"binomial"`/`"gaussian"`/`"poisson"`/…), `""` on crosstabs — lets one `tab_reg()` table mix families |
-| `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label (internal `get_role`) |
+| `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` / `"n"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label, and (z13) by `or_plot()`, `reg_spread_models()` and the `[dep]`-bracket strip (internal `get_role`) |
+| `conf_level` | double | Last Phase z13: the level THIS column's interval and its significance thresholds were computed at; `NA` = unknown. TWO accessors, and the split is load-bearing: the six reconcilers read the RAW `fmt_conf_level_attr()` so a bind carries "unknown" forward instead of freezing today's option into the result, while the four colour-engine thresholds (`fmt_gap_bounds`, the contrib residual gate, the `guaranteed_effect` origin, the p-value cell slot) read `get_conf_level()`, which falls back to `options("tabxplor.conf_level")`. Stamped by ONE sweep at each build tail (`tab_stamp_conf_level()` in `tab_assemble_tables` / `plain_core` / `num_core` / `tab_ci` / both `tab_reg` tails), never per `fmt()` call site. It is what makes a table built at `conf_level = 0.99` grey at 99 % rather than at the global option |
 
 The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))`, so adding an attribute (a `new_fmt()` formal that is not a field) needs no carry-site edit here — but every explicit reconstructor (`vec_cast`/`vec_ptype2`/`vec_arith`/`vec_math`) still hand-lists it beside `model_family`.
 
@@ -1423,3 +1424,51 @@ takes the **raw-fit** tier (the digest fast-path is single-model only), and a `r
 are sized to hold a handful of comparison fits; below those the cache would graceful-skip and every
 display toggle would refit every model. `tab_reg.R` is unchanged (it was already feature-complete for
 the named-list `predictors` / `compare` / `baseline` / `multiplicator` / `trials` args).
+
+### Last Phase z13 — the model-comparison framework's boundary
+
+`dev/reg_comparison_framework_stress_test.md` measured that the z5/z8/z9/z10 statistics verify but the
+boundary between them and the rest of `tab_reg()` leaked. Eleven fixes; the ones that changed a shape:
+
+- **One population per outcome, by default** (`na = "drop_by_outcome"` | `"drop_by_model"` |
+  `"drop_all"`). It needed no new mechanism: z9's `reg_fit(drop_extra =)` is exactly "variables the fit
+  must be complete on without modelling", so the shared frame is `drop_extra = all_predictors`. The old
+  `drop_all_models` pre-pass on `data` is DELETED, and with it the "ignored for a prebuilt survey
+  design" caveat — pre-filtering `data` breaks a prebuilt design's keep_mask (`reg_resolve_design()`
+  computes it from `data` itself), `drop_extra` does not. `emp_frame_of()` uses the same set, so
+  "crude and model are on the same rows" is structural rather than checked.
+- **`reg_same_frame()`** — the twin of `reg_same_estimand()`, gating the same two things (`obs` AND its
+  gap SE). Before it, a model fitted on rows the crude block did not cover lost only the TEST and kept
+  the descriptive colour: the code knew the two numbers were not comparable and coloured their
+  difference anyway. It reads `f$nobs` when `f$data` is absent, so the jamovi digest path keeps `obs`.
+- **`reg_color_notes()`** — THE producer of "the colour you asked for cannot be computed here". Four
+  refusals used to say so in four hand-written blocks in `tab_reg()`'s body and two said nothing; each
+  reason is now one entry, in two kinds (*no colour* / *no test*). Interpolated inside the function
+  (`cli::format_inline`) because it names its own locals, and re-emitted as a VALUE (`"{note}"`) so cli
+  does not glue a message that legitimately prints a literal `{obs}`.
+- **`fmt_gap_scale_key()`** — the gap ladder follows the ESTIMATE's own scale, so a threshold means the
+  same thing in every table (`adj_ratio` / `log_odds_scale(adj_ratio)` / `adj_diff` in points /
+  the new `adj_diff_std` in SD(Y)). ⚠ The ORDER is the contract: a poisson count AME and a raw poisson
+  coefficient are byte-identical in `(type, ci_type, model_family)` and `is_logcoef` claims both — what
+  separates them is `var`, written exactly on the columns whose estimate lives in the outcome's own
+  units, which is also the SD the standardization needs.
+- **`by_scale`** on a MEASURES row — presentation facts belonging to a SCALE rather than to the measure,
+  folded in by `measure_facts(measure, policy, scale_key)` from the plan's new `scale_key`. Same
+  mechanism as `guar` folds a per-POLICY override, so every pre-z13 measure resolves identically by
+  construction (deriving the glyphs from `plan$center` was evaluated and rejected: 2 of the 4 legacy
+  measures need an exception, and it cannot express `break_scale` / `unit_kind`). It also let
+  `contrib`'s `guar` shed the glyph entries its scale swap already implied. `legend_unit_word()` is the
+  extracted twin of the switch `chan()` and `legend_threshold_phrase()` each held.
+- **`reg_term_tests()` / `reg_term_test_line()`** — the aggregated interaction test and the new
+  per-predictor GLOBAL test (`stats = "global"`, in the default set) are the SAME computation differing
+  only in which fit and which terms are dropped. The global one costs NO extra fit (the model is in
+  hand) and is emitted only for terms with 2+ coefficients. Like the interaction rows it is a footer
+  LINE, so its discriminators must be registered in three places or they vanish at materialisation:
+  `is_reg_footer()`, the `reg_footer_lines()` carve-out, and `tab_footer_streams()`.
+- **`reg_level_counts()` + `add_n = TRUE`** — the N behind each predictor level, on the model's own
+  frame, as a real BUILT column (the count needs the model frame, which exists only at build time;
+  `tab()`'s display-time `add_n` folds into a Total cell a reg table does not have). `role = "n"` is a
+  third stored role with three consumers: `or_plot()`'s model-column pick, `reg_spread_models()`'s GOF
+  key (the `n` column comes first and would otherwise key every group's footer under its counts), and
+  the `[dep]` bracket strip. Tests select reg columns through `tests/testthat/helper-reg.R`'s
+  `reg_fmt_cols()`, never by position.

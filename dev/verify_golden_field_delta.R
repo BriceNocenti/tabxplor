@@ -1,7 +1,7 @@
-# verify_golden_field_delta.R -- prove that adding a per-cell fmt FIELD changed the goldens by exactly
-# that field and nothing else.
+# verify_golden_field_delta.R -- prove that adding a per-cell fmt FIELD, or a per-column fmt ATTRIBUTE,
+# changed the goldens by exactly that member and nothing else.
 #
-# WHY THIS FILE EXISTS. Three phases have added a field (n_eff, obs, gap_se). Each time the 36
+# WHY THIS FILE EXISTS. Four phases have added a member (n_eff, obs, gap_se, conf_level). Each time the 36
 # structural `_golden/*.rds` had to be regenerated, each time a throwaway script proved "the only delta
 # is an all-NA column", and each time the script was deleted -- so the next phase wrote it again from
 # the prose in dev/make_golden.R. It is committed now.
@@ -10,8 +10,13 @@
 #   1. BEFORE regenerating, run it once: it reads the committed goldens and rebuilds the same cases
 #      from the current source, then reports, per case and per fmt column, (a) which fields are new,
 #      (b) whether every SHARED field is bit-identical, (c) whether each new field is entirely NA, and
-#      (d) whether the column ATTRIBUTES are unchanged.
+#      (d) whether the column ATTRIBUTES are unchanged apart from the DECLARED new ones, whose value it
+#      prints and checks against the expectation below.
 #   2. Only if every case says OK, run dev/make_golden.R and record the delta in its ledger.
+#
+# DECLARE THE ADDITION HERE before running. A field is expected to be all-NA (nothing computes it yet
+# on these cases); an attribute has a definite expected VALUE -- stating it is the point, since
+# "unchanged" is exactly what an attribute addition is not.
 # A single "CHANGED" line means the new field is not the only difference -- investigate before
 # regenerating, because the goldens are the byte-identity contract.
 #
@@ -21,10 +26,16 @@
 devtools::load_all("~/github/tabxplor", quiet = TRUE)
 source("tests/testthat/helper-golden.R")
 
+# Last Phase z13: `conf_level` = 0.95 on every column (the goldens are built at the default, which is
+# also options("tabxplor.conf_level") -- that equality is why the rendering does not move).
+ADDED_ATTRS   <- c("conf_level")
+EXPECTED_ATTR <- list(conf_level = 0.95)
+
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
 n_cells <- 0L
 issues  <- character(0)
+seen_attrs <- list()
 
 for (nm in names(cases)) {
   f <- file.path(gdir, paste0(nm, ".rds"))
@@ -61,8 +72,22 @@ for (nm in names(cases)) {
     }
     ao <- attributes(old[[col]]); an <- attributes(new[[col]])
     ao$names <- an$names <- NULL                       # the field-name vector is the added field
-    if (!identical(ao, an))
-      issues <- c(issues, paste0(nm, " / ", col, ": column ATTRIBUTES changed"))
+    new_at <- setdiff(names(an), names(ao))
+    if (!setequal(new_at, intersect(ADDED_ATTRS, new_at)))
+      issues <- c(issues, paste0(nm, " / ", col, ": UNDECLARED new attribute(s): ",
+                                 paste(setdiff(new_at, ADDED_ATTRS), collapse = ", ")))
+    if (length(setdiff(names(ao), names(an))))
+      issues <- c(issues, paste0(nm, " / ", col, ": attribute(s) REMOVED: ",
+                                 paste(setdiff(names(ao), names(an)), collapse = ", ")))
+    for (a in intersect(names(ao), names(an))) if (!identical(ao[[a]], an[[a]]))
+      issues <- c(issues, paste0(nm, " / ", col, " / ", a, ": attribute CHANGED"))
+    for (a in new_at) {
+      seen_attrs[[a]] <- unique(c(seen_attrs[[a]], an[[a]]))
+      if (a %in% names(EXPECTED_ATTR) && !isTRUE(all.equal(an[[a]], EXPECTED_ATTR[[a]])))
+        issues <- c(issues, paste0(nm, " / ", col, " / ", a, ": new attribute is ",
+                                   paste(an[[a]], collapse = ", "), ", expected ",
+                                   paste(EXPECTED_ATTR[[a]], collapse = ", ")))
+    }
     n_cells <- n_cells + length(old[[col]])
   }
   # table-level attributes (subtext / test / meta) must be untouched by a field pass
@@ -70,13 +95,16 @@ for (nm in names(cases)) {
   if (!identical(ta(old), ta(new)))
     issues <- c(issues, paste0(nm, ": TABLE attributes changed"))
 
-  cat(if (length(added)) sprintf("OK    %-28s new field(s): %s\n", nm, paste(added, collapse = ", "))
-      else               sprintf("OK    %-28s (no new field)\n", nm))
+  cat(sprintf("OK    %-28s %s\n", nm,
+              if (length(added)) paste0("new field(s): ", paste(added, collapse = ", "))
+              else "(no new field)"))
 }
 
 cat("\n", n_cells, " cells checked across ", length(cases), " cases.\n", sep = "")
+for (a in names(seen_attrs))
+  cat("new attribute ", a, ": observed value(s) ", paste(seen_attrs[[a]], collapse = ", "), "\n", sep = "")
 if (length(issues)) {
   cat("\nPROBLEMS -- do NOT regenerate:\n"); cat(paste0("  ", issues, collapse = "\n"), "\n")
 } else {
-  cat("Only the added field differs. Safe to run dev/make_golden.R.\n")
+  cat("Only the declared addition differs. Safe to run dev/make_golden.R.\n")
 }

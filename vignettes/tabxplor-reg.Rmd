@@ -222,8 +222,12 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
 
 Text colour = how strong the adjusted odds ratio is. Background = how far it sits from the observed
 one: one pole means adjustment **strengthened** the effect, the other that it **attenuated** it. The
-first threshold is ×1.1, the classic "a 10% change in the estimate is worth noticing" rule; the rest
-are ×1.25, ×1.5 and ×2 (change them with `set_color_breaks(adj_ratio = ...)`). You do not have to ask
+first threshold is ×1.1, the classic "a 10% change in the estimate is worth noticing" convention; the
+rest are ×1.25, ×1.5 and ×2 (change them with `set_color_breaks(adj_ratio = ...)`). An *additive*
+effect gets an additive ladder instead: percentage points for a marginal effect on a probability
+(`±2 / ±5 / ±10 / ±20`), and standard deviations of the outcome for a linear β
+(`±0.05 / ±0.1 / ±0.2 / ±0.4`) — so the same model reads the same way whether the outcome is recorded
+in hours, minutes or days. You do not have to ask
 for `empirical` separately — the colour needs the observed effect, so it turns it on for you.
 
 The direction is measured **from the null**, not up or down. A protective effect (OR below 1) that
@@ -349,14 +353,28 @@ The three policies read that same interval:
 |----------------|---------------------------|
 | `"ignore"` (default in `tab()`) | the size of the gap, coloured whether or not it is significant |
 | `"grey_non_signif"` (default in `tab_reg()`) | the same, greyed unless the gap's interval excludes "no change" |
-| `"guaranteed_effect"` | the **floor** of the gap: "adjustment moved this effect by at least ×1.1" |
+| `"guaranteed_effect"` | the **floor** of the gap: "adjustment moved this effect by at least ×1.1" (on a difference scale, "by at least 2 points") |
 
-Three details worth knowing. The significance **stars** in the cells keep reading each estimate's own
-p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip. The
-direction is measured from the null, so a protective effect pulled toward 1 colours like a risky one
-pulled toward 1. And the test needs both estimates computed on the same people: at `at = "reference"`,
-or when a compared model drops different missing rows than the observed columns (use
-`na = "drop_all_models"`), the colours stay descriptive.
+**Stars and colour do not say the same thing, and the combination is the useful part.** The stars keep
+reading each estimate's own p-value — "is this effect different from 1?" — while the colour reads the
+gap's. All four combinations occur in one small table:
+
+| level | stars | p (effect) | p (gap) | coloured |
+|---|---|---|---|---|
+| Black | \*\*\* | 0.0000 | 0.0058 | no — the gap is below the first threshold |
+| Catholic | — | 0.2960 | 0.0000 | **yes** |
+| Muslim | \* | 0.0570 | 0.5585 | no |
+| None | \*\*\* | 0.0000 | 0.0000 | yes |
+
+Read *starred and uncoloured* as a **robust** effect — adjustment barely touched it — and *unstarred
+and coloured* as an effect that **only the crude table showed**. Catholic is the instructive row: no
+effect worth reporting, but adjustment moved it a lot, and significantly.
+
+Two more details. The direction is measured from the null, so a protective effect pulled toward 1
+colours like a risky one pulled toward 1. And the test needs both estimates computed on the same
+people: at `at = "reference"`, or under `na = "drop_by_model"` when a compared model drops different
+missing rows than the observed columns, the comparison is not made at all. (By default it always is —
+see just below.)
 
 ## Grouped-binomial outcomes (a summed score)
 
@@ -402,6 +420,10 @@ With `empirical = TRUE`, the crude/observed/unajusted differences and raw percen
 > The observed effect is **the model's own effect, fitted with one predictor**.
 
 That is worth saying plainly, because it is what makes the comparison fair. The crude number is not "a percentage" and the modelled one "a coefficient" — they are the *same quantity*, computed the same way, on the *same people* (the same complete cases), and shown on the same scale. Only the list of predictors differs. So the distance between them measures adjustment, and nothing else.
+
+The "same people" part is the default, not a hope: `na = "drop_by_outcome"` gives every model of an outcome one complete-case population, so a compared model cannot be fitted on rows the observed columns do not cover. If you ask for `na = "drop_by_model"` instead, a model on a different population gets **no** observed effect at all — better an empty cell than a "gap" that is really listwise deletion.
+
+A word on how to read it. The colour says how much two numbers differ, and the greying whether that difference exceeds noise. It does not say "this is a confounder": the 10% first threshold is a convention, not a decision rule, and part of an odds-ratio gap is arithmetic rather than confounding (see the annex). "This effect was **attenuated** by adjustment" is the safe reading; "explained by" is not.
 
 ### An ordered outcome: what changes when you adjust
 
@@ -625,7 +647,7 @@ The three policies read that same interval:
 |----------------|---------------------------|
 | `"ignore"` (default in `tab()`) | the size of the gap, coloured whether or not it is significant |
 | `"grey_non_signif"` (default in `tab_reg()`) | the same, greyed unless the gap's interval excludes "no difference" |
-| `"guaranteed_effect"` | the **floor** of the gap: "these two effects differ by at least ×1.1" |
+| `"guaranteed_effect"` | the **floor** of the gap: "these two effects differ by at least ×1.1" (on a difference scale, "by at least 2 points") |
 
 Two details worth knowing. The significance **stars** in the cells keep reading each estimate's own
 p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip.
@@ -697,3 +719,5 @@ lm_plots(m)
 - `vignette("tabxplor")` — cross-tables and the colour helpers.
 - `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.
 - `survey::svydesign()` for complex designs (calibration, replicate weights, finite-population corrections).
+- **Out of scope**, and best fitted with their own packages: survival / Cox models, mixed (multilevel) models, and pooling over multiply-imputed datasets.
+- On comparing a crude and an adjusted coefficient, the canonical reference is Clogg, Petkova & Haritou (1995, *AJS* 100(5)), with Allison's comment in the same issue — what `color = "adjustment"` computes, generalised to GLMs, survey designs and marginal effects. For nested logit models, the KHB decomposition (Karlson, Holm & Breen 2012) separates the part of the change that is confounding from the part that is rescaling.
