@@ -141,7 +141,9 @@ test_that("D7/D8 the footer says 'survey design', and tab_reg emits a weight lin
   line <- tabxplor:::tab_weight_line(tt, lang = "en")
   expect_true(!is.null(line))
   expect_false(grepl(".svy_weights", line, fixed = TRUE))
-  expect_match(line, "survey design")
+  # z14-ii replaced z14-i's placeholder ("Weighted by the survey design.") by ruling Q7's sentence,
+  # now that the intervals account for the design too (test-survey-variance.R pins the wording).
+  expect_match(line, "sample design")
 
   tr <- suppressMessages(tab_reg(des, dependent = "y", predictors = "x", family = "binomial"))
   line_reg <- tabxplor:::tab_weight_line(tr, lang = "en")

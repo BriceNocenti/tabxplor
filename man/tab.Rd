@@ -179,10 +179,11 @@ confidence intervals beside them; see the \emph{Weighted confidence intervals} n
 Kish's effective sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence
 interval} and in the whole-table tests (a first-order \strong{Rao-Scott} correction). This corrects
 for unequal weighting only: it is blind to clustering and to calibration.
-\item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}
-tests (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), and the design's own
-weights drive the estimates. Confidence intervals stay tabxplor's single-stage weighted
-approximation.
+\item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
+the design's own weights drive the estimates, the whole-table tests are
+\code{survey::svychisq} (factors) / a \code{svyglm} Wald F (means), \strong{and every confidence
+interval, star and colour threshold uses the design's own variance} (strata, clusters, fpc and
+calibration alike -- so a design can make an interval \emph{narrower}, which Kish never can).
 }
 If your file has only a weight column but you want the design-based test, that is one line:
 \code{tab(survey::svydesign(ids = ~1, weights = ~w, data = d), x, y, test = TRUE)}. Replicate-weight
@@ -478,9 +479,20 @@ sum(w^2)} in \strong{all} the descriptive intervals -- factor proportions and me
 difference, ratio, and the \code{color = "OR"} significance) -- and in the crude \code{empirical =}
 companions of \code{\link{tab_reg}}, so unequal weights widen the intervals honestly. This is a
 single-stage approximation (it needs the microdata weights, so \code{\link{tab_counts}} on
-pre-aggregated counts cannot apply it, and it is not valid for clustered designs). Use
-\code{test = "survey"} for a fully design-based p-value, or reach for \code{\link{tab_reg}} (whose
-\emph{model} standard errors are always design-based) when the uncertainty must be exact.
+pre-aggregated counts cannot apply it, and it is \strong{blind to clustering and to calibration}).
+
+\strong{Design-based confidence intervals.} Pass a \code{survey::svydesign} as \code{data} and that
+same base becomes the design's own: \code{n_eff = p(1-p) / Var_design(p)} for a proportion,
+\code{s^2 / Var_design(mean)} for a mean, from \code{survey::svyrecvar} on each cell's influence
+function -- so strata, clusters, \code{fpc} \emph{and} calibration reach every interval, star and
+colour threshold. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
+cell-vs-reference \emph{difference} (it cannot carry the design covariance between two rows), so it
+never produces a star the design does not support, and sometimes withholds one it would. And the
+\code{color = "contrib"} residual, whose base is the whole table rather than a cell, is
+design-corrected on a counts / \code{pct = "all"} table but keeps the unweighted base on a row- or
+column-percentage one. A design-based table costs roughly 3x a weighted one (6x if calibrated); the
+payoff needs real design information, so if your file ships one calibrated weight and no stratum or
+cluster variable, \code{tabxplor.kish_neff} is already all the correction available to you.
 }
 \section{Significance stars}{
 

@@ -117,7 +117,9 @@ tx_getOption <- function(names, default = NULL) {
   # weighted CIs/tests. Last Phase s made it uniform: n_eff now backs EVERY weighted descriptive CI --
   # factor proportions (tab_ci) AND means (num_core) AND the color="OR" interval AND tab_reg's empirical
   # companions -- plus the whole-table chi2/F tests (Last Phase j, first-order Rao-Scott). It needs the
-  # microdata weights (tab_counts on pre-aggregated counts cannot apply it). Full design test: `test="survey"`.
+  # microdata weights (tab_counts on pre-aggregated counts cannot apply it), and it is blind to
+  # clustering and to calibration. For the real design effect -- in the tests AND in every interval
+  # (Last Phase z14-ii) -- pass a survey::svydesign as `data`; the option is then not consulted.
   options("tabxplor.kish_neff"     = FALSE)
 
   # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,

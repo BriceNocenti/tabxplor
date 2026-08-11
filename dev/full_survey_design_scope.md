@@ -398,6 +398,13 @@ costs nothing that is being spent now.
 Route A also cannot make the **whole-table effect size** design-based (D6) — that is a separate
 computation on the weighted table, not an interval.
 
+**Nor the `contrib` residual on a percentage table (z14-ii, ruling Q1).** Its base is the subtable's
+GRAND total, which under a design has no effective n of its own (`p = 1` for the total column, so
+`p(1-p)/Var` is undefined). Where the table's stored `type` says `n_eff` is already on that base — a
+counts table, `pct = "all"` / `"all_tabs"` — contrib reads it per cell and is design-corrected for free;
+on a row- or column-percentage table `n_eff` holds the row / column base instead, so contrib keeps the
+unweighted grand total. The omnibus p above it is design-based either way (`svychisq`).
+
 ### 4.6 Producing the design variance — one `svyrecvar` call per column
 
 The linearized influence function of a row-percentage cell is elementary. For row domain *i* and column
@@ -896,7 +903,57 @@ then, and the R formals must go in the same commit so the two cannot drift.
 
 ---
 
-### z14-ii — Route A: design-based intervals in `tab()`
+### z14-ii — Route A: design-based intervals in `tab()` — **IMPLEMENTED 2026-08-11**
+
+> **Implementation record.** Suite green (`fr_FR.UTF-8` and the CI-equivalent `LC_ALL=C.UTF-8
+> LANGUAGE=en`), zero golden or snapshot churn off the design path — the acceptance criterion held.
+>
+> **What the plan got wrong, and what that simplified.**
+> - **There are not four influence functions, there is one.** Every quantity here is a ratio of two
+>   weighted sums, so §4.6's four bases are four `(u, v)` domain pairs in a `switch` (`svy_uv_v()`),
+>   not four formulas. A fifth base would be one line. The mean is the same expression with
+>   `(u, v) = (x, 1)`.
+> - **Row domains fall out of the wide table's own keys**, with `"Total"` read as "every level of this
+>   variable" — the rule `leaf_totrow_tottab()` and `build_total_rows()` already assume. So a data row,
+>   a subtable total row and a total-table row need no special case at all, and total rows get a
+>   design-based base for free (load-bearing: it is what `ref = "tot"` compares against).
+> - **`svy_domain_design()` is deliberately NOT reused.** It swaps `$variables` because
+>   `svychisq`/`svyglm` read their data off the design; `svyrecvar()` never does. Its calibrated/PPS
+>   WARNING still applies, which is what `svy_var_prep()`'s scatter index and `w = 1/prob` are for.
+> - **`svy_test_mode()` became `svy_inference_mode()`** (and `ctx$test_mode` → `ctx$inference_mode`).
+>   It now governs the intervals as well as the test, so the two leaves stopped re-reading
+>   `options(tabxplor.kish_neff)` — the same ladder had been derived in three places.
+>
+> **Q1 (contrib), as ruled — and it needed no new plumbing.** `chi2_write_contrib()` reads the `n_eff`
+> FIELD per cell where the column's stored `type` says its base is the whole table (`"n"` / `"all"` /
+> `"all_tabs"`), else the grand cell as before. `contrib_adj_resid()` did not change: it uses `n_base`
+> only as `sqrt(n_base)` and `e_f * n_base < 1`, both elementwise. Byte-identical under Kish (for those
+> bases `leaf_wide_pct()`'s `Dmat` is constant across the subtable, so the per-cell value **is** the
+> grand cell's) and the standard first-order per-cell correction `z_design = z_classic·√(n_eff/N)` under
+> a design — asserted exactly in the tests. A row-/column-percentage table's contrib keeps the grand
+> base, which is §8's new residue line.
+>
+> **Q7 (the footer), as ruled: blanket.** Ruling Q7's sentence replaces z14-i's placeholder for any
+> table built from a design. `tab_reg()`'s categorical crude `Obs_*` intervals are still single-stage
+> until z14-iii, and that exception is now NAMED in `?tab_reg` rather than left implicit; when the
+> variance pass genuinely fails, `svy_var_degraded()` says the intervals fell back, so the sentence is
+> never silently untrue.
+>
+> **Verified against `survey`, never against a hard-coded number**: cell SE and mean SE equal
+> `svyby(covmat = TRUE)` / `svyby(svymean)` to **1e-15** on weights-only, stratified,
+> stratified+clustered and **calibrated** designs; the col% and all% bases equal `svyby` on the
+> transpose and `svymean` on the interaction; `ci_wilson()` on the design `n_eff` reproduces survey's
+> interval to 4 decimals; §4.4's gain case gives `n_eff` 5155 on n = 4000 and a ×0.88 width, where Kish
+> sits at exactly 4000.
+>
+> **One measured surprise:** a total row never carries a *cell* CI (pre-2.0.0 behaviour, unrelated to
+> this phase) — the first draft of the test asserted one and failed. Its design base is still written,
+> and still matters.
+>
+> **Two test files moved consciously**: `test-survey-design-path.R`'s footer assertion and
+> `test-i18n-fr.R`'s msgid, both because the z14-i string was replaced by ruling Q7's.
+
+**Original plan, for the record:**
 
 Region: a new `R/survey-variance.R`, then the two leaves in `tab.R`. Fresh session: it needs the
 influence-function algebra and the leaf/`n_eff` plumbing in context, neither of which z14-i touches.

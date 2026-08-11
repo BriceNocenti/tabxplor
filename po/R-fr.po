@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-11 11:40+0200\n"
+"POT-Creation-Date: 2026-08-11 12:23+0200\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: tabxplor (Last Phase w draft)\n"
 "Language-Team: none\n"
@@ -347,15 +347,19 @@ msgstr "%s : au seuil de %s %%"
 msgid "no star: not significant"
 msgstr "aucune étoile : non significatif"
 
-# Phase 16d -- colour-legend / footer strings (English wired via gettext; .mo recompiled in the
-# dedicated French-translation phase). FR for the stars legend + weighted footer from the roadmap.
-#: fmt_class.R:4816
-msgid "Weighted by the survey design."
-msgstr "Pondéré par le plan de sondage."
+# Last Phase z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
+# "Weighted by the survey design." now that the intervals account for the design too.
+#: fmt_class.R:4820
+msgid ""
+"Design-based (survey): weighted estimates, intervals and tests account for "
+"the sample design."
+msgstr ""
+"Fondé sur le plan de sondage (survey) : estimations, intervalles et tests "
+"pondérés tiennent compte du plan d'échantillonnage."
 
 # Phase 16d -- colour-legend / footer strings (English wired via gettext; .mo recompiled in the
 # dedicated French-translation phase). FR for the stars legend + weighted footer from the roadmap.
-#: fmt_class.R:4817
+#: fmt_class.R:4822
 #, c-format
 msgid "Weighted by %s."
 msgstr "Pondéré par %s."

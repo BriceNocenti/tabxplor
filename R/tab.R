@@ -245,10 +245,11 @@ NULL
 #'  Kish's effective sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence
 #'  interval} and in the whole-table tests (a first-order \strong{Rao-Scott} correction). This corrects
 #'  for unequal weighting only: it is blind to clustering and to calibration.
-#'  \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}
-#'  tests (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), and the design's own
-#'  weights drive the estimates. Confidence intervals stay tabxplor's single-stage weighted
-#'  approximation.
+#'  \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
+#'  the design's own weights drive the estimates, the whole-table tests are
+#'  \code{survey::svychisq} (factors) / a \code{svyglm} Wald F (means), \strong{and every confidence
+#'  interval, star and colour threshold uses the design's own variance} (strata, clusters, fpc and
+#'  calibration alike -- so a design can make an interval \emph{narrower}, which Kish never can).
 #' }
 #' If your file has only a weight column but you want the design-based test, that is one line:
 #' \code{tab(survey::svydesign(ids = ~1, weights = ~w, data = d), x, y, test = TRUE)}. Replicate-weight
@@ -413,9 +414,20 @@ NULL
 #' difference, ratio, and the \code{color = "OR"} significance) -- and in the crude \code{empirical =}
 #' companions of \code{\link{tab_reg}}, so unequal weights widen the intervals honestly. This is a
 #' single-stage approximation (it needs the microdata weights, so \code{\link{tab_counts}} on
-#' pre-aggregated counts cannot apply it, and it is not valid for clustered designs). Use
-#' \code{test = "survey"} for a fully design-based p-value, or reach for \code{\link{tab_reg}} (whose
-#' \emph{model} standard errors are always design-based) when the uncertainty must be exact.
+#' pre-aggregated counts cannot apply it, and it is \strong{blind to clustering and to calibration}).
+#'
+#' \strong{Design-based confidence intervals.} Pass a \code{survey::svydesign} as \code{data} and that
+#' same base becomes the design's own: \code{n_eff = p(1-p) / Var_design(p)} for a proportion,
+#' \code{s^2 / Var_design(mean)} for a mean, from \code{survey::svyrecvar} on each cell's influence
+#' function -- so strata, clusters, \code{fpc} \emph{and} calibration reach every interval, star and
+#' colour threshold. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
+#' cell-vs-reference \emph{difference} (it cannot carry the design covariance between two rows), so it
+#' never produces a star the design does not support, and sometimes withholds one it would. And the
+#' \code{color = "contrib"} residual, whose base is the whole table rather than a cell, is
+#' design-corrected on a counts / \code{pct = "all"} table but keeps the unweighted base on a row- or
+#' column-percentage one. A design-based table costs roughly 3x a weighted one (6x if calibrated); the
+#' payoff needs real design information, so if your file ships one calibrated weight and no stratum or
+#' cluster variable, \code{tabxplor.kish_neff} is already all the correction available to you.
 #'
 #' @inheritSection tab_ci Significance stars
 #'
@@ -628,7 +640,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                      "i" = "Rename that column, or pass a {.fn survey::svydesign} as {.arg data}."))
 
   # `test` says only WHETHER to test; the RUNG (weights / weights + Kish / a design object) is derived
-  # once in tab_setup() -- see svy_test_mode() in R/survey-design.R.
+  # once in tab_setup() -- see svy_inference_mode() in R/survey-design.R.
   test_on     <- svy_check_test(test)
   design_spec <- svy$spec
 
@@ -1415,7 +1427,7 @@ new_ctx <- function(...) {
     wt_quo = NULL, na_drop_all_quo = NULL,
     # inputs (= each formal's current default)
     pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
-    OR = "no", chi2 = FALSE, test_mode = "classic", design_spec = NULL,
+    OR = "no", chi2 = FALSE, inference_mode = "classic", design_spec = NULL,
     na = "keep", levels = "all",
     cleannames = NULL, output = "single",
     other_if_less_than = 0, other_level = "Others",
@@ -1777,7 +1789,7 @@ tab_setup <- function(ctx) {
   # Last Phase z14-i: the test RUNG is derived HERE, the one place that holds both the resolved weight
   # and the design_spec -- so tab(), tab_many() and tab_counts() cannot disagree about it (before, only
   # tab() had the rule, which left tab_many() silently always classic).
-  test_mode <- svy_test_mode(design_spec, wt)
+  inference_mode <- svy_inference_mode(design_spec, wt)
   # Last Phase a bug-fix: a weight that is ALSO a selected variable is nonsensical (you cannot weight a
   # mean by the same column you are averaging, nor cross a variable by itself) and used to abort with a
   # cryptic data.table error. Fail early with a clear message. num_moment_scan is otherwise shadow-proof,
@@ -2044,7 +2056,7 @@ tab_setup <- function(ctx) {
     cleannames = cleannames, stars = stars, lvs = lvs, color_signif = color_signif,
     totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
     OR = OR, comp = comp, color = color, ci = ci, ci_scale = ci_scale, chi2 = chi2,
-    test_mode = test_mode,
+    inference_mode = inference_mode,
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
     color_diff_OR = color_diff_OR, color_ctr = color_ctr,
@@ -2363,7 +2375,8 @@ tab_transform <- function(ctx) {
       method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
       ci_scale = ci_scale[1], totaltab = r_num$totaltab, totaltab_name = totaltab_name,
       tot = r_num$tot, total_names = total_names2, subtext = "", digits = num_digits,
-      num = FALSE, df = FALSE, .fine = fine_num, .by_table = .by_table
+      num = FALSE, df = FALSE, .fine = fine_num, .by_table = .by_table,
+      design_spec = design_spec, inference_mode = inference_mode
     )
     # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), via
     # tab_chi2()'s test step (it detects mean col_vars and calls agg_anova()). Only the tidy `test`
@@ -2389,7 +2402,8 @@ tab_transform <- function(ctx) {
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, conf_level = conf_level, stars = stars,
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
-          .by_table = .by_table
+          .by_table = .by_table,
+          design_spec = design_spec, inference_mode = inference_mode
         )
       }
     ) |> purrr::set_names(as.character(col_vars[col_vars_text]))
@@ -2550,12 +2564,12 @@ tab_assemble_tables <- function(ctx) {
 
   # Last Phase j: the OPT-IN robust omnibus overlay (Kish n_eff / survey design). Recomputes each
   # whole-table p-value from the microdata (`data`, still in ctx) and replaces the classic chi2 / F
-  # rows, keeping the descriptive effect sizes. The default `test_mode = "classic"` never runs it, so
+  # rows, keeping the descriptive effect sizes. The default `inference_mode = "classic"` never runs it, so
   # the ordinary path stays byte-identical. new_ctx() defaults keep it present on every ctx.
-  if (!identical(test_mode, "classic") && nrow(tests) > 0) {
+  if (!identical(inference_mode, "classic") && nrow(tests) > 0) {
     col_num <- stats::setNames(as.logical(col_vars_num), as.character(col_vars))
     tests <- tab_robust_overlay(tests, data, row_var, as.character(col_vars), col_num,
-                                as.character(tab_vars), wt, test_mode, design_spec, comp[1])
+                                as.character(tab_vars), wt, inference_mode, design_spec, comp[1])
   }
 
   # Phase 10i-B: store the add_n / add_pct DISPLAY intent (materialised by tab_materialize_extras()).
@@ -3680,7 +3694,11 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     pct = r$pct, color = color, OR = r$OR, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
     totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
     subtext = subtext, digits = r$digits, num = num, df = df, conf_level = conf_level,
-    stars = stars, color_signif = color_signif, .fine = .fine, .by_table = .by_table
+    stars = stars, color_signif = color_signif, .fine = .fine, .by_table = .by_table,
+    # Last Phase z14-ii: tab_plain(design, ...) gets the design-based intervals too -- the rung is the
+    # same derived one tab_setup() resolves for the pipeline (no design -> "kish"/"classic" from the
+    # option, byte-identical to the leaf's former inline read).
+    design_spec = svy$spec, inference_mode = svy_inference_mode(svy$spec, wt)
   )
 }
 
@@ -3807,7 +3825,8 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
 #' @noRd
 plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na, ref, ref2, comp,
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
-                       conf_level, stars, color_signif, .fine, .by_table) {
+                       conf_level, stars, color_signif, .fine, .by_table,
+                       design_spec = NULL, inference_mode = "classic") {
 
 
 
@@ -3816,7 +3835,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # below). `use_raw` keeps the table-by-table path fully intact; forced on by `.by_table`.
   # Phase 17f: df/num no longer force the raw scan -- they build the normal table then extract the
   # displayed numbers with get_num() (leaf_extract_raw), so they can adopt `.fine` like any build.
-  use_raw <- .by_table || is.null(.fine)
+  # Last Phase z14-ii: a design-based variance is a function of the OBSERVATIONS (survey::svyrecvar on
+  # per-cell influence vectors), so it cannot come from a count aggregate -- under a design the raw
+  # scan is mandatory. In practice the two never meet (tab_counts() refuses a design and no design
+  # reaches jamovi), so this is an invariant made explicit rather than a new path.
+  design_on <- identical(inference_mode, "survey") && !is.null(design_spec$design)
+  use_raw   <- .by_table || is.null(.fine) || design_on
+  des_rows  <- NULL
 
   if (use_raw) {
     # Phase k: convert labelled (haven/labelled) row/col/tab columns to value-label factors for the
@@ -3824,7 +3849,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     # (already converted -> no-op); the weight is excluded (numeric).
     data <- data |> tab_apply_val_labels(as.character(c(tab_vars, row_var, col_var)))
     data <- data |>
-      dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) |>
+      dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt,
+                    tidyselect::any_of(if (design_on) svy_row_col else character())) |>
       dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) |>
       # DESIGN: REQUIRED for the direct tab_plain() entry (the public no-total escape hatch).
       # tab_many() also relabels once upstream (~L889), so this is redundant ONLY on the tab()/
@@ -3876,6 +3902,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 
   #Make all calculations with data.table to gain time
   if (use_raw) {
+    # Last Phase z14-ii: lift `.svy_row` (each prepared row's position in the ORIGINAL design) out of
+    # the frame BEFORE data.table takes over, so the aggregate scan below sees exactly the columns it
+    # saw before this phase. plain_core never filters rows, so `des_rows` stays aligned with `data`.
+    if (design_on) { des_rows <- data[[svy_row_col]]; data[[svy_row_col]] <- NULL }
+
     data.table::setDT(data)
     data.table::setnames(data, as.character(col_var), "col_var", skip_absent = TRUE)
 
@@ -3893,7 +3924,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # sufficient statistic accumulated ONLY on the microdata `use_raw` scan (pre-aggregated `.fine` data
   # has no per-observation weights, so it is genuinely unrecoverable there -> n_eff stays NA -> the CI
   # falls back to the raw unweighted base tot_n). Gated on weighted + kish so the default is untouched.
-  kish <- length(wt) != 0 && isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  # Last Phase z14-ii: the rung is RESOLVED (svy_inference_mode(), tab_setup()), never re-read from the
+  # option here -- one ladder governs the omnibus test and every cell interval. Byte-identical:
+  # "kish" is exactly `length(wt) != 0 && getOption("tabxplor.kish_neff")` when no design is present.
+  kish <- identical(inference_mode, "kish")
   if (use_raw) {
     long <- data[, list(n  = .N,
                         wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()},
@@ -4073,9 +4107,38 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # for counts). Its base is the subtable itself = leaf_wide_pct's "all" selector, so this is the same
   # definition of n_eff, not an overload. Percentage tables take the branch below and are untouched;
   # has_w2 implies the weighted branch above ran, so tabs_wn / tabs_w2 exist.
-  if (pct == "no" && has_w2) {
-    tabs_neff <- leaf_wide_pct(tabs_n, tabs_wn, "all", as.character(tab_vars), cols,
-                               tabs_w2 = tabs_w2)$n_eff
+  # Last Phase z14-ii (Route A): under a survey design the effective base is the DESIGN's own --
+  # n_eff = p(1-p) / Var_design(p), inverting the variance survey::svyrecvar computes from each cell's
+  # influence function (R/survey-variance.R). It is written into the SAME `n_eff` field, so every
+  # interval, star and colour threshold downstream becomes design-based through the one field they all
+  # already read (tab_ci, tab_apply_reference's OR interval, chi2_write_contrib) -- no new field, no
+  # engine change. `p` is the DISPLAYED proportion, so the interval provably inverts the number
+  # printed. A NULL (a design the variance cannot serve) falls back to the Kish / raw base: degraded
+  # is descriptive, never a wrong number. Measured exact against survey to 1e-15, S4.3/S4.6.
+  design_neff <- function(P, base) {
+    if (!design_on || is.null(des_rows)) return(NULL)
+    V <- svy_var_prop(
+      prep      = svy_var_prep(design_spec$design, des_rows),
+      keys      = lapply(tab_row_names,  function(v) svy_key_chr(tabs_n[[v]])),
+      n_tab     = length(tab_vars),
+      mkeys     = lapply(tab_row_names2, function(v) svy_key_chr(data[[v]])),
+      mcol      = svy_key_chr(data[["col_var"]]),
+      col_names = names(cols), base = base)
+    if (is.null(V)) { svy_var_degraded(); return(NULL) }
+    Pm <- as.matrix(P[, names(cols), with = FALSE]) * 1.0
+    Ne <- Pm * (1 - Pm) / V
+    Ne[!is.finite(Ne)] <- NA_real_
+    out <- data.table::copy(tabs_n)
+    out[, (names(cols)) := lapply(seq_len(ncol(Ne)), function(j) Ne[, j])]
+    out
+  }
+
+  if (pct == "no" && (has_w2 || design_on)) {
+    res_0 <- leaf_wide_pct(tabs_n, tabs_wn, "all", as.character(tab_vars), cols,
+                           tabs_w2 = if (has_w2) tabs_w2 else NULL)
+    if (!is.null(res_0$n_eff)) tabs_neff <- res_0$n_eff
+    d_neff <- design_neff(res_0$pct, "all")
+    if (!is.null(d_neff)) tabs_neff <- d_neff
   }
 
   if (pct != "no") {
@@ -4092,6 +4155,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     tabs_totn <- res_e$tot_n
     # Last Phase s: the per-cell effective base n (Kish n_eff of the % base), NULL/absent unless kish.
     if (!is.null(res_e$n_eff)) tabs_neff <- res_e$n_eff
+    # Last Phase z14-ii: a design supersedes it, on the base the table displays (see design_neff()).
+    d_neff <- design_neff(tabs_pct, pct)
+    if (!is.null(d_neff)) tabs_neff <- d_neff
 
 
     #Differences and odds ratio
@@ -4110,9 +4176,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
         color = color, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
         row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
         tabs_totn = if (or_want_ci) tabs_totn else NULL,
-        # Last Phase s: the OR colour interval honours Kish n_eff too (opt-in), so color = "OR"
+        # Last Phase s: the OR colour interval honours the effective base too, so color = "OR"
         # significance/stars on a weighted crosstab widen consistently with the % CI brackets.
-        tabs_neff = if (or_want_ci && kish && exists("tabs_neff", inherits = FALSE)) tabs_neff else NULL,
+        # z14-ii: keyed on the object existing rather than on `kish`, since it now also carries the
+        # DESIGN base -- byte-identical, `tabs_neff` having only ever existed under one of the two.
+        tabs_neff = if (or_want_ci && exists("tabs_neff", inherits = FALSE)) tabs_neff else NULL,
         conf_level = conf_level, stars = stars
       )
       tabs_diff <- ref_res$diff
@@ -4837,7 +4905,10 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     conf_level = conf_level, stars = stars, method_mean_diff = method_mean_diff,
     method_mean_ratio = method_mean_ratio, ci_scale = ci_scale, totaltab = r$totaltab,
     totaltab_name = totaltab_name, tot = r$tot, total_names = total_names, subtext = subtext,
-    digits = digits, num = num, df = df, .fine = .fine, .by_table = .by_table
+    digits = digits, num = num, df = df, .fine = .fine, .by_table = .by_table,
+    # Last Phase z14-ii: tab_num(design, ...) gets the design-based mean intervals too; the rung is
+    # the same derived one tab_setup() resolves for the pipeline.
+    design_spec = svy$spec, inference_mode = svy_inference_mode(svy$spec, wt)
   )
 
   # Phase 17f: df/num returns plain numbers (no fmt), so skip the colour finalise entirely.
@@ -4939,14 +5010,20 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
                      color, na, ref, comp, ci, ci_visible,
                      conf_level, stars, method_mean_diff, method_mean_ratio, ci_scale,
                      totaltab, totaltab_name, tot, total_names,
-                     subtext, digits, num, df, .fine, .by_table) {
+                     subtext, digits, num, df, .fine, .by_table,
+                     design_spec = NULL, inference_mode = "classic") {
 
   tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
 
   # Last Phase s: Kish n_eff applies to the weighted mean CIs (already) AND is now surfaced into the
-  # per-cell `n_eff` FIELD (kish-only, so the field is NA otherwise -- symmetric with the factor side).
-  # Function-scoped so the reshape region can read it even when ci == "no".
-  kish_neff_on <- length(wt) != 0 && isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  # per-cell `n_eff` FIELD, symmetric with the factor side. Function-scoped so the reshape region can
+  # read it even when ci == "no".
+  # Last Phase z14-ii: the rung is RESOLVED once (svy_inference_mode(), tab_setup()) and no longer
+  # re-read from the option here -- byte-identical without a design, and it is what carries the third
+  # rung down to the `_en` block below.
+  kish_neff_on <- identical(inference_mode, "kish")
+  design_on    <- identical(inference_mode, "survey") && !is.null(design_spec$design)
+  des_rows     <- NULL
 
 
 
@@ -4956,7 +5033,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # df/num no longer force the raw scan -- they build the normal moment aggregate then extract the
   # means with get_num() (leaf_extract_raw). The moment MATH lives once in num_moment_scan()
   # (R/tab-agg.R), shared with the producer.
-  use_raw <- .by_table || is.null(.fine)
+  # Last Phase z14-ii: a design-based variance reads the OBSERVATIONS, so the raw scan is mandatory
+  # under a design. Unlike the factor leaf this is a real change of path -- the numeric aggregate
+  # `fine_num` is normally adopted -- but not of VALUES: tab_aggregate_num() and this branch call the
+  # same num_moment_scan() (R/tab-agg.R), which test-num-fuse-parity.R locks.
+  use_raw <- .by_table || is.null(.fine) || design_on
 
   if (use_raw) {
     # Phase k: convert labelled (haven/labelled) GROUPING columns (row_var/tab_vars) to value-label
@@ -4964,7 +5045,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # as.numeric() coercion just below, so they are left out here. Idempotent on the tab() path.
     data <- data |> tab_apply_val_labels(purrr::map_chr(c(tab_vars, row_var), rlang::as_name))
     data <- data |>
-      dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) |>
+      dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt,
+                    tidyselect::any_of(if (design_on) svy_row_col else character())) |>
       dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
                                     !where(is.numeric), as.numeric)
       )
@@ -4974,6 +5056,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
     # Remove NA's in factors here, otherwise they are kept in totals after
     if (na == "drop") data <- stats::na.omit(data, tab_row_names) # 0.5 sec
+
+    # Last Phase z14-ii: `.svy_row` rides THROUGH na.omit (it is what keeps the design positions
+    # aligned with the surviving rows), then leaves before num_moment_scan -- whose .SD would
+    # otherwise scan it as one more numeric col_var.
+    if (design_on) { des_rows <- data[[svy_row_col]]; data[, (svy_row_col) := NULL] }
 
     if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
   } else if (nrow(.fine) == 0) {
@@ -5172,14 +5259,30 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       # when opted in, else the unweighted count. The DISPLAYED `n` field stays the real count;
       # only the inference uses this. Last Phase s: the same n_eff is also surfaced into the `n_eff`
       # field below (kish-only), and the factor side now honours Kish too (leaf_wide_pct).
+      # Last Phase z14-ii (Route A): a design supersedes Kish -- n_eff = s^2 / Var_design(x_bar), the
+      # mean twin of the factor leaf's p(1-p)/Var_design(p), inverting survey::svyrecvar on each cell
+      # mean's influence function (R/survey-variance.R). `s^2` is the very variance this cell's CI
+      # uses, so the interval inverts the number printed. Per cell, a non-finite result falls back to
+      # the raw count (a NULL matrix falls the whole table back), which is what the leaf did before.
       kish <- kish_neff_on
+      Vm   <- if (design_on)
+        svy_var_mean(prep  = svy_var_prep(design_spec$design, des_rows),
+                     keys  = lapply(tab_row_names, function(v) svy_key_chr(tabs[[v]])),
+                     n_tab = length(tab_vars),
+                     mkeys = lapply(tab_row_names, function(v) svy_key_chr(data[[v]])),
+                     xs    = stats::setNames(lapply(cvs, function(v) data[[v]]), cvs))
+      if (design_on && is.null(Vm)) svy_var_degraded()
       for (v in cvs) {
+        raw_n <- as.double(tabs[[paste0(v, "_n")]])
         data.table::set(
           tabs, j = paste0(v, "_en"),
-          value = if (kish && paste0(v, "_w2") %in% names(tabs)) {
+          value = if (!is.null(Vm)) {
+            en <- tabs[[paste0(v, "_var")]] / Vm[, match(v, cvs)]
+            ifelse(is.finite(en) & en > 0, en, raw_n)
+          } else if (kish && paste0(v, "_w2") %in% names(tabs)) {
             tabs[[paste0(v, "_wn")]]^2 / tabs[[paste0(v, "_w2")]]
           } else {
-            as.double(tabs[[paste0(v, "_n")]])
+            raw_n
           })
       }
 
@@ -5232,9 +5335,10 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
         data.table::set(tabs, j = paste0(v, "_pvalue"), value = res$pvalue)
       }
 
-      # Last Phase s: keep the per-cell effective n (`_en`) when kish is on, so it can be surfaced into
-      # the `n_eff` field at the reshape below; drop it otherwise (unchanged behaviour off-kish).
-      if (!kish_neff_on) data.table::set(tabs, j = paste0(cvs, "_en"), value = NULL)
+      # Last Phase s: keep the per-cell effective n (`_en`) when an effective base was actually used
+      # (z14-ii: Kish OR the design), so it can be surfaced into the `n_eff` field at the reshape
+      # below; drop it otherwise (unchanged behaviour on the classic rung).
+      if (!kish_neff_on && !design_on) data.table::set(tabs, j = paste0(cvs, "_en"), value = NULL)
       if (ci == "diff")
         data.table::set(tabs, j = paste0(rep(cvs, each = 3L),
                                          c("_refm", "_refv", "_refn")), value = NULL)
@@ -5331,7 +5435,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # Last Phase s: surface the kept per-cell effective n into the n_eff field (kish-only; selected by
   # EXACT scratch names to avoid the reshape-by-suffix collision the WARNING above flags, then dropped).
   tabs_neff <-
-    if (kish_neff_on && all(paste0(as.character(col_vars), "_en") %in% names(tabs))) {
+    if ((kish_neff_on || design_on) && all(paste0(as.character(col_vars), "_en") %in% names(tabs))) {
       data.table::setnames(tabs[, paste0(as.character(col_vars), "_en"), with = FALSE],
                            as.character(col_vars))
     } else { list(NA_reals) }
@@ -6250,17 +6354,25 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
                              get_col_var(tabs[[nm]]) != "no_col_var")
   # Last Phase z4: the residual's INFERENCE BASE, read off the total column's grand-total cell (the
   # LAST element of each subtable slice, exactly where var_contrib_ctr_signed reads the weighted N).
-  # Kish `n_eff` when opted in and available, else the raw unweighted `n`; the weighted total is used
-  # only as a last-resort fallback (it is what a table built without either would carry). This is the
-  # SAME ladder as every confidence interval in the package (?tab, Last Phase s), so "weighted
+  # The effective `n_eff` when the table carries one, else the raw unweighted `n`; the weighted total
+  # is used only as a last-resort fallback (it is what a table built without either would carry). This
+  # is the SAME ladder as every confidence interval in the package (?tab, Last Phase s), so "weighted
   # estimate, unweighted or effective base" is one rule, not two.
-  kish <- do_ctr && isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  # Last Phase z14-ii: read the FIELD, not the global option -- and per cell where the column's own
+  # `n_eff` is already on the whole-table base, which is exactly what `type` says: "n" (a counts
+  # table, the canonical contrib table), "all" and "all_tabs". Under Kish that is byte-identical
+  # (leaf_wide_pct()'s Dmat for those bases is constant across the subtable, so the per-cell value IS
+  # the grand cell's), and under a survey design it becomes the standard first-order per-cell
+  # correction z_design = z_classic * sqrt(n_eff_ij / N). A PERCENTAGE table's n_eff is on the row /
+  # column base instead, which is not this residual's base, so it keeps the grand cell -- i.e. the raw
+  # n under a design. Stated in ?tab and in dev/full_survey_design_scope.md S8.
   for (nm in elig_col) {
     tot_nm <- as.character(tot_cols[[nm]])
     xwn <- get_wn(tabs[[nm]]); twn <- get_wn(tabs[[tot_nm]])
     itr <- is_totrow(tabs[[nm]]); itt <- is_tottab(tabs[[nm]])
     tn  <- if (do_ctr) get_n(tabs[[tot_nm]])
-    tne <- if (kish)   get_n_eff(tabs[[tot_nm]])
+    cell_base <- do_ctr && get_type(tabs[[nm]]) %in% c("n", "all", "all_tabs")
+    tne <- if (do_ctr) get_n_eff(tabs[[if (cell_base) nm else tot_nm]])
     v   <- var_after[[nm]]
     pv  <- if (do_ctr) pval_after[[nm]]
     for (g in gids) {
@@ -6268,8 +6380,9 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
       v[r] <- var_contrib_ctr_signed(xwn[r], twn[r], itr[r], itt[r], comp)
       if (do_ctr) {
         last   <- r[length(r)]
-        n_base <- if (kish && !is.na(tne[last])) tne[last] else tn[last]
-        if (is.na(n_base) || n_base <= 0) n_base <- twn[last]
+        ne     <- if (cell_base) tne[r] else tne[last]
+        n_base <- ifelse(is.finite(ne) & ne > 0, ne, tn[last])
+        n_base[!is.finite(n_base) | n_base <= 0] <- twn[last]
         zres   <- contrib_adj_resid(xwn[r], twn[r], n_base, itr[r], itt[r], comp)
         pv[r]  <- contrib_pvalue(zres, itr[r], itt[r], comp)
       }

@@ -90,15 +90,21 @@ test_that("summary / GOF row labels + measure words translate", {
   })
 })
 
+# Last Phase z14-ii replaced z14-i's "Weighted by the survey design." by ruling Q7's sentence, now
+# that Route A makes the intervals design-based as well as the tests.
+svy_footer_en <- paste("Design-based (survey): weighted estimates, intervals and tests",
+                       "account for the sample design.")
+
 test_that("the survey-design weight line stays English under the ambient en locale", {
-  expect_equal(with_legend_lang("en", function(lg) gettext("Weighted by the survey design.")),
-               "Weighted by the survey design.")
+  expect_equal(with_legend_lang("en", function(lg) gettext(svy_footer_en)), svy_footer_en)
 })
 
 test_that("the survey-design weight line translates", {
   skip_if_no_gettext()
   with_legend_lang("fr", function(lg) {
-    expect_equal(gettext("Weighted by the survey design."),
-                 "Pond\u00e9r\u00e9 par le plan de sondage.")
+    expect_equal(gettext(svy_footer_en),
+                 paste("Fond\u00e9 sur le plan de sondage (survey) : estimations, intervalles",
+                       "et tests pond\u00e9r\u00e9s tiennent compte du plan",
+                       "d'\u00e9chantillonnage."))
   })
 })

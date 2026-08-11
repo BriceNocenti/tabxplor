@@ -143,7 +143,17 @@ Under **unequal** weights that default interval carries no design effect, so it 
 options(tabxplor.kish_neff = TRUE)
 ```
 
-This is a simple single-stage approximation (it needs the individual weights, so it is not available for tables built from pre-aggregated counts). A **fully design-based** result — clusters, strata, exact standard errors — is available for Chi2 pvalues (factors) and ANOVA F pvalues (numeric column variables) only with `test = "survey"` and the related arguments (see the `test =` argument) : confidence intervals are not covered. See the [survey](https://CRAN.R-project.org/package=survey) package for more informations about survey design. `tab_reg()` regressions tables with weights always use design-effect for standard errors (`vignette("tabxplor-reg")`), but the base version only use Kish's effective sample size.
+This is a simple single-stage approximation: it corrects for **unequal weighting only**, so it is blind to clustering and to calibration (and it needs the individual weights, so it is not available for tables built from pre-aggregated counts).
+
+For a **fully design-based** result — clusters, strata, `fpc`, calibration — build a design with the [survey](https://CRAN.R-project.org/package=survey) package and pass it as `data`. Then everything follows the design: the estimates, the Chi2 / ANOVA F p-values, and **every confidence interval, star and colour threshold**.
+
+```{r, echo=TRUE, eval=FALSE}
+library(survey)
+d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, nest = TRUE)
+tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
+```
+
+Worth knowing before you reach for it: it pays off only where design information actually exists (look for a stratum or cluster variable in your file — if there is none, `kish_neff` is already all the correction available to you), and it costs roughly three times a weighted table. `tab_reg()` regression tables always use design-based standard errors for their **models** (`vignette("tabxplor-reg")`).
 
 
 ## Sub-tables

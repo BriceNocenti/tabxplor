@@ -129,7 +129,17 @@ Lorsque les poids sont **inégaux**, cet intervalle par défaut ne porte aucun *
 options(tabxplor.kish_neff = TRUE)
 ```
 
-C'est une approximation simple, à un seul degré. Un résultat **pleinement fondé sur le plan de sondage/design-effect** — grappes, strates, erreurs-types exactes — n'est disponible que pour les *pvalues* du test du Chi2 (variables catégorielles) et les *pvalues* de l’ANOVA F (variables en colonne numériques), via `test = "survey"` et les arguments associés (voir l'argument `test =`) : les intervalles de confiance ne sont pas concernés. Voir le package [survey](https://CRAN.R-project.org/package=survey) pour plus d'informations sur les *design-effects*. Les modèles de regression pondérés de `tab_reg()` utilisent toujours le *design-effect* pour calculer leurs erreurs-types (`vignette("tabxplor-reg")`), mais les tableaux de base n'utilisent que la taille d'échantillon effective de Kish.
+C'est une approximation simple, à un seul degré : elle corrige **uniquement l'inégalité des poids**, et reste aveugle au *clustering* (grappes) comme au calage (elle a besoin des poids individuels, donc elle ne s'applique pas aux tableaux construits à partir d'effectifs pré-agrégés).
+
+Pour un résultat **pleinement fondé sur le plan de sondage** — grappes, strates, `fpc`, calage — construisez un plan avec le package [survey](https://CRAN.R-project.org/package=survey) et passez-le comme `data`. Tout suit alors le plan : les estimations, les *pvalues* du Chi2 / de l'ANOVA F, et **chaque intervalle de confiance, étoile et seuil de couleur**.
+
+```{r, echo=TRUE, eval=FALSE}
+library(survey)
+d <- svydesign(ids = ~psu, strata = ~strate, weights = ~w, data = mon_enquete, nest = TRUE)
+tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
+```
+
+À savoir avant de s'y lancer : cela ne paie que là où l'information sur le plan existe réellement (cherchez une variable de strate ou de grappe dans votre fichier — s'il n'y en a pas, `kish_neff` est déjà toute la correction dont vous disposez), et cela coûte environ trois fois un tableau pondéré. Les modèles de régression de `tab_reg()` utilisent toujours des erreurs-types fondées sur le plan (`vignette("tabxplor-reg")`).
 
 
 ## Sous-tableaux

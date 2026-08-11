@@ -119,7 +119,13 @@ honour \code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size) 
 a \strong{continuous} predictor's companion comes from a univariable fit and therefore uses the model's
 own design-based variance, like the \verb{Model_*} column beside it. On weighted data the two rules
 will not agree to the last digit — they answer the same question under different variance
-assumptions. Default \code{FALSE}.}
+assumptions. Default \code{FALSE}.
+
+\strong{Under a \code{survey::svydesign}}, the \verb{Model_*} columns are fully design-based (\code{survey::svyglm}),
+and so is a continuous predictor's crude companion; a \strong{categorical} predictor's crude interval
+is still the single-stage weighted one, unlike \code{\link[=tab]{tab()}}'s cells since 2.0.0. The footer's
+design-based sentence therefore over-states that one column, until the next release makes it
+design-based too.}
 
 \item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
 \strong{unadjusted count} behind each predictor level on the model's own complete cases --- the numbers

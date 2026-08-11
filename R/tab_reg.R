@@ -4216,6 +4216,12 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   own design-based variance, like the `Model_*` column beside it. On weighted data the two rules
 #'   will not agree to the last digit — they answer the same question under different variance
 #'   assumptions. Default `FALSE`.
+#'
+#'   **Under a `survey::svydesign`**, the `Model_*` columns are fully design-based (`survey::svyglm`),
+#'   and so is a continuous predictor's crude companion; a **categorical** predictor's crude interval
+#'   is still the single-stage weighted one, unlike [tab()]'s cells since 2.0.0. The footer's
+#'   design-based sentence therefore over-states that one column, until the next release makes it
+#'   design-based too.
 #' @param add_n Logical, default `TRUE`. Add an `n` column, right after the level labels, holding the
 #'   **unadjusted count** behind each predictor level on the model's own complete cases --- the numbers
 #'   a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The

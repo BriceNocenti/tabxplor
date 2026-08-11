@@ -69,11 +69,13 @@
 #'     `n_eff < n`, so the intervals widen honestly (they otherwise carry no design effect and run too
 #'     narrow). It also switches the whole-table tests (`test = TRUE`) to a first-order Rao-Scott
 #'     correction -- the factor chi-square rescaled to `n_eff`, the numeric F on per-group `n_eff`.
-#'     This is a single-stage unequal-weight approximation, not a design-based analysis: it needs the
+#'     This is a single-stage unequal-weight approximation, \strong{not the design effect}: Kish's
+#'     `deff = 1 + CV^2(w)` is a property of the weights alone, so it is blind to \strong{clustering}
+#'     (which inflates the variance) and to \strong{calibration} (which shrinks it), and it needs the
 #'     microdata weights, so [tab_counts()] on pre-aggregated counts cannot apply it. The regression
 #'     \emph{model} CIs of [tab_reg()] are already fully design-based (\code{survey::svyglm}) and are
-#'     unaffected. For a full design-based whole-table test (clusters / strata) use `test = "survey"`
-#'     with `wt =`/`strata =`/`ids =`, or pass a \code{survey::svydesign} as `data`.}
+#'     unaffected. For the real design effect -- in the tests \emph{and} in every interval -- pass a
+#'     \code{survey::svydesign} as `data`; the option is then not consulted at all.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it: since 2.0.0 each column records the level it was built at, so the colour

@@ -48,7 +48,7 @@ utils::globalVariables(c(
   "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
   "color_ratio_ci", "ci_scale",
   # tab_build ctx fields added by Phases 17e/j/k (settings spine, robust tests, var labels):
-  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "test_mode",
+  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "inference_mode",
   "var_labels",
   # reg_build()'s `shared` list fields (Phase 17h):
   "at", "baseline", "compare", "effect", "empirical", "estimate_display",
@@ -145,8 +145,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param tot_n The cell's own (unweighted) percentage base, as a double vector the length
 #' of \code{n}.
 #' @param n_eff The effective sample size used for this cell's confidence interval:
-#' Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on
-#' weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
+#' the DESIGN-based \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)})
+#' when a \code{survey::svydesign} was passed as \code{data}, else Kish's
+#' \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on weighted
+#' data, else \code{NA} (the CI then falls back to the raw unweighted base).
 #' A double vector the length of \code{n}. Non-displayed.
 #' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
 #' measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
@@ -4810,10 +4812,15 @@ tab_weight_line <- function(x, lang = NULL) {
   # fact "this table is design-based" is already on the table, in one field. Read it as a fact rather
   # than printing it as a name -- the internal `.svy_weights` used to leak into user-facing output,
   # and tab_reg() under a design emitted no weight line at all.
-  # NOTE: this sentence deliberately claims only what z14-i delivers. Confidence intervals are still
-  # the single-stage weighted approximation; z14-ii replaces the string when they stop being.
+  # Last Phase z14-ii (ruling Q7): the sentence now claims the intervals too, because Route A made
+  # them design-based -- a rung-3 table has to be distinguishable from a rung-2 (Kish) one, which
+  # S3.2/S3.3 measured can differ by a factor of 2 in EITHER direction. It is deliberately blanket
+  # (maintainer's decision): tab_reg()'s crude Obs_* intervals are still single-stage until z14-iii,
+  # and that exception is named in ?tab_reg rather than hedged here.
   if (identical(as.character(wt)[1], svy_wt_col))
-    return(with_legend_lang(lang, function(lg) enc2utf8(gettext("Weighted by the survey design."))))
+    return(with_legend_lang(lang, function(lg) enc2utf8(gettext(
+      "Design-based (survey): weighted estimates, intervals and tests account for the sample design."
+    ))))
   with_legend_lang(lang, function(lg) enc2utf8(gettextf("Weighted by %s.", wt)))
 }
 

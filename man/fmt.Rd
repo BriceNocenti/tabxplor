@@ -213,8 +213,10 @@ as a double vector the length of \code{n}.}
 of \code{n}.}
 
 \item{n_eff}{The effective sample size used for this cell's confidence interval:
-Kish's \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on
-weighted data, else \code{NA} (the CI then falls back to the raw unweighted base).
+the DESIGN-based \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)})
+when a \code{survey::svydesign} was passed as \code{data}, else Kish's
+\code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on weighted
+data, else \code{NA} (the CI then falls back to the raw unweighted base).
 A double vector the length of \code{n}. Non-displayed.}
 
 \item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour

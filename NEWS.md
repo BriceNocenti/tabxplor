@@ -34,10 +34,13 @@
   `method_mean_ratio` / `method_ratio` choose the interval.
 * **Mean columns get a whole-table test** — a one-way ANOVA (Welch or classic, `options(tabxplor.anova)`),
   the counterpart of the chi-squared for factor columns.
-* **Effect sizes, Fisher's exact and survey-robust p-values.** `test = TRUE` now carries Cramér's V / phi
-  or eta²; a small sparse table uses Fisher's exact; `test = "survey"` (with `ids` / `strata` / `fpc` /
-  `nest`, or a `survey::svydesign` as `data`) and `options(tabxplor.kish_neff = TRUE)` give design-based /
-  effective-sample-size p-values and confidence intervals.
+* **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
+  sparse table uses Fisher's exact.
+* **Survey designs.** Pass a `survey::svydesign()` as `data` and the whole table follows it: the
+  estimates, the Chi2 / ANOVA F p-values, and **every confidence interval, star and colour threshold**
+  (strata, clusters, `fpc` and calibration alike — so a design can also make an interval *narrower*).
+  Without a design, `options(tabxplor.kish_neff = TRUE)` still rescales the intervals and tests to
+  Kish's effective sample size, which corrects for unequal weighting only. See `?tab`.
 * **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
   answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
   `chisq.test()$stdres`), on the package's usual inference base (unweighted *n*, or Kish `n_eff`).

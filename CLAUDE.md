@@ -130,7 +130,23 @@ R/
 │                              svy_omnibus_one() run in tab_assemble_tables on the PREPARED microdata
 │                              (so the p describes the table SHOWN -- lumping/filter/relabel included),
 │                              REPLACE the chi2/F rows' statistic/df/p/n, carry effect_size/min_e through.
-│                              The ONE architectural exception to "test from the aggregate" (opt-in, per-table)
+│                              The ONE architectural exception to "test from the aggregate" (opt-in, per-table).
+│                              z14-ii: svy_test_mode -> **svy_inference_mode()** = THE rung (survey/kish/
+│                              classic), ctx$inference_mode -- it now governs the cell INTERVALS too, so
+│                              the two leaves stopped re-reading tabxplor.kish_neff
+├── survey-variance.R (~215 L) z14-ii Route A: the DESIGN variance of a table's cells -> the existing
+│                              `n_eff` field (n_eff = p(1-p)/Var_design, or s2/Var_design for a mean =
+│                              Korn-Graubard's device), so tab_ci + the color="OR" interval + contrib all
+│                              become design-based through the ONE field they already read. No new fmt
+│                              field, no column attr, no colour-engine change. ONE influence function
+│                              `z = (u - p*v)/B`, four (u,v) DOMAIN PAIRS (svy_uv_v: row/col/all/all_tabs
+│                              + the mean), NOT four formulas; row domains come from the wide table's own
+│                              keys with "Total" = every level, so total rows need no special case.
+│                              svy_group_map = the distinct-key-tuple codes (small R x L matrices; only
+│                              the influence matrix is n-long, one svyrecvar per column level).
+│                              svy_var_prep does NOT reuse svy_domain_design (svyrecvar never reads
+│                              $variables) but keeps its calibrated/PPS warning: scatter index + w=1/prob.
+│                              NULL-not-a-wrong-number + svy_var_degraded() (the footer claim is blanket)
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -2494,7 +2510,44 @@ SKIP 8, PASS 5008), **zero golden/snapshot churn**. Implementation record + the 
   keys; its `test_robust == "survey"` branch was unreachable).
 
 ##### Phase z14-ii — Route A in `tab()`
-New `R/survey-variance.R` (four influence functions, `n × R` batching = one `svyrecvar` per column level, NULL-not-a-wrong-number, `survey` as the test oracle) standalone and unwired; then one argument on `plain_core`/`num_core`, the `n_eff` write site
+
+**DONE (2026-08-11).** Suite green in BOTH locales, **zero golden or snapshot churn off the design
+path** — the subphase's own acceptance criterion. Implementation record + the measurements:
+`dev/full_survey_design_scope.md` § z14-ii.
+
+A design passed as `data` now writes a **design-based effective n** into the EXISTING `n_eff` field
+(`p(1-p)/Var_design(p)`, or `s²/Var_design(x̄)` for a mean — Korn-Graubard's device). Because Last Phase
+s had already made `n_eff` the single base every per-cell inference reads, that one write makes the cell
+CIs, the cell-vs-reference differences, the stars, the `color = "OR"` interval and the colour thresholds
+design-based with **no new fmt field, no column attribute and no colour-engine change**. Verified against
+`survey` itself to **1e-15** on weights-only / stratified / clustered / **calibrated** designs, for
+proportions and means; `ci_wilson()` on that base reproduces survey's interval to 4 decimals; §4.4's gain
+case gives `n_eff` 5155 on n = 4000 (a ×0.88 width) where Kish sits at exactly 4000.
+
+- **Not four influence functions but one.** Every quantity is a ratio of two weighted sums, so the four
+  bases are four `(u, v)` domain pairs (`svy_uv_v()`), the mean included. Row domains come from the wide
+  table's own keys with `"Total"` = every level — so a data row, a subtable total row and a total-table
+  row share one rule, and total rows get a design base for free (load-bearing for `ref = "tot"`).
+- **`svy_test_mode()` → `svy_inference_mode()`** (+ `ctx$inference_mode`): it now governs the intervals
+  as well as the omnibus test, so the leaves stopped re-reading `options(tabxplor.kish_neff)` — the same
+  ladder had been derived in three places. `use_raw` is forced under a design (a count aggregate cannot
+  carry a design variance).
+- **contrib (ruling Q1, "free where already exact")** reads the `n_eff` FIELD per cell where the
+  column's stored `type` says its base is the whole table (`"n"`/`"all"`/`"all_tabs"`);
+  `contrib_adj_resid()` needed no change (it uses `n_base` elementwise). Byte-identical under Kish, and
+  the first-order per-cell correction `z_design = z_classic·√(n_eff/N)` under a design. A percentage
+  table's contrib keeps the grand base — the one new line in the study's honest residue.
+- **Footer (ruling Q7, blanket)**: *"Design-based (survey): weighted estimates, intervals and tests
+  account for the sample design."* `tab_reg()`'s categorical crude `Obs_*` intervals stay single-stage
+  until z14-iii and that exception is NAMED in `?tab_reg`; a failed variance pass informs
+  (`svy_var_degraded()`), so the sentence is never silently untrue. FR translated + `.mo` recompiled.
+- Two conscious test moves (`test-survey-design-path.R`'s footer assertion, `test-i18n-fr.R`'s msgid),
+  both because the z14-i placeholder string was replaced. Docs: `?tab` (the rung ladder + a new
+  "Design-based confidence intervals" block), `?tabxplor-options` (rung 2 is **not** the design effect),
+  `?fmt`, `?tab_reg`, both intro vignettes' Weights sections, NEWS.
+
+*Original plan:* New `R/survey-variance.R` standalone and unwired; then one argument on
+`plain_core`/`num_core`, the `n_eff` write site
   (design → Kish → raw), force `use_raw` under a design, and the footer sentence — without it a
   design-based table is indistinguishable from a Kish one.
 

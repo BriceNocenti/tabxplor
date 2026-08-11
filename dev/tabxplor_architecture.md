@@ -304,6 +304,42 @@ Replicate-weight (`svrepdesign`) and two-phase designs are **refused** with a me
 `svydesign()` — a clear refusal, never an approximation. The design reaches `tab()`'s workers through the
 `.ship` payload (once per worker), not `shared` (which copied the whole dataset per row_var).
 
+**`svy_inference_mode(design_spec, wt)`** is THE rung — `"survey"` / `"kish"` / `"classic"` — resolved
+ONCE in `tab_setup()` (the one place holding both the resolved weight and the `design_spec`) and stored
+as `ctx$inference_mode`. Since z14-ii it governs the cell INTERVALS as well as the omnibus test, which
+is why it is no longer called `svy_test_mode`: the two leaves take their `n_eff` base from it instead of
+re-reading `options(tabxplor.kish_neff)` in two more places.
+
+### Design-based cell variances (`R/survey-variance.R`, Last Phase z14-ii)
+
+Route A: a design passed as `data` writes a **design-based effective n** into the existing `n_eff` field
+— `p(1-p)/Var_design(p)` for a proportion, `s²/Var_design(x̄)` for a mean (Korn–Graubard's device, what
+`svyciprop(method = "beta")` is built on). Because Last Phase s already made `n_eff` the single base
+every per-cell inference reads (`tab_ci`'s cell/diff/ratio bases, `tab_apply_reference`'s `color = "OR"`
+interval, `chi2_write_contrib`'s residual), that one write makes all of them design-based with **no new
+fmt field, no column attribute and no colour-engine change**. Measured exact against `survey` to 1e-15
+on stratified / clustered / stratified+clustered / **calibrated** designs.
+
+**ONE influence function, four domain pairs.** Every quantity is a ratio of two weighted sums,
+`p = A/B` with `A = Σu·w`, `B = Σv·w`, whose linearized contribution is `z = (u − p·v)/B`; `pct` chooses
+`(u, v)` (`svy_uv_v()`), it does not choose a formula. Row **domains** come from the wide table's own key
+columns with `"Total"` read as "every level", so a data row, a subtable total row and a total-table row
+need no special case. Matching goes through a group code over the distinct key tuples, so the weighted
+sums are small matrix products and only the influence matrix is ever *n*-long (one `svyrecvar` call per
+column level; 7 MB at 60 000 × 15). `svy_var_prep()` deliberately does **not** reuse
+`svy_domain_design()` — that helper swaps `$variables` for `svychisq`/`svyglm`, which `svyrecvar` never
+reads — but its calibrated/PPS warning still applies, hence the scatter index and `w = 1/prob`.
+
+Every function returns `NULL` rather than a wrong number; the leaf then falls back to Kish / the raw n
+and `svy_var_degraded()` says so, because the footer sentence is blanket. Two consequences elsewhere:
+`use_raw` is forced under a design (a count aggregate cannot carry a design variance), and
+`chi2_write_contrib()` now reads the `n_eff` FIELD per cell where the column's `type` says its base is
+the whole table (`"n"`/`"all"`/`"all_tabs"`) — byte-identical under Kish, and the standard first-order
+per-cell correction `z_design = z_classic·√(n_eff/N)` under a design. A row-/column-percentage table's
+contrib keeps the grand-total base: that base is not what `n_eff` holds there. Route A is exact for a
+cell and conservative for a cell-vs-reference difference (it cannot carry the row-to-row design
+covariance, ruling Q3) — so it never produces a star the design does not support.
+
 ### The settings spine (`ctx$settings`, Phase 17e)
 
 The argument-normalisation boundary is the historical "top bug factory": five documented bugs came from

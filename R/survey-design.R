@@ -2,7 +2,7 @@
 #   microdata every tabxplor engine already knows how to read -- plus the design constructors and the
 #   ROBUST omnibus tests for tab() crosstabs/means.
 # ROLE: Three things live here:
-#   1. The BOUNDARY (Last Phase z14-i): svy_is_design() / svy_unwrap_data() / svy_resolve_test().
+#   1. The BOUNDARY (Last Phase z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test().
 #      Every public entry point that accepts a survey design (tab, tab_many, tab_plain, tab_num,
 #      tab_reg) calls the same two lines; tab_counts() calls svy_is_design() to REFUSE one. Before
 #      z14-i the detection was written twice, and the two copies disagreed: tab() materialised the
@@ -17,10 +17,12 @@
 #                     the effective n_eff = (sum w)^2 / sum w^2; the numeric F on per-group n_eff.
 #        - "survey" : design-based -- survey::svychisq (Rao-Scott 2nd-order F) for factors, a svyglm +
 #                     regTermTest Wald F for means. Needs `survey` (an Import; guarded for consistency).
-# DESIGN: the test RUNG is derived, never asked for (z14-i, ruling Q2). `test` says only WHETHER to
-#   test; what the user already passed says HOW -- weights / weights + tabxplor.kish_neff / a design
+# DESIGN: the inference RUNG is derived, never asked for (z14-i, ruling Q2). `test` says only WHETHER
+#   to test; what the user already passed says HOW -- weights / weights + tabxplor.kish_neff / a design
 #   object. That is why `ids`/`strata`/`fpc`/`nest` are gone: they reached the omnibus p and nothing
-#   else, and svydesign() says all four better. See svy_resolve_test().
+#   else, and svydesign() says all four better. Since z14-ii the same rung also chooses each cell's
+#   `n_eff` base, so the tests and the intervals cannot describe different samples --
+#   see svy_inference_mode() and R/survey-variance.R.
 # KEY CONSTRAINTS:
 #   - The robust p replaces ONLY the p-value / statistic / df / n on the chi2 / F rows; the descriptive
 #     effect size is carried through (it is computed on the same weighted table since z14-i).
@@ -91,10 +93,13 @@ svy_check_test <- function(test, arg = "test") {
   isTRUE(test)
 }
 
-# The DERIVED test rung (ruling Q2) -- resolved once, in tab_setup(), where the weight is resolved and
-# the design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to
-# drift (only tab() had the rule, so tab_many() was silently always classic).
-svy_test_mode <- function(design_spec, wt) {
+# THE inference rung (ruling Q2) -- resolved once, in tab_setup(), where the weight is resolved and the
+# design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to drift
+# (only tab() had the rule, so tab_many() was silently always classic).
+# Last Phase z14-ii: it governs the CELL INTERVALS as well as the whole-table test -- the leaves take
+# their `n_eff` base from it (design -> Kish -> raw), instead of re-reading tabxplor.kish_neff in two
+# more places. Hence the name: one ladder, one resolution, every inference in the table.
+svy_inference_mode <- function(design_spec, wt) {
   if (!is.null(design_spec) && !is.null(design_spec$design))               return("survey")
   if (isTRUE(getOption("tabxplor.kish_neff", FALSE)) && length(wt) > 0L)   return("kish")
   "classic"
@@ -204,7 +209,7 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, mode, des_rows, design_spec
   }
 
   # mode == "survey": a design-based Rao-Scott F (svychisq) / Wald F (svyglm + regTermTest).
-  # svy_test_mode() only reaches "survey" with a prebuilt design, so `des_rows` is always present.
+  # svy_inference_mode() only reaches "survey" with a prebuilt design, so `des_rows` is always present.
   # The design's model frame is swapped for `d` -- the PREPARED rows -- so the test sees the lumped,
   # relabelled, filtered table that is actually displayed; picking the rows is not enough, since
   # svychisq/svyglm read the variables off the design.
