@@ -60,12 +60,26 @@ svy_var_prep <- function(design, des_rows) {
   dd <- tryCatch(design[des_rows, ], error = function(e) NULL)
   if (is.null(dd) || is.null(dd$prob) || !length(dd$prob))                    return(NULL)
   n_dd <- length(dd$prob)
-  at   <- if (n_dd == length(des_rows)) seq_along(des_rows)
-          else if (n_dd >= max(des_rows)) des_rows
-          else return(NULL)
+  at   <- svy_row_at(n_dd, des_rows)
+  if (is.null(at))                                                            return(NULL)
   w <- 1 / as.numeric(dd$prob)          # Inf prob (survey's domain exclusion) -> weight 0
   w[!is.finite(w)] <- 0
   list(dd = dd, at = at, n = n_dd, w = w)
+}
+
+# THE row-space rule, extracted in Last Phase z14-iii so it is stated once: where does the i-th row of
+# a frame sit in a design of `n_design` rows, given `des_rows` (its `.svy_row` positions)?
+#   the design SHRANK   -> it holds exactly these rows, in order      -> i
+#   it did NOT shrink   -> it kept all n and set prob = Inf outside   -> des_rows[i]
+# Second consumer: reg_gap_se_columns() scatters its closed-form crude influence leg with the same
+# rule, because svyglm keeps a padded design's zero-weight rows in model.matrix() while the crude leg
+# is built on the complete-case frame. NULL = no rule applies (the design is smaller than the rows
+# asked for), which every caller reads as "no design answer here".
+svy_row_at <- function(n_design, des_rows) {
+  if (!length(n_design) || !length(des_rows) || anyNA(des_rows)) return(NULL)
+  if (n_design == length(des_rows)) return(seq_along(des_rows))
+  if (n_design >= max(des_rows))    return(des_rows)
+  NULL
 }
 
 # THE svyrecvar call -- the one place the package's crosstab variance is computed, and the one place
@@ -212,7 +226,11 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
 # list of numeric microdata columns), or NULL. Same influence function with (u, v) = (x, 1) over the
 # row's domain, restricted per variable to its own non-missing rows -- which is the n the leaf's own
 # per-cell variance is computed on.
-svy_var_mean <- function(prep, keys, n_tab, mkeys, xs) {
+# Last Phase z14-iii: `wmult` is a per-row multiplier on the design weight, so the SAME producer also
+# serves tab_reg()'s crude grid, where a grouped-binomial row is a cluster of `trials` Bernoulli draws
+# (p = Sum(w*succ) / Sum(w*trials)). With wmult = trials and x = succ/trials the expression below is
+# (u - p*v)/B for (u, v) = (succ, trials) -- the general ratio form, not a second formula.
+svy_var_mean <- function(prep, keys, n_tab, mkeys, xs, wmult = NULL) {
   if (is.null(prep) || !length(keys) || !length(xs))            return(NULL)
   R <- length(keys[[1]]); K <- length(xs); nfr <- length(xs[[1]])
   if (R == 0L || nfr == 0L)                                     return(NULL)
@@ -222,6 +240,10 @@ svy_var_mean <- function(prep, keys, n_tab, mkeys, xs) {
   gm <- svy_group_map(keys, n_tab, mkeys); if (is.null(gm)) return(NULL)
 
   wf <- prep$w[prep$at]
+  if (!is.null(wmult)) {
+    if (length(wmult) != length(wf) || anyNA(wmult))            return(NULL)
+    wf <- wf * as.numeric(wmult)
+  }
   if (length(wf) != nfr || anyNA(wf))                           return(NULL)
   base_ok <- gm$any_dom[gm$gcode]
   gsum    <- function(x) as.vector(rowsum(x, gm$gcode, reorder = TRUE))

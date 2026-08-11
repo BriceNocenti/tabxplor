@@ -39,8 +39,10 @@
 * **Survey designs.** Pass a `survey::svydesign()` as `data` and the whole table follows it: the
   estimates, the Chi2 / ANOVA F p-values, and **every confidence interval, star and colour threshold**
   (strata, clusters, `fpc` and calibration alike — so a design can also make an interval *narrower*).
-  Without a design, `options(tabxplor.kish_neff = TRUE)` still rescales the intervals and tests to
-  Kish's effective sample size, which corrects for unequal weighting only. See `?tab`.
+  This now includes `tab_reg(empirical = TRUE)`'s observed (`Obs_*`) columns, so the model and its
+  observed counterpart are finally compared under one inferential regime. Without a design,
+  `options(tabxplor.kish_neff = TRUE)` still rescales the intervals and tests to Kish's effective
+  sample size, which corrects for unequal weighting only. See `?tab` and `?tab_reg`.
 * **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
   answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
   `chisq.test()$stdres`), on the package's usual inference base (unweighted *n*, or Kish `n_eff`).
@@ -199,7 +201,12 @@
   per-standard-deviation scaling of numeric predictors and the model-vs-observed gap test were
   unweighted too, and the footer never said the table was weighted at all.
 * **A calibrated survey design** (`survey::calibrate()` / post-stratified) no longer errors in
-  `tab_reg()` as soon as any row has a missing value.
+  `tab_reg()` as soon as any row has a missing value. It also no longer loses the model-vs-observed
+  gap test (`color = "adjustment"`) on such a table, and `effect = "ame"` no longer returned a wrong
+  gap standard error there.
+* **`tab_reg(split_var = )` on a survey design** errored outright whenever the groups had unequal
+  sizes, and on a *calibrated* design it silently fitted each group with the wrong respondents'
+  weights (up to 38% off in our test case).
 * **The design-based p-value now describes the table you see**: it was computed on the design's
   original data, ignoring `filter =`, rare-level lumping (`other_if_less_than`) and `cleannames`
   relabelling, so a lumped table could report the p-value of the unlumped one.

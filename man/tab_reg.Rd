@@ -194,18 +194,25 @@ no \code{color = "adjustment"}, no gap test --- because the distance between two
 be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 no clean crude analogue and is ignored (with a message).
 
-The crude companions of a \strong{categorical} predictor are descriptive, so on weighted data they
-honour \code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size) exactly like \code{\link[=tab]{tab()}};
-a \strong{continuous} predictor's companion comes from a univariable fit and therefore uses the model's
-own design-based variance, like the \verb{Model_*} column beside it. On weighted data the two rules
-will not agree to the last digit — they answer the same question under different variance
-assumptions. Default \code{FALSE}.
+The crude companions of a \strong{categorical} predictor are descriptive, so their confidence
+intervals follow the same three-rung ladder as \code{\link[=tab]{tab()}}'s cells: plain weighted, then
+\code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size), then a \code{survey} design (see
+below). A \strong{continuous} predictor's companion comes from a univariable fit and therefore uses
+the model's own variance, like the \verb{Model_*} column beside it. The two rules answer the same
+question under different variance assumptions, so they will not agree to the last digit.
+Default \code{FALSE}.
 
-\strong{Under a \code{survey::svydesign}}, the \verb{Model_*} columns are fully design-based (\code{survey::svyglm}),
-and so is a continuous predictor's crude companion; a \strong{categorical} predictor's crude interval
-is still the single-stage weighted one, unlike \code{\link[=tab]{tab()}}'s cells since 2.0.0. The footer's
-design-based sentence therefore over-states that one column, until the next release makes it
-design-based too.}
+\strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
+\code{survey::svyglm}; the crude ones through an effective sample size derived from the design
+variance of each cell (Korn & Graubard's device, the same one \code{\link[=tab]{tab()}}'s cells use). That base is
+\strong{exact} for a single cell, and for each leg of a ratio: the odds-ratio and risk-ratio brackets
+built on it \emph{are} the design variance of the log odds and of the log risk. A \strong{difference or a
+ratio between two cells} additionally ignores the design covariance between them, so it lands a
+few percent either side of the exact answer — against the 15–25 \% it was out by before. Two
+things stay outside: a 3+ level outcome (multinomial, ordinal) has no crude \emph{column}, only a
+crude value folded into the model cell, and replicate-weight designs (\code{svrepdesign}) are refused
+at the boundary. If the design variance cannot be computed the intervals fall back to the raw
+count and say so.}
 
 \item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
 \strong{unadjusted count} behind each predictor level on the model's own complete cases --- the numbers

@@ -523,6 +523,16 @@ Two variances for one estimator, one shown and one used. z8-B documented the *ro
 part of this on purpose; the *design-vs-no-design* part is not documented anywhere because it was not
 known.
 
+**z14-iii closes it, up to one named term.** Both quantities now come from the same influence function
+and the same `svyrecvar`. They still differ in what they carry: the gap SE uses the *contrast*
+influence, so it includes the covariance between the two cells; the printed interval is built on a
+*per-cell* effective n, so Route A's discarded covariance (§4.5, ruling Q3) is exactly what separates
+them. Measured on a stratified + clustered design: the `Obs_OR` log-width lands within **2–7 %** of the
+design-based univariable `svyglm`, where the single-stage base was **15 %** out — and the direction is
+not guaranteed, because the cell-to-cell covariance can go either way (§3.4 measured 0.97–0.99 with a
+segregated predictor). "Conservative, never anti-conservative" is a statement about the *difference of
+proportions* in `tab()`, not about a ratio here.
+
 ### 5.4 What stays out of reach in `tab_reg`
 
 * `multinom` / `polr` (`nnet`, `MASS`) have no design-based fitter; z10's score-based influence
@@ -741,10 +751,14 @@ Listing these is part of the answer to "is it full?".
 
 1. **Exact difference variances** (§4.5) — **declined by Q3**: it needs the per-column `R × R`
    covariance rather than a per-cell scalar, i.e. a second stored quantity plus a change to how
-   `tab_ci()` combines two bases. Route A stays conservative, never anti-conservative.
+   `tab_ci()` combines two bases. Route A stays conservative for a difference of proportions; for a
+   crude **ratio** (`Obs_OR`, `Obs_RR`) the same missing covariance can go either way, a few percent
+   (measured in z14-iii, §5.3) — down from 15–25 % before it.
 2. **Design-based Fisher / exact tests** — do not exist; already dropped in robust mode.
-3. **Design-based multinomial / ordinal crude twins**, and any crude twin at all on a replicate design
-   (§5.4, §7.5) — stated as a degradation in z14-iii, or refused outright (replicate designs).
+3. **A crude COLUMN for a 3+ level outcome** (multinomial, ordinal): the crude effect is folded into
+   the model cell as a point (`obs`), so there is no interval to make design-based. Its *tooltip*
+   percentages are design-based since z14-iii. Any crude twin at all on a replicate design is refused
+   outright at the boundary (§7.5).
 4. **Quantiles / medians** — tabxplor has none, so nothing is missing; if `tab_num` ever gains them,
    `svyquantile` is a different machine.
 5. **Domain-estimation subtleties**: tabxplor subsets by row/tab variable, which is domain estimation
@@ -937,7 +951,8 @@ then, and the R formals must go in the same commit so the two cannot drift.
 > table built from a design. `tab_reg()`'s categorical crude `Obs_*` intervals are still single-stage
 > until z14-iii, and that exception is now NAMED in `?tab_reg` rather than left implicit; when the
 > variance pass genuinely fails, `svy_var_degraded()` says the intervals fell back, so the sentence is
-> never silently untrue.
+> never silently untrue. **(Superseded by z14-iii, which made those columns design-based; the
+> `?tab_reg` exception is gone and the sentence is blanket with nothing left to qualify.)**
 >
 > **Verified against `survey`, never against a hard-coded number**: cell SE and mean SE equal
 > `svyby(covmat = TRUE)` / `svyby(svymean)` to **1e-15** on weights-only, stratified,
@@ -986,7 +1001,62 @@ guide's new module, NEWS, the CLAUDE.md roadmap line.
 
 ---
 
-### z14-iii — the crude (`Obs_*`) columns, then the finished ladder
+### z14-iii — the crude (`Obs_*`) columns, then the finished ladder — **IMPLEMENTED 2026-08-11**
+
+> **Implementation record.** Suite green in both locales, **zero golden / snapshot / `_color_golden`
+> churn** — the acceptance criterion held: no fmt field, no column attribute, no crosstab path.
+>
+> **The route is NOT the one this section planned, and the reason matters.** The plan said
+> `reg_crude_if_maker()` + `reg_if_se()`. Those produce the *identical* influence vector —
+> `svy_var_mean()`'s `Z = wf·d·(x−M)/B` **is** the crude maker's identity-link leg `w(y−μ)/Σw` — but
+> the crude maker only exposes the level-vs-reference CONTRAST, never a single leg, and `reg_if_se()`
+> has no scatter, so it cannot serve a CALIBRATED design at all (see the row-space defects below).
+> `R/survey-variance.R` already owns "the design variance of a domain mean", batches every level into
+> one `svyrecvar` call, and was validated to 1e-15 including calibration in z14-ii. So the producer is
+> `svy_var_mean()` with **one** new optional argument, `wmult` — a per-row weight multiplier, because a
+> grouped-binomial row is a cluster of `trials` draws (`p = Σw·succ / Σw·trials`), i.e. the general
+> ratio form, not a second formula. No `tot` argument was needed: the crude domain keys are level
+> INDICES, which also makes the domain identical by construction to the grid's own `ok & x == l` and
+> makes a predictor level literally named `"Total"` unreachable.
+>
+> **`emp_n_draw` became per (level, CATEGORY)**, not per level. The plan assumed 3+ level outcomes
+> expose no crude interval; they expose no crude *column*, but the multinomial **html tooltip** prints
+> `emp_prop_inf/sup` and `emp_diff_inf/sup`, so a per-level scalar would have been an approximation in
+> user-visible output. `svy_var_mean()` returns an R × K matrix anyway, so this cost one `flat()` and
+> one `rep(..., times = nl)`. Off-design the Kish value is category-free → byte-identical. `emp_n_ci`
+> stays per level: a mean has no category. The `* mean(draws)` factor is **dropped** on the design
+> path — `V_p` already carries the trials weighting, so keeping it would double-count.
+>
+> **Three row-space defects, all measured, none previously known** — prerequisites, because the new
+> crude variance would have inherited their wrong rows:
+> - `tab_reg(<svydesign>, …, split_var = )` **errored** with unequal group sizes (the normal case):
+>   `utils::modifyList()` recurses into list elements and a `survey.design2` IS a list whose
+>   `$variables` is a data.frame, so the per-group design was merged into the old one column by column
+>   (*"replacement has 413 rows, data has 800"*; silent recycling when the sizes happened to divide).
+> - On a **calibrated** design the same path ran and was wrong: measured OR `1/2.17` and `1/3.13`
+>   against `svyglm`'s `3.48` and `4.11` on the same groups, no warning. Both fixed by ONE rule —
+>   the design is never re-subset per group, and `reg_resolve_design()` maps its complete-case mask
+>   through `.svy_row` so every subset goes into the ORIGINAL design's row space.
+> - `color = "adjustment"` lost its gap test on **every** calibrated design with an incomplete case
+>   (`svy_domain_design()` pads the fit's design, so the model leg is n-long and the crude leg
+>   `nrow(mdata)`-long; measured 400 vs 380 → the length guard skipped). Worse, `reg_ame_if_maker()`'s
+>   own `emp + delta` **recycled** — a wrong number with only a warning. Fixed by `reg_if_align()` in
+>   `R/reg-influence.R`, over the extracted `svy_row_at()`: the padded rows carry design weight 0, so
+>   scattering with zeros is exact. Verified against a hand-stacked computation to 1e-10.
+>
+> **Verified against `survey`, never a hard-coded number**: the proportion base equals
+> `p(1−p)/SE(svyby(svymean))²` and the mean base `s²/SE²` to **1e-8** on a stratified + clustered
+> design; the multinomial base matches `SE(svyby(~party, ~x))` cell by cell; the `Obs_OR` log-width
+> equals `2z·√(Var(logit p₁)+Var(logit p₀))` to 1e-3, i.e. the Woolf bracket on an effective base **is**
+> the delta-method design variance. Against a univariable `svyglm` it lands **2–7 %** out where the
+> single-stage base was **15 %** out — and NOT always wider, which is the correction to §4.5's wording
+> for a *ratio* (see §5.3). A grouped binomial's base is respondent-level, not `n × trials`.
+>
+> **Nothing else changed**: no `ci_settings` field and no legend degradation clause (maintainer's
+> ruling) — after this, nothing falls back structurally, so such a clause could never fire; the residue
+> is stated once in `?tab_reg` and the runtime `svy_var_degraded()` covers a genuine failure.
+
+**Original plan, for the record:**
 
 Region: `tab_reg.R`'s empirical block (`reg_empirical`, `emp_col`, `REG_EMPIRICAL`) + `reg-influence.R`,
 then the four vignettes. Fresh session: a different large context from z14-ii, even though it reuses

@@ -139,7 +139,19 @@ d <- svydesign(ids = ~psu, strata = ~strate, weights = ~w, data = mon_enquete, n
 tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
 ```
 
-À savoir avant de s'y lancer : cela ne paie que là où l'information sur le plan existe réellement (cherchez une variable de strate ou de grappe dans votre fichier — s'il n'y en a pas, `kish_neff` est déjà toute la correction dont vous disposez), et cela coûte environ trois fois un tableau pondéré. Les modèles de régression de `tab_reg()` utilisent toujours des erreurs-types fondées sur le plan (`vignette("tabxplor-reg")`).
+Il y a donc **trois échelons**, et il vaut la peine de savoir sur lequel on se trouve :
+
+| ce que vous passez | ce que portent les intervalles |
+|---|---|
+| `wt = w` | l'estimation pondérée, sur le *n* brut — aucun effet de plan |
+| `wt = w` + `options(tabxplor.kish_neff = TRUE)` | l'inégalité des poids seule — aveugle aux grappes, aveugle au calage |
+| un plan `survey` comme `data` | l'effet de plan réel : strates, grappes, `fpc`, calage |
+
+**Vérifiez ce que votre fichier peut réellement vous donner avant de viser l'échelon 3.** Cherchez une variable de strate, de grappe ou de calage (`strate`, `grappe`, `psu`, `nomen`…). Beaucoup de fichiers de production et de recherche diffusent un seul poids calé et rien d'autre — les variables de plan sont retenues pour des raisons de confidentialité — et sur un tel fichier un plan ne porte que l'inégalité des poids, c'est-à-dire qu'il tombe à quelques pourcents de `kish_neff`. L'échelon 3 paie là où l'information de plan existe : une enquête que vous avez menée vous-même, un fichier accessible en accès sécurisé (CASD), ESS/SHARE, les évaluations de l'OCDE.
+
+Deux choses encore. Un tableau fondé sur le plan coûte environ trois fois un tableau pondéré. Et la correction est **exacte pour une cellule isolée**, alors qu'un **écart** cellule-vs-référence comporte en plus une covariance entre les deux cellules que cette méthode ne peut pas porter — l'écart ressort donc légèrement trop large plutôt que trop étroit. Elle ne vous donnera jamais une étoile que le plan ne soutient pas.
+
+Les tableaux de régression de `tab_reg()` suivent la même règle, pour les modèles comme pour leurs contreparties observées (`vignette("tabxplor-reg")`).
 
 
 ## Sous-tableaux

@@ -153,7 +153,19 @@ d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, ne
 tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
 ```
 
-Worth knowing before you reach for it: it pays off only where design information actually exists (look for a stratum or cluster variable in your file — if there is none, `kish_neff` is already all the correction available to you), and it costs roughly three times a weighted table. `tab_reg()` regression tables always use design-based standard errors for their **models** (`vignette("tabxplor-reg")`).
+So there are **three rungs**, and it is worth knowing which one you are on:
+
+| you pass | what the intervals carry |
+|---|---|
+| `wt = w` | the weighted estimate, on the raw *n* — no design effect at all |
+| `wt = w` + `options(tabxplor.kish_neff = TRUE)` | unequal weighting only — blind to clustering, blind to calibration |
+| a `survey` design as `data` | the real design effect: strata, clusters, `fpc`, calibration |
+
+**Check what your file can actually give you before reaching for rung 3.** Look for a stratum, cluster or calibration variable (`strate`, `grappe`, `psu`, `nomen`…). Many released research files ship one calibrated weight and nothing else — the design variables are withheld for confidentiality — and on such a file a design carries only the unequal weighting, i.e. it lands within a couple of percent of `kish_neff`. Rung 3 pays where the design information exists: a survey you ran yourself, a secure-access file, ESS/SHARE, the OECD assessments.
+
+Two more things to know. A design-based table costs roughly three times a weighted one. And the correction is **exact for a single cell**, while a cell-vs-reference *difference* also has a covariance between the two cells that this method cannot carry — so a difference comes out slightly too wide rather than too narrow. It will not hand you a star the design does not support.
+
+`tab_reg()` regression tables follow the same rule, models and observed companions alike (`vignette("tabxplor-reg")`).
 
 
 ## Sub-tables

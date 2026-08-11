@@ -403,6 +403,8 @@ reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
     if (anyNA(G)) return(NULL)
     delta <- cif(G)
     if (is.null(delta)) return(NULL)
+    emp <- reg_if_align(emp, length(delta), data[[svy_row_col]])
+    if (is.null(emp)) return(NULL)
     emp + delta
   }
 }
@@ -449,8 +451,27 @@ reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
     }
     delta <- coef_if(unname(G))
     if (is.null(delta)) return(NULL)
+    emp <- reg_if_align(emp, length(delta), data[[svy_row_col]])
+    if (is.null(emp)) return(NULL)
     emp + delta
   }
+}
+
+# reg_if_align() -- Last Phase z14-iii: put an influence vector built on a FRAME into the row space
+# the DESIGN uses, which is also the fit's. `[` does not drop rows on a CALIBRATED or PPS design --
+# survey keeps all n and sets prob = Inf -- so svy_domain_design() pads the fit's design back to full
+# length and svyglm keeps those zero-weight rows in model.matrix(). A leg built on the complete-case
+# frame is then SHORTER than its counterpart, and the two could not be differenced: measured, the
+# closed-form crude leg was 380 against a model leg of 400 (the length guard dropped the test), while
+# reg_ame_if_maker()'s own `emp + delta` RECYCLED, i.e. returned a wrong number with only a warning.
+# Scattering with zeros is exact, not an approximation: the padded rows carry design weight 0, so they
+# contribute nothing to either term. NULL when no row rule applies (svy_row_at()).
+#' @keywords internal
+reg_if_align <- function(v, n, des_rows) {
+  if (is.null(v) || length(v) == n) return(v)
+  at <- svy_row_at(n, suppressWarnings(as.integer(des_rows)))
+  if (is.null(at) || length(at) != length(v)) return(NULL)
+  out <- numeric(n); out[at] <- v; out
 }
 
 # reg_if_se() -- the standard error of a quantity whose per-observation influence contributions are `d`.

@@ -1,7 +1,13 @@
 # Regression assumption plots — design study
 
-Date: 2026-08-10. Status: **RESEARCH ONLY** — no R code written. This report answers Last Phase z12
-and records the maintainer's four rulings (§3). Implementation is a separate session.
+Date: 2026-08-10, **second research round 2026-08-11** (§0.B, §3 R5–R8, §4.4, §5.6–§5.8, §6.1–§6.2,
+§13, §17, §20). Status: **DESIGN COMPLETE, no R code written.** This report answers Last Phase z12 and
+records the maintainer's eight rulings (§3). Implementation is a separate session.
+
+The second round exists because round 1 designed the *plots* and left five questions open: which
+assumptions belong in the footer as numbers, which need the eye, where the plot data lives, how a user
+fixes a non-linearity once found, and how to name a test in one word. Those are now answered and
+measured, and one round-1 headline number is corrected (§1.1).
 
 Scope: replace `lm_plots()` with `reg_assumptions_plots()`, a model-assumption diagnostic covering
 every family `tab_reg()` can fit — gaussian, binomial, poisson / quasipoisson, the z3 modified-Poisson
@@ -21,17 +27,22 @@ lists what I could **not** verify.
 **The feature is justified by a defect in tabxplor's own flagship example, and the package already
 owns the hard half of the machinery.**
 
-Twelve findings govern the design.
+Twelve findings govern the plot design (§0.A); eight more, measured in the second round, govern where
+the *numbers* live and how a user acts on them (§0.B).
+
+### 0.A — round 1: the plots
 
 **Why it must exist.**
 
-1. **The model used throughout the regression vignette is badly mis-specified, and no tabxplor output
-   reveals it.** `married ~ race + age + rincome + relig`: `age` enters linearly, but the empirical
-   logit is an inverted U (−1.76 at age 22, +0.26 at 43, −0.50 at 79). Adding a quadratic gives
-   **ΔAIC = 1251** **[M]**. The linear term reports a log-OR of 0.145 per SD while the empirical-logit
-   line through the deciles gives 0.225 — a **55 % discrepancy** that is pure functional-form error
-   **[M]**. z9 gives that row a crude twin and z8-B tests the gap between them; neither can say *"one
-   slope is the wrong summary."*
+1. **The model used throughout the regression vignette is mis-specified, and no tabxplor output
+   reveals it — and the damage is not confined to the mis-specified row.** On
+   `married ~ race + age + rincome + relig` (n = 12 960), letting `age` curve moves the **printed
+   adjusted odds ratios of the other predictors by up to 23.8 %** (income "$25 000 or more":
+   OR 1.86 → 1.42; median move 10.4 %) and **flips one level's 5 % significance** (income
+   "$15 000 to 24 999": p = 0.0001 → 0.40) **[M]**. ΔAIC for the quadratic is **296**, for `ns(4)`
+   **465**, LRT p = 9.9e-67 **[M]**. z9 gives that row a crude twin and z8-B tests the gap between
+   them; neither can say *"one slope is the wrong summary — and it is bending the income effect you
+   came here to read."* (§1.1 corrects the round-1 numbers, which were not reproducible.)
 2. **The documented `lm_plots()` example errors, in both the EN and FR vignettes.** `m <- tab_reg(...)`
    then `lm_plots(m)` → *"With a data frame, supply `dependent` and `predictors`."* **[M]** A
    `tabxplor_tab` **is** a data frame, so it takes the data-frame branch. The maintainer wrote the
@@ -87,6 +98,60 @@ Twelve findings govern the design.
     originals **[M]**. Multinomial therefore gets **no residual panel** — calibration per category
     instead. This is a refusal, and the report states it as one.
 
+### 0.B — round 2: the numbers, the miniature, and the fix
+
+13. **The assumption block is affordable as an always-on default.** On the vignette's 4-predictor
+    binomial (2 numeric), the whole block costs **~44 ms against a 380 ms build (+12 %)**: curvature
+    refits 25 ms (both predictors), `car::vif` 3.6 ms, dispersion 0.3 ms, the two binned curves
+    3.0 ms, the separation probe 0.5 ms, one influence contrast 11.8 ms **[M]**. For scale,
+    `effect = "ame"` on the same model costs **2 153 ms** **[M]** — the block is noise beside the
+    feature the user already opts into. The one place that needs stating out loud is the
+    per-predictor curvature refit by family: glm **17 ms**, svyglm **81 ms**, polr **110 ms**,
+    multinom **277 ms** (n = 6 803) **[M]**.
+14. **`marginaleffects` silently returns AME = 0 for `poly()` and `ns()`.** Measured on
+    `marginaleffects 0.32.0`, every contrast form (`variables = "x"`, `list(x = 1)`, `list(x = sd)`,
+    `avg_slopes`) returns **0.000000** where `predict(newdata = )` gives the correct +0.038 **[M]**.
+    Root cause, reproduced in 12 lines: the orthogonal basis is **re-evaluated on the perturbed
+    data**, and an orthogonal polynomial absorbs a location shift exactly — max |ΔX| across the design
+    matrix 0.005, AME 0.002953 → **0.000000** **[M]**. `I(x^2)`, `poly(x, k, raw = TRUE)` and `log(x)`
+    are correct through every route **[M]**. **So tabxplor must never emit `poly()`/`ns()`** — the
+    single most consequential constraint on §5.8's grammar. (tabxplor's own compound-formula + `ame`
+    path happens to return the *correct* value today — −0.003818911, exactly the g-computation truth
+    **[M]** — because `insight` fails to recover its data and falls back to the `predvars` route. That
+    is luck, not contract, and §17.4 records it as such.)
+15. **Centring a curved predictor is required, not cosmetic.** Raw `age + I(age^2)` gives
+    **VIF 38.7** and cor(x, x²) = 0.985; the centred/scaled `z + I(z^2)` gives **VIF 1.2** and
+    cor = 0.266 **[M]**. Since round 2 adds a collinearity line to the footer, an uncentred emission
+    would make the package scream 38.7 at a perfectly well-specified model — the exact "wrong number"
+    failure `reg-influence.R` refuses. Centring also makes the linear coefficient readable: it is the
+    **slope at the mean, per 1 SD** (OR 1.577), which is what `multiplier = "sd"` already promises.
+    **Maintainer’s decision: ok to center all numeric predictors**, but it should be clear on docs for the user to know.
+16. **A curved predictor's crude twin needs no new machinery.** Fitting the univariable model with the
+    *same* frozen terms yields **term names identical to the model's** **[M]**, so z9's skeleton-key
+    alignment, `Obs_*`, `color = "adjustment"` and the z8-B gap test all work unchanged: model
+    OR 1.577 vs crude 1.638 (slope at the mean), 0.749 vs 0.730 (curvature) **[M]**.
+17. **A text sparkline reaches every backend; an SVG reaches one.** A 10-bin Unicode block sparkline is
+    **10 characters / 30 bytes**, is plain text (so console, markdown, html and Excel get it through
+    the existing `levels` column with no export machinery), and is legible: a straight line reads
+    `▁▂▃▃▄▅▆▆▇█`, the real `age` curve `▁▄▇▇█████▇`, an inverted U `▁▄▆▇██▇▆▄▁` **[M]**. A hand-rolled
+    inline `<svg><polyline>` is **121 bytes** minimal (240 with `xmlns`), against 1 084 bytes for
+    `svglite` and 843 for a base64 PNG **[M]** — 7–9× smaller, no new dependency, html only.
+18. **The cheap curve is the right curve.** The fit-free empirical link curve and the
+    partial-residual (component + residual) curve correlate **0.997** on the vignette model and give
+    sparklines that differ in one bar (`▁▄▇▇█████▇` vs `▁▄▇██████▇`) **[M]**. So the miniature uses the
+    fit-free one — which also means it survives the jamovi digest path, where no fit exists.
+19. **`car` earns its dependency, and multinomial is the one refusal.** `car::vif()` works on
+    lm / glm / svyglm / **polr / svyolr**; on `nnet::multinom` it warns *"No intercept: vifs may not be
+    sensible"* (the open easystats #907) **[M]**. A hand-rolled `det(R₁₁)det(R₂₂)/det(R)` VIF
+    reproduces `car`'s GVIF **exactly** for glm but returns 11.45 where `car` returns 1.01 for polr
+    **[M]** — so the 15-line replacement is not a drop-in, and §17.8 closes in `car`'s favour.
+20. **A score test would be 4× cheaper and is design-blind — rejected.** The no-refit Rao score test
+    for an added quadratic costs 7.6 ms vs 17–31 ms for the refit and agrees on the decision
+    (p 5.5e-37 vs 1.3e-34) **[M]**, but it returns the **identical p (1.15e-67) on a weights-only and
+    on a stratified + clustered design**, where the design-based Wald gives 5.7e-43 and 4.0e-37
+    **[M]**. The refit + the existing `reg_term_tests()` dispatcher (drop1 / regTermTest) is therefore
+    the single rule, and it is a rule the package already owns.
+
 ---
 
 ## 1. What the phase is actually for
@@ -102,36 +167,62 @@ numeric outcomes, and numeric predictors."* Those are two different jobs and bot
 The second is the one with a measured defect in the shipped documentation (§0.1), and it is the one
 that completes a story the package has been building since z5:
 
-| Question the reader has | What answers it today |
-|---|---|
-| How big is this effect? | `Model_OR` / `Model_β` / `Model_AME` |
-| Is it confounded? | `Obs_*` beside it (z5 `empirical =`), `color = "adjustment"` |
-| Is that gap real, or noise? | z8-B's `gap_se` + `color_signif` |
-| **Is the model's SHAPE right at all?** | **nothing** |
+| Question the reader has                | What answers it today                                        |
+|----------------------------------------|--------------------------------------------------------------|
+| How big is this effect?                | `Model_OR` / `Model_β` / `Model_AME`                         |
+| Is it confounded?                      | `Obs_*` beside it (z5 `empirical =`), `color = "adjustment"` |
+| Is that gap real, or noise?            | z8-B's `gap_se` + `color_signif`                             |
+| **Is the model's SHAPE right at all?** | **nothing**                                                  |
 
 `reg_assumptions_plots()` is the fourth row. Framing it that way is not decoration — it decides the
 default panel set (§6): the functional-form panels come **first**, because they are the ones that
 change what the table means.
 
-### 1.1 The motivating measurement, in full
+### 1.1 The motivating measurement, in full (CORRECTED 2026-08-11)
 
-`married ~ race + age + rincome + relig` on `gss_simple`, deciles of `age` **[M]**:
+⚠ **Round 1's numbers here were not reproducible and are replaced.** Round 1 reported n = 6 803 and
+ΔAIC = 1251; the vignette's model has **n = 12 960** complete cases (6 803 is what you get by dropping
+NAs on *every* column of `gss_simple`, which also drops `tvhours`, a variable the model does not use),
+and its ΔAIC is **296**. The qualitative conclusion is unchanged and the quantitative case is now
+*stronger*, because round 2 measured the consequence that matters (the third table below).
 
-| mean age | P(married) | empirical logit | n |
-|---:|---:|---:|---:|
-| 22 | 0.147 | −1.76 | 2141 |
-| 28 | 0.390 | −0.45 | 2141 |
-| 33 | 0.524 | +0.10 | 2141 |
-| 38 | 0.549 | +0.20 | 2141 |
-| 43 | 0.564 | +0.26 | 2141 |
-| 48 | 0.533 | +0.13 | 2141 |
-| 53 | 0.556 | +0.23 | 2141 |
-| 59 | 0.564 | +0.26 | 2140 |
-| 67 | 0.509 | +0.04 | 2140 |
-| 79 | 0.378 | −0.50 | 2140 |
+`married ~ race + age + rincome + relig` on `gss_simple` (n = 12 960), deciles of `age` **[M]**:
 
-`AIC` linear 28 933 → quadratic 27 682 (**ΔAIC = 1251**). R² of a straight line through the ten points
-0.475; of a quadratic 0.834 (**gain 0.36**).
+| mean age | P(married) | empirical logit |    n |
+|---------:|-----------:|----------------:|-----:|
+|     21.8 |      0.139 |           −1.83 | 1155 |
+|     26.5 |      0.322 |           −0.74 | 1170 |
+|     31.1 |      0.474 |           −0.10 | 1561 |
+|     35.5 |      0.536 |           +0.14 | 1267 |
+|     39.5 |      0.553 |           +0.21 | 1271 |
+|     43.5 |      0.564 |           +0.26 | 1270 |
+|     47.5 |      0.555 |           +0.22 | 1245 |
+|     51.9 |      0.557 |           +0.23 | 1413 |
+|     57.3 |      0.584 |           +0.34 | 1309 |
+|     66.8 |      0.537 |           +0.15 | 1299 |
+
+The shape is a **saturating rise, not an inverted U** (round 1 said inverted U; the fitted quadratic
+does turn over — vertex at age 52 — but the *empirical* curve only flattens over the observed range).
+R² of a straight line through the ten points **0.500**; of a quadratic **0.885**. AIC 16 960 → 16 664
+(**ΔAIC 296**); `ns(4)` 16 495 (**ΔAIC 465**); LRT p = 9.9e-67 **[M]**.
+
+**What it costs the reader** — the adjusted effects the table is actually about **[M]**:
+
+| printed row              | OR, age linear | OR, age quadratic |                        change |
+|--------------------------|---------------:|------------------:|------------------------------:|
+| income $25 000 or more   |          1.863 |             1.419 |                   **−23.8 %** |
+| income $15 000 to 24 999 |          1.273 |             1.056 | −17.0 % (**p 0.0001 → 0.40**) |
+| income $10 000 to 14 999 |          1.140 |             1.021 |                       −10.4 % |
+| race Black               |          0.416 |             0.398 |                        −4.3 % |
+| race Other               |          1.109 |             1.120 |                        +1.0 % |
+
+One income level's conclusion **flips at the 5 % threshold**. And the two models tell opposite
+substantive stories about age itself: linear says P(married) climbs monotonically to **0.686** at 85,
+quadratic says it peaks near 52 and falls to **0.219** **[M]**.
+
+**The AME is not a refuge.** `effect = "ame"` reports +0.0693 per SD under the linear specification
+and **+0.0296** under the quadratic — a factor **2.3** **[M]**. Marginalising fixes the *interpretation*
+of a curved fit; it does not repair a straight-line fit.
 
 This is the example in `vignettes/tabxplor-reg.Rmd`, in the FR article, in `?tab_reg`, and in the
 jamovi screenshots. It should become the worked example of the new vignette section — a package that
@@ -161,14 +252,14 @@ the cause of the model-comparison freeze) and this phase must not weaken it.
 
 `—` = base R **errors** ("no applicable method").
 
-| | `lm` | `glm` | `svyglm` | `polr` | `multinom` | `svyolr` |
-|---|---|---|---|---|---|---|
-| `residuals()` | ✓ | ✓ | ✓ | **NULL** | matrix n×K | **NULL** |
-| `rstandard()` / `rstudent()` | ✓ | ✓ | ✓ | — | — | — |
-| `hatvalues()` / `cooks.distance()` | ✓ | ✓ | ✓ ⚠ | — | — | — |
-| `fitted()` | ✓ | ✓ | ✓ | matrix n×K | matrix n×K | matrix n×K |
-| `model.frame()` / `model.matrix()` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `broom::augment()` | ✓ | ✓ | ✓ | ✓ (4 cols) | — | — |
+|                                    | `lm` | `glm` | `svyglm` | `polr`     | `multinom` | `svyolr`   |
+|------------------------------------|------|-------|----------|------------|------------|------------|
+| `residuals()`                      | ✓    | ✓     | ✓        | **NULL**   | matrix n×K | **NULL**   |
+| `rstandard()` / `rstudent()`       | ✓    | ✓     | ✓        | —          | —          | —          |
+| `hatvalues()` / `cooks.distance()` | ✓    | ✓     | ✓ ⚠      | —          | —          | —          |
+| `fitted()`                         | ✓    | ✓     | ✓        | matrix n×K | matrix n×K | matrix n×K |
+| `model.frame()` / `model.matrix()` | ✓    | ✓     | ✓        | ✓          | ✓          | ✓          |
+| `broom::augment()`                 | ✓    | ✓     | ✓        | ✓ (4 cols) | —          | —          |
 
 ⚠ `svyglm`'s hat values sum to p and correlate 0.45 with the weight **[M]** — they fold the *working*
 weights in, but they know nothing of strata or clusters (§8.3).
@@ -182,14 +273,14 @@ portable across the six classes.
 Measured by a subagent on a fresh install of `performance 0.17.1` / `DHARMa 0.5.0` / `see 0.14.1`,
 n = 400:
 
-| model | panels `check_model()` returns |
-|---|---|
-| `glm` binomial | 7 |
-| `svyglm` gaussian | 8 — **design ignored** |
-| `svyglm` binomial | 4 — Q-Q silently dropped |
-| `MASS::polr` | **2** |
-| `nnet::multinom` | **2** (and its VIF is [known-broken, #907, open](https://github.com/easystats/performance/issues/907)) |
-| `ordinal::clm` | **1** |
+| model             | panels `check_model()` returns                                                                         |
+|-------------------|--------------------------------------------------------------------------------------------------------|
+| `glm` binomial    | 7                                                                                                      |
+| `svyglm` gaussian | 8 — **design ignored**                                                                                 |
+| `svyglm` binomial | 4 — Q-Q silently dropped                                                                               |
+| `MASS::polr`      | **2**                                                                                                  |
+| `nnet::multinom`  | **2** (and its VIF is [known-broken, #907, open](https://github.com/easystats/performance/issues/907)) |
+| `ordinal::clm`    | **1**                                                                                                  |
 
 The `svyglm` result is the disqualifying one: *the same call returns byte-identical homogeneity and
 Cook's-distance panels for a weights-only design and for a `strata = ~s, ids = ~c` design.* It looks
@@ -206,17 +297,32 @@ the easy families in a second visual language and leaves the hard ones exactly w
 
 ## 3. Maintainer rulings (2026-08-10)
 
-| # | Question | Ruling |
-|---|---|---|
-| **R1** | Entry point | **Table + data, AND accept a bare fit as a secondary form.** `reg_assumptions_plots(x, data)` is primary; a fitted `lm`/`glm`/`svyglm`/`polr`/`multinom` as `x` is the secondary form. ONE engine underneath. |
-| **R2** | The numeric side | **Plots carry their verdicts as subtitles, AND `tab_reg(stats = "assumptions")` adds a compact footer block** (φ, GOF p, Brant p, max VIF) so an exported table warns without the plots. |
-| **R3** | `or_plot()` | **Keep the name, share the internals.** It adopts the new theme / guard / i18n seam. Zero user-visible change. |
-| **R4** | Dependencies | **No new Suggests except `car`** (for `vif()`'s GVIF on multi-df factors). Everything else is built on `ggplot2` + `gridExtra` (both already Suggests) and the package's own `reg-influence.R`. |
+| #      | Question         | Ruling                                                                                                                                                                                                        |
+|--------|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **R1** | Entry point      | **Table + data, AND accept a bare fit as a secondary form.** `reg_assumptions_plots(x, data)` is primary; a fitted `lm`/`glm`/`svyglm`/`polr`/`multinom` as `x` is the secondary form. ONE engine underneath. |
+| **R2** | The numeric side | **Plots carry their verdicts as subtitles, AND `tab_reg(stats = "assumptions")` adds a compact footer block** (φ, GOF p, Brant p, max VIF) so an exported table warns without the plots.                      |
+| **R3** | `or_plot()`      | **Keep the name, share the internals.** It adopts the new theme / guard / i18n seam. Zero user-visible change.                                                                                                |
+| **R4** | Dependencies     | **No new Suggests except `car`** (for `vif()`'s GVIF on multi-df factors). Everything else is built on `ggplot2` + `gridExtra` (both already Suggests) and the package's own `reg-influence.R`.               |
 
 Two consequences of R2 worth stating up front: the word *assumptions* now names two coordinated
 things (a `stats =` value and a plot function), which is the desired symmetry; and the footer block
 must be **rendered from the same fact table as the panel subtitles** (§5.3), or the two will drift —
 the §5 disease Phase 17 spent itself removing.
+
+### 3.1 Round-2 rulings (2026-08-11)
+
+| #      | Question                                                    | Ruling                                                                                                                                                                                             |
+|--------|-------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **R5** | The in-table miniature                                      | **Both renderings, one stored curve.** A Unicode text sparkline in the numeric predictor's own row — console, markdown, html and Excel — *and* an inline `<svg>` upgrade in the html engine. §5.7. |
+| **R6** | Fitting a predictor as something other than a line          | **`shape = c(age = "quadratic")`** — a named vector over numeric predictors, the same idiom as `reference =` / `multiplier =` / `family =`. `predictors` stays a pure list of column names. §5.8.  |
+| **R7** | When the assumption statistics are computed                 | **Everything, always.** No `stats = "assumptions"` opt-in gate on the block; it rides the default footer. Measured price §0.B.13. §13.                                                             |
+| **R8** | What a curved predictor's row shows on the coefficient path | **The raw term rows** — one row per model term (`age`, `age²`), each with its own estimate, crude twin and adjustment colour. No refusal, no mixed estimands in a column. §5.8.3.                  |
+
+R5–R8 interlock more than they look. R8 (two coefficient rows) is only readable because R6 emits a
+**centred** parameterisation, which makes row 1 "the slope at the mean" instead of a number nobody can
+read — and only *safe* because R7 puts a collinearity line in the footer that an uncentred emission
+would blow up (§0.B.15). R5's miniature is affordable only because the curve it draws is the fit-free
+one (§0.B.18), which is also the only one available on the jamovi digest path.
 
 ---
 
@@ -241,6 +347,12 @@ reg_assumptions_plots(
 Returns, invisibly, the assembled `gtable` (drawn on the current device) — the same contract as
 `or_plot()` and today's `lm_plots()`, so existing user code that captures the return value keeps
 working.
+
+**`data` is optional, and which panels you get depends on it** (round 2, §4.4): the checks whose
+inputs the table already carries — linearity, calibration, and every footer verdict — draw from the
+stored curves with no `data` and no refit. `data` unlocks the point-level panels (Q-Q, influence,
+binned residuals, scale–location). Calling without it emits one message naming what was skipped and
+how to get it, never a silent half-grid.
 
 ### 4.1 How the table form gets a fit — the `fit_spec` field
 
@@ -271,6 +383,7 @@ is silently about a different model. The check is cheap and specific:
 ```
 nrow(reg_complete_frame(data, drop_vars))  ==  the fit's own nobs   (already in the glance/test attr)
 ```
+
 On mismatch: abort naming the discrepancy (*"`data` has 6 210 complete cases for this model; the table
 was built on 6 803. Pass the data frame the table was built from."*). Never a warning — a diagnostic
 plot of the wrong model is worse than no plot.
@@ -281,11 +394,11 @@ The table can hold several models three ways, and the rule is one rule: **`model
 is the default, and a message names the choice when there is more than one** — the exact idiom
 `or_plot(column =)` already uses.
 
-| table shape | `model =` accepts | default |
-|---|---|---|
-| several dependents | a dependent name | the first |
-| `predictors = list(m1 = , m2 = )` | a model label | the first |
-| `split_var =` | a group level | the first |
+| table shape                       | `model =` accepts | default   |
+|-----------------------------------|-------------------|-----------|
+| several dependents                | a dependent name  | the first |
+| `predictors = list(m1 = , m2 = )` | a model label     | the first |
+| `split_var =`                     | a group level     | the first |
 
 `reg_meta` already carries `dependent`, `model_labels` and `split_var`, so the selector needs no new
 metadata. For `split_var` the refit is per group, which is what makes the panels comparable to the
@@ -297,6 +410,49 @@ If `x` inherits `lm`/`glm`/`svyglm`/`polr`/`multinom`/`svyolr`, it is diagnosed 
 is read from the fit rather than from `reg_meta`, `data` is ignored (the fit knows its own frame), and
 everything downstream is identical. This is what `lm_plots()` could do, preserved — and it is ~10 lines,
 because both forms reduce to the same internal quadruple `(fit, frame, family, weights)`.
+
+### 4.4 The assumption ladder — the answer to "footer, curve, or plot?"
+
+The maintainer's first question was *which assumptions belong in the footer as a statistic, which need
+the user's eye, and which are worth a plot only for teaching*. The answer is not a list of eleven
+checks; it is **four rungs of output**, and each check is placed by two properties of the check itself
+— *does one number decide it?* and *does its input survive in the table?* A check may reach more than
+one rung (linearity reaches 1 and 2), but it reaches the **lowest** rung its two answers allow, and
+never a higher one merely because a plot would look good.
+
+| rung           | what it is                                                                                 | reaches                                      | cost                      | when it fires                                         |
+|----------------|--------------------------------------------------------------------------------------------|----------------------------------------------|---------------------------|-------------------------------------------------------|
+| **1. Verdict** | one number + a threshold, in the footer                                                    | every export, always                         | free–277 ms               | the answer is a magnitude and a magnitude decides     |
+| **2. Shape**   | a 10-bin curve stored in `meta`, rendered as a sparkline in the row and as a faceted panel | every export (text) + html (svg) + the panel | 1.5 ms/predictor          | a number says *whether*, only a curve says *how*      |
+| **3. Panel**   | a point-level plot, needs `data` and a refit                                               | `reg_assumptions_plots(x, data)`             | 60 ms refit + ~1.5 s grid | the diagnostic *is* the point cloud (extremes, tails) |
+| **4. Lesson**  | a panel that a well-specified model does not need                                          | `check = "all"`                              | on request                | it teaches what "fine" looks like                     |
+
+Applying the two properties, check by check:
+
+| check                                          |   rung    | why that rung                                                                                                                                             |
+|------------------------------------------------|:---------:|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| dispersion φ                                   |     1     | φ = 1.56 *is* the finding; no plot adds to it                                                                                                             |
+| collinearity (max GVIF)                        |     1     | a threshold measure by construction (4 / 10)                                                                                                              |
+| separation                                     |     1     | a yes/no fact about the fit                                                                                                                               |
+| fitted > 1 (`rr`)                              |   1 + 3   | the share is the verdict; the histogram is the teaching version                                                                                           |
+| zero counts (poisson)                          |     1     | observed 449 vs expected 570 **[M]** — two numbers, no plot needed                                                                                        |
+| parallelism (Brant)                            |   1 + 2   | the p rejects at survey n on a mild departure (p = 0.00089 for a 0.05-logit spread **[M]**), so the *curve* is what decides — rung 2 is not optional here |
+| **linearity**                                  | **1 + 2** | the test says "not a line"; only the curve says "it saturates after 45", which is what tells you to write `shape = "quadratic"` rather than `"log"`       |
+| calibration                                    |     2     | the test for it (Hosmer–Lemeshow) is discredited (§7.2); the curve is the recommendation                                                                  |
+| influence                                      |   1 + 3   | max ‖IF‖ is a verdict; *which* observations and whether they cluster is a point cloud                                                                     |
+| Q-Q / normality                                |     3     | **the canonical "needs the eye" case**: every test rejects at survey n, and the decision is about the *magnitude and location* of the departure           |
+| binned residuals vs fitted                     |     3     | a point-and-band plot by nature                                                                                                                           |
+| scale–location, residuals vs fitted (gaussian) |     4     | LINE's canonical teaching pair; for a well-specified model they repeat what σ and φ already said                                                          |
+| the lineup / `nullabor` protocol               |     4     | the strongest teaching device in the literature, the wrong default cost (§9.2)                                                                            |
+
+Two rules fall out, and they are the whole design:
+
+- **A check that reaches rung 2 or 3 still keeps its rung-1 verdict.** The footer never goes quiet
+  because a plot exists. That is what makes an *exported* table honest on its own.
+- **Nothing on rung 1 or 2 needs `data`.** Rung 1 is a function of the fit (computed at build, stored
+  in `test`); rung 2 is a function of the raw variables (computed at build, stored in `meta`). Only
+  rung 3 refits. This is the answer to "is refitting the only way?" — **no, and the two rungs that
+  matter most are the ones that never refit.**
 
 ---
 
@@ -314,12 +470,12 @@ Base R, `findInterval` + `rowsum`, O(n), one pass. Returns `x` (weighted bin mea
 
 **It is the load-bearing primitive.** Four panels are `rd_bin()` plus a label:
 
-| panel | `x` | `y` | reading |
-|---|---|---|---|
-| binned residuals | fitted | response residual | scatter about 0 within ±2 SE |
-| empirical link | a predictor | the observed y | on the link scale, a straight line |
-| calibration | fitted | the observed y | the diagonal |
-| mean–variance | fitted | the response | `var` vs `y`, the identity line |
+| panel            | `x`         | `y`               | reading                            |
+|------------------|-------------|-------------------|------------------------------------|
+| binned residuals | fitted      | response residual | scatter about 0 within ±2 SE       |
+| empirical link   | a predictor | the observed y    | on the link scale, a straight line |
+| calibration      | fitted      | the observed y    | the diagonal                       |
+| mean–variance    | fitted      | the response      | `var` vs `y`, the identity line    |
 
 Three reasons it wins over a smoother, all measured or sourced:
 
@@ -358,14 +514,14 @@ loudly.
 
 ### 5.2 Primitive 2 — `rd_resid(fit, family, y, w)`: one residual, dispatched
 
-| family | residual | why |
-|---|---|---|
-| gaussian | `rstandard()` | the classic; `plot.lm` panel 3/5 uses the same |
-| binomial, `rr` | randomised quantile | deviance residuals for a 0/1 outcome are near-useless (§7.2) |
-| poisson, quasipoisson | randomised quantile | discreteness; catches over-dispersion directly |
-| ordinal | randomised quantile from the cumulative `fitted()` matrix | works, and nothing else does |
-| grouped binomial | randomised quantile (binomial CDF at the counts) | m > 1 makes deviance usable too, but one rule is better than two |
-| **multinomial** | **none — refused** | order-dependent (§7.6) |
+| family                | residual                                                  | why                                                              |
+|-----------------------|-----------------------------------------------------------|------------------------------------------------------------------|
+| gaussian              | `rstandard()`                                             | the classic; `plot.lm` panel 3/5 uses the same                   |
+| binomial, `rr`        | randomised quantile                                       | deviance residuals for a 0/1 outcome are near-useless (§7.2)     |
+| poisson, quasipoisson | randomised quantile                                       | discreteness; catches over-dispersion directly                   |
+| ordinal               | randomised quantile from the cumulative `fitted()` matrix | works, and nothing else does                                     |
+| grouped binomial      | randomised quantile (binomial CDF at the counts)          | m > 1 makes deviance usable too, but one rule is better than two |
+| **multinomial**       | **none — refused**                                        | order-dependent (§7.6)                                           |
 
 The randomised quantile residual (Dunn & Smyth 1996) needs only the predictive CDF evaluated at `y`
 and at `y⁻`, then `qnorm(runif(F_lo, F_hi))`. That is **one function** for four families, because
@@ -401,18 +557,18 @@ each position*, so a handful of excursions is expected. Say so in the subtitle, 
 One row per check. This is the `MEASURES` / `REG_EMPIRICAL` pattern, and it is what makes R2's footer
 block impossible to drift from the panel subtitles: **both read this table.**
 
-| column | meaning |
-|---|---|
-| `key` | `"linearity"`, `"binned_resid"`, `"qq"`, `"calibration"`, `"dispersion"`, `"zeros"`, `"influence"`, `"collinearity"`, `"parallel"`, `"separation"`, `"predicted_range"` |
-| `families` | the families it applies to (a character vector; the gate) |
-| `assumption` | the assumption it tests, **named the way the source names it** (§9.1) |
-| `panel` | the builder function |
-| `stat` | the numeric verdict function — `NULL` where the check is graphical only |
-| `verdict` | thresholds → `"ok"` / `"warn"` / `"bad"` |
-| `caption` | the pedagogical one-liner, `gettext`'d |
-| `per_predictor` | logical — does this check produce one panel per numeric predictor? |
-| `needs` | what it requires (`"design_free"`, `"m_gt_1"`, `"count"`, …) — the refusal gate (§8, §12) |
-| `footer` | logical — does `stats = "assumptions"` print it? |
+| column          | meaning                                                                                                                                                                 |
+|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `key`           | `"linearity"`, `"binned_resid"`, `"qq"`, `"calibration"`, `"dispersion"`, `"zeros"`, `"influence"`, `"collinearity"`, `"parallel"`, `"separation"`, `"predicted_range"` |
+| `families`      | the families it applies to (a character vector; the gate)                                                                                                               |
+| `assumption`    | the assumption it tests, **named the way the source names it** (§9.1)                                                                                                   |
+| `panel`         | the builder function                                                                                                                                                    |
+| `stat`          | the numeric verdict function — `NULL` where the check is graphical only                                                                                                 |
+| `verdict`       | thresholds → `"ok"` / `"warn"` / `"bad"`                                                                                                                                |
+| `caption`       | the pedagogical one-liner, `gettext`'d                                                                                                                                  |
+| `per_predictor` | logical — does this check produce one panel per numeric predictor?                                                                                                      |
+| `needs`         | what it requires (`"design_free"`, `"m_gt_1"`, `"count"`, …) — the refusal gate (§8, §12)                                                                               |
+| `footer`        | logical — does `stats = "assumptions"` print it?                                                                                                                        |
 
 Adding a check is then **one row**, exactly as adding a colour measure became one `MEASURES` row in
 17d. The `stat` + `verdict` columns are what `tab_reg(stats = "assumptions")` renders; `panel` +
@@ -430,6 +586,204 @@ geometry, same y-scale meaning, one per numeric predictor — so they are ONE `g
 maintainer's *"facets or grid_arrange in a visually clear way"* answered precisely: facets within a
 check, grid across checks.
 
+### 5.6 Where the numbers live — three stores that already exist
+
+The maintainer's third question: *what is the most user-friendly way to store the assumption data — is
+refitting the only way; can the curves be computed in `tab_reg()` and stored in the summary-stats
+tibble; would that lose the individual points that are sometimes needed?* Measured answer: **three
+stores, all of them already in the package, and none of them new.**
+
+| what                  | store                                                      | shape                                                   | size                                                                                   | who reads it                                    |
+|-----------------------|------------------------------------------------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------|-------------------------------------------------|
+| rung-1 verdicts       | the **`test`** attribute (one row per model column × stat) | the existing `new_test_tibble()` schema                 | ~10 rows                                                                               | the footer, the panel subtitles                 |
+| rung-2 curves         | **`meta$assumptions`**                                     | `list(<model col> = list(<var> = tibble(x, y, n, se)))` | **1.6 KB per curve**; 4 numeric × 3 models = **19.5 KB** against a 32 KB table **[M]** | the sparkline, the linearity/calibration panels |
+| the recipe for rung 3 | **`meta$fit_spec`** (§4.1)                                 | strings + a formula                                     | **4.3 KB** **[M]**                                                                     | `reg_assumptions_plots()` → `reg_fit()`         |
+
+Three consequences worth stating, because each closes a question the maintainer asked:
+
+1. **Refitting is not the only way, and it is not the main way.** Rungs 1–2 — the linearity verdict,
+   its curve, dispersion, collinearity, calibration, parallelism — are computed *inside the build*,
+   from the fit that already exists and the raw columns that are already in hand, and travel with the
+   table into every export. The refit exists only for the point-level panels (§4.4 rung 3).
+2. **Storing the curve loses nothing that a curve can show, and it is what makes the miniature free.**
+   The binned curve *is* the diagnostic for the shape question — the point cloud adds nothing to it
+   (for a binary outcome the raw residual takes exactly two values given p̂, §5.1). What the points are
+   genuinely needed for is Q-Q and influence — which is exactly what rung 3 keeps. So the split is not
+   a compromise, it is the honest boundary between "the shape of a relationship" and "the behaviour of
+   individual observations".
+3. **The curve is computed once per (model column × numeric predictor), never per rendering.** In a
+   model-comparison table (`predictors = list(m1 = , m2 = )`) the *raw* empirical curve of `age` is the
+   same object in every model that contains `age` — it does not depend on the model at all
+   (§0.B.18: it is the fit-free curve). So it is computed once per predictor and referenced by each
+   model column, and a 5-model comparison stores five references to one 1.6 KB tibble, not five copies.
+   The rung-1 *verdicts* do depend on the model and are per column, as every `test` row already is.
+
+⚠ **The jamovi digest path** (`reg_build_digest`, which deliberately keeps no model frame) can compute
+the rung-2 curves — they need only the raw columns — but not the rung-1 statistics that read the fit.
+That is the existing `needs` gate, one more value: `needs = "fit"`. It degrades to curves + a note, and
+that is a better degradation than the alternative, because the curve is the item the live UI most wants.
+
+### 5.7 The miniature (R5) — one curve, two renderings
+
+**Where it goes.** A numeric predictor's `levels` cell is built at `tab_reg.R:3624-3639`, where the
+multiplier already relabels it (`age` → `age (per 1 SD (13.5))`). The sparkline is appended **at that
+same site, in that same loop** — it is one more thing the row label says about a numeric predictor, and
+it is therefore plain text in a plain character column, which is why it reaches every backend with no
+export machinery whatsoever:
+
+```text
+  var     levels                         n   Model_OR   Obs_OR
+  age     age (per 1 SD) ▁▄▇▇█████▇  12 960   1.35***   1.46***
+  race    White                       8 106       ref      ref
+  race    Black                       2 517  1/2.40*** 1/2.68***
+```
+
+**The text rendering.** Eight block glyphs `▁▂▃▄▅▆▇█`, 10 quantile bins, min–max rescaled: 10
+characters, 30 bytes **[M]**. Rescaling is *within the predictor*, so the sparkline answers "is it a
+line?", never "is the effect big?" — the estimate column answers that, and conflating the two would be
+the classic dual-encoding error. Legibility was measured, not assumed (§0.B.17): a straight line and a
+saturating curve are distinguishable at a glance, and so is noise (`▃▁▄▁▅█▂▅▅▃`).
+
+**The html upgrade.** `render_kable_html()` swaps the glyph run for a 121-byte inline
+`<svg><polyline>` **[M]** built from the same stored bins, with the stroke inherited from
+`currentColor` so `tab_css()`'s light/dark/print themes carry it for free (z11's palette applies
+without a single new colour rule).
+
+⚠ **Two implementation traps, both real:**
+
+- **The html engine escapes label cells.** `html_escape_br()` (`tab-render-html.R:131`) HTML-escapes
+  everything and then un-escapes exactly `<br>`. An `<svg>` written into the level label would render as
+  literal text. The fix is one more un-escape in **that same function** — not a second raw-cell path —
+  keeping "one place decides what markup of ours survives escaping".
+- **Fonts.** Block glyphs need a font that has them (skimr documents Windows console failures and ships
+  `fix_windows_histograms()` for exactly this). tabxplor needs the same escape: an option
+  (`tabxplor.spark`, default `TRUE`) and an ASCII fallback. Excel is fine (Calibri has the block), and
+  LaTeX/PDF via pandoc is the one place to expect trouble.
+
+**What it is not.** Not a second computation (§5.6.3), not a new column (no table gets wider), not a
+new fmt display token (the `levels` column is character, not `fmt`, so `format()` remains the only
+string producer for *values* — the export-parity contract is untouched). And honestly: **no statistical
+software does this today** (MATLAB puts sparklines in Live Script table *headers*; gt/kableExtra put
+them in dedicated *columns*), so it is a real novelty, with the review risk that carries.
+
+### 5.8 `shape =` (R6) — fitting a predictor as something other than a line
+
+The plots find a non-linearity; `shape =` is how the user fixes it without leaving the framework.
+Today they cannot: `predictors = c("race", "poly(age, 2)")` fails with *"objet 'poly(age, 2)'
+introuvable"* **[M]**, and the formula escape hatch that does work silently disables `empirical =`,
+`color = "adjustment"`, `multiplier`, and the per-predictor global test, while printing rows a reader
+cannot interpret (`poly(age, 2) | 1`).
+
+#### 5.8.1 The grammar
+
+```r
+tab_reg(gss_simple, "married", c("race", "age", "rincome"),
+        shape = c(age = "quadratic"))        # named over numeric predictors; the rest stay linear
+```
+
+| value                     | emitted terms                       | rows added | why it is in the set                                           |
+|---------------------------|-------------------------------------|------------|----------------------------------------------------------------|
+| `"linear"` (default)      | `z`                                 | 1          | today's behaviour, byte-identical                              |
+| `"quadratic"`             | `z + I(z^2)`                        | 2          | the standard remedy; the one every source names                |
+| `"log"`                   | `I(log(x))`                         | 1          | diminishing returns — the other shape social data actually has |
+| `"sqrt"`                  | `I(sqrt(x))`                        | 1          | the count-data cousin of `log`                                 |
+| `"cut5"` / an integer `5` | a 5-level factor of quantile groups | 5          | **the sociologist's remedy**, see 5.8.4                        |
+
+where `z = (x − x̄)/s` with **x̄ and s frozen as literals in the formula** at build time, exactly as z9
+freezes the `multiplier`. For `"log"` and `"sqrt"` it is the *transformed* column that is centred and
+scaled (`z = (log x − mean log x)/sd(log x)`), so `multiplier = "sd"` keeps meaning "per 1 SD of the
+term as fitted" for every shape — one rule, and the row label stays true. Everything else is out —
+see 5.8.5.
+
+#### 5.8.2 Why it integrates with nothing new
+
+`shape` changes *which terms a predictor emits*, and nothing else. The predictor remains **one
+predictor**, which is the property every downstream subsystem keys on:
+
+- **the skeleton** — `reg_skeleton()` already emits one row per term for a factor; a curved numeric
+  emits two rows with the same `var`, which is the same shape.
+- **the crude twin (z9)** — `reg_empirical_fit()` refits *one predictor* with the model's own family,
+  design, CI method and multiplier; give it the same shape and its **term names are identical to the
+  model's** **[M]**, so `reg_skel_match()` aligns them unchanged.
+- **`color = "adjustment"` and the z8-B gap test** — per term, both legs on the same scale, same rows:
+  `reg_coef_if_maker()` needs no change. Measured on the vignette model: model OR 1.577 vs crude 1.638
+  for the slope at the mean **[M]**.
+- **`effect = "ame"`** — one row per predictor, correct to the g-computation truth **[M]**.
+- **`multiplier`** — absorbed by the centring: both terms are already per-SD.
+- **jamovi** — the picker gains one dropdown per numeric predictor beside the existing scaling one; the
+  digest/reref contract is untouched, because a shape change is a *different model*, hence a different
+  cache key, not a reparametrisation.
+
+⚠ **The one rule the implementation must state once, because it is the only 1-to-1 that breaks:** the
+skeleton emits **one row per model TERM on the coefficient path, one row per PREDICTOR on the marginal
+path**. Today those coincide (a numeric predictor is one term; a factor level is one term). A curved
+predictor is the first case where they differ — two coefficient rows, one AME row — so
+`reg_skeleton()` must take the effect into account, and `reg_marginal_column()`'s `(var, level)` key
+must find `age`, not `age (per 1 SD, at the mean)`. Writing it as a rule, not as an `if`, is what keeps
+it from becoming the next §2 disease.
+
+#### 5.8.3 What the table shows (R8) — and why centring is what makes it readable
+
+Two rows, each with its own estimate, crude twin, stars and adjustment colour:
+
+```text
+  var    levels                                    Model_OR    Obs_OR
+  age    age (per 1 SD, at the mean) ▁▄▇▇█████▇       1.58***   1.64***
+  age    age² (curvature)                             0.75***   0.73***
+```
+
+Both numbers are readable **because the emitted variable is centred and scaled**: row 1 is the odds
+ratio per 1 SD *at the mean of age*, row 2 says the slope shrinks as you move away from it. The
+uncentred emission prints 1.184 and 0.99841 **[M]** — a number nobody can read and a number that looks
+like nothing. And centring is not merely nicer: it takes the collinearity from **VIF 38.7 to 1.2**
+**[M]**, without which R7's new footer line would flag every curved model as broken.
+
+The curvature row's sign is the finding: `< 1` = the effect flattens or turns over, `> 1` = it
+accelerates. The vertex (age 52.2 **[M]**) belongs in the panel subtitle, not in a cell.
+
+#### 5.8.4 `cut` — the remedy the package renders best
+
+Worth its own note, because it is the one that costs *nothing at all*: turning `age` into 5 quantile
+groups makes it a **factor**, so it inherits the entire factor machinery — one OR per group, a
+*saturated* crude twin (the exact observed contrast, not a univariable fit), per-level N, per-level
+colours, adjustment gaps, Woolf intervals — and the non-linearity becomes visible **in the printed
+numbers themselves**, with no new estimand and no `marginaleffects` involvement. For tabxplor's
+audience (a literary-studies student reading an OR table) this is the more teachable fix, and the reg
+vignette already gestures at it (*"something worth checking (with `cut()`, or splines)"*). It should be
+the remedy the vignette teaches **first**, with `"quadratic"` as the parsimonious alternative.
+
+#### 5.8.5 What is deliberately excluded — and one of them is a wrong number, not a preference
+
+- **`poly()` and `ns()`/`bs()` are never emitted.** §0.B.14: `marginaleffects` returns **AME = 0.000000**
+  for them, silently, because the basis is re-evaluated on the perturbed data and an orthogonal basis
+  absorbs a location shift exactly **[M]**. This is not a limitation to work around — it is a wrong
+  number that would reach a user's table, and the package's rule is to return nothing rather than a
+  wrong number. Splines therefore stay available **only** through the formula escape hatch, where
+  §17.4's guard must warn.
+- **Cubic and higher.** A white elephant for this audience: three rows nobody can read, and the honest
+  answer at that point is `cut` or a spline in a different tool.
+- **Arbitrary expressions in `predictors`.** Rejected in R6: every site that keys on a predictor *name*
+  (skeleton, crude refit, multiplier, reference, `split_var`, the jamovi picker) would have to learn to
+  parse and re-emit them, and the name the user reads becomes an expression.
+- **`scale()` inside the formula.** Measured trap: prediction on a subset re-scales with the subset's
+  own mean, so `predict(newdata =)` disagrees with the fit **[M]**. This is why the centring constants
+  are frozen as literals.
+
+#### 5.8.6 The formula escape hatch — keep, and fix two things
+
+It stays (interactions have no other route, and Phase 17 already ruled "keep"). Two defects to fix in
+the same session, both measured:
+
+1. **The refusal message blames the wrong thing.** `tab_reg(gss, married ~ race + poly(age,2),
+   empirical = TRUE)` says *"`empirical` … is not available for any of these outcome families"* on a
+   **binomial** model **[M]**. The cause is the compound formula (`reg_crude_key(compound = TRUE)` →
+   `NA`), not the family. One `cli` branch (`tab_reg.R:5045`).
+2. **`poly()`/`ns()` + `effect = "ame"` must warn.** Today it is a coin flip: the same model returns the
+   correct AME through tabxplor and 0 through a direct `marginaleffects` call **[M]**, decided by
+   whether `insight` can recover the data. A cheap, exact guard exists — compare the returned AME with
+   the g-computation difference `mean(predict(x + k)) − mean(predict(x))`, two lines — and refuse on
+   disagreement.
+
 ---
 
 ## 6. The panels, per family
@@ -437,19 +791,19 @@ check, grid across checks.
 `auto` selects the rows of `REG_CHECKS` whose `families` matches and whose `needs` are satisfied.
 Order matters: **functional form first**, because it is the check that changes what the table means.
 
-| # | check | gaussian | binomial | poisson/quasi | `rr` | grouped binom | ordinal | multinomial |
-|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1 | **linearity** (per numeric predictor, faceted) | ✓ resid vs x | ✓ empirical logit | ✓ log empirical mean | ✓ log empirical mean | ✓ empirical logit | ✓ cumulative logits | ✓ baseline logits |
-| 2 | **binned residuals** vs fitted | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
-| 3 | **Q-Q** of the residual | ✓ standardized | ✓ quantile | ✓ quantile | ✓ quantile | ✓ quantile | ✓ quantile | **refused** |
-| 4 | **calibration** (predicted vs observed) | — | ✓ | — | ✓ | ✓ | ✓ per cut | ✓ per category |
-| 5 | **scale–location** | ✓ | — | — | — | — | — | — |
-| 6 | **mean = variance** | — | — | ✓ | — | — | — | — |
-| 7 | **zero counts** obs vs expected | — | — | ✓ | — | — | — | — |
-| 8 | **influence** ‖IF‖ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 9 | **collinearity** (VIF) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 10 | **parallel lines** (proportional odds) | — | — | — | — | — | ✓ | — |
-| 11 | **predicted range** (fitted > 1) | — | — | — | ✓ | — | — | — |
+| #  | check                                          |    gaussian    |     binomial      |    poisson/quasi     |         `rr`         |   grouped binom   |       ordinal       |    multinomial    |
+|----|------------------------------------------------|:--------------:|:-----------------:|:--------------------:|:--------------------:|:-----------------:|:-------------------:|:-----------------:|
+| 1  | **linearity** (per numeric predictor, faceted) |  ✓ resid vs x  | ✓ empirical logit | ✓ log empirical mean | ✓ log empirical mean | ✓ empirical logit | ✓ cumulative logits | ✓ baseline logits |
+| 2  | **binned residuals** vs fitted                 |       ✓        |         ✓         |          ✓           |          ✓           |         ✓         |          —          |         —         |
+| 3  | **Q-Q** of the residual                        | ✓ standardized |    ✓ quantile     |      ✓ quantile      |      ✓ quantile      |    ✓ quantile     |     ✓ quantile      |    **refused**    |
+| 4  | **calibration** (predicted vs observed)        |       —        |         ✓         |          —           |          ✓           |         ✓         |      ✓ per cut      |  ✓ per category   |
+| 5  | **scale–location**                             |       ✓        |         —         |          —           |          —           |         —         |          —          |         —         |
+| 6  | **mean = variance**                            |       —        |         —         |          ✓           |          —           |         —         |          —          |         —         |
+| 7  | **zero counts** obs vs expected                |       —        |         —         |          ✓           |          —           |         —         |          —          |         —         |
+| 8  | **influence** ‖IF‖                             |       ✓        |         ✓         |          ✓           |          ✓           |         ✓         |          ✓          |         ✓         |
+| 9  | **collinearity** (VIF)                         |       ✓        |         ✓         |          ✓           |          ✓           |         ✓         |          ✓          |         ✓         |
+| 10 | **parallel lines** (proportional odds)         |       —        |         —         |          —           |          —           |         —         |          ✓          |         —         |
+| 11 | **predicted range** (fitted > 1)               |       —        |         —         |          —           |          ✓           |         —         |          —          |         —         |
 
 Row 8 is the row no other package can draw for the last two columns (§0.4). Row 11 exists because the
 modified Poisson's fitted "probabilities" genuinely can exceed 1 — measured max **1.004**, 0.01 % of
@@ -458,6 +812,79 @@ rather than a theoretical caveat.
 
 Default grid: `check = "auto"` draws rows 1–3 plus the family-specific rows and row 8, capped at 6
 panels; `check = "all"` draws every applicable row. `check = c("linearity", "qq")` draws exactly those.
+
+### 6.1 Shared framework vs family-specific — and the seam is one fact that already exists
+
+The maintainer's second question: *which assumptions are common to most families and deserve their own
+framework, and which are specific and should ship only with their family?* The table above answers it
+by rows, but the architectural answer is sharper than "these four are shared":
+
+**Four checks are shared, and they differ across families by exactly ONE parameter — the link.**
+
+| shared check | what varies with the family                                                                   | where that variation already lives                         |
+|--------------|-----------------------------------------------------------------------------------------------|------------------------------------------------------------|
+| linearity    | the y-scale the curve is drawn on: identity / logit / log / cumulative logit / baseline logit | **`REG_EMPIRICAL$link`** — the per-shape column z8-B added |
+| calibration  | the same link, inverted                                                                       | the same                                                   |
+| influence    | nothing (the IF is family-general by construction)                                            | `reg-influence.R`, four makers already dispatched          |
+| collinearity | nothing (a property of the design matrix)                                                     | `car::vif`, one refusal (multinom, §0.B.19)                |
+
+That is the whole cross-family framework: **one binning primitive + one link column**. The link is not
+a new fact to invent — `REG_EMPIRICAL` gained `link` in z8-B *per shape row, not per family*, precisely
+because a binomial model's crude twin is logit by default, identity under `effect = "ame"` and log
+under `"ame_ratio"`. The linearity panel's y-transform is the *same* fact, read by a second consumer.
+This is the difference between adding a framework and finding one.
+
+**Six checks are family-specific, and each is specific for a stated reason** — never "we only
+implemented it there":
+
+| check                        | family                     | the reason it exists only there                                                                              |
+|------------------------------|----------------------------|--------------------------------------------------------------------------------------------------------------|
+| mean = variance (dispersion) | poisson, grouped binomial  | φ ≈ mean(1−μ) by construction for Bernoulli — measured 0.997 **[M]**, a constant of the fitted values (§7.4) |
+| zero counts                  | poisson                    | undefined without a count                                                                                    |
+| parallel lines (Brant)       | ordinal                    | the proportional-odds assumption exists nowhere else                                                         |
+| predicted range              | `rr`                       | only a log link on a binary outcome can predict > 1 — measured max 1.004 **[M]**                             |
+| normality, equal variance    | gaussian                   | for every other family the variance IS a function of the mean (`performance` #376)                           |
+| separation                   | probability-scale families | a perfect predictor is a likelihood pathology of logit/MNL/ordinal                                           |
+
+And **one check is refused everywhere it would be order-dependent**: no residual panel for multinomial
+(§7.6, cor = −0.705 between level orderings **[M]**).
+
+### 6.2 Naming — one word for the assumption, the test in parentheses
+
+The maintainer's fifth question: *is there a concise, preferably one-word way to say what a test is
+about, since test names are cryptic?* Yes — and the package already invented the convention in Last
+Phase m, Item 7, for the crosstab summary: **the test type moved into the row NAME**
+(`"pvalue (Chi2, Welch F; Kish)"`, `"effect size (Cramér's V, eta2)"`). The assumption block follows
+it exactly, so there is one convention in the package rather than two:
+
+| row label (EN)                      | FR                      | the cryptic name it replaces                                      |
+|-------------------------------------|-------------------------|-------------------------------------------------------------------|
+| `Linearity (Wald)` / `(LR)` / `(F)` | `Linéarité`             | "curvature test", "Tukey's test for nonadditivity", "Box–Tidwell" |
+| `Collinearity (max VIF)`            | `Colinéarité (VIF max)` | "generalized variance inflation factor"                           |
+| `Dispersion (Pearson)`              | `Dispersion`            | "φ̂", "overdispersion parameter"                                  |
+| `Parallelism (Brant)`               | `Parallélisme (Brant)`  | "proportional-odds test"                                          |
+| `Influence (max)`                   | `Influence (max)`       | "Cook's distance", "dfbeta", "‖IF‖"                               |
+| `Separation`                        | `Séparation`            | "quasi-complete separation", "Hauck–Donner"                       |
+| `Calibration`                       | `Calibrage`             | "Hosmer–Lemeshow" (which we do not compute, §7.2)                 |
+| `Normality`                         | `Normalité`             | "Shapiro–Wilk", "KS"                                              |
+
+Three rules make it work rather than merely look tidy:
+
+1. **The noun is the assumption, never the plot type or the statistic.** `Linearity`, not "empirical
+   logit plot"; `Parallelism`, not "Brant test". The student meets the noun in the footer, in the panel
+   title, and in the vignette's section heading — three places, one word.
+2. **The parenthesis names the test only when it varies.** `Linearity (Wald)` on a design, `(LR)`
+   unweighted, `(F)` for gaussian/quasipoisson — because that *is* what `reg_term_tests()` dispatches
+   (§13), and hiding it would make two identically-labelled rows carry different p-values.
+3. **The noun is `REG_CHECKS`'s `assumption` column and the `check =` value is its `key`** (§5.4), so
+   the footer row label, the panel title, the argument value and the translation msgid all derive from
+   one row. `check = "linearity"` and the row that says `Linearity` cannot drift apart. The panel-only
+   keys (`binned_resid`, `qq`, `calibration`) carry the same nouns — `Normality` is what the Q-Q panel
+   is *about*, `qq` is only how it is drawn.
+
+⚠ **`Independence` is deliberately absent.** BeyondMLR is explicit that no residual plot evaluates it,
+and jamovi's Durbin–Watson row is meaningless for survey data (rows are not a time series). It gets a
+sentence in the vignette, never a row and never a panel.
 
 ---
 
@@ -634,11 +1061,11 @@ population curve, not the sample curve. `rd_bin()` takes `w` for this reason, an
 
 **[M]**, same data, same formula:
 
-| fit | n | `df.residual` | n − p | `Σ(Pearson²)/df.residual` |
-|---|---:|---:|---:|---:|
-| `glm` binomial | 21 407 | 21 403 | 21 403 | **1.00** |
-| `svyglm`, `ids = ~1` | 21 407 | 21 403 | 21 403 | **1.00** |
-| `svyglm`, `strata = ~s, ids = ~psu` | 21 407 | **949** | 21 403 | **22.49** |
+| fit                                 |      n | `df.residual` |  n − p | `Σ(Pearson²)/df.residual` |
+|-------------------------------------|-------:|--------------:|-------:|--------------------------:|
+| `glm` binomial                      | 21 407 |        21 403 | 21 403 |                  **1.00** |
+| `svyglm`, `ids = ~1`                | 21 407 |        21 403 | 21 403 |                  **1.00** |
+| `svyglm`, `strata = ~s, ids = ~psu` | 21 407 |       **949** | 21 403 |                 **22.49** |
 
 `df.residual(svyglm)` on a clustered design is the **design** degrees of freedom (nPSU − nStrata), so
 the ratio is inflated by exactly n/nPSU. A dispersion panel that did not know this would scream
@@ -736,14 +1163,20 @@ Measured end-to-end: **a 6-panel binomial grid builds and draws in 1 457 ms at n
 
 The budget, and where it goes:
 
-| item | cost | note |
-|---|---|---|
-| refit through `reg_fit()` | 60 ms | the vignette's 4-predictor binomial **[M]** |
-| `rd_bin()` per panel | 19 ms | vs 370 ms for a loess at the same n **[M]** |
-| `rd_qq()` | 28 ms all points, 9 ms thinned **[M]** | vs 1 182 ms simulated **[M]** |
-| influence, one contrast | 35 ms | `reg_coef_if_maker` + one contrast **[M]** |
-| `hatvalues` + `cooks.distance` | 9 ms | not used, listed for scale **[M]** |
-| `geom_point` n = 6 803 | 87 ms | 38 ms thinned to 2 000 **[M]** |
+| item                           | cost                                   | note                                        |
+|--------------------------------|----------------------------------------|---------------------------------------------|
+| refit through `reg_fit()`      | 60 ms                                  | the vignette's 4-predictor binomial **[M]** |
+| `rd_bin()` per panel           | 19 ms                                  | vs 370 ms for a loess at the same n **[M]** |
+| `rd_qq()`                      | 28 ms all points, 9 ms thinned **[M]** | vs 1 182 ms simulated **[M]**               |
+| influence, one contrast        | 35 ms                                  | `reg_coef_if_maker` + one contrast **[M]**  |
+| `hatvalues` + `cooks.distance` | 9 ms                                   | not used, listed for scale **[M]**          |
+| `geom_point` n = 6 803         | 87 ms                                  | 38 ms thinned to 2 000 **[M]**              |
+
+**The build-time budget (round 2)** is a different and much smaller one, because R7 puts it on every
+call: the whole always-on block costs **~44 ms against a 380 ms build (+12 %)**, itemised in §0.B.13,
+with the per-family curvature refit (§13.2) as the only line that can grow — 277 ms per numeric
+predictor on a multinomial **[M]**. Two numbers keep that in proportion: `effect = "ame"` on the same
+model costs **2 153 ms** **[M]**, and the stored curves add **19.5 KB to a 32 KB table** **[M]**.
 
 **Thinning policy — the one that is easy to get wrong.** `max_points` thins **the raw-point layer
 only, never the statistics**. Bins, bands, verdicts and the influence ranking are always computed on
@@ -782,7 +1215,14 @@ the EN vignettes already pin `tabxplor.lang` for exactly this reason; the new vi
 do the same.
 
 New msgids: roughly 11 assumption names + 11 captions + ~15 axis labels + the verdict templates ≈ **40
-strings**. `msgfmt` is installed since z5, so `dev/update_translations.R` runs.
+strings**, plus round 2's **8 footer nouns** (§6.2), the linearity line's head, and the `shape =` unit
+suffixes (`"at the mean"`, `"curvature"`) ≈ **12 more**. `msgfmt` is installed since z5, so
+`dev/update_translations.R` runs.
+
+⚠ The footer nouns are `gettext()`'d **at render**, under the ambient locale, like every other
+`reg_footer_spec()` label (`tab-test-display.R:185`) — not under the plot's `lang =`. Two mechanisms
+for two surfaces is the existing state, documented in Phase z2; do not "unify" them here without
+re-reading why (the footer rows are built long before a `lang` argument exists).
 
 ---
 
@@ -791,16 +1231,18 @@ strings**. `msgfmt` is installed since z5, so `dev/update_translations.R` runs.
 Refusals are a feature, and each one is a `needs` value in `REG_CHECKS`. The house rule from
 `reg-influence.R` applies verbatim: **return nothing rather than a wrong number**, and say why.
 
-| refusal | gate | reason |
-|---|---|---|
-| dispersion on a design-based fit | `design_free` | `df.residual` is the design df — φ off by n/nPSU (§8.3) **[M]** |
-| dispersion on a Bernoulli fit | `count` \| `m_gt_1` | φ ≈ mean(1 − μ) by construction, not informative **[M]** |
-| deviance GOF on a Bernoulli fit | `m_gt_1` | the χ² approximation needs large mᵢ (BeyondMLR §6.5.6) |
-| any residual panel for multinomial | — | order-dependent, cor = −0.705 between orderings (§7.6) **[M]** |
-| zero-inflation on anything but a count | `count` | undefined |
-| scale–location for non-gaussian | — | the variance is a function of the mean by construction (`performance` #376) |
-| linearity panel for a factor predictor | `per_predictor` + `predictor_types` | a factor has no functional form to mis-specify; `Obs_*` vs `Model_*` already covers it |
-| everything, on the `.fit_cache` digest path | — | no model frame exists there (§15) |
+| refusal                                     | gate                                | reason                                                                                                                       |
+|---------------------------------------------|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| dispersion on a design-based fit            | `design_free`                       | `df.residual` is the design df — φ off by n/nPSU (§8.3) **[M]**                                                              |
+| dispersion on a Bernoulli fit               | `count` \| `m_gt_1`                 | φ ≈ mean(1 − μ) by construction, not informative **[M]**                                                                     |
+| deviance GOF on a Bernoulli fit             | `m_gt_1`                            | the χ² approximation needs large mᵢ (BeyondMLR §6.5.6)                                                                       |
+| any residual panel for multinomial          | —                                   | order-dependent, cor = −0.705 between orderings (§7.6) **[M]**                                                               |
+| zero-inflation on anything but a count      | `count`                             | undefined                                                                                                                    |
+| scale–location for non-gaussian             | —                                   | the variance is a function of the mean by construction (`performance` #376)                                                  |
+| linearity panel for a factor predictor      | `per_predictor` + `predictor_types` | a factor has no functional form to mis-specify; `Obs_*` vs `Model_*` already covers it                                       |
+| everything, on the `.fit_cache` digest path | `fit`                               | no model frame exists there (§15) — but the rung-2 *curves* still compute, since they need only the raw columns (§5.6)       |
+| collinearity for multinomial                | `vif_ok`                            | `car::vif()` warns "No intercept: vifs may not be sensible" **[M]**; the hand-rolled replacement is wrong for polr (§0.B.19) |
+| `poly()` / `ns()` emitted by `shape =`      | —                                   | `marginaleffects` returns **AME = 0.000000** silently **[M]** (§0.B.14). A refusal that protects a number, not a panel       |
 
 The last row of the table is worth its own sentence: **a factor predictor's "linearity" question is
 already answered by `empirical = TRUE`.** The crude-vs-model comparison per level *is* the saturated
@@ -809,35 +1251,88 @@ same fact. The plots handle what the table cannot: continuous predictors.
 
 ---
 
-## 13. `stats = "assumptions"` — the footer block (R2)
+## 13. The footer block (R2 + R7) — always on, and not a new mechanism
 
-`tab_reg(stats = c("gof", "assumptions"))` appends a compact block under the GOF footer:
+**The most important thing about this section is what it does *not* build.** The footer already carries
+two assumption statistics — `dispersion` and `brant_po` — as ordinary `reg_footer_spec()` rows produced
+by `reg_glance()` (`tab_reg.R:2744-2753`, `tab-test-display.R:185-208`). The block is therefore not a
+new footer, a new attribute or a new renderer: it is **more rows in an existing spec, plus one more
+per-predictor line in an existing dispatcher**. R7 (always on) is affordable precisely because of that
+— nothing has to be turned on, only computed (§0.B.13: +12 % of a build).
 
+### 13.1 What renders where — the row/line question, closed
+
+Round 1 flagged "row or line?" as open. It is decided by an existing invariant, not by taste: **a
+footer ROW is keyed to exactly one model column; a per-predictor result cannot be** (z8-B established
+this when the interaction test had to become a table-wide line, and z13 followed it for
+`stats = "global"`).
+
+| item                                                                      | grain                               | rendering                           | precedent it copies                            |
+|---------------------------------------------------------------------------|-------------------------------------|-------------------------------------|------------------------------------------------|
+| Dispersion, Collinearity, Separation, Predicted range, Zeros, Parallelism | one per model                       | **row** in `reg_footer_spec()`      | `dispersion`, `brant_po` (already there)       |
+| **Linearity**                                                             | one per (model × numeric predictor) | **line** via `reg_term_test_line()` | `stats = "global"` (z13), `"interaction"` (z8) |
+| Influence                                                                 | one per model                       | **row**                             | —                                              |
+
+So the linearity line is literally `reg_global_lines()` with a different head and a different
+discriminator triple — the shared `reg_term_test_line()` renderer already takes both as arguments. Its
+discriminators (`linearity_lr` / `_f` / `_wald`) must be registered in the three places z8 documented:
+`is_reg_footer()`, `reg_footer_lines()`'s carve-out, and `tab_footer_streams()`.
+
+```text
+  N                                12 960
+  LR vs null                       <0.01%
+  McFadden R2                       0.045
+  AIC                              16 960
+  Dispersion (Pearson)               1.56 *
+  Collinearity (max VIF)             1.21
+  Influence (max)                    0.04
+  Overall association (LR): race p<0.01% ***, rincome p<0.01% ***, relig p = 0.3% ***.
+  Linearity (LR): age p<0.01% ***, tvhours p = 0.08% ***.
 ```
-  N                            6803
-  McFadden R2                  0.08
-  AIC                         27682
-  ---
-  Dispersion (Pearson)         1.56  *
-  Lack of fit (deviance)     p<0.001
-  Max VIF                      1.04
-  Proportional odds (Brant)   p=0.001  *
-```
 
-Rendered from the **`stat` and `verdict` columns of `REG_CHECKS`** (§5.4), which is what keeps it from
-drifting from the panel subtitles. Only rows with `footer = TRUE` appear, and only where their `needs`
-are met — so a design-based fit shows no dispersion line at all rather than a wrong one.
+### 13.2 How each statistic is computed (and what it costs)
 
-Two integration questions the implementation must settle, both flagged as open (§17):
+| row/line        | statistic                                               | producer                                                                                                                                                    | measured cost                                            |
+|-----------------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
+| Linearity       | p of the added centred quadratic, per numeric predictor | **one augmented refit + `reg_term_tests()`** (drop1 unweighted / `regTermTest` on a design / F for gaussian & quasipoisson) — the dispatcher already exists | glm **17 ms**, svyglm 81, polr 110, multinom 277 **[M]** |
+| Collinearity    | max GVIF^(1/2·df)                                       | `car::vif()`                                                                                                                                                | **3.6 ms** **[M]**                                       |
+| Dispersion      | Σ(Pearson²)/df.residual                                 | `reg_dispersion()` (exists)                                                                                                                                 | 0.3 ms **[M]**                                           |
+| Influence       | max ‖IF‖ / n·(4/n) exceedances                          | `reg_coef_if_maker()` (exists)                                                                                                                              | 11.8 ms **[M]**                                          |
+| Separation      | any fitted at 0/1, or max\|coef\| > 10                  | inline                                                                                                                                                      | 0.5 ms **[M]**                                           |
+| Predicted range | share of fitted > 1                                     | inline                                                                                                                                                      | free                                                     |
+| Zeros           | observed vs Σ dpois(0, μ̂)                              | inline                                                                                                                                                      | free                                                     |
+| Parallelism     | Brant p                                                 | already stored on the fit                                                                                                                                   | free                                                     |
 
-- **Row or line?** z8-B established that a footer *row* is keyed to exactly one model column, which is
-  why the interaction test had to become a table-wide *line* through `tab_footer_streams()`. The
-  assumption block is per model, and a comparison table has several — so it is probably one row per
-  model column, i.e. a genuine `reg_footer_spec()` extension. But `Max VIF` is per model while
-  `Dispersion` is per model *and* family, and a mixed-family table has both. Needs a decision.
-- **Byte-identity.** Adding rows moves the GOF footer snapshots for anyone who opts in — but only for
-  those who opt in, since `stats` defaults to the current value. Verify that `stats = "gof"` is
-  byte-identical before and after.
+**The augmented refit reuses `reg_fit(cross =)`'s own idiom** — z8 already added an internal formal for
+"fit the same model plus something", inheriting the binary prep, the grouped-binomial `cbind`, the
+`rr` → svyglm route and the design. A second value (`add_terms =`) is the same seam, not a new one.
+
+⚠ **The one cost worth a decision at implementation.** A multinomial with 3 numeric predictors pays
+**~830 ms** for its linearity line **[M]**. R7 says always; the honest mitigations, in order of
+preference, are (a) do it — a multinomial `tab_reg()` already costs seconds; (b) let the existing
+`stats = FALSE` / `"none"` escape cover jamovi's live UI; (c) if latency bites, a `needs = "cheap_refit"`
+gate. Do **not** reach for the score test (§0.B.20): it is design-blind.
+
+### 13.3 Refusals keep the block honest
+
+Every gate is a `needs` value in `REG_CHECKS` (§5.4, §12), and three of them are measured facts rather
+than caution:
+
+- **no dispersion for a design-based fit** — `df.residual(svyglm)` on a clustered design is the *design*
+  df, giving φ = 22.49 where the truth is 1.00 **[M]** (§8.3). Already avoided by construction:
+  `reg_glance()`'s weighted branch returns before the dispersion line — the design must be preserved,
+  not re-derived.
+- **no dispersion for a Bernoulli fit** — φ ≈ mean(1−μ), measured 0.997 **[M]**.
+- **no collinearity for multinomial** — `car::vif()` warns "No intercept: vifs may not be sensible"
+  **[M]**; the hand-rolled alternative is worse (§0.B.19).
+
+### 13.4 Byte-identity
+
+R7 makes the block unconditional, so **the reg GOF footer snapshots move once, consciously** — and only
+the reg ones: no crosstab path is touched. The `stats =` vocabulary gains `"linearity"`,
+`"collinearity"`, `"influence"`, `"separation"`, `"predicted_range"`, `"zeros"` (validated in
+`reg_footer_stats()`'s `valid` vector), so `stats = c("n", "aic")` still yields exactly two rows and
+`stats = FALSE` still yields none. The verification list is §20.
 
 ---
 
@@ -889,16 +1384,16 @@ The existing `test-tab_reg-plots.R` idiom (`expect_s3_class(..., "gtable")`) is 
 and extends to every family. Beyond it, the things that must be *pinned to a reference rather than to
 a hand-written expectation* — the house rule that made z8-B's influence functions trustworthy:
 
-| what | pinned against |
-|---|---|
-| `rd_bin()` weighted means | `stats::weighted.mean()` per bin, base R |
-| `rd_resid()` gaussian | `stats::rstandard()` |
+| what                          | pinned against                                           |
+|-------------------------------|----------------------------------------------------------|
+| `rd_bin()` weighted means     | `stats::weighted.mean()` per bin, base R                 |
+| `rd_resid()` gaussian         | `stats::rstandard()`                                     |
 | `rd_resid()` binomial/poisson | a direct `statmod`-style computation written in the test |
-| `rd_qq()` band | a 999-replicate simulated envelope, to 2 decimals |
-| the influence panel | `stats::dfbeta()` for `glm` (correlation 1.0000 **[M]**) |
-| the design-based influence SE | `sqrt(vcov(svyglm))` (equal to 7 digits **[M]**) |
-| VIF | `car::vif()` |
-| dispersion | `summary(glm)$dispersion` for quasi families |
+| `rd_qq()` band                | a 999-replicate simulated envelope, to 2 decimals        |
+| the influence panel           | `stats::dfbeta()` for `glm` (correlation 1.0000 **[M]**) |
+| the design-based influence SE | `sqrt(vcov(svyglm))` (equal to 7 digits **[M]**)         |
+| VIF                           | `car::vif()`                                             |
+| dispersion                    | `summary(glm)$dispersion` for quasi families             |
 
 Plus the refusals, each with a fixture that fails if the gate is removed: dispersion absent for a
 clustered `svyglm`; no Q-Q for multinomial; no linearity panel for a factor predictor; the `data`
@@ -907,6 +1402,20 @@ mismatch guard aborts.
 And one property test worth having: **the multinomial residual is order-dependent** — build the
 residual under two level orders and assert `abs(cor) < 0.9`. That is the measurement that justifies
 the refusal, and it should be in the suite so the refusal cannot be quietly removed later.
+
+**Round-2 fixtures** — each one fails if its design decision is quietly reverted:
+
+| what                     | assertion                                                                                                                                                        |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| the `shape =` crude twin | the univariable fit's term names are **identical** to the model's, so `reg_skel_match()` finds them **[M]**                                                      |
+| the `shape =` AME        | equals `mean(predict(x + k)) − mean(predict(x))` to 1e-12 **[M]** — the g-computation truth                                                                      |
+| **the `poly()` refusal** | a model built with `poly()` returns `avg_comparisons` = 0 while the g-computation truth is non-zero — the property test that justifies never emitting it **[M]** |
+| centring                 | `car::vif()` on the emitted terms is < 5 (it is 38.7 uncentred **[M]**)                                                                                          |
+| `shape = "linear"`       | byte-identical to a table built without `shape`                                                                                                                  |
+| the sparkline            | a straight-line predictor and a saturating one give **different** glyph runs; `spark = FALSE` restores today's label byte-for-byte                               |
+| the html `<svg>`         | survives `html_escape_br()` (the trap in §5.7) — it is present in the rendered html, not escaped into text                                                       |
+| the footer grain         | a *comparison* table has one linearity line per model column and one collinearity row per model column (§13.1)                                                   |
+| the design refusal       | a clustered `svyglm` shows **no** dispersion row (φ would read 22.49 **[M]**)                                                                                    |
 
 Suite cost: the panels are ~1.5 s each at vignette scale, so the file must use a small subsample
 (n ≈ 2 000, where the whole grid is ~0.6 s) and `skip_on_cran()` — following the four heaviest files'
@@ -923,13 +1432,18 @@ precedent from z2.
    facets. Draw all (`predictors = NULL`), or default to the 3 with the largest ΔAIC and list the
    rest in the subtitle? **Recommendation: all up to 6, then the worst 6 with a note** — the whole
    value is finding the one you were not looking for.
-3. **The §13 footer block: row or line?** Per §13, `reg_footer_spec()` extension (one row per model
-   column) vs a table-wide `tab_footer_streams()` line. The mixed-family case is what decides it.
+3. ~~**The §13 footer block: row or line?**~~ **CLOSED (round 2, §13.1): both, by grain.** Per-model
+   statistics are rows in `reg_footer_spec()` (copying `dispersion`/`brant_po`, already there);
+   the per-predictor linearity test is a line through `reg_term_test_line()` (copying `stats =
+   "global"`). The rule was never a matter of taste — a footer row is keyed to exactly one model
+   column, so a per-predictor result cannot be one.
 4. **`Obs_*` on the linearity panel?** For a numeric predictor, z9 gives a crude effect and z8-B a gap
    test. The linearity panel could overlay the *crude* empirical curve beside the *adjusted* model
    line — making the panel answer both "is it linear" and "is it confounded" at once. Cheap (both
    quantities exist), but it doubles what the panel says. **Recommendation: no, in v1** — one panel,
-   one question; revisit after the vignette is written.
+   one question; revisit after the vignette is written. (Round 2 note: the two curves are nearly the
+   same object anyway — empirical vs partial-residual correlate **0.997** **[M]**, §0.B.18 — so the
+   overlay would mostly draw one line twice.)
 5. **Should `reg_assumptions_plots()` also accept `tab()` output?** A cross-table has no model, so no.
    But `color = "contrib"` *is* the departure from the log-linear independence model, and a
    residual-style panel for a cross-table is conceivable. **Recommendation: out of scope**, and say so
@@ -944,17 +1458,17 @@ precedent from z2.
    `poly(age, 2)` or a spline in the sections that follow, or leaving it wrong and pointing at it.
    **Recommendation: leave the linear model in the earlier sections and use it as the worked example**;
    changing it would move every numeric result in the vignette for no pedagogical gain.
-8. **Does the `car` dependency earn itself?** `car::vif()`'s GVIF is the right thing for multi-df
-   factors (measured: `race` GVIF 1.17 on 2 df → adjusted 1.04 **[M]**), and R4 approved it. The
-   alternative is ~15 lines computing `det(R₁₁)·det(R₂₂)/det(R)` from `cov2cor(vcov(fit))` — which is
-   literally what `performance` does, and it works for `polr`/`multinom` where `car::vif()` may not.
-   **Flagging honestly: I did not test `car::vif()` on `polr` or `multinom`.** If it fails there, the
-   15 lines are better than a dependency that covers only half the families. Test at implementation.
+8. ~~**Does the `car` dependency earn itself?**~~ **CLOSED (round 2, §0.B.19): yes, and multinomial is
+   the refusal.** `car::vif()` works on lm / glm / svyglm / **polr / svyolr**; on `nnet::multinom` it
+   warns *"No intercept: vifs may not be sensible"* **[M]**. The 15-line `det(R₁₁)det(R₂₂)/det(R)`
+   alternative reproduces `car`'s GVIF **exactly** for glm but returns **11.45 where `car` returns
+   1.01** for polr **[M]** — so it is not a drop-in, and writing a correct one for polr's `zeta`
+   parameterisation is work `car` has already done.
 9. **What I could NOT verify.** Listed so nothing here is over-claimed:
    - Gelman & Hill (2007) p. 97 itself — not openly available. The `2·√(p(1−p)/n)` formula is verified
      verbatim from the successor text (ROS §14.5 p. 253, authors' own PDF), and `arm`'s and
      `performance`'s docs both cite p. 97 for matching content.
-   - Whether `car::vif()` supports `polr` / `multinom` (§17.8).
+   - ~~Whether `car::vif()` supports `polr` / `multinom`~~ — verified in round 2 (§17.8).
    - The exact released-R version in which `plot.lm`'s glm Q-Q became a half-normal of |deviance|; the
      R-devel source shows `abs(rds)`, the history I could not pin. Irrelevant to us (we do not clone
      `plot.lm`) but relevant to anyone comparing output.
@@ -963,25 +1477,62 @@ precedent from z2.
      Hosmer-Lemeshow, binned-residual and `performance` sweeps, which completed. The multinomial and
      `rr` designs above rest mainly on **local measurement**, which for the two decisive claims (the
      order-dependence, the fitted values above 1) is the stronger evidence anyway.
+   - Round 2 did **not** test `car::vif()` on `svyVGAM::svy_vglm` (the weighted multinomial), nor the
+     `shape =` emission through a *weighted* ordinal (`svyolr`). Both are `needs`-gated the same way as
+     their unweighted twins; verify at implementation rather than assuming.
+
+### 17.10 Open after round 2 — the four that implementation must settle
+
+10. **Does the sparkline belong in the `levels` cell or in its own column?** §5.7 puts it in the level
+    label, appended where the multiplier label already is — no new column, no wider table, every
+    backend for free. The alternative (a dedicated `shape` character column) is easier to align and
+    easier to drop, but it widens every reg table with a numeric predictor. **Recommendation: the
+    level label**, with `options(tabxplor.spark = FALSE)` as the off switch.
+11. **How many bins, and quantile or equal-width?** §5.1 fixed `arm`'s `floor(sqrt(n))` rule clamped to
+    `[5, 60]` for the *panels*. The **sparkline** wants a fixed, small count so that two predictors'
+    glyph runs are comparable — 10 reads well at n = 12 960 **[M]**. **Recommendation: 10 fixed for the
+    miniature, the `arm` rule for the panel**, and say so once in the roxygen (two counts for two
+    purposes is defensible; two *undocumented* counts is not).
+12. **`shape = "cut5"` — quantile groups or equal-width?** §5.8.4 assumes quantiles (equal n per group,
+    which is what a survey audience means by "age groups" and what keeps every group's OR estimable).
+    Equal-width is what base `cut()` does, so the value name must not be `"cut"` alone if the semantics
+    are quantiles. **Recommendation: `"quintiles"` / `"quartiles"` / an integer k for k quantile
+    groups**, and no equal-width option until someone asks.
+    **Maintainer’s decision: **
+13. **Multinomial linearity: pay the 277 ms/predictor, or gate it?** §13.2. R7 says always; the measured
+    worst case is ~830 ms for three numeric predictors, in a family that already costs seconds. Decide
+    with the jamovi live UI in front of you, not from the number alone.
 
 ---
 
 ## 18. Rejected alternatives
 
-| rejected | why, measured or sourced |
-|---|---|
-| **Depend on `performance` + `see`** | 2 panels for `polr`, 2 for `multinom`, 1 for `clm`, and `svyglm` diagnostics **identical between a simple and a clustered design** — it silently ignores the design. ~6 new packages in the tree for the families we least need help with, in a second visual language. |
-| **Depend on `DHARMa`** | Does not support `svyglm`, `polr`, `multinom`, `svyolr`, `svy_vglm` — [#321](https://github.com/florianhartig/DHARMa/issues/321) open and unanswered since 2022. Survey-weighted binomial cannot even `simulate()` (non-integer prior weights). |
-| **Keep `lm_plots()`'s fit-only contract** | It is the contract that produced the broken vignette example **[M]**, and it disconnects the plots from the workflow every other tabxplor function shares. |
-| **`keep_fits = TRUE` on `tab_reg()`** | ~10 MB per model on the table — the measured cause of the Phase-o jamovi freeze. A 4.3 KB recipe + a 60 ms refit does the same job **[M]**. |
-| **`geom_smooth(method = "loess")` overlays** | 370 ms → 2 030 ms per panel as n goes 6 803 → 21 483 **[M]**; not weight-aware; and for a binary outcome it smooths a two-valued residual, which is the thing ROS §14.5 says is uninformative. |
-| **A 19-replicate simulated Q-Q envelope** | 1 182 ms vs 28 ms for the analytic beta band, which agrees to 0.19 on the extreme order statistic **[M]**. |
-| **Hosmer–Lemeshow** | Arbitrary in `g` (p = 0.11 / 0.0499 / 0.64 for g = 9/10/11 on one model), always rejects at survey n, says nothing about *where*, and is computed in-sample so it can pass an overfitted model. Harrell: "obsolete". Lemeshow co-authored its replacement. |
-| **A randomised quantile residual for multinomial** | cor = **−0.705** between two level orderings **[M]**. |
-| **`arm`'s empirical ±2 SE band** | ±30 % per-bin disagreement with the book formula, and it ignores weights **[M]**. |
-| **A `nullabor` lineup as the default** | Best pedagogy in the literature, but 19 extra panels per check is the wrong default cost. Opt-in, later. |
-| **Reuse `tab()` to build the empirical-logit bins** | Tempting — the binned proportions *are* a cross-table — but it would route a plot through the fmt/colour pipeline to extract numbers it then throws away. `rd_bin()` is 12 lines of base R. |
-| **A jamovi panel in this phase** | Couples a new plotting API to the byte-locked `.fit_cache` contract for no benefit (§15). |
+| rejected                                            | why, measured or sourced                                                                                                                                                                                                                                                |
+|-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Depend on `performance` + `see`**                 | 2 panels for `polr`, 2 for `multinom`, 1 for `clm`, and `svyglm` diagnostics **identical between a simple and a clustered design** — it silently ignores the design. ~6 new packages in the tree for the families we least need help with, in a second visual language. |
+| **Depend on `DHARMa`**                              | Does not support `svyglm`, `polr`, `multinom`, `svyolr`, `svy_vglm` — [#321](https://github.com/florianhartig/DHARMa/issues/321) open and unanswered since 2022. Survey-weighted binomial cannot even `simulate()` (non-integer prior weights).                         |
+| **Keep `lm_plots()`'s fit-only contract**           | It is the contract that produced the broken vignette example **[M]**, and it disconnects the plots from the workflow every other tabxplor function shares.                                                                                                              |
+| **`keep_fits = TRUE` on `tab_reg()`**               | ~10 MB per model on the table — the measured cause of the Phase-o jamovi freeze. A 4.3 KB recipe + a 60 ms refit does the same job **[M]**.                                                                                                                             |
+| **`geom_smooth(method = "loess")` overlays**        | 370 ms → 2 030 ms per panel as n goes 6 803 → 21 483 **[M]**; not weight-aware; and for a binary outcome it smooths a two-valued residual, which is the thing ROS §14.5 says is uninformative.                                                                          |
+| **A 19-replicate simulated Q-Q envelope**           | 1 182 ms vs 28 ms for the analytic beta band, which agrees to 0.19 on the extreme order statistic **[M]**.                                                                                                                                                              |
+| **Hosmer–Lemeshow**                                 | Arbitrary in `g` (p = 0.11 / 0.0499 / 0.64 for g = 9/10/11 on one model), always rejects at survey n, says nothing about *where*, and is computed in-sample so it can pass an overfitted model. Harrell: "obsolete". Lemeshow co-authored its replacement.              |
+| **A randomised quantile residual for multinomial**  | cor = **−0.705** between two level orderings **[M]**.                                                                                                                                                                                                                   |
+| **`arm`'s empirical ±2 SE band**                    | ±30 % per-bin disagreement with the book formula, and it ignores weights **[M]**.                                                                                                                                                                                       |
+| **A `nullabor` lineup as the default**              | Best pedagogy in the literature, but 19 extra panels per check is the wrong default cost. Opt-in, later.                                                                                                                                                                |
+| **Reuse `tab()` to build the empirical-logit bins** | Tempting — the binned proportions *are* a cross-table — but it would route a plot through the fmt/colour pipeline to extract numbers it then throws away. `rd_bin()` is 12 lines of base R.                                                                             |
+| **A jamovi panel in this phase**                    | Couples a new plotting API to the byte-locked `.fit_cache` contract for no benefit (§15).                                                                                                                                                                               |
+
+Round 2 adds seven, four of them measured wrong numbers rather than preferences:
+
+| rejected                                                                   | why, measured or sourced                                                                                                                                                                                                                                                                                                                                                          |
+|----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Emitting `poly()` or `ns()` for `shape =`**                              | `marginaleffects 0.32.0` returns **AME = 0.000000, silently**, through every contrast form, because the basis is re-evaluated on the perturbed data and absorbs the shift exactly **[M]**. Raw powers give the correct +0.038 **[M]**. This is a wrong number reaching a user's table, not an inconvenience.                                                                      |
+| **An uncentred `x + I(x^2)` emission**                                     | **VIF 38.7** vs 1.2 centred **[M]**, and coefficients (1.184, 0.99841) that no reader can interpret. It would make R7's own new collinearity line flag every curved model.                                                                                                                                                                                                        |
+| **`scale()` inside the emitted formula**                                   | Prediction on a subset re-scales with the subset's mean, so `predict(newdata = )` disagrees with the fit **[M]**. Freeze the constants as literals instead — the z9 `multiplier` precedent.                                                                                                                                                                                       |
+| **A Rao score test for linearity (no refit)**                              | 4× cheaper (7.6 vs 17–31 ms) and it agrees unweighted **[M]** — but **design-blind**: identical p on a weights-only and a stratified+clustered design, where the design Wald differs by 30 orders of magnitude **[M]**.                                                                                                                                                           |
+| **Box–Tidwell as the linearity test**                                      | The test the audience was taught (Hosmer & Lemeshow, Menard, the SPSS workflow), so it is named in the vignette — but it needs `log(x)`, hence **x > 0**, which a centred or negative predictor is not, and it does not generalise across families. The added-quadratic curvature test asks the same question with no domain restriction and is what `car::residualPlots()` uses. |
+| **A dedicated sparkline column**                                           | Widens every reg table that has a numeric predictor, for a mark that belongs to that predictor's own row. The level label already carries the multiplier suffix; this is one more thing the row says about itself.                                                                                                                                                                |
+| **`kableExtra::spec_plot()` / `svglite` / a base64 PNG for the miniature** | 1 084 B and 843 B respectively against **121 B** for a hand-rolled `<polyline>` **[M]**, and the first writes files to disk. None reaches the console or Excel, which the 30-byte text rendering does.                                                                                                                                                                            |
 
 ---
 
@@ -1021,3 +1572,61 @@ points; ggplot2 book §5.5 (alpha's 1/500 floor).
 rather than a wrong number" contract this phase inherits. `dev/model_vs_observed_gap_test.md` §3, §13.
 `dev/numeric_predictors_crude_counterparts.md`. `dev/black_and_white_publication_palette.md` §12 (the
 `"print"` theme vocabulary).
+
+**Round 2 additions.** `car::residualPlots` docs (the curvature test = the t-test for `I(X^2)` in
+`update(model, ~ . + I(X^2))`; Tukey's one-df nonadditivity test on the fitted values; lack-of-fit
+default TRUE for `lm`, FALSE for `glm`). Box–Tidwell as the taught linearity-of-the-logit test
+(Hosmer & Lemeshow 1989; Menard 2002/2010; the SPSS `x·ln(x)` workflow) and splines as its recommended
+remedy. jamovi's own *Assumption Checks* pane (collinearity/VIF as a table, Durbin–Watson, normality,
+residual plots, Cook's distance) — the reference software this package's audience already knows.
+`easystats/performance` [#907](https://github.com/easystats/performance/issues/907) (multinom VIF,
+open). `skimr` unicode block sparklines + `fix_windows_histograms()` (the font caveat);
+`kableExtra::spec_plot`, `gtExtras::gt_plt_sparkline` (the file/column alternatives measured against in
+§0.B.17). `marginaleffects` 0.32.0 behaviour on `poly()`/`ns()` — measured here, not sourced; the
+mechanism is `stats::makepredictcall` / `predvars` vs a re-evaluated basis.
+
+⚠ Every round-2 **[M]** was produced by throwaway scripts in this session's scratchpad, on
+`gss_cat_data_formatting()` at n = 12 960 (the 4-predictor complete cases) or n = 6 803 (also dropping
+`tvhours`), `marginaleffects 0.32.0`, `pillar 1.11.1`, R on WSL2/ext4. The scripts are not kept; each
+claim names the design that produced it so it can be re-derived.
+
+---
+
+## 20. Implementation order (round 2)
+
+Five steps, each shippable and verifiable on its own. The order is chosen so that every step's output
+is testable before the next one depends on it, and so the two steps that move snapshots come last.
+
+**Step 1 — the primitives, unwired.** `rd_bin()`, `rd_resid()`, `rd_qq()` (§5.1–§5.3) plus the
+`REG_CHECKS` fact table (§5.4) with its `stat`/`verdict`/`needs` columns, in a new
+`R/reg-assumptions.R`. Nothing calls them yet. Pinned against `stats::weighted.mean`,
+`stats::rstandard`, a 999-replicate envelope and `car::vif` (§16). *No user-visible change.*
+
+**Step 2 — the footer block (R7).** `reg_glance()` gains the rung-1 rows; `reg_footer_spec()` gains
+their labels; `reg_linearity_rows()` mirrors `reg_global_rows()` and renders through
+`reg_term_test_line()`; the three discriminator registrations (§13.1). Needs `reg_fit(add_terms =)` —
+the twin of z8's `cross =`. **One conscious snapshot regen** (reg GOF footers only; verify no crosstab
+snapshot moves, and that `stats = FALSE` still yields nothing).
+
+**Step 3 — the stored curves + the miniature (R5).** `meta$assumptions` written in `reg_build()`
+(§5.6), the text sparkline appended at `tab_reg.R:3624-3639` (§5.7), the `<svg>` upgrade in
+`render_kable_html()` with the `html_escape_br()` whitelist extension, `options(tabxplor.spark)` and
+the ASCII fallback. **Second conscious regen** (every reg table with a numeric predictor changes one
+label cell). Fixture: the same table with `spark = FALSE` is byte-identical to today.
+
+**Step 4 — `shape =` (R6/R8).** The resolver (frozen centring constants, the closed vocabulary), the
+emission, the skeleton's two rows, the crude twin's matching terms, the `cut`→factor arm, and the two
+escape-hatch fixes (§5.8.6). Fixtures: crude term names match the model's; the AME equals the
+g-computation truth; `shape = "linear"` is byte-identical to today; a `poly()` in a user formula plus
+`effect = "ame"` refuses rather than returning 0.
+
+**Step 5 — `reg_assumptions_plots()` + `lm_plots()` removal.** The panels (§6), the theme seam adopted
+by `or_plot()` (R3), `meta$fit_spec` + the data-match guard (§4.1), the `data`-optional rule (§4.4),
+the ~40 new msgids (§11), the vignette section built on §1.1, and the nine `lm_plots` references
+(§14).
+
+**Verification, whole phase.** Full suite in both locales (the `LC_ALL=C.UTF-8` run matters here — the
+new msgids and the block glyphs are exactly what a locale run catches). Two conscious regens, listed
+above; **zero** crosstab churn — no `tab()` path is touched by any step. `dev/verify_golden_field_delta.R`
+is not needed (no fmt field and no column attribute is added — the whole design is deliberately built
+from the 21 fields and 12 attributes that exist).

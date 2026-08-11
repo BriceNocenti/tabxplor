@@ -146,7 +146,12 @@ R/
 │                              the influence matrix is n-long, one svyrecvar per column level).
 │                              svy_var_prep does NOT reuse svy_domain_design (svyrecvar never reads
 │                              $variables) but keeps its calibrated/PPS warning: scatter index + w=1/prob.
-│                              NULL-not-a-wrong-number + svy_var_degraded() (the footer claim is blanket)
+│                              NULL-not-a-wrong-number + svy_var_degraded() (the footer claim is blanket).
+│                              z14-iii: svy_row_at() = THE row-space rule extracted out of svy_var_prep
+│                              (shrank -> i, did not -> des_rows[i]), also read by reg_if_align();
+│                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
+│                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
+│                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -440,6 +445,15 @@ R/
 │                              per predictor level, a BUILT column (role "n", read by or_plot's model pick,
 │                              reg_spread_models' GOF key and the [dep] strip); reg_detect_family: any
 │                              numeric -> gaussian (integers included), matching the jamovi selector
+│                              z14-iii: reg_empirical(design_spec=) -> the crude bases `emp_n_ci` /
+│                              `emp_n_draw` climb the SAME rung ladder as tab()'s cells
+│                              (svy_inference_mode; the local getOption read is gone), design values
+│                              from svy_var_mean() per predictor level, per-level fallback. `emp_n_draw`
+│                              is per (level, CATEGORY) -- the multinomial html tooltip prints its
+│                              intervals. reg_resolve_design() maps its complete-case mask through
+│                              `.svy_row`, and the split branch NO LONGER subsets the design nor passes
+│                              it through utils::modifyList() (which merges a survey.design's $variables
+│                              COLUMN BY COLUMN -> an error on unequal groups, wrong rows when calibrated)
 ├── reg-influence.R  (~450 L) Last Phase z8-B: influence functions + the SE of the gap between two
 │                              estimators on the SAME rows (the covariance no arithmetic on the two
 │                              printed intervals recovers). Pure matrix math; the package's ONLY
@@ -463,6 +477,13 @@ R/
 │                              softmax / cumulative logit, one producer for the score AND the jacobian)
 │                              + reg_ame_if_cat_maker (the per-category marginal IF, jacobian by
 │                              central differences; pinned to marginaleffects to 10 decimals).
+│                              z14-iii: reg_if_align(v, n, des_rows) over svy_row_at() = the ONE
+│                              row-space alignment. `[` does not drop rows on a CALIBRATED/PPS design,
+│                              so svy_domain_design pads the fit's and svyglm keeps the zero-weight
+│                              rows in model.matrix(): a leg built on the complete-case frame was
+│                              SHORTER (measured 380 vs 400 -> the gap test silently skipped, and
+│                              reg_ame_if_maker's `emp + delta` RECYCLED = a wrong number). Padded rows
+│                              carry weight 0, so a zero scatter is exact, not an approximation.
 ├── tab_reg_plots.R  (~230 L) Phase 12h display: or_plot() (finalfit-style OR forest plot ON a
 │                              tabxplor_tab -- reads fmt fields, NO refit; gridExtra 2-panel) + lm_plots()
 │                              (ggplot2 2x2 glm/lm diagnostics). ggplot2+gridExtra guarded (Suggests).
@@ -2538,8 +2559,8 @@ case gives `n_eff` 5155 on n = 4000 (a ×0.88 width) where Kish sits at exactly 
   the first-order per-cell correction `z_design = z_classic·√(n_eff/N)` under a design. A percentage
   table's contrib keeps the grand base — the one new line in the study's honest residue.
 - **Footer (ruling Q7, blanket)**: *"Design-based (survey): weighted estimates, intervals and tests
-  account for the sample design."* `tab_reg()`'s categorical crude `Obs_*` intervals stay single-stage
-  until z14-iii and that exception is NAMED in `?tab_reg`; a failed variance pass informs
+  account for the sample design."* (z14-iii made the crude `Obs_*` intervals design-based too, so the
+  sentence has nothing left to qualify); a failed variance pass informs
   (`svy_var_degraded()`), so the sentence is never silently untrue. FR translated + `.mo` recompiled.
 - Two conscious test moves (`test-survey-design-path.R`'s footer assertion, `test-i18n-fr.R`'s msgid),
   both because the z14-i placeholder string was replaced. Docs: `?tab` (the rung ladder + a new
@@ -2552,11 +2573,32 @@ case gives `n_eff` 5155 on n = 4000 (a ×0.88 width) where Kish sits at exactly 
   design-based table is indistinguishable from a Kish one.
 
 ##### Phase z14-iii — the crude `Obs_*` columns, then the finished ladder
-`emp_n_ci`/`emp_n_draw`
-  design-based from the EXISTING `reg_crude_if_maker()` + `reg_if_se()` (every crude interval follows
-  for free — they all consume one of those two bases); then the degradation matrix, stated in the
-  legend, never silent. **Split seam**: the four vignettes (the rung 1/2/3 ladder + the reachability
-  check) close it, or become `z14-iiii` if the session runs long.
+
+**DONE (2026-08-11).** Suite green in both locales, **zero golden/snapshot churn** (no fmt field, no
+column attribute, no crosstab path). Implementation record + the corrected route:
+`dev/full_survey_design_scope.md` § z14-iii.
+- **The crude bases became design-based**, so every `Obs_*` interval did: `reg_empirical()` takes
+  `design_spec`, resolves its rung through the shared `svy_inference_mode()` (retiring a local
+  `getOption` read), and writes `n_draw = p(1-p)/Var_design(p)` / `n_ci = s²/Var_design(x̄)` per level.
+  The producer is **`svy_var_mean()`**, not the planned `reg_crude_if_maker()` + `reg_if_se()`: the
+  influence vector is identical, but only `svy_var_prep()`'s `at`-scatter serves a CALIBRATED design,
+  and it batches every level into one `svyrecvar` call. One new optional argument, `wmult` (a per-row
+  weight multiplier — a grouped-binomial row is a cluster of `trials` draws, i.e. the general ratio
+  form). Domain keys are level INDICES, so the domain equals the grid's own `ok & x == l` by
+  construction and a level named `"Total"` is unreachable. `emp_n_draw` is now per (level, CATEGORY),
+  because the multinomial html tooltip prints its intervals. Measured: the proportion and mean bases
+  equal `svyby(svymean)` to 1e-8; the `Obs_OR` bracket **is** `2z·√(Var(logit p₁)+Var(logit p₀))`;
+  against a univariable `svyglm` it lands 2–7 % out where the single-stage base was 15 % out.
+- **Three measured row-space defects fixed first** (prerequisites — the new variance would have
+  inherited their rows): `tab_reg(<design>, split_var=)` **errored** with unequal groups
+  (`utils::modifyList()` recurses into a `survey.design`'s `$variables`) and was silently **wrong** on
+  a calibrated one (measured OR `1/2.17` vs `svyglm`'s `3.48`) — both cured by one rule, *never
+  re-subset the design; map the complete-case mask through `.svy_row`* (`reg_resolve_design`); and
+  `color = "adjustment"` lost its gap test on every calibrated design with an incomplete case, while
+  `reg_ame_if_maker()` silently **recycled** — cured by `reg_if_align()` over the extracted
+  `svy_row_at()` (the padded rows carry weight 0, so a zero scatter is exact).
+- **No new metadata**: no `ci_settings` field, no legend degradation clause (nothing falls back
+  structurally any more, so it could never fire). The residue is stated once in `?tab_reg`.
 
 
 

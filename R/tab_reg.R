@@ -1112,8 +1112,14 @@ reg_complete_frame <- function(data, vars)
 # the 3+ level (svyolr / svy_vglm) weighted branches -- one design constructor.
 reg_resolve_design <- function(design_spec, mdata, data, drop_vars) {
   if (!is.null(design_spec$design)) {
-    keep_mask <- stats::complete.cases(data[, drop_vars, drop = FALSE])
-    svy_domain_design(design_spec$design, which(keep_mask), mdata)
+    keep <- which(stats::complete.cases(data[, drop_vars, drop = FALSE]))
+    # Last Phase z14-iii: index the ORIGINAL design, always. Under split_var `data` holds one group's
+    # rows, so its own positions are group-local; `.svy_row` (written at the boundary, R/survey-design.R)
+    # is the position in the design the user passed. At top level .svy_row == seq_len(n), so `rows` is
+    # `keep` and this is byte-identical. Without it a CALIBRATED design -- which `[` does not shrink --
+    # took a group-local position as a full-sample one and weighted the wrong respondents.
+    rows <- if (!is.null(data[[svy_row_col]])) as.integer(data[[svy_row_col]])[keep] else keep
+    svy_domain_design(design_spec$design, rows, mdata)
   } else {
     svy_make_design(mdata, design_spec$wt)
   }
@@ -1602,14 +1608,18 @@ reg_empirical_empty <- function()
 # a multinomial they do not, and the {j, ref} form is the one nnet::multinom estimates and the one
 # tab(pct = "row", OR = "OR") prints.
 #
-# Weighted rule (SS14, unchanged): weighted proportions/means, unweighted `n`, and a SEPARATE effective
-# n (`n_ci`) for the intervals -- the Kish n_eff when opted in, else the raw count, so off-kish is
-# byte-identical.
+# Weighted rule (SS14): weighted proportions/means, unweighted `n`, and a SEPARATE effective n
+# (`n_ci` / `n_draw`) for the intervals. Last Phase z14-iii makes that base follow the SAME three-rung
+# ladder tab()'s cells do (svy_inference_mode): a survey DESIGN passed as `data` -> Korn-Graubard's
+# device on the design variance; else the Kish n_eff when opted in; else the raw count. Off-design and
+# off-kish is byte-identical.
 reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level, wt,
-                          trials = NULL, ref_category = NULL, conf_level = 0.95) {
+                          trials = NULL, ref_category = NULL, conf_level = 0.95,
+                          design_spec = NULL) {
   yw   <- reg_crude_yw(data, dependent, crude_key, positive_level, wt, trials, ref_category)
   cats <- yw$cats
-  kish <- !is.null(wt) && isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  # the rung comes from the ONE ladder, not a local option read (the drift z14-ii closed for tab()).
+  kish <- identical(svy_inference_mode(design_spec, wt), "kish")
   neff_or_n <- function(wsum, w2, raw) {
     if (!kish) return(as.double(raw))
     ne <- wsum^2 / w2
@@ -1624,12 +1634,50 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   # columns are NULL -- reg_empirical_columns() then errors ("Can't recycle input of size 0").
   if (length(fac_preds) == 0L) return(reg_empirical_empty())
 
+  # --- Last Phase z14-iii: the DESIGN-based effective n --------------------------------------------
+  # A crude cell IS a weighted mean over a domain (the predictor level), so its design variance is the
+  # producer R/survey-variance.R already owns -- the same influence vector reg_crude_if_maker() builds
+  # for the gap test (its identity-link leg w(y-mu)/Sum(w) IS svy_var_mean()'s wf*d*(x-M)/B), but
+  # batched one svyrecvar call per quantity and scattered through svy_var_prep()'s `at`, which is what
+  # a CALIBRATED design needs. Every crude interval then follows for free: they all consume `n_ci` or
+  # `n_draw`, and on an effective base the Woolf and Katz brackets ARE Var_design(logit p) and
+  # Var_design(log p) by construction.
+  said <- FALSE
+  degrade <- function() { if (!said) { svy_var_degraded(); said <<- TRUE }; NULL }
+  prep <- if (!is.null(design_spec$design))
+    svy_var_prep(design_spec$design, data[[svy_row_col]]) else NULL
+  if (!is.null(design_spec$design) && is.null(prep)) degrade()
+  if (!is.null(prep)) {
+    # the grid's own weights must BE the design's, or the printed estimate and the variance beside it
+    # would describe two different populations.
+    wg <- prep$w[prep$at] * yw$draws
+    if (length(wg) != length(yw$w) || anyNA(wg) ||
+        !isTRUE(max(abs(wg - yw$w)) <= 1e-8 * max(1, max(abs(yw$w))))) { degrade(); prep <- NULL }
+  }
+  # Var_design per level: `$p` an nl x nc matrix (the share of each outcome category), `$m` an nl x 1
+  # (the numeric mean). The domain keys are the level INDEX, so the domain is `ok & x == l` by
+  # construction and a predictor level literally named "Total" cannot trip svy_group_map()'s rule.
+  design_var <- function(x, ok, lv) {
+    if (is.null(prep) || !length(lv)) return(NULL)
+    keys  <- list(as.character(seq_along(lv)))
+    mkeys <- list(as.character(match(as.character(x), lv)))
+    hide  <- function(v) ifelse(ok, as.numeric(v), NA_real_)
+    xs_p  <- if (share) list(hide(yw$y))
+             else lapply(stats::setNames(nm = cats), function(k) hide(as.character(yw$y) == k))
+    Vp <- if (has_cat) svy_var_mean(prep, keys, 0L, mkeys, xs_p, wmult = yw$draws) else NULL
+    Vm <- if (has_num) svy_var_mean(prep, keys, 0L, mkeys, list(hide(yw$num)))    else NULL
+    if ((has_cat && is.null(Vp)) || (has_num && is.null(Vm))) return(degrade())
+    list(p = Vp, m = Vm)
+  }
+
   purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
     ok <- !is.na(x) & !is.na(yw$w) & !is.na(yw$y)
     if (has_num) ok <- ok & !is.na(yw$num)
     lv <- levels(forcats::fct_drop(as.factor(x[ok])))
-    per <- purrr::map(lv, function(l) {
+    dv <- design_var(x, ok, lv)
+    per <- purrr::map(seq_along(lv), function(i) {
+      l  <- lv[[i]]
       m  <- ok & x == l
       wl <- sum(yw$w[m])
       # "share": y is the per-row SHARE of successes (0/1 for an ordinary binary outcome, succ/trials
@@ -1644,7 +1692,9 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
         n_ci  = neff_or_n(wl, sum(yw$w[m]^2), sum(m)),
         # the CI base of a PROPORTION is the number of Bernoulli DRAWS, which for a grouped binomial is
         # `trials` per respondent. Equal to n_ci for every other outcome -> byte-identical.
-        n_draw = neff_or_n(wl, sum(yw$w[m]^2), sum(m)) * mean(yw$draws[m]),
+        # z14-iii: a VECTOR over `cats`, because a design variance is per category (it is constant here
+        # and for a binary outcome always -- p and 1-p give the same p(1-p)/Var).
+        n_draw = rep(neff_or_n(wl, sum(yw$w[m]^2), sum(m)) * mean(yw$draws[m]), length(cats)),
         prop  = if (has_cat) wc / wl else NA_real_,
         wpos  = if (has_cat) wc else NA_real_,
         wneg  = if (has_cat) rep(unname(wc[yw$ref]), length(cats)) else NA_real_,
@@ -1661,6 +1711,23 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
         # the numeric part re-derives its own effective n from the per-respondent weights
         out$n_ci <- neff_or_n(wn, sum(nw[m]^2), n1)
       }
+      # z14-iii: the design supersedes it, per level, with Korn & Graubard's device -- the very rule
+      # z14-ii writes into tab()'s own n_eff field. A level whose variance came back non-finite or
+      # <= 0 keeps the Kish / raw base rather than losing its interval.
+      if (!is.null(dv)) {
+        if (has_cat && !is.null(dv$p)) {
+          nd <- out$prop * (1 - out$prop) / dv$p[i, ]
+          out$n_draw <- ifelse(is.finite(nd) & nd > 0, nd, out$n_draw)
+        }
+        if (has_num && !is.null(dv$m)) {
+          nc <- out$var / dv$m[i, 1L]
+          if (isTRUE(is.finite(nc) && nc > 0)) out$n_ci <- nc
+        }
+      }
+      # keep the two identities the pre-z14-iii code had by construction: a numeric outcome has one
+      # base (mean(draws) == 1 and num_w == w), a categorical one without a mean column likewise.
+      if (!has_cat)     out$n_draw <- rep(out$n_ci, length(cats))
+      else if (!has_num) out$n_ci  <- out$n_draw[[1]]
       out
     })
     ref  <- per[[1]]                              # the reference LEVEL is always the first surviving one
@@ -1672,7 +1739,10 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     rprop  <- rep(unname(ref$prop), times = nl)
     meanv  <- rep_lv("mean"); rmean <- rep(ref$mean, nl * nc)
     n_ci   <- rep_lv("n_ci"); r_n_ci <- rep(ref$n_ci, nl * nc)
-    n_draw <- rep_lv("n_draw"); r_n_draw <- rep(ref$n_draw, nl * nc)
+    # z14-iii: n_draw is per (level, CATEGORY) -- flat(), not rep_lv() -- so a design variance is not
+    # averaged away. The reference twin repeats the reference LEVEL's vector once per level, i.e. it
+    # pairs each cell with its OWN category. `n_ci` stays per level: a mean has no category.
+    n_draw <- flat("n_draw"); r_n_draw <- rep(ref$n_draw, times = nl)
     # the crude ODDS ratio (category vs the reference CATEGORY, level vs the reference LEVEL) where the
     # outcome has categories; the crude RATE ratio (mean / reference mean) where it does not.
     # WARNING: the divisor is the reference LEVEL's own wpos/wneg, i.e. the SAME expression as the
@@ -2313,7 +2383,10 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       coef_if(L)
     }
     if (is.null(im)) next
-    ic <- crude_if(v, as.character(skeleton$level[k]), r)
+    # z14-iii: the crude leg lives on `mdata`, the model leg on the fit's row space -- the same thing
+    # except on a calibrated / PPS design, which svy_domain_design() pads back to full length.
+    ic <- reg_if_align(crude_if(v, as.character(skeleton$level[k]), r), length(im),
+                       mdata[[svy_row_col]])
     if (is.null(ic) || length(ic) != length(im)) next
     out[k] <- reg_if_se(im - ic, des)
   }
@@ -3362,9 +3435,18 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     parts <- purrr::map(sl, function(g) {
       gmask <- !is.na(data[[split_var]]) & data[[split_var]] == g
       sub   <- data[gmask, , drop = FALSE]
-      ds_g  <- design_spec
-      if (!is.null(design_spec$design)) ds_g$design <- design_spec$design[gmask, ]  # subset the design
-      tg  <- reg_build(sub, specs, utils::modifyList(shared, list(design_spec = ds_g)),
+      # Last Phase z14-iii: the design is NOT subset here, and `shared` rides through untouched. `sub`
+      # keeps its `.svy_row`, and reg_resolve_design() subsets the ORIGINAL design by those positions
+      # -- ONE subset into ONE row space, R/survey-design.R's own discipline. Two measured defects go
+      # with the two deleted lines:
+      #   WARNING: utils::modifyList() RECURSES into list elements, and a survey.design IS a list whose
+      #     $variables / $cluster / $strata are data.frames -- so handing it a per-group design merged
+      #     the two designs COLUMN BY COLUMN ("replacement has 413 rows, data has 800" whenever the
+      #     groups are unequal, i.e. normally; silent recycling when they happen to divide).
+      #   `[` does not drop rows on a CALIBRATED or PPS design, so the group-local complete-case
+      #     positions then landed on the wrong respondents (measured OR 1/2.17 and 1/3.13 against
+      #     svyglm's 3.48 and 4.11 on the same groups, with no warning).
+      tg  <- reg_build(sub, specs, shared,
                        split_var = NULL, .fit_cache = .fit_cache, reference = NULL, reref = FALSE,
                        skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
@@ -3712,7 +3794,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           suppressWarnings(stats::var(as.numeric(mdata_i[[dep_i]]), na.rm = TRUE)) else NA_real_
         emp_i   <- reg_empirical(mdata_i, fac_preds_e, dep_i, key_i, pos_i, design_spec$wt,
                                  trials = specs[[i]]$trials, ref_category = fits[[i]]$y_ref,
-                                 conf_level = conf_level)
+                                 conf_level = conf_level, design_spec = design_spec)
         # Which predictors have no closed form and must be fitted? z9: the numeric ones. z10: EVERY
         # predictor under an ordinal outcome (proportional odds is a constraint, so the univariable model
         # is not saturated). reg_crude_saturated() states the rule; nothing here re-derives it.
@@ -3871,7 +3953,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         # built for this fit when there is one; otherwise build the grid here.
         tipsd <- if (!is.null(emp_by_fit[[si]]$grid)) emp_by_fit[[si]]$grid else
           reg_empirical(emp_frame_of(dep_i), fac_preds_t, dep_i, "multinomial", NULL, design_spec$wt,
-                        ref_category = fits[[si]]$y_ref, conf_level = conf_level)
+                        ref_category = fits[[si]]$y_ref, conf_level = conf_level,
+                        design_spec = design_spec)
         tk    <- reg_skel_key(tipsd$var, tipsd$level, tipsd$category)
         purrr::compact(purrr::map(cols_idx, function(i) {
           b    <- built[[i]]
@@ -4210,18 +4293,25 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 #'   no clean crude analogue and is ignored (with a message).
 #'
-#'   The crude companions of a **categorical** predictor are descriptive, so on weighted data they
-#'   honour `options(tabxplor.kish_neff = TRUE)` (Kish's effective sample size) exactly like [tab()];
-#'   a **continuous** predictor's companion comes from a univariable fit and therefore uses the model's
-#'   own design-based variance, like the `Model_*` column beside it. On weighted data the two rules
-#'   will not agree to the last digit — they answer the same question under different variance
-#'   assumptions. Default `FALSE`.
+#'   The crude companions of a **categorical** predictor are descriptive, so their confidence
+#'   intervals follow the same three-rung ladder as [tab()]'s cells: plain weighted, then
+#'   `options(tabxplor.kish_neff = TRUE)` (Kish's effective sample size), then a `survey` design (see
+#'   below). A **continuous** predictor's companion comes from a univariable fit and therefore uses
+#'   the model's own variance, like the `Model_*` column beside it. The two rules answer the same
+#'   question under different variance assumptions, so they will not agree to the last digit.
+#'   Default `FALSE`.
 #'
-#'   **Under a `survey::svydesign`**, the `Model_*` columns are fully design-based (`survey::svyglm`),
-#'   and so is a continuous predictor's crude companion; a **categorical** predictor's crude interval
-#'   is still the single-stage weighted one, unlike [tab()]'s cells since 2.0.0. The footer's
-#'   design-based sentence therefore over-states that one column, until the next release makes it
-#'   design-based too.
+#'   **Under a `survey::svydesign`** every column is design-based. The `Model_*` ones through
+#'   `survey::svyglm`; the crude ones through an effective sample size derived from the design
+#'   variance of each cell (Korn & Graubard's device, the same one [tab()]'s cells use). That base is
+#'   **exact** for a single cell, and for each leg of a ratio: the odds-ratio and risk-ratio brackets
+#'   built on it *are* the design variance of the log odds and of the log risk. A **difference or a
+#'   ratio between two cells** additionally ignores the design covariance between them, so it lands a
+#'   few percent either side of the exact answer — against the 15–25 % it was out by before. Two
+#'   things stay outside: a 3+ level outcome (multinomial, ordinal) has no crude *column*, only a
+#'   crude value folded into the model cell, and replicate-weight designs (`svrepdesign`) are refused
+#'   at the boundary. If the design variance cannot be computed the intervals fall back to the raw
+#'   count and say so.
 #' @param add_n Logical, default `TRUE`. Add an `n` column, right after the level labels, holding the
 #'   **unadjusted count** behind each predictor level on the model's own complete cases --- the numbers
 #'   a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The

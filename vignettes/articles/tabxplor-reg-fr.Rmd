@@ -571,23 +571,23 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 Passer une variable de pondération avec `wt =` utilise un *survey design* / **plan de sondage** (`survey::svyglm()`). Le cadre qu'utilise `tabxplor` est simple : l'**estimation du coefficient est pondérée**, et les erreurs-types du modèle prennent en compte les poids inégaux, pour obtenir des intervalles de confiance plus larges mais plus fiables.
 
 ```{r, eval = FALSE}
-# `weight` est une variables de poids :
+# `weight` est une variable de poids -- le cas courant :
 tab_reg(data, "dependent", c("pred1", "pred2"), wt = "weight")
-
-# Un plan stratifié / en grappes 
-#  (les strates retrecissent generalement les intervalles, 
-#  les grappes `ids` les elargissent) :
-tab_reg(data, "dependent", c("pred1", "pred2"),
-        wt = "weight", ids = "psu", strata = "stratum")
 ```
 
-Avec de simples poids, `wt =` suffit. Les différences de poids des individus sont prises en compte dans le calcul des erreurs-types, élargissant les intervalles de confiance.
+Il n'y a que **deux** façons de le dire, et c'est délibéré. Soit vous donnez une variable de poids à `wt =`, soit — lorsque votre fichier porte aussi des strates, des grappes, une correction de population finie ou un calage — vous construisez le plan une fois avec le package [survey](https://CRAN.R-project.org/package=survey) et vous passez **le plan lui-même** comme `data` :
 
-Préciser `strata =` lorque l’enquête est stratifiée permet typiquement de gagner un peu de précision (des intervalles de confiance plus étroits) lorsque les variables de stratification sont corrélées à la variable expliquée.
+```{r, eval = FALSE}
+library(survey)
+d <- svydesign(ids = ~psu, strata = ~strate, weights = ~w, data = mon_enquete, nest = TRUE)
+tab_reg(d, "dependent", c("pred1", "pred2"), empirical = TRUE)
+```
 
-Il est possible de passer un plan de sondage personnalisé avec un object survey::svydesign() à la place de `data` (voir ?survey::svydesign pour la calibration, les poids de replication et les cas plus complexes). La calibration permet notamment de gagner un peu de préciser lorsque les poids sont redressés, par rapport au recensement, sur un certains nombre de variables sociodémographiques.
+Tout suit alors ce plan, dans un seul régime : les coefficients `Model_*` et leurs intervalles (`survey::svyglm()`), les effets marginaux moyens, la mise à l'échelle par écart-type des prédicteurs numériques, le test d'écart modèle-vs-observé — **et les colonnes observées `Obs_*`**, dont les intervalles sont construits sur la variance de plan de chaque cellule. Ce dernier point est décisif pour la comparaison dont parle cette vignette : la colonne du modèle et la colonne observée à côté d'elle sont désormais mesurées de la même façon, donc un écart entre elles porte sur l'**ajustement**, et non sur deux notions différentes de l'incertitude.
 
-Les quantitées observées de `empirical = TRUE` sont *descriptives*, donc sur des données pondérées leurs intervalles de confiance honorent `options(tabxplor.kish_neff = TRUE)`, comme de simples tableaux croisés construits avec `tab()`. Cette option est à activer lorsque `tab_reg()` utilise la pondération, pour une comparaison plus fiable des intervalles de confiance (les colonnes du modèle elles-mêmes restent fondées sur le *survey-design* quoi qu'il arrive : il subsiste donc toujours un écart entre les deux façons de calculer les intervalles de confiance, sur les quantitées observées, et sur les quantitées modélisées).
+Deux limites honnêtes. Une comparaison *entre deux cellules* (un rapport de cotes observé, une différence de risque) ignore la covariance de plan entre elles, et tombe donc à quelques pourcents de la réponse exacte — contre les 15 à 25 % d'écart de l'époque où ces colonnes étaient calculées comme si l'échantillon était aléatoire simple. Et une variable expliquée à 3 modalités ou plus (nominale, ordinale) n'a pas de *colonne* observée : sa valeur brute est repliée dans la cellule du modèle, sous forme de point, sans intervalle à fonder sur le plan.
+
+Sans plan de sondage, `options(tabxplor.kish_neff = TRUE)` élargit les intervalles des colonnes observées avec la taille d'échantillon effective de Kish — une correction de l'inégalité des poids seule (voir `vignette("tabxplor")` pour les trois échelons complets). Les colonnes du modèle restent fondées sur le plan dans tous les cas.
 
 
 ## Comparer plusieurs modèles

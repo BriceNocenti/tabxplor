@@ -551,20 +551,23 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. (This is the design-based counterpart to `tab()`'s cheaper `options(tabxplor.kish_neff = TRUE)` approximation — see `vignette("tabxplor")`.)
 
 ```{r, eval = FALSE}
-# `weight` is a survey weight column in your data, using mostly a basic  :
+# `weight` is a survey weight column in your data -- the common case:
 tab_reg(data, "dependent", c("pred1", "pred2"), wt = "weight")
-
-# A stratified / clustered design (strata usually *narrow* the intervals, clusters widen them):
-tab_reg(data, "dependent", c("pred1", "pred2"),
-        wt = "weight", ids = "psu", strata = "stratum")
-
-# Or pass a design you built yourself with survey::svydesign() as `data` (see ?survey::svydesign
-# for calibration, replicate weights and the more complex cases).
 ```
 
-If you only have simple weights, `wt =` is all you need. Give `strata =` when you have a stratified survey: it typically buys a little precision (narrower confidence intervals) when the strata variables are related to the outcome.
+There are only **two** ways to say it, and that is deliberate. Either you give `wt =` a weight column, or — when your file also carries strata, clusters, a finite-population correction or calibration — you build the design once with the [survey](https://CRAN.R-project.org/package=survey) package and pass **the design itself** as `data`:
 
-The `empirical = TRUE` observed companions columns (the unadjusted `Obs_*` effects) are *descriptive*, so on weighted data their confidence intervals honour `options(tabxplor.kish_neff = TRUE)` exactly like `tab()`. Set it to `TRUE` when using `tab_reg()` with weights for a more like-for-like uncertainty comparison (the model columns themselves stay design-based regardless, so there’s always a remainnig discrepency between the two ways to calculate confidence intervals). 
+```{r, eval = FALSE}
+library(survey)
+d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, nest = TRUE)
+tab_reg(d, "dependent", c("pred1", "pred2"), empirical = TRUE)
+```
+
+Everything then follows that design, in one regime: the `Model_*` coefficients and their intervals (`survey::svyglm()`), the average marginal effects, the per-standard-deviation scaling of numeric predictors, the model-vs-observed gap test — **and the observed `Obs_*` companion columns**, whose intervals are built on the design variance of each cell. That last point matters for the comparison this vignette is about: the model column and the observed column beside it are now measured the same way, so a difference between them is about *adjustment*, not about two different notions of uncertainty.
+
+Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a 3+ level outcome (nominal, ordinal) has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based.
+
+Without a design, `options(tabxplor.kish_neff = TRUE)` widens the observed columns' intervals using Kish's effective sample size — a correction for unequal weighting only (see `vignette("tabxplor")` for the full three-rung ladder). The model columns are design-based either way.
 
 
 ## Comparing several models

@@ -340,6 +340,22 @@ contrib keeps the grand-total base: that base is not what `n_eff` holds there. R
 cell and conservative for a cell-vs-reference difference (it cannot carry the row-to-row design
 covariance, ruling Q3) — so it never produces a star the design does not support.
 
+**Last Phase z14-iii — the same producer serves `tab_reg()`'s crude columns.** A crude `Obs_*` cell IS a
+weighted mean over a domain (a predictor level), so `reg_empirical()` takes `design_spec` and asks
+`svy_var_mean()` for `Var_design` per level, writing Korn–Graubard's device into the bases it already
+had (`emp_n_draw` for every proportion-scale interval, `emp_n_ci` for the mean-scale ones); its rung now
+comes from the shared `svy_inference_mode()` rather than a local `getOption()` read. Two small
+generalisations were enough: **`wmult`** (a per-row weight multiplier, because a grouped-binomial row is
+a cluster of `trials` draws — the general ratio form, not a second formula), and level-INDEX domain keys,
+which make the domain identical by construction to the grid's own `ok & x == l` and put a predictor level
+literally named `"Total"` out of reach. `emp_n_draw` became per (level, **category**) because the
+multinomial html tooltip prints its intervals. On that base the Woolf and Katz brackets *are*
+`Var_design(logit p)` and `Var_design(log p)`; a ratio between two cells still omits their covariance, so
+it lands a few percent either side of the exact answer (measured 2–7 %, against 15 % for the single-stage
+base) — "conservative, never anti-conservative" is a statement about a *difference of proportions*, not
+about a ratio. `svy_row_at()` was extracted here as THE row-space rule, because `reg-influence.R` needs
+the same one (see *The gap test* below).
+
 ### The settings spine (`ctx$settings`, Phase 17e)
 
 The argument-normalisation boundary is the historical "top bug factory": five documented bugs came from
@@ -679,6 +695,8 @@ predates z9 (a 0 %/100 % crude cell already yields no SE) and coverage is comple
 measured, but it is now more reachable; the honest fix would be a per-row `force_policy`.
 
 `force_policy` therefore did NOT disappear as the study forecast -- it became a PREDICATE ON THE COLUMN, **`fmt_gap_force_policy(x)`** (an all-NA `gap_se` -> `"ignore"`), carried by BOTH gap measures and applied by `measure_policy(measure, policy, x)`, whose one call site is `fmt_color_plan()` (the legend reads `plan$policy`, so it inherits the resolution). That is what implements Q1(b) with no 12th column attribute and no display-string matching, and it fixed a live Phase-A hole: `between_groups` under `method = "profile"` writes no SE and was greying the whole column instead of falling back to the descriptive reading. Two legend consequences: `legend_resolve_spec()`'s `chan()` now resolves each channel under ITS OWN policy (they can genuinely differ -- an OR text channel greying by its Wald interval, an `adjustment` background with no test), and the "Background: the same rule..." clause gates on `spec$plan_bg$policy` instead of the text channel's, retiring a sentence that had been claiming a greying rule that was never applied. ⚠ The influence-function SE is the ROBUST (sandwich / design-based) variance on both legs; it equals the printed crude interval exactly only for the unweighted binomial (Woolf), and differs by a few percent from the pooled-Student `Obs_diff` and quasi-Poisson `Obs_IRR` brackets -- correct for a gap between two differently-specified estimators, and documented. §6's rebuild-from-`(data, coef)` was deliberately NOT built: jamovi's regression `color` is a checkbox, so one clause on the `reref` gate (`!("adjustment" %in% color)`) sends the measure down the refit path instead of adding a second encoding of `reg_fit()`'s model frame for no caller.
+
+**Last Phase z14-iii — one row space.** `[` does not drop rows on a **calibrated or PPS** design: `survey` keeps all *n* and sets `prob = Inf`. So `svy_domain_design()` pads the fit's design back to full length, `svyglm` keeps those zero-weight rows in `model.matrix()`, and an influence leg built on the complete-case frame is SHORTER than its counterpart — measured 380 against 400. The closed-form crude leg then failed the length guard (the gap test vanished, silently, on every calibrated design with a missing value), and worse, `reg_ame_if_maker()`'s own `emp + delta` **recycled**: a wrong number with only a warning. **`reg_if_align(v, n, des_rows)`** scatters a frame-length leg into the design's row space over the extracted `svy_row_at()` (shared with `svy_var_prep()`), which is exact rather than approximate because the padded rows carry design weight 0. Three call sites: the closed-form crude leg in `reg_gap_se_columns()`, and the `emp` term of both AME makers. Two matching row-space fixes live in `tab_reg.R`: `reg_resolve_design()` maps its complete-case mask through `.svy_row` so every subset goes into the ORIGINAL design, and the `split_var` branch no longer re-subsets the design at all — ⚠ it used to hand a per-group design through `utils::modifyList()`, which **recurses into list elements**, and a `survey.design2` is a list whose `$variables` is a data.frame, so the two designs were merged column by column (an error whenever the groups were unequal, silent recycling when they divided); on a calibrated design the group-local positions then weighted the wrong respondents (measured OR `1/2.17` against `svyglm`'s `3.48`).
 
 The **`at = "reference"` estimand mismatch** was fixed in passing (a z5 defect): there the model cell is a marginal effect AT the reference profile while the crude companion stays marginal over the whole sample, so no `obs` is written at all and `tab_reg()` says why once. The stratum-restricted crude effect would match the estimand but answers a different question (model FIT at one profile, not confounding) on a few percent of the rows. Rationale, measurements and rejected alternatives (CI overlap; Hausman's subtraction, which goes NEGATIVE for logistic): `dev/model_vs_observed_gap_test.md`.
 

@@ -4814,9 +4814,10 @@ tab_weight_line <- function(x, lang = NULL) {
   # and tab_reg() under a design emitted no weight line at all.
   # Last Phase z14-ii (ruling Q7): the sentence now claims the intervals too, because Route A made
   # them design-based -- a rung-3 table has to be distinguishable from a rung-2 (Kish) one, which
-  # S3.2/S3.3 measured can differ by a factor of 2 in EITHER direction. It is deliberately blanket
-  # (maintainer's decision): tab_reg()'s crude Obs_* intervals are still single-stage until z14-iii,
-  # and that exception is named in ?tab_reg rather than hedged here.
+  # S3.2/S3.3 measured can differ by a factor of 2 in EITHER direction. It is blanket, and since
+  # z14-iii made tab_reg()'s crude Obs_* intervals design-based too it is blanket with nothing left
+  # to qualify -- a table whose design variance could NOT be computed says so at build time
+  # (svy_var_degraded()), so the sentence is never silently untrue.
   if (identical(as.character(wt)[1], svy_wt_col))
     return(with_legend_lang(lang, function(lg) enc2utf8(gettext(
       "Design-based (survey): weighted estimates, intervals and tests account for the sample design."
