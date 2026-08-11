@@ -122,6 +122,12 @@ tx_getOption <- function(names, default = NULL) {
   # (Last Phase z14-ii) -- pass a survey::svydesign as `data`; the option is then not consulted.
   options("tabxplor.kish_neff"     = FALSE)
 
+  # Last Phase z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10
+  # block glyphs showing the OBSERVED shape of its effect, the eye-half of the Linearity check.
+  # TRUE (default) = the block glyphs U+2581..U+2588; "ascii" = a plain-text ladder, for a console or
+  # a LaTeX font without them; FALSE = no sparkline (the label is then exactly what it was before).
+  options("tabxplor.spark"         = TRUE)
+
   # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,
   # matching oneway.test(var.equal=FALSE); "classic" = pooled-variance F). Both are always
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.

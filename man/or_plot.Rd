@@ -4,7 +4,15 @@
 \alias{or_plot}
 \title{Odds-ratio forest plot of a tabxplor regression table}
 \usage{
-or_plot(tabs, column = NULL, point_size = c(1.5, 6), title = NULL, ...)
+or_plot(
+  tabs,
+  column = NULL,
+  point_size = c(1.5, 6),
+  title = NULL,
+  theme = NULL,
+  lang = NULL,
+  ...
+)
 }
 \arguments{
 \item{tabs}{A \code{tabxplor} table from \code{\link[=tab_logit]{tab_logit()}} / \code{\link[=multi_logit]{multi_logit()}} / \code{\link[=tab_reg]{tab_reg()}} (binomial /
@@ -16,6 +24,12 @@ poisson / multinomial / ordinal -- any table with an odds-ratio-shaped column).}
 \item{point_size}{Length-2 numeric, the \code{ggplot2} point-size range mapped to the cell counts.}
 
 \item{title}{Optional plot title (default: the plotted column's name).}
+
+\item{theme}{\code{"light"}, \code{"dark"} or \code{"print"} (greyscale). Defaults to \code{options("tabxplor.theme")},
+like the table exporters and \code{\link[=reg_check_plots]{reg_check_plots()}}.}
+
+\item{lang}{Language of the axis label and the \code{Ref.} marker. Defaults to
+\code{options("tabxplor.lang")}.}
 
 \item{...}{Unused, for future extension.}
 }

@@ -1607,3 +1607,78 @@ jamovi's own pane put it first.
   `reg_dispersion()` divides by `n - rank`, computed here, NEVER `stats::df.residual(fit)` — for an
   `svyglm` that is the DESIGN df, so the weighted-Poisson row read ~22 instead of ~1. The SE-scaling
   caller is gated `!weighted`, where the two agree, so only the weighted row moved.
+
+#### z15-ii — `shape =`, the cure (same file)
+
+`shape` is how a user fixes what the Linearity row finds, without leaving the framework. THE design
+rule, and it is what keeps the whole feature to ~60 lines: **a shape either RECODES THE COLUMN or ADDS
+ONE TERM, and nothing else.**
+
+- **`reg_resolve_shape()`** parses the named vector against a closed vocabulary (`REG_SHAPES` +
+  `reg_shape_k()` for an integer / `"quartiles"` / `"quintiles"`); **`reg_shape_apply()`** performs the
+  recodes at ONE boundary in `tab_reg()` — placed before family detection, the reference relevel, the
+  frozen multiplier SD and the skeleton, so every one of them sees the predictor AS FITTED. The
+  design's own `$variables` are recoded too (`reg_relevel_design()`'s rule: a prebuilt design reads its
+  columns off `$variables`, not off `data`).
+  - `log` / `sqrt`: the column is transformed; the row LABEL says which (`shape_labels`, applied beside
+    the multiplier relabel — the variable name is unchanged everywhere else).
+  - `quartiles` / `quintiles` / integer k: `reg_cut_quantiles()` (WEIGHTED breaks through
+    `rd_wquantile()`, one producer shared with the curves). The predictor genuinely becomes a FACTOR,
+    so it inherits one estimate per group, a SATURATED crude twin, per-level N, per-level colours and
+    adjustment gaps with **no code at all**, and `reg_predictor_types` records what it now is.
+- **`quadratic`** is the only arm that emits a term: `reg_shape_terms()` → `shape_terms` (named by
+  variable) rides `shared` to THREE consumers — `reg_skeleton(shape_terms =)` (the extra `age²` row,
+  COEFFICIENT PATH ONLY: the marginal path emits one row per PREDICTOR, since an AME already integrates
+  the curvature), `reg_fit(add_terms = reg_shape_add(...))` for the model, and the same for
+  `reg_empirical_fit()`, so the crude twin's term names are IDENTICAL to the model's and
+  `reg_skel_match()` aligns them unchanged.
+  - ⚠ `reg_shape_term()` returns the **deparsed** string. A model-matrix column is named by the
+    formula's own term label, which R produces by deparsing, and deparse drops the spaces around `/`
+    that a pasted string keeps — the skeleton then missed the fit's term by two characters and the
+    curvature row rendered EMPTY.
+  - The linear term stays RAW: `a*x + b*((x-m)/s)^2` and `A*z + B*z^2` are the same model with
+    `A = a*s`, so `multiplier = "sd"` (the default) already prints the per-SD slope of the centred
+    parametrisation. The multiplier relabel is keyed on `term == var` so the squared row does not claim
+    a unit it does not carry.
+  - A cured predictor gets NO Linearity row (`reg_check_linearity_rows()` sets `num` minus
+    `names(shape_terms)`): adding the same term twice is a collinear duplicate the engine drops.
+  - `reref` is off when any shape is set — a shape is a DIFFERENT MODEL, not a reparametrization of the
+    canonical one (unlike `reference` / `multiplier`, which are exact transforms of it).
+- **`poly()` / `ns()` are never emitted**, and the escape hatch that can still reach one is guarded:
+  `reg_basis_vars()` + `reg_marginal_basis_ok()` compare the returned AME against
+  `mean(predict(x + k)) - mean(predict(x))` and warn on disagreement (`predict()` carries the basis's
+  frozen `predvars`, which the perturbed-frame route loses — the measured "AME = 0.000000, silently").
+  Paid only where a basis exists.
+
+#### z15-iii — the curves, the row sparkline and `reg_check_plots()`
+
+- **The primitives** (`R/reg-assumptions.R`): `rd_wquantile` (weighted quantiles, one producer for the
+  bins, the panels and `shape = "quintiles"`), `rd_link_y` (the per-observation outcome on the family's
+  own link scale — ordinal/multinomial read as "beyond the first category", stated in the axis label),
+  `rd_bin` (weighted quantile bins + the THEORETICAL `2*sqrt(p(1-p)/n_eff)` band, not `arm`'s empirical
+  one, which its own book does not describe and which ignores weights), `rd_spark` / `rd_spark_glyphs` /
+  `tx_spark_strip`, `rd_resid` (ONE randomised quantile residual for five families; multinomial
+  refused), `rd_qq` (the analytic Beta order-statistic band), `rd_thin` (extremes-first).
+- **`meta$assumptions`** (`reg_curves()`, `get_assumptions()`): one observed curve per continuous
+  predictor, ~1.6 KB, computed ONCE — it contains no fit, so a 5-model comparison stores five
+  references to one tibble. Drawn on `skeleton_data`, never on `data`: under `split_var` the groups
+  share one skeleton and are pivoted into columns BY ROW, so a per-group curve would give one row two
+  different labels. With several outcomes it is NULL rather than the first outcome's silently.
+  ⚠ The binary outcome is read at the MODELLED level (`fits[[1]]$positive_level`), never the factor's
+  first level — reading the level order drew the curve of the COMPLEMENT.
+- **The sparkline** rides the numeric predictor's own `levels` label (a NBSP + 10 glyphs), gated by
+  `options(tabxplor.spark)` (`TRUE` / `"ascii"` / `FALSE`). Per medium, ONE site each: html upgrades it
+  to a 121-byte inline `<svg><polyline stroke="currentColor">` in `tx_spark_svg()`, called at the
+  ordinary-text-cell emission — **the glyph run IS the data**, read straight out of the rendered string,
+  so there is no key to keep in sync and it survives transpose / `tab_spread` / any pipeline; the plot
+  medium STRIPS it (`tx_spark_strip()` in `tab_plot()` and `or_plot()` — a graphics device has no block
+  glyphs and emits one `mbcsToSbcs` failure per label); console, markdown and Excel keep it.
+- **`reg_check_plots()`** (`R/tab_reg_plots.R`, which now holds it + `or_plot()`; `lm_plots()` deleted).
+  The panel set IS `REG_CHECKS`: it gained a `panel` field and TWO taught-but-never-scored rows
+  (`residuals`, `normality` — measured non-discriminating as verdicts, canonical as lessons), which
+  carry an EMPTY `types` and so contribute a panel and no footer row. `reg_checks_for(what = "panel")`
+  is the same selection rule with a declared filter; `reg_panel_build()` is the one dispatch of HOW.
+  It refits through `reg_fit()` itself, from `reg_meta$fit_spec` (~4 KB of strings — never the fits:
+  ~10 MB each was Phase o's measured jamovi freeze), and ABORTS when the data does not reproduce the
+  stored N. `reg_plot_colors()` / `reg_plot_theme()` are the z11 `tx_chrome_hex()` vocabulary, adopted
+  by `or_plot()` too (the five hard-coded `"#c00000"` literals are gone).

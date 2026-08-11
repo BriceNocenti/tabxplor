@@ -56,6 +56,10 @@ column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
 \item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
 level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
 legend line and the colour-legend wording.
+\item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
+bins of the outcome on the family's link scale), set by \code{\link{tab_reg}}: the data behind
+the sparkline in a continuous predictor's row label and behind
+\code{\link{reg_check_plots}}'s linearity panel.
 \item \code{color_breaks} -- a per-table override of the colour break scales (see
 \code{\link{set_color_breaks}}), merged over the global option at render time.
 }

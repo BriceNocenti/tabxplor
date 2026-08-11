@@ -723,17 +723,45 @@ Read them in the order they print, which is the order of what each one threatens
 
 Two things worth knowing. A curvature test on one predictor can pick up **another** predictor's wrong shape when the two are strongly correlated — one more reason to read the collinearity row beside it. And with a large survey sample almost any diagnostic *p*-value ends up significant, which is why three of the five report a magnitude instead.
 
+### The shape a continuous predictor is fitted with
+
+The linearity row tells you *whether* one straight line is enough. The little curve drawn inside a continuous predictor's own row label tells you *what shape the data actually has* — ten bins of the outcome against the predictor, on the model's own scale, with no model in it:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial")
+```
+
+`age` climbs steeply and then flattens: one slope is a poor summary of that. `shape =` is how you fix it, without leaving the table. The most readable answer is usually to cut the predictor into groups — it then becomes an ordinary factor, so it gets one odds ratio per group, its own observed companion, counts and colours, and the shape becomes visible in the printed numbers themselves:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
+        shape = c(age = "quintiles"), empirical = TRUE)
+```
+
+The parsimonious alternative keeps one variable and adds a curvature term, so `age` takes two rows: the slope at the mean, and `age²`, which says whether the slope flattens (below 1) or accelerates (above 1) as you move away from it.
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
+        shape = c(age = "quadratic"))
+```
+
+`shape = c(x = "log")` and `"sqrt"` are the other two — diminishing returns, the shape income data usually has. Everything else keeps working: the observed `Obs_*` companion is fitted with the same shape, so the model-versus-observed comparison still compares like with like, and the linearity row disappears for a predictor you have already cured.
+
+(A `poly()` or spline basis is deliberately never emitted: the marginal-effects engine silently returns zero for those. If you reach one through a `formula`, a warning says so.)
+
 ## Plots
 
-`or_plot()` draws a forest plot of the odds ratios of a finished table, and `lm_plots()` draws the standard 2×2 linear-model diagnostics:
+`or_plot()` draws a forest plot of the odds ratios of a finished table. `reg_check_plots()` draws the model checks — the same five nouns as the footer rows, one panel each, faceted across every model in the table:
 
 ```{r, eval = FALSE}
 t <- tab_reg(gss_simple, "married", c("race", "age"))
 or_plot(t)
 
-m <- tab_reg(gss_simple, "age", c("race", "marital"), family = "gaussian")
-lm_plots(m)
+reg_check_plots(t, gss_simple)                       # every panel the family allows
+reg_check_plots(t, gss_simple, check = "linearity")  # just one
 ```
+
+These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row of the table, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
 
 ## Where to go next
 

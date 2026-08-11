@@ -352,26 +352,8 @@ reg_predictor_sd <- function(x, w = NULL) {
   sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
 }
 
-# Last Phase z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
-# and scale frozen as LITERALS in the formula string. Frozen for the reason z9 freezes the multiplier's
-# SD: `scale()` inside a formula re-scales on new data, so predict(newdata =) would silently disagree
-# with the fit. Returns NULL (never a broken term) when the column cannot supply a finite scale.
-#
-# ONE builder, two consumers: the Linearity check refits "the model plus this term" (reg_fit(add_terms =))
-# and the `shape = "quadratic"` remedy emits the same term -- so the check and its cure are the same
-# object rather than two spellings of one idea. Centring is not cosmetic: uncentred, the pair's own VIF
-# is 38.7 against 1.2 centred, so the Collinearity check would flag every curved model as broken. It
-# leaves the curvature p-value untouched, since {x, (x-a)^2} spans {x, x^2} for any a with 1 and x in
-# the model.
-#' @keywords internal
-reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
-  if (!identical(shape, "quadratic")) return(NULL)
-  m <- reg_weighted_mean(x, w)
-  s <- reg_predictor_sd(x, w)
-  if (!is.finite(m) || !is.finite(s) || s <= 0) return(NULL)
-  num <- function(v) format(signif(v, digits), scientific = FALSE)
-  paste0("I(((`", var, "` - ", num(m), ") / ", num(s), ")^2)")
-}
+# (`reg_shape_term()` -- the extra TERM a non-linear `shape` emits -- lives in R/reg-assumptions.R,
+# beside the Linearity check that emits the same term: the check and its cure are one object.)
 
 # Parse ONE multiplier value ("sd" / "2sd" / a number) against a predictor's frozen SD.
 # Returns list(k = <numeric>, label = <character or NA>); k = NA drops the entry.
@@ -808,7 +790,13 @@ reg_apply_references <- function(data, reference, predictors) {
 # intercept ("Constant") first, then each predictor's levels (factor / character) -- first level =
 # reference, no model term -- or a single row for a numeric predictor. `term` matches lm/glm/svyglm
 # coefficient names so a fit aligns to the skeleton by term.
-reg_skeleton <- function(data, predictors) {
+#
+# Last Phase z15: `shape_terms` (named by variable) adds the CURVATURE row of a `shape = "quadratic"`
+# predictor -- two coefficient rows for one predictor, which is exactly what R8 asks for. The 1-to-1
+# it breaks is stated as a rule, not patched with an `if`: the skeleton emits ONE ROW PER MODEL TERM on
+# the coefficient path and ONE ROW PER PREDICTOR on the marginal path (an AME already integrates the
+# curvature), so reg_build passes `shape_terms` only on the former.
+reg_skeleton <- function(data, predictors, shape_terms = NULL) {
   parts <- purrr::map(predictors, function(p) {
     v <- data[[p]]
     if (reg_is_factor_var(v)) {
@@ -820,7 +808,14 @@ reg_skeleton <- function(data, predictors) {
         is_ref = c(TRUE, rep(FALSE, length(lv) - 1L))
       )
     } else {
-      tibble::tibble(var = p, level = p, term = p, is_ref = FALSE)
+      sq <- if (!is.null(shape_terms) && p %in% names(shape_terms)) shape_terms[[p]] else NULL
+      tibble::tibble(
+        var    = p,
+        level  = c(p, if (!is.null(sq)) reg_shape_sq_level(p)),
+        # the formula carries backticks; broom::tidy()'s term does not (reg_fit strips them)
+        term   = c(p, if (!is.null(sq)) gsub("`", "", sq, fixed = TRUE)),
+        is_ref = rep(FALSE, 1L + !is.null(sq))
+      )
     }
   })
   dplyr::bind_rows(
@@ -1831,7 +1826,8 @@ reg_crude_saturated <- function(crude_key, is_factor)
 reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inverse,
                               conf_level, method, skeleton, multiplier = NULL,
                               other_preds = character(0), effect = "coefficient", wt = NULL,
-                              want_fit = FALSE, marginal = FALSE, trials = NULL) {
+                              want_fit = FALSE, marginal = FALSE, trials = NULL,
+                              shape_terms = NULL) {
   if (length(preds) == 0L) return(list(est = list(), fits = list()))
   ratio  <- identical(effect, "ame_ratio")
   skey   <- reg_skel_key(skeleton$var, skeleton$level)
@@ -1839,10 +1835,14 @@ reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inver
   fits   <- list()
   for (v in preds) {
     f <- tryCatch(
+      # Last Phase z15: the crude fit takes the SAME shape as the model's (`add_terms`), so a curved
+      # predictor's two rows both get an observed twin and its term names are IDENTICAL to the model's
+      # -- which is the whole reason the alignment below needs no shape-aware branch.
       suppressMessages(reg_fit(data, dependent, v, family, design_spec, do_exp = FALSE,
                                inverse, conf_level, method,
                                trials = trials, formula = NULL, multiplier = multiplier,
-                               drop_extra = setdiff(other_preds, v))),
+                               drop_extra = setdiff(other_preds, v),
+                               add_terms = reg_shape_add(shape_terms, v))),
       error = function(e) NULL)
     if (is.null(f)) next
     if (want_fit) fits[[v]] <- list(fit = f$fit, data = f$data)
@@ -2503,6 +2503,37 @@ reg_reference_grid_values <- function(data, predictors) {
 # here into a risk ratio. It shares the whole multiplicative path with "lnor": same double-paren label
 # shape, same exp() of the estimate and BOTH bounds (so the interval stays a Wald interval on the log
 # scale, asymmetric and strictly positive once exponentiated).
+# Last Phase z15 (SS12.6 defect 2) -- the ONE place a marginal effect can be silently WRONG.
+# `marginaleffects` re-evaluates a poly() / ns() / bs() basis on the perturbed data, and an orthogonal
+# basis absorbs a location shift exactly, so it returns AME = 0.000000 with no warning. Whether it
+# happens depends on whether `insight` can recover the data, i.e. it is a coin flip, not a property of
+# the model -- so the answer is to CHECK, not to refuse.
+#
+# The comparator is stats::predict(newdata =), which is correct here: predict() carries the basis's
+# frozen `predvars` (makepredictcall), which is precisely what the perturbed-frame route loses.
+# `shape = "quadratic"` emits I(((x - m)/s)^2) instead, which is correct through every route.
+#' @keywords internal
+reg_basis_vars <- function(fit, predictors) {
+  lab <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
+  hit <- grepl("\\b(poly|ns|bs|rcs)\\s*\\(", lab)
+  if (!any(hit)) return(character(0))
+  predictors[vapply(predictors, function(v)
+    any(grepl(paste0("\\b", tolower(v), "\\b"), tolower(lab[hit]))), logical(1))]
+}
+
+#' @keywords internal
+reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
+  truth <- tryCatch({
+    p0 <- stats::predict(fit, newdata = data, type = "response")
+    d2 <- data; d2[[v]] <- as.numeric(d2[[v]]) + (if (is.finite(k) && k != 0) k else 1)
+    mean(as.numeric(stats::predict(fit, newdata = d2, type = "response")) - as.numeric(p0),
+         na.rm = TRUE)
+  }, error = function(e) NA_real_)
+  if (!is.finite(truth) || abs(truth) < 1e-10) return(TRUE)          # nothing to disagree about
+  if (isTRUE(ratio)) return(!isTRUE(all.equal(unname(est[[1]]), 1, tolerance = 1e-8)))
+  isTRUE(abs(unname(est[[1]]) - truth) <= 0.02 * abs(truth) + 1e-10)
+}
+
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
                          multiplier = NULL) {
@@ -2528,6 +2559,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else NA_real_
     if (is.finite(k) && k != 1 && !reg_is_factor_var(data[[v]])) stats::setNames(list(k), v) else v
   }
+  basis_vars <- reg_basis_vars(fit, predictors)
   amelist <- purrr::map(predictors, function(v) {
     ac <- if (at == "reference")
       as.data.frame(do.call(marginaleffects::comparisons, c(
@@ -2554,6 +2586,17 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
     est <- ac$estimate; lo <- ac$conf.low; hi <- ac$conf.high
     if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # log-ratio -> OR / RR (and its CI)
+    # the basis-expansion guard, paid only where a basis exists (see reg_marginal_basis_ok)
+    if (!is_fac && at == "average" && length(est) == 1L && v %in% basis_vars &&
+        !reg_marginal_basis_ok(fit, data, v,
+                               if (!is.null(multiplier) && v %in% names(multiplier))
+                                 as.numeric(multiplier[[v]]) else 1, est, do_exp)) {
+      cli::cli_warn(c(
+        "!" = paste0("The marginal effect of {.val {v}} is not trustworthy: it is fitted through a ",
+                     "basis expansion ({.code poly()} / {.code ns()}), which the marginal-effects ",
+                     "engine re-evaluates on perturbed data."),
+        "i" = 'Fit it with {.code shape = c({v} = "quadratic")} instead of a formula basis.'))
+    }
     tibble::tibble(var = v, level = as.character(level), group = grp,
                    ame = est, ame_lo = lo, ame_hi = hi, ame_p = ac$p.value)
   })
@@ -3460,6 +3503,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # estimate_display, spread_models, var_labels. (`split_var` stays a formal -- it flips to NULL in the
   # recursion, and a NULL value cannot live in a modifyList()-mergeable list.)
   list2env(shared, environment())
+  # Last Phase z15: the quadratic `shape` terms, named by variable. Read explicitly (not only through
+  # list2env) so a direct reg_build caller that predates the key gets NULL rather than an error --
+  # `shape_terms` is consumed by three call sites below and NULL means "every predictor is a line".
+  shape_terms  <- shared$shape_terms
+  shape_labels <- shared$shape_labels
   # Phase 15e: each spec carries its OWN resolved family / do_exp / effect_shape / eff_word / color (set by
   # tab_reg), read as sp$<key>. The homogeneous-context scalar `family` (first outcome) is still needed by
   # mnl_vsrest + reg_compare_rows; derive it FROM the specs so it can never drift from them.
@@ -3569,14 +3617,15 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       thunk <- function() reg_fit(data, sp$dependent, sp$predictors, sp_fam, design_spec, sp_dox,
                                   inv_sp, conf_level, method,
                                   trials = sp$trials, formula = sp$formula, multiplier = multiplier,
-                                  drop_extra = na_shared_vars)
+                                  drop_extra = na_shared_vars,
+                                  add_terms = reg_shape_add(shape_terms, sp$predictors))
       # .fit_cache present but not on the reref path (ame / profile / mnl-vs-rest / compound): cache the
       # RAW reg_fit result keyed on the (already display-referenced) data -> a reference change refits.
       if (is.null(.fit_cache)) thunk()
       else jmvreg_cached(.fit_cache, "fit",
                          jmvreg_fit_key(sp, data, sp_fam, design_spec,
                                         extra = list(method, sp_dox, conf_level, effect, at,
-                                                     estimate_display, multiplier)),
+                                                     estimate_display, multiplier, shape_terms)),
                          thunk)
     })
   }
@@ -3590,9 +3639,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   mnl_vsrest <- effect == "coefficient" && at == "reference" && family == "multinomial"
   if (is.null(skeleton))
     skeleton <- if (effect %in% c("ame", "ame_ratio") || mnl_vsrest)
-                  reg_skeleton(skeleton_data, union_predictors)
+                  reg_skeleton(skeleton_data, union_predictors)     # one row per PREDICTOR (z15)
                 else if (any(compound))            reg_skeleton_from_fit(fits[[1]]$fit)
-                else                               reg_skeleton(skeleton_data, union_predictors)
+                else            reg_skeleton(skeleton_data, union_predictors, shape_terms)
 
   prefix_dep    <- length(specs) > 1L
   # Phase 14w: a model COMPARISON (several models, one dependent) keeps each model's col_var = its own
@@ -3750,24 +3799,58 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # footer row and no second sentinel logic exists.
   reg_gof <- reg_check_rows(reg_gof, data, fits, specs,
                             list(weighted = weighted, design_spec = design_spec,
-                                 conf_level = conf_level,
+                                 conf_level = conf_level, shape_terms = shape_terms,
                                  inverse_two_level_factors = inverse_two_level_factors),
                             stats, fit_first_col, grouped_by_fit)
 
   disp_levels <- reg_cleanup(skeleton$level, cleannames)
+  # Last Phase z15: a `shape = "log"` / `"sqrt"` predictor was RECODED, so its row must say which
+  # column was fitted ("log(age)"). The variable NAME is unchanged everywhere else (select(), the
+  # references, the crude twin), exactly as the multiplier relabel below leaves it -- only the display
+  # level moves. A quantile-cut predictor needs nothing: its levels ARE the groups.
+  if (length(shape_labels)) {
+    for (v in names(shape_labels)) {
+      hit <- skeleton$var == v & !is.na(skeleton$term)
+      if (any(hit)) disp_levels[hit] <- sub(v, shape_labels[[v]], disp_levels[hit], fixed = TRUE)
+    }
+  }
   # multiplier (Phase 12g / 15d): relabel the display level of each scaled numeric predictor so the row
   # reads "<var> (per <unit>)" -- KEEP the predictor name (dropping it left a bare "per 2" the user could
   # not read). Last Phase z9: the unit text comes from `multiplier_label` ("1 SD (13.5)" / "10 units"),
   # resolved with the number itself so the two can never disagree, and the row is found through the
   # STORED predictor kind rather than the `level == var` convention (which `cleannames` and this very
   # relabel already break -- Phase 17 rule 2).
+  # Last Phase z15: keyed on the LINEAR term (`term == var`), so a curved predictor's `age²` row does
+  # not claim a per-SD unit it does not carry -- reg_fit()'s multiplier matches `td$term == v` and
+  # leaves the squared term alone (it is already per 1 SD², by construction of reg_shape_term()).
   if (length(multiplier_label)) {
-    num_rows <- skeleton$var %in% numeric_preds
+    num_rows <- skeleton$var %in% numeric_preds &
+      !is.na(skeleton$term) & skeleton$term == skeleton$var
     for (v in names(multiplier_label)) {
       lab <- multiplier_label[[v]]
       if (is.na(lab)) next
       hit <- num_rows & skeleton$var == v
       if (any(hit)) disp_levels[hit] <- paste0(disp_levels[hit], " (per ", lab, ")")
+    }
+  }
+
+  # Last Phase z15 -- the OBSERVED shape of each continuous predictor, and its miniature in the row's
+  # own label. It is the `Obs_*` half of the Linearity check (SS7.1): the sparkline is what the data
+  # does, the footer p is whether the model's straight line was good enough. So it is fit-free, and
+  # deliberately drawn on `skeleton_data`, not `data` -- under `split_var` the groups share one
+  # skeleton and are pivoted into columns by row, so a per-group curve would give the same row two
+  # different labels and break the alignment. Ten bins fixed, so two predictors are comparable.
+  assumptions <- reg_curves(skeleton_data, specs, numeric_preds, design_spec$wt,
+                            positive_level = fits[[1]]$positive_level)
+  if (!is.null(assumptions)) {
+    spark <- getOption("tabxplor.spark", TRUE)
+    lin   <- !is.na(skeleton$term) & skeleton$term == skeleton$var
+    for (v in names(assumptions$curves)) {
+      gl <- rd_spark(assumptions$curves[[v]]$y, spark)
+      if (is.na(gl)) next
+      hit <- lin & skeleton$var == v
+      # a NON-BREAKING space (U+00A0): the glyph run belongs to the label and must not wrap off it
+      if (any(hit)) disp_levels[hit] <- paste0(disp_levels[hit], "\u00a0", gl)
     }
   }
 
@@ -3864,6 +3947,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           conf_level = conf_level, method = method, skeleton = skeleton, multiplier = multiplier,
           other_preds = union_predictors, effect = effect, wt = design_spec$wt,
           want_fit = "adjustment" %in% specs[[i]]$color, trials = specs[[i]]$trials,
+          shape_terms = shape_terms,
           marginal = effect %in% c("ame", "ame_ratio") &&
             (reg_fam_binary(fam_i) || reg_fam_prob(fam_i)))
         cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, key_i, fam_i, effect, var_y_i,
@@ -4081,6 +4165,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     tab_stamp_conf_level(conf_level) |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
+                        # Last Phase z15: the observed curves the sparklines were drawn from, and the
+                        # only thing reg_check_plots() needs that a refit cannot give back.
+                        assumptions = assumptions,
                         # Phase k: variable labels for the opt-in name display-swap (absent when none).
                         vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL,
                         # 14v-ii / 17h: the numeric/ratio methods the empirical columns use, read STRAIGHT
@@ -4126,7 +4213,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'     comparison test), `split_var` (one table per group), `multiplier` (the unit a continuous
 #'     predictor's effect is reported per — one standard deviation by default).
 #'   \item **Survey design**: `wt` for a simple weight, or a prebuilt [survey::svydesign()] as `data`.
-#'   \item **Diagnostics**: `stats` (footer statistics), and the plots [or_plot()] / [lm_plots()].
+#'   \item **Model checks**: `stats` (the footer rows --- linearity, dispersion, influence,
+#'   collinearity, proportionality), `shape` (the cure for a non-linearity), and the plots
+#'   [reg_check_plots()] / [or_plot()].
 #' }
 #'
 #' `predictors` selects the mode: a **character vector** fits one model, and `dependent` may itself
@@ -4308,6 +4397,29 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   predictors. Not applied to multinomial / ordinal outcomes, nor to a `formula` model (where a
 #'   variable may enter through an interaction or a `poly()` basis). A 0/1-coded **numeric** predictor
 #'   gets a "per 1 SD (0.5)" reading — pass such a variable as a factor instead.
+#' @param shape How a **continuous** predictor enters the model, when one straight line is not enough.
+#'   The `Linearity` footer row and the little curve drawn in the predictor's own row label tell you
+#'   *whether* a line is enough; this argument is how you fix it without leaving the framework.
+#'
+#'   A **named vector** over continuous predictors — everything it does not name stays linear:
+#'   \describe{
+#'     \item{`"linear"`}{one slope (the default).}
+#'     \item{`"quintiles"` / `"quartiles"` / an integer `k`}{cut into `k` quantile groups, so the
+#'       predictor becomes an ordinary **factor**: one estimate per group, its own observed companion,
+#'       counts and colours per group — the non-linearity becomes visible in the printed numbers. Start
+#'       here; it is the most readable answer.}
+#'     \item{`"quadratic"`}{adds a curvature term, so the predictor takes **two rows** — the slope at
+#'       the mean, and `age²`, which says whether the slope flattens (< 1) or accelerates (> 1) as you
+#'       move away from it. Parsimonious, but two coefficients to read.}
+#'     \item{`"log"` / `"sqrt"`}{fit `log(x)` / `sqrt(x)` instead of `x` — diminishing returns. The row
+#'       label says which (`log(age)`). `"log"` needs strictly positive values.}
+#'   }
+#'   Example: `shape = c(age = "quadratic", income = "log")`.
+#'
+#'   Everything else keeps working: the observed `Obs_*` companion is fitted with the same shape, the
+#'   model-versus-observed colour and test compare like with like, and `multiplier` still names the
+#'   unit. A `poly()` / `ns()` basis is deliberately never emitted — the marginal-effects engine
+#'   silently returns zero for those (a warning fires if you reach one through a `formula`).
 #' @param empirical Logical. If `TRUE`, adds the **observed, unadjusted (univariable)** companion of
 #'   each model effect: with a categorical predictor that is exactly the observed contrast between
 #'   levels; with a continuous predictor it is the univariable slope, which assumes the effect is
@@ -4661,6 +4773,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     color = TRUE, color_signif = NULL, stars = TRUE, 
                     conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, multiplier = "sd",
+                    shape = NULL,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     estimate_display = c("value", "ci", "prob", "ame"),
@@ -4702,7 +4815,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
               exponentiate = exponentiate,
               effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
               reference = reference, inverse_two_level_factors = inverse_two_level_factors,
-              split_var = split_var, multiplier = multiplier, empirical = empirical, add_n = add_n,
+              split_var = split_var, multiplier = multiplier, shape = shape,
+              empirical = empirical, add_n = add_n,
               stats = stats, compare = compare, baseline = baseline,
               estimate_display = estimate_display, color = color, color_signif = color_signif,
               stars = stars, na = na, cleannames = cleannames, subtext = subtext)
@@ -4781,6 +4895,23 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   reg_var_labels <- capture_var_labels(data, reg_lbl_vars)
   data           <- tab_apply_val_labels(data, reg_lbl_vars)
   if (!is.null(design_obj)) design_obj$variables <- data
+
+  # Last Phase z15 -- `shape`: fit a continuous predictor as something other than a line. THE boundary,
+  # and there is only one: a shape either RECODES the column here (log / sqrt / quantile groups) or
+  # emits ONE extra model term (quadratic). Placed before family detection, the reference relevel, the
+  # frozen multiplier SD and the skeleton, so every one of them sees the predictor AS FITTED -- a
+  # quantile-cut `age` is a factor from this line on, and inherits the entire factor machinery (one
+  # estimate per group, a saturated crude twin, per-level N and colours) with no code of its own.
+  # The design's own variables are recoded too, exactly as reg_relevel_design() does: a prebuilt
+  # survey design reads its columns off `$variables`, not off `data`.
+  reg_shapes   <- reg_resolve_shape(shape, data, unlist(predictors, use.names = FALSE))
+  shape_labels <- character(0)
+  if (length(reg_shapes) > 0L) {
+    sh   <- reg_shape_apply(data, reg_shapes, w = wt)
+    data <- sh$data
+    shape_labels <- sh$labels
+    if (!is.null(design_obj)) design_obj$variables <- data
+  }
 
   # Phase 15e: `family` is resolved PER DEPENDENT, so one call can model several outcomes with
   # DIFFERENT families (one column-group per outcome). Accepts "auto" (detect each outcome), a scalar
@@ -5060,7 +5191,11 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     estimate_display %in% c("value", "ci") && method == "wald" &&
     all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")) &&
     !formula_mode && is.null(split_var) && is.null(trials) &&
-    compare == "none" && !is_comparison && !("adjustment" %in% color)
+    compare == "none" && !is_comparison && !("adjustment" %in% color) &&
+    # Last Phase z15: a `shape` is a DIFFERENT MODEL, not a reparametrization of the canonical one, so
+    # the digest cannot serve it (unlike `reference` / `multiplier`, which are exact transforms of it).
+    # `shape` is not reachable from the jamovi UI, so this closes the path rather than narrowing it.
+    length(reg_shapes) == 0L
 
   if (!is.null(reference) && !reref) {
     # A multinomial's baseline is the OUTCOME factor's first level, so `reference` keyed by the
@@ -5225,6 +5360,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   multiplier       <- mult_res$k
   multiplier_label <- mult_res$label
 
+  # Last Phase z15: the quadratic terms, built on the SAME frozen frame as the multiplier's SD -- so
+  # the centre and the unit of a curved predictor's two rows come from one measurement of one column,
+  # and a split group / compared model cannot re-centre it. Empty unless a shape asked for one.
+  shape_terms <- if (length(reg_shapes) > 0L)
+    reg_shape_terms(reg_complete_frame(data, intersect(unique(c(all_predictors, wt)), names(data))),
+                    reg_shapes, w = wt)
+  else stats::setNames(character(0), character(0))
+
   # empirical (Phase 12g / 14v): the descriptive crude companion beside the model effect -- the
   # unadjusted bivariate association (which IS the modelised quantity when there is a single predictor).
   # Wired for binomial / gaussian / poisson (explicit columns) and multinomial (tooltip only). A vector
@@ -5237,7 +5380,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   if (isTRUE(empirical) &&
       !any(purrr::map_lgl(dependent, ~ !is.na(reg_crude_key(family_for(.x), trials_for(.x),
                                                             formula_mode))))) {
-    cli::cli_inform(c("i" = paste0(
+    # Last Phase z15 (SS12.6 defect 1): name the REAL cause. A compound formula has no predictor
+    # structure to be crude about, whatever the family -- the old message blamed the outcome family and
+    # so told a binomial user their binomial outcome was unsupported.
+    cli::cli_inform(if (formula_mode) c("i" = paste0(
+      "{.arg empirical} (crude descriptive companion) needs one predictor per row; a compound formula ",
+      "({.code poly()} / interactions / {.code I()}) has none, so it is ignored here."),
+      "i" = 'Use {.arg predictors} with {.arg shape} for a curved term, e.g. {.code shape = c(age = "quadratic")}.')
+      else c("i" = paste0(
       "{.arg empirical} (crude descriptive companion) is not available for any of these outcome ",
       "families; ignored here.")))
     empirical <- FALSE
@@ -5255,7 +5405,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     inverse_two_level_factors = inverse_two_level_factors, conf_level = conf_level, method = method,
     color_signif = color_signif, cleannames = cleannames, subtext = subtext, effect = effect, at = at,
     stats = stats, compare = compare, baseline = baseline, multiplier = multiplier,
-    multiplier_label = multiplier_label,
+    multiplier_label = multiplier_label, shape_terms = shape_terms, shape_labels = shape_labels,
     empirical = empirical, estimate_display = estimate_display, spread_models = spread_models,
     var_labels = reg_var_labels, na_shared_vars = na_shared_vars, add_n = add_n)
   res <- reg_build(data, specs, shared, split_var = split_var,
@@ -5295,6 +5445,18 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     # broken by `cleannames` and by the multiplier relabel. `multiplier` records the RESOLVED per-unit
     # scaling actually used (the frozen SDs included), so the footer/legend can name the unit.
     predictor_types = reg_predictor_types(data, union_predictors), multiplier = multiplier,
+    # Last Phase z15: THE recipe reg_check_plots() refits from -- the specs plus the handful of scalars
+    # reg_fit() takes, ~4 KB of strings. Deliberately NOT the fits themselves: ~10 MB each was the
+    # measured cause of the Phase-o jamovi freeze, and a 60 ms refit through the very fitter the table
+    # came from is both cheaper and impossible to drift from.
+    fit_spec = list(specs = specs, method = method, conf_level = conf_level,
+                    inverse_two_level_factors = inverse_two_level_factors,
+                    na_shared_vars = na_shared_vars, shape_terms = shape_terms,
+                    multiplier = multiplier, effect = effect, wt = wt_disp,
+                    design_vars = reg_design_vars(design_spec)),
+    shape = if (length(reg_shapes))
+      vapply(reg_shapes, function(s) if (is.na(s$k)) s$kind else paste0(s$k, " groups"),
+             character(1)) else NULL,
     # Last Phase z10: which observed counterpart each outcome has (NA = none). Stored, so the footer can
     # word the in-cell "{or} ({obs})" bracket and ?tab_reg can state the scope honestly.
     crude_keys = if (isTRUE(empirical))
@@ -5334,7 +5496,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 #' @export
 tab_logit <- function(data, dependent, predictors, wt = NULL,
                       inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
-                      empirical = FALSE, add_n = TRUE,
+                      shape = NULL, empirical = FALSE, add_n = TRUE,
                       conf_level = getOption("tabxplor.conf_level", 0.95),
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
@@ -5348,7 +5510,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           split_var = split_var,
-          multiplier = multiplier, empirical = empirical, add_n = add_n,
+          multiplier = multiplier, shape = shape, empirical = empirical, add_n = add_n,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,

@@ -93,6 +93,12 @@ one-line form the console uses). The console itself is always terse.}
 the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
 V, eta2"). N is never added -- it is already shown by \code{add_n}. The console summary block always
 shows N + p-value + effect size.}
+\item{\code{tabxplor.spark}}{\code{TRUE} (default): in a \code{\link[=tab_reg]{tab_reg()}} table, a continuous predictor's row
+label ends with a small curve showing the OBSERVED shape of its effect (ten bins of the outcome
+against the predictor, on the model's scale, with no model in it) --- the eye-half of the
+\code{Linearity} footer row. \code{"ascii"} uses a plain-text ladder for a console or a LaTeX font without
+block characters; \code{FALSE} removes it. In HTML the glyphs become an inline SVG; a plot never
+draws them (no graphics-device font has them).}
 }
 }
 

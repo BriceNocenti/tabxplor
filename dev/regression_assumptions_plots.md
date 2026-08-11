@@ -1081,3 +1081,71 @@ that the only delta is the added empty `term` column.
 | centring leaves the curvature p unchanged but the pair's VIF does not | p equal to 1e-8; VIF > 20 raw, < 5 centred |
 | the whole block's cost | **+88 ms on a 157 ms build (+56 %)**, of which ~72 ms is the one Linearity refit + its test and ~16 ms all four other checks. §24's "+12 % on a 380 ms build" was measured against a heavier baseline; the absolute figures agree |
 | multinomial cost | 756 ms -> 1535 ms for one numeric predictor (ruling 4 accepted this) |
+
+## z15-ii + z15-iii (2026-08-11) — `shape =`, the curves, the sparkline, the plots
+
+Landed: the `shape` family and the plot primitives in `R/reg-assumptions.R`; `meta$assumptions` +
+`get_assumptions()`; the row sparkline (`options(tabxplor.spark)`) with its html `<svg>` upgrade;
+`reg_check_plots()` and the deletion of `lm_plots()`; `reg_plot_colors()`/`reg_plot_theme()` adopted by
+`or_plot()`; `tests/testthat/test-reg-shape.R`; the FR catalogue (201 translated, 0 fuzzy).
+
+### Five corrections to this design
+
+1. **`shape` is a DATA RECODE for three of its five values, not five term emissions.** §12.1 specified
+   `z = (x − x̄)/s` emitted terms for every value. But `log`/`sqrt`/`cut` recoding the COLUMN at one
+   boundary makes every downstream subsystem work untouched — a quantile-cut `age` genuinely IS a
+   factor, so it inherits the crude twin, the per-level N, the colours and the adjustment gap with no
+   code, and `reg_predictor_types` records what it now is. Only `quadratic` emits a term. The cost is
+   two lines (`data` and the design's `$variables`, the rule `reg_relevel_design()` already follows).
+
+2. **The linear term stays RAW, and the multiplier does the centring's work for free.**
+   §12.3 asked for `z + I(z^2)`. But `a·x + b·((x−m)/s)²` and `A·z + B·z²` are the same model with
+   `A = a·s`, so with `multiplier = "sd"` (z9's default) the printed linear row ALREADY is the per-SD
+   slope of the centred parametrisation — verified against a hand-built glm to 1e-6. No second scaling
+   rule, and `reg_shape_term()` stays the ONE object the check and the cure share.
+
+3. **`reg_shape_term()` must return the DEPARSED string** — the one implementation trap. A
+   model-matrix column is named by the formula's own term label, which R produces by deparsing, and
+   deparse drops the spaces around `/` that a pasted string keeps. The skeleton then missed the fit's
+   term by two characters and the curvature row rendered EMPTY, with no error.
+
+4. **The sparkline needs the MODELLED level, and §17's font trap hits our own plot backend.**
+   `rd_link_y()` read `as.numeric(as.factor(y)) - 1`, i.e. the factor's first level — which for the
+   vignette's own `married` is the COMPLEMENT of what the model fits, so the curve was upside down
+   beside a correct odds ratio. It now takes `fits[[1]]$positive_level`. And a graphics device has no
+   block glyphs: `tab_plot()` / `or_plot()` emitted one `mbcsToSbcs` conversion failure per label and
+   drew garbage, so the plot medium strips the run (`tx_spark_strip()`) while console / markdown /
+   Excel keep it and html upgrades it.
+
+5. **The `<svg>` upgrade does not belong in `html_escape_br()`** (§17's "one place decides what markup
+   of ours survives escaping"). The sparkline lives in the `levels` column, which is an ORDINARY TEXT
+   CELL — the rowspanned label path that `html_escape_br()` serves never carries one, and putting it
+   there would have escaped the markup back into text. It sits at the text-cell emission instead, and
+   reads the polyline **out of the glyph run itself**: no lookup into `meta$assumptions`, no key to
+   keep in sync, and it therefore survives transpose, `tab_spread` and any pipeline that moved the
+   label.
+
+### Two smaller deviations
+
+- **The panel set is `REG_CHECKS`, extended rather than duplicated.** §13's panel table and §23.4's
+  `panel` column would have been a second vocabulary beside the checks. Instead the fact table gained a
+  `panel` field and TWO rows that are TAUGHT BUT NEVER SCORED (`residuals`, `normality` — §14's own
+  measurements: non-discriminating as verdicts, canonical as lessons). They carry an EMPTY `types`,
+  which IS the statement "a panel and no footer row", and `reg_checks_for(what = "panel")` is the same
+  selection rule with a declared filter. `check =`, `stats =` and the panel titles are one vocabulary.
+- **`fit_spec` rides `reg_meta`, and the guard reads the table's own `n` footer row** rather than a
+  stored `nobs` (§13.1) — the N is already there, for every model column, so the guard costs no
+  storage and stays silent when `stats = FALSE` left nothing to compare against.
+
+### Confirmed by measurement during implementation
+
+| claim | measured here |
+|---|---|
+| the quadratic pair == a hand-built `glm(y ~ ... + I(((x-m)/s)^2))` | equal to 1e-6, both rows |
+| the crude twin's term names are IDENTICAL to the model's | `Obs_OR` fills BOTH shaped rows; the curvature row == the univariable fit to 1e-6 |
+| centring keeps the pair estimable | `car::vif()` < 5 on the emitted terms |
+| `shape = "linear"` is byte-identical to no shape | labels + `Model_OR` identical |
+| `spark = FALSE` restores the old label byte-for-byte | `"age (per 10 units)"` |
+| `rd_bin()` == `stats::weighted.mean()` per bin | 1e-10, and its logit band == the theoretical formula |
+| the Q-Q band is the Beta order-statistic one | 1e-10; mean pointwise coverage 0.95 over 20 replicates (a SINGLE sample reads 0.85 — consecutive order statistics are correlated) |
+| `rd_resid()` is standard normal under a correct model | KS 0.06 at n = 800 |

@@ -12,6 +12,7 @@ tab_logit(
   inverse_two_level_factors = TRUE,
   split_var = NULL,
   multiplier = "sd",
+  shape = NULL,
   empirical = FALSE,
   add_n = TRUE,
   conf_level = getOption("tabxplor.conf_level", 0.95),
@@ -77,6 +78,30 @@ outcomes, across compared models and across \code{split_var} groups. Names must 
 predictors. Not applied to multinomial / ordinal outcomes, nor to a \code{formula} model (where a
 variable may enter through an interaction or a \code{poly()} basis). A 0/1-coded \strong{numeric} predictor
 gets a "per 1 SD (0.5)" reading — pass such a variable as a factor instead.}
+
+\item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not enough.
+The \code{Linearity} footer row and the little curve drawn in the predictor's own row label tell you
+\emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
+
+A \strong{named vector} over continuous predictors — everything it does not name stays linear:
+\describe{
+\item{\code{"linear"}}{one slope (the default).}
+\item{\code{"quintiles"} / \code{"quartiles"} / an integer \code{k}}{cut into \code{k} quantile groups, so the
+predictor becomes an ordinary \strong{factor}: one estimate per group, its own observed companion,
+counts and colours per group — the non-linearity becomes visible in the printed numbers. Start
+here; it is the most readable answer.}
+\item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} — the slope at
+the mean, and \verb{age²}, which says whether the slope flattens (< 1) or accelerates (> 1) as you
+move away from it. Parsimonious, but two coefficients to read.}
+\item{\code{"log"} / \code{"sqrt"}}{fit \code{log(x)} / \code{sqrt(x)} instead of \code{x} — diminishing returns. The row
+label says which (\code{log(age)}). \code{"log"} needs strictly positive values.}
+}
+Example: \code{shape = c(age = "quadratic", income = "log")}.
+
+Everything else keeps working: the observed \verb{Obs_*} companion is fitted with the same shape, the
+model-versus-observed colour and test compare like with like, and \code{multiplier} still names the
+unit. A \code{poly()} / \code{ns()} basis is deliberately never emitted — the marginal-effects engine
+silently returns zero for those (a warning fires if you reach one through a \code{formula}).}
 
 \item{empirical}{Logical. If \code{TRUE}, adds the \strong{observed, unadjusted (univariable)} companion of
 each model effect: with a categorical predictor that is exactly the observed contrast between

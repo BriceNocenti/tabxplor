@@ -90,6 +90,12 @@
 #'     the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
 #'     V, eta2"). N is never added -- it is already shown by `add_n`. The console summary block always
 #'     shows N + p-value + effect size.}
+#'   \item{`tabxplor.spark`}{`TRUE` (default): in a [tab_reg()] table, a continuous predictor's row
+#'     label ends with a small curve showing the OBSERVED shape of its effect (ten bins of the outcome
+#'     against the predictor, on the model's scale, with no model in it) --- the eye-half of the
+#'     `Linearity` footer row. `"ascii"` uses a plain-text ladder for a console or a LaTeX font without
+#'     block characters; `FALSE` removes it. In HTML the glyphs become an inline SVG; a plot never
+#'     draws them (no graphics-device font has them).}
 #' }
 #'
 #' @section HTML / `tab_kable()` export:

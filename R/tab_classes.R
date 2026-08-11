@@ -83,6 +83,10 @@
 #'   \item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
 #'   level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
 #'   legend line and the colour-legend wording.
+#'   \item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
+#'   bins of the outcome on the family's link scale), set by \code{\link{tab_reg}}: the data behind
+#'   the sparkline in a continuous predictor's row label and behind
+#'   \code{\link{reg_check_plots}}'s linearity panel.
 #'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
 #'   \code{\link{set_color_breaks}}), merged over the global option at render time.
 #' }
@@ -237,6 +241,11 @@ get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
+
+# Last Phase z15: `assumptions` -- the observed curve of each continuous predictor (see new_tab()),
+# the data behind the row sparklines and behind reg_check_plots()' linearity panel.
+get_assumptions <- function(x) get_meta(x)[["assumptions"]]
+set_assumptions <- function(x, assumptions) set_meta_field(x, "assumptions", assumptions)
 
 # Phase 14w: `reg_meta` -- a regression table's model record (see new_tab()).
 get_reg_meta <- function(x) get_meta(x)[["reg_meta"]]
@@ -1897,6 +1906,11 @@ tab_plot <- function(tabs,
     tabs[[cl]] <- as.character(tabs[[cl]])
     tabs[[cl]][!show] <- ""
   }
+  # Last Phase z15: a graphics device has no block glyphs, so a reg row's sparkline would be one
+  # "conversion failure in mbcsToSbcs" per label and a row of garbage. THE plot medium's answer, once,
+  # over every text column (the html engine's is the <svg>; every other medium keeps the glyphs).
+  for (cl in other_cols) if (cl %in% names(tabs))
+    tabs[[cl]] <- tx_spark_strip(as.character(tabs[[cl]]))
 
   # Phase 14m-ii (rework): a monospace body font ONLY when the table SHOWS significance stars (so the
   # stars align); a plain table keeps the ggpubr default (proportional). WARNING: ggpubr 1.0.0 exposes

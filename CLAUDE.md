@@ -454,24 +454,42 @@ R/
 │                              `.svy_row`, and the split branch NO LONGER subsets the design nor passes
 │                              it through utils::modifyList() (which merges a survey.design's $variables
 │                              COLUMN BY COLUMN -> an error on unequal groups, wrong rows when calibrated)
-├── reg-assumptions.R (~330 L) Last Phase z15: THE model checks of a tab_reg() table. `REG_CHECKS` = the
-│                              fact table (one row per check: `noun` + `types` = discriminator -> the
+├── reg-assumptions.R (~730 L) Last Phase z15: THE model checks of a tab_reg() table, their CURE
+│                              (`shape =`) and the primitives its plots draw. `REG_CHECKS` = the fact
+│                              table (one row per check: `noun` + `types` = discriminator -> the
 │                              INSTRUMENT, both BARE MSGIDS -- a top-level gettext() freezes the build
 │                              locale, so reg_check_label() translates at render + a dead-code anchor
 │                              keeps potools able to extract; `kind`/`digits`/`families`/`weighted_ok`/
-│                              `per_predictor`), read by reg_checks_for() = THE selection rule (the
-│                              reg_crude_shape pattern), reg_check_spec_entries() (-> reg_footer_spec)
-│                              and reg_check_expand() (a user's KEY -> the `test` discriminators).
-│                              names(REG_CHECKS) IS the `stats =` vocabulary, so label and argument
-│                              cannot drift. NO new statistic engine: Linearity = reg_fit(add_terms=)
-│                              + reg_term_tests() (the dispatcher global/interaction already use), its
-│                              squared term from reg_shape_term() -- the SAME builder z15-ii's
+│                              `per_predictor`/`panel`), read by reg_checks_for(what=) = THE selection
+│                              rule (the reg_crude_shape pattern), reg_check_spec_entries()
+│                              (-> reg_footer_spec) and reg_check_expand() (a user's KEY -> the `test`
+│                              discriminators). names(REG_CHECKS) IS the `stats =` AND `check =`
+│                              vocabulary, so label, argument and panel title cannot drift; z15-iii
+│                              added two TAUGHT-BUT-NEVER-SCORED rows (residuals/normality) whose EMPTY
+│                              `types` IS "a panel, no footer row". NO new statistic engine: Linearity =
+│                              reg_fit(add_terms=) + reg_term_tests() (the dispatcher global/interaction
+│                              already use), its squared term from reg_shape_term() -- the SAME builder
 │                              `shape = "quadratic"` emits, so the check and its cure are one object;
 │                              Dispersion + Influence = reg_coef_if_maker() + reg_if_se() (max
 │                              SE_robust/SE_model, and max|IF_i(e_j)|/SE_j == stats::dfbetas() to
 │                              cor 0.999999, but working for polr/multinom and design-aware);
 │                              Proportionality = the Brant p already stashed on the fit; Collinearity =
-│                              car::vif() (the ONE new Suggest; absent -> no row, never a hand-roll)
+│                              car::vif() (the ONE new Suggest; absent -> no row, never a hand-roll).
+│                              z15-ii `shape`: a shape either RECODES THE COLUMN (log/sqrt/quantile
+│                              groups -- reg_resolve_shape + reg_shape_apply + reg_cut_quantiles, at ONE
+│                              boundary in tab_reg(), so a cut predictor genuinely IS a factor and
+│                              inherits the whole factor machinery with no code) or ADDS ONE TERM
+│                              (quadratic -> reg_shape_terms/reg_shape_add -> reg_skeleton(shape_terms=)
+│                              on the COEFFICIENT path only + reg_fit/reg_empirical_fit(add_terms=)).
+│                              WARNING reg_shape_term() returns the DEPARSED string (deparse drops the
+│                              spaces around `/` a pasted one keeps -> the curvature row rendered EMPTY).
+│                              z15-iii primitives (base R, no dependency): rd_wquantile (ONE producer for
+│                              the bins, the panels and `shape="quintiles"`), rd_link_y, rd_bin (the
+│                              THEORETICAL band, not arm's empirical one), rd_spark/rd_spark_glyphs/
+│                              tx_spark_strip, rd_resid (ONE randomised quantile residual for 5 families;
+│                              multinomial refused), rd_qq (the analytic Beta band), rd_thin/rd_with_seed,
+│                              reg_curves (-> meta$assumptions, drawn on skeleton_data at the MODELLED
+│                              level, NULL with several outcomes)
 ├── reg-influence.R  (~450 L) Last Phase z8-B: influence functions + the SE of the gap between two
 │                              estimators on the SAME rows (the covariance no arithmetic on the two
 │                              printed intervals recovers). Pure matrix math; the package's ONLY
@@ -502,9 +520,15 @@ R/
 │                              SHORTER (measured 380 vs 400 -> the gap test silently skipped, and
 │                              reg_ame_if_maker's `emp + delta` RECYCLED = a wrong number). Padded rows
 │                              carry weight 0, so a zero scatter is exact, not an approximation.
-├── tab_reg_plots.R  (~230 L) Phase 12h display: or_plot() (finalfit-style OR forest plot ON a
-│                              tabxplor_tab -- reads fmt fields, NO refit; gridExtra 2-panel) + lm_plots()
-│                              (ggplot2 2x2 glm/lm diagnostics). ggplot2+gridExtra guarded (Suggests).
+├── tab_reg_plots.R  (~560 L) The plots of a tab_reg() table: or_plot() (finalfit-style OR forest plot
+│                              ON a tabxplor_tab -- reads fmt fields, NO refit) + z15-iii's
+│                              reg_check_plots() (TEACHING ONLY -- every verdict is already a footer row;
+│                              the panel set IS REG_CHECKS, faceted across every model, one dispatch
+│                              reg_panel_build() of HOW). It refits through reg_fit() from
+│                              reg_meta$fit_spec (~4 KB of strings, never the ~10 MB fits) and ABORTS when
+│                              the data does not reproduce the table's stored N. reg_plot_colors()/
+│                              reg_plot_theme() = the z11 tx_chrome_hex() vocabulary (light/dark/print),
+│                              adopted by or_plot() too. lm_plots() DELETED. ggplot2+gridExtra guarded.
 ├── jmvtab-cache.R  (~910 L)  17i: the SHARED cache kernel at the top (jmv_cache_config +
 │                             jmv_store_new/migrate/env/fetch/put/evict/cached, ONE byte-bounded LRU
 │                             O(n log n), canonical entry list(value,bytes,seq); jmv_hash/jmv_col_fp),
@@ -620,7 +644,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI: Kish `n_eff` when `options(tabxplor.kish_neff=TRUE)` on weighted data, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Last Phase z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Last Phase z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **12 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11; Last Phase z13 added `conf_level` → 12). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
 - **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns + the `chi2_kish`/`chi2_svy`/`F_kish`/`F_svy` robust discriminators), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise — `color_breaks` per named scale). Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns + the `chi2_kish`/`chi2_svy`/`F_kish`/`F_svy` robust discriminators), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Last Phase z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise — `color_breaks` per named scale). Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -794,7 +818,8 @@ this, not the code. Symptoms + rules:
 | `test-tab_logit.R`       | Phase 12a: binomial-wrapper OR/CI/p parity vs glm/svyglm, 1/OR                                  |
 | `test-tab_reg.R`         | Phase 12c/12d/12e: beta/OR/IRR/MNL/ordinal + AME parity vs lm/glm/multinom/polr/marginaleffects |
 | `test-tab_reg-display.R` | Phase 12h: estimate_display (est_ci bracket / prob / ame folds), Excel test label, split footer |
-| `test-tab_reg-plots.R`   | Phase 12h: or_plot() / lm_plots() smoke tests (build a gtable without error)                    |
+| `test-tab_reg-plots.R`   | Phase 12h / z15: or_plot() + reg_check_plots() smoke tests (build a gtable without error)      |
+| `test-reg-shape.R`       | Last Phase z15: `shape =`, the plot primitives, the stored curves and the row sparkline        |
 
 ---
 
@@ -2618,7 +2643,7 @@ column attribute, no crosstab path). Implementation record + the corrected route
 - **No new metadata**: no `ci_settings` field, no legend degradation clause (nothing falls back
   structurally any more, so it could never fire). The residue is stated once in `?tab_reg`.
 
-#### Phase z15 — regression assumptions unified framework
+#### Last Phase z15 — regression assumptions unified framework
 
 Apply `dev/regression_assumptions_plots.md`. Three sessions (maintainer's choice): **z15-i** the
 primitives + the check footer block; **z15-ii** `shape =` (the remedy); **z15-iii** the stored curves,
@@ -2668,6 +2693,49 @@ delta, not only an fmt field/attr one) proving over 1787 cells that the only del
 - **Deliberate deviation from §21 step 1**: `rd_bin()` / `rd_resid()` / `rd_qq()` are NOT written yet.
   They have no caller until z15-iii, and shipping unwired, untested functions for two sessions is the
   dead weight this roadmap's own rules forbid. They land with the curves that use them.
+
+**z15-ii + z15-iii DONE (2026-08-11).** Full suite green in BOTH locales (`fr_FR.UTF-8`: FAIL 0, WARN 0,
+SKIP 4, PASS 5289 + the plot/reproducibility fixtures; CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`:
+FAIL 0, SKIP 10). **Zero golden / snapshot churn** — no fmt field, no column attribute, no `tab()` path.
+Implementation record + the five corrections to the design: `dev/regression_assumptions_plots.md`
+§ z15-ii + z15-iii.
+- **`shape =` is one rule, not five arms** (z15-ii): a shape either RECODES THE COLUMN or ADDS ONE
+  TERM. `log`/`sqrt`/`quartiles`/`quintiles`/integer k recode at ONE boundary in `tab_reg()` (before
+  family detection, the reference relevel, the frozen multiplier SD and the skeleton), so a quantile-cut
+  `age` genuinely IS a factor and inherits one estimate per group, a SATURATED crude twin, per-level N,
+  colours and adjustment gaps **with no code at all**. Only `quadratic` emits `reg_shape_term()`'s
+  centred squared term — the SAME object the Linearity check refits with — which rides `shared` to
+  three consumers: `reg_skeleton(shape_terms =)` (the `age²` row, COEFFICIENT path only — the marginal
+  path emits one row per PREDICTOR, an AME already integrating the curvature), the model fit and
+  `reg_empirical_fit()`, so the crude twin's term names are IDENTICAL to the model's and the existing
+  alignment needs no shape-aware branch. The linear term stays RAW: `multiplier = "sd"` already prints
+  the per-SD slope of the centred parametrisation (`A = a·s`), so there is no second scaling rule.
+  A cured predictor gets no Linearity row; `reref` is off (a shape is a different MODEL). §12.6's two
+  escape-hatch defects fixed: the compound-formula `empirical` refusal now names the formula, not the
+  family, and `reg_marginal_basis_ok()` checks a `poly()`/`ns()` AME against
+  `mean(predict(x + k)) − mean(predict(x))` and warns on disagreement (paid only where a basis exists).
+- **The observed shape, twice** (z15-iii): `meta$assumptions` stores one fit-free curve per continuous
+  predictor (10 weighted quantile bins on the family's link scale, computed ONCE — a 5-model comparison
+  stores five references to one 1.6 KB tibble), and the predictor's own row label ends with its
+  sparkline. Per medium ONE site: html upgrades the glyph run to a 121-byte inline `<svg>` — **the run
+  IS the data**, read out of the rendered string, so nothing has to be kept in sync and it survives
+  transpose / `tab_spread`; the plot medium strips it (no graphics-device font has block glyphs);
+  console, markdown and Excel keep it. `options(tabxplor.spark)` = `TRUE` / `"ascii"` / `FALSE`.
+- **`reg_check_plots()`** replaces `lm_plots()` (deleted, never released). The panel set IS `REG_CHECKS`,
+  which gained a `panel` field and two TAUGHT-BUT-NEVER-SCORED rows (`residuals`, `normality`) whose
+  EMPTY `types` is the statement "a panel and no footer row" — so `check =`, `stats =` and the panel
+  titles are one vocabulary. It refits through `reg_fit()` from the new `reg_meta$fit_spec` (~4 KB of
+  strings, never the ~10 MB fits) and ABORTS when the data does not reproduce the table's stored N.
+  `reg_plot_colors()`/`reg_plot_theme()` are the z11 `tx_chrome_hex()` vocabulary, adopted by
+  `or_plot()` too (the five hard-coded `"#c00000"` literals are gone).
+- **Four defects found while implementing**, each measured: `reg_shape_term()` must return the DEPARSED
+  string (deparse drops the spaces around `/` a pasted one keeps → the curvature row rendered EMPTY);
+  the sparkline must read the MODELLED level, not the factor's first (it drew the COMPLEMENT beside a
+  correct odds ratio); `tab_plot()`/`or_plot()` emitted one `mbcsToSbcs` failure per label; and
+  `rd_resid()`'s `seed` argument was never applied (now `rd_with_seed()`, base R — `withr` is Suggests).
+- New `tests/testthat/test-reg-shape.R` (63) + the plot/reproducibility fixtures; both reg vignettes
+  gained a "shape" section; `?tab_reg`, `?tabxplor-options`, `?new_tab`, NEWS, `_pkgdown.yml`, the
+  architecture guide; `po/R-fr.po` + `.mo` recompiled (**201 translated, 0 fuzzy, 0 untranslated**).
 
 #### Last Phase z16 — the weights framework, reorganised
 Plan and implement from `dev/weights_framework_redesign.md` (design, 2026-08-11). Its §5.1 is your

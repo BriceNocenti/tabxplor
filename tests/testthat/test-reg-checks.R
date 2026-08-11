@@ -232,8 +232,11 @@ test_that("REG_CHECKS drives the footer labels and the `stats =` vocabulary from
       expect_identical(spec[[d]]$label, paste0(ck$noun, " (", ck$types[[d]], ")"))
       expect_identical(spec[[d]]$kind, ck$kind)
     }
-    # the KEY is what a user writes; the discriminators are what a `test` row carries
-    expect_setequal(tabxplor:::reg_check_expand(k), names(ck$types))
+    # the KEY is what a user writes; the discriminators are what a `test` row carries. Last Phase z15:
+    # a TAUGHT-BUT-NEVER-SCORED check (residuals / normality) carries none, so it expands to nothing --
+    # which is exactly how it contributes a panel and no footer row.
+    if (length(ck$types)) expect_setequal(tabxplor:::reg_check_expand(k), names(ck$types))
+    else                  expect_length(tabxplor:::reg_check_expand(k), 0L)
   }
 })
 

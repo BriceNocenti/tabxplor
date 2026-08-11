@@ -1,9 +1,10 @@
-# Last Phase z15 -- THE model checks of a `tab_reg()` table.
+# Last Phase z15 -- THE model checks of a `tab_reg()` table, their CURE (`shape =`) and the
+# primitives its plots are drawn from.
 #
 # ROLE: one fact table (REG_CHECKS), one selection rule (reg_checks_for), one producer
 # (reg_check_rows) and one label builder (reg_check_spec_entries). Adding a check is ONE row: the
-# footer label, the `stats =` value and (later) the panel title all derive from it, so they cannot
-# drift -- the REG_EMPIRICAL / reg_crude_shape pattern of Phase 17h.
+# footer label, the `stats =` value, the `check =` value and the panel title all derive from it, so
+# they cannot drift -- the REG_EMPIRICAL / reg_crude_shape pattern of Phase 17h.
 #
 # THE IDEA. tabxplor's headline feature is a comparison: `Model_OR` beside `Obs_OR`, coloured by the
 # gap and tested by `gap_se`. Every check here is that same comparison applied to something other than
@@ -44,10 +45,14 @@ REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson", "rr",
 #                 convention Last Phase m set for the crosstab summary ("pvalue (Chi2, Welch F; Kish)").
 #                 A term test carries three discriminators because exactly one of LR / F / Wald fires,
 #                 and which one is a fact about the model the reader should see.
+#                 EMPTY = the check is TAUGHT but never SCORED: it contributes a panel and no footer
+#                 row (SS14 -- the two panels that measured as non-discriminating checks).
 #   kind/digits   the reg_footer_spec() rendering (a p-value cell, or a gof number with `digits`)
 #   families      where the check is defined at all
 #   weighted_ok   FALSE = refused on a weighted / design fit (never approximated)
 #   per_predictor one row per (model column x predictor) rather than one per model column
+#   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
+#                 vocabulary. `auto` draws every panel the family allows.
 #' @keywords internal
 REG_CHECKS <- list(
   # 1. the ESTIMATE: is this predictor's effect really one straight line?
@@ -55,32 +60,48 @@ REG_CHECKS <- list(
     noun = "Linearity",
     types = c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"),
     kind = "pvalue", digits = NA_integer_,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE),
+    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE,
+    panel = "linearity"),
   # 2. what the estimate MEANS: is one odds ratio enough for every cut?
   proportionality = list(
     noun = "Proportionality",
     types = c(proportionality = "Brant"),
     kind = "pvalue", digits = NA_integer_,
-    families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE),
+    families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE,
+    panel = "proportionality"),
   # 3. the INTERVAL: are the standard errors wide enough?
   dispersion = list(
     noun = "Dispersion",
     types = c(dispersion = "robust/model SE"),
     kind = "gof", digits = 2L,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE),
+    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
+    panel = "dispersion"),
   # 4. is it REAL: does one respondent carry the result?
   influence = list(
     noun = "Influence",
     types = c(influence = "max dfbetas"),
     kind = "gof", digits = 2L,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE),
+    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
+    panel = "influence"),
   # 5. why is it WIDE: can the data tell these predictors apart?
   collinearity = list(
     noun = "Collinearity",
     types = c(collinearity = "max VIF"),
     kind = "gof", digits = 2L,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE)
+    per_predictor = FALSE, panel = "collinearity"),
+  # TAUGHT, NEVER SCORED (SS14). Both were measured NOT to discriminate as verdicts -- binned residuals
+  # put 45 % of bins outside the band for the mis-specified model against 40 % for the corrected one,
+  # and normality is irrelevant to coefficient inference at survey n -- but both are the canonical
+  # lessons, so they keep their panel and give up their row. An empty `types` IS that statement.
+  residuals = list(
+    noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
+    families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
+    per_predictor = FALSE, panel = "residuals"),
+  normality = list(
+    noun = "Normality", types = character(0), kind = NA_character_, digits = NA_integer_,
+    families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
+    per_predictor = FALSE, panel = "normality")
 )
 
 # Every discriminator the checks can emit (the `test` values that are check rows).
@@ -89,16 +110,20 @@ reg_check_types <- function() unlist(lapply(REG_CHECKS, function(ck) names(ck$ty
                                      use.names = FALSE)
 
 # THE selection rule: which checks apply to this fit? Read by reg_footer_stats() (the default set +
-# the `stats =` vocabulary) and by reg_check_rows() (what to compute). `has_fit` is FALSE on the
-# jamovi digest path, which deliberately keeps no model frame -- every check reads the fit, so they
-# degrade to absent there rather than to a wrong number.
+# the `stats =` vocabulary), by reg_check_rows() (what to compute) and by reg_check_plots()
+# (`what = "panel"`, which keeps the taught-but-unscored rows and drops any check with no panel).
+# `has_fit` is FALSE on the jamovi digest path, which deliberately keeps no model frame -- every
+# check reads the fit, so they degrade to absent there rather than to a wrong number.
 #' @keywords internal
-reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = TRUE) {
+reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = TRUE,
+                           what = c("footer", "panel")) {
+  what <- match.arg(what)
   if (!isTRUE(has_fit)) return(character(0))
   keys <- names(REG_CHECKS)
   keys[vapply(keys, function(k) {
     ck <- REG_CHECKS[[k]]
-    family %in% ck$families && (isTRUE(ck$weighted_ok) || !isTRUE(weighted))
+    ok <- family %in% ck$families && (isTRUE(ck$weighted_ok) || !isTRUE(weighted))
+    ok && if (what == "footer") length(ck$types) > 0L else !is.na(ck$panel)
   }, logical(1))]
 }
 
@@ -106,8 +131,11 @@ reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = 
 # DISCRIMINATOR ("linearity_lr"). One expansion, so both vocabularies stay in this file.
 #' @keywords internal
 reg_check_expand <- function(stats) {
-  unlist(lapply(stats, function(s)
+  out <- unlist(lapply(stats, function(s)
     if (!is.null(REG_CHECKS[[s]])) names(REG_CHECKS[[s]]$types) else s), use.names = FALSE)
+  # a TAUGHT-BUT-NEVER-SCORED key expands to nothing, and so does an empty `stats` -- character(0),
+  # never NULL: every caller uses the result as a vector (`%in%`, `[`).
+  if (is.null(out)) character(0) else out
 }
 
 # The reg_footer_spec() entries the checks contribute -- one per discriminator, label built HERE (at
@@ -276,7 +304,11 @@ reg_nested_lr <- function(base, aug) {
 
 #' @keywords internal
 reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, base_fit = NULL) {
-  num <- reg_numeric_preds(data, sp$predictors)
+  # A predictor the user has already CURED gets no row: `shape = "quadratic"` puts this very term in
+  # the model, so adding it again is a collinear duplicate the engine silently drops. (`log`/`sqrt`
+  # recode the column, so the check then asks the right new question -- does log(x) still curve? -- and
+  # a quantile-cut predictor is a factor, which has no functional form to mis-specify.)
+  num <- setdiff(reg_numeric_preds(data, sp$predictors), names(shared$shape_terms))
   if (length(num) == 0L) return(NULL)
   weighted <- isTRUE(shared$weighted)
   use_f    <- sp$family %in% c("gaussian", "quasipoisson")
@@ -365,6 +397,438 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
 }
 
 
+# === SECTION: `shape` -- fitting a predictor as something other than a line =========================
+#
+# The checks FIND a non-linearity; `shape` is how the user FIXES it without leaving the framework.
+# Before it, they could not: `predictors = c("race", "poly(age, 2)")` errors, and the formula escape
+# hatch silently disables `empirical =`, `color = "adjustment"`, `multiplier` and the per-predictor
+# tests.
+#
+# THE DESIGN RULE, and it is what makes the whole feature ~60 lines: a shape either RECODES THE COLUMN
+# or ADDS ONE TERM, and nothing else.
+#   * log / sqrt / quantile groups recode `data[[v]]` at ONE boundary in tab_reg(). Every downstream
+#     subsystem then works untouched, because the predictor genuinely IS its new self: a quantile-cut
+#     `age` is a FACTOR, so it inherits one OR per group, a SATURATED crude twin, per-level N,
+#     per-level colours and adjustment gaps with no code at all (SS12.4 -- the sociologist's remedy,
+#     and the one this package renders best).
+#   * quadratic adds reg_shape_term()'s centred squared term -- the SAME object the Linearity check
+#     refits with -- plus one skeleton row. The predictor stays ONE predictor, which is the property
+#     every downstream site keys on.
+# Nothing here needs a new fmt field, a new column attribute or a new alignment key.
+#
+# WARNING -- poly() / ns() / bs() are NEVER emitted, and that is a wrong-number refusal, not taste:
+# `marginaleffects` returns AME = 0.000000 for them, silently, through every contrast form (the basis
+# is re-evaluated on the perturbed data and an orthogonal basis absorbs a location shift exactly).
+# I(x^2), raw polynomials and log() are correct through every route.
+
+# The closed vocabulary. Anything else is an integer k (k quantile groups) or an error -- there is no
+# alias table, so what the docs list is what the parser accepts.
+#' @keywords internal
+REG_SHAPES <- c("linear", "quadratic", "log", "sqrt", "quartiles", "quintiles")
+
+# The number of quantile groups a value asks for (NA = it is not a cut request).
+#' @keywords internal
+reg_shape_k <- function(value) {
+  if (identical(value, "quartiles")) return(4L)
+  if (identical(value, "quintiles")) return(5L)
+  k <- suppressWarnings(as.integer(value))
+  if (!is.na(k) && k >= 2L && k <= 20L && identical(trimws(as.character(value)), as.character(k)))
+    k else NA_integer_
+}
+
+# Last Phase z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
+# and scale frozen as LITERALS in the formula string. Frozen for the reason z9 freezes the multiplier's
+# SD: `scale()` inside a formula re-scales on new data, so predict(newdata =) would silently disagree
+# with the fit. Returns NULL (never a broken term) when the column cannot supply a finite scale.
+#
+# ONE builder, two consumers: the Linearity check refits "the model plus this term" (reg_fit(add_terms =))
+# and the `shape = "quadratic"` remedy emits the same term -- so the check and its cure are the same
+# object rather than two spellings of one idea. Centring is not cosmetic: uncentred, the pair's own VIF
+# is 38.7 against 1.2 centred, so the Collinearity check would flag every curved model as broken. It
+# leaves the curvature p-value untouched, since {x, (x-a)^2} spans {x, x^2} for any a with 1 and x in
+# the model.
+#
+# WHY THE LINEAR TERM STAYS RAW. eta = a*x + b*((x-m)/s)^2 and eta = A*z + B*z^2 are the same model with
+# A = a*s, B = b -- so with `multiplier = "sd"` (the default, which multiplies a numeric coefficient by
+# its SD) the printed linear row ALREADY is the per-SD slope of the centred parametrisation. The table
+# reads as SS12.3 specifies with no second scaling rule.
+#' @keywords internal
+reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
+  if (!identical(shape, "quadratic")) return(NULL)
+  m <- reg_weighted_mean(x, w)
+  s <- reg_predictor_sd(x, w)
+  if (!is.finite(m) || !is.finite(s) || s <= 0) return(NULL)
+  num <- function(v) format(signif(v, digits), scientific = FALSE)
+  # WARNING: return the DEPARSED form, not the pasted one. A model-matrix column is named by the
+  # formula's own term label, which R produces by deparsing -- and deparse drops the spaces around `/`
+  # that a hand-pasted string keeps. Without this the skeleton's `term` misses the fit's by two
+  # characters and the curvature row renders EMPTY (measured).
+  s2l <- tryCatch(str2lang(paste0("I(((`", var, "` - ", num(m), ") / ", num(s), ")^2)")),
+                  error = function(e) NULL)
+  if (is.null(s2l)) return(NULL)
+  paste(deparse(s2l, width.cutoff = 500L), collapse = "")
+}
+
+# Parse the whole `shape` argument -> a named list of list(kind, k). Validated against the data, so
+# every refusal names the variable and the value the user wrote.
+#' @keywords internal
+reg_resolve_shape <- function(shape, data, predictors) {
+  if (is.null(shape) || length(shape) == 0L) return(list())
+  if (is.null(names(shape)) || !all(nzchar(names(shape)))) {
+    cli::cli_abort(c("{.arg shape} must be a NAMED vector over numeric predictors.",
+                     "i" = 'e.g. {.code shape = c(age = "quadratic")}.'))
+  }
+  bad <- setdiff(names(shape), predictors)
+  if (length(bad) > 0L) {
+    cli::cli_abort(c("{.arg shape} names must be predictors of the model.",
+                     "x" = "Not {?a predictor/predictors}: {.val {bad}}."))
+  }
+  out <- list()
+  for (v in names(shape)) {
+    if (reg_is_factor_var(data[[v]])) {
+      cli::cli_abort(c("{.arg shape} applies to continuous predictors only.",
+                       "x" = "{.val {v}} is already {.cls {class(data[[v]])}}."))
+    }
+    val  <- shape[[v]]
+    kind <- if (is.character(val)) trimws(tolower(val)) else val
+    k    <- reg_shape_k(kind)
+    if (!is.na(k)) { out[[v]] <- list(kind = "quantiles", k = k); next }
+    if (!is.character(kind) || length(kind) != 1L || !kind %in% REG_SHAPES) {
+      cli::cli_abort(c(
+        "{.arg shape} for {.val {v}} must be one of {.or {.val {REG_SHAPES}}}, or a number of groups.",
+        "x" = "Got {.val {val}}.",
+        "i" = '{.val quintiles} (or an integer) cuts it into quantile groups -- one estimate each.'))
+    }
+    if (identical(kind, "linear")) next                 # the default, spelled out: nothing to emit
+    out[[v]] <- list(kind = kind, k = NA_integer_)
+  }
+  out
+}
+
+# k quantile groups of a continuous column, as an ordinary (unordered) factor. The breaks are WEIGHTED
+# quantiles when the call carries weights -- a survey package's "age groups" are equal-share of the
+# POPULATION, not of the sample -- with the extremes forced to the observed range so no value falls out.
+#' @keywords internal
+reg_cut_quantiles <- function(x, k, w = NULL, var = "x") {
+  x  <- as.numeric(x)
+  br <- rd_wquantile(x, seq(0, 1, length.out = k + 1L), w)
+  if (all(is.finite(x[!is.na(x)]))) {
+    br[[1L]]      <- min(x, na.rm = TRUE)
+    br[[k + 1L]]  <- max(x, na.rm = TRUE)
+  }
+  br <- unique(br[is.finite(br)])
+  if (length(br) < 3L) {
+    cli::cli_abort(c("{.arg shape} cannot cut {.val {var}} into {k} groups.",
+                     "x" = "Its distribution has too few distinct values.",
+                     "i" = "Use fewer groups, or pass it as a factor."))
+  }
+  f <- cut(x, breaks = br, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
+  factor(as.character(f), levels = levels(f))           # unordered: reg_fit de-orders predictors anyway
+}
+
+# Apply every column-recoding shape ONCE, and return the display labels the transformed ones need
+# ("log(age)"). `quadratic` is not a recode -- it emits a term -- so it passes through untouched.
+#' @keywords internal
+reg_shape_apply <- function(data, shapes, w = NULL) {
+  labels <- character(0)
+  wv <- if (!is.null(w) && is.character(w) && length(w) == 1L && w %in% names(data)) data[[w]] else NULL
+  for (v in names(shapes)) {
+    kind <- shapes[[v]]$kind
+    x    <- as.numeric(data[[v]])
+    if (kind == "quadratic") next
+    if (kind == "log") {
+      if (any(x <= 0, na.rm = TRUE)) {
+        cli::cli_abort(c('{.code shape = "log"} needs strictly positive values.',
+                         "x" = "{.val {v}} has values <= 0.",
+                         "i" = 'Use {.val sqrt}, {.val quintiles}, or shift the variable first.'))
+      }
+      data[[v]] <- log(x)
+      labels[[v]] <- paste0("log(", v, ")")
+    } else if (kind == "sqrt") {
+      if (any(x < 0, na.rm = TRUE)) {
+        cli::cli_abort(c('{.code shape = "sqrt"} needs non-negative values.',
+                         "x" = "{.val {v}} has negative values."))
+      }
+      data[[v]] <- sqrt(x)
+      labels[[v]] <- paste0("sqrt(", v, ")")
+    } else if (kind == "quantiles") {
+      data[[v]] <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v)
+    }
+  }
+  list(data = data, labels = labels)
+}
+
+# The quadratic terms a `shape` asks for, named by variable so the skeleton can key its extra row on
+# the same string the formula carries. `w` is the WEIGHT COLUMN NAME (as everywhere else in tab_reg),
+# resolved here -- the centre and scale are weighted whenever the call is.
+#' @keywords internal
+reg_shape_terms <- function(data, shapes, w = NULL) {
+  q <- names(shapes)[vapply(shapes, function(s) identical(s$kind, "quadratic"), logical(1))]
+  if (length(q) == 0L) return(stats::setNames(character(0), character(0)))
+  wv <- if (!is.null(w) && is.character(w) && length(w) == 1L && w %in% names(data)) data[[w]] else NULL
+  tm <- vapply(q, function(v) {
+    t <- reg_shape_term(data[[v]], v, "quadratic", wv)
+    if (is.null(t)) NA_character_ else t
+  }, character(1))
+  tm[!is.na(tm)]
+}
+
+# The display label of a numeric predictor's squared row: "age²". It is also the skeleton `level`,
+# so it must differ from the variable name (the level is the alignment key of every crude / marginal
+# join, and `level == var` is what marks the plain linear row).
+#' @keywords internal
+reg_shape_sq_level <- function(var) paste0(var, "\u00b2")     # U+00B2 SUPERSCRIPT TWO
+
+# The `add_terms` one model contributes: its own predictors' quadratic terms, in predictor order.
+# A model COMPARISON is why this filter exists -- a shaped predictor may be in some models and not
+# others, and a term for a variable the model does not carry would abort the fit.
+#' @keywords internal
+reg_shape_add <- function(shape_terms, predictors) {
+  if (is.null(shape_terms) || length(shape_terms) == 0L) return(NULL)
+  keep <- intersect(predictors, names(shape_terms))
+  if (length(keep) == 0L) return(NULL)
+  unname(shape_terms[keep])
+}
+
+
+# === SECTION: the plot primitives ===================================================================
+#
+# Five base-R functions, no dependency, each measured against the reference the design names (SS23).
+# They are the ONLY producers of the numbers every panel and the row sparkline draw.
+#
+# WARNING for whoever adds a panel later: never `geom_smooth(method = "auto")`. It switches loess -> gam
+# at 1000 observations in the largest GROUP, so a facetted 50 000-row plot gets loess and an unfacetted
+# 1200-row one gets gam -- and its message is assembled dynamically, so it cannot be regex-suppressed.
+# Nothing here smooths: the comparator of a linearity panel must be the STRAIGHT line the model assumes.
+
+# Weighted quantiles (the midpoint / Hmisc definition). One producer for the sparkline bins, the panel
+# bins and `shape = "quintiles"`, so a cut group and its curve can never disagree about where a break is.
+#' @keywords internal
+rd_wquantile <- function(x, probs, w = NULL) {
+  x <- as.numeric(x)
+  ok <- is.finite(x)
+  w  <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
+  ok <- ok & is.finite(w) & w > 0
+  if (!any(ok)) return(rep(NA_real_, length(probs)))
+  x <- x[ok]; w <- w[ok]
+  o <- order(x); x <- x[o]; w <- w[o]
+  if (length(x) == 1L) return(rep(x, length(probs)))
+  cw <- (cumsum(w) - 0.5 * w) / sum(w)
+  stats::approx(cw, x, xout = probs, rule = 2, ties = "ordered")$y
+}
+
+# The per-observation outcome a check reads, on the family's own LINK scale, plus the label of that
+# scale. ONE dispatch: an ordinal / multinomial outcome has no single curve, so it is read as
+# "beyond the first category" -- stated in the axis label, never implied.
+#' @keywords internal
+rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
+  if (family == "gaussian")
+    return(list(y = as.numeric(y), link = "identity", lab = gettext("mean")))
+  if (family %in% c("poisson", "quasipoisson"))
+    return(list(y = as.numeric(y), link = "log", lab = gettext("log(mean)")))
+  if (reg_fam_binary(family) && !is.null(trials))
+    return(list(y = as.numeric(y) / trials, link = "logit", lab = gettext("empirical logit")))
+  if (reg_fam_binary(family)) {
+    yy <- if (!is.null(positive_level)) as.numeric(as.character(y) == positive_level)
+          else                          as.numeric(as.factor(y)) - 1
+    return(list(y = yy, link = "logit", lab = gettext("empirical logit")))
+  }
+  # ordinal / multinomial: the one cut every K-category outcome has.
+  list(y = as.numeric(as.numeric(as.factor(y)) > 1), link = "logit",
+       lab = gettext("empirical logit (beyond the first category)"))
+}
+
+# Weighted quantile bins of y against x, on the link scale: the OBSERVED shape, with no fit in it.
+# Returns x (weighted bin mean), y (link-scale bin estimate), n (sum of weights) and se (the
+# THEORETICAL +/-1 SE of that estimate, from the family's own variance function).
+#
+# The band is deliberately the theoretical one, 2*sqrt(p(1-p)/n) as ROS SS14.5 p.253 specifies -- NOT
+# `arm::binnedplot`'s empirical 2*sd(y)/sqrt(n), which its own book does not describe: measured, they
+# agree on average (ratio 0.997) but differ +/-30 % per bin, and the empirical one ignores weights.
+# Zero cells use Haldane-Anscombe (k + 0.5)/(n + 1) -- symmetric, never infinite, no arbitrary floor.
+#' @keywords internal
+rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity") {
+  x <- as.numeric(x); y <- as.numeric(y)
+  w <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
+  ok <- is.finite(x) & is.finite(y) & is.finite(w) & w > 0
+  if (sum(ok) < 2L) return(NULL)
+  x <- x[ok]; y <- y[ok]; w <- w[ok]
+  br <- unique(rd_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
+  br[[1L]] <- min(x) - 1e-9; br[[length(br)]] <- max(x) + 1e-9
+  if (length(br) < 3L) return(NULL)
+  g  <- findInterval(x, br, rightmost.closed = TRUE)
+  g  <- pmax(pmin(g, length(br) - 1L), 1L)
+  sw <- as.numeric(rowsum(w, g))
+  mx <- as.numeric(rowsum(w * x, g)) / sw
+  my <- as.numeric(rowsum(w * y, g)) / sw
+  # the EFFECTIVE base of each bin: Kish's n_eff, so a weighted band is not a sample-size fiction
+  ne <- sw^2 / as.numeric(rowsum(w^2, g))
+  out <- switch(
+    link,
+    "logit" = {
+      p <- (my * ne + 0.5) / (ne + 1)
+      list(y = log(p / (1 - p)), se = sqrt(1 / (ne * p * (1 - p))))
+    },
+    "log" = {
+      m <- pmax(my, 0.5 / ne)
+      list(y = log(m), se = sqrt(1 / (ne * m)))
+    },
+    list(y = my, se = {
+      v <- as.numeric(rowsum(w * (y - my[g])^2, g)) / sw
+      sqrt(v / ne)
+    })
+  )
+  tibble::tibble(x = mx, y = out$y, n = sw, se = out$se)
+}
+
+# The 8-level block sparkline of a curve, min-max rescaled WITHIN the predictor -- so it answers
+# "is it a line?" and never "is the effect big?". `style`: TRUE = block glyphs, "ascii" = a plain-text
+# ladder for fonts without them (skimr documents the Windows failure), FALSE = no sparkline.
+#' @keywords internal
+rd_spark_glyphs <- function(style = TRUE) {
+  if (identical(style, "ascii")) return(c(".", ",", "-", "~", "+", "=", "*", "#"))
+  # U+2581..U+2588 (lower one-eighth block .. full block), as escapes: the source stays ASCII.
+  c("\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588")
+}
+
+# Remove a glyph run (and the non-breaking space that ties it to its label) from a rendered string.
+# THE plot medium's answer to SS17's font trap: a graphics device substitutes its own font and has no
+# block glyphs, so grid emits one "conversion failure in mbcsToSbcs" per label and draws garbage. The
+# console, markdown, Excel and the html <svg> all keep it; a ggplot never does.
+#' @keywords internal
+tx_spark_strip <- function(x) {
+  gl <- paste(rd_spark_glyphs(TRUE), collapse = "")
+  gsub(paste0("\u00a0?[", gl, "]{3,}"), "", x)
+}
+
+#' @keywords internal
+rd_spark <- function(y, style = TRUE) {
+  if (isFALSE(style) || is.null(y) || length(y) < 3L || !all(is.finite(y))) return(NA_character_)
+  r <- range(y)
+  gl <- rd_spark_glyphs(style)
+  i  <- if (diff(r) <= 0) rep(ceiling(length(gl) / 2), length(y))
+        else 1L + floor((y - r[[1L]]) / diff(r) * (length(gl) - 1e-9))
+  paste(gl[pmax(pmin(i, length(gl)), 1L)], collapse = "")
+}
+
+# ONE residual per family, for the teaching panels. A raw residual takes exactly two values given
+# p-hat for a binary outcome (ROS SS14.5), so every non-gaussian family gets the RANDOMISED QUANTILE
+# residual (Dunn & Smyth 1996), which is standard normal under a correct model whatever the family --
+# including ordinal, whose fitted() matrix gives cumulative probabilities exactly as ppois() does for a
+# count. Multinomial is REFUSED: two level orderings give residuals correlated -0.705, so every plot
+# would be an artefact of the coding.
+#
+# WARNING: qnorm(1) = Inf -- u must be clamped, or a single saturated fitted value returns Inf.
+#' @keywords internal
+rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
+  if (family == "multinomial") return(NULL)
+  clamp <- function(u) pmin(pmax(u, 1e-10), 1 - 1e-10)
+  draw  <- function(lo, hi) rd_with_seed(seed, stats::qnorm(clamp(stats::runif(length(lo), lo, hi))))
+  out <- tryCatch({
+    if (family == "gaussian") {
+      as.numeric(stats::rstandard(fit))
+    } else if (family == "ordinal") {
+      # fitted() is the n x K category-probability matrix; the cumulative probability of the observed
+      # category and of the one below it bracket the randomised quantile residual.
+      P  <- stats::fitted(fit)
+      if (is.null(dim(P))) return(NULL)
+      cp <- t(apply(P, 1L, cumsum))
+      k  <- as.integer(as.factor(y))
+      hi <- cp[cbind(seq_along(k), k)]
+      lo <- ifelse(k > 1L, cp[cbind(seq_along(k), pmax(k - 1L, 1L))], 0)
+      draw(lo, hi)
+    } else if (family %in% c("poisson", "quasipoisson")) {
+      mu <- as.numeric(stats::fitted(fit)); yy <- as.numeric(y)
+      draw(stats::ppois(yy - 1, mu), stats::ppois(yy, mu))
+    } else {                                          # binomial / rr / grouped binomial
+      mu <- as.numeric(stats::fitted(fit))
+      m  <- if (is.null(trials)) 1 else trials
+      yy <- if (is.null(trials)) as.numeric(as.numeric(as.factor(y)) - 1) else as.numeric(y)
+      draw(stats::pbinom(yy - 1, m, mu), stats::pbinom(yy, m, mu))
+    }
+  }, error = function(e) NULL)
+  if (is.null(out) || !length(out)) return(NULL)
+  out
+}
+
+# The ANALYTIC pointwise Q-Q band: the i-th of n uniform order statistics is Beta(i, n-i+1), so the
+# band is qnorm(qbeta(alpha/2, i, n-i+1)) .. qnorm(qbeta(1-alpha/2, ...)). 28 ms for every point
+# against 1182 ms for a 19-replicate simulated envelope, agreeing to 0.19 on the most extreme one.
+#
+# WARNING: it is POINTWISE, not simultaneous -- under a true model ~5 % of points fall outside AT EACH
+# POSITION. The panel subtitle says so; the docs alone would not be enough.
+#' @keywords internal
+rd_qq <- function(r, conf = 0.95, max_pts = 400L) {
+  r <- sort(r[is.finite(r)])
+  n <- length(r)
+  if (n < 5L) return(NULL)
+  i   <- if (n > max_pts) unique(round(seq(1, n, length.out = max_pts))) else seq_len(n)
+  a   <- (1 - conf) / 2
+  tibble::tibble(
+    theoretical = stats::qnorm((i - 0.5) / n),
+    sample      = r[i],
+    lo          = stats::qnorm(stats::qbeta(a,     i, n - i + 1)),
+    hi          = stats::qnorm(stats::qbeta(1 - a, i, n - i + 1)))
+}
+
+# Thin a POINT LAYER (never a statistic) toward the extremes: the influence and Q-Q panels exist to
+# surface the rare extreme observation, so a uniform subsample would defeat them.
+#' @keywords internal
+rd_thin <- function(v, max_points = 2000L, seed = 20260810) {
+  n <- length(v)
+  if (!is.finite(max_points) || n <= max_points) return(seq_len(n))
+  keep <- order(abs(v - stats::median(v, na.rm = TRUE)), decreasing = TRUE)[seq_len(max_points %/% 4L)]
+  rest <- setdiff(seq_len(n), keep)
+  rd_with_seed(seed, sort(c(keep, sample(rest, max_points - length(keep)))))
+}
+
+# Evaluate under a fixed seed and give the caller its RNG stream back. `seed = NULL` is a fresh draw --
+# the honest way to check that a pattern in a randomised residual is not a randomisation artefact.
+# Base R rather than withr::with_seed(): withr is Suggests-only, and these primitives have no dependency.
+#' @keywords internal
+rd_with_seed <- function(seed, expr) {
+  if (is.null(seed)) return(expr)
+  has <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  old <- if (has) get(".Random.seed", envir = globalenv(), inherits = FALSE) else NULL
+  on.exit(if (has) assign(".Random.seed", old, envir = globalenv())
+          else suppressWarnings(rm(".Random.seed", envir = globalenv())), add = TRUE)
+  set.seed(seed)
+  expr
+}
+
+
+# === SECTION: the stored curves =====================================================================
+
+# THE observed curve of every continuous predictor: 10 weighted quantile bins of the outcome against
+# the predictor, on the family's own link scale. ~1.6 KB each, computed ONCE per predictor -- never per
+# model, never per rendering -- because it contains no fit: a 5-model comparison stores five references
+# to one tibble, and it survives the jamovi digest path, where no fit exists.
+#
+# WITH SEVERAL OUTCOMES there is no single observed shape, so the whole thing is NULL rather than the
+# first outcome's silently: a row label is shared by every model column, and a sparkline that described
+# only one of them would be a lie the reader cannot see.
+#' @keywords internal
+reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L) {
+  if (length(numeric_preds) == 0L || length(specs) == 0L) return(NULL)
+  deps <- unique(vapply(specs, function(s) s$dependent, character(1)))
+  if (length(deps) != 1L) return(NULL)
+  sp <- specs[[1L]]
+  if (isTRUE(sp$compound) || is.null(data[[deps]])) return(NULL)
+  # WARNING: the MODELLED level, taken from the fit, never the factor's first level. `Married` before
+  # `Not married` in the data is exactly the case inverse_two_level_factors exists for, and reading the
+  # level order here instead drew the curve of the COMPLEMENT -- an upside-down sparkline beside a
+  # correct odds ratio, which is worse than none.
+  ly <- rd_link_y(data[[deps]], sp$family, sp$trials, positive_level)
+  w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
+          data[[wt]] else NULL
+  curves <- purrr::compact(stats::setNames(
+    purrr::map(numeric_preds, function(v) rd_bin(data[[v]], ly$y, w, nbins, ly$link)),
+    numeric_preds))
+  if (length(curves) == 0L) return(NULL)
+  list(dependent = deps, family = sp$family, link = ly$link, ylab = ly$lab, curves = curves)
+}
+
+
 # === SECTION: potools extraction anchor =============================================================
 
 # The check nouns and instruments are gettext()'d DYNAMICALLY (gettext(ck$noun)), which potools cannot
@@ -375,7 +839,7 @@ reg_check_msgid_anchor <- function() {
   if (FALSE) c(
     gettext("Linearity"), gettext("Proportionality"), gettext("Dispersion"),
     gettext("Influence"), gettext("Collinearity"), gettext("Overall association"),
-    gettext("Pearson dispersion"),
+    gettext("Pearson dispersion"), gettext("Residuals"), gettext("Normality"),
     gettext("LR"), gettext("F"), gettext("Wald"), gettext("Brant"),
     gettext("robust/model SE"), gettext("max dfbetas"), gettext("max VIF"), gettext("phi")
   )

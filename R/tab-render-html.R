@@ -132,6 +132,40 @@ html_escape_br <- function(x) {
   gsub("&lt;br&gt;", "<br>", htmltools::htmlEscape(x), fixed = TRUE)
 }
 
+# Last Phase z15 -- upgrade a block-glyph sparkline to an inline <svg> polyline (121 bytes against
+# 1084 for svglite and 843 for a base64 PNG). ONE place decides what markup of ours survives escaping,
+# which is why it lives inside html_escape_br() rather than beside the label builder.
+#
+# DESIGN: the GLYPH RUN IS THE DATA. Each of U+2581..U+2588 is one of eight levels, so the polyline is
+# read straight out of the rendered string -- no lookup into meta$assumptions, no key to keep in sync,
+# and it therefore survives transpose, tab_spread and any dplyr pipeline that moved the label.
+# `stroke="currentColor"` makes z11's light / dark / print themes carry it with no new colour rule.
+#' @keywords internal
+tx_spark_svg <- function(x, h = 12L, dx = 3L) {
+  gl  <- rd_spark_glyphs(TRUE)
+  pat <- paste0("[", paste(gl, collapse = ""), "]{3,}")
+  hit <- grepl(pat, x)
+  if (!any(hit)) return(x)
+  one <- function(run) {
+    v <- match(strsplit(run, "")[[1L]], gl)
+    n <- length(v)
+    pts <- paste(sprintf("%d,%.1f", (seq_len(n) - 1L) * dx, h - (v - 1) / 7 * (h - 2) - 1),
+                 collapse = " ")
+    paste0('<svg class="tx-spark" width="', (n - 1L) * dx + 2L, '" height="', h,
+           '" viewBox="0 0 ', (n - 1L) * dx + 2L, ' ', h,
+           '" style="vertical-align:-2px" aria-hidden="true"><polyline points="', pts,
+           '" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>')
+  }
+  x[hit] <- vapply(x[hit], function(s) {
+    m <- gregexpr(pat, s)[[1L]]
+    if (m[[1L]] == -1L) return(s)
+    runs <- regmatches(s, gregexpr(pat, s))[[1L]]
+    regmatches(s, gregexpr(pat, s)) <- list(vapply(runs, one, character(1), USE.NAMES = FALSE))
+    s
+  }, character(1), USE.NAMES = FALSE)
+  x
+}
+
 html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
   out <- esc(raw)
   if (is.null(pn)) return(out)
@@ -423,6 +457,11 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
+    # Last Phase z15: THE one place a row sparkline becomes an inline <svg>. It sits here, at the
+    # emission of an ordinary text cell, because that is the only kind of cell a glyph run can be in
+    # (a reg table's `levels` column) -- an fmt cell never carries one, and a rowspanned label cell
+    # (path c2) goes through html_escape_br(), which would escape the markup back into text.
+    cell_html <- tx_spark_svg(cell_html)
     # z11: a palette whose meaning is TYPOGRAPHY writes it as markup too, so it survives a stylesheet-
     # less destination (GitHub, a Word paste). `bold_cell` rather than a$face_bold, so the structural
     # reference/total bold travels as well. No-op under the colour palettes (semantic_face = FALSE).

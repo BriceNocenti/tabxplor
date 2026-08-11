@@ -748,17 +748,45 @@ Lisez-les dans l'ordre où elles s'affichent, qui est l'ordre de ce que chacune 
 
 Deux choses à savoir. Un test de courbure sur un prédicteur peut capter la mauvaise forme d'un **autre** prédicteur lorsque les deux sont fortement corrélés — une raison de plus de lire la ligne de colinéarité à côté. Et avec un grand échantillon d'enquête, presque toute *p*-value de diagnostic finit significative, ce qui explique que trois des cinq indiquent plutôt une grandeur.
 
+### La forme sous laquelle un prédicteur continu est ajusté
+
+La ligne de linéarité dit *si* une seule droite suffit. La petite courbe dessinée dans le libellé de la ligne d'un prédicteur continu dit *quelle forme les données ont réellement* — dix classes de la variable expliquée face au prédicteur, sur l'échelle du modèle, sans aucun modèle dedans :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial")
+```
+
+`age` monte fortement puis s'aplatit : une seule pente résume mal cela. `shape =` est la manière de corriger, sans sortir du tableau. La réponse la plus lisible est en général de découper le prédicteur en groupes — il devient alors un facteur ordinaire, donc il obtient un rapport de cotes par groupe, son propre compagnon observé, des effectifs et des couleurs, et la forme devient visible dans les chiffres imprimés eux-mêmes :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
+        shape = c(age = "quintiles"), empirical = TRUE)
+```
+
+L'alternative parcimonieuse garde une seule variable et ajoute un terme de courbure, de sorte que `age` prend deux lignes : la pente à la moyenne, et `age²`, qui dit si la pente s'aplatit (en dessous de 1) ou s'accélère (au-dessus de 1) à mesure qu'on s'en éloigne.
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
+        shape = c(age = "quadratic"))
+```
+
+`shape = c(x = "log")` et `"sqrt"` sont les deux autres — des rendements décroissants, la forme qu'ont d'ordinaire les données de revenu. Tout le reste continue de fonctionner : le compagnon observé `Obs_*` est ajusté avec la même forme, donc la comparaison modèle-observé compare toujours des grandeurs de même nature, et la ligne de linéarité disparaît pour un prédicteur déjà corrigé.
+
+(Une base `poly()` ou de splines n'est délibérément jamais émise : le moteur d'effets marginaux y renvoie zéro en silence. Si vous en atteignez une via une `formula`, un avertissement le signale.)
+
 ## Graphiques
 
-`or_plot()` trace un graphique en forêt des rapports de cotes, et `lm_plots()` trace les diagnostics standard 2×2 d'un modèle linéaire :
+`or_plot()` trace un graphique en forêt des rapports de cotes. `reg_check_plots()` trace les vérifications du modèle — les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau :
 
 ```{r, eval = FALSE}
 t <- tab_reg(gss_simple, "married", c("race", "age"))
 or_plot(t)
 
-m <- tab_reg(gss_simple, "age", c("race", "marital"), family = "gaussian")
-lm_plots(m)
+reg_check_plots(t, gss_simple)                       # tous les panneaux permis par la famille
+reg_check_plots(t, gss_simple, check = "linearity")  # un seul
 ```
+
+Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
 
 ## Pour aller plus loin
 

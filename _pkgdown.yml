@@ -61,12 +61,12 @@ reference:
 - title: Regression shortcuts and plots
   desc: >
     `tab_logit()` and `multi_logit()` are thin wrappers around `tab_reg()` for logistic models.
-    `or_plot()` and `lm_plots()` draw plots from a finished regression table.
+    `or_plot()` and `reg_check_plots()` draw plots from a finished regression table.
   contents:
   - tab_logit
   - multi_logit
   - or_plot
-  - lm_plots
+  - reg_check_plots
 
 - title: Export a finished table
   desc: >

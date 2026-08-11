@@ -63,7 +63,7 @@
 * **`tab_reg()`** — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal),
   with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
   See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
-  `lm_plots()` draw it.
+  `reg_check_plots()` draw it.
 * **Every regression table now checks itself.** The footer carries five model checks — **Linearity**
   (per continuous predictor), **Proportionality (Brant)**, **Dispersion (robust/model SE)**,
   **Influence (max dfbetas)** and **Collinearity (max VIF)** — computed for every model, with no
@@ -73,6 +73,18 @@
   say so. Any of them can be dropped through `stats =`; `stats = "collinearity"` needs the new
   suggested package `car`. The per-predictor overall-association test (`stats = "global"`) moved from
   a footer sentence to footer rows for the same reason.
+* **A continuous predictor's row shows the shape of its effect**, as a small curve in its own label —
+  ten bins of the outcome against the predictor, with no model in it (`options(tabxplor.spark = FALSE)`
+  to switch it off, `"ascii"` for a font without block characters). In HTML it becomes an inline SVG.
+* **`tab_reg(shape =)` fits a continuous predictor as something other than a line** — the cure for what
+  the linearity row finds. A named vector: `"quintiles"` / `"quartiles"` / an integer cuts it into
+  quantile groups (it becomes an ordinary factor, with one estimate, observed companion, count and
+  colour per group); `"quadratic"` adds a curvature term, giving the predictor two rows; `"log"` /
+  `"sqrt"` fit the transformed column. The observed `Obs_*` companion is fitted with the same shape, so
+  the model-versus-observed comparison still compares like with like.
+* **`reg_check_plots()`** draws those five checks — one panel each, faceted across every model in the
+  table, in the light / dark / print themes. A teaching companion: every verdict it illustrates is
+  already a footer row. It takes a `tab_reg()` table plus its data, or a fitted model directly.
 * **Colour the gap between the modelled and the observed effect.** `tab_reg(empirical = TRUE)` already
   prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
   apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
