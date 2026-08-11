@@ -82,8 +82,9 @@ available (\code{"drop_all"} / \code{"common_base"} need the microdata). The \co
 collapse levels \emph{during the microdata prep} — which \code{tab_counts()} starts past — are not offered:
 \code{levels = "first"} / \code{"auto"} (keeping a subset of levels), \code{other_if_less_than} / \code{other_level}
 (lumping rare levels counts individual observations); build from microdata with \code{\link[=tab]{tab()}} for those.
-Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{wt_counts}); the survey
-design \code{ids}/\code{strata}/\code{fpc}/\code{nest}; \code{method_mean_diff}/\code{method_mean_ratio} (a counts table has no
+Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{wt_counts}); a survey
+design as \code{data} (per-observation weights and structure a count table cannot carry -- it is
+refused with a message); \code{method_mean_diff}/\code{method_mean_ratio} (a counts table has no
 numeric column); \code{parallel}; \code{output_list}; \code{sup_cols}.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0 (see \code{\link[=tab]{tab()}}).}

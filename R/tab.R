@@ -235,20 +235,24 @@ NULL
 #' metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
 #' Automatically added if needed for \code{color}.
 #'
-#' For a weighted table you can opt in to more robust uncertainty:
-#' \code{options(tabxplor.kish_neff = TRUE)} replaces the raw unweighted n with Kish's effective
-#' sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence interval} (see the
-#' \emph{Weighted confidence intervals} note below) \emph{and} switches the whole-table tests to a
-#' first-order \strong{Rao-Scott} correction (the chi-squared rescaled to \code{n_eff}, the F on
-#' per-group effective n). \code{test = "survey"} instead runs a fully \strong{design-based} test
-#' (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
-#' the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
-#' \code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
-#' p-values (estimates/CIs stay tabxplor's single-stage weighted approximation).
-#' @param ids,strata,fpc,nest Survey-design specifications (column name(s) / a formula) used only when
-#' \code{test = "survey"} to build the design for the p-values: cluster ids (default \code{~1}, no
-#' clustering), strata, finite-population correction, and \code{nest} (are ids nested in strata).
-#' Ignored otherwise. Mirror the same arguments of \code{\link{tab_reg}}.
+#' \code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
+#' passed}, in three rungs:
+#' \enumerate{
+#'  \item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
+#'  \strong{weighted} table, with the raw unweighted n as the sample size (the same convention as the
+#'  confidence intervals beside them; see the \emph{Weighted confidence intervals} note below).
+#'  \item \code{wt = w} plus \code{options(tabxplor.kish_neff = TRUE)} --- the raw n is replaced by
+#'  Kish's effective sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence
+#'  interval} and in the whole-table tests (a first-order \strong{Rao-Scott} correction). This corrects
+#'  for unequal weighting only: it is blind to clustering and to calibration.
+#'  \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}
+#'  tests (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), and the design's own
+#'  weights drive the estimates. Confidence intervals stay tabxplor's single-stage weighted
+#'  approximation.
+#' }
+#' If your file has only a weight column but you want the design-based test, that is one line:
+#' \code{tab(survey::svydesign(ids = ~1, weights = ~w, data = d), x, y, test = TRUE)}. Replicate-weight
+#' (\code{svrepdesign}) and two-phase designs are not supported.
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0: the test is a
 #' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 #' misleading. Still works.
@@ -513,7 +517,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 method_cell = "wilson", method_diff = "newcombe",
                 method_ratio = "katz", method_mean_diff = "welch",
                 method_mean_ratio = "robust",
-                ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
@@ -551,19 +554,12 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   cleannames <-
     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
-  # Last Phase j: a prebuilt survey.design / svyrep.design passed as `data` -> its model frame drives the
-  # whole pipeline (the estimates use the design's own weights); the design itself drives ONLY the test
-  # p-values (Rao-Scott). tab()'s estimates / CIs stay the weighted-point + n approximation (S14).
-  design_obj <- NULL
-  if (inherits(data, c("survey.design", "survey.design2", "svyrep.design"))) {
-    if (!requireNamespace("survey", quietly = TRUE))
-      cli::cli_abort("A {.cls survey.design} passed as {.arg data} needs the {.pkg survey} package.")
-    design_obj <- data
-    data       <- as.data.frame(design_obj$variables)
-    cli::cli_inform(c("i" = paste(
-      "Survey design detected: it drives the test p-values;",
-      "estimates and CIs use the design's weights (single-stage approximation).")))
-  }
+  # Last Phase z14-i: a prebuilt survey design passed as `data` is unwrapped at THE one boundary
+  # (R/survey-design.R) -- its model frame drives the whole pipeline, its weights become the weight
+  # column, and the design itself drives the test p-values (Rao-Scott). tab()'s CIs stay the
+  # weighted-point + n approximation (S14) until z14-ii.
+  svy <- svy_unwrap_data(data, "tab")
+  if (!is.null(svy)) data <- svy$data
 
 
   # `row_vars`/`col_vars` accept a <tidy-select> (one variable OR several, e.g. `c(race, relig)`),
@@ -624,29 +620,17 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     wt <- rlang::ensym(wt)
   }
 
-  # Last Phase j: a survey design carries its own weights -> materialise them as the weight column so
-  # the estimates are design-weighted (overrides any user `wt`, which a design makes redundant).
-  if (!is.null(design_obj)) {
-    data[[".svy_weights"]] <- as.double(stats::weights(design_obj))
-    wt <- rlang::sym(".svy_weights")
-  }
+  # A survey design carries its own weights -> they ARE the weight column, so the estimates are
+  # design-weighted (this overrides any user `wt`, which a design makes redundant).
+  if (!is.null(svy)) wt <- rlang::sym(svy$spec$wt)
+  else if (length(wt) && identical(as.character(wt)[1], svy_wt_col))
+    cli::cli_abort(c("{.val {svy_wt_col}} is a name tabxplor reserves for a survey design.",
+                     "i" = "Rename that column, or pass a {.fn survey::svydesign} as {.arg data}."))
 
-  # `test` accepts FALSE / TRUE / "survey": the whole-table test runs whenever it is not FALSE; the
-  # ROBUSTNESS mode (classic / Kish n_eff / survey design) is a separate signal threaded to the overlay.
-  # A survey design as `data` (with test not FALSE) implies survey mode. Kish is the opt-in option, only
-  # meaningful on a weighted table.
-  test_survey <- (is.character(test) && test %in% c("survey", "design")) ||
-    (!is.null(design_obj) && !isFALSE(test))
-  test_on   <- test_survey || isTRUE(test)
-  kish_on   <- isTRUE(getOption("tabxplor.kish_neff", FALSE)) && length(wt) > 0L
-  test_mode <- if (test_survey) "survey" else if (test_on && kish_on) "kish" else "classic"
-  if (test_survey && is.null(design_obj) && length(wt) == 0L)
-    cli::cli_abort(c("A survey-design test needs weights.",
-                     "i" = 'Pass {.arg wt} (+ optional {.arg strata}/{.arg ids}/{.arg fpc}), or a {.cls survey.design} as {.arg data}.'))
-  design_spec <- if (test_survey)
-    list(design = design_obj, wt = if (length(wt)) as.character(wt) else NULL,
-         ids = ids, strata = strata, fpc = fpc, nest = nest)
-  else NULL
+  # `test` says only WHETHER to test; the RUNG (weights / weights + Kish / a design object) is derived
+  # once in tab_setup() -- see svy_test_mode() in R/survey-design.R.
+  test_on     <- svy_check_test(test)
+  design_spec <- svy$spec
 
   vctrs::vec_assert(comp, size = 1)
   # Phase 5: `color` accepts FALSE / TRUE / a scalar / c(text, background) / c(text=, background=),
@@ -719,9 +703,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            comp = comp,
            # tab_build()'s internal arg keeps the `chi2` name (it drives tab_chi2(); the ANOVA arm
            # branches inside tab_transform()); only the PUBLIC tab() surface is renamed. `test_on` is the
-           # boolean (test not FALSE); `test_mode`/`design_spec` carry the robustness overlay (Phase j).
+           # boolean; `design_spec` carries the design, from which tab_setup() derives the test rung.
            chi2 = test_on,
-           test_mode = test_mode, design_spec = design_spec,
+           design_spec = design_spec,
            ci = ci,
            conf_level = conf_level,
            stars = stars,
@@ -1360,6 +1344,16 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     )
   }
 
+  # Last Phase z14-i: tab_many() accepts a survey design as `data` through THE same boundary as
+  # tab() -- and, through `design_spec`, finally gets the same derived test rung (it used to build a
+  # classic ctx whatever the input).
+  svy <- svy_unwrap_data(data, "tab_many")
+  if (!is.null(svy)) data <- svy$data
+  chi2 <- svy_check_test(chi2, "chi2")
+  # A design's own weights ARE the weight column; otherwise `wt` rides on untouched (a bare name or a
+  # tidyselect call -- `!!enquo()` round-trips both, and a missing argument).
+  wt_quo <- if (is.null(svy)) rlang::enquo(wt) else rlang::new_quosure(rlang::sym(svy$spec$wt))
+
   # Phase 6c: parse the new color / color_signif forms here too (same one-parse contract as
   # tab()), so tab_many() accepts color = TRUE / c(text, background) / named / a measure +
   # color_signif. Plain scalar strings (incl. jmvtab's) pass through as the legacy color.
@@ -1367,9 +1361,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   result <- tab_build(
     data = data,
     row_vars = {{ row_vars }}, col_vars = {{ col_vars }}, tab_vars = {{ tab_vars }},
-    wt = {{ wt }},
+    wt = !!wt_quo,
     pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
-    OR = OR, chi2 = chi2, na = na, levels = levels,
+    OR = OR, chi2 = chi2, design_spec = svy$spec, na = na, levels = levels,
     na_drop_all = {{ na_drop_all }},
     cleannames = cleannames, other_if_less_than = other_if_less_than,
     other_level = other_level, ref = ref, ref2 = ref2, comp = comp, ci = ci,
@@ -1477,8 +1471,7 @@ force_comp <- function(comp, tab_vars) {
 tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       pct = "no", color = "no", color_signif = "ignore",
                       color_ratio_ci = FALSE,
-                      OR = "no", chi2 = FALSE,
-                      test_mode = "classic", design_spec = NULL,
+                      OR = "no", chi2 = FALSE, design_spec = NULL,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
                       other_if_less_than = 0, other_level = "Others",
@@ -1527,7 +1520,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     na_drop_all_quo = rlang::enquo(na_drop_all),
     pct = pct, color = color, color_signif = color_signif,
     color_ratio_ci = color_ratio_ci, OR = OR, chi2 = chi2,
-    test_mode = test_mode, design_spec = design_spec,
+    design_spec = design_spec,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
@@ -1565,7 +1558,8 @@ tab_build_tables <- function(ctx) {
   workers <- tab_parallel_workers(ctx$parallel, ctx$cache_env)
   units   <- tab_rowvar_ctxs(ctx)
   built   <- tab_pmap(list(ctx_i = units), "tab_build_one",
-                      .ship = list(data = ctx$data, fine_fused = ctx$fine_fused),
+                      .ship = list(data = ctx$data, fine_fused = ctx$fine_fused,
+                                   design_spec = ctx$design_spec),
                       workers = workers)
   rv_names <- as.character(ctx$row_vars)
   # Name by row_var: tab_assemble_output()'s merge derives the merged `row_var` factor labels from
@@ -1605,7 +1599,10 @@ tab_rowvar_ctxs <- function(ctx) {
   row_scalar <- setdiff(names(rows), "row_var")
   per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect", "OR_vect",
                   "na_text", "na_num", "fine_num", row_scalar)
-  shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused"))]
+  # Last Phase z14-i: `design_spec` is dropped here and SHIPPED once, like `data` -- a prebuilt design
+  # carries its whole `$variables` frame, so riding in `shared` copied the entire dataset into every
+  # per-row_var unit while the microdata itself was serialised once.
+  shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused", "design_spec"))]
   shared <- shared[!grepl("_quo$", names(shared))]
   shared$parallel  <- FALSE     # the worker never spawns nested daemons
   shared$cache_env <- NULL
@@ -1777,6 +1774,10 @@ tab_setup <- function(ctx) {
   } else {
     wt <- rlang::sym(rlang::as_name(wt_quo))
   }
+  # Last Phase z14-i: the test RUNG is derived HERE, the one place that holds both the resolved weight
+  # and the design_spec -- so tab(), tab_many() and tab_counts() cannot disagree about it (before, only
+  # tab() had the rule, which left tab_many() silently always classic).
+  test_mode <- svy_test_mode(design_spec, wt)
   # Last Phase a bug-fix: a weight that is ALSO a selected variable is nonsensical (you cannot weight a
   # mean by the same column you are averaging, nor cross a variable by itself) and used to abort with a
   # cryptic data.table error. Fail early with a clear message. num_moment_scan is otherwise shadow-proof,
@@ -2043,6 +2044,7 @@ tab_setup <- function(ctx) {
     cleannames = cleannames, stars = stars, lvs = lvs, color_signif = color_signif,
     totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
     OR = OR, comp = comp, color = color, ci = ci, ci_scale = ci_scale, chi2 = chi2,
+    test_mode = test_mode,
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
     color_diff_OR = color_diff_OR, color_ctr = color_ctr,
@@ -2069,14 +2071,13 @@ tab_prepare_pop <- function(ctx) {
   # diverges from tab(levels = "first"). See dev/tabxplor_jmvtab_cache_design.md 3.3/4e/5.
 
   #Prepare the data
-  data0 <- data
+  # Last Phase z14-i: `.svy_row` (the position each row holds in the survey design passed as `data`)
+  # rides through the preparation exactly as `.filter` does, so the design-based test can index the
+  # design from the PREPARED microdata -- the table the user actually sees, after `filter=`, level
+  # lumping and relabelling. `any_of()` is a no-op without a design, so nothing else moves.
   data <- data |> dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
-                                 tidyselect::any_of(".filter")) |>
+                                 tidyselect::any_of(c(svy_row_col, ".filter"))) |>
     relabel_levels_in_varnames(as.character(col_vars))
-  # Last Phase j: keep the survey-design-referenced columns (strata / ids / fpc) that are NOT already
-  # row/col/tab/weight vars, so the wt-built survey test can rebuild the design on the prepared data.
-  design_extra <- setdiff(svy_design_vars(design_spec), names(data))
-  if (length(design_extra)) data <- dplyr::bind_cols(data, data0[design_extra])
 
   #  Filters : here after selection (operations on rows copy all columns on memory),
   #     orwhen the tables are made for more speed :
@@ -3610,6 +3611,12 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       conf_level = 0.95, stars = FALSE, color_signif = "ignore",
                       .fine = NULL, .by_table = FALSE
 ) {
+  # Last Phase z14-i: a survey design as `data` is unwrapped FIRST -- tidyselect must see a data frame.
+  # On the tab() pipeline path `data` is already a frame, so this is a single inherits() and a no-op.
+  # The design itself is not used here yet (tab_plain has no test); its weights are, which is what
+  # makes tab_plain(design, ...) return the same estimates as tab(design, ...).
+  svy <- svy_unwrap_data(data, "tab_plain")
+  if (!is.null(svy)) data <- svy$data
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -3659,6 +3666,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   } else {
     wt <- rlang::ensym(wt)
   }
+  if (!is.null(svy)) wt <- rlang::sym(svy$spec$wt)
 
 
 
@@ -4762,6 +4770,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color_breaks = NULL,
                     .fine = NULL, .by_table = FALSE
 ) {
+  # Last Phase z14-i: unwrap a survey design FIRST -- see tab_plain(); a no-op on the pipeline path.
+  svy <- svy_unwrap_data(data, "tab_num")
+  if (!is.null(svy)) data <- svy$data
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -4795,6 +4806,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   } else {
     wt <- rlang::ensym(wt)
   }
+  if (!is.null(svy)) wt <- rlang::sym(svy$spec$wt)
 
   #forbid the level to have the name of the variable, othewise problems ----
 
@@ -5962,10 +5974,18 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 # args are its already-computed metadata (from tab_chi2()'s head).
 # DESIGN: chi2/ANOVA run on the already-AGGREGATED cell statistics, never a raw N-scan -- cost scales
 # with cells, not observations. Every (subtable x col_var) is one "table_id"; ALL tables are stacked
-# and tested in ONE agg_chi2 / agg_anova pass (see the engine header). Chi2 stays fully unweighted
-# (chisq.test parity incl. Yates on 2x2, G2); ANOVA F follows §14 (weighted group mean/var + unweighted
-# n). WARNING: keep byte-identical to the pre-9b-5 inline block (locked by test-calculations.R: chi2 +
-# Yates, Welch/classic F, add_n parity; test-golden.R: the `test` attribute).
+# and tested in ONE agg_chi2 / agg_anova pass (see the engine header).
+# DESIGN (Last Phase z14-i, ruling Q3): the chi2 and the effect size are computed on the WEIGHTED table
+#   whenever the table is weighted -- the weighted counts rescaled so they sum to the raw n. That is
+#   the convention every OTHER inference in the same table already follows: the CIs are
+#   Wilson(weighted p, unweighted n), and the ANOVA F has always taken §14's weighted group mean/var
+#   with the unweighted n. Only the factor chi2 was still fully unweighted, so a weighted table
+#   reported a p and a Cramer's V describing a population nobody had asked about.
+#   It is a rescale, not a branch: get_wn() falls back to get_n() when there are no weights, so the
+#   scale factor is exactly 1 and unweighted output is byte-identical BY CONSTRUCTION. Cramer's V is
+#   scale-invariant, so it is the weighted V at any scale.
+# WARNING: keep byte-identical to the pre-9b-5 inline block for UNWEIGHTED tables (locked by
+#   test-calculations.R: chi2 + Yates, Welch/classic F, add_n parity; test-golden.R: `test`).
 chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
                               col_vars_levels_no_tot, is_a_mean, all_col_tot) {
   # Phase 9b-5: the kept-rows MASK over `tabs` (replaces the tabs2 = tabs[!is_totrow,] record-slice,
@@ -5988,7 +6008,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
   factor_cvs <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
   mean_cvs   <- names(col_vars_levels)[ is_a_mean & !all_col_tot]
 
-  # --- Chi2 for factor col_vars (UNWEIGHTED counts) ---
+  # --- Chi2 for factor col_vars (WEIGHTED counts, rescaled to the raw n; see the DESIGN note) ---
   chi2_rows <- NULL
   if (length(factor_cvs) > 0 && n_rows2 > 0) {
     long <- dplyr::bind_rows(purrr::imap(
@@ -5996,7 +6016,8 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       function(levels, cv) {
         lv_cols <- purrr::map_chr(levels, rlang::as_name)
         if (length(lv_cols) == 0) return(NULL)
-        M  <- vapply(lv_cols, function(cc) as.double(get_n(tabs[[cc]])[mask2]), double(n_rows2))
+        M  <- vapply(lv_cols, function(cc) as.double(get_wn(tabs[[cc]])[mask2]), double(n_rows2))
+        Mn <- vapply(lv_cols, function(cc) as.double(get_n (tabs[[cc]])[mask2]), double(n_rows2))
         # Phase 14a: `length(lv_cols)`, NOT `ncol(M)`. vapply() only returns a MATRIX when
         # FUN.VALUE has length > 1, so a row_var with exactly ONE non-total row (n_rows2 == 1 --
         # e.g. all but one level emptied by na = "drop") made M a plain vector, ncol(M) NULL, and
@@ -6011,11 +6032,20 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
           table_id = paste(cv, rep(subtab_idx, times = ncM), sep = "\r"),
           row_id   = rep(seq_len(n_rows2), times = ncM),
           col_id   = rep(seq_len(ncM), each = n_rows2),
-          o        = as.vector(M)
+          o        = as.vector(M),
+          o_raw    = as.vector(Mn)
         )
       }
     ))
     if (nrow(long) > 0) {
+      # Rescale each table's weighted counts to sum to its raw n (the sample size the test is
+      # entitled to). Unweighted: o == o_raw, so the factor is exactly 1 and nothing moves.
+      weighted_tbl <- !identical(long$o, long$o_raw)
+      if (weighted_tbl) {
+        gs <- rowsum(cbind(long$o, long$o_raw), long$table_id, na.rm = TRUE)
+        k  <- ifelse(gs[, 1] > 0, gs[, 2] / gs[, 1], 1)
+        long$o <- long$o * k[as.character(long$table_id)]
+      }
       res <- agg_chi2(long$table_id, long$row_id, long$col_id, long$o, correct = TRUE)
       map <- dplyr::distinct(long, .data$table_id, .data$col_var, .data$subtab)
       chi2_rows <- dplyr::left_join(map, tibble::as_tibble(res$tables), by = "table_id") |>
@@ -6032,8 +6062,10 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       # Only a NON-simulated (genuinely exact) p is kept: a large table drags min_e down via one rare
       # category but its chi2 is fine, so agg_fisher simulates there and we keep the chi2 (weak "!" flag).
       # The display prefers pvalue_exact when present.
-      weak_ids <- res$tables$table_id[!is.na(res$tables$min_e) &
-                                        res$tables$min_e < test_weak_min_e]
+      # Last Phase z14-i: skipped on a WEIGHTED table -- an exact test enumerates integer tables, and
+      # weighted counts are not counts. The weak "!" flag still fires from min_e.
+      weak_ids <- if (weighted_tbl) character() else
+        res$tables$table_id[!is.na(res$tables$min_e) & res$tables$min_e < test_weak_min_e]
       if (length(weak_ids) > 0) {
         fish <- tibble::as_tibble(
           agg_fisher(long$table_id, long$row_id, long$col_id, long$o, weak_ids))

@@ -55,9 +55,9 @@
 #     summary console block, reg_footer_lines export rows); the built object stays the
 #     coefficient skeleton. `stats=` picks the set (FALSE hides it). No new fmt fields; ONE new display
 #     token "gof" (a plain model-fit number, forced uncoloured).
-#   - 12g: SURVEY designs + companion features. `wt` (+ optional ids/strata/fpc/nest) builds a
-#     survey::svydesign per model (reg_make_design); a PREBUILT survey.design / svyrep.design passed as
-#     `data` is subset()'d per model (reg_subset_design / reg_resolve_design) -- design-based, no weight
+#   - 12g: SURVEY designs + companion features. `wt` builds a flat (ids = ~1)
+#     survey::svydesign per model (svy_make_design); a PREBUILT survey.design passed as
+#     `data` is subset()'d per model (svy_domain_design / reg_resolve_design) -- design-based, no weight
 #     normalisation. reg_svyglm_env() binds survey::svyglm into the fit's formula env so AIC.svyglm /
 #     anova.svyglm work when survey is loaded but not attached. Weighted 3+ level lifted: ordinal ->
 #     survey::svyolr, nominal -> svyVGAM::svy_vglm (Suggests). Weighted glance = the reduced survey set
@@ -1088,27 +1088,17 @@ reg_ordinal_diagnostic <- function(fit) {
 }
 
 # --- Survey design construction (Phase 12g) --------------------------------------------------------
-# A weight column (+ optional ids/strata/fpc/nest) is turned into a survey.design *per model*, on the
-# complete-case model frame -- ids = ~1 (no clustering) by default reproduces the flat weighted path
-# exactly. A PREBUILT survey.design / svyrep.design (passed as `data`) is NOT rebuilt (replicate /
-# calibrated designs cannot be) -- it is subset()'d to the model's complete cases (domain estimation)
-# with its model-frame variables replaced by the recoded `mdata` (same rows, same order).
-# `design_spec` = list(design = <prebuilt or NULL>, wt, ids, strata, fpc, nest).
+# A weight column is turned into a survey.design *per model*, on the complete-case model frame --
+# svy_make_design()'s ids = ~1 (no clustering) reproduces the flat weighted path exactly. A PREBUILT
+# survey.design (passed as `data`) is NOT rebuilt (a calibrated design cannot be) -- it is subset()'d
+# to the model's complete cases (domain estimation) with its model-frame variables replaced by the
+# recoded `mdata`. `design_spec` = list(design = <prebuilt or NULL>, wt).
 
-# Last Phase j: the design constructors are single-sourced in R/survey-design.R (svy_*) and shared with
-# tab()'s survey-design tests. These thin wrappers keep the reg_* call sites + byte-identical behaviour.
-reg_design_formula <- function(x) svy_design_formula(x)
-reg_design_vars    <- function(design_spec) svy_design_vars(design_spec)
-reg_make_design    <- function(data, wt, ids, strata, fpc, nest)
-  svy_make_design(data, wt, ids, strata, fpc, nest)
-# Subset a prebuilt design to the model's complete cases, then swap its model frame for the recoded
-# `mdata` (drop_na + fct_drop + reg_prep_binary + grouped-binomial cols already applied). The design
-# metadata slots (strata / cluster / fpc / prob) are subset by `[` and stay row-aligned with mdata.
-reg_subset_design <- function(design, keep_mask, mdata) {
-  dd <- design[keep_mask, ]
-  dd$variables <- mdata
-  dd
-}
+reg_design_vars <- function(design_spec) svy_design_vars(design_spec)
+
+# Subsetting a prebuilt design to a model's complete cases and swapping in the recoded `mdata` is the
+# SAME operation tab()'s robust overlay needs, so it lives once in R/survey-design.R as
+# svy_domain_design() -- including the calibrated-design padding rule (D10).
 # The model's complete-case frame: drop rows missing the dependent, ANY predictor, or a design var --
 # the ONE definition of "the same population as the model". reg_fit uses it for the fit; the empirical /
 # multinomial-tip blocks recompute it from raw `data` (the fitted `f$data` is NULL on the reref/digest
@@ -1117,16 +1107,15 @@ reg_complete_frame <- function(data, vars)
   tidyr::drop_na(data, tidyselect::all_of(intersect(unique(vars), names(data))))
 
 # The survey design for a model's (recoded) complete-case frame: a prebuilt design is subset()'d and
-# has its model frame swapped for `mdata`; a weight column (+ ids/strata/fpc/nest) is built into a fresh
-# design on `mdata`. `data` + `drop_vars` give the complete-case mask for the subset path. Shared by the
-# glm (svyglm) and the 3+ level (svyolr / svy_vglm) weighted branches -- one design constructor.
+# has its model frame swapped for `mdata`; a weight column is built into a fresh design on `mdata`.
+# `data` + `drop_vars` give the complete-case mask for the subset path. Shared by the glm (svyglm) and
+# the 3+ level (svyolr / svy_vglm) weighted branches -- one design constructor.
 reg_resolve_design <- function(design_spec, mdata, data, drop_vars) {
   if (!is.null(design_spec$design)) {
     keep_mask <- stats::complete.cases(data[, drop_vars, drop = FALSE])
-    reg_subset_design(design_spec$design, keep_mask, mdata)
+    svy_domain_design(design_spec$design, which(keep_mask), mdata)
   } else {
-    reg_make_design(mdata, design_spec$wt, design_spec$ids,
-                    design_spec$strata, design_spec$fpc, design_spec$nest)
+    svy_make_design(mdata, design_spec$wt)
   }
 }
 # AIC.svyglm / anova.svyglm refit sub-models with an UNQUALIFIED `svyglm()` call evaluated in the model
@@ -1283,8 +1272,11 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     stats::glm(fml, data = mdata, family = fam_obj)
   } else {
     # svyglm on the design for this model's complete cases (built or subset via make_design; an
-    # unweighted "rr" gets reg_make_design's ids = ~1, weights = NULL constant-weight design).
-    survey::svyglm(fml, design = make_design(mdata), family = fam_obj)
+    # unweighted "rr" gets svy_make_design's ids = ~1, weights = NULL constant-weight design).
+    # WARNING (D3): call it through do.call() with the family OBJECT spliced in. Some svyglm methods
+    #   rebuild their own call and re-evaluate it in the design's data enclosure, where a local named
+    #   `fam_obj` does not exist -- an "object 'fam_obj' not found" error from inside survey.
+    do.call(survey::svyglm, list(fml, design = make_design(mdata), family = fam_obj))
   }
   # make survey::svyglm visible to AIC / anova null-refits. Fit-driven, not flag-driven, so it covers
   # the unweighted "rr" too (svyolr / svy_vglm return earlier and are not svyglm -- unchanged).
@@ -3999,7 +3991,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   \item **Comparisons & structure**: `reference` (baseline levels), `compare` / `baseline` (model
 #'     comparison test), `split_var` (one table per group), `multiplier` (the unit a continuous
 #'     predictor's effect is reported per — one standard deviation by default).
-#'   \item **Survey design**: `wt`, `ids`, `strata`, `fpc`, `nest`, or pass a prebuilt design as `data`.
+#'   \item **Survey design**: `wt` for a simple weight, or a prebuilt [survey::svydesign()] as `data`.
 #'   \item **Diagnostics**: `stats` (footer statistics), and the plots [or_plot()] / [lm_plots()].
 #' }
 #'
@@ -4035,7 +4027,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'
 #' @param data A data frame, **or a prebuilt survey design** ([survey::svydesign()] /
 #'   [survey::svrepdesign()]). When a design is passed, its weights (and clustering / stratification /
-#'   calibration) drive the estimation and `wt` / `ids` / `strata` / `fpc` are ignored.
+#'   calibration) drive the estimation and `wt` is ignored. Replicate-weight (`svrepdesign`) and
+#'   two-phase designs are not supported.
 #' @param dependent Character outcome variable name(s), **or a model formula** (the escape hatch).
 #'   With a `predictors` character vector, several names give one effect column per outcome; with a
 #'   `predictors` list, a single name is required. A formula supplies its own model (leave
@@ -4068,7 +4061,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   \strong{Standard errors are handled consistently}: the Poisson likelihood is deliberately
 #'   misspecified for a 0/1 outcome, so the naive standard errors are too wide and are replaced by the
 #'   robust **Huber--White sandwich** --- via `survey::svyglm()` in both cases, which means the
-#'   design-based variance when you supply `wt`/`ids`/`strata`, and the equivalent of `HC0` on a
+#'   design-based variance when you supply `wt` or a design, and the equivalent of `HC0` on a
 #'   constant-weight design when you do not. The observed companion (`empirical = TRUE`) follows the same
 #'   estimand: `Obs_RR` is the crude **risk** ratio with a Katz interval, not the crude odds ratio.
 #'   Two caveats: the log link is unbounded above, so predicted probabilities can exceed 1 --- the model
@@ -4086,13 +4079,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param wt Optional. Name of a weight column (character). Switches to design-based survey estimation
 #'   ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw population weights
 #'   are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.
-#' @param ids,strata,fpc Optional survey-design specification for the `wt` path (each a column name /
-#'   character vector, or a formula such as `~psu` / `~region`). `ids` gives the cluster identifier(s)
-#'   from largest to smallest stage (default no clustering); `strata` the stratifying variable(s);
-#'   `fpc` the finite-population correction. Give correct clustering/stratification for honest
-#'   design-based variances (a flat `ids = ~1` can understate them). Ignored when `data` is a design.
-#' @param nest Logical. Passed to [survey::svydesign()]: set `TRUE` when cluster ids are reused across
-#'   strata. Default `FALSE`.
+#'   For clustering, stratification, a finite-population correction or calibration, build the design
+#'   yourself with [survey::svydesign()] and pass it as `data` (see there); `wt` alone is a flat
+#'   `ids = ~1` design, which can understate the variance of a clustered sample.
 #' @param exponentiate Logical. `TRUE` (default) exponentiates coefficients into ratios (odds ratios
 #'   for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
 #'   automatically leaving gaussian linear betas on their raw scale. `FALSE` keeps every coefficient on
@@ -4484,7 +4473,6 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     estimate_display = c("value", "ci", "prob", "ame"),
                     cleannames = NULL, subtext = "", spread_models = TRUE,
-                    ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                     .fit_cache = NULL) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
@@ -4519,7 +4507,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
              else if (length(trials) == 1L)         as.numeric(trials)
              else                                   trials[[i]]
       tab_reg(data, dependent = d, predictors = predictors, family = family, wt = wt,
-              ids = ids, strata = strata, fpc = fpc, nest = nest, exponentiate = exponentiate,
+              exponentiate = exponentiate,
               effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
               reference = reference, inverse_two_level_factors = inverse_two_level_factors,
               split_var = split_var, multiplier = multiplier, empirical = empirical, add_n = add_n,
@@ -4531,21 +4519,22 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     return(new_tabxplor_tabs(tabs))
   }
 
-  # Phase 12g: `data` may be a PREBUILT survey design (survey.design / svyrep.design), gtsummary-style.
-  # Extract its model frame for family-detect / reference / skeleton; keep the design for the fits.
-  design_obj <- NULL
-  if (inherits(data, c("survey.design", "survey.design2", "svyrep.design"))) {
-    if (!requireNamespace("survey", quietly = TRUE)) {
-      cli::cli_abort(c("{.pkg survey} is required to pass a survey design as {.arg data}.",
-                       "i" = 'Install it with {.code install.packages("survey")}.'))
-    }
-    design_obj <- data
-    data       <- design_obj$variables
-    if (!is.null(wt) || !is.null(ids) || !is.null(strata) || !is.null(fpc)) {
-      cli::cli_inform(c("i" = paste0("{.arg data} is already a survey design; {.arg wt} / {.arg ids} / ",
-                                     "{.arg strata} / {.arg fpc} are ignored.")))
-      wt <- NULL; ids <- NULL; strata <- NULL; fpc <- NULL
-    }
+  # Phase 12g / Last Phase z14-i: `data` may be a PREBUILT survey design, gtsummary-style. THE shared
+  # boundary (R/survey-design.R) extracts its model frame for family-detect / reference / skeleton and
+  # materialises the design's own weights as a column; the design itself still drives every fit.
+  # WARNING: `wt` MUST become that column, not NULL. It used to be nulled here, and since ~11 sites
+  #   read `design_spec$wt`, a design-weighted Model_* column sat beside an UNWEIGHTED crude Obs_*
+  #   column, a sample-average (not population-average) AME, an unweighted frozen SD for
+  #   `multiplier = "sd"`, unweighted influence weights in the gap test, and no "Weighted by" footer
+  #   at all (D1 / D2 / D8 of dev/full_survey_design_scope.md S2.3). The FIT is unaffected:
+  #   reg_resolve_design() branches on design_spec$design first, so a non-NULL `wt` never rebuilds one.
+  svy <- svy_unwrap_data(data, "tab_reg")
+  design_obj <- svy$spec$design
+  if (!is.null(svy)) {
+    if (!is.null(wt))
+      cli::cli_inform(c("i" = "{.arg data} is already a survey design; {.arg wt} is ignored."))
+    data <- svy$data
+    wt   <- svy$spec$wt
   }
   stopifnot(is.data.frame(data))
   weighted <- !is.null(design_obj) || !is.null(wt)
@@ -5038,7 +5027,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   } else {
     num_preds_all <- reg_numeric_preds(data, all_predictors)
     sd_frame <- reg_complete_frame(
-      data, intersect(unique(c(all_predictors, wt, ids, strata, fpc)), names(data)))
+      data, intersect(unique(c(all_predictors, wt)), names(data)))
     reg_resolve_multiplier(multiplier, mult_scalar_default, sd_frame, num_preds_all, wt = wt)
   }
   multiplier       <- mult_res$k
@@ -5062,7 +5051,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     empirical <- FALSE
   }
 
-  design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)
+  design_spec <- list(design = design_obj, wt = wt)
   # Phase 15e: check the Suggests deps of EVERY family present (nnet for multinomial, MASS for ordinal...).
   for (fm in unique(families_vec))
     reg_check_deps(fm, weighted, needs_marginaleffects = effect %in% c("ame", "ame_ratio") || mnl_vsrest ||
@@ -5152,7 +5141,6 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 #'
 #' @export
 tab_logit <- function(data, dependent, predictors, wt = NULL,
-                      ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                       inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
                       empirical = FALSE, add_n = TRUE,
                       conf_level = getOption("tabxplor.conf_level", 0.95),
@@ -5167,7 +5155,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   na           <- match.arg(na)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
-          ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
+          split_var = split_var,
           multiplier = multiplier, empirical = empirical, add_n = add_n,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
@@ -5208,7 +5196,6 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #'
 #' @export
 multi_logit <- function(data, dependent, models, wt = NULL,
-                        ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                         inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
                         empirical = FALSE, add_n = TRUE,
                         conf_level = getOption("tabxplor.conf_level", 0.95),
@@ -5227,7 +5214,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
   # mode: a models list + several dependents -> one table each, returned as a tabxplor_tabs list).
   stopifnot(is.character(dependent), length(dependent) >= 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
-          ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
+          split_var = split_var,
           multiplier = multiplier, empirical = empirical, add_n = add_n,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,

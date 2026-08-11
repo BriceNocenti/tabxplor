@@ -88,9 +88,16 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
   `effect_size` + `es_type` (Cramer's V / phi for factors, eta² for means — a companion ON each test's
   row, not a separate row) and `pvalue_exact` (the Fisher-exact p on a small weak factor table, stored ON
   the chi2 row so the row count is unchanged; the display prefers it, labelled "(Fisher)"). The opt-in
-  robust modes swap the discriminator: `"chi2_kish"`/`"F_kish"` (first-order Rao-Scott, `tabxplor.kish_neff`)
-  or `"chi2_svy"`/`"F_svy"` (design-based `survey::svychisq` / `svyglm`), computed by `tab_robust_overlay()`
-  in `R/survey-design.R` — the ONE test path that reads the microdata rather than the aggregate. Read it with `get_test()` (which also
+  test RUNG is **derived, never asked for** (Last Phase z14-i): `test` is only `TRUE`/`FALSE`, and what
+  you already passed decides how. `wt` alone → the chi2 AND Cramer's V are computed on the **weighted**
+  table rescaled to the raw n (the convention the CIs and the ANOVA F already followed; unweighted input
+  stays byte-identical because `get_wn()` falls back to `get_n()`, so the rescale factor is exactly 1 —
+  and Fisher is skipped, an exact test needing whole observations). `wt` + `tabxplor.kish_neff` →
+  `"chi2_kish"`/`"F_kish"` (first-order Rao-Scott). A `survey::svydesign` as `data` →
+  `"chi2_svy"`/`"F_svy"` (`survey::svychisq` / `svyglm`), computed by `tab_robust_overlay()`
+  in `R/survey-design.R` — the ONE test path that reads the microdata rather than the aggregate.
+  `svy_test_mode()` resolves the rung in `tab_setup()`, the one place holding both the resolved weight
+  and the `design_spec`, so `tab()` / `tab_many()` / `tab_counts()` cannot drift. Read it with `get_test()` (which also
   falls back to the old `chi2` attribute); `get_chi2()` is a kept alias. Rendered by the shared summary
   framework in `R/tab-test-display.R` (Phase 16a). Three shared layers, each used by both crosstab and
   regression: (1) CONTENT — `test_display_rows()`, `test_cell_label_weak()` (label + `min_e < 5` weak
@@ -266,6 +273,36 @@ integrated build — guaranteed by the `tab_assemble` total-col decoupling (`tot
 lone-total rename-back tests the distinct name, not its occurrence count). jmvtab (cache_env) forces serial
 and keeps its hooks (`jmv_cache_aggregate` in `tab_aggregate`; `jmv_cache_store_tests` in `tab_build_tables`,
 reading the gathered pre-merge tests).
+
+### The survey-design boundary (`R/survey-design.R`, Last Phase z14-i)
+
+A `survey::svydesign` object passed as `data` is unwrapped at **one** place, `svy_unwrap_data()`, called
+by every public entry point that accepts one (`tab`, `tab_many`, `tab_plain`, `tab_num`, `tab_reg`) —
+and by `tab_counts()`, which uses the same `svy_is_design()` predicate to *refuse* one (pre-aggregated
+counts cannot carry per-observation weights). It returns `NULL` for an ordinary data frame, so the normal
+path costs one `inherits()` and is byte-identical.
+
+It returns the design's `$variables` plus two package-owned columns:
+
++ **`.svy_weights`** = `weights(design, type = "sampling")` — the `type` matters: the bare `weights()`
+  returns the *n × R replicate matrix* for a `svyrep.design`. It becomes the resolved weight name on
+  every path, which is what lets `tab_weight_line()` read "this table is design-based" as a *fact* in
+  one field instead of printing an internal name. A user column of that name is refused.
++ **`.svy_row`** = the row's position in the ORIGINAL design. It rides through `tab_prepare_pop()`'s
+  `select()` exactly as `.filter` does, so the design-based test can index the design *from the prepared
+  microdata* — the table actually displayed, after `filter=`, rare-level lumping and relabelling. Before
+  this, the overlay tested the design's own untouched frame.
+
+**`svy_domain_design(design, rows, frame)`** is the one domain-estimation helper, shared by the overlay
+and by `tab_reg()`'s per-model design: restrict to `rows` (integer positions) and swap in the prepared /
+recoded `frame`. Both halves are needed — picking the rows is not enough, because `svychisq` / `svyglm`
+read their variables off the design. **WARNING:** `[` does not drop rows on a *calibrated* or PPS design;
+it keeps all *n* and sets `prob <- Inf`, so the frame is padded back to full length (the padded rows
+carry zero weight). Assigning a shorter frame used to error outright.
+
+Replicate-weight (`svrepdesign`) and two-phase designs are **refused** with a message pointing at
+`svydesign()` — a clear refusal, never an approximation. The design reaches `tab()`'s workers through the
+`.ship` payload (once per worker), not `shared` (which copied the whole dataset per row_var).
 
 ### The settings spine (`ctx$settings`, Phase 17e)
 

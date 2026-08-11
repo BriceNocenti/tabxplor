@@ -356,40 +356,6 @@ options:
       min: 0
       default: 15
 
-# ================ Advanced: survey design (only used with a weight) ================
-    - name: ids
-      title: "<b>ids = <i>(cluster ids)</i></b>"
-      type: Variables
-      default: NULL
-      description:
-          R: >
-           Cluster identifiers (survey design), largest to smallest stage. Only used
-           with a weight; leave empty for no clustering.
-
-    - name: strata
-      title: "<b>strata = <i>(strata)</i></b>"
-      type: Variables
-      default: NULL
-      description:
-          R: >
-           Stratification variables (survey design). Only used with a weight.
-
-    - name: fpc
-      title: "<b>fpc = <i>(finite population)</i></b>"
-      type: Variable
-      default: NULL
-      description:
-          R: >
-           Finite-population correction (survey design). Only used with a weight.
-
-    - name: nest
-      title: "cluster ids nested within strata"
-      type: Bool
-      default: false
-      description:
-          R: >
-           Set when cluster ids are reused across strata (survey design).
-
 # ============================ Export ============================
     - name: export_format
       title: Format

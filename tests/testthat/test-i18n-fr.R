@@ -89,3 +89,16 @@ test_that("summary / GOF row labels + measure words translate", {
     expect_equal(legend_measure_word("contrib", FALSE, NA, lg), "contribution au Chi2")
   })
 })
+
+test_that("the survey-design weight line stays English under the ambient en locale", {
+  expect_equal(with_legend_lang("en", function(lg) gettext("Weighted by the survey design.")),
+               "Weighted by the survey design.")
+})
+
+test_that("the survey-design weight line translates", {
+  skip_if_no_gettext()
+  with_legend_lang("fr", function(lg) {
+    expect_equal(gettext("Weighted by the survey design."),
+                 "Pond\u00e9r\u00e9 par le plan de sondage.")
+  })
+})

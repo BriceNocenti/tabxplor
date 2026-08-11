@@ -101,10 +101,6 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # `multiplicator` (unchanged so no prepare() regen); only the R-facing arg is renamed.
         multiplicator = self$options$multiplicator,
         wt           = wt,
-        ids          = self$options$ids,
-        strata       = self$options$strata,
-        fpc          = self$options$fpc,
-        nest         = self$options$nest,
         split_var    = self$options$split_var,
         # exponentiate / color are now logical checkboxes (TRUE = ratios-when-sensible / colour on).
         exponentiate = isTRUE(self$options$exponentiate),

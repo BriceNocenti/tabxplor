@@ -103,15 +103,24 @@ test_that("survey numeric F matches svyglm + regTermTest", {
   expect_equal(te$pvalue[1], as.double(ref$p), tolerance = 1e-6)
 })
 
-test_that("survey test also works from wt + strata args (no design object)", {
+test_that("the test RUNG is derived from the input, and `test` is TRUE/FALSE only", {
   skip_if_not_installed("survey")
   suppressWarnings(utils::data("api", package = "survey"))
-  te  <- get_test(tab(apistrat, sch.wide, awards, wt = pw, strata = "stype", fpc = "fpc",
-                      test = "survey"))
+  # Last Phase z14-i: ids/strata/fpc/nest are gone -- a design is expressed by BUILDING one. The rung
+  # follows what was passed, so there is no `test = "survey"` to ask for and not get.
   des <- survey::svydesign(id = ~1, strata = ~stype, weights = ~pw, data = apistrat, fpc = ~fpc)
+  te  <- suppressMessages(get_test(tab(des, sch.wide, awards, test = TRUE)))
   ref <- survey::svychisq(~sch.wide + awards, des, statistic = "F")
+  expect_equal(te$test[1],      "chi2_svy")
   expect_equal(te$statistic[1], unname(ref$statistic), tolerance = 1e-6)
   expect_equal(te$pvalue[1],    unname(ref$p.value),   tolerance = 1e-6)
+
+  # weights alone -> a weighted chi2; weights + the kish option -> the same rescaled to n_eff
+  expect_equal(get_test(tab(apistrat, sch.wide, awards, wt = pw, test = TRUE))$test[1], "chi2")
+  withr::local_options(tabxplor.kish_neff = TRUE)
+  expect_equal(get_test(tab(apistrat, sch.wide, awards, wt = pw, test = TRUE))$test[1], "chi2_kish")
+
+  expect_error(tab(apistrat, sch.wide, awards, wt = pw, test = "survey"), "TRUE.*FALSE")
 })
 
 test_that("the classic default path is unaffected (no robust columns, effect size present)", {

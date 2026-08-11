@@ -339,41 +339,6 @@ children:
                   creating: ./jmvtabreg::subtextCtrl_creating
                   updated: ./jmvtabreg::subtextCtrl_updated
 
-  - type: CollapseBox
-    label: "<b>Advanced — survey design (used with a weight)</b>"
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: VariableSupplier
-        name: surveysupplier
-        persistentItems: false
-        stretchFactor: 1
-        children:
-          - type: TargetLayoutBox
-            label: <b>ids = <i>(cluster ids)</i></b>
-            children:
-              - type: VariablesListBox
-                name: ids
-                isTarget: true
-          - type: TargetLayoutBox
-            label: <b>strata = <i>(strata)</i></b>
-            children:
-              - type: VariablesListBox
-                name: strata
-                isTarget: true
-          - type: TargetLayoutBox
-            label: <b>fpc = <i>(finite population)</i></b>
-            children:
-              - type: VariablesListBox
-                name: fpc
-                maxItemCount: 1
-                isTarget: true
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: CheckBox
-            name: nest
-
   # Phase o: the rule that sets the (outside-the-collapse-hierarchy) Export block apart is drawn by
   # js/jmvtab.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw text.
   - type: LayoutBox

@@ -137,6 +137,20 @@
   (`adj_diff_std`), so the same model on an outcome recorded in hours, minutes or days reads the same
   way. Their break labels are signed (`+2`, `-5`) on an additive scale instead of `×0.02`.
 * **`conf_level` now reaches the gap greying** as well as the printed intervals and the stars.
+* **A weighted table's whole-table test and effect size are now computed on the weighted table.**
+  Every other figure beside them already was: the confidence intervals are `Wilson(weighted %,
+  unweighted n)` and the mean F uses the weighted group moments. Only the chi-squared and Cramér's V
+  were still fully unweighted, so a weighted table reported a p-value and an effect size describing a
+  population you had not asked about. Unweighted tables are unchanged. Fisher's exact test is skipped
+  when weights are used (an exact test counts whole observations).
+* **Survey designs: `tab(ids =, strata =, fpc =, nest =)` and the same arguments on `tab_reg()` /
+  `tab_logit()` / `multi_logit()` are removed**, together with `test = "survey"`. They reached the
+  whole-table p-value and nothing else. Build the design once with `survey::svydesign()` and pass it as
+  `data` instead — it says everything those arguments did, plus calibration:
+  `tab(svydesign(ids = ~psu, strata = ~region, weights = ~w, data = d), x, y, test = TRUE)`.
+  `test` is now simply `TRUE` / `FALSE`: the **kind** of test follows what you passed — weights, or
+  weights plus `options(tabxplor.kish_neff = TRUE)`, or a design. Replicate-weight (`svrepdesign`) and
+  two-phase designs are refused with a message rather than failing obscurely.
 * **Excel export now uses `openxlsx2`** (Suggests) instead of `openxlsx`.
 * **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
   re-exported** — use the base `|>` pipe (or load `magrittr`/`dplyr`). `kableExtra` and `DescTools` move to
@@ -175,6 +189,19 @@
   difference instead of the odds ratio.
 * HTML **tooltips no longer repeat what the cell already prints**: a composite cell (`"{pct} (n={n})"`,
   or an average-marginal-effect cell) used to show its own bracket again on hover.
+* **`tab_reg()` on a survey design now weights everything it should.** The observed (`empirical = TRUE`)
+  columns were computed *unweighted* beside a design-weighted model column — the one comparison the
+  feature exists for, made on two different populations — and `effect = "ame"` returned a
+  sample-average instead of a population-average marginal effect (a 13% error in our test case). The
+  per-standard-deviation scaling of numeric predictors and the model-vs-observed gap test were
+  unweighted too, and the footer never said the table was weighted at all.
+* **A calibrated survey design** (`survey::calibrate()` / post-stratified) no longer errors in
+  `tab_reg()` as soon as any row has a missing value.
+* **The design-based p-value now describes the table you see**: it was computed on the design's
+  original data, ignoring `filter =`, rare-level lumping (`other_if_less_than`) and `cleannames`
+  relabelling, so a lumped table could report the p-value of the unlumped one.
+* `tab_num()`, `tab_plain()` and `tab_many()` **accept a survey design** as `data` (only `tab()` and
+  `tab_reg()` did); `tab_counts()` explains why it cannot.
 
 ## Deprecations
 
@@ -191,6 +218,8 @@ Removed / defunct (now error):
 
 * `tab_xl(n_min =, hide_near_zero =)` (long inert); the little-used `totcol` vector
   forms; the `tabxplor.compact` option (use `output_list =`).
+* `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
+  `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
 
 
 # tabxplor 1.3.1

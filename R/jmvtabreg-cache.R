@@ -87,9 +87,7 @@ jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
     family     = family,
     nrow       = nrow(data),
     fp         = lapply(data[used], jmv_col_fp),
-    design     = list(wt = design_spec$wt, ids = design_spec$ids, strata = design_spec$strata,
-                      fpc = design_spec$fpc, nest = design_spec$nest,
-                      has_design = !is.null(design_spec$design)),
+    design     = list(wt = design_spec$wt, has_design = !is.null(design_spec$design)),
     extra      = extra
   ))
 }
@@ -286,10 +284,6 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     predictors   = preds,
     family       = fam_arg,
     wt           = nz(opts$wt),
-    ids          = nz(opts$ids),
-    strata       = nz(opts$strata),
-    fpc          = nz(opts$fpc),
-    nest         = isTRUE(opts$nest),
     exponentiate = opts$exponentiate,
     effect       = opts$effect,
     at           = opts$at,

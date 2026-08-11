@@ -226,8 +226,9 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'   collapse levels *during the microdata prep* — which `tab_counts()` starts past — are not offered:
 #'   `levels = "first"` / `"auto"` (keeping a subset of levels), `other_if_less_than` / `other_level`
 #'   (lumping rare levels counts individual observations); build from microdata with [tab()] for those.
-#'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); the survey
-#'   design `ids`/`strata`/`fpc`/`nest`; `method_mean_diff`/`method_mean_ratio` (a counts table has no
+#'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); a survey
+#'   design as `data` (per-observation weights and structure a count table cannot carry -- it is
+#'   refused with a message); `method_mean_diff`/`method_mean_ratio` (a counts table has no
 #'   numeric column); `parallel`; `output_list`; `sup_cols`.
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0 (see [tab()]).
 #'
@@ -269,6 +270,19 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     lifecycle::deprecate_soft("2.0.0", "tab_counts(chi2 = )", "tab_counts(test = )")
     test <- chi2
   }
+
+  # Last Phase z14-i: tab_counts() starts from pre-aggregated counts, so it is the ONE entry point
+  # that REFUSES a survey design rather than unwrapping it -- a design's weights and structure are
+  # per-observation facts that a count table cannot carry. Same svy_is_design() as the four accepting
+  # entry points, so "what is a design" has one answer.
+  if (svy_is_design(data))
+    cli::cli_abort(c(
+      "{.fn tab_counts} works on pre-aggregated counts; a survey design carries microdata.",
+      "i" = "Pass the design to {.fn tab} instead, or give the weighted counts in {.arg wt_counts}."
+    ))
+  # `test` is TRUE/FALSE. It used to be forwarded as a truthy `chi2`, so tab_counts(test = "survey")
+  # silently produced a CLASSIC test.
+  test <- svy_check_test(test)
 
   input <- rlang::arg_match(input)
   vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(na, size = 1)

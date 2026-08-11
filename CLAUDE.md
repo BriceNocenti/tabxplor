@@ -111,12 +111,24 @@ R/
 │                              from agg_chi2's uncorrected chi2, eta^2 = SSB/SST from agg_anova) +
 │                              agg_fisher (exact test on small weak factor tables, size/N-guarded ->
 │                              simulate fallback)
-├── survey-design.R  (~200 L) Last Phase j: the shared survey-design constructors (svy_design_formula/
-│                              _vars/_make_design, lifted from tab_reg's reg_* which now delegate) + the
-│                              OPT-IN robust omnibus overlay tab_robust_overlay()/svy_omnibus_one(): run
-│                              in tab_assemble_tables (ctx$data in scope), recompute each (subtable x
-│                              col_var) whole-table p from the microdata under "kish" (first-order
-│                              Rao-Scott n_eff rescale) or "survey" (svychisq / svyglm+regTermTest),
+├── survey-design.R  (~260 L) z14-i: THE survey-design BOUNDARY + the constructors + the robust overlay.
+│                              svy_is_design() = the ONE class list (4 entry points accept, tab_counts
+│                              REFUSES); svy_unwrap_data() = the ONE unwrap, called by tab/tab_many/
+│                              tab_plain/tab_num/tab_reg -- returns NULL for a plain frame (so the
+│                              ordinary path is one inherits(), byte-identical), else $variables +
+│                              `.svy_weights` (weights(type="sampling") -- the bare weights() is the
+│                              n x R REPLICATE MATRIX for a svyrep.design) + `.svy_row` (position in the
+│                              ORIGINAL design). svrepdesign/twophase are REFUSED, never approximated.
+│                              svy_check_test() (test is TRUE/FALSE only) + svy_test_mode() = the DERIVED
+│                              rung, resolved in tab_setup() where the weight AND design_spec are both
+│                              known (before, only tab() had the rule -> tab_many() was always classic).
+│                              svy_domain_design(design, rows, frame) = the ONE domain helper shared with
+│                              tab_reg (restrict by INTEGER rows + swap in the prepared/recoded frame --
+│                              both halves needed, svychisq/svyglm read variables OFF the design;
+│                              WARNING `[` does not drop rows on a CALIBRATED design, it sets prob=Inf,
+│                              so the frame is padded back to full length). tab_robust_overlay()/
+│                              svy_omnibus_one() run in tab_assemble_tables on the PREPARED microdata
+│                              (so the p describes the table SHOWN -- lumping/filter/relabel included),
 │                              REPLACE the chi2/F rows' statistic/df/p/n, carry effect_size/min_e through.
 │                              The ONE architectural exception to "test from the aggregate" (opt-in, per-table)
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
@@ -542,7 +554,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai`, `kableExtra` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded; `kableExtra`'s two entry points — `render_kable_html()` engine dispatch + `kable_tabxplor_style()` — are guarded, the default `html` engine never touches it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(2.0.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR/cumOR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12e: orthogonal `effect="ame"` (marginaleffects) + `at="reference"` profile axis. 12f: model-summary footer + compare= in the `test` attr. 12g: SURVEY designs — `wt=`/`ids=`/`strata=`/`fpc=`/`nest=` + a prebuilt survey.design/svyrep.design as `data`; reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (the UNIT a continuous predictor's effect is reported per -- **default `"sd"`** since z9, so `Model_*` on a numeric row is per-1-SD, NOT `exp(coef(glm))`, unless `multiplier = 1`); `empirical_OR` (crude %/OR beside model OR, binary; z9: continuous predictors too, from their univariable fit). No new fmt fields; new Suggests svyVGAM. |
+| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR/cumOR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12e: orthogonal `effect="ame"` (marginaleffects) + `at="reference"` profile axis. 12f: model-summary footer + compare= in the `test` attr. 12g / z14-i: SURVEY designs — `wt=` (a flat ids=~1 design), or a prebuilt `survey::svydesign` as `data` for anything richer (clusters / strata / fpc / CALIBRATION); `ids=`/`strata=`/`fpc=`/`nest=` are REMOVED (they reached only the omnibus p) and a svrepdesign/twophase is refused. A design's own weights become `.svy_weights` at the shared boundary, so the crude `Obs_*` columns, the AME, the frozen SD, the gap-test influence weights and the footer are all design-weighted (they silently were not); reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (the UNIT a continuous predictor's effect is reported per -- **default `"sd"`** since z9, so `Model_*` on a numeric row is per-1-SD, NOT `exp(coef(glm))`, unless `multiplier = 1`); `empirical_OR` (crude %/OR beside model OR, binary; z9: continuous predictors too, from their univariable fit). No new fmt fields; new Suggests svyVGAM. |
 
 
 ---
@@ -664,7 +676,7 @@ Linux (check.R forces `LANGUAGE=en`, and testthat's `local_reproducible_output()
 fails there. That is why French output is guarded by `skip_if_no_gettext()`
 (`tests/testthat/helper-i18n.R`) and why each i18n feature is tested twice — an UNGUARDED English
 block (the guard-rail that keeps the goldens from moving; must run everywhere) plus a GUARDED French
-one. **Simulate CI before pushing anything locale-touching:**
+one. **Simulate CI before pushing something really locale-touching**, but **avoid to do it on every session and, most of all, avoid to do it when you have not heavily touched locale**:
 
 ```bash
 LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R   # the CI locale
@@ -2421,6 +2433,79 @@ been duplicated, or a claim the table could not support — no new estimand.
   so `jmvtools::prepare()` must regenerate `R/jmvtabreg.h.R`. Until then the live UI keeps
   `drop_by_model`, still a valid value — no breakage, just the old behaviour. `js/jmvtabreg.js`'s
   `detectFamily` (integer → gaussian) is inert until the rebuild too.
+
+
+#### Last Phase z14 — full survey design, opt-in by passing a design object as `data`
+
+**Read `dev/full_survey_design_scope.md` first** (the study; §10 is the roadmap, §11 the maintainer's
+rulings, `dev/survey_design_measurements.R` reproduces every number). **One subphase = one session**,
+each ending with the suite, its OWN documentation (§ The last step of every implementation — there is
+deliberately no doc-only subphase) and a maintainer commit.
+**Non-design tables must stay byte-identical in every subphase.**
+
+Settled: **Route A** — a design-based effective n written into the EXISTING `n_eff` field
+(`n_eff = p(1−p)/Var_design`, Korn-Graubard's own device), so `tab_ci()`, the nine `ci_*` engines, the
+colour engine, the fmt record, the exporters and jamovi are all **unchanged**. No new field, no new
+column attribute. `survey::svyrecvar` (with `postStrata`, so calibration is exact) is the only variance
+owner. Route B (delegate to `svyby`) and Route C (a PSU-augmented aggregate) rejected, with reasons.
+**jamovi is out of scope** (rungs 1-2 only, its survey-design block deleted); **replicate designs
+(`svrepdesign`) are out** — a clear refusal, never an approximation.
+
+##### Phase z14-i — the design path made honest
+   (D1-D9 + the argument removal; changes numbers that are wrong   today, independent of the rest).
+   ONE line materialising `weights(design, type = "sampling")` in
+  `tab_reg()` fixes the crude columns being computed UNWEIGHTED beside a design-weighted model column,
+  the sample-average (not population-average) AME, and the missing weight footer; plus the
+  `svrepdesign` refusal (`do.call(svyglm, …)` turns today's raw error into it), `type = "sampling"` in
+  `tab()`, and a design accepted by `tab_num`/`tab_plain`/`tab_many`/`tab_counts`. Then: effect size
+  weighted under a design, footer names the design not `.svy_weights`, and **remove
+  `ids`/`strata`/`fpc`/`nest`** from `tab()` + `tab_reg()` + `jmvtabreg`'s YAML (they reached only the
+  omnibus p) → maintainer `prepare()`.
+
+**DONE (2026-08-11).** Suite green in BOTH locales (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 5025 =
++46, exactly the new `test-survey-design-path.R`; CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`: FAIL 0,
+SKIP 8, PASS 5008), **zero golden/snapshot churn**. Implementation record + the retracted defect:
+`dev/full_survey_design_scope.md` § z14-i.
+- **THE boundary** (`R/survey-design.R`, see the repo map): the design was detected in two places that
+  DISAGREED — `tab()` materialised its weights, `tab_reg()` set `wt <- NULL`. Since ~11 sites read
+  `design_spec$wt`, that one line meant an UNWEIGHTED crude `Obs_*` column beside a design-weighted
+  `Model_*` one (D1), a sample-average AME (D2, 13% off), an unweighted frozen SD for
+  `multiplier = "sd"`, unweighted influence vectors fed to a design-based `svyrecvar` in the gap test,
+  and no "Weighted by" line at all (D8). All fixed by `wt <- svy$spec$wt`; the FIT is untouched
+  (`reg_resolve_design()` branches on `design_spec$design` first).
+- **The test `test` no longer asks for a rung, it derives one** (ruling Q2): `TRUE`/`FALSE` only,
+  validated at the public boundary; `"survey"` is GONE (a weights-only file gets the design-based test
+  by passing `svydesign(ids = ~1, weights = ~w)` — one line, and the §7.2 doctrine). This also closed
+  two silent failures: `test = "surveyy"` meant no test, `tab_counts(test = "survey")` meant a classic
+  one.
+- **Weighted whenever `wt` is given** (ruling Q3, wider than Q6): the chi2 AND Cramér's V now describe
+  the weighted table — the convention the CIs (`Wilson(weighted p, unweighted n)`) and the ANOVA F
+  already followed. Implemented as a rescale to the raw n, so unweighted output is byte-identical BY
+  CONSTRUCTION (`get_wn()` falls back to `get_n()` → factor 1). Fisher is skipped when weighted.
+- **D10 (found here, severe):** `tab_reg(<calibrated design>, …)` ERRORED on any incomplete case — `[`
+  keeps all n on a calibrated/PPS design and sets `prob = Inf`. **~~D11~~ retracted after measurement**
+  (the recycled logical is harmless: `[` only ever sets `Inf`, which is absorbing). What IS real is the
+  overlay FRAME: a table displaying `a / b / Others` reported the p of the UNLUMPED 4-level table —
+  and fixing it needed BOTH halves (row positions via `.svy_row` AND swapping the design's variables,
+  since `svychisq` reads them off the design).
+- **Deleted as dead:** `svy_test_vars()`, `reg_design_formula()` (no callers), `reg_make_design()`/
+  `reg_subset_design()` (one-caller aliases → `svy_domain_design()`), `tab_prepare_pop()`'s
+  `design_extra` + `data0`, and `jmvtab-cache.R`'s `strata`/`ids` pass-through (`opts` never had those
+  keys; its `test_robust == "survey"` branch was unreachable).
+
+##### Phase z14-ii — Route A in `tab()`
+New `R/survey-variance.R` (four influence functions, `n × R` batching = one `svyrecvar` per column level, NULL-not-a-wrong-number, `survey` as the test oracle) standalone and unwired; then one argument on `plain_core`/`num_core`, the `n_eff` write site
+  (design → Kish → raw), force `use_raw` under a design, and the footer sentence — without it a
+  design-based table is indistinguishable from a Kish one.
+
+##### Phase z14-iii — the crude `Obs_*` columns, then the finished ladder
+`emp_n_ci`/`emp_n_draw`
+  design-based from the EXISTING `reg_crude_if_maker()` + `reg_if_se()` (every crude interval follows
+  for free — they all consume one of those two bases); then the degradation matrix, stated in the
+  legend, never silent. **Split seam**: the four vignettes (the rung 1/2/3 ladder + the reachability
+  check) close it, or become `z14-iiii` if the session runs long.
+
+
 
 #### Last Phase zxx — `tab_reg()` parallelisation
 

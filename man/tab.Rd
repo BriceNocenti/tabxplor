@@ -32,10 +32,6 @@ tab(
   method_ratio = "katz",
   method_mean_diff = "welch",
   method_mean_ratio = "robust",
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -173,16 +169,24 @@ factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-val
 metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
 Automatically added if needed for \code{color}.
 
-For a weighted table you can opt in to more robust uncertainty:
-\code{options(tabxplor.kish_neff = TRUE)} replaces the raw unweighted n with Kish's effective
-sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence interval} (see the
-\emph{Weighted confidence intervals} note below) \emph{and} switches the whole-table tests to a
-first-order \strong{Rao-Scott} correction (the chi-squared rescaled to \code{n_eff}, the F on
-per-group effective n). \code{test = "survey"} instead runs a fully \strong{design-based} test
-(\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
-the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
-\code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
-p-values (estimates/CIs stay tabxplor's single-stage weighted approximation).}
+\code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
+passed}, in three rungs:
+\enumerate{
+\item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
+\strong{weighted} table, with the raw unweighted n as the sample size (the same convention as the
+confidence intervals beside them; see the \emph{Weighted confidence intervals} note below).
+\item \code{wt = w} plus \code{options(tabxplor.kish_neff = TRUE)} --- the raw n is replaced by
+Kish's effective sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence
+interval} and in the whole-table tests (a first-order \strong{Rao-Scott} correction). This corrects
+for unequal weighting only: it is blind to clustering and to calibration.
+\item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}
+tests (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), and the design's own
+weights drive the estimates. Confidence intervals stay tabxplor's single-stage weighted
+approximation.
+}
+If your file has only a weight column but you want the design-based test, that is one line:
+\code{tab(survey::svydesign(ids = ~1, weights = ~w, data = d), x, y, test = TRUE)}. Replicate-weight
+(\code{svrepdesign}) and two-phase designs are not supported.}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -294,11 +298,6 @@ ratio, \code{color = "ratio"}): \code{"katz"} (log risk-ratio, the only value). 
 ratio, \code{color = "ratio"} on a mean): \code{"robust"} (default, each group's own variance =
 modified/robust Poisson), \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or
 \code{"poisson"} (naive). See \code{\link{tab_many}}.}
-
-\item{ids, strata, fpc, nest}{Survey-design specifications (column name(s) / a formula) used only when
-\code{test = "survey"} to build the design for the p-values: cluster ids (default \code{~1}, no
-clustering), strata, finite-population correction, and \code{nest} (are ids nested in strata).
-Ignored otherwise. Mirror the same arguments of \code{\link{tab_reg}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :

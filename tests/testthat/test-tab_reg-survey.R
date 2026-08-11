@@ -24,18 +24,20 @@ or_col <- function(tab) {
   vapply(tab[[nm]], tabxplor::get_num, numeric(1))
 }
 
-test_that("weighted logit with ids/strata matches a hand svyglm (clustered, stratified)", {
+test_that("a clustered, stratified design matches a hand svyglm", {
+  # Last Phase z14-i: clustering / stratification are expressed by BUILDING the design and passing it
+  # as `data` -- the ids/strata/fpc/nest arguments are gone (they reached only the omnibus p-value,
+  # and svydesign() says all four better).
   d   <- reg_survey_data()
-  des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
   # tab_reg models the FIRST level of the 2-level factor as the event; match that coding by hand.
   d01  <- dplyr::mutate(d, y01 = as.integer(y == levels(y)[1]))
   des2 <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d01, nest = TRUE)
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des2, family = quasibinomial())
 
+  des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
   # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", which would compare a per-SD OR to a per-unit coefficient).
-  tab <- tab_logit(d, "y", c("x1", "x2"), wt = "w", ids = "psu", strata = "strata", nest = TRUE,
-                   multiplier = 1)
+  tab <- suppressMessages(tab_logit(des, "y", c("x1", "x2"), multiplier = 1))
   tv  <- or_col(tab)
   # skeleton = Constant, x1(ref), x1 mid, x1 hi, x2 -> drop the reference row (OR = 1) for the term match
   hand_or <- exp(stats::coef(hand))
@@ -82,10 +84,10 @@ test_that("cox_snell_r2 is selectable via stats= for weighted models", {
 
 test_that("weighted model comparison emits a design-based Wald row", {
   d   <- reg_survey_data()
-  tab <- multi_logit(d, "y",
+  des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
+  tab <- suppressMessages(multi_logit(des, "y",
                      models = list(base = "x1", full = c("x1", "x2")),
-                     wt = "w", ids = "psu", strata = "strata", nest = TRUE,
-                     compare = "baseline")
+                     compare = "baseline"))
   tst <- tabxplor:::get_test(tab)
   expect_true("compare_baseline_wald" %in% tst$test)
   wr <- tst[tst$test == "compare_baseline_wald", ]

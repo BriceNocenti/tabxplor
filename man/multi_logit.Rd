@@ -9,10 +9,6 @@ multi_logit(
   dependent,
   models,
   wt = NULL,
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
   inverse_two_level_factors = TRUE,
   split_var = NULL,
   multiplier = "sd",
@@ -34,7 +30,8 @@ multi_logit(
 \arguments{
 \item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}} /
 \code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
-calibration) drive the estimation and \code{wt} / \code{ids} / \code{strata} / \code{fpc} are ignored.}
+calibration) drive the estimation and \code{wt} is ignored. Replicate-weight (\code{svrepdesign}) and
+two-phase designs are not supported.}
 
 \item{dependent}{Character. Name of the binary dependent variable. May be a \strong{vector} of several
 binary dependents: the model comparison is then run once per dependent and the per-dependent
@@ -45,16 +42,10 @@ name labels the column. Unnamed elements are labelled \code{model1}, \code{model
 
 \item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
 (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
-are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
-
-\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
-character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
-from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
-\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
-design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
-
-\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
-strata. Default \code{FALSE}.}
+are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.
+For clustering, stratification, a finite-population correction or calibration, build the design
+yourself with \code{\link[survey:svydesign]{survey::svydesign()}} and pass it as \code{data} (see there); \code{wt} alone is a flat
+\code{ids = ~1} design, which can understate the variance of a clustered sample.}
 
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}

@@ -4805,6 +4805,15 @@ tab_weight_line <- function(x, lang = NULL) {
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt))
     wt <- tryCatch(get_reg_meta(x)$wt, error = function(e) NULL)
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
+  # Last Phase z14-i (D7/D8): a survey design passed as `data` resolves to the package-owned weight
+  # name on EVERY path (tab()'s vars_attr, the tab_plain/tab_num leaves, tab_reg's reg_meta), so the
+  # fact "this table is design-based" is already on the table, in one field. Read it as a fact rather
+  # than printing it as a name -- the internal `.svy_weights` used to leak into user-facing output,
+  # and tab_reg() under a design emitted no weight line at all.
+  # NOTE: this sentence deliberately claims only what z14-i delivers. Confidence intervals are still
+  # the single-stage weighted approximation; z14-ii replaces the string when they stop being.
+  if (identical(as.character(wt)[1], svy_wt_col))
+    return(with_legend_lang(lang, function(lg) enc2utf8(gettext("Weighted by the survey design."))))
   with_legend_lang(lang, function(lg) enc2utf8(gettextf("Weighted by %s.", wt)))
 }
 

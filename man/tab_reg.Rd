@@ -33,17 +33,14 @@ tab_reg(
   cleannames = NULL,
   subtext = "",
   spread_models = TRUE,
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
   .fit_cache = NULL
 )
 }
 \arguments{
 \item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}} /
 \code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
-calibration) drive the estimation and \code{wt} / \code{ids} / \code{strata} / \code{fpc} are ignored.}
+calibration) drive the estimation and \code{wt} is ignored. Replicate-weight (\code{svrepdesign}) and
+two-phase designs are not supported.}
 
 \item{dependent}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
 With a \code{predictors} character vector, several names give one effect column per outcome; with a
@@ -65,7 +62,10 @@ and \code{stats = c(..., "interaction")} adds the aggregated test, once per pred
 
 \item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
 (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
-are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
+are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.
+For clustering, stratification, a finite-population correction or calibration, build the design
+yourself with \code{\link[survey:svydesign]{survey::svydesign()}} and pass it as \code{data} (see there); \code{wt} alone is a flat
+\code{ids = ~1} design, which can understate the variance of a clustered sample.}
 
 \item{family}{The model family, \strong{resolved per dependent} so several outcomes with different
 families can share one table (one effect column-group each). \code{"auto"} (default) detects each
@@ -92,7 +92,7 @@ non-collapsible: it moves when you add a covariate even if that covariate is not
 \strong{Standard errors are handled consistently}: the Poisson likelihood is deliberately
 misspecified for a 0/1 outcome, so the naive standard errors are too wide and are replaced by the
 robust \strong{Huber--White sandwich} --- via \code{survey::svyglm()} in both cases, which means the
-design-based variance when you supply \code{wt}/\code{ids}/\code{strata}, and the equivalent of \code{HC0} on a
+design-based variance when you supply \code{wt} or a design, and the equivalent of \code{HC0} on a
 constant-weight design when you do not. The observed companion (\code{empirical = TRUE}) follows the same
 estimand: \code{Obs_RR} is the crude \strong{risk} ratio with a Katz interval, not the crude odds ratio.
 Two caveats: the log link is unbounded above, so predicted probabilities can exceed 1 --- the model
@@ -428,15 +428,6 @@ non-multinomial model fitted within each \code{split_var} level is automatically
 \code{\link[=tab_spread]{tab_spread()}} so the per-group models sit side by side as columns. \code{FALSE} keeps the
 stacked grouped table (one block of rows per group).}
 
-\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
-character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
-from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
-\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
-design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
-
-\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
-strata. Default \code{FALSE}.}
-
 \item{.fit_cache}{Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
 (see \code{jmvreg_cache_env()}) that memoizes fitted models so display / colour / reference toggles
 avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is
@@ -473,7 +464,7 @@ effect \code{"ame"}), \code{estimate_display}, \code{empirical} (crude vs adjust
 \item \strong{Comparisons & structure}: \code{reference} (baseline levels), \code{compare} / \code{baseline} (model
 comparison test), \code{split_var} (one table per group), \code{multiplier} (the unit a continuous
 predictor's effect is reported per — one standard deviation by default).
-\item \strong{Survey design}: \code{wt}, \code{ids}, \code{strata}, \code{fpc}, \code{nest}, or pass a prebuilt design as \code{data}.
+\item \strong{Survey design}: \code{wt} for a simple weight, or a prebuilt \code{\link[survey:svydesign]{survey::svydesign()}} as \code{data}.
 \item \strong{Diagnostics}: \code{stats} (footer statistics), and the plots \code{\link[=or_plot]{or_plot()}} / \code{\link[=lm_plots]{lm_plots()}}.
 }
 
