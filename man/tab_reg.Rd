@@ -369,36 +369,23 @@ predictors. Not applied to multinomial / ordinal outcomes, nor to a \code{formul
 variable may enter through an interaction or a \code{poly()} basis). A 0/1-coded \strong{numeric} predictor
 gets a "per 1 SD (0.5)" reading — pass such a variable as a factor instead.}
 
-\item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
-model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
-square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
-versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
-also show the Pearson dispersion). Pass a character vector to pick and order the statistics
-(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+\item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
+(default) uses the per-family set: linear models show N, R square, adjusted R square, the overall
+F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
+McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
+dispersion, \code{"phi"}). Every default set also carries the overall-association test \code{"global"} and
+the five \strong{model checks} below. Pass a character vector to pick the statistics (\code{"n"},
+\code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"}, \code{"f_model"},
+\code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"}, \code{"proportionality"}, \code{"dispersion"},
+\code{"influence"}, \code{"collinearity"}), or \code{FALSE} / \code{"none"} to hide the footer entirely.
 
 \code{"global"} (in the default set) adds one \strong{overall test per predictor} --- "is this variable
 associated with the outcome at all?", the question a block of stars against a reference category
 cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
 predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
-that cell's own p-value), as a footer line rather than a footer row, and it costs \strong{no extra
-model fit}: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
-models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
-get no such test.
-
-\code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
-effect-modification test per predictor} — "does this predictor act differently between the
-groups?", asked once for all its levels together, so it carries none of the multiplicity of the
-per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
-row (a pooled test belongs to no single model column), and it costs one extra model fit.
-\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
-linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
-\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
-and the colours answer related but distinct questions, and the line says so. Multinomial and
-ordinal outcomes get no such test.
-
-Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
-(design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+that cell's own p-value), and it costs \strong{no extra model fit}: it is a likelihood-ratio test on
+the fitted model (an F test for linear and quasi models, a design-based Wald test for weighted /
+survey models). Multinomial and ordinal outcomes get no such test.}
 
 \item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
 \code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;
@@ -510,6 +497,66 @@ grouped binomial when you pass \code{trials} (the number of items). Power users 
 formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)} -- driving the model
 directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
 }
+\section{Model checks}{
+
+
+Five checks are computed for every model, in the order of what each one threatens --- the estimate,
+what the estimate means, its interval, whether it is real at all, and why it is wide. Each is a
+footer row, so it travels into every export; none needs an argument, and any of them can be dropped
+through \code{stats}.
+
+\describe{
+\item{\strong{Linearity} (p-value, per numeric predictor)}{Is this predictor's effect really one
+straight line? The model is refitted with that predictor's centred squared term and the two
+compared. A small p says one slope is the wrong summary --- and the damage is \strong{not confined to
+that row}: on the model used throughout \code{vignette("tabxplor-reg")}, letting \code{age} curve moves
+the top income category's odds ratio by 24 \% and flips another income level's conclusion at the
+5 \% threshold.}
+\item{\strong{Proportionality (Brant)} (p-value, ordinal outcomes)}{Is one cumulative odds ratio enough
+for every cut of the outcome? Read it beside the size of the departure: at survey sample sizes
+this test rejects on differences the eye calls mild. Weighted ordinal models (\code{svyolr}) have no
+Brant fit, so the row is absent rather than approximated.}
+\item{\strong{Dispersion (robust/model SE)} (a ratio)}{Are the standard errors wide enough? The largest
+ratio, over the coefficients, of a robust (sandwich) standard error to the model-based one. About
+1 means the family's variance assumption holds; above 1 it does not --- over-dispersion,
+heteroscedasticity or clustering, by roughly that factor. For a count model it is close to the
+square root of the Pearson dispersion, and it correctly returns to about 1 once
+\code{family = "quasipoisson"} has widened the intervals (while \code{"phi"} still reports the
+dispersion). Under a survey design it measures what the design did to the standard errors, which
+are already the design's --- nothing to act on.}
+\item{\strong{Influence (max dfbetas)} (a ratio)}{Does one respondent carry the result? The largest
+change, over coefficients and observations, that dropping a single observation makes to a
+coefficient, in units of that coefficient's own standard error. It is printed as a
+\emph{reassurance}: with thousands of respondents no single one should move anything, and a near-zero
+value is the finding. Note that influence is not outlyingness --- a surprising outcome with an
+ordinary covariate profile moves nothing.}
+\item{\strong{Collinearity (max VIF)} (a ratio)}{Can the data tell these predictors apart? The largest
+variance inflation factor (\code{car::vif()}, on one scale whatever a term's degrees of freedom).
+It is the one check that is not a comparison with the data: collinearity biases nothing, it only
+widens intervals, and a wide interval already shows that. It is here because it is what every
+textbook teaches first. Needs the \code{car} package; refused for multinomial outcomes.}
+}
+
+Two cautions. A curvature test on one predictor can pick up \strong{another} predictor's
+mis-specification when the two are near-collinear --- one more reason the collinearity row sits in
+the same block. And at survey sample sizes a diagnostic p-value rejects almost anything, which is
+why three of the five report a \emph{magnitude} rather than a p-value.
+
+\code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
+effect-modification test per predictor} — "does this predictor act differently between the
+groups?", asked once for all its levels together, so it carries none of the multiplicity of the
+per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
+row (a pooled test belongs to no single model column), and it costs one extra model fit.
+\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
+linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
+\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
+and the colours answer related but distinct questions, and the line says so. Multinomial and
+ordinal outcomes get no such test.
+
+Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
+(design-based Wald test, Nagelkerke pseudo-R square, AIC).
+}
+
 \section{Out of scope}{
 
 \code{tab_reg()} covers linear, logistic, Poisson, multinomial and ordinal models, with survey designs.

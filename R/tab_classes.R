@@ -440,6 +440,14 @@ pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 # "phi"/"eta2") ride each omnibus row -- an effect size belongs ON its test's row, so it is a column,
 # not a separate row. Reg-footer / older rows carry NA/"" there (vec_rbind fills, but the uniform
 # schema keeps binds clean).
+# Last Phase z15: the 13th column `term` -- WHICH PREDICTOR a reg-footer row is about ("" = the whole
+# model). It is a new DIMENSION, not a new test type, and it could not ride `row_var`: on a reg footer
+# row `row_var` already means the SPLIT-GROUP LEVEL, in reg_footer_lines() (the `is_split` switch + the
+# cell key), in test_grid_reg() (the group key) and in reg_spread_models() (which re-keys by it and
+# DROPS the misses). A predictor name there flipped a plain table into "split" mode and silently
+# deleted the rows on a spread one -- measured. It backs the per-predictor Linearity + "global" rows
+# (reg_footer_plan() renders `label: term`) and the interaction/global LINES, which used to overload
+# `row_var` and printed the split level, repeated, instead of the predictors.
 # Phase 9b-3: memoized -- tibble() validation is ~1.4 ms/call and this placeholder is built several
 # times per table (~3% of the build). The empty tibble is STATELESS, so the cached copy is shared
 # safely (R copy-on-modify: any caller edit -- bind_rows / mutate / attr<- -- copies first, never
@@ -449,6 +457,7 @@ new_test_tibble <- local({
   function() {
     if (is.null(cached)) {
       cached <<- tibble::tibble(row_var   = character(), col_var     = character(), test = character(),
+                                term      = character(),
                                 statistic = double()   , df1         = double()   ,
                                 df2       = double()   , pvalue      = double()   ,
                                 n         = double()   , min_e       = double()   ,
@@ -1648,10 +1657,13 @@ reg_footer_lines <- function(tabs) {
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
 
-  stats_present <- names(spec)[names(spec) %in% unique(reg$test)]
-  K  <- length(stats_present)
+  # Last Phase z15: one row per (stat, TERM) -- a check / overall-association row is about one
+  # predictor, so the plan is the shared reg_footer_plan(), not a bare list of discriminators.
+  plan <- reg_footer_plan(reg)
+  K    <- if (is.null(plan)) 0L else nrow(plan)
   if (K == 0) return(tabs)
-  footer_labels <- unname(vapply(stats_present, function(s) spec[[s]]$label, character(1)))
+  reg$.term     <- test_term_col(reg)
+  footer_labels <- plan$label
 
   # split_var (Phase 12h): a split table carries per-group GOF (the group level tagged in `reg$row_var`;
   # split_var is the FIRST grouping column). It gets one "Model fit" footer block PER group; a plain
@@ -1661,15 +1673,16 @@ reg_footer_lines <- function(tabs) {
   split_col <- if (is_split) group_chr[[1]] else NA_character_
   grp_of    <- if (is_split) as.character(tabs[[split_col]]) else rep("", nrow(tabs))
 
-  cell_for <- function(nm, s, g) {
-    sel <- reg$col_var == nm & reg$test == s &
+  cell_for <- function(nm, k, g) {
+    pk  <- plan[k, ]
+    sel <- reg$col_var == nm & reg$test == pk$test & reg$.term == pk$term &
       (if (is_split) (!is.na(reg_rv) & reg_rv == g) else TRUE)
     r <- reg[sel, , drop = FALSE]
     if (nrow(r) == 0) return(reg_blank_cell())
-    sp <- spec[[s]]
-    if (identical(sp$kind, "gof")) reg_gof_cell(r$statistic[1], sp$digits) else reg_pvalue_cell(r$pvalue[1])
+    if (identical(pk$kind, "gof")) reg_gof_cell(r$statistic[1], pk$digits)
+    else                           reg_pvalue_cell(r$pvalue[1])
   }
-  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(stats_present, cell_for, nm = nm, g = g))
+  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(seq_len(K), cell_for, nm = nm, g = g))
   nonfmt_val <- function(nm, g)
     if (nm == row_lab_col)             footer_labels
     else if (identical(nm, split_col)) rep(g, K)
@@ -1682,12 +1695,14 @@ reg_footer_lines <- function(tabs) {
   # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
   # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these
   # rows left, `reg` above is empty and this function returns early.
-  it <- test_tbl[test_tbl$test %in% c(reg_interaction_types(), reg_global_types()), , drop = FALSE]
+  # (z15: the `global` rows no longer ride through -- they became footer ROWS, so they are consumed
+  # here like every other spec'd discriminator.)
+  it <- test_tbl[test_tbl$test %in% reg_interaction_types(), , drop = FALSE]
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs),
                  test = if (nrow(it) > 0) it else NULL),
     regroup = group_chr,
-    row_role = function(g) vapply(stats_present, function(s) spec[[s]]$kind, character(1)))  # "gof"/"pvalue"
+    row_role = function(g) plan$kind)                                    # "gof"/"pvalue"
 }
 
 

@@ -352,6 +352,27 @@ reg_predictor_sd <- function(x, w = NULL) {
   sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
 }
 
+# Last Phase z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
+# and scale frozen as LITERALS in the formula string. Frozen for the reason z9 freezes the multiplier's
+# SD: `scale()` inside a formula re-scales on new data, so predict(newdata =) would silently disagree
+# with the fit. Returns NULL (never a broken term) when the column cannot supply a finite scale.
+#
+# ONE builder, two consumers: the Linearity check refits "the model plus this term" (reg_fit(add_terms =))
+# and the `shape = "quadratic"` remedy emits the same term -- so the check and its cure are the same
+# object rather than two spellings of one idea. Centring is not cosmetic: uncentred, the pair's own VIF
+# is 38.7 against 1.2 centred, so the Collinearity check would flag every curved model as broken. It
+# leaves the curvature p-value untouched, since {x, (x-a)^2} spans {x, x^2} for any a with 1 and x in
+# the model.
+#' @keywords internal
+reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
+  if (!identical(shape, "quadratic")) return(NULL)
+  m <- reg_weighted_mean(x, w)
+  s <- reg_predictor_sd(x, w)
+  if (!is.finite(m) || !is.finite(s) || s <= 0) return(NULL)
+  num <- function(v) format(signif(v, digits), scientific = FALSE)
+  paste0("I(((`", var, "` - ", num(m), ") / ", num(s), ")^2)")
+}
+
 # Parse ONE multiplier value ("sd" / "2sd" / a number) against a predictor's frozen SD.
 # Returns list(k = <numeric>, label = <character or NA>); k = NA drops the entry.
 #' @keywords internal
@@ -616,37 +637,12 @@ reg_model_lines <- function(x, lang = NULL) {
 # colours score the difference in marginal effects -- related, but not the same null. On a coefficient
 # table the words would be noise.
 #' @keywords internal
-# Last Phase z13: the per-predictor GLOBAL test's footer line -- the same shape as the interaction one
-# (one line per model, "<predictor> p = ..." items), differing only in its head. Rendered by the shared
-# reg_term_test_line() so the two cannot drift.
-#' @keywords internal
-reg_global_lines <- function(x, lang = NULL) {
-  reg_term_test_line(x, reg_global_types(),
-                     tname = c(global_lr = "likelihood ratio", global_f = "F test",
-                               global_wald = "Wald test"),
-                     head_fn = function(kind, lg) gettextf("Overall association (%s):", kind),
-                     lang = lang)
-}
-
-# The shared renderer of a per-predictor footer test line. `tname` maps each discriminator to its test
-# NAME (translated at render); `head_fn` builds the line's head from that name.
-#' @keywords internal
-reg_term_test_line <- function(x, types, tname, head_fn, lang = NULL) {
-  tt <- get_test(x)
-  if (is.null(tt) || nrow(tt) == 0) return(character(0))
-  it <- tt[tt$test %in% types, , drop = FALSE]
-  if (nrow(it) == 0) return(character(0))
-  with_legend_lang(lang, function(lg) {
-    nm <- vapply(tname, gettext, character(1))
-    vapply(split(seq_len(nrow(it)), factor(it$col_var, levels = unique(it$col_var))), function(idx) {
-      d     <- it[idx, , drop = FALSE]
-      items <- paste0(d$row_var, " p = ", test_fmt_pvalue(d$pvalue), stars_from_pvalue(d$pvalue))
-      kind  <- unname(nm[d$test[1]]); if (is.na(kind)) kind <- gettext("Wald test")
-      enc2utf8(paste0(head_fn(kind, lg), " ", paste(items, collapse = ", "), "."))
-    }, character(1), USE.NAMES = FALSE)
-  })
-}
-
+# Last Phase z15: the per-predictor GLOBAL test (z13) is no longer a footer LINE -- it became footer
+# ROWS, one per (model column x predictor), so reg_global_lines() and the shared reg_term_test_line()
+# it was extracted for are gone. Measured on the vignette's own data: in a 3-model comparison the line
+# rendered as three sentences with nothing naming which model each described, and on a split table it
+# printed the split level, repeated, instead of the predictors. A verdict that belongs to one model
+# column belongs in the GOF block, which already has one column per model.
 reg_interaction_lines <- function(x, lang = NULL) {
   tt <- get_test(x)
   if (is.null(tt) || nrow(tt) == 0) return(character(0))
@@ -661,7 +657,8 @@ reg_interaction_lines <- function(x, lang = NULL) {
     # split() by a FACTOR of first-appearance order, so several models keep their column order.
     vapply(split(seq_len(nrow(it)), factor(it$col_var, levels = unique(it$col_var))), function(idx) {
       d     <- it[idx, , drop = FALSE]
-      items <- paste0(d$row_var, " p = ", test_fmt_pvalue(d$pvalue), stars_from_pvalue(d$pvalue))
+      items <- paste0(test_term_col(d), " p = ", test_fmt_pvalue(d$pvalue),
+                      stars_from_pvalue(d$pvalue))
       kind  <- unname(tname[d$test[1]]); if (is.na(kind)) kind <- gettext("Wald test")
       what  <- if (on_coef) gettextf("%s on the coefficients", kind) else kind
       head  <- if (!is.na(sv) && nzchar(sv)) gettextf("Interaction with %s (%s):", sv, what)
@@ -953,14 +950,15 @@ reg_wald_from_tidy <- function(td, conf_level, do_exp) {
 # column that reg_build splits into one OR column per category). The reference category is the outcome
 # factor's FIRST level (set via `reference` upstream, MNL only).
 reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, method,
-                             weighted = FALSE, make_design = NULL) {
+                             weighted = FALSE, make_design = NULL, add_terms = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
   }
   mdata[[dependent]] <- forcats::fct_drop(as.factor(mdata[[dependent]]))
   y_levels <- levels(mdata[[dependent]])
   fml <- stats::as.formula(paste0(
-    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
+    "`", dependent, "` ~ ",
+    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")
   ))
 
   if (weighted) {
@@ -1000,7 +998,7 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
 # cut-point "scale" rows are dropped, so the skeleton "Constant" cell stays NA). The parallel-lines
 # assumption is diagnosed (Brant test) for the unweighted fit; the design-based fit degrades that.
 reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, method,
-                            weighted = FALSE, make_design = NULL) {
+                            weighted = FALSE, make_design = NULL, add_terms = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
   }
@@ -1014,7 +1012,8 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
   }
   mdata[[dependent]] <- y
   fml <- stats::as.formula(paste0(
-    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
+    "`", dependent, "` ~ ",
+    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")
   ))
 
   if (weighted) {
@@ -1055,6 +1054,23 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
 # Diagnose the proportional-odds (parallel-lines) assumption with the Brant test (the `brant` package,
 # a Suggests). Warn when the omnibus test rejects; a missing `brant` skips it with a hint; a failing
 # test (sparse data) is swallowed -- a diagnostic must never break the table.
+# Make a fit SELF-CONTAINED, so anything that rebuilds it from `fit$call` works outside the fitting
+# scope. `nnet::multinom` / `MASS::polr` store `data = mdata` -- a local of reg_fit() -- so every
+# consumer that calls update() or eval.parent(fit$call) fails with "object 'mdata' not found":
+# brant::brant() (Phase 12d) and, since z15, stats::drop1() on the Linearity refit. Copy-on-modify, so
+# the caller's fit is untouched; the returned one carries its own frame.
+#' @keywords internal
+reg_selfheal_call <- function(fit, data) {
+  if (is.null(data) || is.null(fit$call)) return(fit)
+  # Not every engine has a formula() method (svyVGAM::svy_vglm has none) -- leave such a fit as it is
+  # rather than erroring: the caller degrades to no test, which is this module's contract.
+  fml <- tryCatch(stats::formula(fit), error = function(e) NULL)
+  if (is.null(fml)) return(fit)
+  fit$call$data    <- data
+  fit$call$formula <- fml
+  fit
+}
+
 reg_ordinal_diagnostic <- function(fit) {
   if (!requireNamespace("brant", quietly = TRUE)) {
     cli::cli_inform(c("i" = paste0(
@@ -1063,11 +1079,7 @@ reg_ordinal_diagnostic <- function(fit) {
     )))
     return(invisible(NA_real_))
   }
-  # brant rebuilds the model frame via eval.parent(fit$call), needing the fit's `data`/`formula`
-  # SYMBOLS resolvable in brant's caller frame -- which fails once we are past the fitting scope. Make
-  # this (copy-on-modify) fit self-contained from its own stored model frame so brant works anywhere.
-  fit$call$data    <- fit$model
-  fit$call$formula <- stats::formula(fit)
+  fit <- reg_selfheal_call(fit, fit$model)
   bt <- tryCatch({ utils::capture.output(res <- brant::brant(fit)); res },
                  error = function(e) NULL)
   if (is.null(bt) || !is.matrix(bt) ||
@@ -1154,7 +1166,14 @@ reg_relevel_design <- function(design, reference, relevelable) {
 reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                     inverse_two_level_factors, conf_level, method,
                     trials = NULL, formula = NULL, multiplier = NULL, cross = NULL,
-                    drop_extra = NULL) {
+                    drop_extra = NULL, add_terms = NULL) {
+  # Last Phase z15: `add_terms` is the third sibling of `cross` / `drop_extra` -- extra RHS terms,
+  # verbatim, appended to the formula and to nothing else (they name no new VARIABLE, so they never
+  # join drop_vars: `I(((age - 44.2)/13.5)^2)` is complete exactly where `age` is). It is how the
+  # Linearity check refits "the model plus this predictor's centred squared term" through the very
+  # fitter the table came from, inheriting the binary prep, the grouped-binomial cbind, the "rr" route
+  # and the design resolution -- which the `formula =` escape hatch would not.
+  #
   # Last Phase z8: `cross` (a split_var) makes the POOLED interaction fit `y ~ (x1 + x2) * g`, used
   # only by reg_interaction_rows(). It goes through this whole function rather than the `formula =`
   # escape hatch precisely so it inherits the binary prep, the grouped-binomial cbind, the family
@@ -1195,11 +1214,11 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   # the CI <-> p <-> stars duality holds, but not the glm path.
   if (family == "multinomial") {
     return(reg_fit_multinom(mdata, dependent, predictors, do_exp, conf_level, method,
-                            weighted, make_design))
+                            weighted, make_design, add_terms = add_terms))
   }
   if (family == "ordinal") {
     return(reg_fit_ordinal(mdata, dependent, predictors, do_exp, conf_level, method,
-                           weighted, make_design))
+                           weighted, make_design, add_terms = add_terms))
   }
 
   positive_level <- NULL
@@ -1259,6 +1278,8 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     resp <- if (grouped) "cbind(`.gb_succ`, `.gb_fail`)" else paste0("`", dependent, "`")
     rhs  <- paste0("`", predictors, "`", collapse = " + ")
     if (!is.null(cross)) rhs <- paste0("(", rhs, ") * `", cross, "`")   # z8: the pooled interaction fit
+    # z15: extra terms LAST, so the fit's own term.labels end with them (the Linearity scope).
+    if (length(add_terms)) rhs <- paste(c(rhs, add_terms), collapse = " + ")
     stats::as.formula(paste0(resp, " ~ ", rhs))
   }
 
@@ -2719,14 +2740,24 @@ reg_null_loglik <- function(fit, family) {
 }
 
 # Pearson dispersion (over/under-dispersion): poisson / grouped binomial only -- the dispersion
-# parameter is not identifiable for ungrouped Bernoulli data. phi = Sum(pearson resid^2) / df.residual
+# parameter is not identifiable for ungrouped Bernoulli data. phi = Sum(pearson resid^2) / (n - rank)
 # (better-behaved than deviance/df). PURE (14v-ii): the over-dispersion warning moved to reg_fit(),
 # where the SEs are now actually scaled by sqrt(phi) -- so it is emitted ONCE per fit (this helper is
 # also called by reg_glance for the footer, which must stay silent).
+#
+# WARNING (Last Phase z15): the denominator is n - rank, computed here, NEVER stats::df.residual(fit).
+# For an svyglm df.residual() is the DESIGN degrees of freedom (PSUs - strata), so the footer row read
+# ~22 instead of ~1 on a weighted Poisson -- the reason the design doc believed phi could not be
+# computed honestly under a design. It can; it was reading the wrong denominator. The SE-scaling caller
+# is gated `!weighted`, where the two denominators agree, so only the weighted row moves.
 reg_dispersion <- function(fit) {
   rp  <- tryCatch(stats::residuals(fit, type = "pearson"), error = function(e) NULL)
-  dfr <- tryCatch(stats::df.residual(fit), error = function(e) NA_real_)
-  if (is.null(rp) || is.na(dfr) || dfr <= 0) return(NA_real_)
+  if (is.null(rp)) return(NA_real_)
+  n    <- sum(is.finite(rp))
+  rank <- tryCatch(sum(!is.na(stats::coef(fit))), error = function(e) NA_integer_)
+  if (is.na(rank)) return(NA_real_)
+  dfr <- n - rank
+  if (dfr <= 0) return(NA_real_)
   sum(rp^2, na.rm = TRUE) / dfr
 }
 
@@ -2816,14 +2847,10 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   if (!is.na(bic)) out <- dplyr::bind_rows(out, row("bic", statistic = bic))
   if (family == "poisson" || grouped) {
     phi <- reg_dispersion(fit)
-    if (!is.na(phi)) out <- dplyr::bind_rows(out, row("dispersion", statistic = phi))
+    if (!is.na(phi)) out <- dplyr::bind_rows(out, row("phi", statistic = phi))
   }
-  # Phase 14q (Item I): the Brant proportional-odds omnibus p, computed once at fit time and stashed on
-  # the fit (reg_fit_ordinal). Weighted ordinal (svyolr) has no Brant fit -> the attr is absent -> skip.
-  if (family == "ordinal" && !weighted) {
-    bp <- attr(fit, "brant_po")
-    if (!is.null(bp) && !is.na(bp)) out <- dplyr::bind_rows(out, row("brant_po", pvalue = bp))
-  }
+  # (Phase 14q's Brant row moved to REG_CHECKS as the "Proportionality (Brant)" check, z15 -- same
+  # stashed attr, same p, one vocabulary.)
   out
 }
 
@@ -2838,20 +2865,24 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
     else if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
     else if (family == "gaussian") c("n", "r2", "r2_adj", "f_model", "sigma")
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
-           if (family == "poisson" || grouped) s <- c(s, "dispersion")
-           if (family == "ordinal") s <- c(s, "brant_po"); s }  # Phase 14q Item I
+           # Last Phase z15: `phi` is the EXACT Pearson dispersion this row has always held; the key
+           # `dispersion` now names the CHECK (max robust/model SE), which every family gets below.
+           if (family == "poisson" || grouped) s <- c(s, "phi"); s }
   # Last Phase z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
   # at all?" is the question a multi-level factor block leaves unanswered, and it costs no extra fit.
-  # It renders as a footer LINE, so it adds no row to the GOF block.
-  default <- c(default, "global")
-  if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
+  # Last Phase z15: so are the five model CHECKS (ruling R7 -- always, no opt-in gate). They need no new
+  # argument: `stats` already IS the footer vocabulary, so each is individually removable and
+  # `stats = FALSE` still hides everything. The applicable set is REG_CHECKS' own rule.
+  default <- c(default, "global", reg_checks_for(family, weighted, grouped))
+  if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
   # "interaction" (Last Phase z8) is not produced by reg_glance -- it is read straight off `stats` by
   # reg_build's split block -- but it belongs to this vocabulary so a user vector does not drop it.
   valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
-             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion", "brant_po",
-             "interaction", "global")
-  stats[stats %in% valid]
+             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "phi",
+             "interaction", "global", names(REG_CHECKS))
+  # A user writes a check KEY ("linearity"); a `test` row carries a discriminator ("linearity_lr").
+  reg_check_expand(stats[stats %in% valid])
 }
 
 # Assemble the whole-table `test` tibble for a regression table: one row per (fit's first column x
@@ -2874,7 +2905,7 @@ reg_gof_tibble <- function(fits, fit_first_col, families_by_fit, weighted, group
     g    <- g[g$test %in% keep, , drop = FALSE]
     g    <- g[order(match(g$test, keep)), , drop = FALSE]        # spec order
     if (nrow(g) == 0) return(NULL)
-    tibble::tibble(row_var = "", col_var = fit_first_col[[i]], test = g$test,
+    tibble::tibble(row_var = "", col_var = fit_first_col[[i]], test = g$test, term = "",
                    statistic = g$statistic, df1 = g$df1, df2 = g$df2, pvalue = g$pvalue,
                    n = as.numeric(nobs_by_fit[[i]]), min_e = NA_real_)
   })
@@ -2959,7 +2990,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 
   row <- function(test, col_var, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_,
                   pvalue = NA_real_, nobs = NA_real_)
-    tibble::tibble(row_var = "", col_var = col_var, test = test, statistic = statistic,
+    tibble::tibble(row_var = "", col_var = col_var, test = test, term = "", statistic = statistic,
                    df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
 
   tag  <- if (compare == "sequential") "seq" else "baseline"
@@ -3029,8 +3060,12 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # and one row per predictor cannot be expressed by a fixed discriminator->label list anyway. So the
 # rows stay pure data (read by reg_interaction_line, rendered as a table-wide footer STREAM like the
 # weight / "Model:" lines), and both row consumers, which filter on names(reg_footer_spec()), ignore
-# them -- the existing GOF footer is untouched. `row_var` carries the predictor (its canonical meaning
-# in the crosstab arm); `col_var` the fit's first column, so several models each get their own line.
+# them -- the existing GOF footer is untouched. `col_var` is the fit's first column, so several models
+# each get their own line.
+# Last Phase z15: the predictor rides `term`, NOT `row_var`. It used to ride `row_var`, which on a
+# split table is overwritten wholesale with the group level (reg_build's split branch tags every row of
+# the group's test tibble) -- so the line printed the split level, repeated, instead of the predictors.
+# `row_var` now means one thing everywhere: the split-group level.
 #' @keywords internal
 reg_interaction_types <- function() c("interact_lr", "interact_f", "interact_wald")
 
@@ -3038,7 +3073,8 @@ reg_interaction_types <- function() c("interact_lr", "interact_f", "interact_wal
 reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_first_col) {
   weighted <- shared$weighted
   row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
-    tibble::tibble(row_var = predictor, col_var = col_var, test = test, statistic = statistic,
+    tibble::tibble(row_var = "", col_var = col_var, test = test, term = predictor,
+                   statistic = statistic,
                    df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
 
   rows <- purrr::map(seq_along(specs), function(i) {
@@ -3105,9 +3141,14 @@ reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, n
       row(types[["wald"]], col_var, pv, e$stat, e$df1, e$df2, e$p, nobs)
     }))
   }
-  d1 <- tryCatch(suppressWarnings(
-    stats::drop1(fit, scope = terms, test = if (use_f) "F" else "Chisq")),
-    error = function(e) NULL)
+  # WARNING: capture.output, not just suppressMessages -- nnet's drop1.multinom PRINTS its progress
+  # ("trying - <term>") with cat(), which no condition handler catches, and it would land in the user's
+  # console on every multinomial table with a numeric predictor. Harmless for the other engines.
+  d1 <- tryCatch({
+    utils::capture.output(
+      res <- suppressWarnings(stats::drop1(fit, scope = terms, test = if (use_f) "F" else "Chisq")))
+    res
+  }, error = function(e) NULL)
   if (is.null(d1)) return(NULL)
   p_col <- grep("^Pr\\(", names(d1), value = TRUE)
   if (!length(p_col)) return(NULL)
@@ -3141,7 +3182,8 @@ reg_global_types <- function() c("global_lr", "global_f", "global_wald")
 reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
   weighted <- shared$weighted
   row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
-    tibble::tibble(row_var = predictor, col_var = col_var, test = test, statistic = statistic,
+    tibble::tibble(row_var = "", col_var = col_var, test = test, term = predictor,
+                   statistic = statistic,
                    df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
 
   rows <- purrr::map(seq_along(specs), function(i) {
@@ -3702,6 +3744,15 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     reg_gof <- reg_global_rows(reg_gof, fits, specs,
                                list(weighted = weighted, design_spec = design_spec),
                                fit_first_col)
+  # Last Phase z15: the five model checks. A sibling of reg_compare_rows / reg_global_rows and placed
+  # with them because it needs `data` (the Linearity refit) and `specs`, which reg_gof_tibble() has
+  # neither of. Its own per-fit gate is reg_footer_stats(), so `stats` governs it like every other
+  # footer row and no second sentinel logic exists.
+  reg_gof <- reg_check_rows(reg_gof, data, fits, specs,
+                            list(weighted = weighted, design_spec = design_spec,
+                                 conf_level = conf_level,
+                                 inverse_two_level_factors = inverse_two_level_factors),
+                            stats, fit_first_col, grouped_by_fit)
 
   disp_levels <- reg_cleanup(skeleton$level, cleannames)
   # multiplier (Phase 12g / 15d): relabel the display level of each scaled numeric predictor so the row
@@ -4318,22 +4369,67 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   Constant row shows the model N. Continuous predictors are left blank: on a listwise-complete frame
 #'   their count is the model N for every one of them. Unlike [tab()]'s `add_n`, this is a real column
 #'   rather than a display option, because only the model frame knows the counts.
-#' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
-#'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
-#'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
-#'   versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
-#'   also show the Pearson dispersion). Pass a character vector to pick and order the statistics
-#'   (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"dispersion"`, `"r2"`, `"r2_adj"`,
-#'   `"f_model"`, `"sigma"`, `"global"`, `"interaction"`), or `FALSE` / `"none"` to hide the footer.
+#' @param stats The statistics shown in the model-summary **footer** (one block per model). `NULL`
+#'   (default) uses the per-family set: linear models show N, R square, adjusted R square, the overall
+#'   F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
+#'   McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
+#'   dispersion, `"phi"`). Every default set also carries the overall-association test `"global"` and
+#'   the five **model checks** below. Pass a character vector to pick the statistics (`"n"`,
+#'   `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"phi"`, `"r2"`, `"r2_adj"`, `"f_model"`,
+#'   `"sigma"`, `"global"`, `"interaction"`, `"linearity"`, `"proportionality"`, `"dispersion"`,
+#'   `"influence"`, `"collinearity"`), or `FALSE` / `"none"` to hide the footer entirely.
 #'
 #'   `"global"` (in the default set) adds one **overall test per predictor** --- "is this variable
 #'   associated with the outcome at all?", the question a block of stars against a reference category
 #'   cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
 #'   predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
-#'   that cell's own p-value), as a footer line rather than a footer row, and it costs **no extra
-#'   model fit**: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
-#'   models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
-#'   get no such test.
+#'   that cell's own p-value), and it costs **no extra model fit**: it is a likelihood-ratio test on
+#'   the fitted model (an F test for linear and quasi models, a design-based Wald test for weighted /
+#'   survey models). Multinomial and ordinal outcomes get no such test.
+#'
+#' @section Model checks:
+#'
+#' Five checks are computed for every model, in the order of what each one threatens --- the estimate,
+#' what the estimate means, its interval, whether it is real at all, and why it is wide. Each is a
+#' footer row, so it travels into every export; none needs an argument, and any of them can be dropped
+#' through `stats`.
+#'
+#' \describe{
+#'   \item{**Linearity** (p-value, per numeric predictor)}{Is this predictor's effect really one
+#'     straight line? The model is refitted with that predictor's centred squared term and the two
+#'     compared. A small p says one slope is the wrong summary --- and the damage is **not confined to
+#'     that row**: on the model used throughout `vignette("tabxplor-reg")`, letting `age` curve moves
+#'     the top income category's odds ratio by 24 % and flips another income level's conclusion at the
+#'     5 % threshold.}
+#'   \item{**Proportionality (Brant)** (p-value, ordinal outcomes)}{Is one cumulative odds ratio enough
+#'     for every cut of the outcome? Read it beside the size of the departure: at survey sample sizes
+#'     this test rejects on differences the eye calls mild. Weighted ordinal models (`svyolr`) have no
+#'     Brant fit, so the row is absent rather than approximated.}
+#'   \item{**Dispersion (robust/model SE)** (a ratio)}{Are the standard errors wide enough? The largest
+#'     ratio, over the coefficients, of a robust (sandwich) standard error to the model-based one. About
+#'     1 means the family's variance assumption holds; above 1 it does not --- over-dispersion,
+#'     heteroscedasticity or clustering, by roughly that factor. For a count model it is close to the
+#'     square root of the Pearson dispersion, and it correctly returns to about 1 once
+#'     `family = "quasipoisson"` has widened the intervals (while `"phi"` still reports the
+#'     dispersion). Under a survey design it measures what the design did to the standard errors, which
+#'     are already the design's --- nothing to act on.}
+#'   \item{**Influence (max dfbetas)** (a ratio)}{Does one respondent carry the result? The largest
+#'     change, over coefficients and observations, that dropping a single observation makes to a
+#'     coefficient, in units of that coefficient's own standard error. It is printed as a
+#'     *reassurance*: with thousands of respondents no single one should move anything, and a near-zero
+#'     value is the finding. Note that influence is not outlyingness --- a surprising outcome with an
+#'     ordinary covariate profile moves nothing.}
+#'   \item{**Collinearity (max VIF)** (a ratio)}{Can the data tell these predictors apart? The largest
+#'     variance inflation factor (`car::vif()`, on one scale whatever a term's degrees of freedom).
+#'     It is the one check that is not a comparison with the data: collinearity biases nothing, it only
+#'     widens intervals, and a wide interval already shows that. It is here because it is what every
+#'     textbook teaches first. Needs the `car` package; refused for multinomial outcomes.}
+#' }
+#'
+#' Two cautions. A curvature test on one predictor can pick up **another** predictor's
+#' mis-specification when the two are near-collinear --- one more reason the collinearity row sits in
+#' the same block. And at survey sample sizes a diagnostic p-value rejects almost anything, which is
+#' why three of the five report a *magnitude* rather than a p-value.
 #'
 #'   `"interaction"` is different from the others: with `split_var`, it adds one **aggregated
 #'   effect-modification test per predictor** — "does this predictor act differently between the

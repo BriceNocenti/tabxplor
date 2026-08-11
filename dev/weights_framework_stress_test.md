@@ -11,6 +11,12 @@ followed everywhere meaningful, in `tab()` **and** in `tab_reg()`? Are there inc
 statistically unsound places? Where is there room for more consistency, simplification, or
 integration into one readable ecosystem?*
 
+**➜ The cure is `dev/weights_framework_redesign.md`** (2026-08-11): the maintainer's rulings on §6,
+plus the finding that turns §9's proposal into the whole reorganisation — a weight column IS a
+survey design, its variance has a closed form in the per-cell `Σw²`, and that closed form
+reproduces `survey` *exactly*, `svychisq` included. Read this document for the diagnosis, that one
+for what replaces it.
+
 Companion documents: `dev/full_survey_design_scope.md` (the z14 study — the ladder's design and its
 measurements), `dev/model_vs_observed_gap_test.md` §3.8 (where the gap test stops holding),
 `dev/tabxplor_2.0.0_decisions.md` §14 (the weighted-inference convention) and §51 (the robust tests).
@@ -632,6 +638,7 @@ rather than adding an explanation, it reuses machinery that already runs, and it
 `empirical = TRUE` comparison — the feature's whole purpose — an apples-to-apples one at every rung.
 Blast radius: `test-tab_reg-empirical.R` value assertions move; no golden (reg tables are not
 snapshotted); the jamovi reref byte-identity contract is untouched (it concerns the model fit).
+**Maintainer’s decision: align upward**
 
 **Q2 — should Kish become the default when `wt` is given (W6)?**
 Three options: **(a)** keep rung 1 as the default (status quo; the split in Q1 then has to be
@@ -641,24 +648,27 @@ weighted user, all goldens with weights regenerate, and the documentation become
 **(c)** keep the default but *warn once* per session when a weighted table is built at rung 1.
 *Recommendation: (b) if Q1 is answered "align upward" — with (a) the two would still disagree.* This
 is the one CRAN-visible behaviour change in the report and the maintainer's call, not mine.
+**Maintainer’s decision: this option should only work for `tab()`, the rule being it’s always on with `tab_reg()` when there are weights**. The discrepancy should be documented on the vignette, to precise with concision that the option must be on for the `tab()` version to match the `tab_reg()` empirical column ? By the way, should the `tabxplor.kish_neff` option be renamed now that we use not only Kish, but a closed-form equivalent to a minimal survey-design with only weights (it was never public) ?
 
 **Q3 — `contrib` under a design on percentage tables (P4): fix or keep documenting?**
 *Recommendation: fix.* The measured gap (`1.6e-11` vs `0.052`) is too large for a documentation
 sentence, and the fix reuses the existing producer.
+**Maintainer’s decision: fix. Ensure the result is the same that with counts (since contrib is independant from row/col percentages and have no reference) ?**
 
 **Q4 — the degrade claim (W4): store the state (P1) or drop the sentence when degraded?**
 *Recommendation: store it.* Dropping the sentence would silently look like an unweighted table; a
 fourth footer sentence ("the sample design could not be applied to this table's intervals") is the
 honest artefact.
+**Maintainer’s decision: ok (also give the reason with extreme concision if it can be done).**
 
-**Q5 — design degrees of freedom (W7): thread `degf` into the t-pivots, offer Korn–Graubard, or
-document?** *Recommendation: thread `degf` (means) + document (proportions) now; Korn–Graubard as a
-named `method_cell` value later.*
+**Q5 — design degrees of freedom (W7): thread `degf` into the t-pivots, offer Korn–Graubard, or document?** *Recommendation: thread `degf` (means) + document (proportions) now; Korn–Graubard as a named `method_cell` value later.*
+**Maintainer’s decision: implement both. Should we make it default with the tabxplor.kish_neff option (or it’s new name) ? And with full design object passed as `data` ?**
 
 **Q6 — jamovi (W11): add the rung selector to Regressions, and retitle Crosstables'?**
 *Recommendation: yes to both.* Ruling §7.4 excluded rung **3** from jamovi; rung 2 is in scope by that
 same ruling and its absence in Regressions is an oversight, not a decision. Needs a
 `jmvtools::prepare()`.
+**Maintainer’s decision: yes to both.**
 
 **Q7 — scope and sequencing.** These split cleanly into three sessions:
 * **z15-i (metadata + truth)**: P1, P2, P3b, P6, P7, P8 — no numbers move except the footer and the
@@ -667,6 +677,7 @@ same ruling and its absence in Regressions is an oversight, not a decision. Need
 * **z15-iii (the two residues)**: P4, P5.
 *Recommendation: run z15-i first regardless of how Q1/Q2 go* — it is pure subtraction plus one stored
 field, and every later decision is easier to express once the rung is a fact on the table.
+**Maintainer’s decision: let’s rethink it after the design is finished, but anyway it’s z16 (z15 is assumptions checks framework).**
 
 ---
 

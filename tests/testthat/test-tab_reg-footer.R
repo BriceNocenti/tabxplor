@@ -87,8 +87,10 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   tst <- get_test(t1); cv <- "Model_\u03b2"
   gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
 
-  # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks)
-  expect_setequal(setdiff(unique(tst$test), tabxplor:::reg_global_types()),   # z13: a LINE, not a row
+  # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks),
+  # plus z13's overall-association rows and z15's model-check rows (both in the default set).
+  expect_setequal(setdiff(unique(tst$test),
+                          c(tabxplor:::reg_global_types(), tabxplor:::reg_check_types())),
                   c("n", "r2", "r2_adj", "f_model", "sigma"))
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   g  <- broom::glance(stats::lm(tvhours ~ age + race, data = dm))
@@ -115,8 +117,10 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
   tst <- get_test(t1); cv <- "Model_IRR"
   dm  <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
+  # z15: the exact Pearson dispersion keeps its own row under the key `phi` (the key `dispersion` now
+  # names the robust/model-SE CHECK). n - rank, never df.residual(fit) -- they agree for a glm.
   phi <- sum(stats::residuals(m, "pearson")^2) / stats::df.residual(m)
-  expect_equal(tst$statistic[tst$col_var == cv & tst$test == "dispersion"], phi, tolerance = 1e-6)
+  expect_equal(tst$statistic[tst$col_var == cv & tst$test == "phi"], phi, tolerance = 1e-6)
 })
 
 # ---- multi-model comparison -----------------------------------------------------------------
@@ -221,12 +225,13 @@ test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
                     forcats::fct_relevel(sort))
   suppressWarnings(t <- tab_reg(d, "rincome", c("marital", "race"), family = "ordinal"))
   tst <- get_test(t)
-  expect_true("brant_po" %in% tst$test)
-  p <- tst$pvalue[tst$test == "brant_po"]
+  # z15: the same stashed Brant p, now the "Proportionality (Brant)" model check
+  expect_true("proportionality" %in% tst$test)
+  p <- tst$pvalue[tst$test == "proportionality"]
   expect_true(all(!is.na(p) & p >= 0 & p <= 1))
-  # renders as a "Brant PO test" export row (A7: normalise non-breaking spaces for the text grep)
+  # renders as a "Proportionality (Brant)" export row (A7: normalise nbsp for the text grep)
   md <- gsub(intToUtf8(160L), " ", tab_md(t, print = FALSE), fixed = TRUE)
-  expect_true(any(grepl("Brant PO test", md)))
+  expect_true(any(grepl("Proportionality (Brant)", md, fixed = TRUE)))
 })
 
 test_that("reg reference cells and GOF footer render black + bold, data cells stay grey (Items D/J)", {
@@ -263,14 +268,16 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
 
 # ---- Last Phase z13 (SS7.2): the per-predictor global test ------------------------------------------
 
-test_that("stats='global' IS drop1() on the fit already in hand, as a footer line", {
+test_that("stats='global' IS drop1() on the fit already in hand, as per-predictor footer rows", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
                                 cleannames = FALSE))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
-  expect_setequal(g$row_var, c("race", "rincome"))       # one per multi-level predictor
+  # z15: the predictor rides `term`; `row_var` means the split-group level and nothing else
+  expect_setequal(g$term, c("race", "rincome"))          # one per multi-level predictor
+  expect_true(all(g$row_var == ""))
   expect_identical(unique(g$test), "global_lr")
 
   # the numbers ARE drop1's, no extra fit involved
@@ -279,36 +286,51 @@ test_that("stats='global' IS drop1() on the fit already in hand, as a footer lin
   dm$race <- forcats::fct_drop(dm$race); dm$rincome <- forcats::fct_drop(dm$rincome)
   fit <- stats::glm(married ~ race + rincome, data = dm, family = stats::binomial())
   d1  <- stats::drop1(fit, scope = c("race", "rincome"), test = "Chisq")
-  expect_equal(g$pvalue[match(rownames(d1)[-1], g$row_var)],
+  expect_equal(g$pvalue[match(rownames(d1)[-1], g$term)],
                d1[["Pr(>Chi)"]][-1], tolerance = 1e-8)
-  expect_equal(g$statistic[match(rownames(d1)[-1], g$row_var)],
+  expect_equal(g$statistic[match(rownames(d1)[-1], g$term)],
                d1[["LRT"]][-1], tolerance = 1e-8)
 
-  # it is a table-wide LINE, not a GOF row: the footer block is untouched
-  expect_false(any(tabxplor:::reg_global_types() %in%
-                     names(tabxplor:::reg_footer_spec())))
-  line <- tabxplor:::reg_global_lines(t, "en")
-  expect_length(line, 1L)
-  expect_match(line, "race p = ")
-  # and it reaches every medium through the shared footer stream
-  expect_true(grepl("Overall association", tab_md(t, print = FALSE), fixed = TRUE))
+  # z15: they are GOF ROWS now -- one per (model column x predictor), labelled "<stat>: <predictor>"
+  expect_true(all(tabxplor:::reg_global_types() %in% names(tabxplor:::reg_footer_spec())))
+  md <- gsub(intToUtf8(160L), " ", tab_md(t, print = FALSE), fixed = TRUE)
+  expect_true(any(grepl("Overall association (LR): race", md, fixed = TRUE)))
+  expect_true(any(grepl("Overall association (LR): rincome", md, fixed = TRUE)))
 })
 
 test_that("the global test skips 1-df terms, unsupported engines and stats = FALSE", {
   skip_if_not_installed("broom")
   d <- reg_data()
-  # a numeric predictor's overall p IS its single cell's p -- a line for it would be noise
+  # a numeric predictor's overall p IS its single cell's p -- a row for it would be noise
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 cleannames = FALSE))
   g <- get_test(t); g <- g[g$test %in% tabxplor:::reg_global_types(), ]
-  expect_setequal(g$row_var, "race")
+  expect_setequal(g$term, "race")
   # opt out
   t0 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE,
                                  cleannames = FALSE))
-  expect_length(tabxplor:::reg_global_lines(t0, "en"), 0L)
-  # an engine with no drop1/regTermTest degrades to no line, never to an error (the z8 contract)
+  expect_false(any(tabxplor:::reg_global_types() %in% get_test(t0)$test))
+  # an engine with no drop1/regTermTest degrades to no row, never to an error (the z8 contract)
   skip_if_not_installed("nnet")
   tm <- suppressMessages(suppressWarnings(
     tab_reg(d, "marital", "race", family = "multinomial", cleannames = FALSE)))
-  expect_length(tabxplor:::reg_global_lines(tm, "en"), 0L)
+  expect_false(any(tabxplor:::reg_global_types() %in% get_test(tm)$test))
+})
+
+# ---- Last Phase z15: the `term` retrofit fixes a live split-table defect ----------------------------
+
+test_that("on a split table the per-predictor rows name the predictors, not the split level", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), split_var = "grp",
+                                family = "binomial", cleannames = FALSE, spread_models = FALSE))
+  tt <- get_test(t)
+  g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
+  expect_true(nrow(g) > 0)
+  # BEFORE z15 the predictor rode `row_var`, which reg_build's split branch overwrites wholesale with
+  # the group level -- so every item printed the group's name, repeated, instead of "race"/"rincome".
+  expect_setequal(unique(g$term), c("race", "rincome"))
+  expect_setequal(unique(g$row_var), c("early", "late"))
+  expect_false(any(g$term %in% c("early", "late")))
 })

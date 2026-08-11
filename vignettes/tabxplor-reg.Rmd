@@ -700,9 +700,28 @@ The footer summarises model fit; which statistics appear depends on the family:
 - **LR vs null** — a likelihood-ratio test of the whole model against the intercept-only model (is the model worth anything?).
 - **McFadden R²** — a pseudo-R² for binomial and poisson models (higher = the predictors explain more; values are much smaller than a linear R²).
 - **AIC / BIC** — information criteria for comparing models on the same data (lower = better; BIC penalises complexity more).
-- Linear models (gaussian) add the usual **R² / adjusted R² / F / σ**; Poisson adds a **dispersion** check.
+- **Overall association** — one test per predictor: *is this variable associated with the outcome at all?* A block of stars against a reference category cannot answer that, which is why a multi-level factor needs more than its cells.
+- Linear models (gaussian) add the usual **R² / adjusted R² / F / σ**; count models add the **Pearson dispersion (φ)**.
 
 For weighted models a reduced set is reported (a Wald test against the null, Nagelkerke / Cox–Snell pseudo-R², a Rao–Scott AIC), because the likelihood-based quantities do not apply to a design-based fit.
+
+## Checking the model
+
+The same footer carries five **model checks**. You do not ask for them, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it.
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))
+```
+
+Read them in the order they print, which is the order of what each one threatens:
+
+- **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor. This is the one to look at first, because a wrong shape does not stay in its own row. In the model above, letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter, and flips another income level's verdict at the 5 % threshold — while nothing in the table hints at it.
+- **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?*
+- **Dispersion (robust/model SE)** — *are the standard errors wide enough?* About 1 means the family's variance assumption holds; 1.4 means the intervals should be about 40 % wider than they are. For a count outcome, `family = "quasipoisson"` fixes exactly that, and the row then returns to about 1 (while the Pearson dispersion φ still reports the over-dispersion itself). Under a survey design it simply says how much the design mattered — the intervals are already the design's.
+- **Influence (max dfbetas)** — *does one respondent carry the result?* The largest amount, in standard errors, by which dropping a single respondent moves any coefficient. With thousands of respondents this is normally reassuringly small, and that reassurance is the point. Careful: influence is not the same as being an outlier — a surprising answer from an otherwise ordinary respondent moves nothing.
+- **Collinearity (max VIF)** — *can the data tell these predictors apart?* Above about 5, two predictors are measuring much the same thing and their intervals are inflated. Collinearity biases nothing, so this is the one check that is a caution rather than a problem. (It needs the `car` package.)
+
+Two things worth knowing. A curvature test on one predictor can pick up **another** predictor's wrong shape when the two are strongly correlated — one more reason to read the collinearity row beside it. And with a large survey sample almost any diagnostic *p*-value ends up significant, which is why three of the five report a magnitude instead.
 
 ## Plots
 

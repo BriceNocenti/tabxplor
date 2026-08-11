@@ -153,36 +153,23 @@ models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats
 the likelihood-ratio test: more accurate near separation, unweighted binomial/poisson models only
 (else it falls back to Wald with a message; gaussian always uses the exact-t interval).}
 
-\item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
-model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
-square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
-versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
-also show the Pearson dispersion). Pass a character vector to pick and order the statistics
-(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}), or \code{FALSE} / \code{"none"} to hide the footer.
+\item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
+(default) uses the per-family set: linear models show N, R square, adjusted R square, the overall
+F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
+McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
+dispersion, \code{"phi"}). Every default set also carries the overall-association test \code{"global"} and
+the five \strong{model checks} below. Pass a character vector to pick the statistics (\code{"n"},
+\code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"}, \code{"f_model"},
+\code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"}, \code{"proportionality"}, \code{"dispersion"},
+\code{"influence"}, \code{"collinearity"}), or \code{FALSE} / \code{"none"} to hide the footer entirely.
 
 \code{"global"} (in the default set) adds one \strong{overall test per predictor} --- "is this variable
 associated with the outcome at all?", the question a block of stars against a reference category
 cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
 predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
-that cell's own p-value), as a footer line rather than a footer row, and it costs \strong{no extra
-model fit}: it is a likelihood-ratio test on the fitted model (an F test for linear and quasi
-models, a design-based Wald test for weighted / survey models). Multinomial and ordinal outcomes
-get no such test.
-
-\code{"interaction"} is different from the others: with \code{split_var}, it adds one \strong{aggregated
-effect-modification test per predictor} — "does this predictor act differently between the
-groups?", asked once for all its levels together, so it carries none of the multiplicity of the
-per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
-row (a pooled test belongs to no single model column), and it costs one extra model fit.
-\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
-linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
-\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
-and the colours answer related but distinct questions, and the line says so. Multinomial and
-ordinal outcomes get no such test.
-
-Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
-(design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+that cell's own p-value), and it costs \strong{no extra model fit}: it is a likelihood-ratio test on
+the fitted model (an F test for linear and quasi models, a design-based Wald test for weighted /
+survey models). Multinomial and ordinal outcomes get no such test.}
 
 \item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
 estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any

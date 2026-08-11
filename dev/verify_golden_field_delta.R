@@ -28,8 +28,13 @@ source("tests/testthat/helper-golden.R")
 
 # Last Phase z13: `conf_level` = 0.95 on every column (the goldens are built at the default, which is
 # also options("tabxplor.conf_level") -- that equality is why the rendering does not move).
-ADDED_ATTRS   <- c("conf_level")
-EXPECTED_ATTR <- list(conf_level = 0.95)
+ADDED_ATTRS   <- character(0)
+EXPECTED_ATTR <- list()
+
+# Last Phase z15: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
+# (`term` = which predictor a regression footer row is about). A crosstab never fills it, so on these
+# goldens it must be present and empty.
+ADDED_TEST_COLS <- c("term")
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
@@ -90,9 +95,24 @@ for (nm in names(cases)) {
     }
     n_cells <- n_cells + length(old[[col]])
   }
-  # table-level attributes (subtext / test / meta) must be untouched by a field pass
+  # table-level attributes (subtext / test / meta) must be untouched by a field pass -- EXCEPT for the
+  # `test` tibble's declared new COLUMNS (ADDED_TEST_COLS), which are checked the same way a new field
+  # is: present, empty, and everything else bit-identical.
   ta <- function(t) attributes(t)[intersect(names(attributes(t)), c("subtext", "test", "meta"))]
-  if (!identical(ta(old), ta(new)))
+  ao <- ta(old); an <- ta(new)
+  if (length(ADDED_TEST_COLS) && !is.null(an$test)) {
+    add <- setdiff(names(an$test), names(ao$test))
+    if (!setequal(add, intersect(ADDED_TEST_COLS, add)))
+      issues <- c(issues, paste0(nm, ": UNDECLARED new `test` column(s): ",
+                                 paste(setdiff(add, ADDED_TEST_COLS), collapse = ", ")))
+    for (cl in add) {
+      v <- an$test[[cl]]
+      if (!all(is.na(v) | (is.character(v) & !nzchar(v))))
+        issues <- c(issues, paste0(nm, " / test / ", cl, ": new column is NOT empty"))
+    }
+    an$test <- an$test[, setdiff(names(an$test), add), drop = FALSE]
+  }
+  if (!identical(ao, an))
     issues <- c(issues, paste0(nm, ": TABLE attributes changed"))
 
   cat(sprintf("OK    %-28s %s\n", nm,

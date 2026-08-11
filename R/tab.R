@@ -3147,7 +3147,8 @@ tab_row_roles <- function(tab) {
   roles[lab %in% "n"]                 <- "n"
   roles[lab %in% "row_pct"]           <- "row_pct"
   roles[lab %in% "pvalue"]            <- "pvalue"
-  roles[lab %in% reg_footer_labels()] <- "gof"
+  # z15: a per-predictor footer row reads "<label>: <predictor>", so match on the label part.
+  roles[sub(":.*$", "", lab) %in% reg_footer_labels()] <- "gof"
   roles[is_totrow(tab)]               <- "total"
   roles
 }

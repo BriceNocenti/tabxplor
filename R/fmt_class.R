@@ -4738,8 +4738,8 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   # rides the stream footer like the weight / Model: lines rather than the per-column footer rows.
   # `esc = TRUE`: the p-values carry significance stars, which pandoc would read as emphasis.
   for (il in reg_interaction_lines(x, lg)) if (nzchar(il)) push(list(.lg_tok(il, esc = TRUE)), "reg")
-  # Last Phase z13: the per-predictor global test, same stream, same escaping (its p-values carry stars).
-  for (gl in reg_global_lines(x, lg)) if (nzchar(gl)) push(list(.lg_tok(gl, esc = TRUE)), "reg")
+  # (Last Phase z15: the per-predictor global test used to push a line here too. It is footer ROWS now
+  # -- see reg_footer_plan() -- because it belongs to one model column and a line could not say which.)
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg, theme)) push(toks, "legend")
   # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
   sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")

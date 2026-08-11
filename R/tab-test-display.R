@@ -180,9 +180,16 @@ test_es_measure <- function(es_types) {
 # kind "gof" -> a plain number (the "gof" display token reading `statistic`); kind "pvalue" -> a p-value
 # cell. `digits` applies to gof cells. Order here = the display / fallback order.
 # Last Phase w: GOF row labels are translatable (gettext, ambient locale). Notation (N/F/R2/AIC/BIC and
-# the named pseudo-R2s) stays; the "vs null/baseline/previous" prose + "Adjusted R2"/"Residual SD"/
-# "Brant PO test"/"Dispersion" translate. English is byte-identical (gettext returns the msgid).
-reg_footer_spec <- function() list(
+# the named pseudo-R2s) stays; the "vs null/baseline/previous" prose + "Adjusted R2"/"Residual SD"
+# translate. English is byte-identical (gettext returns the msgid).
+#
+# Last Phase z15 -- the list is now the FIXED entries plus two GENERATED blocks, so no label is written
+# twice. The `global` per-predictor test moved from a footer LINE to footer ROWS (measured: in a
+# 3-model comparison its line rendered as three unlabelled sentences, and on a split table it printed
+# the split level, repeated, instead of the predictors); the five model CHECKS come from REG_CHECKS
+# (R/reg-assumptions.R), which is also the `stats =` / `check =` vocabulary. Both blocks are
+# per-predictor, keyed by the `term` column and rendered "<label>: <term>" by reg_footer_plan().
+reg_footer_spec <- function() c(list(
   n                    = list(label = gettext("N"),                     kind = "gof",    digits = 0L),
   lr_null              = list(label = gettext("LR vs null"),            kind = "pvalue"),
   wald_null            = list(label = gettext("Wald vs null"),          kind = "pvalue"),
@@ -195,8 +202,10 @@ reg_footer_spec <- function() list(
   sigma                = list(label = gettext("Residual SD"),           kind = "gof",   digits = 2L),
   aic                  = list(label = gettext("AIC"),                   kind = "gof",   digits = 0L),
   bic                  = list(label = gettext("BIC"),                   kind = "gof",   digits = 0L),
-  dispersion           = list(label = gettext("Dispersion"),            kind = "gof",   digits = 2L),
-  brant_po             = list(label = gettext("Brant PO test"),          kind = "pvalue"),
+  # Last Phase z15: `dispersion` now names the CHECK (max robust/model SE, every family, from
+  # REG_CHECKS below); the exact Pearson dispersion this row used to hold keeps its own key `phi`.
+  phi                  = list(label = reg_check_label("Pearson dispersion", "phi"),
+                                                                        kind = "gof",   digits = 2L),
   compare_baseline     = list(label = gettext("LR vs baseline"),        kind = "pvalue"),
   compare_baseline_f   = list(label = gettext("F vs baseline"),         kind = "pvalue"),
   compare_baseline_wald = list(label = gettext("Wald vs baseline"),     kind = "pvalue"),
@@ -205,15 +214,65 @@ reg_footer_spec <- function() list(
   compare_seq_f        = list(label = gettext("F vs previous"),         kind = "pvalue"),
   compare_seq_wald     = list(label = gettext("Wald vs previous"),      kind = "pvalue"),
   compare_seq_aic      = list(label = gettext("Delta-AIC vs previous"),  kind = "gof",  digits = 0L)
+  ),
+  # the per-predictor overall-association test (z13), and the five model checks (z15)
+  stats::setNames(lapply(reg_global_types(), function(d) list(
+      label = reg_check_label("Overall association",
+                              switch(d, global_lr = "LR", global_f = "F", "Wald")),
+      kind = "pvalue")), reg_global_types()),
+  reg_check_spec_entries()
 )
 reg_footer_test_types <- function() names(reg_footer_spec())
 reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))
+# The discriminators whose row is about ONE PREDICTOR (`term`) rather than the whole model, so
+# reg_footer_plan() renders them "<label>: <term>" and emits one row per predictor present.
+reg_footer_per_term <- function() c(reg_global_types(), reg_check_types())
 # Last Phase z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
 # table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
 # (stats = FALSE) is still a reg table, so the arm detection must know them.
 is_reg_footer <- function(test_tbl)
   !is.null(test_tbl) && nrow(test_tbl) > 0 &&
-  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types(), reg_global_types()))
+  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types()))
+
+# The `term` column, NA-safe. A `test` tibble may legitimately have none (a crosstab's, or one built
+# before the column existed), and every reg-footer row of the whole-model kind carries "".
+# WARNING: test by NAME, never `tt$term` -- a tibble WARNS ("Unknown or uninitialised column") before
+# returning NULL, so the `$` form leaked a warning out of every degraded table.
+#' @keywords internal
+test_term_col <- function(tt) {
+  if (!"term" %in% names(tt)) return(rep("", nrow(tt)))
+  ifelse(is.na(tt$term), "", as.character(tt$term))
+}
+
+# THE regression-footer row plan: one row per (test, term), in spec order then term order, with its
+# rendered label. Both row renderers read it -- the appended export rows (reg_footer_lines(), in
+# R/tab_classes.R) and the console grid (test_grid_reg(), below) -- so a per-predictor check cannot
+# render one way in the console and another in Excel.
+#
+# WARNING: it is built from the WHOLE `reg` slice, never per split group, so `K` (the block height) is
+# constant across groups -- tab_append_footer() requires that, and a group missing one predictor must
+# show a blank cell, not a shorter block.
+#
+# `term` is the per-predictor key (Last Phase z15). It could not be `row_var`, which on a reg footer
+# row already means the SPLIT-GROUP LEVEL in this renderer, in reg_footer_lines() and in
+# reg_spread_models() -- a predictor name there flipped a plain table into "split" mode and was
+# silently dropped on a spread one.
+#' @keywords internal
+reg_footer_plan <- function(reg) {
+  spec <- reg_footer_spec()
+  tm   <- test_term_col(reg)
+  keep <- reg$test %in% names(spec)
+  if (!any(keep)) return(NULL)
+  k <- unique(data.frame(test = reg$test[keep], term = tm[keep], stringsAsFactors = FALSE))
+  k <- k[order(match(k$test, names(spec)), k$term), , drop = FALSE]
+  sp <- spec[k$test]
+  lab <- vapply(sp, `[[`, character(1), "label")
+  k$label  <- ifelse(nzchar(k$term), paste0(lab, ": ", k$term), lab)
+  k$kind   <- vapply(sp, `[[`, character(1), "kind")
+  k$digits <- vapply(sp, function(s) as.integer(s$digits %||% 0L), integer(1))
+  rownames(k) <- NULL
+  k
+}
 
 # A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
 # `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the
@@ -338,9 +397,10 @@ test_grid_reg <- function(x, test_tbl) {
   value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps
                    else vapply(value_cols, reg_strip_model_prefix, character(1))
 
-  # the ordered stats actually present (spec order)
-  stats_present <- names(spec)[names(spec) %in% unique(reg$test)]
-  if (length(stats_present) == 0) return(NULL)
+  # the ordered footer rows actually present: one per (stat, term), spec order then term order
+  plan <- reg_footer_plan(reg)
+  if (is.null(plan) || !nrow(plan)) return(NULL)
+  reg$.term <- test_term_col(reg)
 
   # split levels (the group key), from reg$row_var; "" (no split) -> a single unnamed group
   rv_key   <- if (is.null(reg$row_var)) rep("", nrow(reg)) else ifelse(is.na(reg$row_var), "", reg$row_var)
@@ -354,26 +414,28 @@ test_grid_reg <- function(x, test_tbl) {
 
   label_headers <- c(if (is_split) "" else NULL, if (show_preds) "predictors" else NULL)
 
-  n_rows <- length(stats_present)
+  n_rows <- nrow(plan)
   pred_lines <- if (show_preds) test_wrap_items(meta$predictors, n_rows) else NULL
 
   groups <- lapply(grp_lv, function(g) {
     sub <- reg[reg$.grp == g, , drop = FALSE]
-    rows <- lapply(stats_present, function(s) {
-      sp <- spec[[s]]
+    rows <- lapply(seq_len(n_rows), function(k) {
+      pk <- plan[k, ]
+      hit <- function(cv) sub[sub$col_var == cv & sub$test == pk$test & sub$.term == pk$term, ,
+                              drop = FALSE]
       cells <- vapply(value_cols, function(cv) {
-        r <- sub[sub$col_var == cv & sub$test == s, , drop = FALSE]
+        r <- hit(cv)
         if (nrow(r) == 0) return("")
-        if (identical(sp$kind, "gof")) test_fmt_num(r$statistic[1], sp$digits %||% 0L)
+        if (identical(pk$kind, "gof")) test_fmt_num(r$statistic[1], pk$digits)
         else {
           p <- test_fmt_pvalue(r$pvalue[1]); if (is.na(p)) "" else p
         }
       }, character(1))
       nonsig <- vapply(value_cols, function(cv) {
-        r <- sub[sub$col_var == cv & sub$test == s, , drop = FALSE]
-        identical(sp$kind, "pvalue") && nrow(r) > 0 && test_is_nonsig(r$pvalue[1])
+        r <- hit(cv)
+        identical(pk$kind, "pvalue") && nrow(r) > 0 && test_is_nonsig(r$pvalue[1])
       }, logical(1))
-      list(label = sp$label, cells = cells, nonsig = nonsig)
+      list(label = pk$label, cells = cells, nonsig = nonsig)
     })
     label_lines <- c(if (is_split) list(g) else NULL, if (show_preds) list(pred_lines) else NULL)
     list(label_lines = label_lines, rows = rows)

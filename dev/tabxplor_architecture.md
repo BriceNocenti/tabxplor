@@ -1550,12 +1550,11 @@ boundary between them and the rest of `tab_reg()` leaked. Eleven fixes; the ones
   measures need an exception, and it cannot express `break_scale` / `unit_kind`). It also let
   `contrib`'s `guar` shed the glyph entries its scale swap already implied. `legend_unit_word()` is the
   extracted twin of the switch `chan()` and `legend_threshold_phrase()` each held.
-- **`reg_term_tests()` / `reg_term_test_line()`** — the aggregated interaction test and the new
-  per-predictor GLOBAL test (`stats = "global"`, in the default set) are the SAME computation differing
-  only in which fit and which terms are dropped. The global one costs NO extra fit (the model is in
-  hand) and is emitted only for terms with 2+ coefficients. Like the interaction rows it is a footer
-  LINE, so its discriminators must be registered in three places or they vanish at materialisation:
-  `is_reg_footer()`, the `reg_footer_lines()` carve-out, and `tab_footer_streams()`.
+- **`reg_term_tests()`** — the aggregated interaction test and the per-predictor GLOBAL test
+  (`stats = "global"`, in the default set) are the SAME computation differing only in which fit and
+  which terms are dropped. The global one costs NO extra fit (the model is in hand) and is emitted only
+  for terms with 2+ coefficients. *(z15 made it footer ROWS and deleted `reg_term_test_line()`; only
+  the interaction test is still a LINE — see below.)*
 - **`reg_level_counts()` + `add_n = TRUE`** — the N behind each predictor level, on the model's own
   frame, as a real BUILT column (the count needs the model frame, which exists only at build time;
   `tab()`'s display-time `add_n` folds into a Total cell a reg table does not have). `role = "n"` is a
@@ -1563,3 +1562,48 @@ boundary between them and the rest of `tab_reg()` leaked. Eleven fixes; the ones
   key (the `n` column comes first and would otherwise key every group's footer under its counts), and
   the `[dep]` bracket strip. Tests select reg columns through `tests/testthat/helper-reg.R`'s
   `reg_fmt_cols()`, never by position.
+
+### Last Phase z15 — the model checks (`R/reg-assumptions.R`)
+
+Every `tab_reg()` footer now carries five **model checks**, on the framework the package already had:
+each is the `Model_* vs Obs_*` comparison applied to something other than an effect — the SHAPE of a
+numeric predictor's effect (Linearity), the SPREAD of the outcome (Dispersion), the MEANING of an
+ordinal effect (Proportionality), the WEIGHT of one respondent (Influence). Collinearity is the stated
+exception (a property of the design matrix, biasing nothing) and is in because every textbook and
+jamovi's own pane put it first.
+
+- **`REG_CHECKS`** — one row per check (`noun`, `types` = discriminator → instrument, `kind`/`digits`,
+  `families`, `weighted_ok`, `per_predictor`), read by `reg_checks_for()` (THE selection rule, the
+  `reg_crude_shape()` pattern), `reg_check_spec_entries()` (the `reg_footer_spec()` entries) and
+  `reg_check_expand()` (a user's KEY → the `test` discriminators). `names(REG_CHECKS)` IS the `stats =`
+  vocabulary, so the footer label and the argument value cannot drift. ⚠ `noun` / the instruments are
+  BARE MSGIDS: a top-level `gettext()` would evaluate once at load and freeze the build locale, so
+  `reg_check_label()` translates at render and a dead-code anchor keeps potools able to extract them.
+- **No new statistic engine.** Linearity = `reg_fit(add_terms =)` (the third sibling of `cross =` /
+  `drop_extra =`: extra RHS terms, joining the formula and nothing else) + `reg_term_tests()`, the
+  dispatcher `global`/`interaction` already use. Its squared term comes from `reg_shape_term()`, which
+  the z15-ii `shape = "quadratic"` remedy will emit — so the check and its cure are one object.
+  Dispersion and Influence are both `reg_coef_if_maker()` + `reg_if_se()` (`max SE_robust/SE_model`,
+  and `max |IF_i(e_j)|/SE_j` = dfbetas to correlation 0.999999 against `stats::dfbetas()`, working for
+  `polr`/`multinom` and design-aware, which base R is not). Proportionality is the Brant p already
+  stashed on the fit. Collinearity is `car::vif()` (a new Suggest; absent → no row).
+- **The 13th `test` column `term`** = which predictor a footer row is about. It could NOT be `row_var`,
+  which on a reg footer row already means the SPLIT-GROUP LEVEL in `reg_footer_lines()`, in
+  `test_grid_reg()` AND in `reg_spread_models()` (which re-keys by it and drops the misses) — a
+  predictor name there flipped a plain table into "split" mode and was silently deleted on a spread
+  one. The retrofit of the interaction/global rows onto `term` also FIXED a live defect: `reg_build`'s
+  split branch tags every row of a group's test tibble with the group level, so the global line used to
+  print the split level, repeated, instead of the predictors.
+- **`reg_footer_plan(reg)`** — THE ordered `(test, term)` row plan with its rendered label
+  (`"<label>: <term>"` when per-predictor), read by BOTH row renderers so the console grid and the
+  exports cannot diverge. Built from the whole slice, never per split group, because
+  `tab_append_footer()` needs a constant block height.
+- **`stats = "global"` moved from a footer LINE to footer ROWS** (`reg_global_lines()` and the shared
+  `reg_term_test_line()` deleted). Measured on the vignette's data: in a 3-model comparison the line
+  rendered as three sentences with nothing naming which model each described. The interaction test
+  stays a line — it is pooled across split groups and belongs to no column.
+- **`dispersion` / `phi`** — the key `dispersion` now names the CHECK (max robust/model SE, every
+  family); the exact Pearson dispersion keeps its own row as `phi`, count families only. ⚠
+  `reg_dispersion()` divides by `n - rank`, computed here, NEVER `stats::df.residual(fit)` — for an
+  `svyglm` that is the DESIGN df, so the weighted-Poisson row read ~22 instead of ~1. The SE-scaling
+  caller is gated `!weighted`, where the two agree, so only the weighted row moved.

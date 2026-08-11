@@ -64,6 +64,15 @@
   with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
   See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
   `lm_plots()` draw it.
+* **Every regression table now checks itself.** The footer carries five model checks — **Linearity**
+  (per continuous predictor), **Proportionality (Brant)**, **Dispersion (robust/model SE)**,
+  **Influence (max dfbetas)** and **Collinearity (max VIF)** — computed for every model, with no
+  argument to remember and one row per model column so a comparison reads down. They matter: on the
+  model used throughout the regression vignette, letting `age` curve moves the top income category's
+  odds ratio by a quarter and flips another income level's verdict, and nothing in the table used to
+  say so. Any of them can be dropped through `stats =`; `stats = "collinearity"` needs the new
+  suggested package `car`. The per-predictor overall-association test (`stats = "global"`) moved from
+  a footer sentence to footer rows for the same reason.
 * **Colour the gap between the modelled and the observed effect.** `tab_reg(empirical = TRUE)` already
   prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
   apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
@@ -126,6 +135,10 @@
 
 ## Changes that may affect existing code
 
+* **`tab_reg(stats = "dispersion")` now names the model check, not the Pearson dispersion.** The exact
+  Pearson dispersion of a count model keeps its footer row under `stats = "phi"`, and it is now correct
+  for weighted models too (it used to divide by a survey design's degrees of freedom, reading about 20
+  where it should read about 1).
 * **`tab_reg()` fits every model of an outcome on the same people, by default.** The new
   `na = "drop_by_outcome"` shares one complete-case population across the models of a given outcome
   (`"drop_by_model"` restores the per-model drop, `"drop_all"` shares one across the whole call). This

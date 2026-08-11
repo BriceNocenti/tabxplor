@@ -44,6 +44,7 @@ Suggests:
     rstudioapi (>= 0.1),
     testthat (>= 3.0.0),
     brant (>= 0.3.0),
+    car (>= 3.1.0),
     svyVGAM (>= 1.2),
     VGAM (>= 1.1.0),
     marginaleffects (>= 0.20.0),

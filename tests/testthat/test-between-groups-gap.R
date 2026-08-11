@@ -185,15 +185,16 @@ test_that("the interaction test IS drop1() on the pooled model", {
                                 stats = c("n", "interaction")))
   it <- get_test(t)
   it <- it[it$test %in% tabxplor:::reg_interaction_types(), , drop = FALSE]
-  testthat::expect_identical(sort(it$row_var), c("age", "race"))
+  # z15: the predictor rides `term`; `row_var` means the split-group level and nothing else
+  testthat::expect_identical(sort(it$term), c("age", "race"))
   testthat::expect_identical(unique(it$test), "interact_lr")
 
   g  <- stats::glm(married ~ (race + age) * party3, stats::binomial, data = d)
   d1 <- stats::drop1(g, scope = c("race:party3", "age:party3"), test = "Chisq")
-  testthat::expect_equal(it$pvalue[match(c("race", "age"), it$row_var)],
+  testthat::expect_equal(it$pvalue[match(c("race", "age"), it$term)],
                          as.numeric(d1[["Pr(>Chi)"]][match(c("race:party3", "age:party3"),
                                                            rownames(d1))]))
-  testthat::expect_equal(it$statistic[match(c("race", "age"), it$row_var)],
+  testthat::expect_equal(it$statistic[match(c("race", "age"), it$term)],
                          as.numeric(d1[["LRT"]][match(c("race:party3", "age:party3"), rownames(d1))]))
 })
 

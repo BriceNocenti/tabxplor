@@ -725,9 +725,28 @@ Le bas de tableau résume l'ajustement du modèle ; les statistiques qui apparai
 - **LR vs null** — un test du rapport de vraisemblance du modèle entier contre le modèle à constante seule (le modèle vaut-il quelque chose ?).
 - **McFadden R²** — un pseudo-R² pour les modèles binomiaux et de poisson (plus élevé = les prédicteurs expliquent davantage ; les valeurs sont bien plus petites qu'un R² linéaire).
 - **AIC / BIC** — des critères d'information pour comparer des modèles sur les mêmes données (plus bas = meilleur ; le BIC pénalise davantage la complexité/le nombre de paramètres).
-- Les modèles linéaires (`gaussian`) ajoutent les habituels **R² / R² ajusté / F / σ** ; Poisson ajoute un contrôle de **dispersion**.
+- **Association globale** — un test par prédicteur : *cette variable est-elle liée à la variable expliquée, tout court ?* Un bloc d'étoiles face à une modalité de référence ne peut pas y répondre, et c'est pourquoi un facteur à plusieurs modalités a besoin d'autre chose que de ses cases.
+- Les modèles linéaires (`gaussian`) ajoutent les habituels **R² / R² ajusté / F / σ** ; les modèles de comptage ajoutent la **dispersion de Pearson (φ)**.
 
 Pour les modèles pondérés, le résumé statistique est réduit (un test de Wald contre le modèle nul, un pseudo-R² de Nagelkerke / Cox–Snell, un AIC de Rao–Scott), car les quantités fondées sur la vraisemblance ne s'appliquent pas à un ajustement fondé sur un *survey-design*.
+
+## Vérifier le modèle
+
+Le même bas de tableau porte cinq **vérifications du modèle**. Vous ne les demandez pas, et il n'y a rien à apprendre au-delà des cinq noms : chacun désigne une hypothèse, et la parenthèse désigne l'instrument qui l'a mesurée.
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))
+```
+
+Lisez-les dans l'ordre où elles s'affichent, qui est l'ordre de ce que chacune menace :
+
+- **Linéarité** — *l'effet de ce prédicteur est-il vraiment une seule droite ?* Une ligne par prédicteur continu. C'est la première à regarder, car une mauvaise forme ne reste pas dans sa propre ligne. Dans le modèle ci-dessus, laisser `age` se courber au lieu d'aller tout droit déplace d'environ un quart le rapport de cotes de la tranche de revenu la plus élevée, et fait basculer le verdict d'une autre tranche au seuil de 5 % — alors que rien dans le tableau ne le laisse deviner.
+- **Proportionnalité (Brant)** — pour une variable expliquée ordinale, *un seul rapport de cotes cumulé suffit-il pour toutes les coupures ?*
+- **Dispersion (ET robuste/du modèle)** — *les erreurs-types sont-elles assez larges ?* Environ 1 signifie que l'hypothèse de variance de la famille tient ; 1,4 signifie que les intervalles devraient être environ 40 % plus larges qu'ils ne le sont. Pour une variable de comptage, `family = "quasipoisson"` corrige exactement cela, et la ligne revient alors à environ 1 (tandis que la dispersion de Pearson φ continue de signaler la surdispersion elle-même). Sous un *survey-design*, elle dit simplement ce que le plan de sondage a changé — les intervalles sont déjà ceux du plan.
+- **Influence (max dfbetas)** — *un seul enquêté porte-t-il le résultat ?* La quantité maximale, en erreurs-types, dont le retrait d'un seul enquêté déplace un coefficient. Avec des milliers d'enquêtés, c'est normalement rassurant de petitesse, et c'est bien le but. Attention : l'influence n'est pas la même chose que le fait d'être atypique — une réponse surprenante venant d'un enquêté par ailleurs ordinaire ne déplace rien.
+- **Colinéarité (max VIF)** — *les données peuvent-elles distinguer ces prédicteurs ?* Au-dessus de 5 environ, deux prédicteurs mesurent en grande partie la même chose et leurs intervalles sont gonflés. La colinéarité ne biaise rien : c'est la seule vérification qui soit une mise en garde plutôt qu'un problème. (Elle nécessite le package `car`.)
+
+Deux choses à savoir. Un test de courbure sur un prédicteur peut capter la mauvaise forme d'un **autre** prédicteur lorsque les deux sont fortement corrélés — une raison de plus de lire la ligne de colinéarité à côté. Et avec un grand échantillon d'enquête, presque toute *p*-value de diagnostic finit significative, ce qui explique que trois des cinq indiquent plutôt une grandeur.
 
 ## Graphiques
 

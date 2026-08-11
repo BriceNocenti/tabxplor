@@ -454,6 +454,24 @@ R/
 │                              `.svy_row`, and the split branch NO LONGER subsets the design nor passes
 │                              it through utils::modifyList() (which merges a survey.design's $variables
 │                              COLUMN BY COLUMN -> an error on unequal groups, wrong rows when calibrated)
+├── reg-assumptions.R (~330 L) Last Phase z15: THE model checks of a tab_reg() table. `REG_CHECKS` = the
+│                              fact table (one row per check: `noun` + `types` = discriminator -> the
+│                              INSTRUMENT, both BARE MSGIDS -- a top-level gettext() freezes the build
+│                              locale, so reg_check_label() translates at render + a dead-code anchor
+│                              keeps potools able to extract; `kind`/`digits`/`families`/`weighted_ok`/
+│                              `per_predictor`), read by reg_checks_for() = THE selection rule (the
+│                              reg_crude_shape pattern), reg_check_spec_entries() (-> reg_footer_spec)
+│                              and reg_check_expand() (a user's KEY -> the `test` discriminators).
+│                              names(REG_CHECKS) IS the `stats =` vocabulary, so label and argument
+│                              cannot drift. NO new statistic engine: Linearity = reg_fit(add_terms=)
+│                              + reg_term_tests() (the dispatcher global/interaction already use), its
+│                              squared term from reg_shape_term() -- the SAME builder z15-ii's
+│                              `shape = "quadratic"` emits, so the check and its cure are one object;
+│                              Dispersion + Influence = reg_coef_if_maker() + reg_if_se() (max
+│                              SE_robust/SE_model, and max|IF_i(e_j)|/SE_j == stats::dfbetas() to
+│                              cor 0.999999, but working for polr/multinom and design-aware);
+│                              Proportionality = the Brant p already stashed on the fit; Collinearity =
+│                              car::vif() (the ONE new Suggest; absent -> no row, never a hand-roll)
 ├── reg-influence.R  (~450 L) Last Phase z8-B: influence functions + the SE of the gap between two
 │                              estimators on the SAME rows (the covariance no arithmetic on the two
 │                              printed intervals recovers). Pure matrix math; the package's ONLY
@@ -713,7 +731,7 @@ Linux (check.R forces `LANGUAGE=en`, and testthat's `local_reproducible_output()
 fails there. That is why French output is guarded by `skip_if_no_gettext()`
 (`tests/testthat/helper-i18n.R`) and why each i18n feature is tested twice — an UNGUARDED English
 block (the guard-rail that keeps the goldens from moving; must run everywhere) plus a GUARDED French
-one. **Simulate CI before pushing something really locale-touching**, but **avoid to do it on every session and, most of all, avoid to do it when you have not heavily touched locale**:
+one. **Simulate CI before pushing something really locale-touching**, but **absolutely avoid to do it on every session and, most of all, avoid to do it when you have not heavily touched translations**:
 
 ```bash
 LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R   # the CI locale
@@ -2600,6 +2618,61 @@ column attribute, no crosstab path). Implementation record + the corrected route
 - **No new metadata**: no `ci_settings` field, no legend degradation clause (nothing falls back
   structurally any more, so it could never fire). The residue is stated once in `?tab_reg`.
 
+#### Phase z15 — regression assumptions unified framework
+
+Apply `dev/regression_assumptions_plots.md`. Three sessions (maintainer's choice): **z15-i** the
+primitives + the check footer block; **z15-ii** `shape =` (the remedy); **z15-iii** the stored curves,
+the row sparkline, `reg_check_plots()`, the `lm_plots()` removal, the msgids and both vignettes.
+
+**z15-i DONE (2026-08-11).** Full suite green in BOTH locales (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4,
+PASS 5209; CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`: FAIL 0, SKIP 10, PASS 5189). **Zero display /
+export snapshot churn** (`_snaps/*`, `_color_golden/*` untouched); the 36 structural `_golden/*.rds`
+were regenerated with `dev/verify_golden_field_delta.R` (taught here to prove a **`test`-tibble COLUMN**
+delta, not only an fmt field/attr one) proving over 1787 cells that the only delta is the added empty
+`term` column.
+- **Five checks, one fact table** (`R/reg-assumptions.R`, see the repo map). They ride the EXISTING
+  `stats =` vocabulary in the default set, so ruling R7 ("always") needs no new argument and each is
+  individually removable. Cost measured **+88 ms on a 157 ms build**: ~72 ms is the one Linearity refit
+  + its test, ~16 ms all four other checks (a multinomial pays ~780 ms for one numeric predictor --
+  ruling 4 accepted that).
+- **§16's "one-line" footer extension was not available** and the design doc is wrong there: `row_var`
+  on a reg footer row already means the SPLIT-GROUP LEVEL, in `reg_footer_lines()`, in
+  `test_grid_reg()` AND in `reg_spread_models()` (which re-keys by it and DROPS the misses). Hence the
+  **13th `test` column `term`** + the shared **`reg_footer_plan()`** (the ordered `(test, term)` row
+  plan with its `"<label>: <term>"` rendering, read by both row renderers so console and exports cannot
+  diverge; built from the whole slice, never per group, because `tab_append_footer()` needs a constant
+  block height).
+- **`stats = "global"` moved from a footer LINE to footer ROWS** (`reg_global_lines()` +
+  `reg_term_test_line()` DELETED). Measured live: in a 3-model comparison the line rendered as three
+  sentences with nothing naming which model each described. The interaction test stays a line — it is
+  pooled across split groups and belongs to no column.
+- **Two live defects fixed in passing.** (1) `reg_build`'s split branch tags every row of a group's
+  test tibble with the group level, so the global line printed the split level, *repeated*, instead of
+  the predictors — cured by the `term` retrofit, fixture in `test-tab_reg-footer.R`. (2)
+  `reg_dispersion()` divided by `stats::df.residual(fit)`, which for an `svyglm` is the DESIGN df, so
+  the weighted-Poisson row read ~22 instead of ~1; it now divides by `n - rank`, and the SE-scaling
+  caller is gated `!weighted` where the two agree. Also `test_term_col()` tests by NAME, never
+  `tt$term` (a tibble warns before returning NULL).
+- **`dispersion` = the CHECK** (max robust/model SE, every family); the exact Pearson dispersion keeps
+  its own row as **`phi`** (count families). `reg_fit(add_terms =)` is the third sibling of `cross =` /
+  `drop_extra =`. New Suggest `car`. New `tests/testthat/test-reg-checks.R` (65 PASS, every statistic
+  pinned against `stats::dfbetas()` / `car::vif()` / `drop1()` / a hand-written HC0 sandwich).
+- **A third defect, and a wrong assumption in the design.** `drop1()` cannot test a multinomial:
+  `nnet:::drop1.multinom` returns only Df and AIC, has no `test` argument and no p-value -- and it
+  `cat()`s progress that leaked into the console. So `reg_nested_lr()` computes the SAME test from the
+  two nested fits' log-likelihoods (verified == `drop1()`'s LRT to 1e-10 on a glm; refused on a design,
+  where an LR is invalid), `reg_term_tests()` wraps its `drop1()` in `capture.output()`, and
+  `reg_selfheal_call()` -- extracted from the identical fix Phase 12d wrote inline for `brant` -- binds
+  the fit's own frame into its `$call`, without which `drop1()`'s `update()` failed with "object
+  'mdata' not found" for BOTH multinom and polr.
+- **Deliberate deviation from §21 step 1**: `rd_bin()` / `rd_resid()` / `rd_qq()` are NOT written yet.
+  They have no caller until z15-iii, and shipping unwired, untested functions for two sessions is the
+  dead weight this roadmap's own rules forbid. They land with the curves that use them.
+
+#### Last Phase z16 — the weights framework, reorganised
+Plan and implement from `dev/weights_framework_redesign.md` (design, 2026-08-11). Its §5.1 is your
+four rulings, §6 the three-session split (z16-i metadata+honesty / z16-ii the closed form /
+z16-iii the tests and the contrib residual), §7 the parity contract that keeps the closed form safe.
 
 
 #### Last Phase zxx — `tab_reg()` parallelisation

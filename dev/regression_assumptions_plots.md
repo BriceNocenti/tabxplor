@@ -920,32 +920,40 @@ digest path (§15). The clean follow-up, when wanted: `jmvtabreg.b.R` already ho
 
 1. **`check = "auto"` panel count.** 6 panels in 3×2, or 4 in 2×2 (today's `lm_plots` shape)?
    **Recommendation: 6, `ncol = 3`.**
+   **Maintainer’s decision: ok**
 2. **Per-predictor Linearity — all, or the worst?** With 8 numeric predictors the faceted panel has 8
    facets. **Recommendation: all up to 6, then the worst 6 with a note** — the whole value is finding the
    one you were not looking for. The same question applies to the **footer rows** (§16): one row per
    numeric predictor is right for the 1–3 numerics this audience's models have; above that, consider one
    row naming the worst.
+   **Maintainer’s decision: keep all numeric variables.**
 3. **`shape = "cut5"` — quantile or equal-width?** §12.4 assumes quantiles (equal n per group, which is
    what a survey audience means by "age groups" and what keeps every group estimable), but base `cut()`
    is equal-width, so the value must not be called `"cut"` if it means quantiles.
    **Recommendation: `"quintiles"` / `"quartiles"` / an integer k**, no equal-width until asked.
+   **Maintainer’s decision: ok for quantiles.**
 4. **Multinomial Linearity: pay 277 ms/predictor, or gate it?** (§16) Decide with the live UI in front of
    you.
+   **Maintainer’s decision: multinomial is aleardy long, so it’s ok to add a few seconds.**
 5. **Should `reg_assumptions_plots()` accept `tab()` output?** A cross-table has no model, so no — but
    `color = "contrib"` *is* the departure from the log-linear independence model. **Recommendation: out
    of scope**, said in the roxygen so the question is closed rather than left open.
+   **Maintainer’s decision: out of scope.**
 6. **Name.** Now that it is explicitly the *teaching* function, `reg_check_plots()` is shorter than
    `reg_assumptions_plots()` and echoes `check_model()`, which the audience knows.
    **Recommendation: decide at implementation**; if the long name stays, `reg_assumptions()` remains free
    as a numbers-only companion.
+   **Maintainer’s decision: `reg_check_plots()` is good**
 7. **Vignette placement.** A `## Checking the model` section in both reg vignettes, built on §2 — which
    means leaving the vignette's own model linear and using it as the worked example.
    **Recommendation: leave it wrong and point at it**; correcting it would move every numeric result in
    the vignette for no pedagogical gain.
+   **Maintainer’s decision: ok.**
 8. **What was NOT verified**: `car::vif()` on `svyVGAM::svy_vglm`; `shape =` through a weighted ordinal;
    Gelman & Hill (2007) p. 97 itself (the ±2 SE formula is verified verbatim from ROS §14.5 p. 253, and
    both `arm` and `performance` cite p. 97 for matching content); the exact R version in which
    `plot.lm`'s glm Q-Q became a half-normal of |deviance|.
+   **Maintainer’s decision: verify.**
 9. **An exact φ row for count families?** §9.1 measured that the SE ratio is √φ to within 1.5–8 % and
    that the two deliberately diverge under `quasipoisson` (φ 2.62, ratio 1.03) — so the ratio is the
    right *check*. But φ is the number a paper reports, and it is one line to add back as a second row
@@ -953,6 +961,7 @@ digest path (§15). The clean follow-up, when wanted: `jmvtabreg.b.R` already ho
    computed honestly on a clustered fit — §9.1, reason 3). **Recommendation: no** — the vignette can say
    `summary(fit)$dispersion`, and a second row in one family is how a five-row block becomes a seven-row
    one. Reopen if a reviewer asks for φ in a table.
+   **Maintainer’s decision: yes add an exact φ row for count families, it’s needed, specially if the new Dispersion stat already takes it into account with quasipoisson.**
 
 ## 29. Sources
 
@@ -998,3 +1007,77 @@ cases say so inline. The scripts are not kept — each claim names the design th
 re-derived. Round 1 reported n = 6 803 and ΔAIC = 1251 for §2; **both were wrong** (6 803 is what you get
 by dropping NAs on *every* column, including a variable the model does not use), and the corrected
 figures are in §2.
+
+---
+
+# PART V — IMPLEMENTATION RECORD
+
+## z15-i (2026-08-11) — the primitives and the check block
+
+Landed: `R/reg-assumptions.R` (the `REG_CHECKS` fact table, `reg_checks_for()`,
+`reg_check_spec_entries()`, `reg_check_expand()`, `reg_check_rows()` and the five statistics),
+`reg_fit(add_terms =)`, `reg_shape_term()`, the 13th `test` column `term`, `reg_footer_plan()`, the
+`dispersion` / `phi` split, `car` as a Suggest, `tests/testthat/test-reg-checks.R`.
+
+Suite green in both locales (FAIL 0, WARN 0; PASS 5209 / 5189). Zero display or export snapshot churn;
+the 36 structural goldens regenerated with `dev/verify_golden_field_delta.R` proving over 1787 cells
+that the only delta is the added empty `term` column.
+
+### Three corrections to this design
+
+1. **§16's "one line" footer extension does not exist, and would have corrupted three paths.** The
+   claim was that a footer row whose `row_var` is non-empty could render `label: row_var`. But
+   `row_var` on a reg footer row already means the **split-group level** — in `reg_footer_lines()`
+   (the `is_split` switch *and* the cell key), in `test_grid_reg()` (the group key) and in
+   `reg_spread_models()` (which re-keys by it and **drops the misses**). A predictor name there flips a
+   plain table into "split" mode, emits one blank block per predictor, and is silently deleted on a
+   spread table. The per-predictor key is therefore a new column, `term`, and the label rule lives in
+   one shared `reg_footer_plan()` that both row renderers consume.
+
+2. **The line form is wrong for anything keyed to a model column — measured, not argued.** §16 was
+   right that these belong in the block, but the pre-existing `stats = "global"` line proved *why*: in
+   a 3-model comparison it rendered as three sentences with nothing naming which model each described,
+   and on a `split_var` table it printed the split level, repeated, instead of the predictors (the
+   split branch overwrites `row_var` for every row of a group's test tibble). So `global` **migrated
+   to rows** with the checks, and `reg_global_lines()` / `reg_term_test_line()` are deleted. Only the
+   interaction test stays a line: it is pooled across groups and belongs to no column, and it reads
+   correctly as one.
+
+3. **`drop1()` cannot test a multinomial, and §7.2 assumed it could.** `nnet:::drop1.multinom`
+   computes only `Df` and `AIC` — it has no `test` argument and returns **no p-value at all** (and it
+   `cat()`s "trying - <term>" progress that no condition handler catches, which was leaking into the
+   console). §24's "multinom 277 ms" was timing a call that cannot produce the number. The fix is not a
+   second test but the same one computed differently: the likelihood ratio between the two nested fits,
+   which reproduces `drop1()`'s LRT **to 1e-10** on a glm. A design fit stops before it, an LR being
+   invalid there. Two further traps on that path: `multinom`/`polr` store `data = mdata`, a local of
+   `reg_fit()`, so `drop1()`'s internal `update()` failed with *"object 'mdata' not found"* — cured by
+   `reg_selfheal_call()`, extracted from the identical fix Phase 12d had already written inline for
+   `brant::brant()`.
+
+4. **φ can be computed honestly under a design after all** (so §9.1 reason 3 and open question 9's
+   `needs = "design_free"` gate both fall away). The 22.49 measurement was not a property of the
+   Pearson dispersion; it was `reg_dispersion()` reading `stats::df.residual(fit)`, which for an
+   `svyglm` is the DESIGN degrees of freedom. Dividing by `n - rank` — computed rather than read —
+   fixes it, and touches nothing else, because the SE-scaling caller is gated `!weighted` where the two
+   denominators agree. Ruling 9's exact-φ row therefore ships for every count fit, as `stats = "phi"`.
+
+### Two smaller deviations
+
+- **`stats` carries the checks; there is no new argument.** R7 ("always, no opt-in gate") is satisfied
+  by putting them in the *default set*, which also gives a per-check escape for free and keeps
+  `stats = FALSE` meaning what it meant.
+- **`rd_bin()` / `rd_resid()` / `rd_qq()` were not written** (§21 step 1 asked for them unwired). They
+  have no caller until z15-iii, and shipping untested functions for two sessions is the dead weight the
+  roadmap's own rules forbid. They land with the curves that use them.
+
+### Confirmed by measurement during implementation
+
+| claim | measured here |
+|---|---|
+| the influence route reproduces `stats::dfbetas()` | 0.214 vs 0.215, correlation **0.999999** |
+| Dispersion ≈ √φ on an over-dispersed count, ≈ 1 under quasipoisson | ratio/√φ within 5 %; quasi within 10 % of 1 |
+| Collinearity == `car::vif()` | equal to 1e-10, on both the matrix and the bare-vector shape |
+| Linearity == `drop1()` on the augmented fit | equal to 1e-6 |
+| centring leaves the curvature p unchanged but the pair's VIF does not | p equal to 1e-8; VIF > 20 raw, < 5 centred |
+| the whole block's cost | **+88 ms on a 157 ms build (+56 %)**, of which ~72 ms is the one Linearity refit + its test and ~16 ms all four other checks. §24's "+12 % on a 380 ms build" was measured against a heavier baseline; the absolute figures agree |
+| multinomial cost | 756 ms -> 1535 ms for one numeric predictor (ruling 4 accepted this) |
