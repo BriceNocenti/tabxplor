@@ -251,6 +251,23 @@ test_that("a design whose variance cannot be computed says so and falls back", {
   expect_true(all(g1$emp_n_draw <= as.double(g1$emp_n) + 1e-8))
 })
 
+test_that("a stale degrade flag from an EARLIER call cannot mislabel tab_reg() (W-C)", {
+  # The flag is process-scoped and reg_inference() reads it into meta$inference. tab() has reset it
+  # per call since z16-i; tab_reg() never did, so one degraded table anywhere earlier in the session
+  # permanently made every later reg table claim "design_partial" -- whose footer denies a variance
+  # that WAS computed.
+  d <- svc_fixture(n = 1200, seed = 31); des <- svc_des(d)
+  svy_degrade_reset()
+  clean <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
+  expect_identical(tab_inference_basis(clean), "design")     # non-vacuous: it IS "design" when clean
+  suppressMessages(svy_var_degraded("size"))                 # a degrade in an EARLIER call
+  expect_identical(svy_degrade_get(), "size")
+  stale <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
+  expect_identical(tab_inference_basis(stale), "design")
+  expect_identical(get_inference(stale), get_inference(clean))
+  svy_degrade_reset()
+})
+
 test_that("off a design the crude bases and columns are unchanged", {
   d <- svc_fixture(n = 1500, seed = 22)
   # z16-i (ruling 1): OFF a design, a WEIGHTED crude grid is on the weighted basis whatever the
@@ -270,5 +287,27 @@ test_that("off a design the crude bases and columns are unchanged", {
   t1 <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")
   t2 <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")
   expect_identical(t1, t2)
-  expect_true(all(is.na(vctrs::field(t1[["Obs_OR"]], "n_eff"))))
+})
+
+test_that("the crude columns STORE the effective base they used (W-D)", {
+  d <- svc_fixture(n = 1500, seed = 23); des <- svc_des(d)
+  # UNWEIGHTED: nothing corrected the base -> NA, exactly as an unweighted tab() cell carries NA
+  un <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE)
+  expect_true(all(is.na(get_n_eff(un[["Obs_OR"]]))))
+  # WEIGHTED: the field carries the number reg_empirical() actually fed to ci_or() -- ?fmt says
+  # `n_eff` IS "the effective sample size used for this cell's CI", which was false here until z16-iv.
+  wt <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")
+  g  <- reg_empirical(cbind(d, .svy_weights = d$w), "x", "y", "binomial", "yes", ".svy_weights")
+  g1 <- g[g$category == g$category[[1]], ]
+  ne <- get_n_eff(wt[["Obs_OR"]]); ne <- ne[is.finite(ne)]
+  expect_equal(sort(ne), sort(g1$emp_n_draw), tolerance = 1e-10)
+  expect_true(all(ne < as.double(get_n(wt[["Obs_OR"]])[is.finite(get_n_eff(wt[["Obs_OR"]]))])))
+  # a MEAN column takes the mean's own base (n_ci), not the draw base -- each column stores ITS OWN
+  gg <- suppressWarnings(tab_reg(d, "num", "x", family = "gaussian", empirical = TRUE, wt = "w"))
+  nm <- get_n_eff(gg[["Obs_mean"]]); expect_true(any(is.finite(nm)))
+  # under a DESIGN the stored base is the design one (strictly different from the flat-weighted one)
+  dsg <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", empirical = TRUE))
+  nd  <- get_n_eff(dsg[["Obs_OR"]]); nd <- nd[is.finite(nd)]
+  expect_length(nd, length(ne))
+  expect_false(isTRUE(all.equal(sort(nd), sort(ne))))
 })

@@ -47,6 +47,11 @@
 svy_wt_col  <- ".svy_weights"
 svy_row_col <- ".svy_row"
 
+# THE total order of the four inference bases, WEAKEST first (see the DESIGN block above). Declared
+# once, here, beside the resolver that produces them; tab_inference_bind() (R/tab_classes.R) takes the
+# minimum, so a merged or bound table can never claim more inference than its weakest part carried.
+inference_basis_order <- c("n", "weights", "design_partial", "design")
+
 # THE class list. Shared by the entry points that accept a design and by tab_counts(), which refuses
 # one -- so "what is a design" cannot be answered two ways.
 svy_is_design <- function(x)
@@ -272,11 +277,15 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spe
   res %||% na_row()
 }
 
-# Overlay the robust omnibus onto a classic `test` tibble: recompute (statistic, df, pvalue) per
-# (subtable x col_var), keep the classic effect_size / es_type / min_e, drop Fisher. `col_num` is a
-# named logical (col_var -> is numeric). `comp = "all"` tests the whole table (one group); else one
-# test per tab_var subtable. The result has chi2_compute_test's column shape, so every downstream
-# reader (display, bind) is unchanged.
+# svy_omnibus_grid() -- THE PRODUCER: one robust omnibus per (subtable x col_var), straight from the
+# microdata, as a raw tibble carrying `deff`. Returns NULL when there is nothing to compute.
+# DESIGN (Last Phase z16-iv, W-B): this used to be the head of tab_robust_overlay(), which runs in
+#   tab_assemble_tables(). It is split out because TWO consumers need the same numbers at two
+#   different times: the `color = "contrib"` residual's base, DURING tab_transform() (the residual is
+#   written by chi2_write_contrib(), inside tab_chi2()), and the `test` overlay, AFTER the numeric
+#   ANOVA rows are bound in tab_assemble_tables(). Producing it ONCE is also what makes the omnibus p
+#   and the cell colours of one table describe the SAME design effect -- they were 2.5 % apart at
+#   basis "weights", and a factor 7 apart when the row_var is cluster-level.
 # DESIGN (z14-i): the frame is ALWAYS the PREPARED microdata -- the table the user is looking at.
 #   It used to be the design's own `$variables` on the prebuilt path, i.e. the ORIGINAL frame, so the
 #   design-based p ignored `filter=`, `other_if_less_than` lumping and `cleannames` relabelling and
@@ -284,29 +293,40 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spe
 #   carried the p of the unlumped `a / b / c`). The design is reached instead through `.svy_row`, the
 #   position each prepared row holds in the original design -- which is also what makes an excluded
 #   row a proper survey DOMAIN rather than a rebuilt design.
-# The effect size is deliberately NOT recomputed here: it is descriptive, so it describes the weighted
-#   population (chi2_compute_test already computes it on the weighted table), never the effective
-#   sample an inferential rescale works in.
-# `tabxplor.anova` (Welch vs classic F) is deliberately NOT read here: it chooses between two CLASSIC
-# F statistics, and a design-based numeric test is the svyglm Wald F, which has no such variant.
-tab_robust_overlay <- function(test_tbl, data, row_var, col_vars, col_num, tab_vars, wt,
-                               basis, design_spec, comp) {
-  if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
+# `col_num` is a named logical (col_var -> is numeric); `comp = "all"` tests the whole table (one
+# group), else one test per tab_var subtable.
+# `totaltab_name` adds the TOTAL-TABLE group (every row, keyed by that name in each tab_var column):
+#   chi2_compute_test() emits a test row for it, and the overlay used to drop it silently, because its
+#   groups came from `unique(frame[tab_vars])`, which has no such level, and it REPLACES the classic
+#   tibble. So a weighted / design table with tab_vars + totaltab = "table" lost its whole-table test.
+svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
+                             basis, design_spec, comp, totaltab_name = NULL) {
   frame    <- as.data.frame(data)
+  if (nrow(frame) == 0 || length(col_vars) == 0) return(NULL)
   des_rows <- frame[[svy_row_col]]     # NULL without a design; positions into it otherwise
-  # the classic per-(subtable x col_var) effect-size / validity facts to carry through
-  es_keep <- test_tbl[test_tbl$test %in% c("chi2", "F_welch"), , drop = FALSE]
-  tabvars_in <- intersect(tab_vars, names(test_tbl))
-  # subtable groups (row positions into `frame`): tab_var levels unless comp = "all" / no tab_vars
+  tabvars_in <- intersect(tab_vars, names(frame))
   if (length(tabvars_in) == 0 || comp == "all") {
     groups <- list(list(keys = NULL, rows = seq_len(nrow(frame))))
   } else {
     gk <- unique(frame[tabvars_in])
+    # the total table's tab_var value IS `totaltab_name` (leaf_rename_totals): expand each key column's
+    # levels ONCE so the extra row binds as a FACTOR -- a character row would coerce the whole tab_var
+    # column of `test` on the vec_rbind.
+    add_tot <- !is.null(totaltab_name) && length(totaltab_name) == 1L && nzchar(totaltab_name)
+    if (add_tot) for (tc in tabvars_in) {
+      lv <- union(levels(as.factor(gk[[tc]])), totaltab_name)
+      gk[[tc]] <- factor(as.character(gk[[tc]]), levels = lv)
+    }
     groups <- lapply(seq_len(nrow(gk)), function(i) {
       sel <- rep(TRUE, nrow(frame))
-      for (tc in tabvars_in) sel <- sel & frame[[tc]] == gk[[tc]][i]
+      for (tc in tabvars_in) sel <- sel & as.character(frame[[tc]]) == as.character(gk[[tc]][i])
       list(keys = gk[i, , drop = FALSE], rows = which(sel))
     })
+    if (add_tot) {
+      kt <- gk[1, , drop = FALSE]
+      for (tc in tabvars_in) kt[[tc]][1] <- totaltab_name
+      groups <- c(groups, list(list(keys = kt, rows = seq_len(nrow(frame)))))
+    }
   }
 
   out <- list()
@@ -324,10 +344,48 @@ tab_robust_overlay <- function(test_tbl, data, row_var, col_vars, col_num, tab_v
     }
   }
   rob <- dplyr::bind_rows(out)
-  if (nrow(rob) == 0) return(test_tbl)
-  # carry the effect size / min_e from the classic rows (join on the identity key + col_var)
+  if (nrow(rob) == 0) NULL else rob
+}
+
+# Overlay the producer's grid onto a classic `test` tibble: replace (statistic, df, pvalue, n, deff)
+# per (subtable x col_var), keep the classic effect_size / es_type / min_e, drop Fisher. The result
+# has chi2_compute_test's column shape, so every downstream reader (display, bind) is unchanged.
+# The effect size is deliberately NOT recomputed here: it is descriptive, so it describes the weighted
+#   population (chi2_compute_test already computes it on the weighted table), never the effective
+#   sample an inferential rescale works in.
+# `tabxplor.anova` (Welch vs classic F) is deliberately NOT read here: it chooses between two CLASSIC
+# F statistics, and a design-based numeric test is the svyglm Wald F, which has no such variant.
+# The semi_join is the "replace, never invent" rule: a grid row whose subtable the classic test does
+# not have (a tab_var level emptied by the complete-case drop, or the total-table group of a table
+# built with totaltab = "line") is dropped rather than injected with an NA effect size.
+tab_robust_overlay <- function(test_tbl, rob, tab_vars) {
+  if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
+  if (is.null(rob) || nrow(rob) == 0)           return(test_tbl)
+  # the classic per-(subtable x col_var) effect-size / validity facts to carry through
+  es_keep    <- test_tbl[test_tbl$test %in% c("chi2", "F_welch"), , drop = FALSE]
+  tabvars_in <- intersect(tab_vars, names(test_tbl))
   jk  <- intersect(c(tabvars_in, "col_var"), names(es_keep))
+  rob <- dplyr::semi_join(rob, dplyr::distinct(es_keep[jk]), by = jk)
+  if (nrow(rob) == 0) return(test_tbl)
   rob <- dplyr::left_join(
     rob, dplyr::select(es_keep, dplyr::all_of(jk), "min_e", "effect_size", "es_type"), by = jk)
   dplyr::relocate(rob, tidyselect::any_of(c(tabvars_in, "row_var", "col_var")))
+}
+
+# svy_deff_lookup() -- key a producer grid onto a BUILT table's groups: a named numeric (Rao-Scott's
+# mean generalized design effect) keyed on `paste(<group key tuple>, col_var, sep = "\r")`.
+# `svy_key_chr()` (R/survey-variance.R) spells BOTH sides the same way -- it exists for exactly this
+# ("key values as the wide table and the microdata both spell them"), so there is no second key
+# convention. NULL -- "no correction available, use the ladder" -- when the grid cannot be keyed onto
+# these groups: a grouping it does not carry, or an ambiguous grain. Never a wrong number.
+svy_deff_lookup <- function(rob, group_vars) {
+  if (is.null(rob) || !nrow(rob) || !"deff" %in% names(rob))  return(NULL)
+  if (length(group_vars) && !all(group_vars %in% names(rob))) return(NULL)
+  key <- if (length(group_vars))
+    do.call(paste, c(lapply(rob[group_vars], svy_key_chr), list(rob$col_var), list(sep = "\r")))
+  else paste("", rob$col_var, sep = "\r")
+  ok <- !is.na(rob$deff) & is.finite(rob$deff) & rob$deff > 0
+  if (!any(ok)) return(NULL)
+  if (anyDuplicated(key[ok])) return(NULL)
+  stats::setNames(as.double(rob$deff[ok]), key[ok])
 }

@@ -525,8 +525,11 @@ seule source de significativité :
 - le **résidu standardisé ajusté** (Haberman ; le « résidu ajusté » de SPSS, `chisq.test()$stdres`),
   jamais le résidu de Pearson `(o − e)/√e`, dont la variance est inférieure à 1 et qui sous-rejette donc ;
 - calculé comme tout intervalle dans tabxplor : estimation pondérée, et une base qui suit la position
-  d'inférence — le *n* brut, ou le *n* effectif du tableau entier avec
-  `options(tabxplor.design_effect = TRUE)` ou sous un plan `survey`. Une seule base par tableau : un
+  d'inférence — le *n* brut (la lecture qu'attend une analyse des correspondances), ou ce *n* divisé
+  par l'effet de plan de l'**association** avec `options(tabxplor.design_effect = TRUE)` ou sous un
+  plan `survey`. Cet effet de plan est celui de Rao-Scott, exactement celui que rapporte la ligne Chi2
+  du tableau : les couleurs et la p-value décrivent donc un seul effet de plan, et non deux.
+  Une seule base par tableau : un
   tableau d'effectifs et un tableau de pourcentages des mêmes données donnent donc les **mêmes** résidus.
   La contribution, elle, reste **pondérée** et identique à toutes les positions — elle estime la structure
   du tableau dans la population, tandis que le résidu est le test, ce qui préserve la lecture en analyse

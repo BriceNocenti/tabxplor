@@ -646,13 +646,51 @@ rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
 # `arm::binnedplot`'s empirical 2*sd(y)/sqrt(n), which its own book does not describe: measured, they
 # agree on average (ratio 0.997) but differ +/-30 % per bin, and the empirical one ignores weights.
 # Zero cells use Haldane-Anscombe (k + 0.5)/(n + 1) -- symmetric, never infinite, no arbitrary floor.
+# Last Phase z16-iv (W-G.4): the bin's EFFECTIVE base is the package's one device, not a hand-rolled
+# Kish -- `ne = num / Var(mean of y in the bin)`, where `num` is what that variance would be times n
+# under simple random sampling (p(1-p) for a share, the mean for a count, the within-bin variance for
+# a mean). Three inputs, one formula:
+#   a survey DESIGN  -> Var comes from svyrecvar (strata, clusters, fpc, calibration all reach the band)
+#   weights only     -> the EXACT flat closed form (svy_flat_neff_rows), the ids = ~1 design
+#   unweighted       -> `sw` (= n), which is what Kish returns at equal weights, so bands do not move
+# A design whose variance cannot be computed for a bin falls through to the flat form, never to a
+# wrong number.
 #' @keywords internal
-rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity") {
+rd_bin_neff <- function(sw, num, w, y, g, design = NULL, des_rows = NULL) {
+  nb   <- length(sw)
+  nobs <- length(y)
+  flat <- function() vapply(seq_len(nb), function(i) {
+    k  <- g == i
+    ne <- svy_flat_neff_rows(w[k], y[k], rep(1, sum(k)), nobs, num = num[[i]])
+    if (isTRUE(is.finite(ne) && ne > 0)) ne else sw[[i]]
+  }, double(1))
+  if (!is.null(design) && !is.null(des_rows) && length(des_rows) == nobs &&
+      requireNamespace("survey", quietly = TRUE)) {
+    V <- tryCatch(svy_var_mean(prep  = svy_var_prep(design, des_rows),
+                               keys  = list(as.character(seq_len(nb))), n_tab = 0L,
+                               mkeys = list(as.character(g)),
+                               xs    = list(y = as.numeric(y))),
+                  error = function(e) NULL)
+    if (!is.null(V) && nrow(V) == nb) {
+      ne  <- num / V[, 1L]
+      bad <- !is.finite(ne) | ne <= 0
+      if (any(bad)) { fb <- flat(); ne[bad] <- fb[bad] }
+      return(ne)
+    }
+  }
+  flat()
+}
+
+#' @keywords internal
+rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
+                   design = NULL, des_rows = NULL) {
   x <- as.numeric(x); y <- as.numeric(y)
+  wtd <- !is.null(w)
   w <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
   ok <- is.finite(x) & is.finite(y) & is.finite(w) & w > 0
   if (sum(ok) < 2L) return(NULL)
   x <- x[ok]; y <- y[ok]; w <- w[ok]
+  if (!is.null(des_rows)) des_rows <- des_rows[ok]
   br <- unique(rd_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
   br[[1L]] <- min(x) - 1e-9; br[[length(br)]] <- max(x) + 1e-9
   if (length(br) < 3L) return(NULL)
@@ -661,8 +699,11 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity") {
   sw <- as.numeric(rowsum(w, g))
   mx <- as.numeric(rowsum(w * x, g)) / sw
   my <- as.numeric(rowsum(w * y, g)) / sw
-  # the EFFECTIVE base of each bin: Kish's n_eff, so a weighted band is not a sample-size fiction
-  ne <- sw^2 / as.numeric(rowsum(w^2, g))
+  vy <- as.numeric(rowsum(w * (y - my[g])^2, g)) / sw   # the bin's own (weighted) variance
+  # the EFFECTIVE base of each bin, so a weighted band is not a sample-size fiction. `num` = the
+  # numerator of Korn-Graubard's device for THIS link (see rd_bin_neff).
+  num <- switch(link, "logit" = my * (1 - my), "log" = pmax(my, 0), vy)
+  ne  <- if (wtd || !is.null(design)) rd_bin_neff(sw, num, w, y, g, design, des_rows) else sw
   out <- switch(
     link,
     "logit" = {
@@ -673,10 +714,7 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity") {
       m <- pmax(my, 0.5 / ne)
       list(y = log(m), se = sqrt(1 / (ne * m)))
     },
-    list(y = my, se = {
-      v <- as.numeric(rowsum(w * (y - my[g])^2, g)) / sw
-      sqrt(v / ne)
-    })
+    list(y = my, se = sqrt(vy / ne))
   )
   tibble::tibble(x = mx, y = out$y, n = sw, se = out$se)
 }
@@ -808,7 +846,8 @@ rd_with_seed <- function(seed, expr) {
 # first outcome's silently: a row label is shared by every model column, and a sparkline that described
 # only one of them would be a lie the reader cannot see.
 #' @keywords internal
-reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L) {
+reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L,
+                       design = NULL) {
   if (length(numeric_preds) == 0L || length(specs) == 0L) return(NULL)
   deps <- unique(vapply(specs, function(s) s$dependent, character(1)))
   if (length(deps) != 1L) return(NULL)
@@ -821,8 +860,13 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
   ly <- rd_link_y(data[[deps]], sp$family, sp$trials, positive_level)
   w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
           data[[wt]] else NULL
+  # Last Phase z16-iv (W-G.4): under a survey design the bands take the DESIGN variance, reached
+  # through `.svy_row` -- the position each prepared row holds in the original design -- exactly as
+  # every other design quantity in the package is.
+  dr <- if (!is.null(design)) data[[svy_row_col]] else NULL
   curves <- purrr::compact(stats::setNames(
-    purrr::map(numeric_preds, function(v) rd_bin(data[[v]], ly$y, w, nbins, ly$link)),
+    purrr::map(numeric_preds, function(v)
+      rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr)),
     numeric_preds))
   if (length(curves) == 0L) return(NULL)
   list(dependent = deps, family = sp$family, link = ly$link, ylab = ly$lab, curves = curves)

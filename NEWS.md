@@ -49,8 +49,9 @@
   See `?tab` and `?tab_reg`.
 * **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
   answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
-  `chisq.test()$stdres`), on the package's usual inference base (the unweighted *n*, or the table's
-  effective *n* when weights or a design are accounted for — one base per table, so a counts table and a
+  `chisq.test()$stdres`), on the package's usual inference base (the unweighted *n*, or — when weights
+  or a design are accounted for — that *n* divided by the association's own design effect, the same
+  Rao-Scott one the table's Chi-2 line reports; one base per table, so a counts table and a
   percentage table of the same data give the same residuals).
   `color_signif = "guaranteed_effect"` switches the colour to that residual on an absolute ±2 / ±3
   scale that means the same thing in every table, while the default keeps the correspondence-analysis
@@ -256,6 +257,28 @@
   relabelling, so a lumped table could report the p-value of the unlumped one.
 * `tab_num()`, `tab_plain()` and `tab_many()` **accept a survey design** as `data` (only `tab()` and
   `tab_reg()` did); `tab_counts()` explains why it cannot.
+* **`color = "contrib"` significance now accounts for the sample design.** It always used the
+  weighting-only effective size, so a stratified + clustered table and a flat one gave identical
+  cell p-values while their confidence intervals differed. Where the row variable is defined at the
+  cluster level (a geography, a school, an establishment — the commonest reason to have clusters)
+  this overstated the residual by a factor 2.5 in our test case, colouring cells that should be
+  greyed. Note some cells may now go **uncoloured** where the smaller base takes their expected count
+  below 1.
+* **A table with several `row_vars` kept none of its inference metadata**, so its footer stated the
+  *opposite* of what was computed (an interval accounting for the weighting, described as not doing
+  so), and a `tab_plain(design) |> tab_ci()` pipeline lost the design's degrees of freedom — intervals
+  9% too narrow with few clusters.
+* **A weighted table with `tab_vars` and `totaltab = "table"`** silently lost the whole-table
+  ("Ensemble") test row.
+* **Pre-aggregated counts** (`tab_counts(wt_counts = )`) no longer report a design-based p-value they
+  cannot support: such a table states, and now consistently uses, the unweighted sample size.
+* One degraded survey design anywhere in a session used to mislabel **every later `tab_reg()`** as
+  having failed to compute its design variance.
+* `tab_reg()`'s observed (`Obs_*`) columns now **store the effective sample size** their intervals were
+  computed on, in the `n_eff` field, instead of discarding it; and the multinomial crude tooltip uses
+  the same interval method as the column beside it.
+* `tab_reg(trials = "<column name>")` now gives a clear error naming the argument, instead of failing
+  deep inside `glm()`.
 
 ## Deprecations
 

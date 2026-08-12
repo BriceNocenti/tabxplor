@@ -391,6 +391,21 @@ test_that("trials errors outside the binomial family; ordinary >2-level binomial
   expect_error(tab_reg(d, "score", "race", family = "binomial"), "binary|trials")  # no trials -> abort
 })
 
+test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Last Phase z16-iv)", {
+  skip_if_not_installed("broom")
+  d <- gb_data()
+  d$q <- 10L                                    # a per-row item-count column, the natural mistake
+  # used to die inside glm() with "contrasts can be applied only to factors with 2 or more levels"
+  expect_error(tab_reg(d, "score", "race", family = "binomial", trials = "q"),
+               "not a column name")
+  expect_error(tab_reg(d, "score", "race", family = "binomial", trials = c(other = 10)),
+               "positive item count")
+  expect_error(tab_reg(d, "score", "race", family = "binomial", trials = 0),
+               "positive item count")
+  # FALSE is the off switch, symmetric with TRUE -> the same abort as no `trials` at all
+  expect_error(tab_reg(d, "score", "race", family = "binomial", trials = FALSE), "binary|trials")
+})
+
 # ---- formula escape-hatch (Phase 12c-ii) ----------------------------------------------------
 
 test_that("a simple formula reduces to the dependent+predictors path (identical)", {

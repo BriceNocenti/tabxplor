@@ -12,6 +12,9 @@
 #     added). The other data rows are unchanged.
 #   CONSCIOUSLY REGENERATED at Step 3: c_mean_diff (numeric diff -> Glass's delta), and the
 #     pct CI-gated modes c_diff_ci / c_after_ci / c_ci (asymmetric-interval upper-arm fix).
+#   Last Phase z16-iv: c_contrib_wt_grey ADDED (nothing regenerated). It closes the gap that let W-B
+#     ship: there was NO weighted colour fixture at all, so a residual blind to the sample design
+#     moved no golden. Every pre-existing case is unweighted -> basis "n" -> untouched by W-B.
 #   Last Phase z4: c_contrib_grey + c_contrib_guar ADDED (new cases, nothing regenerated). The three
 #     pre-existing c_contrib* cases all use the default color_signif = "ignore" -- the CA reading,
 #     which z4 left byte-identical -- so they did NOT move, which is the mechanical proof that the

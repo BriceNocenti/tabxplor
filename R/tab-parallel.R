@@ -167,7 +167,7 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
   tab_pool_ensure(workers, compute)
 
   # Ship the big objects + a tabxplor/data.table options snapshot + single-thread DT, ONCE. The
-  # options snapshot keeps option-sensitive leaf math (e.g. the numeric-CI Kish n_eff) identical on
+  # options snapshot keeps option-sensitive leaf math (e.g. the numeric-CI effective n) identical on
   # daemons; setDTthreads(1L) avoids workers x DT-threads oversubscription (grouped keyby sums are
   # thread-order-invariant, so this does NOT change results).
   mirai::everywhere(

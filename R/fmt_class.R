@@ -47,9 +47,12 @@ utils::globalVariables(c(
   "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
   "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
   "color_ratio_ci", "ci_scale",
-  # tab_build ctx fields added by Phases 17e/j/k (settings spine, robust tests, var labels):
-  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "inference_mode",
-  "var_labels",
+  # tab_build ctx fields added by Phases 17e/j/k and z16 (settings spine, the inference basis, the
+  # robust omnibus grid, var labels). `inference_basis` is the LIVE name (z16-i); the z14-ii
+  # `inference_mode` listed here until z16-iv had been retired, so the live field went undeclared
+  # (an R CMD check "no visible binding" NOTE on tab_transform / tab_assemble_tables).
+  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "inference_basis",
+  "robust_tests", "var_labels",
   # reg_build()'s `shared` list fields (Phase 17h):
   "at", "baseline", "compare", "effect", "empirical", "estimate_display",
   "inverse_two_level_factors", "method", "multiplier", "spread_models", "stats",
@@ -150,6 +153,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' from the closed-form flat-design variance when
 #' \code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
 #' then falls back to the raw unweighted base).
+#' Populated for \strong{descriptive} cells --- a crosstab or mean cell, and a \code{tab_reg}
+#' \code{Obs_*} crude column, each carrying the base \emph{its own} interval used. A
+#' \code{Model_*} coefficient column carries none (a coefficient has no cell base), like
+#' \code{n} and \code{tot_n}.
 #' A double vector the length of \code{n}. Non-displayed.
 #' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
 #' measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
@@ -375,8 +382,9 @@ fmt <- function(n         = integer(),
   pvalue  <- vctrs::vec_recycle(vctrs::vec_cast(pvalue , double())   , size = max_size)
   or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
   tot_n   <- vctrs::vec_recycle(vctrs::vec_cast(tot_n  , double())   , size = max_size)
-  # Last Phase s: the effective sample size used for this cell's CI (Kish n_eff when opted in,
-  # else NA -> tab_ci/num_core fall back to the raw unweighted base). Non-displayed, CI-only.
+  # Last Phase s: the effective sample size this cell's CI was computed on (the design variance or
+  # the exact flat closed form; NA on basis "n" -> tab_ci/num_core fall back to the raw unweighted
+  # base). Non-displayed, CI-only.
   n_eff   <- vctrs::vec_recycle(vctrs::vec_cast(n_eff  , double())   , size = max_size)
   # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` /
   # "between_groups" (the crude effect, or the reference group's estimate), on the cell's own
@@ -1769,8 +1777,9 @@ get_or     <- fmt_field_factory("or")
 # @export
 get_tot_n  <- fmt_field_factory("tot_n")
 
-# @describeIn fmt get the "n_eff" field (the effective sample size used for this cell's CI:
-# Kish n_eff when opted in, else NA -> the CI falls back to the raw unweighted base)
+# @describeIn fmt get the "n_eff" field (the effective sample size this cell's CI was computed on --
+# the design variance, or the exact flat closed form on the weights; NA when the inference basis is
+# "n", and then the CI falls back to the raw unweighted base)
 #' @keywords internal
 # @export
 get_n_eff  <- fmt_field_factory("n_eff")
@@ -4817,7 +4826,16 @@ tab_weight_line <- function(x, lang = NULL) {
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
   wt    <- as.character(wt)[1]
   inf   <- tryCatch(get_inference(x), error = function(e) NULL)
-  basis <- inf[["basis"]] %||% (if (identical(wt, svy_wt_col)) "design" else "n")
+  # Last Phase z16-iv (W-A): the basis is the STORED fact, read through its one resolver. The
+  # `.svy_weights`-column NAME-SNIFF that stood here (`%||% if (identical(wt, svy_wt_col)) "design"`)
+  # is gone: it was W5 all over again, and it became load-bearing only because tab_compact() dropped
+  # meta$inference on every >=2 row_var table. It now carries it.
+  basis <- tryCatch(tab_inference_basis(x), error = function(e) "n")
+  # `.svy_weights` is the INTERNAL name of a design's sampling weights and must never be printed. The
+  # two design sentences never interpolate `wt`, so this only fires when a design table's stored
+  # inference was lost -- and then the Phase k missing-metadata contract applies: drop the line that
+  # metadata powered, never invent a claim about the intervals.
+  if (identical(wt, svy_wt_col) && !basis %in% c("design", "design_partial")) return(NULL)
   with_legend_lang(lang, function(lg) enc2utf8(switch(
     basis,
     "design" = gettext(

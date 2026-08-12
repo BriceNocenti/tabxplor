@@ -173,9 +173,48 @@ test_that("rd_bin() is stats::weighted.mean() per bin, and its band is the theor
   expect_equal(b$n[[1]], sum(w[g == 1]), tolerance = 1e-10)
   # the logit link uses the theoretical sqrt(1/(n p (1-p))), not arm's empirical sd(y)/sqrt(n)
   bl <- tabxplor:::rd_bin(x, y, w, 5L, "logit")
-  ne <- sum(w[g == 1])^2 / sum(w[g == 1]^2)
-  p  <- (stats::weighted.mean(y[g == 1], w[g == 1]) * ne + 0.5) / (ne + 1)
+  # Last Phase z16-iv (W-G.4): the bin's effective base is the package's EXACT flat closed form on
+  # the weights (svy_flat_neff_rows), not the hand-rolled Kish that stood here -- the last surviving
+  # use of the formula z16 retired. Same device as every cell base: ne = p(1-p) / Var_flat(mean).
+  k  <- g == 1
+  my <- stats::weighted.mean(y[k], w[k])
+  ne <- tabxplor:::svy_flat_neff_rows(w[k], y[k], rep(1, sum(k)), length(y),
+                                      num = my * (1 - my))
+  p  <- (my * ne + 0.5) / (ne + 1)
   expect_equal(bl$se[[1]], sqrt(1 / (ne * p * (1 - p))), tolerance = 1e-10)
+  # non-vacuous: the exact form and Kish genuinely differ on these weights
+  expect_false(isTRUE(all.equal(ne, sum(w[k])^2 / sum(w[k]^2), tolerance = 1e-6)))
+  # UNWEIGHTED is byte-unchanged: Kish at equal weights IS n, so the bands do not move
+  bu <- tabxplor:::rd_bin(x, y, NULL, 5L, "logit")
+  gu <- findInterval(x, {
+    b0 <- unique(tabxplor:::rd_wquantile(x, seq(0, 1, length.out = 6L)))
+    b0[[1]] <- min(x) - 1e-9; b0[[length(b0)]] <- max(x) + 1e-9; b0
+  }, rightmost.closed = TRUE)
+  n1 <- sum(gu == 1); m1 <- mean(y[gu == 1]); p1 <- (m1 * n1 + 0.5) / (n1 + 1)
+  expect_equal(bu$se[[1]], sqrt(1 / (n1 * p1 * (1 - p1))), tolerance = 1e-10)
+})
+
+test_that("rd_bin()'s band takes the DESIGN variance when a design is given (W-G.4)", {
+  skip_if_not_installed("survey")
+  set.seed(4)
+  n  <- 900
+  cl <- rep(seq_len(45), each = 20)
+  d  <- data.frame(psu = factor(cl), x = stats::runif(n))
+  d$w <- exp(stats::rnorm(n, 0, .4)); d$w <- d$w / mean(d$w)
+  d$y <- stats::rbinom(n, 1, stats::plogis(-0.2 + stats::rnorm(45, 0, 1)[cl] + d$x))
+  des <- survey::svydesign(ids = ~psu, weights = ~w, data = d)
+  dr  <- seq_len(n)                                    # the frame IS the design's rows here
+  flat <- tabxplor:::rd_bin(d$x, d$y, d$w, 5L, "identity")
+  dsg  <- tabxplor:::rd_bin(d$x, d$y, d$w, 5L, "identity", design = des, des_rows = dr)
+  expect_equal(dsg$y, flat$y)                          # the ESTIMATE is the same; only the band moves
+  expect_false(isTRUE(all.equal(dsg$se, flat$se)))
+  expect_true(mean(dsg$se) > mean(flat$se))            # clustering widens it
+  # and it IS survey's own number: ne = Var_srs / Var_design, so se == SE(svymean) on the bin's domain
+  br <- unique(tabxplor:::rd_wquantile(d$x, seq(0, 1, length.out = 6L), d$w))
+  br[[1]] <- min(d$x) - 1e-9; br[[length(br)]] <- max(d$x) + 1e-9
+  g  <- pmax(pmin(findInterval(d$x, br, rightmost.closed = TRUE), length(br) - 1L), 1L)
+  sv <- survey::SE(survey::svymean(~y, subset(des, g == 1)))
+  expect_equal(unname(as.numeric(dsg$se[[1]])), unname(as.numeric(sv)), tolerance = 1e-6)
 })
 
 test_that("rd_spark() reads as the shape, and distinguishes a line from a saturating curve", {

@@ -1625,10 +1625,12 @@ reg_empirical_empty <- function()
 # tab(pct = "row", OR = "OR") prints.
 #
 # Weighted rule (SS14): weighted proportions/means, unweighted `n`, and a SEPARATE effective n
-# (`n_ci` / `n_draw`) for the intervals. Last Phase z14-iii makes that base follow the SAME three-rung
-# ladder tab()'s cells do (svy_inference_mode): a survey DESIGN passed as `data` -> Korn-Graubard's
-# device on the design variance; else the Kish n_eff when opted in; else the raw count. Off-design and
-# off-kish is byte-identical.
+# (`n_ci` / `n_draw`) for the intervals. Last Phase z14-iii makes that base come from the SAME
+# producers tab()'s cells use (svy_inference_basis): a survey DESIGN passed as `data` ->
+# Korn-Graubard's device on the design variance; else the EXACT flat closed form on the weights
+# (svy_flat_neff_rows); else the raw count. The basis is FORCED weighted here (ruling 1) -- it is not
+# the tab()-scoped option -- so a weighted crude column always matches the svyglm column beside it.
+# Unweighted is byte-identical.
 reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level, wt,
                           trials = NULL, ref_category = NULL, conf_level = 0.95,
                           design_spec = NULL) {
@@ -1658,6 +1660,10 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   has_num <- !is.null(yw$num)
   has_cat <- !identical(yw$kind, "numeric")
   share   <- identical(yw$kind, "share")
+  # Last Phase z16-iv (W-E): the difference-CI method is the FAMILY's declared one (REG_EMPIRICAL is
+  # the single source), never a literal written here. "wald" is the fallback for a key that declares
+  # none -- it is what tab_reg() uses throughout.
+  emp_method_diff <- REG_EMPIRICAL[[crude_key]]$method_diff %||% "wald"
   # variance only where a mean column is actually built (gaussian / poisson / the grouped mean score)
   want_var <- has_num
   # Last Phase z9: a TYPED zero-row return. purrr::map_dfr over character(0) yields a 0x0 tibble, whose
@@ -1754,7 +1760,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
       }
       # z14-iii: the design supersedes it, per level, with Korn & Graubard's device -- the very rule
       # z14-ii writes into tab()'s own n_eff field. A level whose variance came back non-finite or
-      # <= 0 keeps the Kish / raw base rather than losing its interval.
+      # <= 0 keeps the flat / raw base rather than losing its interval.
       if (!is.null(dv)) {
         if (has_cat && !is.null(dv$p)) {
           nd <- out$prop * (1 - out$prop) / dv$p[i, ]
@@ -1794,8 +1800,13 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     } else meanv / rmean
     pw <- if (has_cat) ci_wilson(prop, n_draw, conf_level = conf_level) else
       list(inf = rep(NA_real_, nl * nc), sup = rep(NA_real_, nl * nc))
+    # Last Phase z16-iv (W-E): the family's DECLARED difference method, not a second hard-coded one.
+    # This interval's only consumer is the multinomial html tooltip, which was Newcombe while the
+    # Obs_% column of the same table was Wald -- one quantity, two methods, inside one table. The
+    # cross-table difference from tab(ci = "diff")'s Newcombe is deliberate (Phase 16d: the crude
+    # companion matches the model AME's Wald so the merged legend can name ONE method).
     dd <- if (has_cat) ci_prop_diff(prop, n_draw, rprop, r_n_draw, conf_level = conf_level,
-                                    method = "newcombe", want_p = FALSE) else pw
+                                    method = emp_method_diff, want_p = FALSE) else pw
     tibble::tibble(
       var = p, level = rep(lv, each = nc), category = rep(cats, times = nl),
       emp_prop = prop, emp_prop_inf = pw$inf, emp_prop_sup = pw$sup,
@@ -2095,7 +2106,7 @@ cat_get <- function(l, key) {
 #     numeric predictors in any family (z9), and EVERY predictor under an ordinal outcome (z10).
 reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, effect, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
-                                  color = NULL, do_exp = TRUE, fit_est = NULL) {
+                                  color = NULL, do_exp = TRUE, fit_est = NULL, weighted = FALSE) {
   fam <- REG_EMPIRICAL[[crude_key]]
   if (is.null(fam)) return(list(cols = list(), effect = NULL, shape = NULL))
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
@@ -2118,15 +2129,25 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   na_v   <- function() rep(NA_real_, n_rows)
   # one fmt column from a shape row + its varying fmt FIELD values. Uncoloured when the model is off or
   # the shape declares no measure (Obs_mean); `ref` is omitted when the shape has none.
-  emp_col <- function(shape, fields) {
+  emp_col <- function(shape, fields, n_eff = NULL) {
     measure <- if (emp_off || !nzchar(shape$color)) "" else shape$color
-    args <- c(fields, list(
+    args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
       type = shape$type, display = shape$display, digits = shape$digits, ci_type = shape$ci_type,
       color = measure, color_signif = if (nzchar(measure)) color_signif else "ignore",
       col_var = shape$nm, comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp"))
     if (!is.na(shape$ref)) args$ref <- shape$ref
     do.call(fmt, args)
   }
+  # Last Phase z16-iv (W-D): the effective base a crude interval was ACTUALLY computed on, stored in
+  # the `n_eff` field. reg_empirical() computes it (identically to tab()'s own cell base, to 9 s.f.),
+  # feeds it to ci_wilson / ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio -- and then
+  # threw it away, so ?fmt's "the effective sample size used for this cell's CI" was false on every
+  # regression column and `$n_eff` returned NA where the correction demonstrably happened. NA when
+  # nothing corrected it, exactly as an unweighted tab() cell carries NA. Which of the two bases a
+  # column used is a property of ITS OWN interval, so each arm passes its own (`nv_dr` for a
+  # proportion / odds / risk ratio, `nv_ci` for a mean, a rate and their ratios) -- it cannot be read
+  # off `shape$type` (a poisson IRR is type "row" and takes `nv_ci`).
+  neff_of <- function(v) if (isTRUE(weighted)) as.double(v) else rep(NA_real_, n_rows)
   # Last Phase z5: besides the columns, return the crude EFFECT vector -- the very value the effect
   # column stores in its own estimate field, so it is already on the model column's scale (an OR beside
   # an OR, log(OR) beside a raw coefficient, a risk difference beside an AME). reg_build writes it into
@@ -2205,8 +2226,9 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   prop <- g$emp_prop; diffv <- g$emp_diff; ratio <- g$emp_ratio
   meanv <- g$emp_mean; varv <- g$emp_var; nv <- g$emp_n
   rprop <- g$emp_ref_prop; rmean <- g$emp_ref_mean; rv <- g$emp_ref_var; rn <- g$emp_ref_n
-  # Last Phase s: the CI base is the effective n (Kish n_eff, opt-in) -- off-kish it equals the raw
-  # count, so the intervals are byte-identical. The displayed n/tot_n fields keep the raw count `nv`.
+  # Last Phase s: the CI base is the effective n -- the exact flat closed form on the weights, or the
+  # design variance; unweighted it equals the raw count, so those intervals are byte-identical. The
+  # displayed n/tot_n fields always keep the raw count `nv`.
   nv_ci <- g$emp_n_ci; rn_ci <- g$emp_ref_n_ci
   # the CI base of a PROPORTION is the number of Bernoulli DRAWS (n x trials for a grouped binomial,
   # n everywhere else -> byte-identical); the MEAN CIs keep the per-respondent n_ci.
@@ -2228,12 +2250,14 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
       cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = nv_ci - 1, conf_level = conf_level,
                        want_p = FALSE)
       list(col = emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
-                                        ci_inf = cell$inf, ci_sup = cell$sup)), shape = fam$base)
-    } else list(col = emp_col(fam$base, rd_fields), shape = fam$base)
+                                        ci_inf = cell$inf, ci_sup = cell$sup),
+                         n_eff = neff_of(nv_ci)), shape = fam$base)
+    } else list(col = emp_col(fam$base, rd_fields, n_eff = neff_of(nv_dr)), shape = fam$base)
 
     if (effect == "ame") {             # the AME shows a difference, not an OR -> crude risk-difference
       sh <- reg_crude_shape(crude_key, "ame", do_exp)
-      return(emit(base, list(col = emp_col(sh, rd_fields), vec = diffv, shape = sh), cat1))
+      return(emit(base, list(col = emp_col(sh, rd_fields, n_eff = neff_of(nv_dr)),
+                             vec = diffv, shape = sh), cat1))
     }
     # Last Phase z3: a marginal RATIO's crude twin is the crude RISK ratio with the Katz log-RR interval
     # -- on the binomial model path as well as the "rr" one, since the estimand is what must match, not
@@ -2243,7 +2267,8 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
       rr_ci <- na_ref(ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, want_p = TRUE))
       sh    <- reg_crude_shape(crude_key, "ame_ratio", do_exp)
       return(emit(base, list(col = emp_col(sh, list(or = prop / rprop, n = nv, ci_inf = rr_ci$inf,
-                                                    ci_sup = rr_ci$sup, pvalue = rr_ci$pvalue)),
+                                                    ci_sup = rr_ci$sup, pvalue = rr_ci$pvalue),
+                                    n_eff = neff_of(nv_dr)),
                              vec = prop / rprop, shape = sh), cat1))
     }
     # binomial / grouped -> the crude ODDS ratio (the 2x2 legs vs the reference level's) with the Woolf
@@ -2266,25 +2291,29 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     sh_log <- reg_crude_shape(crude_key, "coefficient", FALSE)
     if (do_exp) {
       eff_col <- emp_col(sh_exp, list(or = eff_v, n = nv, ci_inf = eff_ci$inf,
-                                      ci_sup = eff_ci$sup, pvalue = eff_ci$pvalue))
+                                      ci_sup = eff_ci$sup, pvalue = eff_ci$pvalue),
+                         n_eff = neff_of(nv_dr))
       return(emit(base, list(col = eff_col, vec = eff_v, shape = sh_exp), cat1))
     }
     # Phase g: exponentiate = FALSE -> the crude companion is the LOGGED effect (Obs_log(OR) /
     # Obs_log(RR)): the log ratio in the `diff` field with the logged CI, i.e. the exact Wald interval
     # on the log scale -- the same link scale as the raw model coefficient.
     eff_col <- emp_col(sh_log, list(diff = log(eff_v), n = nv, ci_inf = log(eff_ci$inf),
-                                    ci_sup = log(eff_ci$sup), pvalue = eff_ci$pvalue))
+                                    ci_sup = log(eff_ci$sup), pvalue = eff_ci$pvalue),
+                       n_eff = neff_of(nv_dr))
     return(emit(base, list(col = eff_col, vec = log(eff_v), shape = sh_log), cat1))
   }
 
   if (identical(crude_key, "gaussian")) {
     cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = nv_ci - 1, conf_level = conf_level, want_p = FALSE)
     base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
-                                       ci_inf = cell$inf, ci_sup = cell$sup))
+                                       ci_inf = cell$inf, ci_sup = cell$sup),
+                        n_eff = neff_of(nv_ci))
     md <- na_ref(ci_mean_diff2(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_diff, # pooled t = OLS
                                conf_level = conf_level, want_p = TRUE))
     eff_col <- emp_col(fam$diff, list(diff = diffv, var = rep(var_y, n_rows), n = nv,
-                                      ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue))
+                                      ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue),
+                       n_eff = neff_of(nv_ci))
     return(emit(list(col = base_col, shape = fam$base),
                 list(col = eff_col, vec = diffv,
                      shape = reg_crude_shape(crude_key, effect, do_exp)), cat1))
@@ -2295,17 +2324,20 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     rr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_ratio,
                                conf_level = conf_level, want_p = TRUE))
     base_col <- emp_col(fam$base, list(mean = meanv, ratio = ratio, n = nv, tot_n = nv,
-                                       ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue))
+                                       ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue),
+                        n_eff = neff_of(nv_ci))
     if (do_exp) {
       eff_col <- emp_col(fam$irr, list(or = ratio, n = nv, ci_inf = rr$inf,
-                                       ci_sup = rr$sup, pvalue = rr$pvalue))
+                                       ci_sup = rr$sup, pvalue = rr$pvalue),
+                          n_eff = neff_of(nv_ci))
       return(emit(list(col = base_col, shape = fam$base),
                   list(col = eff_col, vec = ratio, shape = fam$irr), cat1))
     }
     # Phase g: exponentiate = FALSE -> the crude companion is Obs_log(IRR): log(rate-ratio) in `diff`
     # with the logged rate-ratio CI (the same link scale as the raw Poisson coefficient).
     eff_col <- emp_col(fam$irr_log, list(diff = log(ratio), n = nv, ci_inf = log(rr$inf),
-                                         ci_sup = log(rr$sup), pvalue = rr$pvalue))
+                                         ci_sup = log(rr$sup), pvalue = rr$pvalue),
+                        n_eff = neff_of(nv_ci))
     return(emit(list(col = base_col, shape = fam$base),
                 list(col = eff_col, vec = log(ratio), shape = fam$irr_log), cat1))
   }
@@ -3876,7 +3908,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # skeleton and are pivoted into columns by row, so a per-group curve would give the same row two
   # different labels and break the alignment. Ten bins fixed, so two predictors are comparable.
   assumptions <- reg_curves(skeleton_data, specs, numeric_preds, design_spec$wt,
-                            positive_level = fits[[1]]$positive_level)
+                            positive_level = fits[[1]]$positive_level,
+                            design = design_spec$design)
   if (!is.null(assumptions)) {
     spark <- getOption("tabxplor.spark", TRUE)
     lin   <- !is.na(skeleton$term) & skeleton$term == skeleton$var
@@ -3987,7 +4020,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
             (reg_fam_binary(fam_i) || reg_fam_prob(fam_i)))
         cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, key_i, fam_i, effect, var_y_i,
                                          conf_level = conf_level, color_signif = color_signif,
-                                         color = col_i, do_exp = specs[[i]]$do_exp, fit_est = fit_i)
+                                         color = col_i, do_exp = specs[[i]]$do_exp, fit_est = fit_i,
+                                         # W-D: `n_eff` is written only where something corrected it
+                                         weighted = svy_weighted(design_spec, design_spec$wt))
         # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
         # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
         if (!is_comparison && length(cols_i$cols)) {
@@ -4387,7 +4422,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param trials Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 #'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
 #'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE` uses each
-#'   dependent's observed maximum score. Requires `family = "binomial"`.
+#'   dependent's observed maximum score. Requires `family = "binomial"`. It is one count per
+#'   *dependent*, never a column name --- a per-row item count is not supported; write the model with
+#'   `cbind()` in a compound `formula` instead.
 #' @param conf_level Confidence level for the intervals. Default `0.95`. It drives every interval in
 #'   the table, the significance stars, and the greying under `color_signif` --- including the
 #'   model-vs-observed gap interval, which is computed at print time from the stored standard error and
@@ -4497,11 +4534,20 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   The crude companions are **always** on the same inference basis as the `Model_*` column beside
 #'   them, which is the whole point of putting them side by side: when the data is weighted, their
 #'   intervals account for the weighting exactly (the flat survey design), and under a
-#'   `survey::svydesign` for the full design. [tab()]'s `tabxplor.design_effect` option is *not* read
-#'   here --- turn it on if you want a `tab()` percentage interval to be comparable with these
-#'   columns. A **continuous** predictor's companion comes from a univariable fit; a categorical one
+#'   `survey::svydesign` for the full design. Each column stores the base its own interval used, in
+#'   the `n_eff` [fmt()] field, while the displayed `n` stays the raw count.
+#'   A **continuous** predictor's companion comes from a univariable fit; a categorical one
 #'   from the closed-form cell sums, which for a saturated model is the same estimator. Default
 #'   `FALSE`.
+#'
+#'   **Two consequences worth knowing**, both deliberate. First, a weighted `tab_reg()` is *always*
+#'   design-corrected while a weighted [tab()] is *not* unless you ask
+#'   (`options(tabxplor.design_effect = TRUE)`): [tab()] keeps the descriptive convention (a weighted
+#'   estimate on the raw sample size) as its default, and each table's footer says which it used --- so
+#'   the same weight can legitimately give a slightly wider interval here than in a crosstab beside it.
+#'   Turn the option on to make the two agree. Second, the crude percentage *difference* here uses the
+#'   **Wald** interval, matching the model AME so one legend can name one method, where
+#'   `tab(ci = "diff")` uses Newcombe; on a real table they differ by a few tenths of a percent.
 #'
 #'   **Under a `survey::svydesign`** every column is design-based. The `Model_*` ones through
 #'   `survey::svyglm`; the crude ones through an effective sample size derived from the design
@@ -4818,6 +4864,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     estimate_display = c("value", "ci", "prob", "ame"),
                     cleannames = NULL, subtext = "", spread_models = TRUE,
                     .fit_cache = NULL) {
+  # Last Phase z16-iv (W-C): this call's own design-degrade flag. It is PROCESS-scoped, and
+  # reg_inference() reads it into meta$inference -- so without this reset one degraded table earlier
+  # in the session (a design over the influence-matrix ceiling, a svyrecvar failure) permanently
+  # mislabelled every later tab_reg() as "design_partial", whose footer then denies a variance that
+  # was computed. tab() has reset it since z16-i (tab_transform + both leaf wrappers); tab_reg() is
+  # the public entry here, and reg_build() must NOT do it (it recurses per split group, and would
+  # clear a group's own degrade).
+  svy_degrade_reset()
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
@@ -5091,7 +5145,24 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # off (binary logit). TRUE = observed max per dependent. Numeric / named vector = the item count.
   # Phase 15e: applied per BINOMIAL outcome only (a non-binomial dependent ignores it).
   trials_for <- function(d) NULL
+  if (isFALSE(trials)) trials <- NULL            # the natural off switch, symmetric with TRUE
   if (!is.null(trials)) {
+    # Last Phase z16-iv (S6): validate HERE. A column name -- the shape a reader naturally reaches for,
+    # since a respondent may have answered a different number of items -- used to reach
+    # as.numeric("q_count") -> NA -> `cbind(score, NA - score)`, and died deep inside glm() with
+    # "contrasts can be applied only to factors with 2 or more levels", naming neither the argument
+    # nor the reason. `trials` is one item COUNT per dependent, not a per-row column.
+    if (is.character(trials) || is.factor(trials))
+      cli::cli_abort(c(
+        "{.arg trials} must be an item count, not a column name.",
+        "x" = "Got {.val {as.character(trials)}}.",
+        "i" = paste("Pass the number of ITEMS behind the summed score: an integer, a vector named by",
+                    "dependent, or {.code TRUE} to use each dependent's observed maximum."),
+        "i" = "Per-row item counts are not supported; write the model formula with {.code cbind()}."))
+    if (!is.numeric(trials) && !isTRUE(trials))
+      cli::cli_abort(c(
+        "{.arg trials} must be a number, a vector named by dependent, or {.code TRUE}.",
+        "x" = "Got {.cls {class(trials)[[1]]}}."))
     if (!any(families_vec == "binomial")) {
       cli::cli_abort("{.arg trials} applies only to {.val binomial} outcomes (grouped / summed-score).")
     }
@@ -5102,6 +5173,13 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
             else if (!is.null(names(trials))) unname(trials[dependent])
             else                              rep_len(as.numeric(trials), length(dependent))
       tv <- stats::setNames(as.integer(round(tv)), dependent)
+      # a named vector that does not name every dependent gives NA here, which used to reach glm()
+      bad <- names(tv)[is.na(tv) | tv < 1L]
+      if (length(bad))
+        cli::cli_abort(c(
+          "{.arg trials} must be a positive item count for every dependent.",
+          "x" = "Missing or invalid for {.val {bad}}.",
+          "i" = "A named vector must name every dependent; {.code TRUE} takes the observed maximum."))
       trials_for <- function(d) if (identical(family_for(d), "binomial")) tv[[d]] else NULL
     }
   }

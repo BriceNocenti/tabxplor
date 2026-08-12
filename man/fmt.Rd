@@ -218,6 +218,10 @@ of \code{n}.}
 from the closed-form flat-design variance when
 \code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
 then falls back to the raw unweighted base).
+Populated for \strong{descriptive} cells --- a crosstab or mean cell, and a \code{tab_reg}
+\code{Obs_*} crude column, each carrying the base \emph{its own} interval used. A
+\code{Model_*} coefficient column carries none (a coefficient has no cell base), like
+\code{n} and \code{tot_n}.
 A double vector the length of \code{n}. Non-displayed.}
 
 \item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour

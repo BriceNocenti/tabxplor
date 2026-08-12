@@ -133,8 +133,11 @@ In all three, significance is the adjusted standardized residual (Haberman; SPSS
 residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
 whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
 the package rule -- weighted estimate, and a base that follows the inference basis: the raw
-\code{n} by default, the whole table's effective n under
-\code{options(tabxplor.design_effect = TRUE)} or under a \code{survey} design -- while the
+\code{n} by default (the reading a correspondence analysis expects), and under
+\code{options(tabxplor.design_effect = TRUE)} or a \code{survey} design that raw \code{n} divided
+by the \strong{association's} design effect -- Rao-Scott's mean generalized delta-bar, the very
+one the whole-table test reports, so the colours and the p-value of one table describe one design
+effect. The
 contribution itself stays weighted (it estimates the population table's structure, and is therefore
 identical at every basis, which is what keeps the correspondence-analysis reading safe). One base
 for the whole table, so a counts table and a percentage table of the same data give the SAME
@@ -504,9 +507,11 @@ is then referred to the design's own degrees of freedom (\code{#PSU - #strata}),
 about 30 PSUs. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
 cell-vs-reference \emph{difference} (it cannot carry the design covariance between two rows), so it
 never produces a star the design does not support, and sometimes withholds one it would. And the
-\code{color = "contrib"} residual takes the \emph{whole table's} effective n rather than each
-cell's own --- the standard first-order correction --- which is what makes a counts table and a
-percentage table of the same data give identical residuals. A design-based table costs roughly 3x a
+\code{color = "contrib"} residual takes the \emph{whole table's} design effect (Rao-Scott's
+delta-bar, the one its omnibus test reports) rather than each cell's own --- the standard
+first-order correction, and what makes a counts table and a percentage table of the same data give
+identical residuals. An exact per-cell design residual would need each cell's own influence
+function, which the aggregate does not carry. A design-based table costs roughly 3x a
 weighted one (6x if calibrated); the payoff needs real design information, so if your file ships one
 calibrated weight and no stratum or cluster variable, \code{tabxplor.design_effect} is already all
 the correction available to you.

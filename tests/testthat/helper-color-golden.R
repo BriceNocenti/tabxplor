@@ -120,6 +120,14 @@ color_golden_cases <- function() {
       tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "grey_non_signif")),
     c_contrib_guar   = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "guaranteed_effect")),
+    # Last Phase z16-iv (W-B): the WEIGHTED gated contrib, previously UNCOVERED here -- there was no
+    # weighted colour fixture at all, which is exactly why the residual could ignore the sample design
+    # for a whole release. `tvhours` is gss_cat's own numeric column, so the case stays deterministic
+    # with no synthetic weight; the option makes the residual take the n/delta-bar base.
+    c_contrib_wt_grey = function() color_golden_capture_tab(withr::with_options(
+      list(tabxplor.design_effect = TRUE),
+      tab(gss[!is.na(gss$tvhours) & gss$tvhours > 0, ], marital, race, wt = tvhours,
+          pct = "row", color = "contrib", color_signif = "grey_non_signif"))),
     c_or             = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "col", OR = "OR", color = "OR")),
 

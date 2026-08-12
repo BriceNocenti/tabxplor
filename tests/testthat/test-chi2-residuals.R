@@ -6,8 +6,9 @@
 #      too strict on this very table.
 #   2. It is invariant to the WEIGHT SCALE. The old one used the weighted N, so multiplying every
 #      weight by a constant (population weights) drove every cell p-value to 0.
-#   3. `options(tabxplor.design_effect = TRUE)` shrinks it by exactly sqrt(n_eff/n) -- the same ladder
-#      every confidence interval in the package uses (?tab, Last Phase s).
+#   3. `options(tabxplor.design_effect = TRUE)` shrinks it by exactly 1/sqrt(delta-bar) -- Rao-Scott's
+#      mean generalized design effect of the table's OWN omnibus test, so the colours and the p of one
+#      table describe one design effect (Last Phase z16-iv, W-B).
 #   4. The three `color_signif` policies each read a DIFFERENT, documented quantity:
 #      ignore / grey_non_signif = the relative contribution (the CA reading, byte-identical to
 #      pre-z4); guaranteed_effect = the absolute residual on the `zscore` break scale.
@@ -86,30 +87,39 @@ testthat::test_that("the residual is invariant to the WEIGHT SCALE (population w
   testthat::expect_true(all(p1 > 0))         # pre-z4 the population-weighted ones were all exactly 0
 })
 
-testthat::test_that("kish_neff shrinks the residual by exactly sqrt(n_eff / n)", {
+testthat::test_that("design_effect shrinks the residual by exactly 1 / sqrt(delta-bar)", {
+  skip_if_not_installed("survey")
   d <- gss_r()
   set.seed(2)
   d$w <- stats::runif(nrow(d), 0.3, 3)
-  z_of <- function(kish) {
-    withr::local_options(list(tabxplor.design_effect = kish))
+  z_of <- function(on) {
+    withr::local_options(list(tabxplor.design_effect = on))
     # pct = "no": the counts table is where `color = "contrib"` is most at home (it is what
     # color = TRUE picks there), and it is the case that used to have no n_eff at all.
     t <- tab(d, race, rincome, wt = w, color = "contrib", color_signif = "grey_non_signif",
-             na = "drop")
-    list(z = fmt_resid(t[["4-$25000 or more"]])[1:3], tot = t[["Total"]])
+             na = "drop", test = TRUE)
+    list(z = fmt_resid(t[["4-$25000 or more"]])[1:3], tot = t[["Total"]], test = get_test(t))
   }
-  raw  <- z_of(FALSE)
-  kish <- z_of(TRUE)
-  n_tot     <- get_n(kish$tot)[length(kish$tot)]
-  n_eff_tot <- get_n_eff(kish$tot)[length(kish$tot)]
-
-  testthat::expect_false(is.na(n_eff_tot))            # n_eff IS available on the grand-total cell
-  testthat::expect_lt(n_eff_tot, n_tot)               # unequal weights -> deff > 1
-  # Last Phase z16-iii: ONE base for the whole table -- the subtable's grand-cell effective n -- so
-  # every residual shrinks by the same sqrt(n_eff / n). That uniformity is the point: it is what makes
-  # a counts table and a percentage table of the same data give identical residuals (W3, ruling Q3).
-  testthat::expect_equal(kish$z / raw$z, rep(sqrt(n_eff_tot / n_tot), 3), tolerance = 1e-8)
-  testthat::expect_lt(max(abs(kish$z)), max(abs(raw$z)))   # honestly wider = smaller |z|
+  raw <- z_of(FALSE)
+  eff <- z_of(TRUE)
+  n_tot <- get_n(eff$tot)[length(eff$tot)]
+  # Last Phase z16-iv (W-B): the base of an ASSOCIATION residual is the raw n over Rao-Scott's mean
+  # generalized design effect of THIS table's own omnibus test -- the `deff` the test row reports.
+  # Not the grand cell's `n_eff`: that cell's proportion is 1, so its design variance is 0 and it
+  # always fell back to the weights-only B^2/S, at EVERY basis (which is why a stratified design and
+  # a flat one used to give residuals identical to the last digit).
+  dbar <- eff$test$deff[[1]]
+  testthat::expect_true(is.finite(dbar) && dbar > 1)  # unequal weights -> a real design effect
+  testthat::expect_equal(eff$test$n[[1]], n_tot)      # `n` is always the RAW count (W8)
+  # ONE base for the whole table, so every residual shrinks by the SAME factor. That uniformity is
+  # the point: it is what makes a counts table and a percentage table give identical residuals.
+  testthat::expect_equal(eff$z / raw$z, rep(1 / sqrt(dbar), 3), tolerance = 1e-8)
+  testthat::expect_lt(max(abs(eff$z)), max(abs(raw$z)))   # honestly wider = smaller |z|
+  # ...and the same table's cell intervals and its residual now describe ONE design effect: before,
+  # the residual's B^2/S and the omnibus test's implied n/delta-bar were two different effective
+  # sizes for the same table (measured 2.5 % apart).
+  testthat::expect_false(isTRUE(all.equal(
+    n_tot / dbar, get_n_eff(eff$tot)[length(eff$tot)], tolerance = 1e-6)))
 })
 
 testthat::test_that("the three color_signif policies read three documented quantities", {

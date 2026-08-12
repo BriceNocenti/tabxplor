@@ -132,3 +132,41 @@ test_that("the classic default path is unaffected (no robust columns, effect siz
   expect_true(all(te$test %in% c("chi2", "F_welch", "F_classic")))
   expect_true(is.finite(te$effect_size[te$test == "chi2"]))
 })
+
+# === Last Phase z16-iv: the robust omnibus GRID (producer / joiner split) =========================
+
+test_that("a design table with tab_vars keeps its TOTAL-TABLE test row", {
+  skip_if_not_installed("survey")
+  d <- gss[!is.na(gss$tvhours) & gss$tvhours > 0, ]
+  d <- d[d$year %in% c(2000, 2006), ]
+  # non-vacuous: the classic path HAS an Ensemble row, so its absence would be a loss, not a shape
+  cls <- get_test(tab(d, marital, race, tab_vars = year, pct = "row", test = TRUE,
+                      totaltab = "table"))
+  expect_true("Ensemble" %in% as.character(cls$year))
+  # the overlay used to REPLACE the classic tibble with groups taken from unique(frame[tab_vars]),
+  # which has no such level -- so the whole-table test silently vanished under weights / a design.
+  rob <- withr::with_options(list(tabxplor.design_effect = TRUE),
+                             get_test(tab(d, marital, race, tab_vars = year, wt = tvhours,
+                                          pct = "row", test = TRUE, totaltab = "table")))
+  expect_true("Ensemble" %in% as.character(rob$year))
+  expect_identical(as.character(rob$year), as.character(cls$year))
+  expect_true(is.factor(rob$year))                       # not coerced to character by the extra row
+  expect_true(all(rob$test == "chi2_design"))
+  ens <- rob[as.character(rob$year) == "Ensemble", ]
+  expect_equal(ens$n[[1]], nrow(d[!is.na(d$marital) & !is.na(d$race), ]))
+})
+
+test_that("an input that cannot serve the weighted basis gets NO design-based test (W-H)", {
+  skip_if_not_installed("survey")
+  d   <- gss[!is.na(gss$tvhours) & gss$tvhours > 0, ]
+  cnt <- as.data.frame(dplyr::count(d, marital, race, name = "n"))
+  cnt$wn <- as.data.frame(dplyr::count(d, marital, race, wt = tvhours, name = "wn"))$wn
+  withr::local_options(list(tabxplor.design_effect = TRUE))
+  t <- tab_counts(cnt, marital, race, counts = n, wt_counts = wn, pct = "row", test = TRUE)
+  # pre-aggregated counts carry no per-observation Sigma w^2, so the leaves state basis "n" -- and the
+  # whole-table test must say the same thing. It used to run svychisq on the AGGREGATE rows (one
+  # "PSU" per aggregate row) and report chi2_design under a footer that said "unweighted sample size".
+  expect_identical(tabxplor:::tab_inference_basis(t), "n")
+  expect_true(all(get_test(t)$test == "chi2"))
+  expect_true(all(is.na(get_test(t)$deff)))
+})

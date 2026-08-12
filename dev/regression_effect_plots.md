@@ -70,12 +70,12 @@ Nothing answers, in one place:
 
 Four consumers each answer it their own way:
 
-| consumer | how it re-derives the scale | file |
-|---|---|---|
-| `format.tabxplor_fmt()` | compound `(display × type × ci_type)` predicates | `R/fmt_class.R` |
-| `fmt_color_plan()` | `md$std_when` + `fmt_gap_scale_key()` | `R/fmt_class.R:3205-3226` |
-| the legend | `MEASURES$…$unit_kind` / `break_over` / `break_under` + `legend_unit_word()` | `R/fmt_class.R:3855` |
-| `or_plot()` | a **hard-coded ladder** `c(1/8, 1/4, 1/2, 1/1.5, 1, 1.5, 2, 4, 8)` | `R/tab_reg_plots.R:245` |
+| consumer                | how it re-derives the scale                                                  | file                      |
+|-------------------------|------------------------------------------------------------------------------|---------------------------|
+| `format.tabxplor_fmt()` | compound `(display × type × ci_type)` predicates                             | `R/fmt_class.R`           |
+| `fmt_color_plan()`      | `md$std_when` + `fmt_gap_scale_key()`                                        | `R/fmt_class.R:3205-3226` |
+| the legend              | `MEASURES$…$unit_kind` / `break_over` / `break_under` + `legend_unit_word()` | `R/fmt_class.R:3855`      |
+| `or_plot()`             | a **hard-coded ladder** `c(1/8, 1/4, 1/2, 1/1.5, 1, 1.5, 2, 4, 8)`           | `R/tab_reg_plots.R:245`   |
 
 The fourth is the disease in miniature: `or_plot()`'s ladder has no relationship to
 `options(tabxplor.color_breaks)`, so a user who moves their break scale sees the table change and
@@ -107,13 +107,13 @@ places. Three consumers then share one dispatch instead of two agreeing by comme
 
 **(b) `reg_estimates(x)` — the long model.** One row per (table row × estimate column):
 
-| group | columns |
-|---|---|
-| keys | `row` (table row index), `var`, `level`, `column`, `role` (`model`/`emp`), `col_var`, `facet`, `series`, `outcome`, `model_label`, `group` (split level), `category` |
-| estimate | `estimate`, `ci_inf`, `ci_sup`, `pvalue`, `stars`, `n`, `is_ref`, `is_constant`, `kind` |
-| comparison | `obs`, `gap_se`, `gap`, `gap_lo`, `gap_hi`, `gap_p`, `gap_slot` |
-| scale | `scale_key`, `neutral`, `trans`, `unit`, `breaks` (list-col) |
-| colour | `measure`, `policy`, `slot_text`, `slot_bg`, `hex_text`, `hex_bg`, `bold`, `italic`, `underline` |
+| group      | columns                                                                                                                                                              |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| keys       | `row` (table row index), `var`, `level`, `column`, `role` (`model`/`emp`), `col_var`, `facet`, `series`, `outcome`, `model_label`, `group` (split level), `category` |
+| estimate   | `estimate`, `ci_inf`, `ci_sup`, `pvalue`, `stars`, `n`, `is_ref`, `is_constant`, `kind`                                                                              |
+| comparison | `obs`, `gap_se`, `gap`, `gap_lo`, `gap_hi`, `gap_p`, `gap_slot`                                                                                                      |
+| scale      | `scale_key`, `neutral`, `trans`, `unit`, `breaks` (list-col)                                                                                                         |
+| colour     | `measure`, `policy`, `slot_text`, `slot_bg`, `hex_text`, `hex_bg`, `bold`, `italic`, `underline`                                                                     |
 
 Sources, all existing, none new:
 `get_num()` / `get_ci_inf()` / `get_ci_sup()` / `get_pvalue()` / `get_stars()` / `get_obs()` /
@@ -192,12 +192,12 @@ reg_estimates(x, theme = NULL)          # the long model (§2.3b)
 
 ### 4.2 What is removed
 
-| removed | why | cost |
-|---|---|---|
-| `or_plot()` | superseded in full by `reg_plot()`; never released (added in 2.0.0 Phase 12h, `dev/tabxplor_2.0.0_decisions.md:3192`) | **none** — a removal, not a deprecation, exactly like `lm_plots()` in z15-iii |
-| `or_plot(point_size =)` | verified inert (§19.1) | none |
-| the hard-coded ladder `R/tab_reg_plots.R:245` | replaced by the colour break scale | none |
-| the hard-coded fills `#33648c` / `#b0b0b0` `R/tab_reg_plots.R:259` | replaced by palette slots | none |
+| removed                                                            | why                                                                                                                   | cost                                                                          |
+|--------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
+| `or_plot()`                                                        | superseded in full by `reg_plot()`; never released (added in 2.0.0 Phase 12h, `dev/tabxplor_2.0.0_decisions.md:3192`) | **none** — a removal, not a deprecation, exactly like `lm_plots()` in z15-iii |
+| `or_plot(point_size =)`                                            | verified inert (§19.1)                                                                                                | none                                                                          |
+| the hard-coded ladder `R/tab_reg_plots.R:245`                      | replaced by the colour break scale                                                                                    | none                                                                          |
+| the hard-coded fills `#33648c` / `#b0b0b0` `R/tab_reg_plots.R:259` | replaced by palette slots                                                                                             | none                                                                          |
 
 ⚠ This contradicts **z15 ruling R3** ("`or_plot()` keeps its name and shares the internals"), which
 was decided when `or_plot()` was only expected to gain a shared theme. The maintainer's instruction
@@ -220,13 +220,13 @@ contract** (inherited from `fmt_gap_scale_key()`, `R/fmt_class.R:3140-3152`, who
 why: a poisson count AME and a raw poisson coefficient are identical in `type`, `ci_type` and
 `model_family` — only `var` separates them):
 
-| # | test | key | neutral | transform | axis |
-|---|---|---|---|---|---|
-| 1 | `display_primary ∈ {pct, mean}` | `level_pct` / `level_mean` | — | identity | `%` / units of Y |
-| 2 | `ci_type ∈ {or, ratio}` | `ratio` | 1 | **log10** | the effect word (§6) |
-| 3 | `type == "coef"` and `!all(is.na(get_var(x)))` | `raw_diff` | 0 | identity | units of Y, **+ SD(Y) secondary axis** |
-| 4 | `type == "coef"` and `reg_fam_logscale(model_family)` | `log_coef` | 0 | identity | log-odds, **+ ratio secondary axis** |
-| 5 | otherwise (`ci_type == "diff"`, probability scale) | `points` | 0 | identity, `%` | percentage points |
+| # | test                                                  | key                        | neutral | transform     | axis                                   |
+|---|-------------------------------------------------------|----------------------------|---------|---------------|----------------------------------------|
+| 1 | `display_primary ∈ {pct, mean}`                       | `level_pct` / `level_mean` | —       | identity      | `%` / units of Y                       |
+| 2 | `ci_type ∈ {or, ratio}`                               | `ratio`                    | 1       | **log10**     | the effect word (§6)                   |
+| 3 | `type == "coef"` and `!all(is.na(get_var(x)))`        | `raw_diff`                 | 0       | identity      | units of Y, **+ SD(Y) secondary axis** |
+| 4 | `type == "coef"` and `reg_fam_logscale(model_family)` | `log_coef`                 | 0       | identity      | log-odds, **+ ratio secondary axis**   |
+| 5 | otherwise (`ci_type == "diff"`, probability scale)    | `points`                   | 0       | identity, `%` | percentage points                      |
 
 Clause 1 must come first: `Obs_%` and `Obs_diff` carry **identical fields** (measured — both have
 `pct` *and* `diff` non-NA; only `display` differs), so only `display` distinguishes a level column
@@ -238,19 +238,19 @@ gates (`R/fmt_class.R:3411-3432`).
 
 Measured column shapes (probe 2 / probe 3), with the axis each implies:
 
-| family / effect | model column | `ci_type` / `type` | scale | axis title | special need |
-|---|---|---|---|---|---|
-| binomial, coefficient | `Model_OR` | or / row | `ratio` | Odds ratio | log axis, `1/x` labels |
-| binomial, `exponentiate = FALSE` | `Model_β` | diff / coef | `log_coef` | log-odds | **secondary axis `exp(.)` = OR** |
-| binomial, `effect = "ame"` | `Model_AME (adjusted %)` | diff / row | `points` | percentage points | `%` labels; also carries the adjusted probability in `pct` (§11) |
-| binomial, `effect = "ame_ratio"` | `Model_RR (adjusted %)` | or / row | `ratio` | Risk ratio | log axis |
-| `family = "poisson"` on a binary outcome (modified Poisson, z3) | `Model_RR` | or / row | `ratio` | Risk ratio | log axis |
-| poisson counts | `Model_IRR` | or / row | `ratio` | Incidence-rate ratio | log axis |
-| gaussian | `Model_β` | diff / coef | `raw_diff` | units of Y | **secondary axis `. / SD(Y)`** — the colour is standardized, the number is not |
-| multinomial, coefficient | one column per category | or / row | `ratio` | Odds ratio | facet or dodge by category; crude rides **in-cell** in `obs` (no `Obs_*` column) |
-| multinomial, `ame` | one column per category | diff / row | `points` | percentage points | same |
-| ordinal | `Model_OR` + `Obs_cumOR` | or / row | `ratio` | Cumulative odds ratio | log axis; PO caveat belongs in the caption |
-| grouped binomial (`trials =`) | `Model_OR` | or / row | `ratio` | Odds ratio | base column is a mean score, not a proportion |
+| family / effect                                                 | model column             | `ci_type` / `type` | scale      | axis title            | special need                                                                     |
+|-----------------------------------------------------------------|--------------------------|--------------------|------------|-----------------------|----------------------------------------------------------------------------------|
+| binomial, coefficient                                           | `Model_OR`               | or / row           | `ratio`    | Odds ratio            | log axis, `1/x` labels                                                           |
+| binomial, `exponentiate = FALSE`                                | `Model_β`                | diff / coef        | `log_coef` | log-odds              | **secondary axis `exp(.)` = OR**                                                 |
+| binomial, `effect = "ame"`                                      | `Model_AME (adjusted %)` | diff / row         | `points`   | percentage points     | `%` labels; also carries the adjusted probability in `pct` (§11)                 |
+| binomial, `effect = "ame_ratio"`                                | `Model_RR (adjusted %)`  | or / row           | `ratio`    | Risk ratio            | log axis                                                                         |
+| `family = "poisson"` on a binary outcome (modified Poisson, z3) | `Model_RR`               | or / row           | `ratio`    | Risk ratio            | log axis                                                                         |
+| poisson counts                                                  | `Model_IRR`              | or / row           | `ratio`    | Incidence-rate ratio  | log axis                                                                         |
+| gaussian                                                        | `Model_β`                | diff / coef        | `raw_diff` | units of Y            | **secondary axis `. / SD(Y)`** — the colour is standardized, the number is not   |
+| multinomial, coefficient                                        | one column per category  | or / row           | `ratio`    | Odds ratio            | facet or dodge by category; crude rides **in-cell** in `obs` (no `Obs_*` column) |
+| multinomial, `ame`                                              | one column per category  | diff / row         | `points`   | percentage points     | same                                                                             |
+| ordinal                                                         | `Model_OR` + `Obs_cumOR` | or / row           | `ratio`    | Cumulative odds ratio | log axis; PO caveat belongs in the caption                                       |
+| grouped binomial (`trials =`)                                   | `Model_OR`               | or / row           | `ratio`    | Odds ratio            | base column is a mean score, not a proportion                                    |
 
 **The effect word** is not guessed from the column name: it comes from `reg_meta$eff_word` and the
 column's own `model_family` + `role`, which is exactly what `legend_reg_eff_word()` already does for
@@ -353,18 +353,18 @@ Three ways out, in preference order:
 `tab_reg(dependent, c("race","age"), empirical = TRUE, color = "adjustment")`, counts of non-NA
 cells out of the skeleton:
 
-| family | effect | model column | `ci_type` | `obs` | `gap_se` |
-|---|---|---|---|---|---|
-| binomial | coefficient | `Model_OR` | or | 4 | **0** |
-| binomial | ame | `Model_AME (adjusted %)` | diff | 4 | 3 |
-| binomial | ame_ratio | `Model_RR (adjusted %)` | or | 4 | 3 |
-| poisson (binary → `rr`) | coefficient | `Model_RR` | or | 4 | 3 |
-| gaussian | coefficient | `Model_β` | diff | 4 | 3 |
-| poisson (counts) | coefficient | `Model_IRR` | or | 4 | 3 |
-| multinomial | coefficient | per category | or | 3 | **0** |
-| multinomial | ame | per category | diff | 4 | 3 |
-| ordinal | coefficient | `Model_OR` | or | 3 | **0** |
-| ordinal | ame | per category | diff | 3 | 3 |
+| family                  | effect      | model column             | `ci_type` | `obs` | `gap_se` |
+|-------------------------|-------------|--------------------------|-----------|-------|----------|
+| binomial                | coefficient | `Model_OR`               | or        | 4     | **0**    |
+| binomial                | ame         | `Model_AME (adjusted %)` | diff      | 4     | 3        |
+| binomial                | ame_ratio   | `Model_RR (adjusted %)`  | or        | 4     | 3        |
+| poisson (binary → `rr`) | coefficient | `Model_RR`               | or        | 4     | 3        |
+| gaussian                | coefficient | `Model_β`                | diff      | 4     | 3        |
+| poisson (counts)        | coefficient | `Model_IRR`              | or        | 4     | 3        |
+| multinomial             | coefficient | per category             | or        | 3     | **0**    |
+| multinomial             | ame         | per category             | diff      | 4     | 3        |
+| ordinal                 | coefficient | `Model_OR`               | or        | 3     | **0**    |
+| ordinal                 | ame         | per category             | diff      | 3     | 3        |
 
 The three zeros are **ruling Q1(b)**, not a bug: `reg_estimand_collapsible()` refuses a gap test on
 a conditional odds ratio, because a non-collapsible OR moves under adjustment with zero confounding
@@ -426,14 +426,14 @@ manual p   : NA NA 2.292e-28 1.133e-34 NA 0.01125 0.007757 9.644e-28 1.353e-19
 with `manual p = 2·pnorm(-|log(est) - log(obs)| / gap_se)`, and the containment check agreeing on
 every row:
 
-| level | obs | est | band_lo | band_hi | outside | p |
-|---|---|---|---|---|---|---|
-| Black | 0.591 | 0.632 | 0.583 | 0.598 | TRUE | 2.3e-28 |
-| Other | 0.949 | 1.041 | 0.935 | 0.963 | TRUE | 1.1e-34 |
-| $10000-14999 | 1.121 | 1.095 | 1.101 | 1.142 | TRUE | 0.0113 |
-| $15000-24999 | 1.187 | 1.163 | 1.169 | 1.204 | TRUE | 0.0078 |
-| $25000+ | 1.510 | 1.398 | 1.489 | 1.531 | TRUE | 9.6e-28 |
-| age (per SD) | 1.201 | 1.177 | 1.196 | 1.207 | TRUE | 1.4e-19 |
+| level        | obs   | est   | band_lo | band_hi | outside | p       |
+|--------------|-------|-------|---------|---------|---------|---------|
+| Black        | 0.591 | 0.632 | 0.583   | 0.598   | TRUE    | 2.3e-28 |
+| Other        | 0.949 | 1.041 | 0.935   | 0.963   | TRUE    | 1.1e-34 |
+| $10000-14999 | 1.121 | 1.095 | 1.101   | 1.142   | TRUE    | 0.0113  |
+| $15000-24999 | 1.187 | 1.163 | 1.169   | 1.204   | TRUE    | 0.0078  |
+| $25000+      | 1.510 | 1.398 | 1.489   | 1.531   | TRUE    | 9.6e-28 |
+| age (per SD) | 1.201 | 1.177 | 1.196   | 1.207   | TRUE    | 1.4e-19 |
 
 So the reader's visual operation ("is the dark point inside the pale bracket?") is exactly the
 package's test. **No other visual device in this design is an identity; this one is.**
@@ -442,23 +442,23 @@ package's test. **No other visual device in this design is an identity; this one
 
 Per row, when `observed` resolves to `"band"` (the `"auto"` default whenever `gap_se` is present):
 
-| layer | encodes | geometry |
-|---|---|---|
-| observed marker | the crude estimate | hollow/light point (no whisker) |
-| **gap band** | the CI of the *difference* | a short thick bracket / `geom_errorbarh` around the observed marker |
-| connector | direction and size of adjustment | segment observed → modelled, **coloured by the gap measure's slot** |
-| modelled point + whisker | the model estimate and its own CI | filled point, `geom_linerange` |
+| layer                    | encodes                           | geometry                                                            |
+|--------------------------|-----------------------------------|---------------------------------------------------------------------|
+| observed marker          | the crude estimate                | hollow/light point (no whisker)                                     |
+| **gap band**             | the CI of the *difference*        | a short thick bracket / `geom_errorbarh` around the observed marker |
+| connector                | direction and size of adjustment  | segment observed → modelled, **coloured by the gap measure's slot** |
+| modelled point + whisker | the model estimate and its own CI | filled point, `geom_linerange`                                      |
 
 `"point"` drops the band (when `gap_se` is absent), `"ci"` restores the classic crude interval,
 `"none"` suppresses the crude entirely, `"auto"` picks `band` → `point` → `none` by availability.
 
 ### 9.4 Three states, honestly
 
-| state | condition | rendering |
-|---|---|---|
-| tested, gap significant | `gap_se` present, point outside band | solid connector, band drawn |
-| tested, gap not significant | `gap_se` present, point inside band | solid connector, band drawn, connector greyed under `grey_non_signif` |
-| **not tested** | `gap_se` all-NA on the column | dotted connector, **no band**, and the caption says why |
+| state                       | condition                            | rendering                                                             |
+|-----------------------------|--------------------------------------|-----------------------------------------------------------------------|
+| tested, gap significant     | `gap_se` present, point outside band | solid connector, band drawn                                           |
+| tested, gap not significant | `gap_se` present, point inside band  | solid connector, band drawn, connector greyed under `grey_non_signif` |
+| **not tested**              | `gap_se` all-NA on the column        | dotted connector, **no band**, and the caption says why               |
 
 The third state is already a first-class concept: `fmt_gap_force_policy()`
 (`R/fmt_class.R:2005`) reads an all-NA `gap_se` as "no test here" and forces the measure to read
@@ -493,15 +493,15 @@ already says — rejected.
 Nothing invented; every channel maps to the geometry that corresponds to what it paints in the
 table.
 
-| table | plot | source |
-|---|---|---|
-| cell **text** colour (channel 1) | the **point's** colour | `fmt_channel_codes(col, theme)$text` |
-| cell **background** (channel 2) | a **band behind the row** | `…$bg` |
-| bold / italic / underline (print palette) | the point's stroke weight / shape | `…$text_face` |
-| grey (slot 0) | grey point | `theme_cols$grey` via `fmt_col_ann()` |
-| the break ladder | the **gridlines** | `plan$over_breaks` / `$under_breaks` |
-| the legend prose | the **caption** | `rd_footer(src, "plain" \| "runs")` |
-| the stars | optional text beside the point | `get_stars()` |
+| table                                     | plot                              | source                                |
+|-------------------------------------------|-----------------------------------|---------------------------------------|
+| cell **text** colour (channel 1)          | the **point's** colour            | `fmt_channel_codes(col, theme)$text`  |
+| cell **background** (channel 2)           | a **band behind the row**         | `…$bg`                                |
+| bold / italic / underline (print palette) | the point's stroke weight / shape | `…$text_face`                         |
+| grey (slot 0)                             | grey point                        | `theme_cols$grey` via `fmt_col_ann()` |
+| the break ladder                          | the **gridlines**                 | `plan$over_breaks` / `$under_breaks`  |
+| the legend prose                          | the **caption**                   | `rd_footer(src, "plain" \| "runs")`   |
+| the stars                                 | optional text beside the point    | `get_stars()`                         |
 
 The row band is the literal translation: a two-channel table paints the cell's background, and the
 plot paints the row's background, with the same hex. The background palette
@@ -534,11 +534,11 @@ main reason this could be judged a white elephant — open decision **D4**.
 This is the strongest teaching argument for the whole feature, and it required no design work — it
 is what a forest plot *is*.
 
-| policy | what it does to a cell | what it is in the plot |
-|---|---|---|
-| `ignore` | colour by the raw quantity | **where the point sits** relative to the neutral line |
-| `grey_non_signif` | grey unless the interval excludes the neutral *and* agrees in direction | **whether the whisker crosses the neutral line** |
-| `guaranteed_effect` | score the CI bound nearest the neutral | **how far the near end of the whisker is from the neutral line** |
+| policy              | what it does to a cell                                                  | what it is in the plot                                           |
+|---------------------|-------------------------------------------------------------------------|------------------------------------------------------------------|
+| `ignore`            | colour by the raw quantity                                              | **where the point sits** relative to the neutral line            |
+| `grey_non_signif`   | grey unless the interval excludes the neutral *and* agrees in direction | **whether the whisker crosses the neutral line**                 |
+| `guaranteed_effect` | score the CI bound nearest the neutral                                  | **how far the near end of the whisker is from the neutral line** |
 
 So a single figure explains all three policies, and a user who has seen the plot can read the
 table's colours without reading the legend. Two concrete devices follow:
@@ -597,13 +597,13 @@ in the legend. Nothing is written twice.
 
 ### 14.1 The measured `col_var` vocabulary
 
-| table | `col_var` values (probe 4) |
-|---|---|
-| one model, one outcome, `empirical` | all estimate columns share `"married: 01-Married"` |
-| **model comparison** | `"m1"`, `"m2"` on model columns; **`"Obs_%"`, `"Obs_OR"` on the crude ones** |
-| two dependents | `"married: 01-Married"` / `"black: 01-Black"`, shared by crude and model |
-| `split_var` (spread, the default) | `"White<br>married: 01-Married"`, … |
-| multinomial | `"2-Independent, other vs 1-Democrat"`, … |
+| table                               | `col_var` values (probe 4)                                                   |
+|-------------------------------------|------------------------------------------------------------------------------|
+| one model, one outcome, `empirical` | all estimate columns share `"married: 01-Married"`                           |
+| **model comparison**                | `"m1"`, `"m2"` on model columns; **`"Obs_%"`, `"Obs_OR"` on the crude ones** |
+| two dependents                      | `"married: 01-Married"` / `"black: 01-Black"`, shared by crude and model     |
+| `split_var` (spread, the default)   | `"White<br>married: 01-Married"`, …                                          |
+| multinomial                         | `"2-Independent, other vs 1-Democrat"`, …                                    |
 
 So `col_var` is the facet key in four modes out of five. In **comparison mode it breaks**: the single
 crude block is not attached to any model's `col_var` (it is deliberately shared — one crude block
@@ -698,13 +698,13 @@ it off.
 
 ## 16. Relationship to the rest of the package
 
-| | `reg_plot()` | `reg_check_plots()` (z15-iii) | `tab_plot()` |
-|---|---|---|---|
-| input | a table | a table **+ its data** (or a fit) | a table |
-| refits? | **never** | **always** | never |
-| output | one `ggplot` | a `gtable` grid | a `ggpubr::ggtexttable` image *of the table* |
-| about | the results | the assumptions | the table's appearance |
-| status | new | new | frozen legacy |
+|         | `reg_plot()` | `reg_check_plots()` (z15-iii)     | `tab_plot()`                                 |
+|---------|--------------|-----------------------------------|----------------------------------------------|
+| input   | a table      | a table **+ its data** (or a fit) | a table                                      |
+| refits? | **never**    | **always**                        | never                                        |
+| output  | one `ggplot` | a `gtable` grid                   | a `ggpubr::ggtexttable` image *of the table* |
+| about   | the results  | the assumptions                   | the table's appearance                       |
+| status  | new          | new                               | frozen legacy                                |
 
 `tab_plot()` is not a chart — it renders the table as an image. **`reg_plot()` would be the
 package's first real data chart.** That is worth stating in the docs so users stop looking for a
@@ -844,34 +844,34 @@ On an `empirical = TRUE` table `or_plot()` picks one column and informs afterwar
 
 ## 20. Rejected alternatives
 
-| rejected | why |
-|---|---|
-| a new `SCALES` fact table beside `MEASURES` | `MEASURES` is about the colour *measure*; the estimate scale is a different question with the *same* dispatch as `fmt_gap_scale_key()`. Generalising that one function is integration; a parallel table is a second encoding of one rule (§2.3a) |
-| deriving the axis from the rendered string (`format()`) | matching rendered labels is exactly what the roles-are-stored rule forbids, and it is how `or_plot()`'s `^Emp\\.` prefix bug happened (`dev/reg_comparison_framework_stress_test.md:691`) |
-| pairing crude and model by column **name** (`Obs_OR` ↔ `Model_OR`) | `obs` is stored, name-free, and is the only carrier for multinomial (§8.1) |
-| `sqrt(se_model² + se_crude²)` for the band | measured 2-4× too large; the estimators are correlated (z8-B) |
-| CI-overlap reading | Schenker & Gentleman 2001 (§9.1) |
-| returning a `gtable` with a finalfit-style text panel | un-modifiable by the user; re-prints a table the user already has; `labels = "estimate"` gives the same information inside one `ggplot` (§15.3) |
-| `ggh4x` for per-facet axis titles | new Suggest, forbidden by z15 R4; the strip label solves it (§14.4) |
-| `patchwork` | not a Suggest anywhere in the repo; `gridExtra` is the established grid tool and A5 avoids needing either |
-| a `"plot"` medium in `legend_render_line()` | `"plain"` and `"runs"` already cover it (§13) |
-| sorting rows by effect size | breaks the table↔plot correspondence, which is the feature's reason to exist |
-| extending `reg_plot()` to crosstabs now | the estimate model is class-agnostic and a crosstab dot plot is one facet mapping away, but it is a *second* feature with its own layout questions. Deliberately deferred, noted so the door stays open (D9) |
+| rejected                                                           | why                                                                                                                                                                                                                                              |
+|--------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| a new `SCALES` fact table beside `MEASURES`                        | `MEASURES` is about the colour *measure*; the estimate scale is a different question with the *same* dispatch as `fmt_gap_scale_key()`. Generalising that one function is integration; a parallel table is a second encoding of one rule (§2.3a) |
+| deriving the axis from the rendered string (`format()`)            | matching rendered labels is exactly what the roles-are-stored rule forbids, and it is how `or_plot()`'s `^Emp\\.` prefix bug happened (`dev/reg_comparison_framework_stress_test.md:691`)                                                        |
+| pairing crude and model by column **name** (`Obs_OR` ↔ `Model_OR`) | `obs` is stored, name-free, and is the only carrier for multinomial (§8.1)                                                                                                                                                                       |
+| `sqrt(se_model² + se_crude²)` for the band                         | measured 2-4× too large; the estimators are correlated (z8-B)                                                                                                                                                                                    |
+| CI-overlap reading                                                 | Schenker & Gentleman 2001 (§9.1)                                                                                                                                                                                                                 |
+| returning a `gtable` with a finalfit-style text panel              | un-modifiable by the user; re-prints a table the user already has; `labels = "estimate"` gives the same information inside one `ggplot` (§15.3)                                                                                                  |
+| `ggh4x` for per-facet axis titles                                  | new Suggest, forbidden by z15 R4; the strip label solves it (§14.4)                                                                                                                                                                              |
+| `patchwork`                                                        | not a Suggest anywhere in the repo; `gridExtra` is the established grid tool and A5 avoids needing either                                                                                                                                        |
+| a `"plot"` medium in `legend_render_line()`                        | `"plain"` and `"runs"` already cover it (§13)                                                                                                                                                                                                    |
+| sorting rows by effect size                                        | breaks the table↔plot correspondence, which is the feature's reason to exist                                                                                                                                                                     |
+| extending `reg_plot()` to crosstabs now                            | the estimate model is class-agnostic and a crosstab dot plot is one facet mapping away, but it is a *second* feature with its own layout questions. Deliberately deferred, noted so the door stays open (D9)                                     |
 
 ## 21. Open decisions for the maintainer
 
-| # | decision | recommendation |
-|---|---|---|
-| **D1** | Remove `or_plot()` outright (contradicting z15 ruling R3, which predates the "no back-compat on reg functions" instruction), or keep it as an alias of `reg_plot(columns = <the OR column>)`? | **Remove.** Never released; the alias would preserve a broken `point_size` and a private ladder |
-| **D2** | `gap_se` is gated on `color = "adjustment"` (`R/tab_reg.R:2355`). Add `tab_reg(gap_test =)`, always compute it when `empirical = TRUE` and valid, or leave it and degrade with a message? | **Add `gap_test = c("auto", TRUE, FALSE)`** (§8.2) |
-| **D3** | Export `reg_estimates()`, or keep it internal behind `reg_plot(return_data = TRUE)`? | **Export** (§2.4) |
-| **D4** | Ship `what = "level"` (observed vs adjusted percentages), knowing it only works on AME tables? | Ship it — it is the most readable figure for the target audience — but cut it without regret if AME tables are judged rare (§11) |
-| **D5** | `guide = "bands"` (panel background = the colour scale) — ship, or gridlines only? | Ship, **not** as the default (§12.3) |
-| **D6** | Caption via `rd_footer(medium = "plain")`, a coloured `"runs"` caption, or a real ggplot guide built from `legend_break_tokens()`? | `"plain"` for v1 (§13) |
-| **D7** | Fix the comparison-mode facet key by storing the served `col_var` on crude columns, or by deriving it once in `reg_estimates()`? | Derive once (§14.2) — storing it would change a column attribute that the exporters' header machinery reads |
-| **D8** | Land `reg_plot()` after z15-iii (adopting `reg_plot_theme()`), or before (defining the seam)? | **After** (§16.1) |
-| **D9** | Should the estimate model / a future `reg_plot()` accept `tab()` crosstabs (cell estimates with CIs)? | Not now; keep the internals class-agnostic so it stays a small step (§20) |
-| **D10** | Function name: `reg_plot()` (symmetric with `reg_check_plots()`), or a general name (`tab_chart()`) since the internal model is not regression-specific? | **`reg_plot()`** — the symmetry with `reg_check_plots()` is worth more than anticipating D9 |
+| #       | what to decide                                                                                                                                                                                      | **maintainer’s decision**                                                                                                                   |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| **D1**  | Remove `or_plot()` outright (contradicting z15 ruling R3, which predates the "no back-compat on reg functions" instruction), or keep it as an alias of `reg_plot(columns = <the OR column>)`? | **Remove.** Never released; the alias would preserve a broken `point_size` and a private ladder                                  |
+| **D2**  | `gap_se` is gated on `color = "adjustment"` (`R/tab_reg.R:2355`). Add `tab_reg(gap_test =)`, always compute it when `empirical = TRUE` and valid, or leave it and degrade with a message?     | **Always compute it when `empirical = TRUE` and valid.**                                                                           |
+| **D3**  | Export `reg_estimates()`, or keep it internal behind `reg_plot(return_data = TRUE)`?                                                                                                          | Keep it internal behind `reg_plot(return_data = TRUE)`                                                                                                                |
+| **D4**  | Ship `what = "level"` (observed vs adjusted percentages), knowing it only works on AME tables?                                                                                                | Ship it — it is the most readable figure for the target audience |
+| **D5**  | `guide = "bands"` (panel background = the colour scale) — ship, or gridlines only?                                                                                                            | Ship, **not** as the default (§12.3)                                                                                             |
+| **D6**  | Caption via `rd_footer(medium = "plain")`, a coloured `"runs"` caption, or a real ggplot guide built from `legend_break_tokens()`?                                                            | a real ggplot guide is needed for all forest plots, carefully designed for concision, ease-to-understand and clarity (some things may need to stay in a footer too)                                                                                                          |
+| **D7**  | Fix the comparison-mode facet key by storing the served `col_var` on crude columns, or by deriving it once in `reg_estimates()`?                                                              | Derive once (§14.2) — storing it would change a column attribute that the exporters' header machinery reads                      |
+| **D8**  | Land `reg_plot()` after z15-iii (adopting `reg_plot_theme()`), or before (defining the seam)?                                                                                                 | **After** (§16.1)                                                                                                                |
+| **D9**  | Should the estimate model / a future `reg_plot()` accept `tab()` crosstabs (cell estimates with CIs)?                                                                                         | **Now**: it’s as good to print cell CIs or difference from reference CIs than for regressions, and just totally looks like the real way tabxplor should do plots                                                       |
+| **D10** | Function name: `reg_plot()` (symmetric with `reg_check_plots()`), or a general name (`tab_chart()`) since the internal model is not regression-specific?                                      | **`forest_plot()`**, if it’s clear enough for expert users that forest plots are for effect + CI + significance (working both for tab and tab_reg)?                                   |
 
 ## 22. Measurement appendix
 
@@ -895,38 +895,38 @@ Reproduced facts, in order of load-bearing-ness:
 
 ## 23. Sources
 
-- Schenker, N. & Gentleman, J. F. (2001), *On Judging the Significance of Differences by Examining
+* Schenker, N. & Gentleman, J. F. (2001), *On Judging the Significance of Differences by Examining
   the Overlap Between Confidence Intervals*, The American Statistician 55(3):182-186 —
-  https://www.tandfonline.com/doi/abs/10.1198/000313001317097960
-- Larmarange, J., `ggstats::ggcoef_model()` family (`ggcoef_compare`, `ggcoef_faceted`,
+  <https://www.tandfonline.com/doi/abs/10.1198/000313001317097960>
+* Larmarange, J., `ggstats::ggcoef_model()` family (`ggcoef_compare`, `ggcoef_faceted`,
   `ggcoef_dodged`, `ggcoef_table`) — the closest prior art, and from the same disciplinary audience:
-  https://larmarange.github.io/ggstats/articles/ggcoef_model.html
+  <https://larmarange.github.io/ggstats/articles/ggcoef_model.html>
   Adopted from it: variable strips as facets, reference rows drawn by default, log axis under
   `exponentiate`, `return_data`. Deliberately *not* adopted: significance by point shape (colour
   already carries it here), `stripped_rows` as decoration (the row band carries meaning here).
-- `dotwhisker::dwplot()`, `sjPlot::plot_model()`, `modelsummary::modelplot()` — the same family of
+* `dotwhisker::dwplot()`, `sjPlot::plot_model()`, `modelsummary::modelplot()` — the same family of
   coefficient plots; none of them carries a crude-vs-adjusted comparison or a gap test.
-- Forest-plot conventions (log scale so ratios are symmetric about 1; reference line at the null):
-  https://en.wikipedia.org/wiki/Forest_plot
-- Change-in-estimate practice and its limits (the 10 % rule the `adj_ratio` ladder encodes; and why
-  it is not a test): https://cran.r-project.org/web/packages/chest/vignettes/chest-vignette.html
-- Redundant visual encoding — benefit is for segmentation in dense displays, not comprehension
-  (§12.2): https://www.tandfonline.com/doi/full/10.1080/15551393.2017.1343153
-- Marginal effects vs odds ratios in sociology (why the AME/`what = "level"` geometry matters for
-  this audience): https://sociologicalscience.com/articles-v10-10-332/
+* Forest-plot conventions (log scale so ratios are symmetric about 1; reference line at the null):
+  <https://en.wikipedia.org/wiki/Forest_plot>
+* Change-in-estimate practice and its limits (the 10 % rule the `adj_ratio` ladder encodes; and why
+  it is not a test): <https://cran.r-project.org/web/packages/chest/vignettes/chest-vignette.html>
+* Redundant visual encoding — benefit is for segmentation in dense displays, not comprehension
+  (§12.2): <https://www.tandfonline.com/doi/full/10.1080/15551393.2017.1343153>
+* Marginal effects vs odds ratios in sociology (why the AME/`what = "level"` geometry matters for
+  this audience): <https://sociologicalscience.com/articles-v10-10-332/>
 
 ## 24. Internal cross-references
 
-- `dev/regression_assumptions_plots.md` §3 (R3, R4), §13, §19, §21 — the sibling plot, its theme /
+* `dev/regression_assumptions_plots.md` §3 (R3, R4), §13, §19, §21 — the sibling plot, its theme /
   guard / i18n seam, and the `lm_plots()` removal this design mirrors.
-- `dev/model_vs_observed_gap_test.md` §3.8, §4, §5.3, §12 — `gap_se`, its influence-function
+* `dev/model_vs_observed_gap_test.md` §3.8, §4, §5.3, §12 — `gap_se`, its influence-function
   derivation, where it stops holding, and ruling Q1(b).
-- `dev/model_vs_observed_effect_colour.md` §11.5 — the crude-overlay item this design implements.
-- `dev/reg_comparison_framework_stress_test.md` §8.2 and §11 — "a crude-vs-adjusted overlay in
+* `dev/model_vs_observed_effect_colour.md` §11.5 — the crude-overlay item this design implements.
+* `dev/reg_comparison_framework_stress_test.md` §8.2 and §11 — "a crude-vs-adjusted overlay in
   `or_plot()`" was listed as cheap QoL and explicitly **not taken** ("maintainer's scope choice;
   only the stale-prefix repair landed"); its capability matrix (~line 521) records that competitors
   (`gtsummary`, `finalfit`) have a forest plot but none has the comparison.
-- `dev/black_and_white_publication_palette.md` §7.3 — the rule any new renderer inherits: the
+* `dev/black_and_white_publication_palette.md` §7.3 — the rule any new renderer inherits: the
   palette is the single source; a backend only translates a record into its own vocabulary.
-- `CLAUDE.md` Repository Map — `R/tab_reg_plots.R`, `R/fmt_class.R` (colour engine + legend),
+* `CLAUDE.md` Repository Map — `R/tab_reg_plots.R`, `R/fmt_class.R` (colour engine + legend),
   `R/tab-export-prep.R` (`rd_footer`).

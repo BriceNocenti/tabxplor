@@ -146,29 +146,50 @@ test_that("the color = 'OR' interval rides the design base too", {
   expect_true(all(abs(dw[2:3] / tw - 1) < abs(rw[2:3] / tw - 1)))
 })
 
-test_that("contrib's residual is design-corrected, and identical at every table SHAPE (W3)", {
+test_that("contrib's residual is design-corrected, and identical at every table SHAPE (W3, W-B)", {
   d <- svv_fixture(); des <- svv_des(d)
-  dsg <- suppressMessages(tab(des, g, col, pct = "no", color = "contrib"))
+  dsg <- suppressMessages(tab(des, g, col, pct = "no", color = "contrib", test = TRUE))
   raw <- tab(d, g, col, wt = w, pct = "no", color = "contrib")
   cl  <- dsg[["yes"]]; rl <- raw[["yes"]]
   expect_true(all(is.finite(get_n_eff(cl))))
   expect_true(all(is.na(get_n_eff(rl))))
-  # z_design = z_classic * sqrt(n_eff / N), the standard FIRST-ORDER correction, on the subtable's
-  # grand-cell effective n -- one base for the whole table (Last Phase z16-iii).
+  # Last Phase z16-iv (W-B): z_design = z_classic / sqrt(delta-bar) -- the standard FIRST-ORDER
+  # correction, on Rao-Scott's mean generalized design effect of the table's OWN omnibus test. Before,
+  # the base was the grand cell's `n_eff`, which is degenerate there (its proportion is 1, so its
+  # design variance is 0) and always collapsed to the weights-only B^2/S -- so this ratio was blind to
+  # strata and clusters. One base for the whole table, so the ratio is the same in every cell.
   keep <- !is_totrow(cl) & is.finite(fmt_resid(cl)) & is.finite(fmt_resid(rl))
   expect_true(any(keep))
-  tot   <- dsg[["Total"]]
-  N     <- get_n(tot)[length(tot)]
-  n_eff <- get_n_eff(tot)[length(tot)]
-  expect_true(is.finite(n_eff) && n_eff < N)
+  dbar <- get_test(dsg)$deff[[1]]
+  expect_true(is.finite(dbar) && dbar > 0)
   expect_equal(abs(fmt_resid(cl)[keep] / fmt_resid(rl)[keep]),
-               rep(sqrt(n_eff / N), sum(keep)), tolerance = 1e-6)
+               rep(1 / sqrt(dbar), sum(keep)), tolerance = 1e-6)
+  # the design really is what moved it: the weights-only base gives a DIFFERENT number
+  expect_false(isTRUE(all.equal(
+    get_n(dsg[["Total"]])[length(dsg[["Total"]])] / dbar,
+    get_n_eff(dsg[["Total"]])[length(dsg[["Total"]])], tolerance = 1e-6)))
   # W3 / ruling Q3: a ROW-PERCENTAGE table of the same data gives the SAME residuals -- the residual
-  # is a property of the joint distribution and must not depend on `pct`. It used to keep the raw n
-  # here (measured p 1.6e-11 against the counts table's 0.052) because the total column's design
-  # base is degenerate (p = 1); it now falls back to that column's own B^2/S, at every shape.
-  pctt <- suppressMessages(tab(des, g, col, pct = "row", color = "contrib"))
+  # is a property of the joint distribution and must not depend on `pct`.
+  pctt <- suppressMessages(tab(des, g, col, pct = "row", color = "contrib", test = TRUE))
   expect_equal(fmt_resid(pctt[["yes"]]), fmt_resid(cl))
+})
+
+test_that("the contrib residual of a FLAT design differs from a clustered one's (W-B)", {
+  # The defect this closes: both used to take the degenerate B^2/S, so a stratified + clustered table
+  # and a flat one gave residuals identical to the last digit while their CELL intervals differed --
+  # one table reporting design-corrected intervals and weights-only significance, side by side.
+  d <- svv_fixture()
+  flat <- suppressMessages(tab(survey::svydesign(ids = ~1, weights = ~w, data = d),
+                               g, col, pct = "row", color = "contrib", test = TRUE))
+  clus <- suppressMessages(tab(svv_des(d), g, col, pct = "row", color = "contrib", test = TRUE))
+  zf <- fmt_resid(flat[["yes"]]); zc <- fmt_resid(clus[["yes"]])
+  k  <- is.finite(zf) & is.finite(zc)
+  expect_true(any(k))
+  expect_false(isTRUE(all.equal(zf[k], zc[k])))
+  # the two design effects are the two the tests report, and nothing else
+  expect_equal(abs(zc[k] / zf[k]),
+               rep(sqrt(get_test(flat)$deff[[1]] / get_test(clus)$deff[[1]]), sum(k)),
+               tolerance = 1e-6)
 })
 
 test_that("total rows get a design base of their own", {

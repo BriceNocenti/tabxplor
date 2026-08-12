@@ -8,7 +8,8 @@ tab_chi2(
   tabs,
   calc = c("ctr", "p", "var", "counts"),
   comp = NULL,
-  color = c("no", "auto", "all", "all_pct")
+  color = c("no", "auto", "all", "all_pct"),
+  .deff = NULL
 )
 }
 \arguments{
@@ -36,6 +37,11 @@ variance
 \item \code{"auto"}: only color columns with counts, \code{pct = "all"} or
 \code{pct = "all_tabs"}
 }}
+
+\item{.deff}{Internal pipeline seam. The design-based omnibus grid (one row per subtable x
+col_var, carrying Rao-Scott's mean generalized design effect), used as the divisor of the
+\code{color = "contrib"} residual's base when the table's inference basis is not \code{"n"}.
+\code{NULL} --- the default, and every direct call --- keeps the unweighted base.}
 }
 \value{
 A \code{tibble} of class \code{tab}, with Chi2 summaries as metadata,

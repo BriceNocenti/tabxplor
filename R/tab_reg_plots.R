@@ -84,7 +84,7 @@ reg_plot_fits <- function(x, data = NULL) {
     fr <- tryCatch(stats::model.frame(x), error = function(e) NULL)
     return(list(list(fit = x, data = if (is.null(data)) fr else data,
                      family = reg_plot_family_of(x), dependent = reg_plot_dep_of(x),
-                     predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL,
+                     predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL, design = NULL,
                      label = gettext("Model"))))
   }
   meta <- get_reg_meta(x)
@@ -124,7 +124,7 @@ reg_plot_fits <- function(x, data = NULL) {
                        "i" = "Pass the same data (and the same weights / design) the table was built from."))
     }
     list(fit = f$fit, data = f$data, family = sp$family, dependent = sp$dependent,
-         predictors = sp$predictors, trials = sp$trials, wt = ds$wt,
+         predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
          positive_level = f$positive_level, label = sp$label)
   }) |> purrr::compact()
 }
@@ -195,7 +195,11 @@ reg_panel_linearity <- function(ctxs, cols, opts) {
     ly <- rd_link_y(cx$data[[cx$dependent]], cx$family, cx$trials, cx$positive_level)
     w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else NULL
     purrr::list_rbind(purrr::map(num, function(v) {
-      b <- rd_bin(cx$data[[v]], ly$y, w, opts$nbins, ly$link)
+      # Last Phase z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
+      # svydesign to reg_check_plots(), the exact flat closed form on a plain weight column, and is
+      # unchanged (n) unweighted.
+      b <- rd_bin(cx$data[[v]], ly$y, w, opts$nbins, ly$link,
+                  design = cx$design, des_rows = cx$data[[svy_row_col]])
       if (is.null(b)) return(NULL)
       dplyr::mutate(b, predictor = v, model = cx$label, ylab = ly$lab)
     }))

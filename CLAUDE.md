@@ -126,10 +126,12 @@ R/
 │                              tab_reg (restrict by INTEGER rows + swap in the prepared/recoded frame --
 │                              both halves needed, svychisq/svyglm read variables OFF the design;
 │                              WARNING `[` does not drop rows on a CALIBRATED design, it sets prob=Inf,
-│                              so the frame is padded back to full length). tab_robust_overlay()/
-│                              svy_omnibus_one() run in tab_assemble_tables on the PREPARED microdata
-│                              (so the p describes the table SHOWN -- lumping/filter/relabel included),
-│                              REPLACE the chi2/F rows' statistic/df/p/n, carry effect_size/min_e through.
+│                              so the frame is padded back to full length). svy_omnibus_grid() (the
+│                              PRODUCER, run in tab_transform) + svy_omnibus_one() work on the PREPARED
+│                              microdata (so the p describes the table SHOWN -- lumping/filter/relabel
+│                              included); tab_robust_overlay() (the thin JOINER, in tab_assemble_tables,
+│                              which is where the numeric ANOVA rows are bound) REPLACES the chi2/F rows'
+│                              statistic/df/p/n and carries effect_size/min_e through.
 │                              The ONE architectural exception to "test from the aggregate" (opt-in, per-table).
 │                              z14-ii: it governs the cell INTERVALS too, so the leaves stopped re-reading
 │                              the option. z16-i: **svy_inference_basis(design_spec, wt, force=)** = THE
@@ -147,7 +149,16 @@ R/
 │                              svyglm+regTermTest the "design" basis runs, so the discriminators are two
 │                              (chi2/chi2_design, F_welch/F_classic/F_design) and not four. ~35 lines of
 │                              hand-rolled first-order Rao-Scott + weighted ANOVA DELETED, not replaced:
-│                              "survey owns the variance algebra" is this subsystem's standing rule
+│                              "survey owns the variance algebra" is this subsystem's standing rule.
+│                              z16-iv: the overlay SPLIT into producer + joiner because TWO consumers
+│                              need the grid at two times -- the `color = "contrib"` residual's base
+│                              (tab_transform, via svy_deff_lookup + tab_chi2(.deff=)) and the test
+│                              overlay (assemble). Producing it once is what makes a table's p and its
+│                              cell colours describe ONE design effect. The producer also carries the
+│                              TOTAL-TABLE group (the overlay used to drop the Ensemble test row) and is
+│                              skipped for an input that cannot SERVE the basis (pre-aggregated counts:
+│                              their footer says "n", so their test must not say "design").
+│                              inference_basis_order = the declared weakest-first enum (tab_inference_bind)
 ├── survey-variance.R (~410 L) z14-ii Route A: the DESIGN variance of a table's cells -> the existing
 │                              `n_eff` field (n_eff = p(1-p)/Var_design, or s2/Var_design for a mean =
 │                              Korn-Graubard's device), so tab_ci + the color="OR" interval + contrib all
@@ -674,7 +685,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Last Phase s which added **`n_eff`** = the effective sample size used for a cell's CI, `p(1-p)/Var_design` (Korn-Graubard): the closed-form flat-design variance under `options(tabxplor.design_effect=TRUE)` on weighted data, `svyrecvar` under a real design, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Last Phase z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Last Phase z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **12 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11; Last Phase z13 added `conf_level` → 12). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. Both are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
 - **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns, Last Phase z16-i `deff` = the design effect this row's test corrected by, and the robust discriminators are `chi2_design`/`F_design` -- TWO, not four, because the flat and the full design run the same estimator; `n` is now ALWAYS the raw count), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Last Phase z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), `inference` (Last Phase z16-i, `list(basis, degf, note)` = THE stored fact "how were this table's intervals and tests computed" -- `"n"`/`"weights"`/`"design"`/`"design_partial"`; absent when unweighted; it generates the footer sentence, so a claim cannot outlive the computation, and it retired the `.svy_weights` name-sniff), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise — `color_breaks` per named scale). Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Last Phase j added `effect_size`/`es_type`/`pvalue_exact` columns, Last Phase z16-i `deff` = the design effect this row's test corrected by, and the robust discriminators are `chi2_design`/`F_design` -- TWO, not four, because the flat and the full design run the same estimator; `n` is now ALWAYS the raw count), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Last Phase z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), `inference` (Last Phase z16-i, `list(basis, degf, note)` = THE stored fact "how were this table's intervals and tests computed" -- `"n"`/`"weights"`/`"design"`/`"design_partial"`; absent when unweighted; it generates the footer sentence, so a claim cannot outlive the computation, and it retired the `.svy_weights` name-sniff), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise through the DECLARED `meta_bind_rules` table — default first-non-NULL, `color_breaks` per named scale, `inference` the WEAKEST basis via `tab_inference_bind()` over `inference_basis_order`). A table rebuilt from SEVERAL inputs (`tab_compact()`, `tab_transpose()`) goes through **`tab_meta_merge(metas, ...)`** — reduce, then overwrite only what it recomputes — NEVER a fresh `meta = list(...)` literal: that is how z16-iv found `tab_compact()` dropping `inference` on every ≥2-`row_var` table (an inverted footer sentence, `degf` lost on the step path). Guarded by a field-AGNOSTIC probe in `test-meta-attr.R`. Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -785,7 +796,9 @@ Linux (check.R forces `LANGUAGE=en`, and testthat's `local_reproducible_output()
 fails there. That is why French output is guarded by `skip_if_no_gettext()`
 (`tests/testthat/helper-i18n.R`) and why each i18n feature is tested twice — an UNGUARDED English
 block (the guard-rail that keeps the goldens from moving; must run everywhere) plus a GUARDED French
-one. **Simulate CI before pushing something really locale-touching**, but **absolutely avoid to do it on every session and, most of all, avoid to do it when you have not heavily touched translations**:
+one. 
+
+**Never simulate CI, even before committing something really locale-touching and heavily do translation: only do it when the user call for it, when you explicitely now the user will push (not for every commit), at release, etc.**
 
 ```bash
 LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R   # the CI locale
@@ -2873,6 +2886,67 @@ one definition with two implementations, and it is what makes the whole phase mo
   `design_effect` checkbox), so `jmvtools::prepare()` must regenerate `R/jmvtab.h.R`. Until then the
   live UI simply reads the checkbox as absent (`isTRUE(NULL)` is FALSE) — no breakage, the option
   stays off.
+
+##### z16-iiii — implement corrections revealed by the second stress test
+
+Implement all corrections flagged in `dev/weights_framework_stress_test_2_post_z16.md`.
+
+Remove all white elephants and code now useless in the new simplified framework when you bump into them.
+
+**DONE (2026-08-12).** Suite green (FAIL 0, WARN 0, SKIP 4, PASS 5423 = +67), **zero golden or
+snapshot churn** — the only fixture added is new (`_color_golden/c_contrib_wt_grey.rds`), and the two
+tests that moved were consciously rewritten around a better identity. Implementation record + the two
+places the audit's own prescription was wrong: `dev/weights_framework_stress_test_2_post_z16.md` §9.
+
+All six findings were of one kind — *a fact true of the numbers fails to reach the thing that reports
+it* — and the fixes are mostly subtraction.
+
+- **W‑A** — `tab_compact()` was the package's one "rebuild a `meta` from a literal" site, so every
+  sub-field it did not name was dropped (a ≥2-`row_var` table printed the OPPOSITE footer sentence and
+  lost `degf` on the exported step path, measured 9 % too narrow at 13 PSUs). Cured structurally:
+  **`tab_meta_merge(metas, ...)`** = reduce through `tab_meta_bind()`, then overwrite only what the
+  merge recomputes, so a future sub-field rides along by construction. `tab_meta_bind()`'s hard-coded
+  `color_breaks` branch became the DECLARED `meta_bind_rules` table (net shorter), and `inference`
+  joined it with `tab_inference_bind()` — the WEAKEST basis wins over the declared
+  `inference_basis_order`, which also fixes `bind_rows()`. The `.svy_weights` name-sniff is deleted;
+  the guard is a **field-agnostic** probe (stamp a sub-field nothing knows about, assert it survives
+  compact / bind / transpose / a dplyr verb), so it cannot rot.
+- **W‑B** — the contribution residual's base was the total column's GRAND cell, whose proportion is 1,
+  so its design variance is 0 and it always took the degenerate weights-only `B²/S` — at EVERY basis.
+  A stratified+clustered table and a flat one gave residuals identical to the last digit while their
+  cell intervals differed (measured |z| overstated ×2.52 on a cluster-level `row_var`). It now takes
+  the raw n over Rao-Scott's δ̄, the one the omnibus row reports. **The audit's prescription was wrong
+  on where**: the overlay runs in `tab_assemble_tables()`, not `tab_transform()`, and must (the
+  numeric ANOVA rows are bound there) — so `tab_robust_overlay()` SPLIT into `svy_omnibus_grid()` (the
+  producer, in transform) and a thin joiner. It passes **δ̄, never a resolved base** (the base's scale
+  belongs to the table block; `svy_omnibus_one()`'s `n` is the complete-case count), so
+  `chi2_write_contrib()` needs no knowledge of the basis and basis `"n"` is untouched structurally.
+  **No new `svychisq`**: `color = "contrib"` already forces `chi2 <- TRUE`. Invariant now exact and
+  testable: |z| shrinks by exactly `1/√δ̄`.
+- **Two further defects found while implementing.** The total-table (`Ensemble`) test row was silently
+  DROPPED on any weighted/design table with `tab_vars` + `totaltab = "table"` (the overlay's groups
+  came from `unique(frame[tab_vars])` and it replaced the classic tibble) — the producer now carries
+  that group and the joiner `semi_join`s, "replace, never invent". And **W‑H**, the same disease: the
+  overlay ran on inputs that cannot SERVE the weighted basis (`tab_counts(wt_counts=)`, a cached
+  `.fine`), so a table whose footer said `"n"` carried a `chi2_design` p from `svychisq` on aggregate
+  rows — now gated on the leaf's own "can this input serve it" predicate.
+- **W‑C** one `svy_degrade_reset()` in `tab_reg()`. **W‑D** `emp_col(n_eff =)`, each arm passing ITS
+  OWN base (`nv_dr` / `nv_ci` — not derivable from `shape$type`: a poisson IRR is type `"row"` and
+  takes `nv_ci`). **W‑E** `REG_EMPIRICAL[[key]]$method_diff` replaces the hard-coded `"newcombe"`.
+  **W‑F** documented (ruling: keep `FALSE`).
+- **W‑G** `.1` the `globalVariables()` swap; `.2` `use_w2` deleted for `want_neff` ("the basis asks") ×
+  `can_neff`/`num_served` ("this input can supply"), spelled the same way in both leaves; `.3` `n_obs`
+  moved into the `use_raw` block; `.5` six `exists(inherits = FALSE)` guards → `NULL` locals; `.6` ten
+  stale *Kish / opt-in / rung / `svy_inference_mode`* comments.
+- **W‑G.4** `rd_bin()` takes the DESIGN variance under a `svydesign`, the exact flat closed form on
+  plain weights, and is unchanged unweighted. One rule for all three links (`ne = num / Var(mean)`),
+  so the link arms were untouched; verified equal to `SE(svymean)` on the bin's own domain to 1e-6.
+- **§6** `trials` validated at the boundary (a column name is refused by name), `FALSE` = off.
+- **Not done, deliberately**: the residual's correction stays FIRST-ORDER (one δ̄ per table). An exact
+  per-cell design residual needs each cell's own influence function, i.e. a second channel through the
+  col_var join — the ad hoc layer this roadmap exists to avoid. Stated in `?tab` and both vignettes.
+
+##### z16-iiiii — clean, simplify and further integrate the weights framework
 
 
 

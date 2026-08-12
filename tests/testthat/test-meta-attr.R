@@ -90,3 +90,68 @@ test_that("get_chi2 / get_test back-compat still read the top-level test attr", 
   expect_identical(get_chi2(t), get_test(t))
   expect_s3_class(get_test(t), "tbl_df")
 })
+
+# === SECTION: meta must SURVIVE every table rebuild (Last Phase z16-iv, W-A) ======================
+# THE guard is field-AGNOSTIC on purpose: it stamps a sub-field that no constructor, no getter and no
+# bind rule knows about. Any re-enumeration of `meta` (a fresh `meta = list(a, b, c)` literal in a
+# rebuilder) drops it and fails here -- which is exactly how meta$inference was lost in tab_compact(),
+# where it inverted the footer sentence and cost the exported step path its `degf`.
+
+test_that("every table rebuild carries an UNKNOWN meta sub-field (no re-enumeration)", {
+  withr::local_options(list(lifecycle_verbosity = "quiet"))   # tab_transpose() is soft-deprecated
+  probe <- function(x) tabxplor:::set_meta_field(x, "zz_probe", list(kept = TRUE))
+  kept  <- function(x) tabxplor:::get_meta(x)[["zz_probe"]]
+  tl <- tab(forcats::gss_cat, c(marital, relig), race, pct = "row", output_list = TRUE)
+  expect_null(kept(tl[[1]]))                                     # non-vacuous: absent before
+  tl <- purrr::map(tl, probe)
+  expect_identical(kept(tab_compact(tl)),                    list(kept = TRUE))  # the >=2 row_var merge
+  expect_identical(kept(dplyr::bind_rows(tl[[1]], tl[[1]])), list(kept = TRUE))  # the vctrs reconcile
+  expect_identical(kept(tab_transpose(tl[[1]])),             list(kept = TRUE))  # rewrites vars only
+  expect_identical(kept(dplyr::filter(tl[[1]], TRUE)),       list(kept = TRUE))  # a dplyr verb
+})
+
+test_that("a >=2 row_var table keeps meta$inference (the footer cannot invert)", {
+  skip_if_no_gettext()
+  d <- forcats::gss_cat[!is.na(forcats::gss_cat$tvhours) & forcats::gss_cat$tvhours > 0, ]
+  withr::local_options(list(tabxplor.design_effect = TRUE, tabxplor.lang = "en"))
+  one <- tab(d, marital, race, wt = tvhours, pct = "row")
+  two <- tab(d, c(marital, relig), race, wt = tvhours, pct = "row")
+  expect_identical(tabxplor:::tab_inference_basis(one), "weights")   # non-vacuous
+  expect_identical(tabxplor:::tab_inference_basis(two), "weights")
+  # the sentence the merged table prints must be the one the numbers earned
+  expect_identical(tab_weight_line(two), tab_weight_line(one))
+  expect_match(tab_weight_line(two), "account for the weighting")
+})
+
+test_that("an UNWEIGHTED merge still carries no inference (absent-when-unset)", {
+  m <- tab(forcats::gss_cat, c(marital, relig), race, pct = "row")
+  expect_false("inference" %in% names(tabxplor:::get_meta(m)))
+})
+
+test_that("the inference bind rule is min over n < weights < design_partial < design", {
+  mk <- function(b, d = NA_real_) list(inference = tabxplor:::new_inference_attr(b, degf = d))
+  bs <- function(x, y) tabxplor:::tab_meta_bind(x, y)$inference$basis
+  expect_identical(bs(mk("design"),         mk("weights")), "weights")
+  expect_identical(bs(mk("weights"),        mk("design")),  "weights")   # symmetric
+  expect_identical(bs(mk("n"),              mk("design")),  "n")
+  expect_identical(bs(mk("design_partial"), mk("design")),  "design_partial")
+  expect_identical(bs(mk("design"),         mk("design")),  "design")
+  expect_identical(tabxplor:::tab_meta_bind(mk("design", 30), mk("design", 12))$inference$degf, 12)
+  expect_null(tabxplor:::tab_meta_bind(mk("design"), mk("design"))$inference$degf)  # NA stays ABSENT
+  # a one-sided bind is a pass-through, not a downgrade
+  expect_identical(tabxplor:::tab_meta_bind(mk("design"), NULL)$inference$basis, "design")
+  expect_identical(tabxplor:::tab_meta_bind(NULL, mk("design"))$inference$basis, "design")
+})
+
+test_that("tab_weight_line() reads the STORED basis, never the .svy_weights column name", {
+  skip_if_no_gettext()
+  withr::local_options(list(tabxplor.lang = "en"))
+  g <- forcats::gss_cat[!is.na(forcats::gss_cat$tvhours) & forcats::gss_cat$tvhours > 0, ]
+  t <- tab(g, marital, race, wt = tvhours)
+  expect_match(tab_weight_line(t), "unweighted sample size")           # basis "n" = the default
+  # forge the internal design weight name with NO stored inference: the line is DROPPED, the internal
+  # name is never printed, and no claim about the intervals is invented.
+  v <- get_vars_attr(t); v$wt <- ".svy_weights"
+  t2 <- tabxplor:::set_meta_field(tabxplor:::set_meta_field(t, "vars", v), "inference", NULL)
+  expect_null(tab_weight_line(t2))
+})

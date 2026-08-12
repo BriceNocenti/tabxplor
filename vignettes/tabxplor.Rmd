@@ -532,8 +532,10 @@ says) and the others are read as spacings from it. Both readings share one signi
 - the **adjusted standardized residual** (Haberman; SPSS's "adjusted residual", `chisq.test()$stdres`),
   never the Pearson residual `(o − e)/√e`, whose variance is below 1 and which therefore under-rejects;
 - computed the way every interval in tabxplor is: weighted estimate, and a base that follows the
-  inference basis — the raw *n*, or the whole table's effective *n* under
-  `options(tabxplor.design_effect = TRUE)` or under a `survey` design. One base per table, so a counts
+  inference basis — the raw *n* (the reading a correspondence analysis expects), or that *n* divided
+  by the **association's** design effect under `options(tabxplor.design_effect = TRUE)` or a `survey`
+  design. That design effect is Rao-Scott's, the very one the table's own Chi-2 line reports, so the
+  colours and the p-value describe one design effect and not two. One base per table, so a counts
   table and a percentage table of the same data give the **same** residuals. The contribution itself
   stays **weighted** and is identical at every basis — it estimates the population table's structure,
   while the residual is the test, which is what keeps the correspondence-analysis reading safe;

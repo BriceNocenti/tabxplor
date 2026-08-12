@@ -120,11 +120,20 @@ no clean crude analogue and is ignored (with a message).
 The crude companions are \strong{always} on the same inference basis as the \verb{Model_*} column beside
 them, which is the whole point of putting them side by side: when the data is weighted, their
 intervals account for the weighting exactly (the flat survey design), and under a
-\code{survey::svydesign} for the full design. \code{\link[=tab]{tab()}}'s \code{tabxplor.design_effect} option is \emph{not} read
-here --- turn it on if you want a \code{tab()} percentage interval to be comparable with these
-columns. A \strong{continuous} predictor's companion comes from a univariable fit; a categorical one
+\code{survey::svydesign} for the full design. Each column stores the base its own interval used, in
+the \code{n_eff} \code{\link[=fmt]{fmt()}} field, while the displayed \code{n} stays the raw count.
+A \strong{continuous} predictor's companion comes from a univariable fit; a categorical one
 from the closed-form cell sums, which for a saturated model is the same estimator. Default
 \code{FALSE}.
+
+\strong{Two consequences worth knowing}, both deliberate. First, a weighted \code{tab_reg()} is \emph{always}
+design-corrected while a weighted \code{\link[=tab]{tab()}} is \emph{not} unless you ask
+(\code{options(tabxplor.design_effect = TRUE)}): \code{\link[=tab]{tab()}} keeps the descriptive convention (a weighted
+estimate on the raw sample size) as its default, and each table's footer says which it used --- so
+the same weight can legitimately give a slightly wider interval here than in a crosstab beside it.
+Turn the option on to make the two agree. Second, the crude percentage \emph{difference} here uses the
+\strong{Wald} interval, matching the model AME so one legend can name one method, where
+\code{tab(ci = "diff")} uses Newcombe; on a real table they differ by a few tenths of a percent.
 
 \strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
 \code{survey::svyglm}; the crude ones through an effective sample size derived from the design
