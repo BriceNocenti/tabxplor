@@ -508,18 +508,6 @@ options:
            (default) is the dual of the two-proportion score test, so the interval and the
            significance stars always agree.
 
-    - name: method_ratio
-      title: method_ratio
-      type: List
-      options:
-        - title: "katz <i>(log ratio)</i>"
-          name:  katz
-      default: katz
-      description:
-          R: >
-           The confidence-interval method for a ratio of proportions or rates
-           (\code{ci = "ratio"} on percentages): Katz's log-ratio interval.
-
     - name: method_mean_diff
       title: method_mean_diff
       type: List

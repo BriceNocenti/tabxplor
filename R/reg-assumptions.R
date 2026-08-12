@@ -664,12 +664,11 @@ rd_bin_neff <- function(sw, num, w, y, g, design = NULL, des_rows = NULL) {
     ne <- svy_flat_neff_rows(w[k], y[k], rep(1, sum(k)), nobs, num = num[[i]])
     if (isTRUE(is.finite(ne) && ne > 0)) ne else sw[[i]]
   }, double(1))
-  if (!is.null(design) && !is.null(des_rows) && length(des_rows) == nobs &&
-      requireNamespace("survey", quietly = TRUE)) {
+  if (!is.null(design) && !is.null(des_rows) && length(des_rows) == nobs) {
     V <- tryCatch(svy_var_mean(prep  = svy_var_prep(design, des_rows),
                                keys  = list(as.character(seq_len(nb))), n_tab = 0L,
                                mkeys = list(as.character(g)),
-                               xs    = list(y = as.numeric(y))),
+                               xs    = list(y = as.numeric(y)))$v,
                   error = function(e) NULL)
     if (!is.null(V) && nrow(V) == nb) {
       ne  <- num / V[, 1L]

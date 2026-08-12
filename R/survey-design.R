@@ -63,9 +63,6 @@ svy_is_design <- function(x)
 #   in `...`, so one call shape is right for both classes.
 svy_unwrap_data <- function(data, fn = "tab") {
   if (!svy_is_design(data)) return(NULL)
-  if (!requireNamespace("survey", quietly = TRUE))
-    cli::cli_abort(c("A {.cls survey.design} passed as {.arg data} needs the {.pkg survey} package.",
-                     "i" = 'Install it with {.code install.packages("survey")}.'))
   # Replicate-weight and two-phase designs are OUT (ruling Q5): their variance is a set of alternative
   # weight columns / a two-phase formula, which none of the tabxplor engines can read. Refuse clearly
   # rather than approximate -- a replicate design would otherwise die inside survey with a raw error.
@@ -141,18 +138,52 @@ svy_check_test <- function(test, arg = "test") {
 # (`agg_only`) and folded in HERE, so the basis a table reports is already the one it can honour --
 # the same fact used to be re-derived three incompatible ways downstream (`has_w2` in one leaf,
 # `num_served` in the other, `is.null(fine_fused) || by_table` in the omnibus gate).
-svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE) {
+# `design_effect` (Last Phase z16-iiiii) is the per-call argument of tab() / tab_many() / tab_num() /
+# tab_plain() / tab_counts(): NULL means "the global option", which keeps this the ONE reader of it.
+svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE,
+                                design_effect = NULL) {
   if (!is.null(design_spec) && !is.null(design_spec$design))          return("design")
-  if (length(wt) > 0L && isTRUE(can_serve) &&
-      (isTRUE(force) || isTRUE(getOption("tabxplor.design_effect", FALSE)))) return("weights")
+  de <- if (is.null(design_effect)) getOption("tabxplor.design_effect", FALSE)
+        else isTRUE(design_effect)
+  if (length(wt) > 0L && isTRUE(can_serve) && (isTRUE(force) || isTRUE(de))) return("weights")
   "n"
 }
 
 # "Is anything weighted here?" -- the ONE predicate (W12.3 counted three spellings of it: reg_fit(),
 # reg_resolve_multiplier()'s caller, and the crude grid). A design always is; otherwise it is the
-# presence of a weight, whatever its shape (NULL / character(0) / a name / a symbol).
-svy_weighted <- function(design_spec = NULL, wt = NULL)
-  !is.null(design_spec$design) || length(wt) > 0L
+# presence of a weight, whatever its shape (NULL / character(0) / a name / a symbol). `x` is a
+# design_spec or an inference object -- both name their design `$design` and their weight `$wt`.
+svy_weighted <- function(x = NULL, wt = x$wt)
+  !is.null(x$design) || length(wt) > 0L
+
+# THE inference object (Last Phase z16-iiiii) -- "how is every interval, star and colour threshold in
+# this table computed". Resolved ONCE, in tab_setup(), and carried whole from there:
+#   wt          the weight column NAME (character(0) unweighted) -- how the ESTIMATE is computed
+#   design      the survey design object, or NULL
+#   basis       "n" / "weights" / "design" / "design_partial" -- how the INTERVAL is computed
+#   degf        the design's degrees of freedom (Inf = refer to z)
+#   conf_level  the level every interval in the table is built at
+#   method      the four interval methods (see CI_METHODS / default_ci_method())
+#   agg_only    this call holds a pre-aggregate, not microdata -- so it cannot SERVE the weighted
+#               basis, which is why the resolver takes it (tab_counts declares it; see `can_serve`)
+# DESIGN: it replaced ten flat formals on plain_core() / num_core() / tab_apply_tests(), each of which
+#   had to be threaded through five layers by hand and could be (and repeatedly was) forgotten at one
+#   of them. It is a BUILD-TIME object: what survives the build is the per-column `conf_level` / `degf`
+#   / `basis` attributes tab_stamp_inference() projects from it.
+new_inference <- function(wt = character(), design_spec = NULL,
+                          conf_level = getOption("tabxplor.conf_level", 0.95),
+                          method = default_ci_method(), agg_only = FALSE, force = FALSE,
+                          design_effect = NULL) {
+  list(wt         = if (length(wt)) as.character(wt) else character(),
+       design     = design_spec$design,
+       basis      = svy_inference_basis(design_spec, wt, force = force,
+                                        can_serve = !isTRUE(agg_only),
+                                        design_effect = design_effect),
+       degf       = design_spec$degf %||% Inf,
+       conf_level = conf_level,
+       method     = method,
+       agg_only   = isTRUE(agg_only))
+}
 
 # === SECTION: design construction (shared with tab_reg) =============================================
 
@@ -210,7 +241,8 @@ svy_domain_design <- function(design, rows, frame) {
 
 # ONE subtable x col_var robust test. `sub` is the subtable frame (a data.frame, the PREPARED
 # microdata), `des_rows` the positions of its rows in the original design (NULL when no design).
-# `basis` is the resolved inference basis ("weights" / "design"); "n" never reaches here.
+# `basis` is the resolved inference basis ("weights" / "design"); "n" never reaches here, and
+# `design` is the survey design object itself (NULL at basis "weights", which synthesises a flat one).
 # `rv`/`cv` are the variable names, `is_num` its type, `wt` the weight name. Returns a one-row list
 # with the test discriminator + (statistic, df1, df2, pvalue, n, deff); an all-NA row on any failure
 # (never crashes tab()).
@@ -231,7 +263,7 @@ svy_domain_design <- function(design, rows, frame) {
 # Last Phase z16-i (W8): `n` is ALWAYS the raw count -- at the old rung 2 it silently became the
 # effective sample size, so one column meant two things depending on a global option. The effective
 # information moved to `deff`, the mean design effect this test corrected by, at its own grain.
-svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spec) {
+svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
   disc   <- if (is_num) "F_design" else "chi2_design"
   na_row <- function() list(test = disc, statistic = NA_real_, df1 = NA_real_,
                             df2 = NA_real_, pvalue = NA_real_, n = NA_real_, deff = NA_real_)
@@ -240,14 +272,14 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spe
   if (!is_num) d[[rv]] <- droplevels(as.factor(d[[rv]]))
   d[[cv]] <- if (is_num) as.double(d[[cv]]) else droplevels(as.factor(d[[cv]]))
   n_obs <- nrow(d)
-  if (!requireNamespace("survey", quietly = TRUE) || n_obs < 3) return(na_row())
+  if (n_obs < 3) return(na_row())
 
   # The design the test runs on: the user's own (restricted to these rows and given the PREPARED
   # frame -- so the p describes the lumped, relabelled, filtered table that is actually displayed,
   # and an excluded row is a proper survey DOMAIN rather than a rebuilt design), or the flat one the
   # weights themselves define.
   des <- tryCatch(
-    if (identical(basis, "design")) svy_domain_design(design_spec$design, des_rows[keep], d)
+    if (identical(basis, "design")) svy_domain_design(design, des_rows[keep], d)
     else                            svy_make_design(d, wt),
     error = function(e) NULL)
   if (is.null(des)) return(na_row())
@@ -303,7 +335,7 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spe
 #   groups came from `unique(frame[tab_vars])`, which has no such level, and it REPLACES the classic
 #   tibble. So a weighted / design table with tab_vars + totaltab = "table" lost its whole-table test.
 svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
-                             basis, design_spec, comp, totaltab_name = NULL) {
+                             basis, design, comp, totaltab_name = NULL) {
   frame    <- as.data.frame(data)
   if (nrow(frame) == 0 || length(col_vars) == 0) return(NULL)
   des_rows <- frame[[svy_row_col]]     # NULL without a design; positions into it otherwise
@@ -338,7 +370,7 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
     rows_g <- des_rows[g$rows]
     for (cv in col_vars) {
       r <- svy_omnibus_one(sub, row_var, cv, isTRUE(col_num[[cv]]), wt, basis,
-                           rows_g, design_spec)
+                           rows_g, design)
       row <- tibble::tibble(row_var = row_var, col_var = cv, test = r$test,
                             statistic = r$statistic, df1 = r$df1, df2 = r$df2,
                             pvalue = r$pvalue, n = r$n, deff = r$deff)

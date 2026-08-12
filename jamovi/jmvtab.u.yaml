@@ -229,7 +229,7 @@ children:
                 children:
                   - type: CheckBox
                     name: design_effect
-                    label: "design_effect = <i>(effet de plan des pond\u00e9rations)</i>"
+                    label: "design_effect = <i>(design effect of the weights)</i>"
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -491,31 +491,12 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: method_ratio = <i>(proportion / rate ratio)</i>
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 1
-                  row: 2
-                stretchFactor: 1
-                children:
-                  - type: ComboBox
-                    name: method_ratio
-                    enable: (ci:ratio)
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 0
-                  row: 3
-                stretchFactor: 0
-                children:
-                  - type: Label
                     label: method_mean_diff = <i>(mean difference)</i>
               - type: LayoutBox
                 margin: none
                 cell:
                   column: 1
-                  row: 3
+                  row: 2
                 stretchFactor: 1
                 children:
                   - type: ComboBox
@@ -525,7 +506,7 @@ children:
                 margin: none
                 cell:
                   column: 0
-                  row: 4
+                  row: 3
                 stretchFactor: 0
                 children:
                   - type: Label
@@ -534,7 +515,7 @@ children:
                 margin: none
                 cell:
                   column: 1
-                  row: 4
+                  row: 3
                 stretchFactor: 1
                 children:
                   - type: ComboBox

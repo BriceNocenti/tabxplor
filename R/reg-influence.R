@@ -479,15 +479,18 @@ reg_if_align <- function(v, n, des_rows) {
 # its OWN variances, so strata, clusters and finite-population corrections come along for free
 # (measured: it reproduces SE(svyglm) exactly, ratio 1.0000, while the IID version is 6 % too small on a
 # mild stratified/clustered design). Without one it is the plain sum of squares.
+# Last Phase z16-iiiii (defect 5): the svyrecvar call goes through svy_var_recvar(), the ONE place the
+# package answers the lonely-PSU question. It was inlined here WITHOUT that policy, so survey's default
+# ("fail") made svyrecvar error on a design with a single-PSU stratum -- the tryCatch then returned NA
+# and the gap test silently vanished, while tab()'s cell variances and the omnibus test, which both
+# say "adjust", succeeded on the very same design.
 #' @keywords internal
 reg_if_se <- function(d, design = NULL) {
   if (is.null(d)) return(NA_real_)
   d <- as.numeric(d)
   if (!length(d) || anyNA(d)) return(NA_real_)
-  v <- if (is.null(design)) sum(d * d) else tryCatch(
-    as.numeric(survey::svyrecvar(as.matrix(d), design$cluster, design$strata, design$fpc,
-                                 postStrata = design$postStrata)),
-    error = function(e) NA_real_)
+  v <- if (is.null(design)) sum(d * d) else
+    as.numeric(svy_var_recvar(as.matrix(d), design) %||% NA_real_)
   if (!isTRUE(is.finite(v)) || v < 0) return(NA_real_)
   sqrt(v)
 }

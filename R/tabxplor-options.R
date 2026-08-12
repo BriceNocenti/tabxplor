@@ -78,7 +78,8 @@
 #'     reads it --- its crude `empirical =` companions are always on the weighted basis, beside a model
 #'     column (\code{survey::svyglm}) that always was. For the full design effect --- strata, clusters,
 #'     `fpc`, calibration --- pass a \code{survey::svydesign} as `data`; the option is then not
-#'     consulted at all. (Renamed in 2.0.0; it was `tabxplor.kish_neff` during development.)}
+#'     consulted at all. The per-call `design_effect =` argument of [tab()], [tab_many()], [tab_num()]
+#'     and [tab_plain()] overrides it (`NULL`, the default, means "use this option").}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it: since 2.0.0 each column records the level it was built at, so the colour

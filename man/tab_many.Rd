@@ -34,11 +34,10 @@ tab_many(
   ci = "no",
   conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  method_ratio = "katz",
-  method_mean_diff = "welch",
-  method_mean_ratio = "robust",
+  ci_method = NULL,
+  design_effect = NULL,
+  method_cell = NULL,
+  method_diff = NULL,
   totaltab = "line",
   totaltab_name = "Ensemble",
   totrow = TRUE,
@@ -251,27 +250,12 @@ cell shows significance stars for the difference from its reference (\code{*} p<
 (universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
 significance computation entirely. \code{NULL} uses \code{options("tabxplor.stars")}.}
 
-\item{method_cell}{Character string, the proportion confidence-interval method for
-\code{ci = "cell"}. Either \code{"wilson"} (the score interval, default) or \code{"wald"}
-(the normal approximation, commonly taught -- degenerate at cell proportions of 0 or 1).}
+\item{ci_method, design_effect}{See \code{\link{tab}}. \code{ci_method} is the ONE named vector of
+interval methods (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial);
+\code{design_effect} opts a weighted table's intervals into the weighting's design effect.}
 
-\item{method_diff}{Character string, the proportion confidence-interval method for
-\code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
-two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
-chosen, the stars come from that same interval, so they always agree with the bracket.}
-
-\item{method_ratio}{Character string, the proportion \emph{ratio} interval (\code{color = "ratio"}):
-\code{"katz"} (the log risk-ratio interval, the only value for now).}
-
-\item{method_mean_diff}{Character string, the numeric mean-\emph{difference} interval: \code{"welch"}
-(default, each group's own variance, Welch--Satterthwaite df) or \code{"student"} (pooled variance,
-df \eqn{= n_1 + n_2 - 2}, reproducing a linear-regression coefficient interval).}
-
-\item{method_mean_ratio}{Character string, the numeric mean-\emph{ratio} interval (\code{color =
-"ratio"} on a mean): \code{"robust"} (default, each group's own variance = modified/robust Poisson),
-\code{"quasipoisson"} (Poisson SE scaled by the dispersion, reproducing a quasi-Poisson regression)
-or \code{"poisson"} (naive Var = mean). All are the log-scale Wald/t interval, exp-back. As for the
-other methods, the significance stars come from the same interval so bracket and stars always agree.}
+\item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
+\code{ci_method = c(cell = , diff = )} instead.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.

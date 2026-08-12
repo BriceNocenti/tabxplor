@@ -217,9 +217,15 @@ of \code{n}.}
 \item{n_eff}{The effective sample size used for this cell's confidence interval,
 \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
 \code{survey::svyrecvar} when a \code{survey::svydesign} was passed as \code{data},
-from the closed-form flat-design variance when
-\code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
-then falls back to the raw unweighted base).
+from the closed-form flat-design variance when the weighted basis is asked for
+(\code{tab(design_effect = TRUE)}, or \code{options(tabxplor.design_effect = TRUE)}), else
+\code{NA} (the CI then falls back to the raw unweighted base).
+It records \emph{the base that was used}, so it has three conventions and all three are
+deliberate: a finite value where the design or the weights corrected the base; \code{NA} where
+nothing did (basis \code{"n"}, or a column that has no cell base); and the \strong{raw count}
+where a correction was asked for and this cell could not carry one (a degenerate cell, a design
+variance that had to fall back) --- writing \code{NA} there would say "no interval was computed",
+which is not what happened.
 Populated for \strong{descriptive} cells --- a crosstab or mean cell, and a \code{tab_reg}
 \code{Obs_*} crude column, each carrying the base \emph{its own} interval used. A
 \code{Model_*} coefficient column carries none (a coefficient has no cell base), like

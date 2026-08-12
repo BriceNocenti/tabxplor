@@ -25,8 +25,9 @@ tab_plain(
   digits = 0,
   num = FALSE,
   df = FALSE,
-  conf_level = 0.95,
-  stars = FALSE,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
+  stars = NULL,
+  design_effect = NULL,
   color_signif = "ignore",
   .fine = NULL,
   .by_table = FALSE
@@ -161,6 +162,10 @@ as a single numeric between 0 and 1. Default to 0.95.}
 
 \item{stars}{Set to \code{TRUE} to compute the significance stars attached to the
 odds-ratio confidence intervals (with \code{OR}).}
+
+\item{design_effect}{See \code{\link{tab}}: whether a \strong{weighted} table's intervals account
+for the weighting's own design effect. \code{NULL} (default) takes
+\code{options("tabxplor.design_effect")}.}
 
 \item{color_signif}{How significance interacts with \code{color} (with \code{OR}):
 \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.

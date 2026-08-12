@@ -27,11 +27,10 @@ tab(
   ci = "no",
   conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  method_ratio = "katz",
-  method_mean_diff = "welch",
-  method_mean_ratio = "robust",
+  ci_method = NULL,
+  design_effect = NULL,
+  method_cell = NULL,
+  method_diff = NULL,
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -184,7 +183,8 @@ passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogona
 \item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
 \strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
 they carry no design effect. This is the default, and the footer says so.
-\item \code{wt = w} plus \code{options(tabxplor.design_effect = TRUE)} --- the same intervals and
+\item \code{wt = w} plus \code{design_effect = TRUE} (or, for a whole session,
+\code{options(tabxplor.design_effect = TRUE)}) --- the same intervals and
 tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
 (the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
 \code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
@@ -298,18 +298,36 @@ significance stars for each cell's difference from its reference, read from the 
 itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
 \code{FALSE}). See \code{\link{tab_many}}.}
 
-\item{method_cell, method_diff}{Character strings choosing the confidence-interval method for
-\code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
-(\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.}
+\item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector --
+partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
+\itemize{
+\item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
+(default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
+degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard, exact on an effective base).
+\item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+(default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
+(Agresti-Caffo) or \code{"wald"}.
+\item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
+group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
+interval).
+\item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
+\code{"robust"} (default, each group's own variance = modified/robust Poisson),
+\code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
+(naive).
+}
+Whatever the method, the significance stars come from that same interval, so bracket and stars
+always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
+a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.}
 
-\item{method_ratio, method_mean_diff, method_mean_ratio}{Character strings choosing the
-confidence-interval method for the ratio / numeric-mean intervals. \code{method_ratio} (proportion
-ratio, \code{color = "ratio"}): \code{"katz"} (log risk-ratio, the only value). \code{method_mean_diff}
-(numeric mean difference): \code{"welch"} (default, each group's own variance) or \code{"student"}
-(pooled variance = a linear-regression coefficient interval). \code{method_mean_ratio} (numeric mean
-ratio, \code{color = "ratio"} on a mean): \code{"robust"} (default, each group's own variance =
-modified/robust Poisson), \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or
-\code{"poisson"} (naive). See \code{\link{tab_many}}.}
+\item{design_effect}{Logical or \code{NULL} (default). Whether the confidence intervals, stars and
+colour thresholds of a \strong{weighted} table account for the weighting's own design effect (the
+exact flat-design variance) instead of using the raw sample size. \code{NULL} takes
+\code{options("tabxplor.design_effect")} (\code{FALSE} by default). Ignored without \code{wt}, and
+superseded by a \code{\link[survey]{svydesign}} passed as \code{data} (which is always
+design-based). See the "Weights" section of the introduction vignette.}
+
+\item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
+\code{ci_method = c(cell = , diff = )} instead.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :

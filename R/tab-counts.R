@@ -219,7 +219,7 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' @param base For `input = "pct"`: the column holding each row's sample size N.
 #' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
 #'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,method_ratio,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars,names_prefix,names_sort
+#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,ci_method,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars,names_prefix,names_sort
 #'   Same meaning as in [tab()]. `color` accepts every form [tab()] does (`FALSE` / `TRUE` /
 #'   a measure / `c(text, background)` / `list(pct =, mean =)`). Only `na = "keep"` / `"drop"` are
 #'   available (`"drop_all"` / `"common_base"` need the microdata). The [tab()] arguments that pick or
@@ -228,8 +228,9 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'   (lumping rare levels counts individual observations); build from microdata with [tab()] for those.
 #'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); a survey
 #'   design as `data` (per-observation weights and structure a count table cannot carry -- it is
-#'   refused with a message); `method_mean_diff`/`method_mean_ratio` (a counts table has no
-#'   numeric column); `parallel`; `output_list`; `sup_cols`.
+#'   refused with a message); `design_effect` (same reason: no per-observation weights); `parallel`;
+#'   `output_list`; `sup_cols`. The `mean_diff` / `mean_ratio` slots of `ci_method` are inert here
+#'   (a counts table has no numeric column).
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0 (see [tab()]).
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
@@ -254,9 +255,8 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        OR = "no", test = FALSE,
                        na = "keep", cleannames = NULL,
                        ref = "auto", ref2 = "first", comp = "tab",
-                       ci = "no", conf_level = 0.95, stars = NULL,
-                       method_cell = "wilson", method_diff = "newcombe",
-                       method_ratio = "katz",
+                       ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95),
+                       stars = NULL, ci_method = NULL,
                        totaltab = "line", totaltab_name = "Ensemble",
                        tot = c("row", "col"), total_names = "Total",
                        add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
@@ -352,9 +352,9 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   totcol <- if ("col" %in% tot) "last" else "no"
 
   # Phase 17e: the same typed new_ctx() constructor tab_build() uses. tab_counts() sets the fields it
-  # needs and inherits the rest (parallel/cache_env/defer_level_merge/levels_order/method_mean_* -- the
-  # mean CI methods are numeric-only and inert on a counts table, but ci_settings expects them) from the
-  # ONE defaults list. Colour rides the parsed spec, exactly as tab() does (R/tab.R): the legacy string,
+  # needs and inherits the rest (parallel / cache_env / defer_level_merge / levels_order) from the
+  # ONE defaults list. The two numeric interval methods of `ci_method` are inert on a counts table
+  # (there are no mean columns), but they ride the same one argument, so nothing has to say so. Colour rides the parsed spec, exactly as tab() does (R/tab.R): the legacy string,
   # the significance policy, and color_pct_text_is_ratio() (whether the reader's pct channel IS the
   # ratio measure -> it owns the stored interval).
   ctx <- new_ctx(
@@ -370,7 +370,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     na = na, levels = "all",
     cleannames = cleannames, output = "single",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
-    method_cell = method_cell, method_diff = method_diff, method_ratio = method_ratio,
+    ci_method = resolve_ci_method(ci_method, fn = "tab_counts"),
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,

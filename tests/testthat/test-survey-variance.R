@@ -57,14 +57,14 @@ test_that("svy_var_prop / svy_var_mean equal survey's own variance on every desi
     prep <- tabxplor:::svy_var_prep(dsg, seq_len(n))
     expect_false(is.null(prep), info = nm)
 
-    V  <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "row")
+    V  <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "row")$v
     by <- survey::svyby(~col, ~g, dsg, survey::svymean, covmat = TRUE)
     Vs <- stats::vcov(by); ix <- names(stats::coef(by))
     se_ref <- vapply(seq_along(RL), function(i) {
       k <- which(ix == paste0(RL[i], ":col", CL[2])); sqrt(Vs[k, k]) }, numeric(1))
     expect_equal(sqrt(V[, 2]), se_ref, tolerance = 1e-8, info = nm)
 
-    Vm <- tabxplor:::svy_var_mean(prep, keys, 0L, mkeys, list(x = d$x))
+    Vm <- tabxplor:::svy_var_mean(prep, keys, 0L, mkeys, list(x = d$x))$v
     expect_equal(sqrt(Vm[, 1]), unname(survey::SE(survey::svyby(~x, ~g, dsg, survey::svymean))),
                  tolerance = 1e-8, info = nm)
   }
@@ -77,11 +77,11 @@ test_that("the col% and all% bases are the transposed / whole-table domains surv
   keys <- list(g = RL); mkeys <- list(g = tabxplor:::svy_key_chr(d$g))
   mcol <- tabxplor:::svy_key_chr(d$col)
 
-  Vc  <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "col")
+  Vc  <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "col")$v
   byc <- survey::svyby(~g, ~col, des, survey::svymean, covmat = TRUE)
   expect_equal(sqrt(Vc[2, 2]), unname(survey::SE(byc)[2, 2]), tolerance = 1e-8)
 
-  Va <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "all")
+  Va <- tabxplor:::svy_var_prop(prep, keys, 0L, mkeys, mcol, CL, "all")$v
   dc <- des; dc$variables$cell <- interaction(d$g, d$col, sep = "|")
   ba <- survey::svymean(~cell, dc)
   k  <- which(names(stats::coef(ba)) == paste0("cell", RL[2], "|", CL[2]))
@@ -278,15 +278,19 @@ test_that("tab_plain() and tab_num() on a design take the same path as tab()", {
   expect_true(all(is.finite(get_n_eff(n$x))))
 })
 
-test_that("the producers return NULL, never a wrong number, on inputs they cannot serve", {
+test_that("the producers answer 'no value', never a wrong number, on inputs they cannot serve", {
   d <- svv_fixture(600); des <- svv_des(d)
   prep <- tabxplor:::svy_var_prep(des, seq_len(nrow(d)))
   RL <- levels(d$g); CL <- levels(d$col)
   mk <- list(g = tabxplor:::svy_key_chr(d$g)); mc <- tabxplor:::svy_key_chr(d$col)
-  expect_null(tabxplor:::svy_var_prop(NULL, list(g = RL), 0L, mk, mc, CL, "row"))
-  expect_null(tabxplor:::svy_var_prop(prep, list(g = RL), 0L, list(g = mk$g[-1]), mc, CL, "row"))
-  expect_null(tabxplor:::svy_var_prop(prep, list(g = RL), 0L, mk, mc, CL, "nonsense"))
-  expect_null(tabxplor:::svy_var_mean(prep, list(g = RL), 0L, mk, list(x = d$x[-1])))
+  expect_null(tabxplor:::svy_var_prop(NULL, list(g = RL), 0L, mk, mc, CL, "row")$v)
+  expect_null(tabxplor:::svy_var_prop(prep, list(g = RL), 0L, list(g = mk$g[-1]), mc, CL, "row")$v)
+  expect_null(tabxplor:::svy_var_prop(prep, list(g = RL), 0L, mk, mc, CL, "nonsense")$v)
+  expect_null(tabxplor:::svy_var_mean(prep, list(g = RL), 0L, mk, list(x = d$x[-1]))$v)
+  # z16-iiiii: the answer carries its own REASON, which is what replaced the process-global flag.
+  big <- tabxplor:::svy_var_prop(prep, list(g = rep(RL, 4e5)), 0L, mk, mc, CL, "row")
+  expect_null(big$v)
+  expect_identical(big$reason, "size")
   # and a lonely-PSU design (one cluster per stratum) still BUILDS -- the lonely.psu policy is the
   # overlay's, answered in one place (svy_var_recvar)
   d2 <- d; d2$psu <- factor(seq_len(nrow(d2)))

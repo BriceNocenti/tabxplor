@@ -138,10 +138,11 @@ tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
 #> Weighted by poids; confidence intervals and tests use the unweighted sample size.
 ```
 
-Under **unequal** weights that default carries no design effect, so the intervals run a little too narrow. One option corrects it:
+Under **unequal** weights that default carries no design effect, so the intervals run a little too narrow. One argument corrects it — per call, or once for the whole session:
 
 ```{r, echo=TRUE, eval=FALSE}
-options(tabxplor.design_effect = TRUE)
+tab(hdv2003, nivetud, occup, wt = poids, pct = "row", design_effect = TRUE)
+options(tabxplor.design_effect = TRUE)   # or once, for every table
 #> Weighted by poids; confidence intervals and tests account for the weighting.
 ```
 
@@ -161,10 +162,10 @@ So there are **three positions**, and the footer always tells you which one you 
 | you pass | what the intervals and tests carry |
 |---|---|
 | `wt = w` | the weighted estimate, on the raw *n* — no design effect at all |
-| `wt = w` + `options(tabxplor.design_effect = TRUE)` | the unequal weighting, exactly — blind to clustering and calibration |
+| `wt = w` + `design_effect = TRUE` | the unequal weighting, exactly — blind to clustering and calibration |
 | a `survey` design as `data` | the full design: strata, clusters, `fpc`, calibration |
 
-Turn the option on **if you want a `tab()` percentage interval to be comparable with the `Obs_*` column of a `tab_reg()` on the same data**: a regression table's crude companions are always corrected, beside a model column that always was, so at the default position the two functions disagree.
+Turn it on **if you want a `tab()` percentage interval to be comparable with the `Obs_*` column of a `tab_reg()` on the same data**: a regression table's crude companions are always corrected, beside a model column that always was, so at the default position the two functions disagree.
 
 **Check what your file can actually give you before reaching for the third position.** Look for a stratum, cluster or calibration variable (`strate`, `grappe`, `psu`, `nomen`…). Many released research files ship one calibrated weight and nothing else — the design variables are withheld for confidentiality — and on such a file a design carries only the unequal weighting, i.e. exactly what the option already gives you. The third position pays where the design information exists: a survey you ran yourself, a secure-access file, ESS/SHARE, the OECD assessments.
 
@@ -486,12 +487,13 @@ Every colored table answers three questions:
 | mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                          |
 | mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means              |
 
-Alternative interval methods (see `?tab_ci`): 
+Alternative interval methods go in ONE argument, `ci_method` — a named vector, partial like `ref` or `pct`, so a kind you do not name keeps its default (see `?tab`): 
 
-- `method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage difference; 
-- `method_mean_diff = "student"` (pooled, the OLS two-group interval) for a mean difference; 
-- `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio. 
-- The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no alternative.
+- `ci_method = c(diff = "ac")` (Agresti-Caffo) or `"wald"` for a percentage difference; 
+- `ci_method = c(mean_diff = "student")` (pooled, the OLS two-group interval) for a mean difference; 
+- `ci_method = c(mean_ratio = "quasipoisson")` or `"poisson"` for a mean ratio. 
+- Several at once: `ci_method = c(cell = "beta", diff = "ac")`.
+- The relative-risk (Katz) and odds-ratio (Woolf) intervals have no alternative, so they are not a choice.
 - A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units, unless the user provides a custom break scale.
 - For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level : it is a relative risk ratio (RRR) (the same observed quantity that is modelised by a multinomial logistic regression). The OR interval is computed only when `color_signif` or `stars` needs it.
 
@@ -499,10 +501,10 @@ Alternative interval methods (see `?tab_ci`):
 
 | type | color  | confidence interval (default) | other method                    |
 |------|--------|-------------------------------|---------------------------------|
-| pct  | `cell` | Wilson score interval         | `method_cell = "wald"` (normal) |
+| pct  | `cell` | Wilson score interval         | `ci_method = c(cell = "wald")`  |
 | mean | `cell` | one-sample Student *t* (n-1)  | —                               |
 
-Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**. `method_cell` chooses `"wilson"` (default) or `"wald"` for percentages; a mean cell interval is always the one-sample Student *t*.
+Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**. `ci_method = c(cell = )` chooses `"wilson"` (default), `"wald"` or `"beta"` (Korn-Graubard) for percentages; a mean cell interval is always the one-sample Student *t*.
 
 **`color_signif` turns that interval into a coloring policy.** 
 

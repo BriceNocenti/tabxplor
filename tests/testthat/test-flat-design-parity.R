@@ -96,11 +96,11 @@ test_that("4. the closed form == svyrecvar on the SAME flat design (both leaves)
   keys  <- list(c(levels(d$grp), "Total"))
   V <- tabxplor:::svy_var_prop(
     prep, keys, 0L, list(tabxplor:::svy_key_chr(d$grp)), tabxplor:::svy_key_chr(d$col),
-    c("no", "yes", "Total"), "row")
+    c("no", "yes", "Total"), "row")$v
   expect_equal(fdp_var_prop(by_w), V[, 2], tolerance = 1e-9, ignore_attr = TRUE)
 
   by_m <- fdp_on(tab(d, grp, x, wt = w, ci = "cell"))$x
-  Vm <- tabxplor:::svy_var_mean(prep, keys, 0L, list(tabxplor:::svy_key_chr(d$grp)), list(x = d$x))
+  Vm <- tabxplor:::svy_var_mean(prep, keys, 0L, list(tabxplor:::svy_key_chr(d$grp)), list(x = d$x))$v
   expect_equal(fdp_var_mean(by_m), Vm[, 1], tolerance = 1e-9, ignore_attr = TRUE)
 })
 
@@ -208,9 +208,10 @@ test_that("12. the weights and the design basis run the SAME estimator (ruling 7
   expect_equal(a$deff,      b$deff,      tolerance = 1e-10)
 })
 
-test_that("13. method_cell = 'beta' IS survey::svyciprop(method = 'beta')", {
+test_that("13. ci_method = c(cell = 'beta') IS survey::svyciprop(method = 'beta')", {
   d <- fdp_fixture(1200, seed = 23); des <- fdp_des(d)
-  tt <- fdp_on(tab(d, grp, col, wt = w, pct = "row", ci = "cell", method_cell = "beta"))[["yes"]]
+  tt <- fdp_on(tab(d, grp, col, wt = w, pct = "row", ci = "cell",
+                   ci_method = c(cell = "beta")))[["yes"]]
   ref <- survey::svyciprop(~yes01, subset(des, grp == "A"), method = "beta")
   expect_equal(c(get_ci_inf(tt)[1], get_ci_sup(tt)[1]),
                as.numeric(attr(ref, "ci")), tolerance = 1e-6, ignore_attr = TRUE)

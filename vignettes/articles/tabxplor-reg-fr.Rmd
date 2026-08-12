@@ -144,7 +144,7 @@ gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |>
   tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop",
       color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE,
-      method_diff = "wald"
+      ci_method = c(diff = "wald")
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
 ```
@@ -526,7 +526,7 @@ Les âges moyens empiriques, et les différences d'âge moyen par rapport à la 
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "diff", ref = 1, method_mean_diff = "student"
+    color = "diff", ref = 1, ci_method = c(mean_diff = "student")
 ) |>
   mutate(diff = set_display(age, "diff"))
 # student : intervalles de confiance a variance commune, 
@@ -556,7 +556,7 @@ Les heures moyennes observées/empiriques de télévision par jour, et les diff�
 
 ```{r}
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
-    color = "ratio", ref = 1,  method_mean_ratio = "quasipoisson"
+    color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |>
   mutate(IRR = set_display(tvhours, "ratio"))
 # la methode par defaut pour les intervalles de confiance 

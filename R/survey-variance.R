@@ -27,9 +27,11 @@
 #   (the distinct key tuples, a few hundred at most), so the per-cell weighted sums are small matrix
 #   products and only the influence matrix is ever n-long.
 # KEY CONSTRAINTS:
-#   - EVERY function returns NULL rather than a wrong number (R/reg-influence.R's discipline). The leaf
-#     reads a NULL as "no design base here" and falls back to the flat closed form (and, failing that,
-#     the raw n), RECORDING the step so the footer says so -- never silently reported as design-based.
+#   - EVERY function answers "no answer" rather than a wrong number (R/reg-influence.R's discipline).
+#     The two producers say so through svy_var_out(): `v` NULL, plus the REASON. The leaf reads that as
+#     "no design base here", falls back to the flat closed form (and, failing that, the raw n) and
+#     records the step in a LOCAL, which becomes the basis "design_partial" it stamps on its own
+#     columns -- so a fallen-back table can never be reported as design-based, in any export.
 #   - `survey` owns the variance algebra. This module builds influence vectors and calls svyrecvar();
 #     it never re-implements strata / clusters / fpc / calibration (Route C, rejected, S4.8).
 #   - Weights are read as 1/prob, never from a data column: that is the calibrated-design-safe form,
@@ -54,8 +56,6 @@
 #   influence matrix is scattered into the design's own row space and the excluded rows stay zero.
 svy_var_prep <- function(design, des_rows) {
   if (is.null(design) || is.null(des_rows) || !length(des_rows))              return(NULL)
-  if (inherits(design, c("svyrep.design", "twophase", "twophase2")))
-    return(svy_var_bail("unsupported"))
   des_rows <- as.integer(des_rows)
   if (anyNA(des_rows) || any(des_rows < 1L))                                  return(NULL)
   dd <- tryCatch(design[des_rows, ], error = function(e) NULL)
@@ -107,60 +107,49 @@ svy_var_block <- function(Zf, prep) {
   v
 }
 
-# THE degrade recorder (Last Phase z16-i, W4). A console message is not a property of the table:
+# THE producers' return type (Last Phase z16-iiiii). They answer with a VALUE or with a REASON, never
+# with a bare NULL the caller has to interpret: `list(v = <matrix>, reason = NULL)` on success,
+# `list(v = NULL, reason = "size" | NULL)` when there is no answer.
+# DESIGN: this return type is what let the process-global degrade environment go. The reason now
+#   travels WITH the answer, up the call stack, to the one caller that knows whether it matters (a
+#   leaf under a real design) -- instead of being assigned into a mutable env that every later build
+#   in the session could read, which is the stale-flag hazard W-C had to patch with a reset in four
+#   entry points. A build's own degrade is now a LOCAL of that build, and cannot outlive it.
+svy_var_out <- function(v = NULL, reason = NULL) list(v = v, reason = reason)
+
+# The guards both producers open with, plus the group map they both need -- extractable only once the
+# return type carries the bail. `list(gm =, R =, K =, nfr =)` on success; a bail (no `gm`) otherwise,
+# which the caller returns verbatim as its own answer.
+svy_var_setup <- function(prep, keys, n_tab, mkeys, nfr, K) {
+  if (is.null(prep) || !length(keys) || !K || !nfr)              return(svy_var_out())
+  R <- length(keys[[1]])
+  if (R == 0L)                                                   return(svy_var_out())
+  if (!all(vapply(mkeys, length, integer(1)) == nfr))            return(svy_var_out())
+  if (!is.finite(R * nfr) || R * nfr > 5e7) return(svy_var_out(reason = "size")) # ~400 MB of influence
+  if (length(prep$w) != prep$n || max(prep$at) > prep$n)         return(svy_var_out())
+  gm <- svy_group_map(keys, n_tab, mkeys)
+  if (is.null(gm))                                               return(svy_var_out())
+  list(gm = gm, R = R, K = K, nfr = nfr)
+}
+
+# THE degrade message (Last Phase z16-i, W4). A console message is not a property of the table:
 # suppressMessages(), an Rmd chunk, tab_export(), jamovi's backend all drop it, and what survived was
-# a table whose footer asserted, permanently and in every export, something untrue of its numbers.
-# So the fall-back also RECORDS itself, in one build-scoped flag that tab_assemble_tables() reads into
-# meta$inference (basis "design_partial" + its reason), and the footer is generated from that.
-# `reason` is a three-value enum so the sentence stays one clause: the table is too large for the
-# influence matrix / the design is not supported / svyrecvar failed.
+# a table whose footer asserted, permanently and in every export, something untrue of its numbers. So
+# the fall-back also records itself -- as a LOCAL of the build that fell back (z16-iiiii), which the
+# leaf resolves into basis "design_partial" and stamps on its own columns. The CLAIM rides the
+# numbers; the REASON is a build event, and belongs where the user is when it happens and where it is
+# actionable ("too large" says to reduce the table, which an exported footer read months later could
+# not act on anyway).
+# Returns TRUE, so a caller writes `degraded <- svy_var_degraded(res$reason)`.
 # Not throttled, like every other tabxplor per-render notice (CLAUDE.md Last Phase k2: a
 # once-per-session throttle was tried and reverted).
-svy_degrade_env <- new.env(parent = emptyenv())
-
-svy_degrade_reset <- function() {
-  assign("reason",   NULL, envir = svy_degrade_env)
-  assign("pending",  NULL, envir = svy_degrade_env)
-  assign("unserved", FALSE, envir = svy_degrade_env)
-  invisible(NULL)
-}
-
-svy_degrade_get <- function() get0("reason", envir = svy_degrade_env, ifnotfound = NULL)
-
-# The OTHER thing a leaf can find out and the assembler cannot (W9): the weighted basis was asked for
-# but the input cannot serve it -- pre-aggregated counts (tab_counts, a supplied `.fine`) carry no
-# per-observation Sum(w^2), so there is no design effect to recover. The table then states basis "n"
-# and its footer says the intervals use the counts' own n, instead of claiming a correction the
-# numbers do not have.
-svy_degrade_unserved <- function() {
-  assign("unserved", TRUE, envir = svy_degrade_env)
-  invisible(NULL)
-}
-svy_degrade_unserved_get <- function() isTRUE(get0("unserved", envir = svy_degrade_env,
-                                                   ifnotfound = FALSE))
-
-# The producers return NULL rather than a wrong number; this is how the NULL says WHY, without any
-# function having to return two things.
-svy_var_bail <- function(reason = c("size", "unsupported", "failed")) {
-  assign("pending", match.arg(reason), envir = svy_degrade_env)
-  NULL
-}
-
 svy_var_degraded <- function(reason = NULL) {
-  if (is.null(reason)) reason <- get0("pending", envir = svy_degrade_env, ifnotfound = NULL)
-  reason <- reason %||% "failed"
-  assign("reason", reason, envir = svy_degrade_env)
-  assign("pending", NULL, envir = svy_degrade_env)
-  # Last Phase z16-iiiii: the message NAMES the reason. The claim ("design_partial") is a property of
-  # the numbers and rides the columns; the reason is a build event, so it belongs where the user is
-  # when it happens and where it is actionable -- "too large" says to reduce the table, which an
-  # exported footer read months later could not act on anyway.
   cli::cli_inform(c(
-    "!" = switch(reason,
-                 "size"        = "This table is too large for the sample design's variance.",
-                 "unsupported" = "This sample design is not supported by the variance engine.",
-                 "The sample design's variance could not be computed for this table."),
+    "!" = if (identical(reason, "size"))
+      "This table is too large for the sample design's variance."
+    else "The sample design's variance could not be computed for this table.",
     "i" = "Its confidence intervals fall back to the weighting alone."))
+  invisible(TRUE)
 }
 
 # === SECTION: the flat closed form (ids = ~1) =======================================================
@@ -326,16 +315,12 @@ svy_uv_v <- function(base, d, s, uj, valid) {
 # `tot_lab` is the table's Total column, i.e. "every level" rather than one. One svyrecvar call per
 # column level, each on a prepared-rows x R influence matrix (7 MB at 60 000 x 15).
 svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_lab = "Total") {
-  if (is.null(prep) || !length(keys) || !length(col_names))     return(NULL)
-  R <- length(keys[[1]]); K <- length(col_names); nfr <- length(mcol)
-  if (R == 0L || nfr == 0L)                                     return(NULL)
-  if (!all(vapply(mkeys, length, integer(1)) == nfr))           return(NULL)
-  if (!is.finite(R * nfr) || R * nfr > 5e7)  return(svy_var_bail("size"))   # ~400 MB of influence
-  if (length(prep$w) != prep$n || max(prep$at) > prep$n)        return(NULL)
-  gm <- svy_group_map(keys, n_tab, mkeys); if (is.null(gm)) return(NULL)
+  s <- svy_var_setup(prep, keys, n_tab, mkeys, nfr = length(mcol), K = length(col_names))
+  if (is.null(s$gm)) return(s)
+  gm <- s$gm; R <- s$R; K <- s$K; nfr <- s$nfr
 
   wf     <- prep$w[prep$at]
-  if (length(wf) != nfr || anyNA(wf))                           return(NULL)
+  if (length(wf) != nfr || anyNA(wf))                           return(svy_var_out())
   is_tot <- col_names == tot_lab
   # rows the displayed table is built on: a key tuple that reaches some wide row, and a col_var level
   # that reaches some wide column (the NA column is dropped from the table under na = "drop", so its
@@ -354,7 +339,7 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
                 "all"      = matrix(as.vector(gm$in_sub %*% gw), R, K),
                 "all_tabs" = matrix(sum(gw), R, K),
                 NULL)
-  if (is.null(den)) return(NULL)
+  if (is.null(den)) return(svy_var_out())
   P <- num / den
 
   out <- matrix(NA_real_, R, K)
@@ -368,10 +353,10 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
       wf * (as.numeric(d & valid & uj) - P[i, j] * as.numeric(v)) / B
     }, numeric(nfr))
     v <- svy_var_block(matrix(Zf, nrow = nfr, ncol = R), prep)
-    if (is.null(v)) return(NULL)
+    if (is.null(v)) return(svy_var_out())
     out[, j] <- v
   }
-  out
+  svy_var_out(out)
 }
 
 # Var_design of every cell MEAN of a numeric table: an R x K matrix aligned to `keys` and `xs` (a named
@@ -383,27 +368,24 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
 # (p = Sum(w*succ) / Sum(w*trials)). With wmult = trials and x = succ/trials the expression below is
 # (u - p*v)/B for (u, v) = (succ, trials) -- the general ratio form, not a second formula.
 svy_var_mean <- function(prep, keys, n_tab, mkeys, xs, wmult = NULL) {
-  if (is.null(prep) || !length(keys) || !length(xs))            return(NULL)
-  R <- length(keys[[1]]); K <- length(xs); nfr <- length(xs[[1]])
-  if (R == 0L || nfr == 0L)                                     return(NULL)
-  if (!all(vapply(mkeys, length, integer(1)) == nfr))           return(NULL)
-  if (!is.finite(R * nfr) || R * nfr > 5e7)  return(svy_var_bail("size"))
-  if (length(prep$w) != prep$n || max(prep$at) > prep$n)        return(NULL)
-  gm <- svy_group_map(keys, n_tab, mkeys); if (is.null(gm)) return(NULL)
+  K <- length(xs)
+  s <- svy_var_setup(prep, keys, n_tab, mkeys, nfr = if (K) length(xs[[1]]) else 0L, K = K)
+  if (is.null(s$gm)) return(s)
+  gm <- s$gm; R <- s$R; nfr <- s$nfr
 
   wf <- prep$w[prep$at]
   if (!is.null(wmult)) {
-    if (length(wmult) != length(wf) || anyNA(wmult))            return(NULL)
+    if (length(wmult) != length(wf) || anyNA(wmult))            return(svy_var_out())
     wf <- wf * as.numeric(wmult)
   }
-  if (length(wf) != nfr || anyNA(wf))                           return(NULL)
+  if (length(wf) != nfr || anyNA(wf))                           return(svy_var_out())
   base_ok <- gm$any_dom[gm$gcode]
   gsum    <- function(x) as.vector(rowsum(x, gm$gcode, reorder = TRUE))
 
   out <- matrix(NA_real_, R, K)
   for (j in seq_len(K)) {
     x  <- as.numeric(xs[[j]])
-    if (length(x) != nfr) return(NULL)
+    if (length(x) != nfr) return(svy_var_out())
     ok <- base_ok & !is.na(x)
     xz <- ifelse(ok, x, 0)
     B  <- as.vector(gm$in_dom %*% gsum(wf * ok))
@@ -414,8 +396,8 @@ svy_var_mean <- function(prep, keys, n_tab, mkeys, xs, wmult = NULL) {
       wf * d * (x - M[[i]]) / B[[i]]
     }, numeric(nfr))
     v <- svy_var_block(matrix(Zf, nrow = nfr, ncol = R), prep)
-    if (is.null(v)) return(NULL)
+    if (is.null(v)) return(svy_var_out())
     out[, j] <- v
   }
-  out
+  svy_var_out(out)
 }

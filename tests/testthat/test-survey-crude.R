@@ -122,7 +122,8 @@ test_that("Obs_OR's bracket IS the design variance of the log odds-ratio, and be
   V <- svc_se(survey::svyby(~I(y == "yes"), ~x, des, survey::svymean))[seq_len(3)]^2
   p <- as.numeric(tapply(d$w * (d$y == "yes"), d$x, sum) / tapply(d$w, d$x, sum))
   vl <- V / (p * (1 - p))^2                       # delta-method Var(logit p), per level
-  z  <- conf_level_to_z(0.95)
+  # z16-iiiii (D4): the critical value is the DESIGN's t, the one the Model_OR column beside it uses
+  z  <- conf_level_to_crit(0.95, svy_degf(des))
   expect_equal(unname(lw[k]), unname(2 * z * sqrt(vl[2:3] + vl[1])), tolerance = 1e-3)
 
   # against the design-based univariable model: MOST of the error goes, but not all of it -- Route A
@@ -249,23 +250,89 @@ test_that("a design whose variance cannot be computed says so and falls back", {
   # cannot be computed still HAS weights, so the fallback is the weighted base, never a wrong number.
   expect_true(all(is.finite(g1$emp_n_draw) & g1$emp_n_draw > 0))
   expect_true(all(g1$emp_n_draw <= as.double(g1$emp_n) + 1e-8))
+  # z16-iiiii: the reason travels OUT with the grid it describes -- that return value is what let the
+  # process-global degrade environment go, and it is what reg_build() stamps as "design_partial".
+  expect_true(isTRUE(attr(g, "degrade")))
 })
 
-test_that("a stale degrade flag from an EARLIER call cannot mislabel tab_reg() (W-C)", {
-  # The flag is process-scoped and reg_inference() reads it into the columns' `basis`. tab() has reset it
-  # per call since z16-i; tab_reg() never did, so one degraded table anywhere earlier in the session
-  # permanently made every later reg table claim "design_partial" -- whose footer denies a variance
-  # that WAS computed.
+test_that("a lonely-PSU design still gets a gap SE -- one lonely.psu policy, everywhere (defect 5)", {
+  # reg_if_se() called survey::svyrecvar() with NO lonely-PSU policy while svy_var_recvar() and
+  # svy_omnibus_one() both say "adjust". survey's default is "fail", so on a design with a
+  # single-PSU stratum the call errored, the tryCatch returned NA and `color = "adjustment"` lost its
+  # test -- on a design whose cell intervals and omnibus p had just been computed successfully.
+  d <- svc_fixture(n = 1200, seed = 44)
+  d$strat <- factor(ifelse(as.integer(d$psu) == 1L, "5", as.character(d$strat)))  # stratum 5: 1 PSU
+  des <- suppressMessages(
+    survey::svydesign(~psu, strata = ~strat, weights = ~w, data = d, nest = TRUE))
+  sv <- suppressMessages(svy_unwrap_data(des, "tab_reg"))
+  ds <- list(design = des, wt = ".svy_weights")
+  # survey's DEFAULT policy, which is what reg_if_se() used to inherit
+  old <- options(survey.lonely.psu = "fail"); on.exit(options(old), add = TRUE)
+  fm <- local({
+    o <- options(survey.lonely.psu = "adjust"); on.exit(options(o), add = TRUE)
+    suppressWarnings(reg_fit(sv$data, "y", "x", "binomial", ds, TRUE, FALSE, .95, "wald"))
+  })
+  d_if <- reg_coef_if_maker(fm$fit)(stats::setNames(1, "xb"))
+  expect_error(survey::svyrecvar(as.matrix(d_if), des$cluster, des$strata, des$fpc,   # the old call
+                                 postStrata = des$postStrata), "one PSU")
+  se <- suppressWarnings(reg_if_se(d_if, fm$fit$survey.design))                       # the new one
+  expect_true(is.finite(se) && se > 0)
+  # and it is the same answer the package's other svyrecvar caller gives on the same influence vector
+  expect_equal(se, sqrt(as.numeric(svy_var_recvar(as.matrix(d_if), fm$fit$survey.design))))
+})
+
+test_that("a degrade cannot escape the build it happened in (W-C)", {
+  # It used to: the flag was a process-global environment, and reg_inference() read it. tab() reset it
+  # per call from z16-i; tab_reg() never did, so ONE degraded table anywhere earlier in the session
+  # permanently made every later reg table claim "design_partial" -- whose footer then denies a
+  # variance that WAS computed. z16-iiiii makes it a local of the build, so the hazard is structural
+  # rather than patched: there is nothing left to reset, and nothing left to go stale.
   d <- svc_fixture(n = 1200, seed = 31); des <- svc_des(d)
-  svy_degrade_reset()
   clean <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
   expect_identical(tab_inference_basis(clean), "design")     # non-vacuous: it IS "design" when clean
-  suppressMessages(svy_var_degraded("size"))                 # a degrade in an EARLIER call
-  expect_identical(svy_degrade_get(), "size")
-  stale <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
-  expect_identical(tab_inference_basis(stale), "design")
-  expect_identical(tab_inference_degf(stale), tab_inference_degf(clean))
-  svy_degrade_reset()
+
+  # a real degrade, in its own build: the crude grid's rows fall outside the design's row space
+  sv  <- suppressMessages(svy_unwrap_data(des, "tab_reg"))
+  bad <- sv$data; bad[[".svy_row"]] <- rev(seq_len(nrow(bad)) + nrow(bad))
+  expect_message(reg_empirical(bad, "x", "y", "binomial", "yes", ".svy_weights",
+                               design_spec = list(design = des, wt = ".svy_weights")),
+                 "could not be computed")
+
+  after <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
+  expect_identical(tab_inference_basis(after), "design")
+  expect_identical(tab_inference_degf(after), tab_inference_degf(clean))
+  # and no reset was needed anywhere -- the helpers that made one necessary are gone
+  expect_false(exists("svy_degrade_reset", envir = asNamespace("tabxplor"), inherits = FALSE))
+})
+
+test_that("the crude bracket is referred to the SAME degrees of freedom as the model (D4)", {
+  # Last Phase z16-iiiii. An svyglm's df.residual IS the design df, so the Model_* columns were
+  # already on t(degf) while every crude Obs_* interval beside them was on z -- at a small degf the
+  # crude bracket printed NARROWER than the model bracket it exists to be compared with, in a table
+  # whose whole premise is that the two are comparable.
+  d <- svc_fixture(n = 900, seed = 12)
+  d$psu <- factor(rep(seq_len(10), each = nrow(d) / 10))      # 10 clusters, no strata -> degf 9
+  des <- suppressMessages(survey::svydesign(~psu, weights = ~w, data = d))
+  dg <- svy_degf(des)
+  expect_lt(dg, 30)                                           # non-vacuous: t(degf) != z here
+
+  sv <- suppressMessages(svy_unwrap_data(des, "tab_reg"))
+  ds <- list(design = des, wt = ".svy_weights", degf = dg)
+  g  <- reg_empirical(sv$data, "x", "y", "binomial", "yes", ".svy_weights", design_spec = ds)
+  cz <- reg_empirical_columns(
+    tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
+    g, "x", "binomial", "binomial", "coefficient", NA_real_, weighted = TRUE)
+  ct <- reg_empirical_columns(
+    tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
+    g, "x", "binomial", "binomial", "coefficient", NA_real_, weighted = TRUE, degf = dg)
+  or_z <- cz$cols[[2]]; or_t <- ct$cols[[2]]
+  w_z <- get_ci_sup(or_z) / get_ci_inf(or_z)
+  w_t <- get_ci_sup(or_t) / get_ci_inf(or_t)
+  expect_true(all(w_t[-1] > w_z[-1]))                         # t(8) is WIDER than z, everywhere
+  # and it is exactly the t/z ratio on the log scale, i.e. the same rule tab()'s own cells follow
+  expect_equal(unname(log(w_t[-1]) / log(w_z[-1])),
+               rep(conf_level_to_crit(0.95, dg) / conf_level_to_crit(0.95, Inf), 2),
+               tolerance = 1e-10)
 })
 
 test_that("off a design the crude bases and columns are unchanged", {

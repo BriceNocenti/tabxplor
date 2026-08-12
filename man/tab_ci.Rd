@@ -12,11 +12,9 @@ tab_ci(
   color = "no",
   visible = FALSE,
   stars = NULL,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  method_ratio = "katz",
-  method_mean_diff = "welch",
-  method_mean_ratio = "robust",
+  ci_method = NULL,
+  method_cell = NULL,
+  method_diff = NULL,
   ci_scale = "diff",
   degf = NULL
 )
@@ -64,26 +62,23 @@ With \code{ci = "diff"}, store and print per-cell significance stars for the dif
 the reference, read from the same interval that is displayed (universal CI-inclusion), so the
 stars and the bracket never disagree. \code{FALSE} skips the significance computation.}
 
-\item{method_cell}{Character string, the proportion CI method for \code{ci = "cell"}: either
-\code{"wilson"} (the score interval, default), \code{"wald"} (the normal approximation) or
-\code{"beta"} (Korn-Graubard: \code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval
-on the effective sample size -- the textbook design-based cell interval, conservative near 0 and 1).}
+\item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector
+(\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial) -- see \code{\link{tab}}. The
+\code{cell} slot also takes \code{"beta"} (Korn-Graubard:
+\code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval on the effective sample size
+-- the textbook design-based cell interval, conservative near 0 and 1, and \emph{exact} at the
+weighted basis, where the flat design's df is \eqn{n - 1}; under a real \code{svydesign} it is
+slightly anti-conservative, since survey's own rescaling would need the number of PSUs).}
 
-\item{method_diff}{Character string, the proportion CI method for \code{ci = "diff"}: one of
-\code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
-(Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
-It selects among the \emph{difference} methods only -- see \code{ci_scale}.}
-
-\item{method_ratio, method_mean_diff, method_mean_ratio}{Character strings, the ratio / numeric-mean
-CI methods -- see \code{\link{tab}}. \code{method_ratio}: proportion ratio (\code{"katz"}).
-\code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}). \code{method_mean_ratio}:
-mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).}
+\item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
+\code{ci_method = c(cell = , diff = )} instead.}
 
 \item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
-\code{"diff"} (default) for a difference interval (neutral 0, one of the \code{method_diff}
+\code{"diff"} (default) for a difference interval (neutral 0, one of the \code{ci_method["diff"]}
 methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
-centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (\code{method_ratio}),
-or a ratio-of-means interval for numeric means (\code{method_mean_ratio}). \code{tab()} sets it from
+centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
+ratio method), or a ratio-of-means interval for numeric means (\code{ci_method["mean_ratio"]}).
+\code{tab()} sets it from
 the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
 \code{c("ratio", "diff")}) asks for the ratio one.}
 

@@ -135,7 +135,7 @@ testthat::test_that("the ratio bracket renders on the ratio scale: no x100, no %
   testthat::expect_true(any(grepl("^\\[[0-9]+\\.[0-9]{2};[0-9]+\\.[0-9]{2}\\]$", b)))
 })
 
-testthat::test_that("the legend names Katz, not a method_diff it was not built with", {
+testthat::test_that("the legend names Katz, not a diff method it was not built with", {
   t <- tab(d, race, marital, pct = "row", color = "ratio", color_signif = "grey_non_signif")
   lg <- tab_color_legend(t, medium = "plain", lang = "en")
   testthat::expect_match(paste(lg, collapse = " "), "Katz")
@@ -209,7 +209,7 @@ testthat::test_that("a ratio-coloured MEAN stores ci_type='ratio' + ratio-scale 
                             get_ratio(col)[k] <= get_ci_sup(col)[k]))
 })
 
-testthat::test_that("the three method_mean_ratio values give the three decisions-48 intervals", {
+testthat::test_that("the three mean_ratio methods give the three decisions-48 intervals", {
   d2 <- forcats::gss_cat |> dplyr::mutate(race = forcats::fct_rev(race)) |>
     dplyr::filter(!is.na(tvhours))
   g  <- d2 |> dplyr::filter(race %in% c("White", "Black"))
@@ -220,7 +220,7 @@ testthat::test_that("the three method_mean_ratio values give the three decisions
   }
   for (m in c("robust", "quasipoisson", "poisson")) {
     t   <- tab(g |> dplyr::mutate(race = forcats::fct_drop(race)), race, tvhours, ref = 1,
-               color = "ratio", ci = "diff", method_mean_ratio = m, stars = TRUE)
+               color = "ratio", ci = "diff", ci_method = c(mean_ratio = m), stars = TRUE)
     col <- t$tvhours
     k   <- which(as.character(t$race) == "Black")  # Black vs White = ref (Total row also has a CI)
     ref <- hand(m, want_p = TRUE)
@@ -245,8 +245,11 @@ testthat::test_that("the legend names the ratio-of-means method (Welch/Student/r
     tab(d2, race, tvhours, ref = 1, ci = "diff", color_signif = "grey_non_signif", ...),
     medium = "plain", lang = "en"), collapse = " ")
   testthat::expect_match(leg(color = "ratio"),                                   "robust-Poisson")
-  testthat::expect_match(leg(color = "ratio", method_mean_ratio = "quasipoisson"), "quasi-Poisson")
-  testthat::expect_match(leg(color = "ratio", method_mean_ratio = "poisson"),    "Poisson interval")
+  testthat::expect_match(leg(color = "ratio", ci_method = c(mean_ratio = "quasipoisson")),
+                         "quasi-Poisson")
+  testthat::expect_match(leg(color = "ratio", ci_method = c(mean_ratio = "poisson")),
+                         "Poisson interval")
   testthat::expect_match(leg(color = "diff"),                                    "Welch t interval")
-  testthat::expect_match(leg(color = "diff", method_mean_diff = "student"),      "Student t interval")
+  testthat::expect_match(leg(color = "diff", ci_method = c(mean_diff = "student")),
+                         "Student t interval")
 })

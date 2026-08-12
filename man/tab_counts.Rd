@@ -26,11 +26,9 @@ tab_counts(
   ref2 = "first",
   comp = "tab",
   ci = "no",
-  conf_level = 0.95,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  method_ratio = "katz",
+  ci_method = NULL,
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -76,7 +74,7 @@ holding the \code{col_var} levels.}
 \item{input}{\code{"counts"} (default) or \code{"pct"} (with \code{cols} and \code{base}: the level columns hold
 frequencies, and counts are rebuilt from them and \code{base}).}
 
-\item{pct, color, color_signif, OR, test, na, cleannames, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, method_ratio, totaltab, totaltab_name, tot, total_names, add_n, add_pct, common_totrow, subtext, digits, n_min, display, color_breaks, spread_vars, names_prefix, names_sort}{Same meaning as in \code{\link[=tab]{tab()}}. \code{color} accepts every form \code{\link[=tab]{tab()}} does (\code{FALSE} / \code{TRUE} /
+\item{pct, color, color_signif, OR, test, na, cleannames, ref, ref2, comp, ci, conf_level, stars, ci_method, totaltab, totaltab_name, tot, total_names, add_n, add_pct, common_totrow, subtext, digits, n_min, display, color_breaks, spread_vars, names_prefix, names_sort}{Same meaning as in \code{\link[=tab]{tab()}}. \code{color} accepts every form \code{\link[=tab]{tab()}} does (\code{FALSE} / \code{TRUE} /
 a measure / \code{c(text, background)} / \code{list(pct =, mean =)}). Only \code{na = "keep"} / \code{"drop"} are
 available (\code{"drop_all"} / \code{"common_base"} need the microdata). The \code{\link[=tab]{tab()}} arguments that pick or
 collapse levels \emph{during the microdata prep} — which \code{tab_counts()} starts past — are not offered:
@@ -84,8 +82,9 @@ collapse levels \emph{during the microdata prep} — which \code{tab_counts()} s
 (lumping rare levels counts individual observations); build from microdata with \code{\link[=tab]{tab()}} for those.
 Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{wt_counts}); a survey
 design as \code{data} (per-observation weights and structure a count table cannot carry -- it is
-refused with a message); \code{method_mean_diff}/\code{method_mean_ratio} (a counts table has no
-numeric column); \code{parallel}; \code{output_list}; \code{sup_cols}.}
+refused with a message); \code{design_effect} (same reason: no per-observation weights); \code{parallel};
+\code{output_list}; \code{sup_cols}. The \code{mean_diff} / \code{mean_ratio} slots of \code{ci_method} are inert here
+(a counts table has no numeric column).}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0 (see \code{\link[=tab]{tab()}}).}
 }

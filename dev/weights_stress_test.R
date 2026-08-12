@@ -19,7 +19,10 @@ options(tabxplor.lang = "en")
 stopifnot(requireNamespace("survey", quietly = TRUE))
 
 ON <- function(e) withr::with_options(list(tabxplor.design_effect = TRUE), e)
-R  <- function() tabxplor:::svy_degrade_reset()          # the build-scoped degrade flag
+# Last Phase z16-iiiii: there is nothing left to reset -- a degrade is a LOCAL of the build that fell
+# back (svy_var_out()'s `reason`, carried to leaf_inference()), never process-global state. `R()` is
+# kept as a no-op so the block numbering below still matches the report.
+R  <- function() invisible(NULL)
 svse <- function(o) as.numeric(unlist(survey::SE(o)))
 hd <- function(x) cat("\n\n===== ", x, " =====\n", sep = "")
 fm <- function(x, d = 6) paste(format(x, digits = d), collapse = "  ")
@@ -62,7 +65,7 @@ cat("row%  ratio      :", fm(vp(row[["yes"]])[1:4] / svse(o)^2, 10), "\n")
 hd("OK 2. ... and on a STRATIFIED + CLUSTERED design (svyrecvar path)")
 R(); tc <- suppressMessages(tab(desc, grp, col, pct = "row", ci = "cell"))
 oc <- survey::svyby(~yes01, ~grp, desc, survey::svymean)
-cat("degf stored:", get_inference(tc)$degf, " (survey::degf:", survey::degf(desc), ")\n")
+cat("degf stored:", tab_inference_degf(tc), " (survey::degf:", survey::degf(desc), ")\n")
 cat("ratio      :", fm(vp(tc[["yes"]])[1:4] / svse(oc)^2, 10), "\n")
 
 hd("OK 3. ... and for MEANS")
@@ -80,32 +83,36 @@ cat("3 design     :", fm(wd(suppressMessages(tab(desc, grp, col, pct = "row", ci
 
 
 # ====================================================================================================
-hd("W-A (FIXED). meta$inference survives the >=2 row_var merge")
+hd("W-A (FIXED). the basis survives the >=2 row_var merge")
 # WAS: tab_compact() rebuilt `meta` from a hand-enumerated 3-field list, dropping everything else.
 # NOW: tab_meta_merge() reduces the inputs' metas and overwrites only what the merge recomputes.
 f <- function(t) tab_weight_line(t) %||% "(none)"
 cat("1 row_var , ON :", f(ON(tab(d, grp, col, wt = w, pct = "row"))), "\n")
 cat("2 row_vars, ON :", f(ON(tab(d, c(grp, g2), col, wt = w, pct = "row"))), "  <-- was INVERTED\n")
-cat("inference stored, 2 row_vars:",
-    if (is.null(get_inference(ON(tab(d, c(grp, g2), col, wt = w, pct = "row"))))) "NULL" else "present", "\n")
+cat("basis carried, 2 row_vars:",
+    tab_inference_basis(ON(tab(d, c(grp, g2), col, wt = w, pct = "row"))), "\n")
 t1 <- ON(tab(d, grp, col, wt = w, pct = "row", ci = "cell"))
 t2 <- ON(tab(d, c(grp, g2), col, wt = w, pct = "row", ci = "cell"))
 cat("...yet the CELLS are corrected in both:\n")
 cat("   1 row_var  widths:", fm(wd(t1), 4), "\n")
 cat("   2 row_vars widths:", fm(wd(t2), 4), "\n")
 R(); cat("design, 2 row_vars:", f(suppressMessages(tab(desf, c(grp, g2), col, pct = "row"))), "\n")
-cat("   ^ now from the STORED basis; the `.svy_weights` name-sniff (W5) is deleted\n")
+cat("   ^ now DERIVED from the columns; the `.svy_weights` name-sniff (W5) is deleted\n")
 
-hd("W-A (numbers, FIXED). the degf survives; losing it would cost 9 % of interval width")
+hd("W-A (FIXED TWICE). the degf survives; losing it would cost 9 % of interval width")
+# z16-iv made tab_compact() merge the metas; z16-iiiii moved the fact OFF the table entirely -- degf
+# and basis are per-COLUMN attributes now, so even a table stripped of `meta` keeps them.
 dd  <- fx(560, seed = 9); dd$psu <- factor(rep(seq_len(14), each = 40))
 des2 <- survey::svydesign(ids = ~psu, weights = ~w, data = dd)
 R(); s1 <- suppressMessages(tab_plain(des2, grp, col, pct = "row"))
-cat("design degf:", survey::degf(des2), " | stored:", get_inference(s1)$degf, "\n")
+cat("design degf:", survey::degf(des2), " | carried:", tab_inference_degf(s1), "\n")
 w_with <- (function(x) get_ci_sup(x) - get_ci_inf(x))(tab_ci(s1)[["yes"]])[1:3]
-s1b <- s1; attr(s1b, "meta")$inference <- NULL            # simulate the merge's loss
-w_without <- (function(x) get_ci_sup(x) - get_ci_inf(x))(tab_ci(s1b)[["yes"]])[1:3]
-cat("with    stored degf:", fm(w_with, 6), "\n")
-cat("without stored degf:", fm(w_without, 6), "\n")
+s1b <- s1; attr(s1b, "meta") <- NULL          # the whole metadata gone -- the columns still carry it
+w_meta <- (function(x) get_ci_sup(x) - get_ci_inf(x))(tab_ci(s1b)[["yes"]])[1:3]
+w_without <- (function(x) get_ci_sup(x) - get_ci_inf(x))(tab_ci(s1, degf = Inf)[["yes"]])[1:3]
+cat("with       degf:", fm(w_with, 6), "\n")
+cat("meta STRIPPED  :", fm(w_meta, 6), "  <-- identical: the fact rides the columns\n")
+cat("forced to z    :", fm(w_without, 6), "\n")
 cat("anti-conservative by:", fm(100 * (1 - w_without / w_with), 3), "%\n")
 
 
@@ -172,17 +179,17 @@ cat("omnibus implied n/deff         :", fm(4000 / (x2f / (as.numeric(chf$statist
 
 
 # ====================================================================================================
-hd("W-C (FIXED). the degrade flag no longer leaks across calls into tab_reg()")
-# tab() resets it in tab_transform() and both leaf wrappers; tab_reg() now does too.
-R(); cat("clean flag  -> basis:",
-         tab_inference_basis(suppressMessages(
-           tab_reg(desf, dependent = "col", predictors = "grp", family = "binomial"))), "\n")
-R(); suppressMessages(tabxplor:::svy_var_degraded("size"))      # a degrade in an EARLIER call
-cat("stale flag  -> basis:",
+hd("W-C (FIXED). a degrade cannot escape the build it happened in")
+# z16-iv patched this with a reset in four entry points; z16-iiiii deleted the hazard class instead --
+# the degrade is a local of the build, so there is no flag left to go stale.
+cat("clean       -> basis:",
+    tab_inference_basis(suppressMessages(
+      tab_reg(desf, dependent = "col", predictors = "grp", family = "binomial"))), "\n")
+suppressMessages(tabxplor:::svy_var_degraded("size"))           # a degrade in an EARLIER call
+cat("after one   -> basis:",
     tab_inference_basis(suppressMessages(
       tab_reg(desf, dependent = "col", predictors = "grp", family = "binomial"))),
     "  <-- was wrong: the footer then denied a variance that was computed\n")
-R()
 
 
 # ====================================================================================================
@@ -250,11 +257,12 @@ cnt <- as.data.frame(dplyr::count(d, grp, col, name = "n")); cnt$wn <- agg$wn
 tc2 <- ON(tab_counts(cnt, grp, col, counts = n, wt_counts = wn, pct = "row"))
 cat("with wt_counts       -> basis:", tab_inference_basis(tc2), "| line:", f(tc2), "\n")
 cat("   ^ the weighted basis was asked for and cannot be served (no per-obs Sum w^2):\n",
-    "     svy_degrade_unserved() downgrades to 'n' and the footer says so.\n")
+    "     the leaf's `unserved` local downgrades it to 'n' and the footer says so.\n")
 
 hd("OK 7. the option is read in exactly one DECISION site")
 cat(paste(system("grep -rn 'getOption(\"tabxplor.design_effect' ~/github/tabxplor/R/",
                  intern = TRUE), collapse = "\n"), "\n")
-cat("   ^ survey-design.R:139 is the decision; jmvtab.b.R:41 only saves it for on.exit().\n")
+cat("   ^ svy_inference_basis() is the ONE decision; every other reader takes the resolved value,\n",
+    "     and the per-call `design_effect =` argument overrides it there and only there.\n")
 
 cat("\n\ndone.\n")

@@ -151,7 +151,7 @@ gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |> 
   tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop", 
       color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE, 
-      method_diff = "wald"
+      ci_method = c(diff = "wald")
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
 ```
@@ -513,7 +513,7 @@ The empirical mean ages, and differences of mean ages from reference, can be com
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "diff", ref = 1,  method_mean_diff = "student"
+    color = "diff", ref = 1,  ci_method = c(mean_diff = "student")
 ) |> 
   mutate(diff = set_display(age, "diff"))
 # student : confidence intervals with pooled variance, to match those computed by linear regression
@@ -538,7 +538,7 @@ The empirical average TV hours per day, and differences of rate of television wa
 
 ```{r}
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
-    color = "ratio", ref = 1,  method_mean_ratio = "quasipoisson"
+    color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |> 
   mutate(IRR = set_display(tvhours, "ratio"))
 # default method for confidence intervals is robust ratio of means with unequal variable ;

@@ -637,7 +637,7 @@ systematically conservative by keeping only the widening term. Since z16 it *doe
 narrowing term visible in the weights (`n_eff > n`), and what it omits is worth ~8 % conservative
 against up to ~900 % anti-conservative.
 
-### 8.2 What follows — for maintainer decision, not proposed here
+### 8.2 What follows — for maintainer decision
 
 No code change is recommended in this document; these are the questions the evidence raises,
 ordered by how cheap and how clearly-right they are.
@@ -683,6 +683,7 @@ computations, are what z16 left behind):
    on coverage in all twelve cells tested (0.785–0.943) — but changing it moves every weighted
    table's stars, which is a release-scale decision, and the docs already state the position
    honestly in the footer. Recorded, not recommended.
+   **Maintainer’s decision: leave. If should be documented enough, where the regression vignette present empirical=TRUE for different cases and say how to match the empirical counterpart using tab(), but without endless repetitions.**
 10. **The degrees-of-freedom gap** (§7.1): structurally uncorrectable at the flat basis (with no
     PSUs, `n−1` *is* the right df for the design being assumed), so this is a documentation item at
     most — but it is a real second ×0.92 that no sentence currently mentions.

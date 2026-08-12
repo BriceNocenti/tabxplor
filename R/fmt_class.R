@@ -39,8 +39,8 @@ utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot"
 utils::globalVariables(c(
   "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
   "col_vars_text", "color_ci", "color_ctr", "color_diff_OR", "color_num", "comp", "conf_level",
-  "data", "digits", "fine_fused", "fine_num", "lv1", "method_cell", "method_diff",
-  "method_ratio", "method_mean_diff", "method_mean_ratio", "na",
+  "data", "digits", "fine_fused", "fine_num", "lv1", "ci_method", "design_effect",
+  "inference", "na",
   "na_drop_all_quo", "na_num", "na_text", "names_prefix", "names_sort", "other_if_less_than",
   "other_level", "output", "pct", "pct_vect", "ref", "ref2", "remove_levels", "row_vars",
   "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
@@ -150,9 +150,15 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param n_eff The effective sample size used for this cell's confidence interval,
 #' \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
 #' \code{survey::svyrecvar} when a \code{survey::svydesign} was passed as \code{data},
-#' from the closed-form flat-design variance when
-#' \code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
-#' then falls back to the raw unweighted base).
+#' from the closed-form flat-design variance when the weighted basis is asked for
+#' (\code{tab(design_effect = TRUE)}, or \code{options(tabxplor.design_effect = TRUE)}), else
+#' \code{NA} (the CI then falls back to the raw unweighted base).
+#' It records \emph{the base that was used}, so it has three conventions and all three are
+#' deliberate: a finite value where the design or the weights corrected the base; \code{NA} where
+#' nothing did (basis \code{"n"}, or a column that has no cell base); and the \strong{raw count}
+#' where a correction was asked for and this cell could not carry one (a degenerate cell, a design
+#' variance that had to fall back) --- writing \code{NA} there would say "no interval was computed",
+#' which is not what happened.
 #' Populated for \strong{descriptive} cells --- a crosstab or mean cell, and a \code{tab_reg}
 #' \code{Obs_*} crude column, each carrying the base \emph{its own} interval used. A
 #' \code{Model_*} coefficient column carries none (a coefficient has no cell base), like
@@ -4130,7 +4136,8 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   if (identical(measure, "adjustment"))
     return(gettext("z test on the difference between two estimates fitted on the same sample"))
   if (isTRUE(spec$is_reg)) {
-    if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
+    if (identical(ci_method_of(cis, "diff"), "profile"))
+      return(gettext("profile-likelihood interval"))
     # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
     # ratio and the cumulative OR -- naming it "log odds-ratio" unconditionally called a Poisson IRR an
     # odds ratio. The effect word (the column-name suffix the package itself writes) is the scale.
@@ -4148,28 +4155,25 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   if (identical(measure, "contrib")) return(NA_character_)
   # 14v-ii: a mean names the method actually used, from ci_settings. A ratio-of-means (ci_type "ratio")
   # is one of the dispersion-ladder intervals (robust / quasi / naive Poisson); a mean difference is
-  # Welch or pooled Student (method_mean_diff).
+  # Welch or pooled Student (the `mean_diff` slot).
   if (isTRUE(spec$is_mean)) {
     if (identical(spec$ci_type, "ratio")) {
-      mmr <- cis$method_mean_ratio; if (is.null(mmr)) mmr <- "robust"
-      return(switch(mmr,
+      return(switch(ci_method_of(cis, "mean_ratio"),
                     "robust"       = gettext("robust-Poisson (delta) interval"),
                     "quasipoisson" = gettext("quasi-Poisson interval"),
                     "poisson"      = gettext("Poisson interval"),
                     gettext("confidence interval")))
     }
-    mmd <- cis$method_mean_diff; if (is.null(mmd)) mmd <- "welch"
-    return(switch(mmd,
+    return(switch(ci_method_of(cis, "mean_diff"),
                   "welch"   = gettext("Welch t interval"),
                   "student" = gettext("Student t interval"),
                   gettext("confidence interval")))
   }
   # Phase 14b: the STORED interval names itself. A ratio-coloured proportion column carries the Katz
-  # log-RR bounds, not one of the `method_diff` difference approximations the switch below names --
+  # log-RR bounds, not one of the `diff` difference approximations the switch below names --
   # and the legend must not claim a method the bracket was never built with.
   if (identical(spec$ci_type, "ratio")) return(gettext("Katz interval on the log risk-ratio"))
-  md <- cis$method_diff; if (is.null(md)) md <- "newcombe"
-  switch(md,
+  switch(ci_method_of(cis, "diff"),
          "newcombe" = gettext("Newcombe score interval"),
          "ac"       = gettext("Wald interval with Agresti-Caffo adjustment"),
          "wald"     = gettext("Wald interval"),

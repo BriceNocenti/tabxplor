@@ -160,7 +160,9 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 11L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 12L   # bump on any store-shape change -> discard stale stores
+                            # 12 = Last Phase z16-iiiii: the tier-3 tuple folds the five method_* keys
+                            #     into one `ci_method` vector, and the columns carry degf/basis.
                             # 9 = Last Phase z8: the fmt record gained the `gap_se` field, so a tier-3
                             #     carrier stored by an older session has a 20-field frame.
                             # (8: Last Phase z5 -- the `obs` field | 7: Last Phase j -- the `test`
@@ -663,8 +665,7 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   )
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
                   "ref", "ref2", "comp", "OR", "ci", "conf_level",
-                  "method_cell", "method_diff", "method_ratio", "method_mean_diff",
-                  "method_mean_ratio", "stars", "n_min")
+                  "ci_method", "stars", "n_min")
   # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
   # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
   # 1-2 hit (design 4e). The rebuild also recomputes the reorder-driven ref shift (ref="first" /
@@ -692,14 +693,23 @@ jmv_tab3_arming <- function(color) {
 # exact match with the cached entry's tuple -> re-paint only; a difference -> re-ref (7f-4) or rebuild.
 # `ci` is the RESOLVED ci (after the color_signif cascade), so grey<->color_all (same ci) re-paint
 # while ignore<->grey (ci no<->diff) re-ref.
+# The jamovi UI still exposes one ComboBox per interval kind (five separate options); this folds them
+# into the ONE named vector the R surface takes (Last Phase z16-iiiii). Absent / empty options fall back
+# to the package defaults, so an older .h.R that does not declare them all still builds.
+#' @keywords internal
+#' @noRd
+jmv_ci_method <- function(opts) {
+  ui <- list(cell = opts$method_cell, diff = opts$method_diff,
+             mean_diff = opts$method_mean_diff, mean_ratio = opts$method_mean_ratio)
+  resolve_ci_method(unlist(purrr::compact(ui)), fn = "jmvtab")
+}
+
 #' @keywords internal
 #' @noRd
 jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
   list(arming = arming, or = opts$OR, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp,
        ci = ci_resolved, conf_level = opts$conf_level,
-       method_cell = opts$method_cell, method_diff = opts$method_diff,
-       method_ratio = opts$method_ratio, method_mean_diff = opts$method_mean_diff,
-       method_mean_ratio = opts$method_mean_ratio, stars = opts$stars)
+       ci_method = jmv_ci_method(opts), stars = opts$stars)
 }
 
 # Whether a cached armed CARRIER can be RE-REFERENCED (Phase 9b-7): only ref/ref2 changed and the
@@ -711,8 +721,7 @@ jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
 #' @keywords internal
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys <- c("arming", "or", "comp", "ci", "conf_level", "method_cell", "method_diff",
-            "method_ratio", "method_mean_diff", "method_mean_ratio", "stars")
+  keys <- c("arming", "or", "comp", "ci", "conf_level", "ci_method", "stars")
   identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
     !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
     identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
@@ -816,9 +825,7 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
     rec  <- fmt_wrap(carrier)
     rec  <- tab_ci(tabs = rec, ci = ci_resolved, comp = comp, conf_level = tuple$conf_level,
                    color = "no", visible = identical(ci_resolved, "cell"), stars = tuple$stars,
-                   method_cell = tuple$method_cell, method_diff = tuple$method_diff,
-                   method_ratio = tuple$method_ratio, method_mean_diff = tuple$method_mean_diff,
-                   method_mean_ratio = tuple$method_mean_ratio)
+                   ci_method = tuple$ci_method)
     ci_d <- fmt_unwrap(rec)
     for (nm in names(carrier$fmt)) {
       cd <- ci_d$fmt[[nm]]$frame
@@ -861,11 +868,8 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     ci           = ci,
     conf_level   = opts$conf_level,
     stars        = opts$stars,
-    method_cell  = opts$method_cell,
-    method_diff  = opts$method_diff,
-    method_ratio      = opts$method_ratio,       # Phase 15c: the three added CI expert methods
-    method_mean_diff  = opts$method_mean_diff,
-    method_mean_ratio = opts$method_mean_ratio,
+    ci_method    = jmv_ci_method(opts),
+    design_effect = opts$design_effect,
     cleannames   = FALSE,                        # cleannames applied at display (jmvtab_build)
     totaltab     = opts$totaltab,
     digits       = opts$digits,

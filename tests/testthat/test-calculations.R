@@ -569,9 +569,9 @@ testthat::test_that("option tabxplor.conf_level is the interval default; per-cal
   testthat::expect_equal(override, w90)
 })
 
-testthat::test_that("cell CI method_cell='wald' matches p +- z*sqrt(p(1-p)/n) (Phase 7g)", {
+testthat::test_that("cell CI ci_method = c(cell = 'wald') matches p +- z*sqrt(p(1-p)/n) (Phase 7g)", {
   tabs <- tab(gss, race, marital, pct = "row", ci = "cell", conf_level = 0.95,
-              method_cell = "wald")
+              ci_method = c(cell = "wald"))
   ct   <- table(gss$race, gss$marital)
   z    <- stats::qnorm(0.975)
 
@@ -594,9 +594,28 @@ testthat::test_that("cell CI method_cell='wald' matches p +- z*sqrt(p(1-p)/n) (P
   testthat::expect_true(all(is.na(get_pvalue(cn))))
 })
 
+testthat::test_that("the released method_cell / method_diff are soft-deprecated aliases of ci_method", {
+  # Last Phase z16-iiiii: five `method_*` arguments folded into ONE named vector. `method_cell` and
+  # `method_diff` are CRAN-released (1.2.0), so they keep working with one nudge; `method_ratio` /
+  # `method_mean_diff` / `method_mean_ratio` were 2.0.0-new and are simply gone.
+  withr::local_options(lifecycle_verbosity = "warning")
+  testthat::expect_warning(
+    old <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wald"), "deprecated")
+  new <- tab(gss, race, marital, pct = "row", ci = "cell", ci_method = c(cell = "wald"))
+  testthat::expect_equal(old, new)
+  testthat::expect_identical(get_ci_settings(new)$method[["cell"]], "wald")
+  # the vector is PARTIAL: an unnamed slot keeps its default, exactly like `ref` / `pct`
+  testthat::expect_identical(unname(get_ci_settings(new)$method),
+                             c("wald", "newcombe", "welch", "robust"))
+  # and one validator answers for every entry point
+  testthat::expect_error(tab(gss, race, marital, ci_method = c(diff = "wilson")), "newcombe")
+  testthat::expect_error(tab(gss, race, marital, ci_method = c(nope = "wald")), "Unknown")
+  testthat::expect_error(tab(gss, race, marital, ci_method = "wald"), "must be named")
+})
+
 testthat::test_that("wald and wilson cell CIs differ but both centre near the estimate (Phase 7g)", {
-  wilson <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wilson")
-  wald   <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wald")
+  wilson <- tab(gss, race, marital, pct = "row", ci = "cell", ci_method = c(cell = "wilson"))
+  wald   <- tab(gss, race, marital, pct = "row", ci = "cell", ci_method = c(cell = "wald"))
   col_wi <- wilson |> dplyr::filter(race == "Black") |> dplyr::pull("Divorced")
   col_wa <- wald   |> dplyr::filter(race == "Black") |> dplyr::pull("Divorced")
   # Different intervals (wald symmetric about p, wilson shifted) but same point estimate.
@@ -609,7 +628,7 @@ testthat::test_that("diff CI for proportions (method='ac') matches DescTools::Bi
   # Phase 3a: AC is now the expert opt-in (default is Newcombe, tested below). get_ci() is the
   # upper arm (ci_sup - diff), matching DescTools' upr.ci - est.
   tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95,
-              method_diff = "ac", stars = FALSE)
+              ci_method = c(diff = "ac"), stars = FALSE)
   ct <- table(gss$race, gss$marital)
 
   test_cells <- list(

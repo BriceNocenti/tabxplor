@@ -18,8 +18,8 @@ tab_num(
   ci = NULL,
   conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
-  method_mean_diff = "welch",
-  method_mean_ratio = "robust",
+  ci_method = NULL,
+  design_effect = NULL,
   ci_scale = "diff",
   totaltab = "line",
   totaltab_name = "Ensemble",
@@ -115,9 +115,8 @@ as a single numeric between 0 and 1. Default to 0.95 (95\%).}
 With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
 reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
 
-\item{method_mean_diff, method_mean_ratio}{Character strings, the numeric-mean CI methods -- see
-\code{\link{tab}}. \code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}).
-\code{method_mean_ratio}: mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).}
+\item{ci_method, design_effect}{See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
+slots of \code{ci_method} are meaningful here (a numeric table has no proportion interval).}
 
 \item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
 \code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored

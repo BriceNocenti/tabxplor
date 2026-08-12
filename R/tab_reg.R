@@ -92,12 +92,6 @@ reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
       "i" = 'default {.code effect = "coefficient"}, {.code at = "average"}.'
     ))
   }
-  if (isTRUE(weighted) && !requireNamespace("survey", quietly = TRUE)) {
-    cli::cli_abort(c(
-      "{.pkg survey} is required for weighted / survey-design regression.",
-      "i" = 'Install it with {.code install.packages("survey")}.'
-    ))
-  }
   if (family == "multinomial" && !isTRUE(weighted) && !requireNamespace("nnet", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg nnet} is required for multinomial (nominal 3+ level) outcomes.",
@@ -1649,6 +1643,12 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   # byte-identical. `n_obs` is the crude frame's row count = survey's nPSU for its flat design.
   weighted <- identical(basis, "weights") || identical(basis, "design")
   n_obs    <- nrow(data)
+  # Last Phase z16-iiiii (D4): a design's DEGREES OF FREEDOM. survey refers every interval to t(degf),
+  # and the model columns of a design-weighted tab_reg() already are (an svyglm's df.residual IS the
+  # design df) -- while the crude companions beside them were referred to z, so at degf = 8 the crude
+  # bracket printed 15 % narrower than the model bracket it exists to be compared with. `Inf` (no
+  # design) is a no-op: qt(p, Inf) is bit-identical to qnorm(p).
+  degf     <- design_spec$degf %||% Inf
   # the per-RESPONDENT weight: yw$w already carries the grouped-binomial `trials` multiplier, and the
   # ratio form wants (weight, u, v) = (w, successes, trials) -- see svy_flat_neff_rows().
   w0       <- if (identical(yw$kind, "share")) yw$w / yw$draws else yw$w
@@ -1678,8 +1678,14 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   # a CALIBRATED design needs. Every crude interval then follows for free: they all consume `n_ci` or
   # `n_draw`, and on an effective base the Woolf and Katz brackets ARE Var_design(logit p) and
   # Var_design(log p) by construction.
+  # Last Phase z16-iiiii: a LOCAL latch, and the reason travels OUT on the returned grid
+  # (attr "degrade"), which reg_build() harvests into the basis it stamps -- the process-global
+  # degrade environment is gone, so one degraded table can no longer mislabel every later one.
   said <- FALSE
-  degrade <- function() { if (!said) { svy_var_degraded(); said <<- TRUE }; NULL }
+  degrade <- function(reason = NULL) {
+    if (!said) { svy_var_degraded(reason); said <<- TRUE }
+    NULL
+  }
   # z16-ii: a FLAT svydesign(ids = ~1) has the closed form as its exact answer (verified: identical
   # to svyrecvar here), so it takes the algebraic path -- no influence matrix, no ceiling.
   need_svy <- !is.null(design_spec$design) && !svy_design_is_flat(design_spec$design)
@@ -1702,13 +1708,14 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     hide  <- function(v) ifelse(ok, as.numeric(v), NA_real_)
     xs_p  <- if (share) list(hide(yw$y))
              else lapply(stats::setNames(nm = cats), function(k) hide(as.character(yw$y) == k))
-    Vp <- if (has_cat) svy_var_mean(prep, keys, 0L, mkeys, xs_p, wmult = yw$draws) else NULL
-    Vm <- if (has_num) svy_var_mean(prep, keys, 0L, mkeys, list(hide(yw$num)))    else NULL
-    if ((has_cat && is.null(Vp)) || (has_num && is.null(Vm))) return(degrade())
-    list(p = Vp, m = Vm)
+    rp <- if (has_cat) svy_var_mean(prep, keys, 0L, mkeys, xs_p, wmult = yw$draws) else NULL
+    rm <- if (has_num) svy_var_mean(prep, keys, 0L, mkeys, list(hide(yw$num)))    else NULL
+    if ((has_cat && is.null(rp$v)) || (has_num && is.null(rm$v)))
+      return(degrade(rp$reason %||% rm$reason))
+    list(p = rp$v, m = rm$v)
   }
 
-  purrr::map_dfr(fac_preds, function(p) {
+  out <- purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
     ok <- !is.na(x) & !is.na(yw$w) & !is.na(yw$y)
     if (has_num) ok <- ok & !is.na(yw$num)
@@ -1798,7 +1805,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     emp_ratio <- if (has_cat) {
       (wpos / wneg) / rep(unname(ref$wpos / ref$wneg), times = nl)
     } else meanv / rmean
-    pw <- if (has_cat) ci_wilson(prop, n_draw, conf_level = conf_level) else
+    pw <- if (has_cat) ci_wilson(prop, n_draw, conf_level = conf_level, df = degf) else
       list(inf = rep(NA_real_, nl * nc), sup = rep(NA_real_, nl * nc))
     # Last Phase z16-iv (W-E): the family's DECLARED difference method, not a second hard-coded one.
     # This interval's only consumer is the multinomial html tooltip, which was Newcombe while the
@@ -1806,7 +1813,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     # cross-table difference from tab(ci = "diff")'s Newcombe is deliberate (Phase 16d: the crude
     # companion matches the model AME's Wald so the merged legend can name ONE method).
     dd <- if (has_cat) ci_prop_diff(prop, n_draw, rprop, r_n_draw, conf_level = conf_level,
-                                    method = emp_method_diff, want_p = FALSE) else pw
+                                    method = emp_method_diff, want_p = FALSE, df = degf) else pw
     tibble::tibble(
       var = p, level = rep(lv, each = nc), category = rep(cats, times = nl),
       emp_prop = prop, emp_prop_inf = pw$inf, emp_prop_sup = pw$sup,
@@ -1821,6 +1828,10 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
       emp_ref_n    = as.integer(rep(ref$n, nl * nc)), emp_ref_n_ci = r_n_ci
     )
   })
+  # z16-iiiii: the degrade travels OUT with the grid it describes. reg_build() harvests it into the
+  # basis it stamps on the columns ("design_partial"), so the fact reaches the footer without any
+  # process-global state -- and a grid computed for one table cannot label another.
+  structure(out, degrade = said)
 }
 
 # reg_empirical_fit() -- Last Phase z9 (numeric predictors) / z10 (ordinal outcomes): the crude
@@ -2106,7 +2117,8 @@ cat_get <- function(l, key) {
 #     numeric predictors in any family (z9), and EVERY predictor under an ordinal outcome (z10).
 reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, effect, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
-                                  color = NULL, do_exp = TRUE, fit_est = NULL, weighted = FALSE) {
+                                  color = NULL, do_exp = TRUE, fit_est = NULL, weighted = FALSE,
+                                  degf = Inf) {
   fam <- REG_EMPIRICAL[[crude_key]]
   if (is.null(fam)) return(list(cols = list(), effect = NULL, shape = NULL))
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
@@ -2242,13 +2254,13 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   if (binary_like) {
     grouped <- identical(crude_key, "grouped_binomial")
     rd <- na_ref(ci_prop_diff(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, # crude risk-difference
-                              method = fam$method_diff, want_p = TRUE))
+                              method = fam$method_diff, want_p = TRUE, df = degf))
     rd_fields <- list(pct = prop, diff = diffv, n = nv, tot_n = nv,
                       ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue)
     base <- if (grouped) {
       # the mean SCORE and its one-sample t interval (the gaussian base shape, on the numeric part)
-      cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = nv_ci - 1, conf_level = conf_level,
-                       want_p = FALSE)
+      cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = df_or_design(nv_ci - 1, degf),
+                       conf_level = conf_level, want_p = FALSE)
       list(col = emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
                                         ci_inf = cell$inf, ci_sup = cell$sup),
                          n_eff = neff_of(nv_ci)), shape = fam$base)
@@ -2264,7 +2276,8 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     # the fitted family. Always exponentiated: `exponentiate` is ignored for marginal effects. The Obs_RR
     # shape is defined once, in REG_EMPIRICAL$rr, and reused here rather than duplicated per family.
     if (effect == "ame_ratio") {
-      rr_ci <- na_ref(ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, want_p = TRUE))
+      rr_ci <- na_ref(ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level,
+                                 want_p = TRUE, df = degf))
       sh    <- reg_crude_shape(crude_key, "ame_ratio", do_exp)
       return(emit(base, list(col = emp_col(sh, list(or = prop / rprop, n = nv, ci_inf = rr_ci$inf,
                                                     ci_sup = rr_ci$sup, pvalue = rr_ci$pvalue),
@@ -2280,13 +2293,13 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     is_rr  <- identical(crude_key, "rr")
     eff_v  <- if (is_rr) prop / rprop else ratio
     eff_ci <- na_ref(if (is_rr)
-      ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, want_p = TRUE)
+      ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, want_p = TRUE, df = degf)
     else
       # the SS14 rule, unchanged: WEIGHTED proportion x UNWEIGHTED base, so the base cancels out of the
       # log-OR. For a grouped binomial that base counts DRAWS (n x trials), which is what makes the crude
       # OR equal a univariable glm(cbind(s, q - s) ~ x) rather than an OR on respondent counts.
       ci_or(prop * nv_dr, (1 - prop) * nv_dr,
-            rprop * rn_dr, (1 - rprop) * rn_dr, conf_level = conf_level, want_p = TRUE))
+            rprop * rn_dr, (1 - rprop) * rn_dr, conf_level = conf_level, want_p = TRUE, df = degf))
     sh_exp <- reg_crude_shape(crude_key, "coefficient", TRUE)
     sh_log <- reg_crude_shape(crude_key, "coefficient", FALSE)
     if (do_exp) {
@@ -2305,12 +2318,13 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   }
 
   if (identical(crude_key, "gaussian")) {
-    cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = nv_ci - 1, conf_level = conf_level, want_p = FALSE)
+    cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = df_or_design(nv_ci - 1, degf),
+                     conf_level = conf_level, want_p = FALSE)
     base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
                                        ci_inf = cell$inf, ci_sup = cell$sup),
                         n_eff = neff_of(nv_ci))
     md <- na_ref(ci_mean_diff2(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_diff, # pooled t = OLS
-                               conf_level = conf_level, want_p = TRUE))
+                               conf_level = conf_level, want_p = TRUE, df_design = degf))
     eff_col <- emp_col(fam$diff, list(diff = diffv, var = rep(var_y, n_rows), n = nv,
                                       ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue),
                        n_eff = neff_of(nv_ci))
@@ -2322,7 +2336,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   if (identical(crude_key, "poisson")) {
     # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives BOTH columns.
     rr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_ratio,
-                               conf_level = conf_level, want_p = TRUE))
+                               conf_level = conf_level, want_p = TRUE, df_design = degf))
     base_col <- emp_col(fam$base, list(mean = meanv, ratio = ratio, n = nv, tot_n = nv,
                                        ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue),
                         n_eff = neff_of(nv_ci))
@@ -3554,9 +3568,11 @@ reg_spread_models <- function(t, split_var, sl) {
 # ALWAYS on the weighted basis (its models fit through svyglm, i.e. the Binder linearization, and
 # since z16-ii its crude Obs_* companions use the same closed form), so the tab()-scoped
 # tabxplor.design_effect option is never read. Feeds the footer sentence, nothing else.
-reg_inference <- function(shared) {
+# `degraded` is harvested from the crude grids this build produced (attr "degrade", set by
+# reg_empirical()) -- z16-iiiii, in place of the process-global degrade flag it used to read.
+reg_inference <- function(shared, degraded = FALSE) {
   ds <- shared$design_spec
-  leaf_inference(svy_inference_basis(ds, ds$wt, force = TRUE), ds, ds$wt)
+  leaf_inference(new_inference(ds$wt, ds, force = TRUE), degraded = degraded)
 }
 
 # THE `meta$ci_settings` of a regression table -- what the colour legend names as the interval method.
@@ -3564,15 +3580,16 @@ reg_inference <- function(shared) {
 # mean-diff = OLS, quasi-Poisson rate-ratio = the phi-scaled model), so the legend names exactly what
 # the crude CI used.
 # Last Phase z16-iiiii: extracted because reg_build() wrote it TWICE and the two copies had drifted --
-# the split_var branch listed only conf_level / method_cell / method_diff, so a split gaussian or
+# the split_var branch listed only conf_level / the cell + diff methods, so a split gaussian or
 # poisson table's legend lost the name of the very interval its Obs_* columns print.
 #' @keywords internal
 #' @noRd
 reg_ci_settings <- function(conf_level, method) {
-  list(conf_level = conf_level, method_cell = NA_character_,
-       method_diff = method, method_ratio = "katz",
-       method_mean_diff  = REG_EMPIRICAL$gaussian$method_mean_diff,
-       method_mean_ratio = REG_EMPIRICAL$poisson$method_mean_ratio)
+  list(conf_level = conf_level,
+       method = c(cell       = NA_character_,          # a reg table has no proportion cell interval
+                  diff       = method,                 # the model's own: "wald" / "profile"
+                  mean_diff  = REG_EMPIRICAL$gaussian$method_mean_diff,
+                  mean_ratio = REG_EMPIRICAL$poisson$method_mean_ratio))
 }
 
 reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, reference = NULL,
@@ -3653,10 +3670,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
       tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
     }
-    reg_inf <- reg_inference(shared)
     grouped <- combined |>
-      # Last Phase z13 (D3) + z16-iiiii: the per-column level, design df and inference basis
-      tab_stamp_inference(conf_level, reg_inf$degf, reg_inf$basis) |>
+      # Last Phase z13 (D3): the per-column confidence level. z16-iiiii: the LEVEL only -- each group
+      # was built by the recursion above, which stamped its OWN design df and basis on its own
+      # columns, and vec_rbind()'s fmt reconcile already took the weakest of them. Re-stamping one
+      # table-wide basis here would overwrite a group whose design variance succeeded with the verdict
+      # of a group that had to fall back.
+      tab_stamp_inference(conf_level) |>
       # Last Phase z16-iiiii (defect 2): the ci_settings literal that stood here was a THREE-key
       # reduction of the non-split branch's six, so a split table's legend could not name its own
       # interval method -- reg_ci_settings() is now the one source.
@@ -3984,6 +4004,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # the matching Emp. % / Emp. mean / Emp. rate + effect column). Ineligible outcomes (ordinal, or a
   # grouped/compound binomial with no positive level) are skipped individually; multinomial is tooltip-only.
   emp_by_fit <- vector("list", length(specs))
+  # z16-iiiii: the crude grids' own degrade, harvested from the grid each reg_empirical() returns
+  # (attr "degrade") and folded into the basis stamped at the tail -- see reg_inference().
+  emp_degraded <- FALSE
   # The per-dependent complete-case frame the crude companions + multinomial tips share with the model
   # (reg_complete_frame = reg_fit's own frame). `union_predictors` == the model's predictors when not
   # comparing; in comparison mode it is the shared population. Recomputed from `data` (fits[[i]]$data is
@@ -4021,6 +4044,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         emp_i   <- reg_empirical(mdata_i, fac_preds_e, dep_i, key_i, pos_i, design_spec$wt,
                                  trials = specs[[i]]$trials, ref_category = fits[[i]]$y_ref,
                                  conf_level = conf_level, design_spec = design_spec)
+        emp_degraded <- emp_degraded || isTRUE(attr(emp_i, "degrade"))
         # Which predictors have no closed form and must be fitted? z9: the numeric ones. z10: EVERY
         # predictor under an ordinal outcome (proportional odds is a constraint, so the univariable model
         # is not saturated). reg_crude_saturated() states the rule; nothing here re-derives it.
@@ -4046,7 +4070,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                          conf_level = conf_level, color_signif = color_signif,
                                          color = col_i, do_exp = specs[[i]]$do_exp, fit_est = fit_i,
                                          # W-D: `n_eff` is written only where something corrected it
-                                         weighted = svy_weighted(design_spec, design_spec$wt))
+                                         weighted = svy_weighted(design_spec, design_spec$wt),
+                                         # z16-iiiii (D4): the design df the MODEL columns are already
+                                         # referred to, so the crude bracket beside them matches
+                                         degf = design_spec$degf %||% Inf)
         # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
         # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
         if (!is_comparison && length(cols_i$cols)) {
@@ -4184,6 +4211,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           reg_empirical(emp_frame_of(dep_i), fac_preds_t, dep_i, "multinomial", NULL, design_spec$wt,
                         ref_category = fits[[si]]$y_ref, conf_level = conf_level,
                         design_spec = design_spec)
+        emp_degraded <<- emp_degraded || isTRUE(attr(tipsd, "degrade"))
         tk    <- reg_skel_key(tipsd$var, tipsd$level, tipsd$category)
         purrr::compact(purrr::map(cols_idx, function(i) {
           b    <- built[[i]]
@@ -4252,7 +4280,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
-  reg_inf <- reg_inference(shared)
+  reg_inf <- reg_inference(shared, emp_degraded)
   tab |>
     # Last Phase z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
     # df it is referred to and the basis it was computed on, all on each fmt column -- the colour
@@ -4885,14 +4913,6 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     estimate_display = c("value", "ci", "prob", "ame"),
                     cleannames = NULL, subtext = "", spread_models = TRUE,
                     .fit_cache = NULL) {
-  # Last Phase z16-iv (W-C): this call's own design-degrade flag. It is PROCESS-scoped, and
-  # reg_inference() reads it into meta$inference -- so without this reset one degraded table earlier
-  # in the session (a design over the influence-matrix ceiling, a svyrecvar failure) permanently
-  # mislabelled every later tab_reg() as "design_partial", whose footer then denies a variance that
-  # was computed. tab() has reset it since z16-i (tab_transform + both leaf wrappers); tab_reg() is
-  # the public entry here, and reg_build() must NOT do it (it recurses per split group, and would
-  # clear a group's own degrade).
-  svy_degrade_reset()
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)

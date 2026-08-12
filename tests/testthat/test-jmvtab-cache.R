@@ -9,8 +9,10 @@ jmv_opts <- function(...) {
   o <- list(row_vars = character(), col_vars = character(), tab_vars = character(), wt = character(),
             pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
             na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
-            conf_level = 0.95, stars = TRUE, method_cell = "wilson", method_diff = "newcombe",
-            method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
+            conf_level = 0.95, stars = TRUE,   # design_effect: absent -> the global option decides
+            # the jamovi UI keeps one ComboBox per interval kind; jmv_ci_method() folds them
+            method_cell = "wilson", method_diff = "newcombe",
+            method_mean_diff = "welch", method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
             subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
             output_list = FALSE, cleannames = FALSE, display = "auto")
@@ -30,8 +32,9 @@ jmv_oracle <- function(opts, data) {
     tab_vars = tidyselect::all_of(opts$tab_vars), wt = !!wt_sym, pct = opts$pct, color = color,
     color_signif = opts$color_signif, OR = opts$OR, test = opts$chi2, na = opts$na,
     levels = opts$levels, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp, ci = ci,
-    conf_level = opts$conf_level, stars = opts$stars, method_cell = opts$method_cell,
-    method_diff = opts$method_diff, cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
+    conf_level = opts$conf_level, stars = opts$stars,
+    ci_method = c(cell = opts$method_cell, diff = opts$method_diff),
+    cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
     other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
     subtext = opts$subtext, totaltab_name = opts$totaltab_name, total_names = opts$total_names,
     other_level = opts$other_level, output_list = isTRUE(opts$output_list)

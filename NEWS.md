@@ -30,8 +30,8 @@
   tooltips off document-wide. The vignettes now showcase the live html tables.
 * **Significance stars and correct confidence intervals.** Stars are opt-in (`stars =`); cell / difference
   / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read
-  the same interval. `ci` gains `"ratio"`; `method_cell` / `method_diff` / `method_mean_diff` /
-  `method_mean_ratio` / `method_ratio` choose the interval.
+  the same interval. `ci` gains `"ratio"`; one named vector, `ci_method = c(cell =, diff =,
+  mean_diff =, mean_ratio =)`, chooses each interval's method.
 * **Mean columns get a whole-table test** — a one-way ANOVA (Welch or classic, `options(tabxplor.anova)`),
   the counterpart of the chi-squared for factor columns.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
@@ -39,7 +39,8 @@
 * **Weights, and survey designs.** A weighted `tab()` estimates the population, and now **says in its
   footer** what its confidence intervals and tests are based on. By default that is still the raw
   number of respondents (no design effect). `options(tabxplor.design_effect = TRUE)` makes every
-  weighted interval, star, colour threshold and p-value **account for the unequal weighting, exactly** —
+  weighted interval, star, colour threshold and p-value **account for the unequal weighting, exactly**
+  (per call: `tab(design_effect = TRUE)`) —
   a weight column *is* a survey design (the flat one), so this reproduces `survey` to the last digit
   rather than approximating it. Pass a `survey::svydesign()` as `data` and the whole table follows the
   full design instead: strata, clusters, `fpc`, calibration (so a design can also make an interval
@@ -287,7 +288,8 @@ Soft-deprecated (still work):
 * `tab_many()` (use `tab()` with several `row_vars` / `col_vars`); singular `row_var` / `col_var`;
   `tab(sup_cols =)` (use `col_vars =`); `tab(filter =)` (filter upstream).
 * `tab_pct()` / `tab_tot()` / `tab_totaltab()`; `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
-* Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`.
+* Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
+  `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`.
 * The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "diff"` +
   `color_signif =`); `color_type` (now inert).
 
@@ -295,6 +297,8 @@ Removed / defunct (now error):
 
 * `tab_xl(n_min =, hide_near_zero =)` (long inert); the little-used `totcol` vector
   forms; the `tabxplor.compact` option (use `output_list =`).
+* `method_ratio` / `method_mean_diff` / `method_mean_ratio` (never released; use `ci_method`).
+  A proportion *ratio* has only one interval (Katz), so it was never a choice.
 * `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
   `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
 

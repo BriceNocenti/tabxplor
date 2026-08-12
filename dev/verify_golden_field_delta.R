@@ -45,7 +45,22 @@ ADDED_TEST_COLS <- character(0)
 # Last Phase z16-iiiii REMOVES one instead: `inference` left `meta` for the two column attributes
 # above. No golden case is weighted, so none of them stored it -- declare nothing.
 ADDED_META_FIELDS   <- character(0)
-REMOVED_META_FIELDS <- c("inference")
+REMOVED_META_FIELDS <- character(0)
+
+# A phase can also RESHAPE a `meta` sub-field without changing what it says. Last Phase z16-iiiii folds
+# `ci_settings`' five `method_*` scalars into ONE named vector, and drops `method_ratio` (a one-value
+# argument). Declare the field with a predicate proving old and new carry the SAME information; the
+# script then treats that sub-field as accounted for and still demands bit-identity of everything else.
+RESHAPED_META_FIELDS <- list(
+  ci_settings = function(old, new) {
+    isTRUE(all.equal(old$conf_level, new$conf_level)) &&
+      identical(unname(new$method[["cell"]]),       old$method_cell) &&
+      identical(unname(new$method[["diff"]]),       old$method_diff) &&
+      identical(unname(new$method[["mean_diff"]]),  old$method_mean_diff) &&
+      identical(unname(new$method[["mean_ratio"]]), old$method_mean_ratio) &&
+      identical(old$method_ratio, "katz")          # the dropped slot had exactly one legal value
+  }
+)
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
@@ -137,6 +152,14 @@ for (nm in names(cases)) {
     ao$meta <- ao$meta[setdiff(names(ao$meta), remm)]
     if (!length(ao$meta)) ao$meta <- NULL
     if (is.null(an$meta)) ao <- ao[names(ao) != "meta"]
+  }
+  for (fl in names(RESHAPED_META_FIELDS)) {
+    if (is.null(ao$meta[[fl]]) && is.null(an$meta[[fl]])) next
+    ok <- isTRUE(tryCatch(RESHAPED_META_FIELDS[[fl]](ao$meta[[fl]], an$meta[[fl]]),
+                          error = function(e) FALSE))
+    if (!ok) issues <- c(issues, paste0(nm, ": meta$", fl, " RESHAPE lost information"))
+    else cat(sprintf("      %-24s meta$%s reshaped, same information\n", nm, fl))
+    ao$meta[[fl]] <- NULL; an$meta[[fl]] <- NULL
   }
   if (length(ADDED_META_FIELDS)) {
     addm <- setdiff(names(an$meta), names(ao$meta))

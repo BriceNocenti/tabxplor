@@ -73,7 +73,7 @@
 #'   \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 #'   print/export time from this attribute rather than baked into the table.
 #'   \item \code{ci_settings} -- display-only metadata for the colour legend,
-#'   \code{list(conf_level =, method_cell =, method_diff =, ...)}: which confidence level and
+#'   \code{list(conf_level =, method = c(cell =, diff =, mean_diff =, mean_ratio =))}: which level and
 #'   confidence-interval methods were actually used. Absent makes the legend fall back to defaults.
 #'   \item \code{vars} -- the table's variable roles,
 #'   \code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
@@ -200,7 +200,7 @@ get_render_extras <- function(x) get_meta(x)[["render_extras"]]
 set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras", render_extras)
 
 # Phase 13b: `ci_settings` -- display-only metadata for the colour legend, a small list
-# `list(conf_level = <num>, method_cell = <chr>, method_diff = <chr>, ...)` recording which CI method /
+# `list(conf_level = <num>, method = <the named four-slot vector>)` recording which CI method /
 # confidence level tab()/tab_ci() actually used, so tab_color_legend() can name it accurately (e.g.
 # "Newcombe score interval, 95% confidence"). get_ci_settings() falls back to the package defaults when
 # absent (heavy dplyr chains / raw tab_plain / older objects).
@@ -308,11 +308,17 @@ new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
 # (Phase 17a) rather than hand-mirrored, so the two can never drift: each default is the tab() formal
 # evaluated (conf_level resolves getOption("tabxplor.conf_level", 0.95), exactly as tab() would).
 default_ci_settings <- function() {
-  fm <- formals(tab)
-  ce <- environment()
-  lapply(fm[c("conf_level", "method_cell", "method_diff",
-              "method_ratio", "method_mean_diff", "method_mean_ratio")],
-         eval, envir = ce)
+  list(conf_level = eval(formals(tab)$conf_level), method = default_ci_method())
+}
+
+# One slot of a table's stored CI-method vector, falling back to the package default when the table
+# carries none (or names none for that slot -- a regression table has no `cell` method). The legend is
+# its only consumer, and it must never claim a method the interval was not built with.
+#' @keywords internal
+#' @noRd
+ci_method_of <- function(cis, slot) {
+  v <- cis$method[[slot]]
+  if (is.null(v) || is.na(v)) default_ci_method()[[slot]] else v
 }
 
 # === SECTION: the ONE table-attribute carry (Phase 14d / 17b) ======================================

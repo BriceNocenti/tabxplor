@@ -124,10 +124,11 @@ tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
 #> Pondéré par poids ; les intervalles de confiance et les tests utilisent l'effectif non pondéré.
 ```
 
-Lorsque les poids sont **inégaux**, ce défaut ne porte aucun *design-effect* : les intervalles sont un peu trop étroits. Une option corrige cela :
+Lorsque les poids sont **inégaux**, ce défaut ne porte aucun *design-effect* : les intervalles sont un peu trop étroits. Un argument corrige cela — appel par appel, ou une fois pour toute la session :
 
 ```{r, echo=TRUE, eval=FALSE}
-options(tabxplor.design_effect = TRUE)
+tab(hdv2003, nivetud, occup, wt = poids, pct = "row", design_effect = TRUE)
+options(tabxplor.design_effect = TRUE)   # ou une seule fois, pour tous les tableaux
 #> Pondéré par poids ; les intervalles de confiance et les tests tiennent compte de la pondération.
 ```
 
@@ -147,7 +148,7 @@ Il y a donc **trois positions**, et la note de bas de page dit toujours sur laqu
 | ce que vous passez | ce que portent les intervalles et les tests |
 |---|---|
 | `wt = w` | l'estimation pondérée, sur le *n* brut — aucun effet de plan |
-| `wt = w` + `options(tabxplor.design_effect = TRUE)` | l'inégalité des poids, exactement — aveugle aux grappes et au calage |
+| `wt = w` + `design_effect = TRUE` | l'inégalité des poids, exactement — aveugle aux grappes et au calage |
 | un plan `survey` comme `data` | le plan complet : strates, grappes, `fpc`, calage |
 
 Activez l'option **si vous voulez qu'un intervalle de pourcentage de `tab()` soit comparable à la colonne `Obs_*` d'un `tab_reg()` sur les mêmes données** : les contreparties observées d'un tableau de régression sont toujours corrigées, à côté d'une colonne de modèle qui l'a toujours été — au défaut, les deux fonctions ne disent donc pas la même chose.
@@ -478,12 +479,13 @@ Tout tableau coloré répond à trois questions :
 | mean | `diff`    | moyenne case − moyenne référence (en écart-type) | *t* de Welch                |
 | mean | `ratio`   | moyenne case / moyenne référence            | rapport de moyennes robuste      |
 
-Méthodes d'intervalle alternatives (voir `?tab_ci`) :
+Les méthodes d'intervalle alternatives tiennent dans UN seul argument, `ci_method` — un vecteur nommé, partiel comme `ref` ou `pct` : un type d'intervalle que vous ne nommez pas garde sa méthode par défaut (voir `?tab`) :
 
-- `method_diff = "ac"` (Agresti-Caffo) ou `"wald"` pour une différence de pourcentages ;
-- `method_mean_diff = "student"` (à variance commune, l'intervalle à deux groupes d’une regression linéaire) pour une différence de moyennes ;
-- `method_mean_ratio = "quasipoisson"` ou `"poisson"` pour un rapport de moyennes.
-- Les intervalles du risque relatif (`method_ratio = "katz"`) et du rapport de cotes (Woolf) n'ont pas d'alternative.
+- `ci_method = c(diff = "ac")` (Agresti-Caffo) ou `"wald"` pour une différence de pourcentages ;
+- `ci_method = c(mean_diff = "student")` (à variance commune, l'intervalle à deux groupes d’une regression linéaire) pour une différence de moyennes ;
+- `ci_method = c(mean_ratio = "quasipoisson")` ou `"poisson"` pour un rapport de moyennes.
+- Plusieurs à la fois : `ci_method = c(cell = "beta", diff = "ac")`.
+- Les intervalles du risque relatif (Katz) et du rapport de cotes (Woolf) n'ont pas d'alternative : ce n'est donc pas un choix.
 - Une **différence** de moyennes est, par défault, **standardisée** : les seuils de couleur `mean_diff` se lisent en unités d'écart-type (Δ de Glass, différence divisée par l'écart-type de la référence), sauf si l'utilisateur fournit une échelle de seuils personnalisée avec `set_color_breaks(mean_diff = c(100, 200, 500))`.
 - Pour un facteur à **3 modalités ou plus**, l’*odds-ratio* ou rapport de cotes (et son intervalle) compare chaque modalité à la modalité de base `ref2` : c'est un rapport de risques relatifs (RRR) (la même quantité observée que celle modélisée par une régression logistique multinomiale).
 
@@ -491,10 +493,10 @@ Méthodes d'intervalle alternatives (voir `?tab_ci`) :
 
 | type | color  | intervalle de confiance (défaut) | autre méthode                   |
 |------|--------|----------------------------------|---------------------------------|
-| pct  | `cell` | intervalle score de Wilson       | `method_cell = "wald"` (normal) |
+| pct  | `cell` | intervalle score de Wilson       | `ci_method = c(cell = "wald")`  |
 | mean | `cell` | *t* de Student à un échantillon (n-1) | —                          |
 
-Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `method_cell` choisit `"wilson"` (défaut) ou `"wald"` pour les pourcentages ; pour une moyenne, un intervalle de confiance au niveau de chaque case est toujours le *t* de Student à un échantillon.
+Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `ci_method = c(cell = )` choisit `"wilson"` (défaut), `"wald"` ou `"beta"` (Korn-Graubard) pour les pourcentages ; pour une moyenne, un intervalle de confiance au niveau de chaque case est toujours le *t* de Student à un échantillon.
 
 **`color_signif` transforme cet intervalle en repères de couleur.**
 

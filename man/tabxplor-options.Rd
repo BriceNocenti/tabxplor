@@ -81,7 +81,8 @@ correction it does not have). \strong{Scope: \code{\link[=tab]{tab()}} and its l
 reads it --- its crude \verb{empirical =} companions are always on the weighted basis, beside a model
 column (\code{survey::svyglm}) that always was. For the full design effect --- strata, clusters,
 \code{fpc}, calibration --- pass a \code{survey::svydesign} as \code{data}; the option is then not
-consulted at all. (Renamed in 2.0.0; it was \code{tabxplor.kish_neff} during development.)}
+consulted at all. The per-call \verb{design_effect =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_many]{tab_many()}}, \code{\link[=tab_num]{tab_num()}}
+and \code{\link[=tab_plain]{tab_plain()}} overrides it (\code{NULL}, the default, means "use this option").}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
 overrides it: since 2.0.0 each column records the level it was built at, so the colour

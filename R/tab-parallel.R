@@ -198,13 +198,14 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
 # cross-row_var output shape (merge/pvalue/unwrap) runs on main in tab_assemble_output().
 #' @keywords internal
 #' @noRd
-tab_build_one <- function(ctx_i, data, fine_fused, design_spec = NULL) {
+tab_build_one <- function(ctx_i, data, fine_fused, design = NULL) {
   # ctx_update() (single-bracket [<-) so fine_fused = NULL (the default, fuse off) is PRESERVED as a
   # list element -- `ctx_i$fine_fused <- NULL` would DELETE the key and tab_transform's list2env() then
-  # can't find `fine_fused`. Last Phase z14-i: `design_spec` is shipped the same way (once per worker,
-  # not once per row_var -- a prebuilt design carries the whole dataset).
-  ctx_i <- ctx_update(ctx_i, list(data = data, fine_fused = fine_fused,
-                                  design_spec = design_spec))
+  # can't find `fine_fused`. Last Phase z14-i: the survey DESIGN is shipped the same way (once per
+  # worker, not once per row_var -- a prebuilt design carries the whole dataset); z16-iiiii puts it
+  # back into the one `inference` object tab_rowvar_ctxs() emptied it out of.
+  ctx_i <- ctx_update(ctx_i, list(data = data, fine_fused = fine_fused))
+  ctx_i$inference["design"] <- list(design)
   ctx_i <- tab_transform(ctx_i)
   # Capture the PRE-merge test (the factor chi2 tibble, or the chi2 logical on a numeric-only table)
   # for the jmvtab tier-2 store: assemble then bind_rows the numeric ANOVA into it, so returning the

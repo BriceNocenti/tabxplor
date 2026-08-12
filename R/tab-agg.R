@@ -297,16 +297,83 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 #' @keywords internal
 conf_level_to_crit <- function(conf_level, df = Inf) {
   stopifnot(conf_level >= 0, conf_level <= 1)
+  stats::qt(1 - (1 - conf_level) / 2, df_clean(df))
+}
+
+# THE df sanitiser -- "no df here" is Inf, i.e. refer to z. Absent / NA / non-positive all mean the
+# same thing (no design, an empty design, a design whose degf could not be had), and every engine that
+# takes a `df` needs exactly this line before qt()/pt(). It was written out four times.
+#' @keywords internal
+df_clean <- function(df) {
   df <- as.double(df)
-  if (!length(df)) df <- Inf
+  if (!length(df)) return(Inf)
   df[is.na(df) | df <= 0] <- Inf
-  stats::qt(1 - (1 - conf_level) / 2, df)
+  df
 }
 
 # The normal quantile (z-score) for a two-sided confidence level -- conf_level_to_crit() at df = Inf.
 # (Moved here from tab.R in Phase 17a: it belongs beside its only callers, the CI engine.)
 #' @keywords internal
 zscore_formula <- function(conf_level) conf_level_to_crit(conf_level, Inf)
+
+
+# === SECTION: the CI-method vocabulary ==============================================================
+#
+# THE interval kinds a tabxplor table can choose a method for, each with its legal values, FIRST = the
+# default -- declared once, beside the engines that implement them.
+#   cell        a proportion's own interval          (ci = "cell")     ci_wilson / ci_wald / ci_beta
+#   diff        a proportion minus its reference     (ci = "diff")     ci_prop_diff
+#   mean_diff   a numeric mean minus its reference                     ci_mean_diff2
+#   mean_ratio  a numeric mean over its reference    (color = "ratio") ci_mean_ratio
+# Last Phase z16-iiiii: this table IS the public grammar. One named vector,
+# `ci_method = c(cell = , diff = , mean_diff = , mean_ratio = )`, partial (an unnamed slot keeps its
+# default), replaced five parallel `method_*` arguments that had to be listed, validated, threaded,
+# cache-keyed and stored one by one across six files. There is no `ratio` slot: a proportion ratio has
+# exactly one method (Katz's log risk-ratio), so it is not a choice -- the never-released
+# `method_ratio` had one legal value and went with the five.
+CI_METHODS <- list(
+  cell       = c("wilson", "wald", "beta"),
+  diff       = c("newcombe", "ac", "wald"),
+  mean_diff  = c("welch", "student"),
+  mean_ratio = c("robust", "quasipoisson", "poisson")
+)
+
+# The package's own methods -- DERIVED from the table above, so a default cannot drift from the values
+# it is chosen among.
+#' @keywords internal
+default_ci_method <- function() vapply(CI_METHODS, `[[`, character(1), 1L)
+
+# Resolve the public grammar into the full four-slot vector: the defaults, overwritten by the
+# soft-deprecated `method_cell` / `method_diff` (released CRAN arguments), then by `ci_method`.
+# Validation is one loop over CI_METHODS, so an unknown slot or an illegal value is named the same way
+# by every entry point -- tab(), tab_many(), tab_num(), tab_counts() and tab_ci().
+#' @keywords internal
+resolve_ci_method <- function(ci_method = NULL, method_cell = NULL, method_diff = NULL,
+                              fn = "tab") {
+  out <- default_ci_method()
+  for (s in c("cell", "diff")) {
+    v <- if (s == "cell") method_cell else method_diff
+    if (is.null(v) || identical(v, out[[s]])) next
+    lifecycle::deprecate_soft("2.0.0", paste0(fn, "(method_", s, " = )"),
+                              paste0(fn, "(ci_method = )"))
+    out[[s]] <- v[[1]]
+  }
+  if (is.null(ci_method) || !length(ci_method)) ci_method <- character()
+  nm <- names(ci_method)
+  if (length(ci_method) && (is.null(nm) || !all(nzchar(nm))))
+    cli::cli_abort(c("{.arg ci_method} must be named.",
+                     "i" = "One entry per interval kind, e.g. {.code ci_method = c(cell = \"beta\")}.",
+                     "i" = "Kinds: {.val {names(CI_METHODS)}}."))
+  bad <- setdiff(nm, names(CI_METHODS))
+  if (length(bad))
+    cli::cli_abort(c("Unknown {.arg ci_method} {cli::qty(length(bad))}name{?s} {.val {bad}}.",
+                     "i" = "Kinds: {.val {names(CI_METHODS)}}."))
+  for (s in nm) out[[s]] <- as.character(ci_method[[s]])[[1]]
+  for (s in names(CI_METHODS)) if (!out[[s]] %in% CI_METHODS[[s]])
+    cli::cli_abort(c("{.arg ci_method} {.field {s}} must be one of {.val {CI_METHODS[[s]]}}.",
+                     "x" = "Got {.val {out[[s]]}}."))
+  out
+}
 
 #' Convert confidence levels into z thresholds
 #'
@@ -387,6 +454,12 @@ ci_wald <- function(p, n, conf_level = 0.95, df = Inf) {
 # framework computes (n_eff = p(1-p)/Var_design). Opt-in via `method_cell = "beta"`, NOT a default --
 # one interval SHAPE at every position keeps the legend, the goldens and cross-table comparability one
 # story, and beta is deliberately conservative near 0 and 1 where Wilson is not.
+# WARNING -- where it is EXACT (Last Phase z16-iiiii, D5): survey rescales its beta interval by
+# degf/(degf + 1)... i.e. by the number of PSUs, which this closed form does not hold. At the WEIGHTED
+# basis that factor is 1 (the flat design has degf = n - 1, and n_eff <= n), so `ci_beta` IS
+# svyciprop(method = "beta") there. Under a REAL svydesign with few PSUs it is therefore slightly
+# anti-conservative; making it exact would mean storing n_psu beside `n_eff`, i.e. a second field for
+# one opt-in interval. Documented in ?tab_ci rather than approximated.
 ci_beta <- function(p, n, conf_level = 0.95) {
   a  <- (1 - conf_level) / 2
   lo <- stats::qbeta(a,     n * p,     n * (1 - p) + 1)
@@ -436,8 +509,7 @@ newcombe_pvalue <- function(p1, n1, p2, n2, steps = 50L, df = Inf) {
     lo   <- ifelse(over, lo,  mid)
   }
   q <- (lo + hi) / 2
-  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
-  dfp[is.na(dfp) | dfp <= 0] <- Inf
+  dfp <- df_clean(df)
   p <- 2 * stats::pt(-q, dfp)
   p[!is.finite(d)] <- NA_real_
   p
@@ -482,8 +554,7 @@ ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE, df = In
   lrr <- log(rr)
   se  <- sqrt((1 - p1) / (n1 * p1) + (1 - p2) / (n2 * p2))
   z   <- conf_level_to_crit(conf_level, df)
-  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
-  dfp[is.na(dfp) | dfp <= 0] <- Inf
+  dfp <- df_clean(df)
   inf <- exp(lrr - z * se)
   sup <- exp(lrr + z * se)
   pvalue <- if (want_p) 2 * stats::pt(-abs(lrr / se), dfp)
@@ -569,8 +640,7 @@ ci_or <- function(a, b, c, d, conf_level = 0.95, want_p = TRUE, df = Inf) {
   lor <- log((a * d) / (b * c))
   se  <- sqrt(1 / a + 1 / b + 1 / c + 1 / d)
   z   <- conf_level_to_crit(conf_level, df)
-  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
-  dfp[is.na(dfp) | dfp <= 0] <- Inf
+  dfp <- df_clean(df)
   inf <- exp(lor - z * se); sup <- exp(lor + z * se)
   pvalue <- if (want_p) 2 * stats::pt(-abs(lor / se), dfp)
             else vctrs::vec_recycle(NA_real_, length(lor))

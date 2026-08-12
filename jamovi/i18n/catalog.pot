@@ -253,10 +253,6 @@ msgstr ""
 msgid "ci = <i>(confidence intervals)</i>"
 msgstr ""
 
-#: jmvtab/options/test_robust/classic.title
-msgid "classic"
-msgstr ""
-
 #: jmvtab/options/anova/classic.title
 msgid "classic <i>(equal variances)</i>"
 msgstr ""
@@ -350,6 +346,14 @@ msgstr ""
 
 #: jmvtab/options/display/ctr.title
 msgid "ctr <i>(relative contributions to variance)</i>"
+msgstr ""
+
+#: jmvtab/options/design_effect.title
+msgid "design_effect"
+msgstr ""
+
+#: jmvtab/ui[1][1][1][2]/design_effect.label
+msgid "design_effect = <i>(design effect of the weights)</i>"
 msgstr ""
 
 #: jmvtab/options/ci/diff.title
@@ -482,16 +486,8 @@ msgstr ""
 msgid "ignore <i>(color effect size only, ignore significance)</i>"
 msgstr ""
 
-#: jmvtab/options/method_ratio/katz.title
-msgid "katz <i>(log ratio)</i>"
-msgstr ""
-
 #: jmvtab/options/na/keep.title
 msgid "keep <i>(NA as a normal level)</i>"
-msgstr ""
-
-#: jmvtab/options/test_robust/kish.title
-msgid "Kish n_eff <i>(weighted)</i>"
 msgstr ""
 
 #: jmvtab/options/levelOrder.title
@@ -573,14 +569,6 @@ msgstr ""
 
 #: jmvtab/ui[4][1][0][8][0].label
 msgid "method_mean_ratio = <i>(mean ratio)</i>"
-msgstr ""
-
-#: jmvtab/options/method_ratio.title
-msgid "method_ratio"
-msgstr ""
-
-#: jmvtab/ui[4][1][0][4][0].label
-msgid "method_ratio = <i>(proportion / rate ratio)</i>"
 msgstr ""
 
 #: jmvtab/options/ci_print/moe.title
@@ -809,14 +797,6 @@ msgstr ""
 
 #: jmvtab/ui[5][0][0].label
 msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
-msgstr ""
-
-#: jmvtab/ui[1][1][1][2]/test_robust.label
-msgid "Type de pvalue"
-msgstr ""
-
-#: jmvtab/options/test_robust.title
-msgid "Type of p-value"
 msgstr ""
 
 #: package.title

@@ -33,7 +33,7 @@ testthat::test_that("ratio prose uses the Total column and the x/1 operators", {
 })
 
 testthat::test_that("the CI method + confidence level come from the stored ci_settings", {
-  # default method_diff = newcombe
+  # the default diff method = newcombe
   tb1 <- tab(gss, marital, race, pct = "row", color = "diff",
              color_signif = "grey_non_signif", ci = "diff")
   l1  <- leg_en(tb1)
@@ -47,10 +47,10 @@ testthat::test_that("the CI method + confidence level come from the stored ci_se
   testthat::expect_no_match(l1, "Grey: not significantly different")
   testthat::expect_match(l1, "Newcombe score interval, 95% confidence")
 
-  # an explicit method_diff = "ac" + a non-default conf_level must be reflected
+  # an explicit diff method + a non-default conf_level must be reflected
   tb2 <- tab(gss, marital, race, pct = "row", color = "diff",
              color_signif = "grey_non_signif", ci = "diff",
-             method_diff = "ac", conf_level = 0.9)
+             ci_method = c(diff = "ac"), conf_level = 0.9)
   l2  <- leg_en(tb2)
   testthat::expect_match(l2, "Wald interval with Agresti-Caffo adjustment, 90% confidence")
 })

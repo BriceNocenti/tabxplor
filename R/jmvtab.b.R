@@ -36,11 +36,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
 
       # Last Phase z16-iii (W11): ONE honest checkbox. It was labelled "Type of p-value" but has moved
-      # every confidence interval, star and colour threshold in the table since Last Phase s. Set
-      # around the build (like anova); it is in the tier-3 base key, so a toggle rebuilds with it.
-      de_option <- getOption("tabxplor.design_effect")
-      options("tabxplor.design_effect" = isTRUE(self$options$design_effect))
-      on.exit(options("tabxplor.design_effect" = de_option), add = TRUE)
+      # every confidence interval, star and colour threshold in the table since Last Phase s.
+      # z16-iiiii: it rides `opts$design_effect` into tab()'s own argument -- no global option, no
+      # on.exit dance (it is in the tier-3 base key, so a toggle rebuilds with it).
 
       store <- self$results$cache_state$state          # NULL on the first run
       # DESIGN (Phase h): flush queued option changes before building so a newer edit supersedes this
@@ -110,11 +108,11 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         ci           = self$options$ci,
         conf_level   = self$options$conf_level,
         stars        = self$options$stars,
-        method_cell  = self$options$method_cell,
-        method_diff  = self$options$method_diff,
-         method_ratio      = self$options$method_ratio,
-        method_mean_diff  = self$options$method_mean_diff,
+        method_cell       = self$options$method_cell,   # folded into ONE ci_method vector by
+        method_diff       = self$options$method_diff,   # jmv_ci_method() -- the UI keeps one
+        method_mean_diff  = self$options$method_mean_diff,  # ComboBox per interval kind
         method_mean_ratio = self$options$method_mean_ratio,
+        design_effect     = isTRUE(self$options$design_effect),
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
         totaltab     = self$options$totaltab,
         digits       = as.integer(self$options$digits),  # `digits` is a List -> a "0".."6" string

@@ -97,7 +97,13 @@ R/
 │                              length heuristic GONE) ; tab_transform / tab_assemble_tables are SCALAR
 │                              over one row_var ; tab_assemble_output (merge/pvalue/unwrap);
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
-├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
+├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3) + z16-iiiii's **CI_METHODS** = THE interval-method
+│                              vocabulary (4 kinds x their legal values, first = default), from which
+│                              default_ci_method() derives and resolve_ci_method() validates -- so the ONE
+│                              public `ci_method = c(cell=, diff=, mean_diff=, mean_ratio=)` named vector
+│                              (partial, like `ref`) cannot mean different things in tab/tab_many/tab_num/
+│                              tab_counts/tab_ci. + df_clean() (the df sanitiser, was inlined 4x).
+│                              num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
 │                              CI engine (ci_pivot/ci_wilson/ci_newcombe/ci_katz_rr/ci_mean_diff2/
 │                              …: 14b's Katz log-RR + 14v-ii's ci_mean_ratio [robust/quasipoisson/
@@ -134,9 +140,10 @@ R/
 │                              statistic/df/p/n and carries effect_size/min_e through.
 │                              The ONE architectural exception to "test from the aggregate" (opt-in, per-table).
 │                              z14-ii: it governs the cell INTERVALS too, so the leaves stopped re-reading
-│                              the option. z16-i: **svy_inference_basis(design_spec, wt, force=)** = THE
-│                              BASIS -- "n"/"weights"/"design"(/"design_partial"), the ONLY option-or-design
-│                              read, ctx$inference_basis, then STORED in meta$inference. `wt` says how the
+│                              the option. z16-i: **svy_inference_basis(design_spec, wt, force=, can_serve=,
+│                              design_effect=)** = THE BASIS -- "n"/"weights"/"design"(/"design_partial"),
+│                              the ONLY option-or-design read (`design_effect` is the per-call argument,
+│                              NULL = the option). `wt` says how the
 │                              ESTIMATE is computed; the basis says how the INTERVAL is -- two orthogonal
 │                              facts, which is why one kept needing four encodings. `force` is tab_reg's
 │                              ruling-1 rule (its crude Obs_* are ALWAYS weighted-basis, so they match the
@@ -144,6 +151,13 @@ R/
 │                              #PSU-#strata, captured at the boundary -> every interval's critical value),
 │                              svy_abort_wt_design() (W10: wt beside a design ABORTS, all 5 entry points),
 │                              svy_weighted() (the ONE "is anything weighted" predicate, was 3 spellings).
+│                              z16-iiiii: **new_inference(wt, design_spec, conf_level, method, agg_only,
+│                              force, design_effect)** = THE build-time object `ctx$inference`
+│                              (wt/design/basis/degf/conf_level/method/agg_only), resolved once in
+│                              tab_setup() and carried whole by plain_core/num_core/tab_apply_tests --
+│                              it replaced ~10 flat formals that had to be threaded through five layers
+│                              by hand. What SURVIVES the build is the per-column conf_level/degf/basis
+│                              attributes tab_stamp_inference() projects from it.
 │                              z16-iii: svy_omnibus_one() is ONE estimator, two ways in -- the "weights"
 │                              basis SYNTHESISES the flat svydesign and runs the SAME survey::svychisq /
 │                              svyglm+regTermTest the "design" basis runs, so the discriminators are two
@@ -171,13 +185,16 @@ R/
 │                              the influence matrix is n-long, one svyrecvar per column level).
 │                              svy_var_prep does NOT reuse svy_domain_design (svyrecvar never reads
 │                              $variables) but keeps its calibrated/PPS warning: scatter index + w=1/prob.
-│                              NULL-not-a-wrong-number + svy_var_degraded(), which since z16-i RECORDS its
-│                              reason in a build-scoped flag (svy_degrade_*) that leaf_inference() reads
-│                              into basis "design_partial" -- a console message is not a property of the
-│                              table, so the footer could assert a design its numbers did not carry, in
-│                              every export, forever (W4). Its twin svy_degrade_unserved() = "the weighted
-│                              basis was asked for and this input cannot serve it" (pre-aggregated counts
-│                              carry no per-obs Sigma w^2) -> the table states basis "n" and says so (W9).
+│                              z16-iiiii: the producers return **svy_var_out() = list(v=, reason=)** --
+│                              "no answer" plus WHY, never a bare NULL the caller must interpret, and
+│                              svy_var_setup() extracts the 6-guard prologue they share. That return type
+│                              is what let the process-global degrade env GO: the reason travels with the
+│                              answer to the leaf, which keeps its own `degraded` / `unserved` LOCALS and
+│                              passes them to leaf_inference() -> basis "design_partial" / "n" on ITS OWN
+│                              columns (W4/W9). svy_degrade_env + its 5 helpers + svy_var_bail DELETED
+│                              (6 fns, 12 sites), and with them the stale-flag hazard class that had
+│                              needed a reset in four entry points. svy_var_degraded() is now just the
+│                              message, naming the reason where it is actionable.
 │                              **z16-ii: the FLAT CLOSED FORM** -- a weight column IS a survey design, and
 │                              at ids=~1 svyrecvar collapses (Sum(w*z) = 0 exactly, so the centering is a
 │                              no-op) to per-cell sums the aggregate already has:
@@ -2946,12 +2963,13 @@ it* — and the fixes are mostly subtraction.
 
 ##### z16-iiiii — clean, simplify and further integrate the weights framework
 
-**PARTIALLY DONE (2026-08-12) — sessions A, B and C-i of four.** Suite green: FAIL 0, WARN 0, SKIP 4,
-PASS 5461 (+38, all new fixtures). The ONLY snapshot that moved is `_snaps/fmt-contract.md` (the record
-shape); `_snaps/golden.md`, `_snaps/render-html.md` and every `_color_golden/*` are untouched, and the
-36 structural `_golden/*.rds` were regenerated with the delta proved minimal over 1787 cells by
-`dev/verify_golden_field_delta.R` (taught here to prove a REMOVED `meta` sub-field as well as an added
-one). Plan: `.claude/plans/we-are-near-the-tidy-lecun.md`.
+**DONE (2026-08-12), all four sessions.** Suite green: FAIL 0, WARN 0, SKIP 4, PASS 5475 (+52, all
+new fixtures). The ONLY snapshot that moved is `_snaps/fmt-contract.md` (the record shape);
+`_snaps/golden.md`, `_snaps/render-html.md` and every `_color_golden/*` are untouched. Two conscious
+`_golden` regens, each proved minimal over 1787 cells by `dev/verify_golden_field_delta.R` (taught here
+to prove a REMOVED `meta` sub-field, and then a RESHAPED one): all 36 for the column attributes, then
+the 4 carrying `ci_settings` for the `ci_method` fold. Plan:
+`.claude/plans/we-are-near-the-tidy-lecun.md`.
 
 **The keystone (maintainer's ruling): a number must not depend on a table attribute.** `meta$inference`
 is DELETED; `degf` and `basis` are the 13th and 14th per-column fmt attributes, beside `conf_level`,
@@ -2986,16 +3004,55 @@ group applies it without anyone calling it (`basis_rank`/`basis_weakest`, min no
 **Deliberate call:** the degrade REASON left the table — the CLAIM (`design_partial`) rides the
 columns, the reason is named in `svy_var_degraded()`'s message, where it is actionable.
 
-**NOT DONE — sessions C-ii and D of the plan remain**: deleting the global `svy_degrade_env` and
-building the one `ctx$inference` object; and the engine/argument work (`df_clean`, the 4 dead
-`requireNamespace("survey")` guards, `reg_if_se()`'s missing lonely-PSU policy, `degf` into
-`tab_reg()`'s crude engines, `ci_method =`, the `design_effect =` argument, the jamovi/doc sweep).
+**No global state left (session C-ii).** The two variance producers now answer `list(v =, reason =)`
+(`svy_var_out()`), so the reason travels WITH the answer to the one caller that can act on it; each
+core keeps its own `degraded` / `unserved` LOCALS and passes them to `leaf_inference()`, which stamps
+the resulting basis on ITS OWN columns. That deleted `svy_degrade_env` + its five helpers + the
+`svy_var_bail()` two-step (6 functions, 12 sites) **and the whole stale-flag hazard class** W-C had
+patched with a reset in four entry points — the test that locked it is now a structural one. Two
+consequences worth keeping: the assembler no longer re-stamps one table-wide basis, so a factor block
+whose design variance succeeded keeps `"design"` beside a numeric block that fell back (the
+table-level answer being the weakest of the columns anyway); and `reg_build()`'s split branch stamps
+only the level, because `vec_rbind`'s fmt reconcile already took the weakest of its groups.
 
-**OPEN — unrelated defect found in passing, not fixed** (out of this phase's scope, reproduced with NO
-weight and the option OFF, i.e. where every change here is a no-op): on the jamovi cache path a table
-built with `ci = "cell"` and MIXED col_vars renders its numeric column with the `pct_ci` display token
-where plain `tab()` renders `mean_ci`. A display-resolution divergence in `jmvtab_build`, not a weights
-issue.
+**One object, not ten formals (C10).** `ctx$inference` = `new_inference(wt, design, basis, degf,
+conf_level, method, agg_only)`, built once in `tab_setup()` and carried whole by `plain_core()` /
+`num_core()` / `tab_apply_tests()`. `design_spec` / `conf_level` / `ci_method` / `design_effect` /
+`agg_only` are `tab_setup` INPUTS that nothing downstream reads. Only the survey design still travels
+separately to the parallel workers (`.ship`), so `tab_rowvar_ctxs()` empties `shared$inference$design`
+and `tab_build_one()` fills it back.
+
+**`ci_method` — one named vector (D6).** `CI_METHODS` (R/tab-agg.R) declares the four interval kinds
+and their legal values; `default_ci_method()` derives from it and `resolve_ci_method()` validates
+against it, so `tab()` / `tab_many()` / `tab_num()` / `tab_counts()` / `tab_ci()` cannot disagree about
+a legal value. Partial like `ref` / `pct`. It replaced five `method_*` arguments listed, validated,
+threaded, cache-keyed and stored one by one across six files; `method_cell` / `method_diff` stay as
+soft-deprecated aliases (CRAN-released), `method_ratio` went with the rest (a proportion ratio has one
+method, Katz, so it was never a choice). `meta$ci_settings` is now `list(conf_level, method)`.
+**`design_effect =` (D7)** is the per-call twin of the option on `tab()` / `tab_many()` / `tab_num()` /
+`tab_plain()` — `NULL` means "read the option", so `svy_inference_basis()` stays its ONE reader, and
+jamovi passes an argument instead of setting a global with `on.exit`. Also fixed: `tab_plain()`
+hard-coded `conf_level = 0.95` and `stars = FALSE` while `?tabxplor-options` promised both options
+were honoured.
+
+**Engines (D1-D5).** `df_clean()` (the df sanitiser, inlined 4x); the 4 dead
+`requireNamespace("survey")` guards deleted (`survey` is an Import); `reg_if_se()` routed through
+`svy_var_recvar()` — it was the one `svyrecvar` call with NO lonely-PSU policy, so survey's default
+("fail") made the gap SE silently NA on a design whose cell variances and omnibus p had just been
+computed; and `degf` threaded into `tab_reg()`'s ten crude engines, so a crude bracket is referred to
+the SAME reference distribution as the model bracket beside it (at `degf = 8` it was 15 % narrower).
+Doc-only: `ci_beta()` is exact at basis `"weights"` (the flat design's df IS `n - 1`) and slightly
+anti-conservative under a real design; `n_eff`'s three write conventions are stated in `?fmt`.
+
+**OPEN — maintainer step:** `jamovi/jmvtab.a.yaml` + `.u.yaml` changed (`method_ratio` removed; the
+`design_effect` label was hard-coded in FRENCH in the English UI and is now English + translated in
+`jamovi/i18n/fr.po`), so `jmvtools::prepare()` must regenerate `R/jmvtab.h.R`. Until then the stale
+`.h.R` simply keeps declaring `method_ratio`, which `jmvtab.b.R` no longer reads — no breakage.
+
+
+##### z16-iiiiii — further cleaning and documentation
+
+Implement changes recorded in `dev/weights_only_design_effect_soundness.md` "### 8.2 What follows — for maintainer decision"
 
 
 #### Last Phase z17 — `forest_plot` effect + CIs + significance + comparison plots for `tab_reg` and `tab`

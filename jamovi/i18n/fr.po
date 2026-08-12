@@ -255,10 +255,6 @@ msgstr "ci <i>(format: [inf;sup])</i>"
 msgid "ci = <i>(confidence intervals)</i>"
 msgstr "ci = <i>(intervalles de confiance, IC)</i>"
 
-#: jmvtab/options/test_robust/classic.title
-msgid "classic"
-msgstr "classique"
-
 #: jmvtab/options/anova/classic.title
 msgid "classic <i>(equal variances)</i>"
 msgstr "classique <i>(variances égales)</i>"
@@ -353,6 +349,14 @@ msgstr "Tableaux croisés"
 #: jmvtab/options/display/ctr.title
 msgid "ctr <i>(relative contributions to variance)</i>"
 msgstr "ctr <i>(contribution relative à la variance)</i>"
+
+#: jmvtab/options/design_effect.title
+msgid "design_effect"
+msgstr "design_effect"
+
+#: jmvtab/ui[1][1][1][2]/design_effect.label
+msgid "design_effect = <i>(design effect of the weights)</i>"
+msgstr "design_effect = <i>(effet de plan des pondérations)</i>"
 
 #: jmvtab/options/ci/diff.title
 msgid "diff <i>(ci on the difference with reference)</i>"
@@ -484,17 +488,9 @@ msgstr "ignore <i>(colorer selon la taille observée)</i>"
 msgid "ignore <i>(color effect size only, ignore significance)</i>"
 msgstr "ignore <i>(taille d'effet seule, ignorer signif.)</i>"
 
-#: jmvtab/options/method_ratio/katz.title
-msgid "katz <i>(log ratio)</i>"
-msgstr "katz <i>(log du ratio)</i>"
-
 #: jmvtab/options/na/keep.title
 msgid "keep <i>(NA as a normal level)</i>"
 msgstr "keep <i>(NA comme modalité)</i>"
-
-#: jmvtab/options/test_robust/kish.title
-msgid "Kish n_eff <i>(weighted)</i>"
-msgstr "Kish n_eff <i>(pondéré)</i>"
 
 #: jmvtab/options/levelOrder.title
 msgid "Level order (per variable)"
@@ -585,14 +581,6 @@ msgstr "method_mean_ratio"
 #: jmvtab/ui[4][1][0][8][0].label
 msgid "method_mean_ratio = <i>(mean ratio)</i>"
 msgstr "method_mean_ratio = <i>(ratio de moyennes)</i>"
-
-#: jmvtab/options/method_ratio.title
-msgid "method_ratio"
-msgstr "method_ratio"
-
-#: jmvtab/ui[4][1][0][4][0].label
-msgid "method_ratio = <i>(proportion / rate ratio)</i>"
-msgstr "method_ratio = <i>(ratio de proportions/taux)</i>"
 
 #: jmvtab/options/ci_print/moe.title
 msgid "moe <i>(display: pct±margin of error)</i>"
@@ -821,14 +809,6 @@ msgstr "totaltab"
 #: jmvtab/ui[5][0][0].label
 msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
 msgstr "totaltab = <i>(avec tab_vars, ajouter un tableau Total général)</i>"
-
-#: jmvtab/ui[1][1][1][2]/test_robust.label
-msgid "Type de pvalue"
-msgstr "Type de pvalue"
-
-#: jmvtab/options/test_robust.title
-msgid "Type of p-value"
-msgstr "Type de p-value"
 
 #: package.title
 msgid "User-Friendly Tables with Color Helpers for Data Exploration"
