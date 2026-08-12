@@ -132,9 +132,13 @@ thresholds mean the same thing in every table, which is the SPSS "adjusted resid
 In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
 residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
 whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
-the package rule -- weighted estimate, unweighted \code{n} base, or Kish \code{n_eff} with
-\code{options(tabxplor.kish_neff = TRUE)} -- while the contribution itself stays weighted (it
-estimates the population table's structure). Cells whose expected count is below 1 are left
+the package rule -- weighted estimate, and a base that follows the inference basis: the raw
+\code{n} by default, the whole table's effective n under
+\code{options(tabxplor.design_effect = TRUE)} or under a \code{survey} design -- while the
+contribution itself stays weighted (it estimates the population table's structure, and is therefore
+identical at every basis, which is what keeps the correspondence-analysis reading safe). One base
+for the whole table, so a counts table and a percentage table of the same data give the SAME
+residuals. Cells whose expected count is below 1 are left
 uncolored: the normal approximation does not hold there.
 Colors are computed per column at print time; since 2.0.0 each column records the confidence level
 it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
@@ -170,24 +174,28 @@ metadata, and to color cells based on their contribution to variance (\code{colo
 Automatically added if needed for \code{color}.
 
 \code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
-passed}, in three rungs:
+passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogonal fact --- the
+\strong{inference basis}, stored on the table and named in its footer --- says how the
+\emph{interval and the test} are:
 \enumerate{
 \item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
-\strong{weighted} table, with the raw unweighted n as the sample size (the same convention as the
-confidence intervals beside them; see the \emph{Weighted confidence intervals} note below).
-\item \code{wt = w} plus \code{options(tabxplor.kish_neff = TRUE)} --- the raw n is replaced by
-Kish's effective sample size \code{(sum w)^2 / sum w^2} in \strong{every weighted confidence
-interval} and in the whole-table tests (a first-order \strong{Rao-Scott} correction). This corrects
-for unequal weighting only: it is blind to clustering and to calibration.
+\strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
+they carry no design effect. This is the default, and the footer says so.
+\item \code{wt = w} plus \code{options(tabxplor.design_effect = TRUE)} --- the same intervals and
+tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
+(the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
+\code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
+\code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. It is blind to
+clustering and to calibration, which the weights do not record.
 \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
-the design's own weights drive the estimates, the whole-table tests are
-\code{survey::svychisq} (factors) / a \code{svyglm} Wald F (means), \strong{and every confidence
-interval, star and colour threshold uses the design's own variance} (strata, clusters, fpc and
-calibration alike -- so a design can make an interval \emph{narrower}, which Kish never can).
+the same quantities, now with strata, clusters, \code{fpc} and calibration (so a design can make
+an interval \emph{narrower}, which weights alone never can).
 }
-If your file has only a weight column but you want the design-based test, that is one line:
-\code{tab(survey::svydesign(ids = ~1, weights = ~w, data = d), x, y, test = TRUE)}. Replicate-weight
-(\code{svrepdesign}) and two-phase designs are not supported.}
+Turn the option on when you want a \code{tab()} percentage interval to be comparable with the
+\code{Obs_*} column of a \code{\link{tab_reg}} on the same data: \code{tab_reg()} never reads it,
+because its crude companions are \emph{always} on the weighted basis, beside a model column that
+always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
+\code{wt} beside a design is an error (a design already carries its own weights).}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -473,26 +481,35 @@ greatest levels. They are labels, not points on the scale.
 interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
 proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
 the same way). Under unequal weights this carries no design effect, so the default interval is
-\strong{too narrow}. Opt in to Kish's effective sample size with
-\code{options(tabxplor.kish_neff = TRUE)}: it replaces that raw n with \code{n_eff = (sum w)^2 /
-sum(w^2)} in \strong{all} the descriptive intervals -- factor proportions and means alike (cell,
-difference, ratio, and the \code{color = "OR"} significance) -- and in the crude \code{empirical =}
-companions of \code{\link{tab_reg}}, so unequal weights widen the intervals honestly. This is a
-single-stage approximation (it needs the microdata weights, so \code{\link{tab_counts}} on
-pre-aggregated counts cannot apply it, and it is \strong{blind to clustering and to calibration}).
+\strong{too narrow} --- and the table's footer now says exactly that.
 
-\strong{Design-based confidence intervals.} Pass a \code{survey::svydesign} as \code{data} and that
-same base becomes the design's own: \code{n_eff = p(1-p) / Var_design(p)} for a proportion,
-\code{s^2 / Var_design(mean)} for a mean, from \code{survey::svyrecvar} on each cell's influence
-function -- so strata, clusters, \code{fpc} \emph{and} calibration reach every interval, star and
-colour threshold. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
+\code{options(tabxplor.design_effect = TRUE)} corrects it, \strong{exactly}: a weight column is the
+flat survey design \code{ids = ~1}, whose variance has a closed form in the per-cell
+\code{sum(w^2)} the aggregate already computes, so the base becomes
+\code{n_eff = p(1-p) / Var_design(p)} (or \code{s^2 / Var_design(mean)}) in \strong{every}
+descriptive interval --- proportions and means alike (cell, difference, ratio, and the
+\code{color = "OR"} significance). It reproduces \code{survey} to the last digit, including
+\code{survey}'s own \code{n/(n-1)} factor (so a table weighted by a \emph{constant} gets
+\code{n_eff = n * (n-1)/n}, not \code{n}). It needs the microdata weights, so
+\code{\link{tab_counts}} on pre-aggregated counts cannot apply it --- such a table says so in its
+footer instead of claiming a correction it does not have. Kish's \code{(sum w)^2 / sum(w^2)}, which
+earlier versions used here, is that same formula with each cell's own \code{sum(w^2)} discarded;
+it survives only as the limit for a cell that carries no information (a 0 \\% or 100 \\% cell).
+
+\strong{Design-based confidence intervals.} Pass a \code{survey::svydesign} as \code{data} and the
+same base comes from \code{survey::svyrecvar} on each cell's influence function, so strata,
+clusters, \code{fpc} \emph{and} calibration reach every interval, star and colour threshold; a flat
+\code{svydesign(ids = ~1)} takes the closed form instead, which is its exact answer. Every interval
+is then referred to the design's own degrees of freedom (\code{#PSU - #strata}), which matters below
+about 30 PSUs. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
 cell-vs-reference \emph{difference} (it cannot carry the design covariance between two rows), so it
 never produces a star the design does not support, and sometimes withholds one it would. And the
-\code{color = "contrib"} residual, whose base is the whole table rather than a cell, is
-design-corrected on a counts / \code{pct = "all"} table but keeps the unweighted base on a row- or
-column-percentage one. A design-based table costs roughly 3x a weighted one (6x if calibrated); the
-payoff needs real design information, so if your file ships one calibrated weight and no stratum or
-cluster variable, \code{tabxplor.kish_neff} is already all the correction available to you.
+\code{color = "contrib"} residual takes the \emph{whole table's} effective n rather than each
+cell's own --- the standard first-order correction --- which is what makes a counts table and a
+percentage table of the same data give identical residuals. A design-based table costs roughly 3x a
+weighted one (6x if calibrated); the payoff needs real design information, so if your file ships one
+calibrated weight and no stratum or cluster variable, \code{tabxplor.design_effect} is already all
+the correction available to you.
 }
 \section{Significance stars}{
 
@@ -519,8 +536,8 @@ variances); inverting the Welch t interval is exactly this well-known test.
 so it carries no stars and its \code{pvalue} is \code{NA}.
 }
 On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to Kish's effective sample size with
-\code{options("tabxplor.kish_neff" = TRUE)}.
+number of cases, unless you opt in to the weighting's own design effect with
+\code{options("tabxplor.design_effect" = TRUE)}.
 }
 
 \examples{

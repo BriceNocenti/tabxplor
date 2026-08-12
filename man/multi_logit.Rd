@@ -117,13 +117,14 @@ no \code{color = "adjustment"}, no gap test --- because the distance between two
 be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 no clean crude analogue and is ignored (with a message).
 
-The crude companions of a \strong{categorical} predictor are descriptive, so their confidence
-intervals follow the same three-rung ladder as \code{\link[=tab]{tab()}}'s cells: plain weighted, then
-\code{options(tabxplor.kish_neff = TRUE)} (Kish's effective sample size), then a \code{survey} design (see
-below). A \strong{continuous} predictor's companion comes from a univariable fit and therefore uses
-the model's own variance, like the \verb{Model_*} column beside it. The two rules answer the same
-question under different variance assumptions, so they will not agree to the last digit.
-Default \code{FALSE}.
+The crude companions are \strong{always} on the same inference basis as the \verb{Model_*} column beside
+them, which is the whole point of putting them side by side: when the data is weighted, their
+intervals account for the weighting exactly (the flat survey design), and under a
+\code{survey::svydesign} for the full design. \code{\link[=tab]{tab()}}'s \code{tabxplor.design_effect} option is \emph{not} read
+here --- turn it on if you want a \code{tab()} percentage interval to be comparable with these
+columns. A \strong{continuous} predictor's companion comes from a univariable fit; a categorical one
+from the closed-form cell sums, which for a saturated model is the same estimator. Default
+\code{FALSE}.
 
 \strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
 \code{survey::svyglm}; the crude ones through an effective sample size derived from the design

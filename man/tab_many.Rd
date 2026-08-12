@@ -508,8 +508,8 @@ variances); inverting the Welch t interval is exactly this well-known test.
 so it carries no stars and its \code{pvalue} is \code{NA}.
 }
 On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to Kish's effective sample size with
-\code{options("tabxplor.kish_neff" = TRUE)}.
+number of cases, unless you opt in to the weighting's own design effect with
+\code{options("tabxplor.design_effect" = TRUE)}.
 }
 
 \examples{

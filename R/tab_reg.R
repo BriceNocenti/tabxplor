@@ -1198,7 +1198,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     ))
   }
 
-  weighted <- !is.null(design_spec$design) || !is.null(design_spec$wt)
+  weighted <- svy_weighted(design_spec, design_spec$wt)
   # A closure the fit branches call with their OWN recoded model frame -> the matching survey design
   # (build the weight-column design / subset the prebuilt one). Lets the MNL / ordinal engines, which
   # recode the outcome themselves, get a row-aligned design without re-deriving the mask.
@@ -1634,12 +1634,26 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
                           design_spec = NULL) {
   yw   <- reg_crude_yw(data, dependent, crude_key, positive_level, wt, trials, ref_category)
   cats <- yw$cats
-  # the rung comes from the ONE ladder, not a local option read (the drift z14-ii closed for tab()).
-  kish <- identical(svy_inference_mode(design_spec, wt), "kish")
-  neff_or_n <- function(wsum, w2, raw) {
-    if (!kish) return(as.double(raw))
-    ne <- wsum^2 / w2
-    if (is.finite(ne)) ne else as.double(raw)
+  # The basis comes from the ONE resolver, not a local option read (the drift z14-ii closed for
+  # tab()). Last Phase z16-i, ruling 1: tab_reg() FORCES the weighted basis -- its crude Obs_* columns
+  # must be comparable with the Model_* column beside them, which is always design/weight-based
+  # (a weighted fit goes through svyglm, i.e. the Binder linearization). The tab()-scoped
+  # tabxplor.design_effect option is therefore never read here.
+  basis <- svy_inference_basis(design_spec, wt, force = TRUE)
+  # Last Phase z16-ii: the WEIGHTED base is the flat design's own, in closed form -- the same
+  # p(1-p)/Var_design device tab()'s cells use, evaluated at ids = ~1 (svy_flat_neff_rows). It replaces
+  # Kish, which is that formula with the cell's own Sum(w^2) discarded (measured up to 17 % wrong in
+  # either direction, and unable to move with the outcome at all). Unweighted -> the raw count,
+  # byte-identical. `n_obs` is the crude frame's row count = survey's nPSU for its flat design.
+  weighted <- identical(basis, "weights") || identical(basis, "design")
+  n_obs    <- nrow(data)
+  # the per-RESPONDENT weight: yw$w already carries the grouped-binomial `trials` multiplier, and the
+  # ratio form wants (weight, u, v) = (w, successes, trials) -- see svy_flat_neff_rows().
+  w0       <- if (identical(yw$kind, "share")) yw$w / yw$draws else yw$w
+  flat_neff <- function(keep, u, v, raw, num = NULL) {
+    if (!weighted) return(as.double(raw))
+    ne <- svy_flat_neff_rows(w0[keep], u[keep], v[keep], n_obs, num = num)
+    if (isTRUE(is.finite(ne) && ne > 0)) ne else as.double(raw)
   }
   has_num <- !is.null(yw$num)
   has_cat <- !identical(yw$kind, "numeric")
@@ -1660,9 +1674,11 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   # Var_design(log p) by construction.
   said <- FALSE
   degrade <- function() { if (!said) { svy_var_degraded(); said <<- TRUE }; NULL }
-  prep <- if (!is.null(design_spec$design))
-    svy_var_prep(design_spec$design, data[[svy_row_col]]) else NULL
-  if (!is.null(design_spec$design) && is.null(prep)) degrade()
+  # z16-ii: a FLAT svydesign(ids = ~1) has the closed form as its exact answer (verified: identical
+  # to svyrecvar here), so it takes the algebraic path -- no influence matrix, no ceiling.
+  need_svy <- !is.null(design_spec$design) && !svy_design_is_flat(design_spec$design)
+  prep <- if (need_svy) svy_var_prep(design_spec$design, data[[svy_row_col]]) else NULL
+  if (need_svy && is.null(prep)) degrade()
   if (!is.null(prep)) {
     # the grid's own weights must BE the design's, or the printed estimate and the variance beside it
     # would describe two different populations.
@@ -1703,14 +1719,19 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
             else if (share) stats::setNames(c(sum(yw$w[m] * yw$y[m]), sum(yw$w[m] * (1 - yw$y[m]))),
                                             cats)
             else vapply(cats, function(k) sum(yw$w[m & yw$y == k]), numeric(1))
+      # z16-ii: the CI base of a PROPORTION is now its own flat-design effective n, per CATEGORY --
+      # the ratio p_k = Sum(w u_k) / Sum(w v) with (u, v) = (successes, trials) for a share and
+      # (indicator, 1) for a label. For a grouped binomial that is the number of independent Bernoulli
+      # DRAWS the level is worth, which is why it is not n x trials.
+      draw_ne <- if (!has_cat) NA_real_ else vapply(cats, function(k) {
+        u <- if (share) (if (identical(k, cats[[1]])) yw$y else 1 - yw$y) * yw$draws
+             else as.numeric(yw$y == k)
+        flat_neff(m, u, yw$draws, sum(m) * mean(yw$draws[m]))
+      }, numeric(1))
       out <- list(
         n     = sum(m),
-        n_ci  = neff_or_n(wl, sum(yw$w[m]^2), sum(m)),
-        # the CI base of a PROPORTION is the number of Bernoulli DRAWS, which for a grouped binomial is
-        # `trials` per respondent. Equal to n_ci for every other outcome -> byte-identical.
-        # z14-iii: a VECTOR over `cats`, because a design variance is per category (it is constant here
-        # and for a binary outcome always -- p and 1-p give the same p(1-p)/Var).
-        n_draw = rep(neff_or_n(wl, sum(yw$w[m]^2), sum(m)) * mean(yw$draws[m]), length(cats)),
+        n_ci  = flat_neff(m, yw$draws, yw$draws, sum(m)),
+        n_draw = unname(draw_ne),
         prop  = if (has_cat) wc / wl else NA_real_,
         wpos  = if (has_cat) wc else NA_real_,
         wneg  = if (has_cat) rep(unname(wc[yw$ref]), length(cats)) else NA_real_,
@@ -1724,8 +1745,12 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
         out$var  <- if (want_var) {
           if (is.null(wt)) (s2 - s1^2 / n1) / (n1 - 1) else round(s2 / wn - (s1 / wn)^2, 10)
         } else NA_real_
-        # the numeric part re-derives its own effective n from the per-respondent weights
-        out$n_ci <- neff_or_n(wn, sum(nw[m]^2), n1)
+        # the numeric part re-derives its own effective n from the per-respondent weights: the mean
+        # twin of the same closed form, s^2 / Var_design(x_bar).
+        out$n_ci <- if (!weighted) as.double(n1) else {
+          ne <- svy_flat_neff_rows(nw[m], yw$num[m], rep(1, sum(m)), n_obs, num = out$var)
+          if (isTRUE(is.finite(ne) && ne > 0)) ne else as.double(n1)
+        }
       }
       # z14-iii: the design supersedes it, per level, with Korn & Graubard's device -- the very rule
       # z14-ii writes into tab()'s own n_eff field. A level whose variance came back non-finite or
@@ -1741,7 +1766,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
         }
       }
       # keep the two identities the pre-z14-iii code had by construction: a numeric outcome has one
-      # base (mean(draws) == 1 and num_w == w), a categorical one without a mean column likewise.
+      # base, a categorical one without a mean column likewise.
       if (!has_cat)     out$n_draw <- rep(out$n_ci, length(cats))
       else if (!has_num) out$n_ci  <- out$n_draw[[1]]
       out
@@ -3493,6 +3518,15 @@ reg_spread_models <- function(t, split_var, sl) {
 # skeleton is read from its fitted terms (reg_skeleton_from_fit). Fit-all first so the skeleton can
 # come from the fit before the columns are aligned. A multinomial fit contributes SEVERAL columns
 # (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
+# Last Phase z16-i: the inference basis of a regression table. Ruling 1 -- a weighted tab_reg() is
+# ALWAYS on the weighted basis (its models fit through svyglm, i.e. the Binder linearization, and
+# since z16-ii its crude Obs_* companions use the same closed form), so the tab()-scoped
+# tabxplor.design_effect option is never read. Feeds the footer sentence, nothing else.
+reg_inference <- function(shared) {
+  ds <- shared$design_spec
+  leaf_inference(svy_inference_basis(ds, ds$wt, force = TRUE), ds, ds$wt)
+}
+
 reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, reference = NULL,
                       reref = FALSE, skeleton_data = data) {
   # `shared` bundles every per-call setting the leaves + assembler read (built once in tab_reg), replacing
@@ -3576,6 +3610,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       new_tab(subtext = subtext, test = tests,
               meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
                                              method_diff = method),
+                          inference = reg_inference(shared),
                           vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
       dplyr::group_by(!!rlang::sym(split_var), var)
     # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
@@ -4165,6 +4200,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     tab_stamp_conf_level(conf_level) |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
+                        # Last Phase z16-i: the inference basis (ruling 1: a weighted tab_reg() is
+                        # ALWAYS on the weighted basis, model column and crude companions alike).
+                        inference = reg_inference(shared),
                         # Last Phase z15: the observed curves the sparklines were drawn from, and the
                         # only thing reg_check_plots() needs that a refit cannot give back.
                         assumptions = assumptions,
@@ -4456,13 +4494,14 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   be listwise deletion rather than adjustment. Also works with a vector of dependents. Ordinal has
 #'   no clean crude analogue and is ignored (with a message).
 #'
-#'   The crude companions of a **categorical** predictor are descriptive, so their confidence
-#'   intervals follow the same three-rung ladder as [tab()]'s cells: plain weighted, then
-#'   `options(tabxplor.kish_neff = TRUE)` (Kish's effective sample size), then a `survey` design (see
-#'   below). A **continuous** predictor's companion comes from a univariable fit and therefore uses
-#'   the model's own variance, like the `Model_*` column beside it. The two rules answer the same
-#'   question under different variance assumptions, so they will not agree to the last digit.
-#'   Default `FALSE`.
+#'   The crude companions are **always** on the same inference basis as the `Model_*` column beside
+#'   them, which is the whole point of putting them side by side: when the data is weighted, their
+#'   intervals account for the weighting exactly (the flat survey design), and under a
+#'   `survey::svydesign` for the full design. [tab()]'s `tabxplor.design_effect` option is *not* read
+#'   here --- turn it on if you want a `tab()` percentage interval to be comparable with these
+#'   columns. A **continuous** predictor's companion comes from a univariable fit; a categorical one
+#'   from the closed-form cell sums, which for a saturated model is the same estimator. Default
+#'   `FALSE`.
 #'
 #'   **Under a `survey::svydesign`** every column is design-based. The `Model_*` ones through
 #'   `survey::svyglm`; the crude ones through an effective sample size derived from the design
@@ -4837,13 +4876,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   svy <- svy_unwrap_data(data, "tab_reg")
   design_obj <- svy$spec$design
   if (!is.null(svy)) {
-    if (!is.null(wt))
-      cli::cli_inform(c("i" = "{.arg data} is already a survey design; {.arg wt} is ignored."))
+    # Last Phase z16-i (W10): one rule across the package -- `wt` beside a design ABORTS (it used to
+    # be silently ignored here with a note nothing downstream could see).
+    svy_abort_wt_design(!is.null(wt), "tab_reg")
     data <- svy$data
     wt   <- svy$spec$wt
   }
   stopifnot(is.data.frame(data))
-  weighted <- !is.null(design_obj) || !is.null(wt)
+  weighted <- svy_weighted(list(design = design_obj), wt)
 
   # formula escape-hatch (D9): a formula in `dependent` supplies the model. A SIMPLE formula (bare
   # response ~ bare main-effect vars) reduces losslessly to the dependent+predictors character path;

@@ -113,14 +113,17 @@ tx_getOption <- function(names, default = NULL) {
   options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
   options("tabxplor.signif_labels" = c("*", "**", "***"))
 
-  # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2 for the
-  # weighted CIs/tests. Last Phase s made it uniform: n_eff now backs EVERY weighted descriptive CI --
-  # factor proportions (tab_ci) AND means (num_core) AND the color="OR" interval AND tab_reg's empirical
-  # companions -- plus the whole-table chi2/F tests (Last Phase j, first-order Rao-Scott). It needs the
-  # microdata weights (tab_counts on pre-aggregated counts cannot apply it), and it is blind to
-  # clustering and to calibration. For the real design effect -- in the tests AND in every interval
-  # (Last Phase z14-ii) -- pass a survey::svydesign as `data`; the option is then not consulted.
-  options("tabxplor.kish_neff"     = FALSE)
+  # Weighted inference (§14): by default a weighted tab() estimates the population but bases every
+  # interval and test on the RAW number of respondents -- so it carries no design effect, and the
+  # footer says so. Opt in and the same intervals account for the unequal weighting exactly (the
+  # closed-form flat ids = ~1 design variance, Last Phase z16-ii). It needs the microdata weights
+  # (tab_counts on pre-aggregated counts cannot apply it) and it is blind to clustering and to
+  # calibration; for those, pass a survey::svydesign as `data` and the option is not consulted.
+  # SCOPE: tab() and its leaves only (ruling 1). tab_reg()'s crude Obs_* columns are ALWAYS on the
+  # weighted basis, so they always match the Model_* column beside them.
+  # Renamed in Last Phase z16-i (was tabxplor.kish_neff -- never public, and Kish is now only the
+  # degenerate limit of the exact formula, not a rung).
+  options("tabxplor.design_effect" = FALSE)
 
   # Last Phase z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10
   # block glyphs showing the OBSERVED shape of its effect, the eye-half of the Linearity check.

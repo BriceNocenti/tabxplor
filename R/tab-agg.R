@@ -117,7 +117,8 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
 # col_vars already coerced to numeric) it returns, per numeric col_var `v`, the sufficient moment
 # sums keyed by `tab_row_names`:
 #   v_n  = sum(!is.na(x))                          v_s1 = sum([w *] x)      v_s2 = sum([w *] x^2)
-#   v_wn = sum([w *] !is.na(x))  (weighted only)   v_w2 = sum(w^2 * !is.na(x))  (Kish opt-in only)
+#   v_wn = sum([w *] !is.na(x))  (weighted only)   v_w2 = sum(w^2 * !is.na(x))  (weighted only)
+#   v_w2s1 = sum(w^2 x)  v_w2s2 = sum(w^2 x^2)      (weighted only, Last Phase z16-ii)
 # `wt` is the weight SYMBOL (character(0) when unweighted); `eval(wt)` looks the column up inside j.
 # WARNING: byte-identity-critical -- the as.double() coercions (32-bit overflow guard on Sigma x^2),
 # the weight lookup, the (no) .SDcols on the weighted branch, and the column construction order (all
@@ -132,7 +133,6 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
 num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
   col_vars <- as.character(col_vars)
   wt_name  <- as.character(wt)     # captured here (un-shadowed) -- see the WARNING above
-  kish <- isTRUE(getOption("tabxplor.kish_neff", FALSE))
   if (length(wt) == 0) {
     data[,
          c(purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
@@ -173,18 +173,33 @@ num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
                                           .else = ~ NA_real_),
                             paste0(c(col_vars, wt_name), "_s2")),
 
-           # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective n
-           # (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted path is
-           # byte-identical and pays nothing. See dev/tabxplor_2.0.0_decisions.md §14.
-           if (kish)
-             purrr::set_names(purrr::map_if(.SD,
-                                            names(.SD) != wt_name,
-                                            ~ sum(get(wt_name)^2 * as.integer(!is.na(.)), na.rm = TRUE),
-                                            .else = ~ NA_real_),
-                              paste0(c(col_vars, wt_name), "_w2"))
+           # G1 (Phase 3a) + Last Phase z16-ii: the THREE extra sufficient statistics the flat-design
+           # variance of a mean needs -- Sigma w^2, Sigma w^2 x, Sigma w^2 x^2 (Kish only ever used
+           # the first, which is that formula with the outcome discarded). Accumulated whenever the
+           # table is WEIGHTED, never on an option (ruling 8): the aggregate then has ONE shape, so
+           # toggling tabxplor.design_effect is a jamovi cache HIT instead of a re-aggregate, and
+           # num_core() decides from the resolved BASIS whether to use them. All three are ADDITIVE,
+           # so num_rollup() gives the total rows their own exact variance by summation.
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != wt_name,
+                                          ~ sum(get(wt_name)^2 * as.integer(!is.na(.)), na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(c(col_vars, wt_name), "_w2")),
+
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != wt_name,
+                                          ~ sum(get(wt_name)^2 * ., na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(c(col_vars, wt_name), "_w2s1")),
+
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != wt_name,
+                                          ~ sum(get(wt_name)^2 * . * ., na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(c(col_vars, wt_name), "_w2s2"))
          ),
          keyby = c(tab_row_names)][
-           , paste0(wt_name, c("_n", "_wn", "_s1", "_s2", if (kish) "_w2")) := NULL]
+           , paste0(wt_name, c("_n", "_wn", "_s1", "_s2", "_w2", "_w2s1", "_w2s2")) := NULL]
   }
 }
 
@@ -271,14 +286,27 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 # Validated against DescTools/prop.test/t.test in dev/verify_ci_inclusion.R.
 # See: CLAUDE.md > 2.0.0 roadmap > Phase 3a; dev/tabxplor_2.0.0_decisions.md §20.
 
-# The normal quantile (z-score) for a two-sided confidence level -- the engine's z for the
-# Wilson/Newcombe/Wald intervals below. (Moved here from tab.R in Phase 17a: it belongs beside its
-# only callers, the CI engine.)
+# THE critical value of every interval in the package (Last Phase z16-i, W7): the two-sided Student
+# quantile at `df` degrees of freedom, which at `df = Inf` IS the normal quantile -- `qt(p, Inf)` is
+# bit-identical to `qnorm(p)`, so the default is byte-identical to the z the engines used before.
+# WHY one function: `survey` refers every interval to `t(degf)` where `degf = #PSU - #strata`;
+# tabxplor referred proportions to z and means to `t(n_eff - 1)`, i.e. to an EFFECTIVE SAMPLE SIZE,
+# which has nothing to do with the design's degrees of freedom -- measured 15 % too narrow on a
+# proportion at 10 PSUs. Threading `df` here covers the score intervals too (Wilson / Newcombe / Katz
+# / Woolf are z-based by construction; substituting t(degf) for z is survey's own `xlogit` idiom).
 #' @keywords internal
-zscore_formula <- function(conf_level) {
+conf_level_to_crit <- function(conf_level, df = Inf) {
   stopifnot(conf_level >= 0, conf_level <= 1)
-  stats::qnorm((1 - conf_level) / 2, lower.tail = FALSE)
+  df <- as.double(df)
+  if (!length(df)) df <- Inf
+  df[is.na(df) | df <= 0] <- Inf
+  stats::qt(1 - (1 - conf_level) / 2, df)
 }
+
+# The normal quantile (z-score) for a two-sided confidence level -- conf_level_to_crit() at df = Inf.
+# (Moved here from tab.R in Phase 17a: it belongs beside its only callers, the CI engine.)
+#' @keywords internal
+zscore_formula <- function(conf_level) conf_level_to_crit(conf_level, Inf)
 
 #' Convert confidence levels into z thresholds
 #'
@@ -337,8 +365,8 @@ ci_pivot <- function(estimate, se, df = Inf, conf_level = 0.95, want_p = TRUE) {
 }
 
 # SCORE shape, single proportion: Wilson interval. Cell CI -> no meaningful H0 -> pvalue NA.
-ci_wilson <- function(p, n, conf_level = 0.95) {
-  b <- wilson_bounds(p, n, zscore_formula(conf_level))
+ci_wilson <- function(p, n, conf_level = 0.95, df = Inf) {
+  b <- wilson_bounds(p, n, conf_level_to_crit(conf_level, df))
   list(inf = b$inf, sup = b$sup, pvalue = vctrs::vec_recycle(NA_real_, length(p)))
 }
 
@@ -348,20 +376,40 @@ ci_wilson <- function(p, n, conf_level = 0.95) {
 # WARNING: at p in {0, 1} se = 0 -> a degenerate zero-width interval (Wilson never degenerates);
 # bounds can also fall outside [0, 1] (the pct_ci display clamps to [0, 100], same as method_diff
 # = "wald"). Kept for teaching parity; wilson stays the default.
-ci_wald <- function(p, n, conf_level = 0.95) {
-  ci_pivot(p, sqrt(p * (1 - p) / n), df = Inf, conf_level = conf_level, want_p = FALSE)
+ci_wald <- function(p, n, conf_level = 0.95, df = Inf) {
+  ci_pivot(p, sqrt(p * (1 - p) / n), df = df, conf_level = conf_level, want_p = FALSE)
+}
+
+# KORN-GRAUBARD shape, single proportion (Last Phase z16-iii, ruling 4): a Clopper-Pearson interval
+# on the EFFECTIVE sample size -- literally `survey::svyciprop(method = "beta")`, which is defined as
+# binom.test "with an effective sample size based on the estimated variance of the proportion". It is
+# the textbook design-based cell interval, and it needs nothing new here: `n` is already the base this
+# framework computes (n_eff = p(1-p)/Var_design). Opt-in via `method_cell = "beta"`, NOT a default --
+# one interval SHAPE at every position keeps the legend, the goldens and cross-table comparability one
+# story, and beta is deliberately conservative near 0 and 1 where Wilson is not.
+ci_beta <- function(p, n, conf_level = 0.95) {
+  a  <- (1 - conf_level) / 2
+  lo <- stats::qbeta(a,     n * p,     n * (1 - p) + 1)
+  hi <- stats::qbeta(1 - a, n * p + 1, n * (1 - p))
+  bad <- !is.finite(n) | n <= 0 | !is.finite(p)
+  lo[bad] <- NA_real_; hi[bad] <- NA_real_
+  lo[!is.na(p) & p <= 0] <- 0
+  hi[!is.na(p) & p >= 1] <- 1
+  list(inf = lo, sup = hi, pvalue = vctrs::vec_recycle(NA_real_, length(p)))
 }
 
 # SCORE shape, proportion difference: Newcombe method 10 (hybrid score, built from the two
 # groups' Wilson intervals). Its exact dual test has no closed form, so the inversion p is
 # found by a vectorised bisection on z (monotone). want_p = FALSE skips it (one interval eval).
-ci_newcombe <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
+ci_newcombe <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE, df = Inf) {
   d  <- p1 - p2
-  w1 <- wilson_bounds(p1, n1, zscore_formula(conf_level))
-  w2 <- wilson_bounds(p2, n2, zscore_formula(conf_level))
+  z  <- conf_level_to_crit(conf_level, df)
+  w1 <- wilson_bounds(p1, n1, z)
+  w2 <- wilson_bounds(p2, n2, z)
   inf <- d - sqrt((p1 - w1$inf)^2 + (w2$sup - p2)^2)
   sup <- d + sqrt((w1$sup - p1)^2 + (p2 - w2$inf)^2)
-  pvalue <- if (want_p) newcombe_pvalue(p1, n1, p2, n2) else vctrs::vec_recycle(NA_real_, length(d))
+  pvalue <- if (want_p) newcombe_pvalue(p1, n1, p2, n2, df = df)
+            else vctrs::vec_recycle(NA_real_, length(d))
   list(inf = inf, sup = sup, pvalue = pvalue)
 }
 
@@ -369,7 +417,7 @@ ci_newcombe <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
 # g(z) = |d| - near_margin(z) is decreasing in z (the interval widens with z); bisect for the
 # root z*, then p = 2*(1 - Phi(z*)). By construction cut(p) matches the Newcombe bracket's own
 # 0-inclusion at any level. Fully vectorised (fixed iterations, no per-cell root solver).
-newcombe_pvalue <- function(p1, n1, p2, n2, steps = 50L) {
+newcombe_pvalue <- function(p1, n1, p2, n2, steps = 50L, df = Inf) {
   d  <- p1 - p2
   ad <- abs(d)
   margin <- function(z) {
@@ -387,7 +435,10 @@ newcombe_pvalue <- function(p1, n1, p2, n2, steps = 50L) {
     hi   <- ifelse(over, mid, hi)
     lo   <- ifelse(over, lo,  mid)
   }
-  p <- 2 * stats::pnorm(-(lo + hi) / 2)
+  q <- (lo + hi) / 2
+  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
+  dfp[is.na(dfp) | dfp <= 0] <- Inf
+  p <- 2 * stats::pt(-q, dfp)
   p[!is.finite(d)] <- NA_real_
   p
 }
@@ -396,17 +447,18 @@ newcombe_pvalue <- function(p1, n1, p2, n2, steps = 50L) {
 # is the score hybrid; AC and Wald are pivot-shaped (the caller-free adjusted est/se are built
 # here). Weighted rule (§14): the caller passes the WEIGHTED proportions p1/p2 and the
 # UNWEIGHTED bases n1/n2 (their cells' tot_n).
-ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe", want_p = TRUE) {
+ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe", want_p = TRUE,
+                         df = Inf) {
   switch(
     method,
-    "newcombe" = ci_newcombe(p1, n1, p2, n2, conf_level, want_p),
+    "newcombe" = ci_newcombe(p1, n1, p2, n2, conf_level, want_p, df = df),
     "ac" = {
       a1 <- (p1 * n1 + 1) / (n1 + 2); a2 <- (p2 * n2 + 1) / (n2 + 2)
       ci_pivot(a1 - a2, sqrt(a1 * (1 - a1) / (n1 + 2) + a2 * (1 - a2) / (n2 + 2)),
-               df = Inf, conf_level = conf_level, want_p = want_p)
+               df = df, conf_level = conf_level, want_p = want_p)
     },
     "wald" = ci_pivot(p1 - p2, sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2),
-                      df = Inf, conf_level = conf_level, want_p = want_p),
+                      df = df, conf_level = conf_level, want_p = want_p),
     stop("unknown method_diff: ", method)
   )
 }
@@ -425,14 +477,17 @@ ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe",
 # WARNING: undefined at p1 = 0 (log 0) or p2 = 0 (the division) -> NA bounds and NA p, so an empty
 # cell or an empty reference is left uncoloured/unstarred rather than +/-Inf. Katz is the standard
 # large-sample RR interval and, like every Wald-family method here, wants a few counts per cell.
-ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
+ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE, df = Inf) {
   rr  <- p1 / p2
   lrr <- log(rr)
   se  <- sqrt((1 - p1) / (n1 * p1) + (1 - p2) / (n2 * p2))
-  z   <- zscore_formula(conf_level)
+  z   <- conf_level_to_crit(conf_level, df)
+  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
+  dfp[is.na(dfp) | dfp <= 0] <- Inf
   inf <- exp(lrr - z * se)
   sup <- exp(lrr + z * se)
-  pvalue <- if (want_p) 2 * stats::pnorm(-abs(lrr / se)) else vctrs::vec_recycle(NA_real_, length(rr))
+  pvalue <- if (want_p) 2 * stats::pt(-abs(lrr / se), dfp)
+            else vctrs::vec_recycle(NA_real_, length(rr))
   pvalue <- vctrs::vec_recycle(pvalue, length(rr))
   bad <- !is.finite(lrr) | !is.finite(se) | se == 0
   inf[bad] <- NA_real_; sup[bad] <- NA_real_; pvalue[bad] <- NA_real_
@@ -448,7 +503,7 @@ ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
 # bracket width) no longer flips with stars. Weighted rule (§14): weighted means/variances, unweighted
 # n1/n2.
 ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
-                          method = "welch") {
+                          method = "welch", df_design = Inf) {
   if (identical(method, "student")) {
     sp2 <- ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2)
     se  <- sqrt(sp2 * (1 / n1 + 1 / n2))
@@ -457,7 +512,16 @@ ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
     se <- sqrt(v1 / n1 + v2 / n2)
     df <- se^4 / ((v1 / n1)^2 / (n1 - 1) + (v2 / n2)^2 / (n2 - 1))
   }
-  ci_pivot(m1 - m2, se, df = df, conf_level = conf_level, want_p = want_p)
+  ci_pivot(m1 - m2, se, df = df_or_design(df, df_design), conf_level = conf_level, want_p = want_p)
+}
+
+# Last Phase z16-i (W7): a DESIGN's degrees of freedom REPLACE the sample-based ones -- `survey`
+# refers every interval, mean included, to t(degf) = t(#PSU - #strata), which no n_eff can stand in
+# for. `df_design` is NA / Inf everywhere else, so the sample-based df is kept unchanged.
+df_or_design <- function(df, df_design) {
+  d <- as.double(df_design)
+  if (!length(d) || anyNA(d) || !all(is.finite(d)) || any(d <= 0)) return(df)
+  vctrs::vec_recycle(d, length(df))
 }
 
 # MULTIPLICATIVE shape, ratio of MEANS (14v-ii, decisions §48): exp(log(m1/m2) +/- q * se_logR), the
@@ -474,7 +538,7 @@ ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
 # rule (§14): weighted means/variances, unweighted n1/n2. WARNING: undefined at m <= 0 -> NA bounds/p
 # (an empty group is left uncoloured/unstarred).
 ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
-                          method = "robust") {
+                          method = "robust", df_design = Inf) {
   lr <- log(m1 / m2)
   se <- switch(
     method,
@@ -487,7 +551,8 @@ ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
     stop("unknown method_mean_ratio: ", method)
   )
   df  <- if (identical(method, "quasipoisson")) n1 + n2 - 2 else Inf
-  res <- ci_pivot(lr, se, df = df, conf_level = conf_level, want_p = want_p)
+  res <- ci_pivot(lr, se, df = df_or_design(df, df_design), conf_level = conf_level,
+                  want_p = want_p)
   inf <- exp(res$inf); sup <- exp(res$sup)
   bad <- !is.finite(lr) | !is.finite(se) | se == 0
   inf[bad] <- NA_real_; sup[bad] <- NA_real_; res$pvalue[bad] <- NA_real_
@@ -500,12 +565,15 @@ ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
 # the caller builds the cells from the WEIGHTED proportion x the UNWEIGHTED base (a = p1*n1,
 # b = (1-p1)*n1, ...). z-based (an OR has no exact small-sample t). WARNING: undefined when any cell
 # is 0 (log 0 / 1/0) -> NA bounds/p.
-ci_or <- function(a, b, c, d, conf_level = 0.95, want_p = TRUE) {
+ci_or <- function(a, b, c, d, conf_level = 0.95, want_p = TRUE, df = Inf) {
   lor <- log((a * d) / (b * c))
   se  <- sqrt(1 / a + 1 / b + 1 / c + 1 / d)
-  z   <- zscore_formula(conf_level)
+  z   <- conf_level_to_crit(conf_level, df)
+  dfp <- as.double(df); if (!length(dfp)) dfp <- Inf
+  dfp[is.na(dfp) | dfp <= 0] <- Inf
   inf <- exp(lor - z * se); sup <- exp(lor + z * se)
-  pvalue <- if (want_p) 2 * stats::pnorm(-abs(lor / se)) else vctrs::vec_recycle(NA_real_, length(lor))
+  pvalue <- if (want_p) 2 * stats::pt(-abs(lor / se), dfp)
+            else vctrs::vec_recycle(NA_real_, length(lor))
   pvalue <- vctrs::vec_recycle(pvalue, length(lor))
   bad <- !is.finite(lor) | !is.finite(se) | se == 0
   inf[bad] <- NA_real_; sup[bad] <- NA_real_; pvalue[bad] <- NA_real_

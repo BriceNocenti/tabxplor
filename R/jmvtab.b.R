@@ -35,11 +35,12 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       options("tabxplor.anova" = if (identical(self$options$anova, "classic")) "classic" else "welch")
       on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
 
-      # Last Phase j: "kish" robust mode is the tabxplor.kish_neff option, set around the build (like
-      # anova). test_robust is in the tier-3 base key, so a toggle rebuilds with the right option.
-      kish_option <- getOption("tabxplor.kish_neff")
-      options("tabxplor.kish_neff" = identical(self$options$test_robust, "kish"))
-      on.exit(options("tabxplor.kish_neff" = kish_option), add = TRUE)
+      # Last Phase z16-iii (W11): ONE honest checkbox. It was labelled "Type of p-value" but has moved
+      # every confidence interval, star and colour threshold in the table since Last Phase s. Set
+      # around the build (like anova); it is in the tier-3 base key, so a toggle rebuilds with it.
+      de_option <- getOption("tabxplor.design_effect")
+      options("tabxplor.design_effect" = isTRUE(self$options$design_effect))
+      on.exit(options("tabxplor.design_effect" = de_option), add = TRUE)
 
       store <- self$results$cache_state$state          # NULL on the first run
       # DESIGN (Phase h): flush queued option changes before building so a newer edit supersedes this
@@ -89,10 +90,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # line at build time, so it must sit in the tier-3 base-key (not `reapplied`) -> a toggle
         # rebuilds. The global option is set from it around the build in .run().
         anova        = self$options$anova,
-        # Last Phase j: the whole-table test robustness (classic / Kish n_eff / survey design) + the
-        # survey design vars. All land in the tier-3 base key (structural, not `reapplied`) -> a toggle
-        # rebuilds; the robust overlay recomputes the omnibus p from the microdata (jmvtab-cache §Kish).
-        test_robust  = self$options$test_robust,
+        # Last Phase j / z16-iii: the inference basis checkbox. It lands in the tier-3 base key
+        # (structural, not `reapplied`) -> a toggle rebuilds; the robust overlay recomputes the
+        # omnibus p on the flat design, and every cell interval moves with it.
+        design_effect = isTRUE(self$options$design_effect),
         na           = self$options$na,
         levels       = self$options$lvs,             # option named `lvs` (jmvcore has a levels() method)
         # Phase 7g-iii: the reference-level picker (refLevels) drives `ref`, keyed by the ACTIVE axis

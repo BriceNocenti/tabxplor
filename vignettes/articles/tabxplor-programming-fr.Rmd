@@ -90,7 +90,7 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `resid`     | résidu standardisé ajusté (dérivé de `pvalue`, en lecture seule) |
 | `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
-| `n_eff`     | taille d'échantillon efficace utilisée pour l'intervalle de confiance, avec `options(tabxplor.kish_neff = TRUE)` |
+| `n_eff`     | taille d'échantillon efficace utilisée pour l'intervalle de confiance, avec `options(tabxplor.design_effect = TRUE)` ou un plan `survey` |
 | `obs`       | `tab_reg()` seulement : l'effet observé (brut) auquel l'effet modélisé est comparé |
 | `digits`    | nombre de décimales à afficher (par case) |
 | `display`   | quel champ est affiché (par case) |
@@ -224,7 +224,7 @@ tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
            col_name = "race", pct = "row", color = "diff")
 ```
 
-La pondération fonctionne comme dans `tab()` : passer l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (La taille d'échantillon efficace de Kish, `options(tabxplor.kish_neff = TRUE)`, a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus, elle ne s'applique donc pas ici — les intervalles de confiance utilisent toujours le N non pondéré.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.
+La pondération fonctionne comme dans `tab()` : passer l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (`options(tabxplor.design_effect = TRUE)` a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus : elle ne s'applique donc pas ici — les intervalles de confiance utilisent le N non pondéré, et la note de bas de page le dit plutôt que de revendiquer une correction absente.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.
 
 ## Passer un tableau groupé en colonnes
 

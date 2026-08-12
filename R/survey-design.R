@@ -10,25 +10,31 @@
 #      population-average AME, the frozen SD and the "Weighted by" footer silently lost the weights
 #      (D1/D2/D8 of dev/full_survey_design_scope.md S2.3).
 #   2. The design constructors (svy_*), shared by tab_reg's weighted models.
-#   3. tab_robust_overlay(): recompute each whole-table omnibus p-value under a robustness mode and
-#      overlay it on the classic `test` attribute (Last Phase j). Two modes, both OPT-IN -- the default
-#      unweighted-chi2 / S14-F path never runs this, stays byte-identical:
-#        - "kish"   : first-order Rao-Scott -- the Pearson chi2 on the WEIGHTED proportions rescaled to
-#                     the effective n_eff = (sum w)^2 / sum w^2; the numeric F on per-group n_eff.
-#        - "survey" : design-based -- survey::svychisq (Rao-Scott 2nd-order F) for factors, a svyglm +
-#                     regTermTest Wald F for means. Needs `survey` (an Import; guarded for consistency).
-# DESIGN: the inference RUNG is derived, never asked for (z14-i, ruling Q2). `test` says only WHETHER
-#   to test; what the user already passed says HOW -- weights / weights + tabxplor.kish_neff / a design
-#   object. That is why `ids`/`strata`/`fpc`/`nest` are gone: they reached the omnibus p and nothing
-#   else, and svydesign() says all four better. Since z14-ii the same rung also chooses each cell's
-#   `n_eff` base, so the tests and the intervals cannot describe different samples --
-#   see svy_inference_mode() and R/survey-variance.R.
+#   3. tab_robust_overlay(): recompute each whole-table omnibus p-value ON A DESIGN -- the user's own,
+#      or the flat one a weight column defines -- and overlay it on the classic `test` attribute
+#      (Last Phase j; z16-iii made the two bases run the SAME survey estimator). survey::svychisq
+#      (Rao-Scott 2nd-order F) for factors, svyglm + regTermTest's Wald F for means.
+# DESIGN (Last Phase z16-i): the INFERENCE BASIS is derived, never asked for, and now STORED
+#   (meta$inference). `test` says only WHETHER to test; what the user already passed says HOW.
+#   `wt` says how the ESTIMATE is computed; the basis says how the INTERVAL is computed -- two
+#   orthogonal facts, which is why the framework kept needing four encodings of one thing.
+#     "n"              the raw sample size (unweighted, or weighted with the option off = the default)
+#     "weights"        the design effect of the weights, exactly -- the flat ids = ~1 design
+#     "design"         the full design: strata, clusters, fpc, calibration
+#     "design_partial" a design was given but its variance could not be computed here
+#   svy_inference_basis() is the ONLY place the option or the design object is read; every consumer
+#   takes the resolved value. That is also why `ids`/`strata`/`fpc`/`nest` are gone: they reached the
+#   omnibus p and nothing else, and svydesign() says all four better.
+#   See dev/weights_framework_redesign.md S2.1, and R/survey-variance.R for the two variance
+#   implementations the basis selects between.
 # KEY CONSTRAINTS:
 #   - The robust p replaces ONLY the p-value / statistic / df / n on the chi2 / F rows; the descriptive
 #     effect size is carried through (it is computed on the same weighted table since z14-i).
 #   - Robust tests run on complete cases of (row_var, col_var) per subtable (the survey convention);
 #     this can differ slightly from the classic chi2 when na = "keep" counts NA as a category -- documented.
 #   - Fisher rows are dropped in robust mode (the robust p is the answer there).
+#   - This is the ONE architectural exception to "the test comes from the aggregate": a design-based
+#     omnibus needs the observations. It runs only when the basis is not "n" -- i.e. opt-in.
 # See: dev/full_survey_design_scope.md (z14-i); dev/tabxplor_2.0.0_decisions.md S51; CLAUDE.md Last Phase j.
 
 # === SECTION: the design boundary ===================================================================
@@ -74,7 +80,31 @@ svy_unwrap_data <- function(data, fn = "tab") {
   frame[[svy_wt_col]]  <- as.double(stats::weights(data, type = "sampling"))
   frame[[svy_row_col]] <- seq_len(nrow(frame))
   cli::cli_inform(c("i" = "Survey design detected: estimates and tests use the design."))
-  list(data = frame, spec = list(design = data, wt = svy_wt_col))
+  # Last Phase z16-i (W7): the design's DEGREES OF FREEDOM, captured once at the boundary. survey
+  # refers every interval to t(degf) where degf = #PSU - #strata; tabxplor referred proportions to z
+  # and means to t(n_eff - 1), which is anti-conservative by up to 15 % below 30 PSUs. It rides the
+  # spec to the leaves and then meta$inference, so the exported step path gets it too.
+  list(data = frame, spec = list(design = data, wt = svy_wt_col,
+                                 degf = svy_degf(data)))
+}
+
+# Last Phase z16-i (W10): `wt` beside a design is a contradiction, not a preference -- the design
+# carries its own weights and the `wt` column was silently thrown away. Every other collision in the
+# package aborts (a weight that is also a row_var, a row_var that is also a tab_var); this one now
+# does too, from the ONE place both are visible. `wt_given` is TRUE when the user actually passed one.
+svy_abort_wt_design <- function(wt_given, fn = "tab") {
+  if (!isTRUE(wt_given)) return(invisible(NULL))
+  cli::cli_abort(c(
+    "{.arg wt} cannot be used when {.arg data} is a {.cls survey.design}.",
+    "x" = "A design already carries its own sampling weights.",
+    "i" = "Drop {.arg wt}, or build the design with those weights: \\
+           {.code survey::svydesign(ids = ~1, weights = ~w, data = d)}."))
+}
+
+# The design's degrees of freedom, or NA when they cannot be had (never errors, never guesses).
+svy_degf <- function(design) {
+  d <- tryCatch(as.double(survey::degf(design)), error = function(e) NA_real_)
+  if (length(d) != 1L || !is.finite(d) || d <= 0) NA_real_ else d
 }
 
 # `test` says only WHETHER to test -- TRUE/FALSE, nothing else. Validated at the PUBLIC boundary
@@ -87,23 +117,34 @@ svy_check_test <- function(test, arg = "test") {
       "{.arg {arg}} must be {.code TRUE} or {.code FALSE}.",
       "x" = "Got {.val {test}}.",
       "i" = paste("The KIND of test follows what you pass: {.arg wt} gives a weighted test,",
-                  "{.code options(tabxplor.kish_neff = TRUE)} rescales it to Kish's effective sample",
-                  "size, and a {.fn survey::svydesign} passed as {.arg data} gives a design-based one.")
+                  "{.code options(tabxplor.design_effect = TRUE)} makes it account for the",
+                  "weighting, and a {.fn survey::svydesign} passed as {.arg data} gives a",
+                  "design-based one.")
     ))
   isTRUE(test)
 }
 
-# THE inference rung (ruling Q2) -- resolved once, in tab_setup(), where the weight is resolved and the
-# design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to drift
-# (only tab() had the rule, so tab_many() was silently always classic).
-# Last Phase z14-ii: it governs the CELL INTERVALS as well as the whole-table test -- the leaves take
-# their `n_eff` base from it (design -> Kish -> raw), instead of re-reading tabxplor.kish_neff in two
-# more places. Hence the name: one ladder, one resolution, every inference in the table.
-svy_inference_mode <- function(design_spec, wt) {
-  if (!is.null(design_spec) && !is.null(design_spec$design))               return("survey")
-  if (isTRUE(getOption("tabxplor.kish_neff", FALSE)) && length(wt) > 0L)   return("kish")
-  "classic"
+# THE inference basis (ruling Q2) -- resolved once, in tab_setup(), where the weight is resolved and
+# the design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to
+# drift (only tab() had the rule, so tab_many() was silently always classic).
+# It governs the CELL INTERVALS, the whole-table test and the contrib residual alike -- one basis, one
+# resolution, every inference in the table -- and Last Phase z16-i STORES it (meta$inference), so the
+# footer, the exporters and jamovi can name it instead of re-deriving it from a weight-column name.
+# `force` is how tab_reg() states its own rule (ruling 1): its crude Obs_* columns are ALWAYS on the
+# weighted basis when weighted, so they always match the Model_* column beside them; the option is
+# tab()-scoped and tab_reg() never reads it.
+svy_inference_basis <- function(design_spec, wt, force = FALSE) {
+  if (!is.null(design_spec) && !is.null(design_spec$design))          return("design")
+  if (length(wt) > 0L &&
+      (isTRUE(force) || isTRUE(getOption("tabxplor.design_effect", FALSE)))) return("weights")
+  "n"
 }
+
+# "Is anything weighted here?" -- the ONE predicate (W12.3 counted three spellings of it: reg_fit(),
+# reg_resolve_multiplier()'s caller, and the crude grid). A design always is; otherwise it is the
+# presence of a weight, whatever its shape (NULL / character(0) / a name / a symbol).
+svy_weighted <- function(design_spec = NULL, wt = NULL)
+  !is.null(design_spec$design) || length(wt) > 0L
 
 # === SECTION: design construction (shared with tab_reg) =============================================
 
@@ -161,83 +202,77 @@ svy_domain_design <- function(design, rows, frame) {
 
 # ONE subtable x col_var robust test. `sub` is the subtable frame (a data.frame, the PREPARED
 # microdata), `des_rows` the positions of its rows in the original design (NULL when no design).
+# `basis` is the resolved inference basis ("weights" / "design"); "n" never reaches here.
 # `rv`/`cv` are the variable names, `is_num` its type, `wt` the weight name. Returns a one-row list
-# with the test discriminator + (statistic, df1, df2, pvalue, n); an all-NA row on any failure (never
-# crashes tab()).
-svy_omnibus_one <- function(sub, rv, cv, is_num, wt, mode, des_rows, design_spec, anova) {
-  na_row <- function(test) list(test = test, statistic = NA_real_, df1 = NA_real_,
-                                df2 = NA_real_, pvalue = NA_real_, n = NA_real_)
+# with the test discriminator + (statistic, df1, df2, pvalue, n, deff); an all-NA row on any failure
+# (never crashes tab()).
+#
+# DESIGN (Last Phase z16-iii, ruling 7): ONE estimator, two ways in. A weight column IS a survey
+# design -- the flat one -- so the "weights" basis SYNTHESISES `svydesign(ids = ~1, weights = ~w)` and
+# runs exactly the same survey estimator the "design" basis runs: survey::svychisq's Rao-Scott
+# second-order F for factors, svyglm + regTermTest's Wald F for means. That is why there are two
+# discriminators (`chi2` / `chi2_design`) and not four: labelling the two designs differently would be
+# a second encoding of the basis, which meta$inference already stores.
+#
+# It replaces ~35 lines of hand-rolled statistics -- a FIRST-ORDER Rao-Scott rescale of the Pearson
+# chi2 to Kish's n_eff, and a weighted ANOVA on per-group Kish n -- which were an approximation of
+# exactly this. Not re-implementing it is the module's own standing rule ("`survey` owns the variance
+# algebra", R/survey-variance.R): the closed form in survey-variance.R exists because the CELL
+# variance is needed per cell in an O(cells) leaf, which is not the shape of a whole-table test.
+#
+# Last Phase z16-i (W8): `n` is ALWAYS the raw count -- at the old rung 2 it silently became the
+# effective sample size, so one column meant two things depending on a global option. The effective
+# information moved to `deff`, the mean design effect this test corrected by, at its own grain.
+svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design_spec) {
+  disc   <- if (is_num) "F_design" else "chi2_design"
+  na_row <- function() list(test = disc, statistic = NA_real_, df1 = NA_real_,
+                            df2 = NA_real_, pvalue = NA_real_, n = NA_real_, deff = NA_real_)
   keep <- !is.na(sub[[rv]]) & !is.na(sub[[cv]])
   d    <- sub[keep, , drop = FALSE]
   if (!is_num) d[[rv]] <- droplevels(as.factor(d[[rv]]))
   d[[cv]] <- if (is_num) as.double(d[[cv]]) else droplevels(as.factor(d[[cv]]))
   n_obs <- nrow(d)
-  wt_v  <- if (length(wt)) as.double(d[[as.character(wt)]]) else rep(1, n_obs)
+  if (!requireNamespace("survey", quietly = TRUE) || n_obs < 3) return(na_row())
 
-  if (mode == "kish") {
-    n_eff <- sum(wt_v)^2 / sum(wt_v^2)
-    if (!is.finite(n_eff) || n_eff < 2) return(na_row(if (is_num) "F_kish" else "chi2_kish"))
-    if (is_num) {
-      # per group: weighted mean / ML weighted var (S14) + n_eff_g = wn_g^2 / sum w_g^2
-      g   <- split(seq_len(n_obs), d[[rv]])
-      st  <- lapply(g, function(ix) {
-        w <- wt_v[ix]; x <- d[[cv]][ix]
-        wn <- sum(w); m <- sum(w * x) / wn
-        list(n = wn^2 / sum(w^2), mean = m, var = sum(w * x^2) / wn - m^2)
-      })
-      st <- Filter(function(s) is.finite(s$n) && s$n >= 2 && is.finite(s$var) && s$var > 0, st)
-      if (length(st) < 2) return(na_row("F_kish"))
-      a <- agg_anova(rep(1L, length(st)), seq_along(st),
-                     vapply(st, `[[`, double(1), "n"),
-                     vapply(st, `[[`, double(1), "mean"),
-                     vapply(st, `[[`, double(1), "var"))
-      pick <- if (identical(anova, "classic")) "_classic" else ""
-      return(list(test = "F_kish",
-                  statistic = a[[paste0("statistic", pick)]][1], df1 = a[[paste0("df1", pick)]][1],
-                  df2 = a[[paste0("df2", pick)]][1], pvalue = a[[paste0("pvalue", pick)]][1],
-                  n = n_eff))
-    }
-    # factor: Pearson X2 on the WEIGHTED counts, rescaled to n_eff (first-order Rao-Scott, single deff)
-    M <- tapply(wt_v, list(d[[rv]], d[[cv]]), sum); M[is.na(M)] <- 0
-    M <- M[rowSums(M) > 0, colSums(M) > 0, drop = FALSE]
-    if (nrow(M) < 2 || ncol(M) < 2) return(na_row("chi2_kish"))
-    gt <- sum(M); E <- outer(rowSums(M), colSums(M)) / gt
-    X2 <- sum((M - E)^2 / E) / gt * n_eff
-    df <- (nrow(M) - 1) * (ncol(M) - 1)
-    return(list(test = "chi2_kish", statistic = X2, df1 = df, df2 = NA_real_,
-                pvalue = stats::pchisq(X2, df, lower.tail = FALSE), n = n_eff))
-  }
-
-  # mode == "survey": a design-based Rao-Scott F (svychisq) / Wald F (svyglm + regTermTest).
-  # svy_inference_mode() only reaches "survey" with a prebuilt design, so `des_rows` is always present.
-  # The design's model frame is swapped for `d` -- the PREPARED rows -- so the test sees the lumped,
-  # relabelled, filtered table that is actually displayed; picking the rows is not enough, since
-  # svychisq/svyglm read the variables off the design.
-  if (!requireNamespace("survey", quietly = TRUE)) return(na_row(if (is_num) "F_svy" else "chi2_svy"))
-  des <- tryCatch(svy_domain_design(design_spec$design, des_rows[keep], d),
-                  error = function(e) NULL)
-  if (is.null(des)) return(na_row(if (is_num) "F_svy" else "chi2_svy"))
+  # The design the test runs on: the user's own (restricted to these rows and given the PREPARED
+  # frame -- so the p describes the lumped, relabelled, filtered table that is actually displayed,
+  # and an excluded row is a proper survey DOMAIN rather than a rebuilt design), or the flat one the
+  # weights themselves define.
+  des <- tryCatch(
+    if (identical(basis, "design")) svy_domain_design(design_spec$design, des_rows[keep], d)
+    else                            svy_make_design(d, wt),
+    error = function(e) NULL)
+  if (is.null(des)) return(na_row())
   old <- options(survey.lonely.psu = "adjust"); on.exit(options(old), add = TRUE)
 
   if (is_num) {
     res <- tryCatch({
       fit <- survey::svyglm(stats::reformulate(rv, response = cv), design = des)
       rt  <- survey::regTermTest(fit, stats::reformulate(rv), method = "Wald")
-      list(test = "F_svy", statistic = as.double(rt$Ftest), df1 = as.double(rt$df),
-           df2 = as.double(rt$ddf), pvalue = as.double(rt$p), n = n_obs)
+      list(test = disc, statistic = as.double(rt$Ftest), df1 = as.double(rt$df),
+           df2 = as.double(rt$ddf), pvalue = as.double(rt$p), n = n_obs, deff = NA_real_)
     }, error = function(e) NULL)
-    return(res %||% na_row("F_svy"))
+    return(res %||% na_row())
   }
   res <- tryCatch({
     ch <- survey::svychisq(stats::reformulate(c(rv, cv)), design = des, statistic = "F")
-    list(test = "chi2_svy", statistic = as.double(ch$statistic),
+    # deff = Rao-Scott's mean generalized design effect, delta-bar = X2_Pearson / (F * df_Pearson).
+    # svychisq's own `ndf` is Satterthwaite's d0, not (r-1)(c-1), so the Pearson df is recomputed here.
+    # `ch$observed` is survey's own weighted table rescaled to the raw n, i.e. exactly the table
+    # agg_chi2() works on -- so this X2 IS the classic statistic beside it.
+    dfp <- (nlevels(d[[rv]]) - 1) * (nlevels(d[[cv]]) - 1)
+    x2p <- tryCatch(as.double(sum((ch$observed - ch$expected)^2 / ch$expected)),
+                    error = function(e) NA_real_)
+    list(test = disc, statistic = as.double(ch$statistic),
          df1 = as.double(ch$parameter[["ndf"]]), df2 = as.double(ch$parameter[["ddf"]]),
-         pvalue = as.double(ch$p.value), n = n_obs)
+         pvalue = as.double(ch$p.value), n = n_obs,
+         deff = if (isTRUE(is.finite(x2p)) && dfp > 0) x2p / (as.double(ch$statistic) * dfp)
+                else NA_real_)
   }, error = function(e) NULL)
-  res %||% na_row("chi2_svy")
+  res %||% na_row()
 }
 
-# Overlay the robust omnibus onto a classic `test` tibble: recompute (statistic, df, pvalue, n) per
+# Overlay the robust omnibus onto a classic `test` tibble: recompute (statistic, df, pvalue) per
 # (subtable x col_var), keep the classic effect_size / es_type / min_e, drop Fisher. `col_num` is a
 # named logical (col_var -> is numeric). `comp = "all"` tests the whole table (one group); else one
 # test per tab_var subtable. The result has chi2_compute_test's column shape, so every downstream
@@ -252,8 +287,10 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, mode, des_rows, design_spec
 # The effect size is deliberately NOT recomputed here: it is descriptive, so it describes the weighted
 #   population (chi2_compute_test already computes it on the weighted table), never the effective
 #   sample an inferential rescale works in.
+# `tabxplor.anova` (Welch vs classic F) is deliberately NOT read here: it chooses between two CLASSIC
+# F statistics, and a design-based numeric test is the svyglm Wald F, which has no such variant.
 tab_robust_overlay <- function(test_tbl, data, row_var, col_vars, col_num, tab_vars, wt,
-                               mode, design_spec, comp, anova = getOption("tabxplor.anova", "welch")) {
+                               basis, design_spec, comp) {
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
   frame    <- as.data.frame(data)
   des_rows <- frame[[svy_row_col]]     # NULL without a design; positions into it otherwise
@@ -277,11 +314,11 @@ tab_robust_overlay <- function(test_tbl, data, row_var, col_vars, col_num, tab_v
     sub    <- frame[g$rows, , drop = FALSE]
     rows_g <- des_rows[g$rows]
     for (cv in col_vars) {
-      r <- svy_omnibus_one(sub, row_var, cv, isTRUE(col_num[[cv]]), wt, mode,
-                           rows_g, design_spec, anova)
+      r <- svy_omnibus_one(sub, row_var, cv, isTRUE(col_num[[cv]]), wt, basis,
+                           rows_g, design_spec)
       row <- tibble::tibble(row_var = row_var, col_var = cv, test = r$test,
                             statistic = r$statistic, df1 = r$df1, df2 = r$df2,
-                            pvalue = r$pvalue, n = r$n)
+                            pvalue = r$pvalue, n = r$n, deff = r$deff)
       if (!is.null(g$keys)) row <- dplyr::bind_cols(g$keys, row)
       out[[length(out) + 1L]] <- row
     }

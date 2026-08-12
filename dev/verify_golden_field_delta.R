@@ -31,10 +31,16 @@ source("tests/testthat/helper-golden.R")
 ADDED_ATTRS   <- character(0)
 EXPECTED_ATTR <- list()
 
-# Last Phase z15: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
-# (`term` = which predictor a regression footer row is about). A crosstab never fills it, so on these
-# goldens it must be present and empty.
-ADDED_TEST_COLS <- c("term")
+# Last Phase z16-i: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
+# (`deff` = the design effect the row's test corrected by). A classic-basis table never fills it, so on
+# these goldens it must be present and all-NA.
+ADDED_TEST_COLS <- c("deff")
+
+# Last Phase z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
+# basis). Unlike a field or a test column it has a definite VALUE, and it is stored only on the
+# WEIGHTED cases -- an unweighted golden must keep exactly the metadata it had. Declare it here and
+# the check prints what it actually found, per case.
+ADDED_META_FIELDS <- c("inference")
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
@@ -111,6 +117,18 @@ for (nm in names(cases)) {
         issues <- c(issues, paste0(nm, " / test / ", cl, ": new column is NOT empty"))
     }
     an$test <- an$test[, setdiff(names(an$test), add), drop = FALSE]
+  }
+  if (length(ADDED_META_FIELDS)) {
+    addm <- setdiff(names(an$meta), names(ao$meta))
+    if (!setequal(addm, intersect(ADDED_META_FIELDS, addm)))
+      issues <- c(issues, paste0(nm, ": UNDECLARED new `meta` field(s): ",
+                                 paste(setdiff(addm, ADDED_META_FIELDS), collapse = ", ")))
+    for (fl in addm)
+      cat(sprintf("      %-24s new meta$%s = %s\n", nm, fl,
+                  paste(names(an$meta[[fl]]), unlist(an$meta[[fl]]), sep = "=", collapse = ", ")))
+    an$meta <- an$meta[setdiff(names(an$meta), addm)]
+    if (!length(an$meta)) an$meta <- NULL
+    if (is.null(ao$meta)) an <- an[names(an) != "meta"]
   }
   if (!identical(ao, an))
     issues <- c(issues, paste0(nm, ": TABLE attributes changed"))

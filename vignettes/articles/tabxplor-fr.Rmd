@@ -116,20 +116,22 @@ Quelques autres arguments du quotidien : `na = "drop"` pour retirer les valeurs 
 
 ## Pondération
 
-L'argument `wt =` permet de pondérer le tableau. Chaque pourcentage et chaque moyenne utilise la pondération, tandis que la taille d'échantillon derrière les intervalles de confiance reste le nombre réel, non pondéré, d'observations.
+L'argument `wt =` permet de pondérer le tableau. Chaque pourcentage et chaque moyenne utilise alors la pondération. Par défaut, les intervalles de confiance et les tests utilisent toujours le nombre réel, **non pondéré**, de répondants — et le tableau le dit dans sa note de bas de page.
 
 ```{r, echo=TRUE, eval=FALSE}
 data(hdv2003, package = "questionr")
 tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
+#> Pondéré par poids ; les intervalles de confiance et les tests utilisent l'effectif non pondéré.
 ```
 
-Lorsque les poids sont **inégaux**, cet intervalle par défaut ne porte aucun *design-effect*, donc il est un peu trop étroit. Au besoin, la taille d'échantillon effective de Kish (*Kish effective sample size*) corrige cela : elle compte chaque observation selon ce qu'elle apporte réellement, `n_eff = (somme des w)² / (somme des w²)`, et utilise `n_eff` à la place du *n* brut. Activer l’option élargit les intervalles de confiance pondérés de tous les tableaux pour donner une estimation plus fiable de l’incertitude :
+Lorsque les poids sont **inégaux**, ce défaut ne porte aucun *design-effect* : les intervalles sont un peu trop étroits. Une option corrige cela :
 
 ```{r, echo=TRUE, eval=FALSE}
-options(tabxplor.kish_neff = TRUE)
+options(tabxplor.design_effect = TRUE)
+#> Pondéré par poids ; les intervalles de confiance et les tests tiennent compte de la pondération.
 ```
 
-C'est une approximation simple, à un seul degré : elle corrige **uniquement l'inégalité des poids**, et reste aveugle au *clustering* (grappes) comme au calage (elle a besoin des poids individuels, donc elle ne s'applique pas aux tableaux construits à partir d'effectifs pré-agrégés).
+Tous les intervalles de confiance pondérés du tableau — proportions comme moyennes — s'élargissent alors honnêtement, et les tests du Chi2 / F d'ensemble suivent. Ce n'est **pas** une approximation : une variable de pondération *est* un plan de sondage (le plus simple, sans grappes ni strates), et sa variance est calculée exactement. Ce qu'elle ne peut pas connaître, c'est ce que les poids n'enregistrent pas : les **grappes** et le **calage**. Elle a aussi besoin des poids individuels : un tableau construit à partir d'effectifs pré-agrégés ne peut pas l'utiliser, et le dit dans sa note plutôt que de revendiquer une correction qu'il n'a pas.
 
 Pour un résultat **pleinement fondé sur le plan de sondage** — grappes, strates, `fpc`, calage — construisez un plan avec le package [survey](https://CRAN.R-project.org/package=survey) et passez-le comme `data`. Tout suit alors le plan : les estimations, les *pvalues* du Chi2 / de l'ANOVA F, et **chaque intervalle de confiance, étoile et seuil de couleur**.
 
@@ -137,21 +139,22 @@ Pour un résultat **pleinement fondé sur le plan de sondage** — grappes, stra
 library(survey)
 d <- svydesign(ids = ~psu, strata = ~strate, weights = ~w, data = mon_enquete, nest = TRUE)
 tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
+#> Fondé sur le plan de sondage (survey) : estimations, intervalles et tests pondérés tiennent compte du plan d'échantillonnage.
 ```
 
-Il y a donc **trois échelons**, et il vaut la peine de savoir sur lequel on se trouve :
+Il y a donc **trois positions**, et la note de bas de page dit toujours sur laquelle on se trouve :
 
-| ce que vous passez | ce que portent les intervalles |
+| ce que vous passez | ce que portent les intervalles et les tests |
 |---|---|
 | `wt = w` | l'estimation pondérée, sur le *n* brut — aucun effet de plan |
-| `wt = w` + `options(tabxplor.kish_neff = TRUE)` | l'inégalité des poids seule — aveugle aux grappes, aveugle au calage |
-| un plan `survey` comme `data` | l'effet de plan réel : strates, grappes, `fpc`, calage |
+| `wt = w` + `options(tabxplor.design_effect = TRUE)` | l'inégalité des poids, exactement — aveugle aux grappes et au calage |
+| un plan `survey` comme `data` | le plan complet : strates, grappes, `fpc`, calage |
 
-**Vérifiez ce que votre fichier peut réellement vous donner avant de viser l'échelon 3.** Cherchez une variable de strate, de grappe ou de calage (`strate`, `grappe`, `psu`, `nomen`…). Beaucoup de fichiers de production et de recherche diffusent un seul poids calé et rien d'autre — les variables de plan sont retenues pour des raisons de confidentialité — et sur un tel fichier un plan ne porte que l'inégalité des poids, c'est-à-dire qu'il tombe à quelques pourcents de `kish_neff`. L'échelon 3 paie là où l'information de plan existe : une enquête que vous avez menée vous-même, un fichier accessible en accès sécurisé (CASD), ESS/SHARE, les évaluations de l'OCDE.
+Activez l'option **si vous voulez qu'un intervalle de pourcentage de `tab()` soit comparable à la colonne `Obs_*` d'un `tab_reg()` sur les mêmes données** : les contreparties observées d'un tableau de régression sont toujours corrigées, à côté d'une colonne de modèle qui l'a toujours été — au défaut, les deux fonctions ne disent donc pas la même chose.
+
+**Vérifiez ce que votre fichier peut réellement vous donner avant de viser la troisième position.** Cherchez une variable de strate, de grappe ou de calage (`strate`, `grappe`, `psu`, `nomen`…). Beaucoup de fichiers de production et de recherche diffusent un seul poids calé et rien d'autre — les variables de plan sont retenues pour des raisons de confidentialité — et sur un tel fichier un plan ne porte que l'inégalité des poids, c'est-à-dire exactement ce que l'option donne déjà. La troisième position paie là où l'information de plan existe : une enquête que vous avez menée vous-même, un fichier en accès sécurisé (CASD), ESS/SHARE, les évaluations de l'OCDE.
 
 Deux choses encore. Un tableau fondé sur le plan coûte environ trois fois un tableau pondéré. Et la correction est **exacte pour une cellule isolée**, alors qu'un **écart** cellule-vs-référence comporte en plus une covariance entre les deux cellules que cette méthode ne peut pas porter — l'écart ressort donc légèrement trop large plutôt que trop étroit. Elle ne vous donnera jamais une étoile que le plan ne soutient pas.
-
-Les tableaux de régression de `tab_reg()` suivent la même règle, pour les modèles comme pour leurs contreparties observées (`vignette("tabxplor-reg")`).
 
 
 ## Sous-tableaux
@@ -368,13 +371,13 @@ Haberman — le « résidu ajusté » de SPSS, le `chisq.test()$stdres` de R. At
 appellent aussi `(o − e)/√e` « résidu standardisé », mais celui-là n'est **pas** sur une échelle ±2 : sa
 variance est inférieure à 1, il sous-estime donc. tabxplor utilise toujours le résidu ajusté, pour les
 couleurs comme pour le grisage. Les seuils viennent de `conf_level` ; avec un poids, le résidu utilise
-le *n* non pondéré (ou le `n_eff` de Kish, voir [Pondération](#ponderation)) tandis que la contribution,
+le *n* non pondéré (ou le *n* effectif du tableau, voir [Pondération](#ponderation)) tandis que la contribution,
 elle, reste pondérée. Les cases dont l'effectif théorique est inférieur à 1 restent non colorées — aucune
 approximation ne tient à ce niveau. Et, comme partout dans tabxplor, le test est fait case par case :
 dans un tableau de 30 cases, attendez-vous à un ou deux faux positifs à 5 % (±3 correspond à peu près à
 une correction de Bonferroni à cette taille).
 
-**Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations. Sous des poids inégaux, elle ne porte aucun effet de plan de sondage / *design-effect*, et la cas échant peut s’avérer trop étroite : activez la taille d'échantillon effective de Kish avec `options(tabxplor.kish_neff = TRUE)` (voir [Pondération](#ponderation)) pour élargir chaque intervalle de manière plus fiable et faire passer les tests du Chi2 à une correction de Rao–Scott.
+**Une note sur la pondération.** Avec un poids (`wt =`), chaque proportion ou moyenne est pondérée, mais par défaut la taille d'échantillon derrière les intervalles de confiance et les tests reste le nombre réel, **non pondéré**, d'observations — la note de bas de page le dit. Sous des poids inégaux, elle ne porte aucun effet de plan de sondage / *design-effect*, et peut le cas échéant s'avérer trop étroite : `options(tabxplor.design_effect = TRUE)` (voir [Pondération](#ponderation)) élargit chaque intervalle exactement de l'effet de plan de la pondération, et fait passer les tests du Chi2 / F d'ensemble à leurs équivalents fondés sur le plan.
 
 
 ## Infobulles au survol à la souris (tableaux html)
@@ -521,9 +524,13 @@ seule source de significativité :
 
 - le **résidu standardisé ajusté** (Haberman ; le « résidu ajusté » de SPSS, `chisq.test()$stdres`),
   jamais le résidu de Pearson `(o − e)/√e`, dont la variance est inférieure à 1 et qui sous-rejette donc ;
-- calculé comme tout intervalle dans tabxplor : estimation pondérée, base *n* non pondérée, ou `n_eff` de
-  Kish avec `options(tabxplor.kish_neff = TRUE)`. La contribution, elle, reste **pondérée** — elle estime
-  la structure du tableau dans la population, tandis que le résidu est le test ;
+- calculé comme tout intervalle dans tabxplor : estimation pondérée, et une base qui suit la position
+  d'inférence — le *n* brut, ou le *n* effectif du tableau entier avec
+  `options(tabxplor.design_effect = TRUE)` ou sous un plan `survey`. Une seule base par tableau : un
+  tableau d'effectifs et un tableau de pourcentages des mêmes données donnent donc les **mêmes** résidus.
+  La contribution, elle, reste **pondérée** et identique à toutes les positions — elle estime la structure
+  du tableau dans la population, tandis que le résidu est le test, ce qui préserve la lecture en analyse
+  des correspondances ;
 - les cases dont l'effectif théorique est inférieur à 1 restant non colorées (l'approximation normale n'y
   tient pas) ;
 - et case par case, sans correction pour comparaisons multiples — comme partout ailleurs dans tabxplor.

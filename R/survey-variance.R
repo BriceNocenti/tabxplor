@@ -28,8 +28,8 @@
 #   products and only the influence matrix is ever n-long.
 # KEY CONSTRAINTS:
 #   - EVERY function returns NULL rather than a wrong number (R/reg-influence.R's discipline). The leaf
-#     reads a NULL as "no design base here" and falls back to Kish / the raw n, which is what the
-#     package did before z14-ii -- a degraded design is never silently reported as design-based.
+#     reads a NULL as "no design base here" and falls back to the flat closed form (and, failing that,
+#     the raw n), RECORDING the step so the footer says so -- never silently reported as design-based.
 #   - `survey` owns the variance algebra. This module builds influence vectors and calls svyrecvar();
 #     it never re-implements strata / clusters / fpc / calibration (Route C, rejected, S4.8).
 #   - Weights are read as 1/prob, never from a data column: that is the calibrated-design-safe form,
@@ -54,7 +54,8 @@
 #   influence matrix is scattered into the design's own row space and the excluded rows stay zero.
 svy_var_prep <- function(design, des_rows) {
   if (is.null(design) || is.null(des_rows) || !length(des_rows))              return(NULL)
-  if (inherits(design, c("svyrep.design", "twophase", "twophase2")))          return(NULL)
+  if (inherits(design, c("svyrep.design", "twophase", "twophase2")))
+    return(svy_var_bail("unsupported"))
   des_rows <- as.integer(des_rows)
   if (anyNA(des_rows) || any(des_rows < 1L))                                  return(NULL)
   dd <- tryCatch(design[des_rows, ], error = function(e) NULL)
@@ -106,14 +107,157 @@ svy_var_block <- function(Zf, prep) {
   v
 }
 
-# The one message a fallback owes the user. The footer sentence is blanket -- any table built from a
-# design says it is design-based (ruling Q7) -- so a table whose variance could NOT be computed has to
-# say so somewhere, or the sentence is silently untrue. Not throttled, like every other tabxplor
-# per-render notice (CLAUDE.md Last Phase k2: a once-per-session throttle was tried and reverted).
-svy_var_degraded <- function() {
+# THE degrade recorder (Last Phase z16-i, W4). A console message is not a property of the table:
+# suppressMessages(), an Rmd chunk, tab_export(), jamovi's backend all drop it, and what survived was
+# a table whose footer asserted, permanently and in every export, something untrue of its numbers.
+# So the fall-back also RECORDS itself, in one build-scoped flag that tab_assemble_tables() reads into
+# meta$inference (basis "design_partial" + its reason), and the footer is generated from that.
+# `reason` is a three-value enum so the sentence stays one clause: the table is too large for the
+# influence matrix / the design is not supported / svyrecvar failed.
+# Not throttled, like every other tabxplor per-render notice (CLAUDE.md Last Phase k2: a
+# once-per-session throttle was tried and reverted).
+svy_degrade_env <- new.env(parent = emptyenv())
+
+svy_degrade_reset <- function() {
+  assign("reason",   NULL, envir = svy_degrade_env)
+  assign("pending",  NULL, envir = svy_degrade_env)
+  assign("unserved", FALSE, envir = svy_degrade_env)
+  invisible(NULL)
+}
+
+svy_degrade_get <- function() get0("reason", envir = svy_degrade_env, ifnotfound = NULL)
+
+# The OTHER thing a leaf can find out and the assembler cannot (W9): the weighted basis was asked for
+# but the input cannot serve it -- pre-aggregated counts (tab_counts, a supplied `.fine`) carry no
+# per-observation Sum(w^2), so there is no design effect to recover. The table then states basis "n"
+# and its footer says the intervals use the counts' own n, instead of claiming a correction the
+# numbers do not have.
+svy_degrade_unserved <- function() {
+  assign("unserved", TRUE, envir = svy_degrade_env)
+  invisible(NULL)
+}
+svy_degrade_unserved_get <- function() isTRUE(get0("unserved", envir = svy_degrade_env,
+                                                   ifnotfound = FALSE))
+
+# The producers return NULL rather than a wrong number; this is how the NULL says WHY, without any
+# function having to return two things.
+svy_var_bail <- function(reason = c("size", "unsupported", "failed")) {
+  assign("pending", match.arg(reason), envir = svy_degrade_env)
+  NULL
+}
+
+svy_var_degraded <- function(reason = NULL) {
+  if (is.null(reason)) reason <- get0("pending", envir = svy_degrade_env, ifnotfound = NULL)
+  assign("reason", reason %||% "failed", envir = svy_degrade_env)
+  assign("pending", NULL, envir = svy_degrade_env)
   cli::cli_inform(c(
     "!" = "The sample design's variance could not be computed for this table.",
-    "i" = "Its confidence intervals fall back to the unweighted sample size."))
+    "i" = "Its confidence intervals fall back to the weighting alone."))
+}
+
+# === SECTION: the flat closed form (ids = ~1) =======================================================
+#
+# Last Phase z16-ii. A WEIGHT COLUMN IS A SURVEY DESIGN -- the flat one -- and at `ids = ~1`, with no
+# strata, no fpc and no calibration, svyrecvar reduces to a plain sum of squares of `w_k z_k` with
+# survey's finite-sample factor n/(n-1). Because Sum(w_k z_k) = (A - p B)/B is EXACTLY zero for every
+# base, onestrat()'s centering is a no-op, so the whole variance collapses to per-cell sums the
+# aggregate core can accumulate in the same pass as Sum(w):
+#
+#     Var(p_hat) = n/(n-1) * [ A (1-p)^2 + (S - A) p^2 ] / B^2
+#     Var(x_bar) = n/(n-1) * [ Sum(w^2 x^2) - 2 x_bar Sum(w^2 x) + x_bar^2 Sum(w^2) ] / B^2
+#
+#   A = the CELL's own Sum(w^2)   S = Sum(w^2) over the base's domain   B = Sum(w) over that domain
+#   n = the design's nPSU, i.e. the number of observations the table is built from
+#
+# so the weighted basis stops needing the microdata at all: O(cells), composing with the wide-table
+# rollup (Sum(w^2) is additive across a partition, so total rows and the Total column get the right
+# A / S / B by summation, with no special case), with no size ceiling and nothing that can degrade.
+#
+# WARNING -- THE BOUNDARY THAT MUST NEVER BE CROSSED: this is the ids = ~1 case and NOTHING else. The
+#   rejection of a hand-rolled aggregate variance for real designs (Route C,
+#   dev/full_survey_design_scope.md S4.8) stands and does not apply here, precisely because at
+#   ids = ~1 there is no svyrecvar to re-implement: no lonely-PSU policy, no multistage fpc, no
+#   calibration, no strata. A design with ANY of those goes through the svyrecvar section below.
+#
+# KISH IS THIS FORMULA WITH ONE INPUT DISCARDED. Write A ~ p*S ("the cell's Sum(w^2) is its
+# proportional share of the base's") and the bracket collapses to S*p(1-p), giving n_eff -> B^2/S,
+# which is Kish up to the finite-sample factor. That assumption is exactly what unequal weights
+# violate: measured, Kish is up to 17 % wrong in EITHER direction once the outcome follows the weight,
+# and it cannot move with the outcome at all (it is a property of the weights alone). It survives here
+# only as the DEGENERATE-CASE LIMIT (svy_flat_base_neff), which is what it always was.
+# See dev/weights_framework_redesign.md S1 and its Appendix A.
+
+# n/(n-1), survey's own finite-sample factor. NA below 2 observations (no variance is defined).
+svy_flat_fac <- function(n_obs) {
+  n <- suppressWarnings(as.double(n_obs)[1])
+  if (!isTRUE(is.finite(n)) || n < 2) return(NA_real_)
+  n / (n - 1)
+}
+
+# The base domain's own effective n, B^2/S -- the exact effective size of a quantity that carries no
+# information about the weights. It is the limit the cell formula tends to when the cell carries no
+# information at all (p = 0 or p = 1 give Var = 0, so p(1-p)/Var is 0/0), which is where it is used.
+svy_flat_base_neff <- function(B, S) {
+  out <- B^2 / S
+  out[!is.finite(out) | out <= 0] <- NA_real_
+  out
+}
+
+# n_eff of every cell PERCENTAGE of a wide factor table, from four matrices aligned cell by cell:
+# `P` the DISPLAYED proportions, `A` each cell's own Sum(w^2), `S` / `B` the Sum(w^2) / Sum(w) of its
+# percentage base (the SAME broadcast the leaf applies to build `tot_n`). Degenerate cells fall back
+# to the base's B^2/S rather than to the raw n.
+svy_flat_neff_prop <- function(P, A, S, B, n_obs) {
+  fac <- svy_flat_fac(n_obs)
+  V   <- fac * (A * (1 - P)^2 + (S - A) * P^2) / B^2
+  ne  <- P * (1 - P) / V
+  fb  <- svy_flat_base_neff(B, S)
+  ne[!is.finite(ne) | ne <= 0] <- NA_real_
+  ne[is.na(ne)] <- fb[is.na(ne)]
+  ne[!is.finite(ne) | ne <= 0] <- NA_real_
+  ne
+}
+
+# n_eff of every cell MEAN, the twin: `s2` the ML weighted variance the cell's interval uses, and the
+# three per-cell moment sums Sum(w^2), Sum(w^2 x), Sum(w^2 x^2) over the cell's own rows (B = Sum(w)).
+svy_flat_neff_mean <- function(M, s2, W2, W2X, W2X2, B, n_obs) {
+  fac <- svy_flat_fac(n_obs)
+  V   <- fac * (W2X2 - 2 * M * W2X + M^2 * W2) / B^2
+  ne  <- s2 / V
+  fb  <- svy_flat_base_neff(B, W2)
+  ne[!is.finite(ne) | ne <= 0] <- NA_real_
+  ne[is.na(ne)] <- fb[is.na(ne)]
+  ne[!is.finite(ne) | ne <= 0] <- NA_real_
+  ne
+}
+
+# The general per-row form, for the callers that hold observations rather than a wide table
+# (tab_reg()'s crude grid): p = Sum(w u) / Sum(w v), whose linearized contribution is (u - p v)/B.
+# Returns the effective n directly -- p(1-p)/Var for a share, s^2/Var for a mean -- via `num`.
+svy_flat_neff_rows <- function(w, u, v, n_obs, num = NULL) {
+  B <- sum(w * v)
+  if (!isTRUE(is.finite(B)) || B <= 0) return(NA_real_)
+  p   <- sum(w * u) / B
+  fac <- svy_flat_fac(n_obs)
+  V   <- fac * sum((w * (u - p * v))^2) / B^2
+  ne  <- (num %||% (p * (1 - p))) / V
+  if (isTRUE(is.finite(ne) && ne > 0)) return(ne)
+  svy_flat_base_neff(B, sum(w^2))
+}
+
+# Is this design the flat one the closed form covers? A `survey::svydesign(ids = ~1, weights = ~w)` --
+# the shape most users build -- has an algebraic answer, so it never needs an influence matrix, a
+# 400 MB ceiling or a microdata pass. Anything with strata, fpc, calibration or real clusters does.
+svy_design_is_flat <- function(design) {
+  if (is.null(design) || !inherits(design, "survey.design")) return(FALSE)
+  if (!is.null(design$postStrata) && length(design$postStrata))  return(FALSE)
+  if (!is.null(design$fpc$popsize))                              return(FALSE)
+  st <- design$strata
+  if (!is.null(st) && length(st) && length(unique(st[[1]])) > 1L) return(FALSE)
+  cl <- design$cluster
+  if (is.null(cl) || !length(cl)) return(FALSE)
+  if (ncol(cl) != 1L) return(FALSE)
+  !anyDuplicated(cl[[1]])          # ids = ~1 <=> one "cluster" per row
 }
 
 # === SECTION: the row domains =======================================================================
@@ -178,7 +322,7 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
   R <- length(keys[[1]]); K <- length(col_names); nfr <- length(mcol)
   if (R == 0L || nfr == 0L)                                     return(NULL)
   if (!all(vapply(mkeys, length, integer(1)) == nfr))           return(NULL)
-  if (!is.finite(R * nfr) || R * nfr > 5e7)                     return(NULL)   # ~400 MB of influence
+  if (!is.finite(R * nfr) || R * nfr > 5e7)  return(svy_var_bail("size"))   # ~400 MB of influence
   if (length(prep$w) != prep$n || max(prep$at) > prep$n)        return(NULL)
   gm <- svy_group_map(keys, n_tab, mkeys); if (is.null(gm)) return(NULL)
 
@@ -235,7 +379,7 @@ svy_var_mean <- function(prep, keys, n_tab, mkeys, xs, wmult = NULL) {
   R <- length(keys[[1]]); K <- length(xs); nfr <- length(xs[[1]])
   if (R == 0L || nfr == 0L)                                     return(NULL)
   if (!all(vapply(mkeys, length, integer(1)) == nfr))           return(NULL)
-  if (!is.finite(R * nfr) || R * nfr > 5e7)                     return(NULL)
+  if (!is.finite(R * nfr) || R * nfr > 5e7)  return(svy_var_bail("size"))
   if (length(prep$w) != prep$n || max(prep$at) > prep$n)        return(NULL)
   gm <- svy_group_map(keys, n_tab, mkeys); if (is.null(gm)) return(NULL)
 

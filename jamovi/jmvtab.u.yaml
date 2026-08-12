@@ -227,10 +227,9 @@ children:
                   row: 1
                 stretchFactor: 0
                 children:
-                  - type: ComboBox
-                    name: test_robust
-                    label: "Type de pvalue"
-                    enable: (chi2)
+                  - type: CheckBox
+                    name: design_effect
+                    label: "design_effect = <i>(effet de plan des pond\u00e9rations)</i>"
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1

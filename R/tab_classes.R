@@ -238,6 +238,31 @@ set_row_roles <- function(x, roles) {
 }
 get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 
+# Last Phase z16-i: `inference` -- THE stored fact "how were this table's intervals and tests
+# computed", `list(basis = , degf = , note = )`. `wt` says how the ESTIMATE is computed; this says how
+# the INFERENCE is. Before, the basis was resolved at build (svy_inference_basis) and thrown away, so
+# the footer could not name it, a degraded design could not be recorded, and tab_weight_line() had to
+# re-derive "this is design-based" by string-sniffing the internal `.svy_weights` column name.
+#   basis  "n" | "weights" | "design" | "design_partial"   (see R/survey-design.R)
+#   degf   the design's degrees of freedom (NA otherwise) -- the critical value of every interval
+#   note   why a design degraded, only on "design_partial": "size" | "unsupported" | "failed"
+# Stored only when the table is weighted, so an unweighted table carries no `inference` and no golden
+# moves ("absent when unset", Phase 17b).
+get_inference <- function(x) get_meta(x)[["inference"]]
+set_inference  <- function(x, inference) set_meta_field(x, "inference", inference)
+
+new_inference_attr <- function(basis = "n", degf = NA_real_, note = NULL) {
+  out <- list(basis = basis)
+  degf <- suppressWarnings(as.double(degf)[1])
+  if (length(degf) == 1L && !is.na(degf) && is.finite(degf)) out$degf <- degf
+  if (!is.null(note) && nzchar(note)) out$note <- note
+  out
+}
+
+# The BASIS of a table, resolved for display: the stored fact, else "n" (a hand-built table, an older
+# object, a table whose metadata a pipeline dropped -- all of which mean "no design effect claimed").
+tab_inference_basis <- function(x) get_inference(x)[["basis"]] %||% "n"
+
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
@@ -471,7 +496,10 @@ new_test_tibble <- local({
                                 df2       = double()   , pvalue      = double()   ,
                                 n         = double()   , min_e       = double()   ,
                                 effect_size = double() , es_type     = character(),
-                                pvalue_exact = double())
+                                pvalue_exact = double(),
+                                # Last Phase z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
+                                # mean design effect this row's test corrected by (NA on basis "n").
+                                deff       = double())
     }
     cached
   }
@@ -1576,7 +1604,7 @@ tab_pvalue_lines <- function(tabs) {
   # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
   # GOF footer). Last Phase m: rows in display ORDER = p-value, then effect size; the STATISTIC row is
   # gone from the default (ambiguous once effect size shares the block) -- it returns only under
-  # `tabxplor.test_lines = "stat"`/"all". The test TYPE ("Chi2, Welch F; Kish") and the effect-size
+  # `tabxplor.test_lines = "stat"`/"all". The test TYPE ("Chi2, Welch F; survey-design") and the effect-size
   # MEASURE ("Cramér's V, eta2") move into the row NAMES (per group, via the descriptors), so the p-value
   # CELL is now the bare p (no in-cell "(Chi2)" suffix). Modes: "summary" (default) = p-value + effect
   # size; "all" = + statistic; "stat" = p-value + statistic; "pvalue" = p-value only.

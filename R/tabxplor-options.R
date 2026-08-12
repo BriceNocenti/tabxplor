@@ -61,21 +61,24 @@
 #' \describe{
 #'   \item{`tabxplor.anova`}{which one-way ANOVA F is shown for mean columns: `"welch"` (default,
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
-#'   \item{`tabxplor.kish_neff`}{`FALSE` by default (weighted estimate, raw unweighted n). Set to
-#'     `TRUE` to replace that raw n with Kish's effective sample size `n_eff = (sum w)^2 / sum(w^2)`
-#'     in \strong{every weighted descriptive confidence interval} -- factor proportions \emph{and}
-#'     means (cell, difference, ratio and the `color = "OR"` significance) in [tab()] / [tab_num()] /
-#'     [tab_counts()], and the crude `empirical =` companions of [tab_reg()]. Under unequal weights
-#'     `n_eff < n`, so the intervals widen honestly (they otherwise carry no design effect and run too
-#'     narrow). It also switches the whole-table tests (`test = TRUE`) to a first-order Rao-Scott
-#'     correction -- the factor chi-square rescaled to `n_eff`, the numeric F on per-group `n_eff`.
-#'     This is a single-stage unequal-weight approximation, \strong{not the design effect}: Kish's
-#'     `deff = 1 + CV^2(w)` is a property of the weights alone, so it is blind to \strong{clustering}
-#'     (which inflates the variance) and to \strong{calibration} (which shrinks it), and it needs the
-#'     microdata weights, so [tab_counts()] on pre-aggregated counts cannot apply it. The regression
-#'     \emph{model} CIs of [tab_reg()] are already fully design-based (\code{survey::svyglm}) and are
-#'     unaffected. For the real design effect -- in the tests \emph{and} in every interval -- pass a
-#'     \code{survey::svydesign} as `data`; the option is then not consulted at all.}
+#'   \item{`tabxplor.design_effect`}{`FALSE` by default: a weighted [tab()] estimates the population
+#'     but bases every interval and test on the raw number of respondents, so they carry no design
+#'     effect --- and the table's footer says so. Set `TRUE` and the same intervals \strong{account for
+#'     the unequal weighting, exactly}: a weight column IS a survey design (the flat one, `ids = ~1`),
+#'     whose variance has a closed form in the per-cell `sum(w^2)` the aggregate already computes, so
+#'     the base becomes `n_eff = p(1-p) / Var_design(p)` in \strong{every weighted descriptive
+#'     confidence interval} --- factor proportions \emph{and} means (cell, difference, ratio and the
+#'     `color = "OR"` significance) --- and the whole-table tests (`test = TRUE`) become
+#'     \code{survey::svychisq} / a \code{svyglm} Wald F on that flat design. It reproduces `survey` to
+#'     the last digit, Kish's `(sum w)^2 / sum(w^2)` being that same formula with each cell's own
+#'     `sum(w^2)` discarded. It is blind to \strong{clustering} and to \strong{calibration}, which the
+#'     weights do not record, and it needs the microdata weights, so [tab_counts()] on pre-aggregated
+#'     counts cannot apply it (such a table states the raw basis in its footer rather than claiming a
+#'     correction it does not have). \strong{Scope: [tab()] and its leaves only.} [tab_reg()] never
+#'     reads it --- its crude `empirical =` companions are always on the weighted basis, beside a model
+#'     column (\code{survey::svyglm}) that always was. For the full design effect --- strata, clusters,
+#'     `fpc`, calibration --- pass a \code{survey::svydesign} as `data`; the option is then not
+#'     consulted at all. (Renamed in 2.0.0; it was `tabxplor.kish_neff` during development.)}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it: since 2.0.0 each column records the level it was built at, so the colour
@@ -87,7 +90,7 @@
 #'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_html()],
 #'     [tab_xl()]) append: `"summary"` (default: p-value + effect size), `"all"` (+ the raw statistic),
 #'     `"stat"` (p-value + statistic), or `"pvalue"` (the single p-value row). The p-value row name states
-#'     the test used ("pvalue (Chi2, Welch F; Kish)") and the effect-size row name its measure ("Cramer's
+#'     the test used ("pvalue (Chi2, Welch F; survey-design)") and the effect-size row its measure ("Cramer's
 #'     V, eta2"). N is never added -- it is already shown by `add_n`. The console summary block always
 #'     shows N + p-value + effect size.}
 #'   \item{`tabxplor.spark`}{`TRUE` (default): in a [tab_reg()] table, a continuous predictor's row

@@ -108,3 +108,30 @@ test_that("the survey-design weight line translates", {
                        "d'\u00e9chantillonnage."))
   })
 })
+
+# Last Phase z16-i: ONE sentence per inference basis, so the DEFAULT weighted position stops being
+# silent. All three must translate -- the second is the one every weighted table prints.
+z16_footers <- c(
+  n       = "Weighted by %s; confidence intervals and tests use the unweighted sample size.",
+  weights = "Weighted by %s; confidence intervals and tests account for the weighting.",
+  partial = paste("Design-based (survey) estimates; this table's design variance could not be",
+                  "computed (%s), so its intervals account for the weighting only."))
+
+test_that("the per-basis weight lines stay English under the ambient en locale", {
+  with_legend_lang("en", function(lg)
+    for (m in z16_footers) expect_equal(gettext(m), m))
+})
+
+test_that("the per-basis weight lines translate, degrade reason included", {
+  skip_if_no_gettext()
+  with_legend_lang("fr", function(lg) {
+    for (m in z16_footers) {
+      fr <- gettext(m)
+      expect_false(identical(fr, m))
+      expect_match(fr, "^(Pond\u00e9r\u00e9|Estimations)")
+    }
+    expect_equal(gettext("too large"), "tableau trop grand")
+    expect_equal(gettext("design not supported"), "plan non pris en charge")
+    expect_equal(gettext("computation failed"), "\u00e9chec du calcul")
+  })
+})

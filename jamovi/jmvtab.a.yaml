@@ -202,19 +202,17 @@ options:
            Which F statistic to display for numeric column variables when the test is on:
            Welch's F (default, does not assume equal variances) or the classic pooled F.
 
-    - name: test_robust
-      title: "Type of p-value"
-      type: List
-      options:
-        - title: "classic"
-          name:  classic
-        - title: "Kish n_eff <i>(weighted)</i>"
-          name:  kish
-      default: classic
+    - name: design_effect
+      title: design_effect
+      type: Bool
+      default: false
       description:
           R: >
-           For a weighted table, a more robust p-value: "classic" (unweighted chi2 / Welch F);
-           "kish" (first-order Rao-Scott rescale to the effective sample size).
+           For a WEIGHTED table, make the confidence intervals, the significance stars, the colour
+           thresholds AND the p-values account for the unequal weighting (the exact flat survey-design
+           variance) instead of using the raw number of respondents. Sets
+           options(tabxplor.design_effect). Off by default; it moves every interval in the table, not
+           only the p-value.
 
 
 # Missing values and levels

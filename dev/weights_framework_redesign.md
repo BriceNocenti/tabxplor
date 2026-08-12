@@ -554,22 +554,18 @@ p-value it corrects.
    (Pearson) contributions are untouched**, because they are estimates, not inference (§2.6). The
    correspondence-analysis reading is therefore invariant by construction.
 4. **`degf` always; Korn–Graubard opt-in** as `method_cell = "beta"`.
-
-### 5.2 Recommended here, open to the maintainer
-
-* **The option's new name**: `tabxplor.design_effect`, with `tabxplor.kish_neff` as a deprecated
-  synonym through `tx_getOption()` (§3.2).
-* **The stored fact's shape**: `meta$inference = list(basis, degf, note)` (§2.1), and `test$deff`
+5. **The option's new name**: `tabxplor.design_effect` ; `tabxplor.kish_neff` is hard-deprecated/removed (it was never made public)
+6. **The stored fact's shape**: `meta$inference = list(basis, degf, note)` (§2.1), and `test$deff`
   as a new column of the `test` tibble (§2.5) — the same additive shape Phase j used for
   `effect_size` / `es_type` / `pvalue_exact`, provable minimal with
   `dev/verify_golden_field_delta.R`.
-* **The test discriminators**: `chi2` / `chi2_design`, `F_welch` / `F_classic` / `F_design` — four
+7. **The test discriminators**: `chi2` / `chi2_design`, `F_welch` / `F_classic` / `F_design` — four
   values become two, because the flat and full designs run the same estimator.
-* **`Σw²` accumulated whenever the table is weighted**, not only when the option is on. It costs one
+8. **`Σw²` accumulated whenever the table is weighted**, not only when the option is on. It costs one
   extra `value.var` in the factor dcast and three grouped sums per numeric `col_var` (measured as
   noise in the stress test's §9.4), and it buys a real UX win: **toggling the option becomes a jamovi
   cache HIT** instead of a full re-aggregate, because the aggregate has one shape.
-* **The footer carries no numbers** (§3.3); the design effect lives in `test$deff` at its own grain.
+9. **The footer carries no numbers** (§3.3); the design effect lives in `test$deff` at its own grain.
 
 ---
 
@@ -886,3 +882,86 @@ Line references are anchors from the 2026-08-11 audit; **re-grep before editing*
 | `R/tab-counts.R:157-162` | its own `weighted` predicate | the resolved basis; footer says the base is the counts' own n |
 | `jamovi/jmvtab.a.yaml:205-217` | `test_robust` classic/kish, *"Type of p-value"* | one honest checkbox |
 | `jamovi/jmvtabreg.a.yaml` | nothing | **still nothing** (always corrected) |
+
+---
+
+## Appendix D — implementation record (Last Phase z16, 2026-08-12)
+
+Status: **FULLY IMPLEMENTED**, all three subphases, one session. Suite green in both locales
+(`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 5356 + the new parity file; CI-equivalent
+`LC_ALL=C.UTF-8 LANGUAGE=en`: FAIL 0, SKIP 10). **Zero display/export snapshot churn** — `_snaps/*`
+and `_color_golden/*` are untouched; the 36 structural `_golden/*.rds` were regenerated with the delta
+proved minimal over 1787 cells by `dev/verify_golden_field_delta.R` (taught here to prove a `meta`
+SUB-FIELD delta as well as a `test` column one).
+
+### D.1 What the plan got right, and what it got wrong
+
+Right, and confirmed by measurement on the real code paths (`test-flat-design-parity.R`, 50
+assertions, every one against `survey` itself): the closed form reproduces `survey` **exactly** —
+variance ratio `1.0000000000` for `pct = "row"` / `"col"` / `"all"`, for a total row, for a
+total-table row, for a `tab_vars` subtable domain, for a cell mean and for the total-table mean; the
+Woolf `Obs_OR` bracket lands on the univariable `svyglm` SE(log OR) to `1.00000000`; equal weights
+give `n_eff / n = (n-1)/n` exactly (§8.1); and the flat closed form equals `svy_var_prop()` /
+`svy_var_mean()` on the *same* flat `svydesign`, so `svy_design_is_flat()` routing is free.
+
+**Wrong in one place, and it changed the shape of z16-iii.** §2.5 and §A.3 proposed re-implementing
+`svychisq`'s Rao-Scott adjustment from the aggregate, with a `q ≤ 400` guard and a first-order
+fallback. That was not built, and should not have been: **a weight column IS a survey design, so the
+weighted basis can simply BUILD the flat design and call `survey::svychisq` / `svyglm` +
+`regTermTest`** — the same estimator the design basis runs, in the same lines. It deletes ~35 lines of
+hand-rolled statistics instead of adding ~60, needs no guard (survey's own cost is survey's business),
+makes ruling 7 structurally true rather than argued, and honours this module's own standing rule
+(*"`survey` owns the variance algebra"*, `R/survey-variance.R` header). The closed form exists in
+`survey-variance.R` because the CELL variance is needed per cell in an O(cells) leaf; a whole-table
+test is not that shape, and `tab_robust_overlay()` already had the microdata in hand — it remains the
+one documented architectural exception. Parity items 5 and 6 are therefore *exact* (`1e-10`), not
+approximate.
+
+### D.2 The second correction: §2.7's exact per-cell residual
+
+Also not built, and deliberately. The exact residual variance (§A.5) needs each cell's own `A`, `p`,
+`S`, `B`; the fmt record carries none of them and adding a channel through the col_var join is exactly
+the ad hoc layer this roadmap forbids. What shipped instead **deletes** the defect's cause: the
+`type %in% c("n","all","all_tabs")` guess is gone, and the residual's base is ALWAYS the subtable's
+grand-cell effective n. Because that cell's own proportion is 1, the degenerate fallback returns the
+whole subtable's `B²/S` at **every** table shape — so a counts table and a row-percentage table of the
+same data give identical residuals **by construction**, which is precisely what ruling Q3 asked for,
+and W3's measured `1.6e-11` vs `0.052` split cannot recur. It is the standard first-order correction
+`z_design = z_classic · √(n_eff/N)`; §2.7's measurement that a single design effect is 0.61–1.37× the
+exact per-cell value stands as the honest residue, now stated in `?tab` instead of the old one.
+The design path needed one more line to reach it: `svy_var_prop()` returns `Var = 0` for a `p = 1`
+cell, so the design branch now inherits the closed form's degenerate fallback (`B²/S`) — without it
+the Total column stayed `NA` under a design and the residual silently read the raw n.
+
+### D.3 Everything else, as designed
+
+`meta$inference = list(basis, degf, note)` with the four values; `svy_inference_basis()` as the ONLY
+option/design read, with `force =` for `tab_reg()`'s ruling-1 rule; `conf_level_to_crit(conf_level,
+df)` threading `degf` through all nine CI engines (`qt(p, Inf)` is bit-identical to `qnorm(p)`, so the
+default is byte-identical); `n_eff` written as a property of the cell in the numeric leaf (W13);
+`test$n` always raw + `test$deff`; `svy_abort_wt_design()` (W10, extended to `tab_reg()` for one rule);
+the four footer sentences generated from the stored basis, in English and French; `Σw²` (+ `Σw²x`,
+`Σw²x²`) accumulated whenever weighted so the aggregate has ONE shape; `method_cell = "beta"`; and the
+jamovi selector replaced by one honest checkbox.
+
+**W9 closed structurally, better than planned.** Instead of `tab_counts()` declaring its basis, the
+LEAF records that the weighted basis was asked for and could not be served (`svy_degrade_unserved()`,
+the same build-scoped recorder as the design degrade) and `leaf_inference()` downgrades to `"n"`. Any
+input without per-observation `Σw²` — a supplied `.fine`, `tab_counts()` — therefore states the basis
+it can actually carry, and its footer says the counts' own n. Nothing had to know it was `tab_counts`.
+
+### D.4 One pre-existing bug found and fixed in passing
+
+`tab(pct = "all", ci = "cell")` errored (`"false" must be a vector, not NULL`) for every table,
+weighted or not: `tab_ci()`'s per-type base `switch()` had no `"all"` / `"all_tabs"` arm, although the
+`ci = "auto"` rule routes exactly those types to a cell interval. Their base is `tot_n` like every
+other proportion.
+
+### D.5 Values that moved
+
+Only where §6 said they would. A weighted `tab()` **with the option on**: Kish → exact (per cell, and
+in either direction). A weighted `tab_reg(empirical = TRUE)`: raw n → exact, unconditionally (the
+W1/W2 fix — the crude and model columns now agree). A weighted omnibus p with the option on: hand-rolled
+first-order → `svychisq`. The `contrib` residual on a design + percentage table: raw n → corrected. The
+direct `tab_num(design) |> tab_ci()` step path: raw n → design (W13). Any interval under a real design
+with few PSUs: z → t(degf) (W7). Everything else, including every unweighted table, is byte-identical.

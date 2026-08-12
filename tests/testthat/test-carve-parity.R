@@ -83,7 +83,8 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
   # ctx_update() (single-bracket) so a NULL fine_fused (fuse off) survives as a list element -- a
   # `unit$fine_fused <- NULL` would delete the key and tab_transform's list2env() couldn't find it.
   unit <- tabxplor:::tab_rowvar_ctxs(ctx)[[1]]
-  unit <- tabxplor:::ctx_update(unit, list(data = ctx$data, fine_fused = ctx$fine_fused))
+  unit <- tabxplor:::ctx_update(unit, list(data = ctx$data, fine_fused = ctx$fine_fused,
+                                          design_spec = ctx$design_spec))
   unit <- tabxplor:::tab_transform(unit)
   testthat::expect_true(all(c("tabs_text", "tabs_num", "tests", "chi2_num") %in% names(unit)))
   unit <- tabxplor:::tab_assemble_tables(unit)

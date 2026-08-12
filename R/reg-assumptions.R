@@ -42,7 +42,7 @@ REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson", "rr",
 # ONE row per check.
 #   noun          the assumption, as a word the reader already knows (a msgid)
 #   types         discriminator -> INSTRUMENT (a msgid). The label is "<noun> (<instrument>)", the
-#                 convention Last Phase m set for the crosstab summary ("pvalue (Chi2, Welch F; Kish)").
+#                 convention Last Phase m set for the crosstab summary ("pvalue (Chi2, Welch F)").
 #                 A term test carries three discriminators because exactly one of LR / F / Wald fires,
 #                 and which one is a fact about the model the reader should see.
 #                 EMPTY = the check is TAUGHT but never SCORED: it contributes a panel and no footer

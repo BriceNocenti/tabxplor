@@ -230,11 +230,11 @@ test_that("Q2 the test rung follows the input and `test` takes no other value", 
 
   expect_equal(get_test(tab(b, x, y, pct = "row", test = TRUE))$test[1], "chi2")
   expect_equal(get_test(tab(b, x, y, wt = w, pct = "row", test = TRUE))$test[1], "chi2")
-  withr::with_options(list(tabxplor.kish_neff = TRUE), {
-    expect_equal(get_test(tab(b, x, y, wt = w, pct = "row", test = TRUE))$test[1], "chi2_kish")
+  withr::with_options(list(tabxplor.design_effect = TRUE), {
+    expect_equal(get_test(tab(b, x, y, wt = w, pct = "row", test = TRUE))$test[1], "chi2_design")
   })
   expect_equal(suppressMessages(get_test(tab(des, x, y, pct = "row", test = TRUE)))$test[1],
-               "chi2_svy")
+               "chi2_design")
 
   expect_error(tab(b, x, y, test = "survey"), "TRUE")
   expect_error(tab(b, x, y, test = "surveyy"), "TRUE")

@@ -36,16 +36,22 @@
   the counterpart of the chi-squared for factor columns.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
   sparse table uses Fisher's exact.
-* **Survey designs.** Pass a `survey::svydesign()` as `data` and the whole table follows it: the
-  estimates, the Chi2 / ANOVA F p-values, and **every confidence interval, star and colour threshold**
-  (strata, clusters, `fpc` and calibration alike — so a design can also make an interval *narrower*).
-  This now includes `tab_reg(empirical = TRUE)`'s observed (`Obs_*`) columns, so the model and its
-  observed counterpart are finally compared under one inferential regime. Without a design,
-  `options(tabxplor.kish_neff = TRUE)` still rescales the intervals and tests to Kish's effective
-  sample size, which corrects for unequal weighting only. See `?tab` and `?tab_reg`.
+* **Weights, and survey designs.** A weighted `tab()` estimates the population, and now **says in its
+  footer** what its confidence intervals and tests are based on. By default that is still the raw
+  number of respondents (no design effect). `options(tabxplor.design_effect = TRUE)` makes every
+  weighted interval, star, colour threshold and p-value **account for the unequal weighting, exactly** —
+  a weight column *is* a survey design (the flat one), so this reproduces `survey` to the last digit
+  rather than approximating it. Pass a `survey::svydesign()` as `data` and the whole table follows the
+  full design instead: strata, clusters, `fpc`, calibration (so a design can also make an interval
+  *narrower*), each interval referred to the design's own degrees of freedom. `tab_reg()`'s observed
+  (`Obs_*`) columns are **always** on the same basis as the `Model_*` column beside them, so the two are
+  finally comparable by construction — turn the option on if you want a `tab()` percentage to match them.
+  See `?tab` and `?tab_reg`.
 * **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
   answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
-  `chisq.test()$stdres`), on the package's usual inference base (unweighted *n*, or Kish `n_eff`).
+  `chisq.test()$stdres`), on the package's usual inference base (the unweighted *n*, or the table's
+  effective *n* when weights or a design are accounted for — one base per table, so a counts table and a
+  percentage table of the same data give the same residuals).
   `color_signif = "guaranteed_effect"` switches the colour to that residual on an absolute ±2 / ±3
   scale that means the same thing in every table, while the default keeps the correspondence-analysis
   reading (each cell's share of the table's chi-squared). The residual can also be printed
@@ -147,6 +153,18 @@
 
 ## Changes that may affect existing code
 
+* **A weighted table now says, in its footer, what its intervals and tests are based on** — and the
+  default position ("the raw number of respondents") is stated rather than left silent. The
+  development-only option `tabxplor.kish_neff` is **renamed `tabxplor.design_effect`** (it was never
+  released) and no longer approximates: it now computes the weighting's own design effect exactly. It
+  is scoped to `tab()` and its leaves; `tab_reg()` never reads it, its observed columns being always
+  corrected. Two consequences on numbers: with the option **on**, a weighted table's intervals and
+  p-values change slightly (an approximation became exact, in either direction, and a table weighted by
+  a *constant* gets `n_eff = n * (n-1)/n`, `survey`'s own finite-sample factor); and
+  `tab_reg(empirical = TRUE)` on weighted data now widens its observed intervals **unconditionally**,
+  which is what makes them match the model column beside them.
+* **`tab(pct = "all", ci = "cell")` used to error** ("`false` must be a vector, not NULL"), weighted or
+  not. Fixed.
 * **`tab_reg(stats = "dispersion")` now names the model check, not the Pearson dispersion.** The exact
   Pearson dispersion of a count model keeps its footer row under `stats = "phi"`, and it is now correct
   for weighted models too (it used to divide by a survey design's degrees of freedom, reading about 20
@@ -179,8 +197,9 @@
   `data` instead — it says everything those arguments did, plus calibration:
   `tab(svydesign(ids = ~psu, strata = ~region, weights = ~w, data = d), x, y, test = TRUE)`.
   `test` is now simply `TRUE` / `FALSE`: the **kind** of test follows what you passed — weights, or
-  weights plus `options(tabxplor.kish_neff = TRUE)`, or a design. Replicate-weight (`svrepdesign`) and
-  two-phase designs are refused with a message rather than failing obscurely.
+  weights plus `options(tabxplor.design_effect = TRUE)`, or a design. Replicate-weight (`svrepdesign`)
+  and two-phase designs are refused with a message rather than failing obscurely, and passing `wt =`
+  *and* a design is now an error (a design already carries its own weights).
 * **Excel export now uses `openxlsx2`** (Suggests) instead of `openxlsx`.
 * **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
   re-exported** — use the base `|>` pipe (or load `magrittr`/`dplyr`). `kableExtra` and `DescTools` move to

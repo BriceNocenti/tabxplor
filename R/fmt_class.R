@@ -144,11 +144,12 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'   as a double vector the length of \code{n}.
 #' @param tot_n The cell's own (unweighted) percentage base, as a double vector the length
 #' of \code{n}.
-#' @param n_eff The effective sample size used for this cell's confidence interval:
-#' the DESIGN-based \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)})
-#' when a \code{survey::svydesign} was passed as \code{data}, else Kish's
-#' \code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on weighted
-#' data, else \code{NA} (the CI then falls back to the raw unweighted base).
+#' @param n_eff The effective sample size used for this cell's confidence interval,
+#' \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
+#' \code{survey::svyrecvar} when a \code{survey::svydesign} was passed as \code{data},
+#' from the closed-form flat-design variance when
+#' \code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
+#' then falls back to the raw unweighted base).
 #' A double vector the length of \code{n}. Non-displayed.
 #' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
 #' measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
@@ -4799,30 +4800,38 @@ tab_stars_legend <- function(x, lang = NULL) {
   })
 }
 
-# Phase 16d: the "Weighted by <wt>." footer line (FR "Pondere par <wt>."), shown FIRST in the footer
-# when the table was built with a weight. The weight column NAME is persisted on the table (the `vars`
-# attribute for a crosstab, `reg_meta` for a regression); NULL when unweighted. Returns one plain string.
+# Phase 16d: the weight footer line, shown FIRST in the footer when the table was built with a weight.
+# The weight column NAME is persisted on the table (the `vars` attribute for a crosstab, `reg_meta` for
+# a regression); NULL when unweighted. Returns one plain string.
+#
+# Last Phase z16-i: ONE sentence per INFERENCE BASIS, generated from the stored `meta$inference` --
+# so the claim cannot outlive the computation (W4), and the package's least defensible position (a
+# weighted estimate on a raw-n interval, which is the DEFAULT) stops being silent (W6, S8.2: this
+# sentence is load-bearing, not decoration). It also retires the last role-guessed-from-a-name in the
+# weights subsystem: "this table is design-based" used to be decided by recognising the internal
+# `.svy_weights` column name (W5), which is exactly what Phase 17's rule 2 outlaws.
 tab_weight_line <- function(x, lang = NULL) {
   wt <- get_vars_attr(x)$wt
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt))
     wt <- tryCatch(get_reg_meta(x)$wt, error = function(e) NULL)
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
-  # Last Phase z14-i (D7/D8): a survey design passed as `data` resolves to the package-owned weight
-  # name on EVERY path (tab()'s vars_attr, the tab_plain/tab_num leaves, tab_reg's reg_meta), so the
-  # fact "this table is design-based" is already on the table, in one field. Read it as a fact rather
-  # than printing it as a name -- the internal `.svy_weights` used to leak into user-facing output,
-  # and tab_reg() under a design emitted no weight line at all.
-  # Last Phase z14-ii (ruling Q7): the sentence now claims the intervals too, because Route A made
-  # them design-based -- a rung-3 table has to be distinguishable from a rung-2 (Kish) one, which
-  # S3.2/S3.3 measured can differ by a factor of 2 in EITHER direction. It is blanket, and since
-  # z14-iii made tab_reg()'s crude Obs_* intervals design-based too it is blanket with nothing left
-  # to qualify -- a table whose design variance could NOT be computed says so at build time
-  # (svy_var_degraded()), so the sentence is never silently untrue.
-  if (identical(as.character(wt)[1], svy_wt_col))
-    return(with_legend_lang(lang, function(lg) enc2utf8(gettext(
-      "Design-based (survey): weighted estimates, intervals and tests account for the sample design."
-    ))))
-  with_legend_lang(lang, function(lg) enc2utf8(gettextf("Weighted by %s.", wt)))
+  wt    <- as.character(wt)[1]
+  inf   <- tryCatch(get_inference(x), error = function(e) NULL)
+  basis <- inf[["basis"]] %||% (if (identical(wt, svy_wt_col)) "design" else "n")
+  with_legend_lang(lang, function(lg) enc2utf8(switch(
+    basis,
+    "design" = gettext(
+      "Design-based (survey): weighted estimates, intervals and tests account for the sample design."),
+    "design_partial" = gettextf(
+      "Design-based (survey) estimates; this table's design variance could not be computed (%s), so its intervals account for the weighting only.",
+      switch(inf[["note"]] %||% "failed",
+             "size"        = gettext("too large"),
+             "unsupported" = gettext("design not supported"),
+             gettext("computation failed"))),
+    "weights" = gettextf(
+      "Weighted by %s; confidence intervals and tests account for the weighting.", wt),
+    gettextf("Weighted by %s; confidence intervals and tests use the unweighted sample size.", wt)
+  )))
 }
 
 # Phase 13a: the level -> palette-slot mapping now lives with the break scales themselves

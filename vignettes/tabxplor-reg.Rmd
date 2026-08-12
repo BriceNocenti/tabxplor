@@ -548,7 +548,7 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 
 ## Weighted and survey data
 
-Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. (This is the design-based counterpart to `tab()`'s cheaper `options(tabxplor.kish_neff = TRUE)` approximation — see `vignette("tabxplor")`.)
+Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. The crude `Obs_*` companions are on the same basis, always — which is what makes them comparable with the model column beside them. `tab()` is more cautious by default: turn `options(tabxplor.design_effect = TRUE)` on if you want a `tab()` percentage interval to match these columns (see `vignette("tabxplor")`).
 
 ```{r, eval = FALSE}
 # `weight` is a survey weight column in your data -- the common case:
@@ -567,7 +567,7 @@ Everything then follows that design, in one regime: the `Model_*` coefficients a
 
 Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a 3+ level outcome (nominal, ordinal) has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based.
 
-Without a design, `options(tabxplor.kish_neff = TRUE)` widens the observed columns' intervals using Kish's effective sample size — a correction for unequal weighting only (see `vignette("tabxplor")` for the full three-rung ladder). The model columns are design-based either way.
+Without a design, the observed columns' intervals already account for the weighting exactly (the flat survey design, `ids = ~1`) — a correction for unequal weighting only, blind to clustering and calibration. `tab_reg()` never reads `tabxplor.design_effect`: that option is `tab()`'s, and turning it on is what makes a `tab()` percentage interval comparable with these columns (see `vignette("tabxplor")`).
 
 
 ## Comparing several models

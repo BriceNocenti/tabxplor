@@ -74,8 +74,8 @@ testthat::test_that("tab_build numeric: default (adopt fine) == .by_table (raw s
     tabxplor:::tab_build(gss, c(marital, relig), c(age, tvhours), na = "drop", .by_table = TRUE))
 })
 
-testthat::test_that("Kish n_eff (tabxplor.kish_neff): _w2 survives the .fine round-trip", {
-  withr::local_options(tabxplor.kish_neff = TRUE)
+testthat::test_that("Kish n_eff (tabxplor.design_effect): _w2 survives the .fine round-trip", {
+  withr::local_options(tabxplor.design_effect = TRUE)
   gss <- make_gss_num()
 
   fine <- tabxplor:::tab_aggregate_num(gss, race, c(age, tvhours), marital, wt = w, na = "drop")

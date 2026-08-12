@@ -568,7 +568,7 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 
 ## Données pondérées et *survey-design*
 
-Passer une variable de pondération avec `wt =` utilise un *survey design* / **plan de sondage** (`survey::svyglm()`). Le cadre qu'utilise `tabxplor` est simple : l'**estimation du coefficient est pondérée**, et les erreurs-types du modèle prennent en compte les poids inégaux, pour obtenir des intervalles de confiance plus larges mais plus fiables.
+Passer une variable de pondération avec `wt =` utilise un *survey design* / **plan de sondage** (`survey::svyglm()`). Le cadre qu'utilise `tabxplor` est simple : l'**estimation du coefficient est pondérée**, et les erreurs-types du modèle prennent en compte les poids inégaux, pour obtenir des intervalles de confiance plus larges mais plus fiables. Les contreparties observées `Obs_*` sont sur la même base, toujours — c'est ce qui les rend comparables à la colonne du modèle placée à côté. `tab()` est plus prudent par défaut : activez `options(tabxplor.design_effect = TRUE)` si vous voulez qu'un intervalle de pourcentage de `tab()` corresponde à ces colonnes (voir `vignette("tabxplor")`).
 
 ```{r, eval = FALSE}
 # `weight` est une variable de poids -- le cas courant :
@@ -587,7 +587,7 @@ Tout suit alors ce plan, dans un seul régime : les coefficients `Model_*` et le
 
 Deux limites honnêtes. Une comparaison *entre deux cellules* (un rapport de cotes observé, une différence de risque) ignore la covariance de plan entre elles, et tombe donc à quelques pourcents de la réponse exacte — contre les 15 à 25 % d'écart de l'époque où ces colonnes étaient calculées comme si l'échantillon était aléatoire simple. Et une variable expliquée à 3 modalités ou plus (nominale, ordinale) n'a pas de *colonne* observée : sa valeur brute est repliée dans la cellule du modèle, sous forme de point, sans intervalle à fonder sur le plan.
 
-Sans plan de sondage, `options(tabxplor.kish_neff = TRUE)` élargit les intervalles des colonnes observées avec la taille d'échantillon effective de Kish — une correction de l'inégalité des poids seule (voir `vignette("tabxplor")` pour les trois échelons complets). Les colonnes du modèle restent fondées sur le plan dans tous les cas.
+Sans plan de sondage, les intervalles des colonnes observées tiennent déjà compte de la pondération exactement (le plan plat, `ids = ~1`) — une correction de l'inégalité des poids seule, aveugle aux grappes et au calage. `tab_reg()` ne lit jamais `tabxplor.design_effect` : cette option est celle de `tab()`, et l'activer est ce qui rend un intervalle de pourcentage de `tab()` comparable à ces colonnes (voir `vignette("tabxplor")`).
 
 
 ## Comparer plusieurs modèles

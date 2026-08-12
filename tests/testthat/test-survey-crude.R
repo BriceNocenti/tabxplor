@@ -61,7 +61,7 @@ test_that("the crude PROPORTION base is Korn-Graubard's, from survey's own varia
   # non-vacuity: it is NOT the raw count, and not the Kish one either
   expect_false(isTRUE(all.equal(g1$emp_n_draw, as.double(g1$emp_n))))
   expect_true(all(g1$emp_n_draw < g1$emp_n))       # this design costs precision
-  kish <- withr::with_options(list(tabxplor.kish_neff = TRUE), {
+  kish <- withr::with_options(list(tabxplor.design_effect = TRUE), {
     reg_empirical(cbind(d, .svy_weights = d$w), "x", "y", "binomial", "yes", ".svy_weights")
   })
   expect_false(isTRUE(all.equal(unname(g1$emp_n_draw),
@@ -132,14 +132,19 @@ test_that("Obs_OR's bracket IS the design variance of the log odds-ratio, and be
                                          family = stats::quasibinomial()))
   ci  <- suppressMessages(stats::confint(fit))
   tw  <- unname(ci[2:3, 2] - ci[2:3, 1])
-  raw <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")[["Obs_OR"]]
-  rw  <- unname((log(get_ci_sup(raw)) - log(get_ci_inf(raw)))[k])
-  expect_true(all(abs(unname(lw[k]) / tw - 1) < abs(rw / tw - 1) / 2))
   expect_true(all(abs(unname(lw[k]) / tw - 1) < 0.10))
-  expect_true(all(abs(rw            / tw - 1) > 0.10))   # what the single-stage base was doing
+  # Last Phase z16-i (W1/W2): the WEIGHTS-only table is no longer on the raw n -- tab_reg() forces the
+  # weighted basis -- so it now tracks the FLAT univariable model instead of missing it by ~17 %.
+  flat <- survey::svydesign(ids = ~1, weights = ~w, data = d)
+  ffit <- suppressWarnings(survey::svyglm(I(y == "yes") ~ x, design = flat,
+                                          family = stats::quasibinomial()))
+  fw   <- unname(apply(suppressMessages(stats::confint(ffit))[2:3, ], 1, diff))
+  raw  <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")[["Obs_OR"]]
+  rw   <- unname((log(get_ci_sup(raw)) - log(get_ci_inf(raw)))[k])
+  expect_true(all(abs(rw / fw - 1) < 0.10))
 })
 
-test_that("the crude % and mean columns widen with the design, and the point estimates do not move", {
+test_that("the crude % and mean columns follow the DESIGN, and the point estimates do not move", {
   d <- svc_fixture(); des <- svc_des(d)
   wid <- function(t, nm) { cc <- t[[nm]]; get_ci_sup(cc) - get_ci_inf(cc) }
   for (spec in list(list(dep = "y",   nm = "Obs_%",    fam = "binomial"),
@@ -148,7 +153,11 @@ test_that("the crude % and mean columns widen with the design, and the point est
     tr <- tab_reg(d, spec$dep, "x", family = spec$fam, empirical = TRUE, wt = "w")
     ok <- is.finite(wid(td, spec$nm)) & is.finite(wid(tr, spec$nm))
     expect_true(any(ok), info = spec$nm)
-    expect_true(all(wid(td, spec$nm)[ok] > wid(tr, spec$nm)[ok]), info = spec$nm)
+    # z16-i: BOTH tables are now corrected (tab_reg forces the weighted basis, W1/W2), so what
+    # separates them is the design STRUCTURE -- strata narrow, clusters widen -- not the base. The
+    # assertion is therefore that the structure reaches the interval at all, not a direction:
+    # this fixture is stratified AND clustered, so the two must differ.
+    expect_true(any(abs(wid(td, spec$nm)[ok] / wid(tr, spec$nm)[ok] - 1) > 0.02), info = spec$nm)
     # the estimate itself is untouched -- only its base moved
     expect_equal(get_num(td[[spec$nm]]), get_num(tr[[spec$nm]]), tolerance = 1e-10)
   }
@@ -236,19 +245,26 @@ test_that("a design whose variance cannot be computed says so and falls back", {
                        design_spec = list(design = des, wt = ".svy_weights")),
     "could not be computed")
   g1 <- g[g$category == "1", ]
-  expect_equal(g1$emp_n_draw, as.double(g1$emp_n))     # the raw base, not a wrong number
+  # z16-i: the degrade ladder is design -> weights -> n, each step labelled. A design whose variance
+  # cannot be computed still HAS weights, so the fallback is the weighted base, never a wrong number.
+  expect_true(all(is.finite(g1$emp_n_draw) & g1$emp_n_draw > 0))
+  expect_true(all(g1$emp_n_draw <= as.double(g1$emp_n) + 1e-8))
 })
 
 test_that("off a design the crude bases and columns are unchanged", {
   d <- svc_fixture(n = 1500, seed = 22)
+  # z16-i (ruling 1): OFF a design, a WEIGHTED crude grid is on the weighted basis whatever the
+  # tab()-scoped option says -- that is what makes it comparable with the model column beside it.
   gw <- reg_empirical(cbind(d, .svy_weights = d$w), "x", "y", "binomial", "yes", ".svy_weights")
-  expect_equal(gw$emp_n_draw, as.double(gw$emp_n))
-  expect_equal(gw$emp_n_ci,   as.double(gw$emp_n))
-  kish <- withr::with_options(list(tabxplor.kish_neff = TRUE), {
+  expect_true(all(gw$emp_n_draw < gw$emp_n))
+  expect_equal(gw$emp_n_ci, gw$emp_n_draw)             # one base where the outcome has no mean
+  kish <- withr::with_options(list(tabxplor.design_effect = TRUE), {
     reg_empirical(cbind(d, .svy_weights = d$w), "x", "y", "binomial", "yes", ".svy_weights")
   })
-  expect_true(all(kish$emp_n_draw < kish$emp_n))       # rung 2 still works, and still differs
-  expect_equal(kish$emp_n_ci, kish$emp_n_draw)         # one base where the outcome has no mean
+  expect_equal(kish$emp_n_draw, gw$emp_n_draw)         # the option cannot move it
+  # UNWEIGHTED, the base is the raw count
+  un <- reg_empirical(d, "x", "y", "binomial", "yes", NULL)
+  expect_equal(un$emp_n_draw, as.double(un$emp_n))
 
   # a design object never reached: the whole table is identical to what it always was
   t1 <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")

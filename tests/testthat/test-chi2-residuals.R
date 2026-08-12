@@ -6,7 +6,7 @@
 #      too strict on this very table.
 #   2. It is invariant to the WEIGHT SCALE. The old one used the weighted N, so multiplying every
 #      weight by a constant (population weights) drove every cell p-value to 0.
-#   3. `options(tabxplor.kish_neff = TRUE)` shrinks it by exactly sqrt(n_eff/n) -- the same ladder
+#   3. `options(tabxplor.design_effect = TRUE)` shrinks it by exactly sqrt(n_eff/n) -- the same ladder
 #      every confidence interval in the package uses (?tab, Last Phase s).
 #   4. The three `color_signif` policies each read a DIFFERENT, documented quantity:
 #      ignore / grey_non_signif = the relative contribution (the CA reading, byte-identical to
@@ -91,7 +91,7 @@ testthat::test_that("kish_neff shrinks the residual by exactly sqrt(n_eff / n)",
   set.seed(2)
   d$w <- stats::runif(nrow(d), 0.3, 3)
   z_of <- function(kish) {
-    withr::local_options(list(tabxplor.kish_neff = kish))
+    withr::local_options(list(tabxplor.design_effect = kish))
     # pct = "no": the counts table is where `color = "contrib"` is most at home (it is what
     # color = TRUE picks there), and it is the case that used to have no n_eff at all.
     t <- tab(d, race, rincome, wt = w, color = "contrib", color_signif = "grey_non_signif",
@@ -105,6 +105,9 @@ testthat::test_that("kish_neff shrinks the residual by exactly sqrt(n_eff / n)",
 
   testthat::expect_false(is.na(n_eff_tot))            # n_eff IS available on the grand-total cell
   testthat::expect_lt(n_eff_tot, n_tot)               # unequal weights -> deff > 1
+  # Last Phase z16-iii: ONE base for the whole table -- the subtable's grand-cell effective n -- so
+  # every residual shrinks by the same sqrt(n_eff / n). That uniformity is the point: it is what makes
+  # a counts table and a percentage table of the same data give identical residuals (W3, ruling Q3).
   testthat::expect_equal(kish$z / raw$z, rep(sqrt(n_eff_tot / n_tot), 3), tolerance = 1e-8)
   testthat::expect_lt(max(abs(kish$z)), max(abs(raw$z)))   # honestly wider = smaller |z|
 })

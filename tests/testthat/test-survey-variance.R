@@ -146,22 +146,29 @@ test_that("the color = 'OR' interval rides the design base too", {
   expect_true(all(abs(dw[2:3] / tw - 1) < abs(rw[2:3] / tw - 1)))
 })
 
-test_that("contrib's residual is design-corrected on a whole-table-base table", {
+test_that("contrib's residual is design-corrected, and identical at every table SHAPE (W3)", {
   d <- svv_fixture(); des <- svv_des(d)
   dsg <- suppressMessages(tab(des, g, col, pct = "no", color = "contrib"))
   raw <- tab(d, g, col, wt = w, pct = "no", color = "contrib")
   cl  <- dsg[["yes"]]; rl <- raw[["yes"]]
   expect_true(all(is.finite(get_n_eff(cl))))
   expect_true(all(is.na(get_n_eff(rl))))
-  # z_design = z_classic * sqrt(n_eff_ij / N), the standard first-order per-cell correction
+  # z_design = z_classic * sqrt(n_eff / N), the standard FIRST-ORDER correction, on the subtable's
+  # grand-cell effective n -- one base for the whole table (Last Phase z16-iii).
   keep <- !is_totrow(cl) & is.finite(fmt_resid(cl)) & is.finite(fmt_resid(rl))
   expect_true(any(keep))
-  N <- get_n(dsg[["Total"]])[length(get_n(dsg[["Total"]]))]
+  tot   <- dsg[["Total"]]
+  N     <- get_n(tot)[length(tot)]
+  n_eff <- get_n_eff(tot)[length(tot)]
+  expect_true(is.finite(n_eff) && n_eff < N)
   expect_equal(abs(fmt_resid(cl)[keep] / fmt_resid(rl)[keep]),
-               sqrt(get_n_eff(cl)[keep] / N), tolerance = 1e-6)
-  # a percentage table keeps the grand-total base (the documented residue, S8)
+               rep(sqrt(n_eff / N), sum(keep)), tolerance = 1e-6)
+  # W3 / ruling Q3: a ROW-PERCENTAGE table of the same data gives the SAME residuals -- the residual
+  # is a property of the joint distribution and must not depend on `pct`. It used to keep the raw n
+  # here (measured p 1.6e-11 against the counts table's 0.052) because the total column's design
+  # base is degenerate (p = 1); it now falls back to that column's own B^2/S, at every shape.
   pctt <- suppressMessages(tab(des, g, col, pct = "row", color = "contrib"))
-  expect_equal(fmt_resid(pctt[["yes"]]), fmt_resid(rl))
+  expect_equal(fmt_resid(pctt[["yes"]]), fmt_resid(cl))
 })
 
 test_that("total rows get a design base of their own", {
@@ -205,11 +212,13 @@ test_that("a stratified equal-weight design NARROWS the interval (n_eff > n), wh
   des <- survey::svydesign(~1, strata = ~st, weights = ~w, data = q)
 
   dsg <- suppressMessages(tab(des, g, y, pct = "row", ci = "cell"))[["yes"]]
-  kis <- withr::with_options(list(tabxplor.kish_neff = TRUE),
+  kis <- withr::with_options(list(tabxplor.design_effect = TRUE),
                              tab(q, g, y, wt = w, pct = "row", ci = "cell"))[["yes"]]
   i <- which(!is_totrow(dsg))[1]
   expect_gt(get_n_eff(dsg)[i], get_tot_n(dsg)[i])                   # the design GAINED precision
-  expect_equal(get_n_eff(kis)[i], get_tot_n(kis)[i])                # Kish cannot move at all
+  # equal weights carry no design effect, so the closed form returns the sample size itself -- up to
+  # survey's own finite-sample factor n/(n-1), which svyglm at ids = ~1 also applies (S8.1).
+  expect_equal(get_n_eff(kis)[i], get_tot_n(kis)[i] - 1)
   expect_lt(get_ci_sup(dsg)[i] - get_ci_inf(dsg)[i],
             get_ci_sup(kis)[i] - get_ci_inf(kis)[i])
 })
@@ -217,19 +226,27 @@ test_that("a stratified equal-weight design NARROWS the interval (n_eff > n), wh
 
 # ---- degradation, byte-identity, and the footer --------------------------------------------------
 
-test_that("the classic and Kish rungs are untouched, and the rung is one resolved fact", {
+test_that("the basis is ONE resolved fact, and it is stored on the table", {
   d <- svv_fixture(1200)
-  expect_identical(tabxplor:::svy_inference_mode(NULL, character()), "classic")
-  expect_identical(tabxplor:::svy_inference_mode(NULL, "w"), "classic")
-  withr::with_options(list(tabxplor.kish_neff = TRUE), {
-    expect_identical(tabxplor:::svy_inference_mode(NULL, "w"), "kish")
-    expect_identical(tabxplor:::svy_inference_mode(NULL, character()), "classic")
-    k <- tab(d, g, col, wt = w, pct = "row", ci = "cell")[["yes"]]
-    expect_true(all(is.finite(get_n_eff(k))))     # Kish still writes the base it always did
+  expect_identical(tabxplor:::svy_inference_basis(NULL, character()), "n")
+  expect_identical(tabxplor:::svy_inference_basis(NULL, "w"), "n")
+  withr::with_options(list(tabxplor.design_effect = TRUE), {
+    expect_identical(tabxplor:::svy_inference_basis(NULL, "w"), "weights")
+    expect_identical(tabxplor:::svy_inference_basis(NULL, character()), "n")
+    k <- tab(d, g, col, wt = w, pct = "row", ci = "cell")
+    expect_identical(tabxplor:::tab_inference_basis(k), "weights")
+    expect_true(all(is.finite(get_n_eff(k[["yes"]]))))
   })
-  expect_identical(tabxplor:::svy_inference_mode(list(design = 1), character()), "survey")
-  plain <- tab(d, g, col, pct = "row", ci = "cell")[["yes"]]
-  expect_true(all(is.na(get_n_eff(plain))))
+  # tab_reg() FORCES it (ruling 1): its crude columns must match the model column beside them.
+  expect_identical(tabxplor:::svy_inference_basis(NULL, "w", force = TRUE), "weights")
+  expect_identical(tabxplor:::svy_inference_basis(list(design = 1), character()), "design")
+  plain <- tab(d, g, col, pct = "row", ci = "cell")
+  expect_true(all(is.na(get_n_eff(plain[["yes"]]))))
+  expect_identical(tabxplor:::tab_inference_basis(plain), "n")
+  expect_null(tabxplor:::get_inference(plain))          # absent when unset (unweighted)
+  # a weighted table at the default basis STORES the fact, so its footer can say so
+  w1 <- tab(d, g, col, wt = w, pct = "row")
+  expect_identical(tabxplor:::get_inference(w1)$basis, "n")
 })
 
 test_that("tab_plain() and tab_num() on a design take the same path as tab()", {
@@ -262,8 +279,13 @@ test_that("the footer says design-based, in English and in French", {
   tt <- suppressMessages(tab(des, g, col, pct = "row"))
   expect_equal(tabxplor:::tab_weight_line(tt, lang = "en"),
                "Design-based (survey): weighted estimates, intervals and tests account for the sample design.")
+  # Last Phase z16-i: the DEFAULT weighted position now says what it does (S8.2 -- load-bearing).
   expect_equal(tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en"),
-               "Weighted by w.")
+               "Weighted by w; confidence intervals and tests use the unweighted sample size.")
+  expect_equal(
+    withr::with_options(list(tabxplor.design_effect = TRUE),
+                        tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en")),
+    "Weighted by w; confidence intervals and tests account for the weighting.")
 })
 
 test_that("the French design-based footer is translated", {

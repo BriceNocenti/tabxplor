@@ -38,7 +38,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `pvalue` | double | Per-cell significance p-value (Phase 3a: CI-inversion p; drives `get_stars()`). Phase 17c: also the HONEST home of a chi2/F test row's p (`display == "pvalue"` cells; was overloaded into `pct`/`var` with a fake `diff = -0.5`). `get_stars()` is gated to `""` on `gof`/`pvalue`/`blank` cells; `fmt_color_slots()` colours a non-significant test row (p > alpha) with the deepest under-slot on the `diff` channel |
 | `or` | double | Odds ratio or relative risk ratio |
 | `tot_n` | double | The cell's own (unweighted) percentage base — its row/column/grand total per `pct` (written by `tab_plain()` in Phase 2; `NA` for count tables and mean cells). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (not a stored field) |
-| `n_eff` | double | Last Phase s: the effective sample size used for this cell's CI -- Kish's `(sum w)^2 / sum(w^2)` under `options(tabxplor.kish_neff = TRUE)` on weighted data, else `NA` (the CI falls back to the raw unweighted base). Non-displayed |
+| `n_eff` | double | Last Phase s: the effective sample size used for this cell's CI, `p(1-p)/Var_design(p)` (a mean: `s²/Var_design(x̄)`) -- from the closed-form flat-design variance under `options(tabxplor.design_effect = TRUE)` on weighted data, from `survey::svyrecvar` under a real design, else `NA` (the CI falls back to the raw unweighted base). Non-displayed |
 | `obs` | double | Last Phase z5: the value this cell's estimate is COMPARED TO by the `tab_reg` colour measures -- the observed/crude effect (`color = "adjustment"`) or the reference group's estimate (`"between_groups"`), on the cell's own scale. `NA` everywhere else, which is what leaves those cells uncoloured. Displayable as `{obs}` |
 | `gap_se` | double | Last Phase z8: the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale (log-ratio for `or`/`ratio`, plain difference for `diff`). Written where the two estimates are independent (`split_var` groups, by quadrature from the two stored Wald intervals), which is what lets `color_signif` apply to `between_groups`. `NA` elsewhere -> the policies stay inert. Non-displayed |
 | `in_totrow` | logical | Cell belongs to a total row |
@@ -92,19 +92,21 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
   you already passed decides how. `wt` alone → the chi2 AND Cramer's V are computed on the **weighted**
   table rescaled to the raw n (the convention the CIs and the ANOVA F already followed; unweighted input
   stays byte-identical because `get_wn()` falls back to `get_n()`, so the rescale factor is exactly 1 —
-  and Fisher is skipped, an exact test needing whole observations). `wt` + `tabxplor.kish_neff` →
-  `"chi2_kish"`/`"F_kish"` (first-order Rao-Scott). A `survey::svydesign` as `data` →
-  `"chi2_svy"`/`"F_svy"` (`survey::svychisq` / `svyglm`), computed by `tab_robust_overlay()`
-  in `R/survey-design.R` — the ONE test path that reads the microdata rather than the aggregate.
-  `svy_test_mode()` resolves the rung in `tab_setup()`, the one place holding both the resolved weight
-  and the `design_spec`, so `tab()` / `tab_many()` / `tab_counts()` cannot drift. Read it with `get_test()` (which also
+  and Fisher is skipped, an exact test needing whole observations). `wt` + `tabxplor.design_effect`, OR
+  a `survey::svydesign` as `data`, → `"chi2_design"`/`"F_design"`: **the same estimator**
+  (`survey::svychisq` / `svyglm` + `regTermTest`), run on the user's design or on the flat one a weight
+  column defines, by `tab_robust_overlay()` in `R/survey-design.R` — the ONE test path that reads the
+  microdata rather than the aggregate. Two discriminators, not four, because there is one estimator;
+  WHICH design a table used is `meta$inference$basis`, never a second encoding in `test$test`.
+  `svy_inference_basis()` resolves the basis in `tab_setup()`, the one place holding both the resolved
+  weight and the `design_spec`, so `tab()` / `tab_many()` / `tab_counts()` cannot drift. Read it with `get_test()` (which also
   falls back to the old `chi2` attribute); `get_chi2()` is a kept alias. Rendered by the shared summary
   framework in `R/tab-test-display.R` (Phase 16a). Three shared layers, each used by both crosstab and
   regression: (1) CONTENT — `test_display_rows()`, `test_cell_label_weak()` (label + `min_e < 5` weak
   flag), the `test_fmt_*` formatters and the fmt-cell builders (`pvalue_line_fmt` / `reg_gof_cell` /
   `stat_line_fmt`) + `reg_footer_spec()`. Last Phase m: the crosstab summary is **p-value then effect
   size** (no statistic by default; `tabxplor.test_lines = "all"` adds it back); the test type is named in
-  the p-value ROW (`test_pvalue_descriptor` → "pvalue (Chi2, Welch F; Kish)"/"Fisher"/" !") and the
+  the p-value ROW (`test_pvalue_descriptor` → "pvalue (Chi2, Welch F; survey-design)"/"Fisher"/" !") and the
   measure in the effect-size ROW (`test_es_measure` → "Cramér's V, eta2"), so the cell is the bare p (no
   in-cell "(Chi2)"); (2) CONSOLE — `test_summary_grid()` → a backend-free grid,
   `test_render_console()` → the GFM block; (3) EXPORT — `tab_append_footer()`, the ONE fmt-frame append
@@ -304,11 +306,38 @@ Replicate-weight (`svrepdesign`) and two-phase designs are **refused** with a me
 `svydesign()` — a clear refusal, never an approximation. The design reaches `tab()`'s workers through the
 `.ship` payload (once per worker), not `shared` (which copied the whole dataset per row_var).
 
-**`svy_inference_mode(design_spec, wt)`** is THE rung — `"survey"` / `"kish"` / `"classic"` — resolved
-ONCE in `tab_setup()` (the one place holding both the resolved weight and the `design_spec`) and stored
-as `ctx$inference_mode`. Since z14-ii it governs the cell INTERVALS as well as the omnibus test, which
-is why it is no longer called `svy_test_mode`: the two leaves take their `n_eff` base from it instead of
-re-reading `options(tabxplor.kish_neff)` in two more places.
+### The inference basis (Last Phase z16-i)
+
+`wt` says how the **estimate** is computed. A second, orthogonal fact says how the **interval and the
+test** are — and the framework needed four encodings of one thing because there was no slot for it.
+
+**`svy_inference_basis(design_spec, wt, force =)`** is THE resolver and the ONLY place the option or
+the design object is read. Four values: `"n"` (the raw sample size — unweighted, or weighted with the
+option off, which is the default), `"weights"` (the design effect of the weights, exactly: the flat
+`ids = ~1` design), `"design"` (strata, clusters, `fpc`, calibration), `"design_partial"` (a design was
+given but its variance could not be computed here). It resolves ONCE in `tab_setup()` and rides
+`ctx$inference_basis`; `force = TRUE` is `tab_reg()`'s own rule (its crude `Obs_*` columns are always on
+the weighted basis, beside a model column that always was, so the option is `tab()`-scoped).
+
+It is then **STORED**, in `meta$inference = list(basis, degf, note)` (`get_inference()` /
+`new_inference_attr()`, `R/tab_classes.R`), written by `leaf_inference()` — shared by both leaves and by
+`tab_assemble_tables()`, so the pipeline and the exported step path cannot disagree. Absent when
+nothing is weighted. Three things follow that could not exist before:
+
+* `tab_weight_line()` generates ONE footer sentence per basis instead of recognising the internal
+  `.svy_weights` column name — the last role-guessed-from-a-name in the weights subsystem. The
+  `"n"`-and-weighted sentence is the important one: it is the DEFAULT, so the package's least
+  defensible position stops being silent.
+* A degrade is a STATE, not a console message. `svy_var_degraded()` records its reason in a
+  build-scoped flag (`R/survey-variance.R`) that `leaf_inference()` reads into `"design_partial"` + its
+  reason, so a table cannot assert a design its numbers do not carry through every export, forever.
+  Its twin `svy_degrade_unserved()` says "the weighted basis was asked for and this input cannot serve
+  it" — pre-aggregated counts carry no per-observation `Σw²` — and the table then states basis `"n"`.
+  Nothing had to know it was `tab_counts()`.
+* `degf` (the design's `#PSU − #strata`, captured at the boundary) rides to `tab_ci()`, which reads it
+  off the table when not given, so the step path gets it too. `conf_level_to_crit(conf_level, df)`
+  (`R/tab-agg.R`) is the ONE critical value of every interval — `qt(p, Inf)` being bit-identical to
+  `qnorm(p)`, the default is byte-identical to the z the engines used before.
 
 ### Design-based cell variances (`R/survey-variance.R`, Last Phase z14-ii)
 
@@ -330,15 +359,46 @@ column level; 7 MB at 60 000 × 15). `svy_var_prep()` deliberately does **not** 
 `svy_domain_design()` — that helper swaps `$variables` for `svychisq`/`svyglm`, which `svyrecvar` never
 reads — but its calibrated/PPS warning still applies, hence the scatter index and `w = 1/prob`.
 
-Every function returns `NULL` rather than a wrong number; the leaf then falls back to Kish / the raw n
-and `svy_var_degraded()` says so, because the footer sentence is blanket. Two consequences elsewhere:
-`use_raw` is forced under a design (a count aggregate cannot carry a design variance), and
-`chi2_write_contrib()` now reads the `n_eff` FIELD per cell where the column's `type` says its base is
-the whole table (`"n"`/`"all"`/`"all_tabs"`) — byte-identical under Kish, and the standard first-order
-per-cell correction `z_design = z_classic·√(n_eff/N)` under a design. A row-/column-percentage table's
-contrib keeps the grand-total base: that base is not what `n_eff` holds there. Route A is exact for a
-cell and conservative for a cell-vs-reference difference (it cannot carry the row-to-row design
+Every function returns `NULL` rather than a wrong number; the leaf then falls back to the flat closed
+form (below) and records the step, so the footer says `"design_partial"` instead of claiming the design.
+Two consequences elsewhere: `use_raw` is forced under a design (a count aggregate cannot carry a design
+variance), and `chi2_write_contrib()` reads the total column's grand-cell `n_eff` — ONE base for the
+whole table, the standard first-order correction `z_design = z_classic·√(n_eff/N)`. Route A is exact for
+a cell and conservative for a cell-vs-reference difference (it cannot carry the row-to-row design
 covariance, ruling Q3) — so it never produces a star the design does not support.
+
+### The flat closed form (`R/survey-variance.R` § the flat closed form, Last Phase z16-ii)
+
+**A weight column IS a survey design** — the flat one — and at `ids = ~1`, with no strata, no `fpc` and
+no calibration, `svyrecvar` reduces to a plain sum of squares of `w·z` with survey's `n/(n−1)` factor.
+Because `Σ w·z = (A − p·B)/B` is exactly zero for every base, the centering is a no-op and the whole
+variance collapses to per-cell sums the aggregate core computes in the same pass as `Σw`:
+
+```
+Var(p̂) = n/(n−1) · [ A(1−p)² + (S−A)p² ] / B²          A = the CELL's Σw²
+Var(x̄) = n/(n−1) · [ Σw²x² − 2x̄·Σw²x + x̄²·Σw² ] / B²   S, B = Σw², Σw over the base's domain
+```
+
+So the weighted basis needs no microdata at all: `O(cells)`, no ceiling, nothing that can degrade.
+`svy_flat_neff_prop()` / `_mean()` / `_rows()` (the per-observation ratio form, for `tab_reg()`'s crude
+grid) are the producers; `leaf_dmat()` is the base-domain broadcast, extracted so `leaf_wide_pct()` and
+the variance provably use the SAME base — the leaf lost its `Σw²` arm and now computes percentages and
+`tot_n` only. `svy_design_is_flat()` routes a `svydesign(ids = ~1, weights = ~w)` here too (same answer,
+no influence matrix). Degenerate cells (`p = 0` or `1`, so `p(1−p)/Var` is `0/0`) fall back to the base
+domain's `B²/S` — **which is Kish**, surviving only as what it always was: this formula with each cell's
+own `Σw²` discarded, i.e. the limit for a cell carrying no information. Measured up to 17 % wrong in
+either direction once the outcome follows the weight, and unable to move with the outcome at all.
+
+`num_moment_scan()` accumulates `Σw²`, `Σw²x`, `Σw²x²` whenever the table is WEIGHTED (never on an
+option), and the factor scan its `Σw²` likewise, so the aggregate has ONE shape — toggling the option is
+a jamovi cache HIT, not a re-aggregate. All three are additive, so the wide rollup, the Total column and
+the total rows get the right `A`/`S`/`B` by summation, with no special case.
+
+**The parity contract is a test, not a comment** (`tests/testthat/test-flat-design-parity.R`, 50
+assertions, every one against `survey` itself): variance ratio `1.0000000000` for row/col/all
+percentages, total rows, subtable domains and means; the `Obs_OR` bracket == the univariable `svyglm`
+SE(log OR); the omnibus chi2 and F == `svychisq` / `svyglm + regTermTest` to `1e-10`; equal weights give
+`n_eff = n·(n−1)/n`; and the relative contribution `ctr` is identical at every basis.
 
 **Last Phase z14-iii — the same producer serves `tab_reg()`'s crude columns.** A crude `Obs_*` cell IS a
 weighted mean over a domain (a predictor level), so `reg_empirical()` takes `design_spec` and asks
@@ -573,17 +633,19 @@ and the `tab_xl` numFmt fold) pass `stars = TRUE`, while tooltip / character-cas
 default `FALSE`, so stars never leak onto secondary fields. When shown, `format()` **right-pads** each
 value cell's star field to the column-max width so numbers stay aligned. `pvalue` feeds ONLY the stars
 (colour significance reads the bounds), so not storing it when stars are off changes nothing else.
-Kish `n_eff` opt-in (`options("tabxplor.kish_neff")`) backs **every weighted descriptive CI** (Last
-Phase s): factor proportions AND means (cell/diff/ratio + the `color = "OR"` interval) in
-`tab()`/`tab_num()`, and `tab_reg()`'s `empirical =` companions. It rides the **19th fmt field
-`n_eff`** = the effective sample size used for a cell's CI; the CI base is
-`coalesce(get_n_eff, tot_n/n)`, so off-kish (`n_eff` NA) it is byte-identical. `Σw²` is accumulated
-only when opted in — on the FACTOR count scan (`plain_core`'s `w2` dcast → `leaf_wide_pct` broadcasts
-`(Σw_base)²/(Σw²_base)`) and the numeric scan (`num_moment_scan`'s `_w2` → `num_core`'s `_en`). It
-needs the microdata weights, so `tab_counts()` on pre-aggregated counts leaves `n_eff` NA and falls
-back to the raw base. `tab_reg()`'s empirical CIs pass a separate effective-n into the `ci_*` engines
-(no field; the displayed `n` stays the raw count); the model CIs are design-based (`svyglm`) and
-untouched.
+The `options("tabxplor.design_effect")` opt-in backs **every weighted descriptive CI** (Last Phase s,
+made exact in z16-ii): factor proportions AND means (cell/diff/ratio + the `color = "OR"` interval) in
+`tab()`/`tab_num()`. It rides the **19th fmt field `n_eff`** = the effective sample size used for a
+cell's CI; the base is `coalesce(get_n_eff, tot_n/n)`, so on basis `"n"` (`n_eff` NA) it is
+byte-identical. `Σw²` (and, numerically, `Σw²x` / `Σw²x²`) is accumulated whenever the table is
+WEIGHTED — on the FACTOR count scan (`plain_core`'s `w2` dcast) and the numeric one
+(`num_moment_scan`) — so the aggregate has ONE shape and the BASIS, not the aggregate, decides whether
+it is used. It needs the microdata weights, so `tab_counts()` on pre-aggregated counts leaves `n_eff`
+NA, states basis `"n"` and says so in its footer. `tab_reg()` never reads the option: its `empirical =`
+companions are ALWAYS on the weighted basis (they pass a separate effective-n into the `ci_*` engines —
+no field; the displayed `n` stays the raw count), beside model CIs that are design-based (`svyglm`) and
+untouched. Turning the option on is what makes a `tab()` percentage interval comparable with an
+`Obs_*` column.
 
 Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with the `$ci` field extraction);
 `get_ci_moe()` = larger arm for the `± moe` display; `fmt(ci=)` stores absolute symmetric bounds
@@ -644,7 +706,7 @@ Coloring is decomposed into three orthogonal per-column choices: **measure** (`d
 
 1. `fmt_color_plan(x, channel, color, signif)` builds a plan: the measure is the stored `color` attribute (a CLEAN measure since Phase 17d — the legacy combined strings are decoded once at the boundary by `color_decode_legacy()`, never here) and the policy is the `signif` arg or the stored `color_signif`. It then reads the measure's ONE `MEASURES` row (Phase 17d — engine facts joined the legend facts) for: the scale keys for the measure×column-type (`scale = c(std=, pct=)` picked by `std_when`: `diff` → `pct_diff`/`mean_diff`, `ratio` → `pct_ratio`/`mean_ratio`, **`or` → `odds_ratio`** [Phase 16c], `contrib` → `contrib`), the per-cell `score` (`raw` getter: `get_diff`, standardized `get_diff / sqrt(get_ref_var)` for numeric diff; `get_ratio`; `get_ctr / get_mean_contrib`), the significance source (`sig_source`) and the row gate (`gate_row`). The `gate` (from the stored `get_ci_inf`/`get_ci_sup` bounds — EXCEPT `contrib`, which has no interval and instead reads the stored `get_pvalue()`: the **ADJUSTED standardized (Haberman) residual**'s p-value, written per cell by `chi2_write_contrib()` / `contrib_adj_resid()` / `contrib_pvalue()` at chi2-time, where the margins and the grand total are in hand; direction from the sign of `get_ctr / get_mean_contrib`, so `contrib` colours under `grey_non_signif` / `guaranteed_effect` instead of colouring nothing), and the per-side `over_breaks`/`over_slots` + `under_breaks`/`under_slots` (read straight from the scale).
 
-**Last Phase z4 — the two readings of `contrib`, and the one `MEASURES` accessor.** `contrib` is the only measure whose reading changes with the significance policy, because a contribution has no confidence interval to floor. The divergence is a **`guar` override list inside its `MEASURES` row**, never a `switch`: `measure_facts(measure, policy)` returns the row with `guar` folded in under `guaranteed_effect`, and it is now the ONLY way `MEASURES` is read (1 call in `fmt_color_plan()`, 5 in the legend, each passing `plan$policy` / `spec$policy`) — so the colour plan and the legend describing it cannot diverge. Under `ignore` / `grey_non_signif` the score is the RELATIVE contribution (`ctr / mean_contrib`, `contrib` scale, in multiples of the mean cell — the correspondence-analysis reading, intrinsically relative to its table); under `guaranteed_effect` it is the ABSOLUTE residual `fmt_resid(x)` on the 7th scale `zscore` (named `residual` until Last Phase z8 -- it is a z scale, and a second measure could want it), whose breaks `offset_guaranteed_breaks(breaks, center, origin = z(conf_level))` re-anchors at the significance threshold (the `break_origin = "threshold"` fact). That keeps the policy's invariant — a cell is coloured iff `|z| > z(conf_level)` — while the printed thresholds stay real |z| values a reader can name, comparable between tables; the legend therefore drops the "after subtracting the margin of error" phrasing for this measure (`guar_abs`, resolved per channel in `legend_resolve_spec()`). **`fmt_resid()`** derives the residual from `pvalue` + `sign(ctr)` — deliberately NOT a field of its own, since the p-value determines `|z|` exactly (`-qnorm(p/2)`; `qnorm(1 - p/2)` would saturate to `Inf` for every `|z| > 8.2`). It also backs the `resid` **display token** (`tabxplor_display_fields`, read-only: `get_num()` has an arm, `set_num()` does not; a `{}` composite keeps its p-value for that token instead of blanking it) and the html tooltip's "std. residual" fragment. Statistics: `contrib_adj_resid()` (R/tab.R) computes `(o/N - e_f) * sqrt(n_base) / sqrt(e_f (1-p_i)(1-p_j))` from the same weighted margins `var_contrib_ctr_signed()` uses (shared `contrib_zero_inner()` prologue), where **`n_base` is the unweighted `n` — or the Kish `n_eff` under `options(tabxplor.kish_neff = TRUE)` — never the weighted total**: weighted estimate, unweighted or effective base, the same rule as every CI in the package. The CONTRIBUTION itself stays weighted (it estimates the population table's inertia decomposition). A cell whose expected count falls below 1 gets no residual (the normal approximation fails there). On an unweighted table this reduces exactly to `stats::chisq.test()$stdres`. `leaf_wide_pct()` is now also called on the `pct = "no"` path (with the `"all"` base) when kish is on, so a COUNTS table — where `color = TRUE`/`"auto"` picks `contrib` — carries an `n_eff` at all. Rationale, measurements and rejected alternatives: `dev/chi2_cell_residuals_and_contributions.md`.
+**Last Phase z4 — the two readings of `contrib`, and the one `MEASURES` accessor.** `contrib` is the only measure whose reading changes with the significance policy, because a contribution has no confidence interval to floor. The divergence is a **`guar` override list inside its `MEASURES` row**, never a `switch`: `measure_facts(measure, policy)` returns the row with `guar` folded in under `guaranteed_effect`, and it is now the ONLY way `MEASURES` is read (1 call in `fmt_color_plan()`, 5 in the legend, each passing `plan$policy` / `spec$policy`) — so the colour plan and the legend describing it cannot diverge. Under `ignore` / `grey_non_signif` the score is the RELATIVE contribution (`ctr / mean_contrib`, `contrib` scale, in multiples of the mean cell — the correspondence-analysis reading, intrinsically relative to its table); under `guaranteed_effect` it is the ABSOLUTE residual `fmt_resid(x)` on the 7th scale `zscore` (named `residual` until Last Phase z8 -- it is a z scale, and a second measure could want it), whose breaks `offset_guaranteed_breaks(breaks, center, origin = z(conf_level))` re-anchors at the significance threshold (the `break_origin = "threshold"` fact). That keeps the policy's invariant — a cell is coloured iff `|z| > z(conf_level)` — while the printed thresholds stay real |z| values a reader can name, comparable between tables; the legend therefore drops the "after subtracting the margin of error" phrasing for this measure (`guar_abs`, resolved per channel in `legend_resolve_spec()`). **`fmt_resid()`** derives the residual from `pvalue` + `sign(ctr)` — deliberately NOT a field of its own, since the p-value determines `|z|` exactly (`-qnorm(p/2)`; `qnorm(1 - p/2)` would saturate to `Inf` for every `|z| > 8.2`). It also backs the `resid` **display token** (`tabxplor_display_fields`, read-only: `get_num()` has an arm, `set_num()` does not; a `{}` composite keeps its p-value for that token instead of blanking it) and the html tooltip's "std. residual" fragment. Statistics: `contrib_adj_resid()` (R/tab.R) computes `(o/N - e_f) * sqrt(n_base) / sqrt(e_f (1-p_i)(1-p_j))` from the same weighted margins `var_contrib_ctr_signed()` uses (shared `contrib_zero_inner()` prologue), where **`n_base` is the unweighted `n` — or, on any basis but `"n"`, the whole table's effective n, read off the total column's grand cell — never the weighted total**: weighted estimate, unweighted or effective base, the same rule as every CI in the package. ONE base per table (z16-iii deleted the `type %in% c("n","all","all_tabs")` guess), which is what makes a counts table and a percentage table of the same data give IDENTICAL residuals: the grand cell's own proportion is 1, so the degenerate fallback returns the subtable's `B²/S` at every shape. The CONTRIBUTION itself stays weighted and is identical at every basis (it estimates the population table's inertia decomposition), so the correspondence-analysis reading is invariant by construction. A cell whose expected count falls below 1 gets no residual (the normal approximation fails there). On an unweighted table this reduces exactly to `stats::chisq.test()$stdres`. `leaf_wide_pct()` is also called on the `pct = "no"` path (with the `"all"` base) when the basis asks for one, so a COUNTS table — where `color = TRUE`/`"auto"` picks `contrib` — carries an `n_eff` at all. Rationale, measurements and rejected alternatives: `dev/chi2_cell_residuals_and_contributions.md`.
 2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval()` **per direction** (`over_breaks` for over-cells, `under_breaks` for under-cells) → level → palette slot (0 = uncolored, **1..4 = over intensities, 5..8 = under**), zeroing ungated cells. The former in-text ×2 / slot-11 override is gone (the ×2 rule is now a 1-break `pct_ratio` scale on the background channel). **`guaranteed_effect` computes `score` = the guaranteed (CI-floor) magnitude ON THE MEASURE'S OWN SCALE** so the fold's `center` matches: for `diff` the floor is the stored difference bound (centre 0); for `or` the native OR bound (centre 1); for `ratio` — which has no native CI — the shared diff floor is converted to a guaranteed ratio `1 + (get_ratio - 1) * (guar_diff / get_diff)` (centre 1). Feeding the raw diff bound into a centre-1 fold was the "ratio floods /4" bug.
 3. `fmt_color_channels(x)` → `list(text_slot, bg_slot)`, via `resolve_color_channel_plans(x)` — the shared arbiter (also used by `legend_specs()`, so cells and legend agree). Phase 16c: `fmt_color_plan()` flags a plan `degenerate` when the policy is `guaranteed_effect` and the scale has a single break per side (which `offset_guaranteed_breaks()` collapses to the neutral → one flat "×1" fill). The arbiter drops a degenerate channel and its legend line, but **never the last channel** (a degenerate text channel survives when no non-degenerate background does — "keep the first channel"). The single-channel golden `fmt_get_color_code()` is not arbitrated (it always renders the text measure).
 

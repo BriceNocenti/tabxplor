@@ -106,11 +106,12 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 # chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
 test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
   keep_f <- paste0("F_", anova)
-  # Last Phase j: a robust table carries chi2_kish/chi2_svy (factor) or F_kish/F_svy (numeric) INSTEAD
-  # of the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.
+  # Last Phase j: a design-based table carries chi2_design (factor) or F_design (numeric) INSTEAD of
+  # the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.
+  # (z16-iii: four discriminators became two, because the flat and the full design run the SAME
+  # survey estimator; which one a table used is meta$inference$basis, not a second encoding here.)
   disp   <- dplyr::filter(test_tbl,
-                          .data$test %in% c("chi2", "chi2_kish", "chi2_svy",
-                                            keep_f, "F_kish", "F_svy"))
+                          .data$test %in% c("chi2", "chi2_design", keep_f, "F_design"))
   if (is.null(disp[["pvalue_exact"]])) disp$pvalue_exact <- NA_real_
   disp
 }
@@ -129,36 +130,34 @@ pvalue_line_fmt <- function(p, label = NA_character_) {
 }
 
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
-# Last Phase j: the robust variants name their method (Kish n_eff / Rao-Scott survey design).
+# Last Phase j / z16-iii: the design-based variant names its method (Rao-Scott / svyglm Wald F).
 test_cell_label <- function(test) {
-  # Last Phase w: mostly notation + proper names (Welch/Kish/Rao-Scott), kept; "survey" translates.
+  # Last Phase w: mostly notation + proper names (Welch/Rao-Scott), kept; "survey" translates.
   switch(test,
          "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F",
-         "chi2_kish" = "Chi2, Kish", "chi2_svy" = "Chi2, Rao-Scott",
-         "F_kish" = "F, Kish", "F_svy" = gettext("F, survey"),
+         "chi2_design" = "Chi2, Rao-Scott", "F_design" = gettext("F, survey"),
          NA_character_)
 }
 
-# Last Phase m: the p-value ROW NAME (was the in-cell "(Chi2, Kish)" suffix -- moved out of the cell so a
+# Last Phase m: the p-value ROW NAME (was an in-cell suffix -- moved out of the cell so a
 # mixed factor/numeric row no longer wastes width, and the table-level test type is stated ONCE). Names
 # the test(s) used across the group's columns: factor side "Chi2" (or "Fisher" when the exact test ran),
-# numeric side "Welch F" / "ANOVA F"; a single robust suffix "; Kish" (n_eff rescale) or "; survey-design"
-# (Rao-Scott / svyglm). Examples: "pvalue (Chi2)", "pvalue (Chi2, Welch F)", "pvalue (ANOVA F)",
-# "pvalue (Chi2, Welch F; Kish)", "pvalue (Chi2, Welch F; survey-design)".
+# numeric side "Welch F" / "ANOVA F"; a single robust suffix "; survey-design" (Rao-Scott / svyglm --
+# the same estimator whether the design came from a weight column or from svydesign(), z16-iii).
+# Examples: "pvalue (Chi2)", "pvalue (Chi2, Welch F)", "pvalue (ANOVA F)",
+# "pvalue (Chi2, Welch F; survey-design)".
 # Last Phase w: the prose is translatable (gettext, ambient locale). Notation ("Chi2", "F") is kept;
-# proper names ("Welch", "Fisher", "Kish", "Rao-Scott") stay as-is. English is byte-identical.
+# proper names ("Welch", "Fisher", "Rao-Scott") stay as-is. English is byte-identical.
 test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
   tests <- unique(tests[!is.na(tests)])
-  fac   <- tests[tests %in% c("chi2", "chi2_kish", "chi2_svy")]
-  num   <- tests[tests %in% c("F_welch", "F_classic", "F_kish", "F_svy")]
+  fac   <- tests[tests %in% c("chi2", "chi2_design")]
+  num   <- tests[tests %in% c("F_welch", "F_classic", "F_design")]
   parts <- character(0)
   # a weak chi2 (smallest expected count < 5) with no exact companion keeps a " !" validity caveat.
   if (length(fac)) parts <- c(parts, if (used_exact) gettext("Fisher") else if (weak) gettext("Chi2 !") else gettext("Chi2"))
   if (length(num)) parts <- c(parts, if (any(num == "F_classic")) gettext("ANOVA F") else gettext("Welch F"))
   if (!length(parts)) return(gettext("pvalue"))
-  robust <- if      (any(tests %in% c("chi2_kish", "F_kish"))) gettext("; Kish")
-            else if (any(tests %in% c("chi2_svy",  "F_svy")))  gettext("; survey-design")
-            else                                               ""
+  robust <- if (any(tests %in% c("chi2_design", "F_design"))) gettext("; survey-design") else ""
   enc2utf8(gettextf("pvalue (%s%s)", paste(parts, collapse = ", "), robust))
 }
 

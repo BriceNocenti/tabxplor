@@ -55,11 +55,14 @@ test_that("a prebuilt survey design passed as `data` equals the hand svyglm", {
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
 })
 
-test_that("passing wt/ids alongside a design object is ignored with a message", {
+test_that("passing wt alongside a design object ABORTS (Last Phase z16-i, W10)", {
   d   <- reg_survey_data()
   d01 <- dplyr::mutate(d, y01 = as.integer(y == 1))
   des <- survey::svydesign(ids = ~psu, weights = ~w, data = d01)
-  expect_message(tab_logit(des, "y01", "x1", wt = "w"), "already a survey design")
+  # it used to be silently ignored with a console note nothing downstream could see; every other
+  # variable-role collision in the package aborts, and now so does this one, in tab() too.
+  expect_error(tab_logit(des, "y01", "x1", wt = "w"), "cannot be used when")
+  expect_error(suppressMessages(tab(des, x1, y01, wt = w)), "cannot be used when")
 })
 
 test_that("weighted footer is the reduced survey set (n / wald_null / nagelkerke_r2 / aic)", {

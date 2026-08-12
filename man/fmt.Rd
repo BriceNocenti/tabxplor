@@ -212,11 +212,12 @@ as a double vector the length of \code{n}.}
 \item{tot_n}{The cell's own (unweighted) percentage base, as a double vector the length
 of \code{n}.}
 
-\item{n_eff}{The effective sample size used for this cell's confidence interval:
-the DESIGN-based \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)})
-when a \code{survey::svydesign} was passed as \code{data}, else Kish's
-\code{(sum w)^2 / sum(w^2)} when \code{options(tabxplor.kish_neff = TRUE)} on weighted
-data, else \code{NA} (the CI then falls back to the raw unweighted base).
+\item{n_eff}{The effective sample size used for this cell's confidence interval,
+\code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
+\code{survey::svyrecvar} when a \code{survey::svydesign} was passed as \code{data},
+from the closed-form flat-design variance when
+\code{options(tabxplor.design_effect = TRUE)} on weighted data, else \code{NA} (the CI
+then falls back to the raw unweighted base).
 A double vector the length of \code{n}. Non-displayed.}
 
 \item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour

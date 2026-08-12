@@ -17,7 +17,8 @@ tab_ci(
   method_ratio = "katz",
   method_mean_diff = "welch",
   method_mean_ratio = "robust",
-  ci_scale = "diff"
+  ci_scale = "diff",
+  degf = NULL
 )
 }
 \arguments{
@@ -64,7 +65,9 @@ the reference, read from the same interval that is displayed (universal CI-inclu
 stars and the bracket never disagree. \code{FALSE} skips the significance computation.}
 
 \item{method_cell}{Character string, the proportion CI method for \code{ci = "cell"}: either
-\code{"wilson"} (the score interval, default) or \code{"wald"} (the normal approximation).}
+\code{"wilson"} (the score interval, default), \code{"wald"} (the normal approximation) or
+\code{"beta"} (Korn-Graubard: \code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval
+on the effective sample size -- the textbook design-based cell interval, conservative near 0 and 1).}
 
 \item{method_diff}{Character string, the proportion CI method for \code{ci = "diff"}: one of
 \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
@@ -83,6 +86,10 @@ centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (\c
 or a ratio-of-means interval for numeric means (\code{method_mean_ratio}). \code{tab()} sets it from
 the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
 \code{c("ratio", "diff")}) asks for the ratio one.}
+
+\item{degf}{The design's degrees of freedom, the reference distribution of every interval
+(\code{#PSU - #strata}). \code{NULL} (default) takes the value the table itself stores when it was
+built from a \code{survey::svydesign}; \code{Inf} is the large-sample normal pivot.}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from
@@ -116,8 +123,8 @@ variances); inverting the Welch t interval is exactly this well-known test.
 so it carries no stars and its \code{pvalue} is \code{NA}.
 }
 On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to Kish's effective sample size with
-\code{options("tabxplor.kish_neff" = TRUE)}.
+number of cases, unless you opt in to the weighting's own design effect with
+\code{options("tabxplor.design_effect" = TRUE)}.
 }
 
 \examples{

@@ -96,7 +96,7 @@ A `tabxplor_fmt` cell carries **19 fields** (many are `NA` when the relevant qua
 | `resid`     | adjusted standardized residual (derived from `pvalue`, read-only) |
 | `var`       | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n`     | the cell's own base — the count its percentage is computed on |
-| `n_eff`     | effective sample size used for the CI, with `options(tabxplor.kish_neff = TRUE)` |
+| `n_eff`     | effective sample size used for the CI, with `options(tabxplor.design_effect = TRUE)` or a `survey` design |
 | `obs`       | `tab_reg()` only: the observed (crude) effect the modelled one is compared to |
 | `digits`    | number of decimals to display (per cell) |
 | `display`   | which field is shown (per cell) |
@@ -230,7 +230,7 @@ tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
            col_name = "race", pct = "row", color = "diff")
 ```
 
-Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. (Kish's effective sample size, `options(tabxplor.kish_neff = TRUE)`, needs the individual weights, which pre-aggregated counts no longer carry, so it does not apply here — the CIs use the unweighted N as shown.) When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.
+Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. (`options(tabxplor.design_effect = TRUE)` needs the individual weights, which pre-aggregated counts no longer carry, so it does not apply here — the CIs use the unweighted N, and the table's footer says so rather than claiming a correction it does not have.) When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.
 
 ## Pivoting a grouped table into columns
 

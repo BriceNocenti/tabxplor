@@ -71,12 +71,16 @@ test_that("a large table's chi2 is NOT overridden by a simulated Fisher p (pvalu
 test_that("Kish factor chi2 rescales the weighted chi2 to n_eff", {
   skip_if_not_installed("survey")
   suppressWarnings(utils::data("api", package = "survey"))
-  withr::local_options(tabxplor.kish_neff = TRUE)
+  withr::local_options(tabxplor.design_effect = TRUE)
   te <- get_test(tab(apistrat, stype, awards, wt = pw, test = TRUE))
-  expect_equal(te$test[1], "chi2_kish")
+  expect_equal(te$test[1], "chi2_design")
   expect_true(is.finite(te$pvalue) && te$pvalue > 0)
-  # n reported is the effective n = (sum w)^2 / sum w^2, below the raw 200
-  expect_true(te$n[1] < nrow(apistrat) && te$n[1] > 1)
+  # Last Phase z16-i (W8): `n` is ALWAYS the raw count -- it used to become the effective n here, so
+  # one column meant two things depending on a global option. The correction now lives in `deff`.
+  expect_equal(te$n[1], nrow(apistrat))
+  # `deff` is Rao-Scott's mean generalized design effect: >1 when the weighting costs information,
+  # <1 when it buys some (apistrat is a stratified sample, so its weights can). Finite is the claim.
+  expect_true(is.finite(te$deff[1]) && te$deff[1] > 0)
 })
 
 # ---- Survey design (Rao-Scott), opt-in ------------------------------------------------------------
@@ -87,7 +91,7 @@ test_that("survey factor test matches survey::svychisq", {
   des <- survey::svydesign(id = ~1, strata = ~stype, weights = ~pw, data = apistrat, fpc = ~fpc)
   te  <- suppressMessages(get_test(tab(des, sch.wide, awards, pct = "row", test = TRUE)))
   ref <- survey::svychisq(~sch.wide + awards, des, statistic = "F")
-  expect_equal(te$test[1], "chi2_svy")
+  expect_equal(te$test[1], "chi2_design")
   expect_equal(te$statistic[1], unname(ref$statistic), tolerance = 1e-6)
   expect_equal(te$pvalue[1],    unname(ref$p.value),   tolerance = 1e-6)
 })
@@ -99,7 +103,7 @@ test_that("survey numeric F matches svyglm + regTermTest", {
   te  <- suppressMessages(get_test(tab(des, stype, api00, test = TRUE)))
   fit <- survey::svyglm(api00 ~ stype, des)
   ref <- survey::regTermTest(fit, ~stype, method = "Wald")
-  expect_equal(te$test[1], "F_svy")
+  expect_equal(te$test[1], "F_design")
   expect_equal(te$pvalue[1], as.double(ref$p), tolerance = 1e-6)
 })
 
@@ -111,14 +115,14 @@ test_that("the test RUNG is derived from the input, and `test` is TRUE/FALSE onl
   des <- survey::svydesign(id = ~1, strata = ~stype, weights = ~pw, data = apistrat, fpc = ~fpc)
   te  <- suppressMessages(get_test(tab(des, sch.wide, awards, test = TRUE)))
   ref <- survey::svychisq(~sch.wide + awards, des, statistic = "F")
-  expect_equal(te$test[1],      "chi2_svy")
+  expect_equal(te$test[1],      "chi2_design")
   expect_equal(te$statistic[1], unname(ref$statistic), tolerance = 1e-6)
   expect_equal(te$pvalue[1],    unname(ref$p.value),   tolerance = 1e-6)
 
   # weights alone -> a weighted chi2; weights + the kish option -> the same rescaled to n_eff
   expect_equal(get_test(tab(apistrat, sch.wide, awards, wt = pw, test = TRUE))$test[1], "chi2")
-  withr::local_options(tabxplor.kish_neff = TRUE)
-  expect_equal(get_test(tab(apistrat, sch.wide, awards, wt = pw, test = TRUE))$test[1], "chi2_kish")
+  withr::local_options(tabxplor.design_effect = TRUE)
+  expect_equal(get_test(tab(apistrat, sch.wide, awards, wt = pw, test = TRUE))$test[1], "chi2_design")
 
   expect_error(tab(apistrat, sch.wide, awards, wt = pw, test = "survey"), "TRUE.*FALSE")
 })
