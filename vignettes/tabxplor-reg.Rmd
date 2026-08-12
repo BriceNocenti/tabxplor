@@ -79,6 +79,8 @@ One rule covers every case: **the observed effect is the effect of that predicto
 
 A continuous predictor has no levels, so only its **effect** column is filled; the base column (`Obs_%`, `Obs_mean`, `Obs_rate`) stays empty, and its distribution — mean, standard deviation, and the mean in each outcome group — is shown in the html tooltip instead.
 
+On **weighted** data, one thing is worth knowing from the start: an observed column is always measured exactly like the model column beside it, so its confidence interval accounts for the weighting (and, under a `survey` design, for the whole design). A `tab()` cross-table does not, by default — add `design_effect = TRUE` there if you want its percentages directly comparable with these. See [Weighted and survey data](#weighted-and-survey-data) below.
+
 
 ## Logistic regression (a binary factor)
 
@@ -548,14 +550,14 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 
 ## Weighted and survey data
 
-Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. The crude `Obs_*` companions are on the same basis, always — which is what makes them comparable with the model column beside them. `tab()` is more cautious by default: turn `options(tabxplor.design_effect = TRUE)` on if you want a `tab()` percentage interval to match these columns (see `vignette("tabxplor")`).
+Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. The crude `Obs_*` companions are on the same basis, always — which is what makes them comparable with the model column beside them.
 
 ```{r, eval = FALSE}
 # `weight` is a survey weight column in your data -- the common case:
 tab_reg(data, "dependent", c("pred1", "pred2"), wt = "weight")
 ```
 
-There are only **two** ways to say it, and that is deliberate. Either you give `wt =` a weight column, or — when your file also carries strata, clusters, a finite-population correction or calibration — you build the design once with the [survey](https://CRAN.R-project.org/package=survey) package and pass **the design itself** as `data`:
+There are only **two ways to hand tabxplor your weights**, and that is deliberate. Either you give `wt =` a weight column, or — when your file also carries strata, clusters, a finite-population correction or calibration — you build the design once with the [survey](https://CRAN.R-project.org/package=survey) package and pass **the design itself** as `data`:
 
 ```{r, eval = FALSE}
 library(survey)
@@ -567,7 +569,9 @@ Everything then follows that design, in one regime: the `Model_*` coefficients a
 
 Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a 3+ level outcome (nominal, ordinal) has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based.
 
-Without a design, the observed columns' intervals already account for the weighting exactly (the flat survey design, `ids = ~1`) — a correction for unequal weighting only, blind to clustering and calibration. `tab_reg()` never reads `tabxplor.design_effect`: that option is `tab()`'s, and turning it on is what makes a `tab()` percentage interval comparable with these columns (see `vignette("tabxplor")`).
+Without a design, the observed columns' intervals already account for the weighting exactly (the flat survey design, `ids = ~1`) — a correction for unequal weighting only, blind to clustering and calibration.
+
+**Why a weighted `tab_reg()` is not a weighted `tab()`.** `tab_reg()` cannot choose: its observed columns have to be measured like the model column beside them, and that one is design-based by construction (`survey::svyglm()`). `tab()` can, and keeps the descriptive convention — a weighted estimate on the raw sample size — as its default. Each table's footer says which it used, and `tab(design_effect = TRUE)` is what brings the two into line. In the vocabulary of `vignette("tabxplor")`: `tab_reg()` is always at **level 2** (or level 3 under a design), while `tab()` starts at level 1.
 
 
 ## Comparing several models
@@ -768,6 +772,6 @@ These are a **teaching** companion, not a decision tool: every verdict they illu
 - `tab_reg()` is also available **without writing R code**, as a point-and-click **Regressions** analysis in the [jamovi](https://www.jamovi.org/download) module — install *tabxplor* from jamovi's module library (see `vignette("tabxplor")`).
 - `vignette("tabxplor")` — cross-tables and the colour helpers.
 - `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.
-- `survey::svydesign()` for complex designs (calibration, replicate weights, finite-population corrections).
+- `survey::svydesign()` for complex designs (strata, clusters, calibration, finite-population corrections). Replicate-weight designs (`svrepdesign()`) are not supported.
 - **Out of scope**, and best fitted with their own packages: survival / Cox models, mixed (multilevel) models, and pooling over multiply-imputed datasets.
 - On comparing a crude and an adjusted coefficient, the canonical reference is Clogg, Petkova & Haritou (1995, *AJS* 100(5)), with Allison's comment in the same issue — what `color = "adjustment"` computes, generalised to GLMs, survey designs and marginal effects. For nested logit models, the KHB decomposition (Karlson, Holm & Breen 2012) separates the part of the change that is confounding from the part that is rescaling.

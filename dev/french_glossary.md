@@ -51,6 +51,29 @@ spots below are runtime-string issues (not vignette prose) and still await maint
 | shades of blue / yellow to red | nuances de bleu / du jaune au rouge                |
 | vs the mean                    | p. r. à la moyenne (par rapport à)                 |
 
+## Weights and survey-design terms
+
+Settled in Last Phase z16-iiiiii, when the Weights section of both intro vignettes was rewritten.
+The three earlier renderings of *effective sample size* (`taille d'échantillon efficace`,
+`n effectif`, none at all) are now one.
+
+| English                            | French                                                   |
+|------------------------------------|----------------------------------------------------------|
+| weight / weighting                 | pondération                                              |
+| survey design                      | plan de sondage (`survey-design` where it names a class) |
+| the three weighting levels         | les trois niveaux de pondération                         |
+| design effect                      | effet de plan                                            |
+| effective sample size              | taille d'échantillon effective (short: *n* effectif)     |
+| cluster / clustered                | grappe / en grappes                                      |
+| stratum / stratified               | strate / stratifié                                       |
+| calibration                        | calage                                                   |
+| finite population correction       | correction de population finie (notation `fpc` kept)     |
+| PSU (primary sampling unit)        | unité primaire (notation `psu` kept)                     |
+| degrees of freedom                 | degrés de liberté                                        |
+| margin of error                    | marge d'erreur                                           |
+| face-to-face survey                | enquête en face-à-face                                   |
+| replicate weights                  | poids de réplication                                     |
+
 ## Regression terms
 
 | English                                | French                                                |

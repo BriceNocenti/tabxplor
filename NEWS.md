@@ -162,7 +162,7 @@
   is scoped to `tab()` and its leaves; `tab_reg()` never reads it, its observed columns being always
   corrected. Two consequences on numbers: with the option **on**, a weighted table's intervals and
   p-values change slightly (an approximation became exact, in either direction, and a table weighted by
-  a *constant* gets `n_eff = n * (n-1)/n`, `survey`'s own finite-sample factor); and
+  a *constant* gets an effective n a whisker below the raw one, `survey`'s own finite-sample factor); and
   `tab_reg(empirical = TRUE)` on weighted data now widens its observed intervals **unconditionally**,
   which is what makes them match the model column beside them.
 * **`tab(pct = "all", ci = "cell")` used to error** ("`false` must be a vector, not NULL"), weighted or
@@ -230,6 +230,9 @@
 
 * A factor carrying **`NA` as a real level** (`factor(..., exclude = NULL)`, common in imported data) no
   longer crashes `print()` / `format()` / any export.
+* `ci_method = c(cell = "beta")` under a `survey` design now applies Korn & Graubard's
+  degrees-of-freedom rescale, as `survey::svyciprop(method = "beta")` does. On a design built on few
+  clusters its intervals were measurably too short. Unchanged without a design.
 * `tab()` accepts a **`data.table`** as input, and a **logical `col_var`**.
 * **Clearer errors** for an unknown named `ref`, a variable used as both a tab and a row/column variable,
   and an all-zero / all-`NA` weight.

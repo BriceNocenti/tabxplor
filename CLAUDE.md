@@ -3042,7 +3042,8 @@ were honoured.
 computed; and `degf` threaded into `tab_reg()`'s ten crude engines, so a crude bracket is referred to
 the SAME reference distribution as the model bracket beside it (at `degf = 8` it was 15 % narrower).
 Doc-only: `ci_beta()` is exact at basis `"weights"` (the flat design's df IS `n - 1`) and slightly
-anti-conservative under a real design; `n_eff`'s three write conventions are stated in `?fmt`.
+anti-conservative under a real design (**superseded by z16-iiiiii, which made it exact there too**);
+`n_eff`'s three write conventions are stated in `?fmt`.
 
 **OPEN — maintainer step:** `jamovi/jmvtab.a.yaml` + `.u.yaml` changed (`method_ratio` removed; the
 `design_effect` label was hard-coded in FRENCH in the English UI and is now English + translated in
@@ -3054,10 +3055,42 @@ anti-conservative under a real design; `n_eff`'s three write conventions are sta
 
 Implement changes recorded in `dev/weights_only_design_effect_soundness.md` "### 8.2 What follows — for maintainer decision"
 
+**DONE (2026-08-12).** Suite green (FAIL 0, WARN 0, SKIP 4, PASS 5478 = +17, the new fixture),
+**zero golden/snapshot churn** — the one code change fires only under a real `svydesign` AND an
+opt-in method; the rest is prose. Implementation record: `dev/weights_only_design_effect_soundness.md`
+§11.
+- **The one code change.** `ci_beta()` applied Clopper-Pearson to the effective base but skipped the
+  SECOND half of Korn-Graubard — survey's own `n_eff * (qt(a, n-1)/qt(a, degf))^2`, which is how a
+  beta interval, having no degrees of freedom of its own, gets referred to the design's. Measured on
+  8 PSUs: the interval was **25 % too short**. It needed no new field and no new quantity — both
+  numbers were already on the one call site (`degf`, and `get_tot_n()` = the cell's raw base) — and
+  the guard "no design, nothing to convert" is what keeps every other table byte-identical, since at
+  `ids = ~1` survey's own factor is exactly 1. ⚠ The df stays the WHOLE design's, as for every other
+  interval: equal to survey's domain df whenever the row variable is crossed with the PSUs, smaller
+  when a domain drops whole PSUs.
+- **Five statements z16 had turned false** are corrected (`?tab` ×2, `?tabxplor-options`, `?tab_reg`,
+  `NEWS.md`, the two reg vignettes): a design is no longer said to be the only thing that can narrow
+  an interval (the exact flat form does it too, on 11 of 25 cells of a weighted NHANES crosstab); the
+  constant-weight identity is stated in words instead of a formula that only held where a cell's base
+  is the whole leaf; `design_partial` — a runtime basis documented nowhere — now has a sentence
+  everywhere the other three do; `svrepdesign()` is no longer listed as accepted in the paragraph
+  refusing it. The jamovi/`.po` half of this list had already been swept by z16-iiiii Pass 2.
+- **The Weights section of both intro vignettes is rewritten** (~40 → ~110 lines, mirrored EN/FR),
+  around the maintainer's vocabulary **"the three weighting levels" / "les trois niveaux de
+  pondération"**, with a runnable worked example and — the point of the whole study — the
+  **asymmetry**: strata and calibration would narrow intervals a few percent, clusters can widen them
+  several-fold, and they do not cancel. Plus §6's crossed-vs-nested rule as a question a reader can
+  answer about their own row variable, and a `### The fine print` closing on `n_eff > n`, the
+  degrees-of-freedom gap and `design_partial`. `tabxplor.design_effect` was in no options list
+  anywhere; it is now in both.
+- **`tab()` vs `tab_reg()`** (ruled *leave*): it was stated four times in three rationales and never
+  where the reader meets `empirical = TRUE`. One sentence early, the two late paragraphs merged, one
+  rationale kept. Declined and recorded: items 7 and 11, and the `tab()` default.
+
 
 #### Last Phase z17 — `forest_plot` effect + CIs + significance + comparison plots for `tab_reg` and `tab`
 
-Plan and implement for `dev/regression_effect_plots.md`
+Plan and implement for `dev/regression_effect_plots.md`.
 
 #### Last Phase zxx — `tab_reg()` parallelisation
 

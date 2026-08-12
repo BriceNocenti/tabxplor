@@ -177,8 +177,8 @@ Automatically added if needed for \code{color}.
 
 \code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
 passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogonal fact --- the
-\strong{inference basis}, stored on the table and named in its footer --- says how the
-\emph{interval and the test} are:
+\strong{inference basis} (the "weighting level" of \code{vignette("tabxplor")}), stored on each
+column and named in the table's footer --- says how the \emph{interval and the test} are:
 \enumerate{
 \item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
 \strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
@@ -188,12 +188,16 @@ they carry no design effect. This is the default, and the footer says so.
 tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
 (the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
 \code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
-\code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. It is blind to
-clustering and to calibration, which the weights do not record.
+\code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. Being exact rather
+than a bound, it can make an interval \emph{narrower} as well as wider --- unequal probabilities
+can carry more information than equal ones. It is blind to clustering and to calibration, which
+the weights do not record.
 \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
-the same quantities, now with strata, clusters, \code{fpc} and calibration (so a design can make
-an interval \emph{narrower}, which weights alone never can).
+the same quantities, now with strata, clusters, \code{fpc} and calibration, and every interval
+referred to the design's own degrees of freedom.
 }
+A fourth basis is not a choice but a fallback: when a design-based table's variance cannot be
+computed, it reverts to the weighting-only correction, and its footer says so.
 Turn the option on when you want a \code{tab()} percentage interval to be comparable with the
 \code{Obs_*} column of a \code{\link{tab_reg}} on the same data: \code{tab_reg()} never reads it,
 because its crude companions are \emph{always} on the weighted basis, beside a model column that
@@ -303,7 +307,8 @@ partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
 \itemize{
 \item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
 (default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
-degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard, exact on an effective base).
+degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
+the effective base, referred to a survey design's own degrees of freedom).
 \item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
 (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
 (Agresti-Caffo) or \code{"wald"}.
@@ -502,16 +507,21 @@ greatest levels. They are labels, not points on the scale.
 interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
 proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
 the same way). Under unequal weights this carries no design effect, so the default interval is
-\strong{too narrow} --- and the table's footer now says exactly that.
+\strong{usually too narrow} --- and the table's footer now says exactly that.
 
-\code{options(tabxplor.design_effect = TRUE)} corrects it, \strong{exactly}: a weight column is the
+\code{design_effect = TRUE} (or \code{options(tabxplor.design_effect = TRUE)} for a whole session)
+corrects it, \strong{exactly}: a weight column is the
 flat survey design \code{ids = ~1}, whose variance has a closed form in the per-cell
 \code{sum(w^2)} the aggregate already computes, so the base becomes
 \code{n_eff = p(1-p) / Var_design(p)} (or \code{s^2 / Var_design(mean)}) in \strong{every}
 descriptive interval --- proportions and means alike (cell, difference, ratio, and the
-\code{color = "OR"} significance). It reproduces \code{survey} to the last digit, including
-\code{survey}'s own \code{n/(n-1)} factor (so a table weighted by a \emph{constant} gets
-\code{n_eff = n * (n-1)/n}, not \code{n}). It needs the microdata weights, so
+\code{color = "OR"} significance). Because it is the exact variance and not an upper bound, it can
+also make an interval \emph{narrower}: where the weights line up with what is being tabulated,
+\code{n_eff} comes out above the cell's own \code{n}, which is correct and not a bug. It reproduces
+\code{survey} to the last digit, including \code{survey}'s own finite-sample factor --- so a table
+weighted by a \emph{constant} gets an effective n a whisker \emph{below} the raw one
+(\code{n_base * (N-1)/N}, \code{N} being the number of respondents the table is built on), not
+exactly \code{n}. It needs the microdata weights, so
 \code{\link{tab_counts}} on pre-aggregated counts cannot apply it --- such a table says so in its
 footer instead of claiming a correction it does not have. Kish's \code{(sum w)^2 / sum(w^2)}, which
 earlier versions used here, is that same formula with each cell's own \code{sum(w^2)} discarded;
@@ -529,7 +539,9 @@ never produces a star the design does not support, and sometimes withholds one i
 delta-bar, the one its omnibus test reports) rather than each cell's own --- the standard
 first-order correction, and what makes a counts table and a percentage table of the same data give
 identical residuals. An exact per-cell design residual would need each cell's own influence
-function, which the aggregate does not carry. A design-based table costs roughly 3x a
+function, which the aggregate does not carry. If a table's design variance cannot be computed at
+all, it falls back to the weighting-only correction and its footer says so, rather than claiming a
+design its numbers do not carry. A design-based table costs roughly 3x a
 weighted one (6x if calibrated); the payoff needs real design information, so if your file ships one
 calibrated weight and no stratum or cluster variable, \code{tabxplor.design_effect} is already all
 the correction available to you.

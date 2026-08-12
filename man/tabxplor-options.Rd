@@ -74,8 +74,12 @@ confidence interval} --- factor proportions \emph{and} means (cell, difference, 
 \code{color = "OR"} significance) --- and the whole-table tests (\code{test = TRUE}) become
 \code{survey::svychisq} / a \code{svyglm} Wald F on that flat design. It reproduces \code{survey} to
 the last digit, Kish's \verb{(sum w)^2 / sum(w^2)} being that same formula with each cell's own
-\code{sum(w^2)} discarded. It is blind to \strong{clustering} and to \strong{calibration}, which the
-weights do not record, and it needs the microdata weights, so \code{\link[=tab_counts]{tab_counts()}} on pre-aggregated
+\code{sum(w^2)} discarded. Being exact rather than a bound, it can make an interval \emph{narrower}
+as well as wider. It is blind to \strong{clustering} and to \strong{calibration}, which the
+weights do not record --- and those are not symmetric: missing the calibration and the strata
+costs a few percent, in the safe direction, while missing the clusters of a face-to-face
+household survey can leave an interval several times too short (see the Weights section of
+\code{vignette("tabxplor")}). It needs the microdata weights, so \code{\link[=tab_counts]{tab_counts()}} on pre-aggregated
 counts cannot apply it (such a table states the raw basis in its footer rather than claiming a
 correction it does not have). \strong{Scope: \code{\link[=tab]{tab()}} and its leaves only.} \code{\link[=tab_reg]{tab_reg()}} never
 reads it --- its crude \verb{empirical =} companions are always on the weighted basis, beside a model

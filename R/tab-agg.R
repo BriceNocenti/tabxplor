@@ -454,14 +454,27 @@ ci_wald <- function(p, n, conf_level = 0.95, df = Inf) {
 # framework computes (n_eff = p(1-p)/Var_design). Opt-in via `method_cell = "beta"`, NOT a default --
 # one interval SHAPE at every position keeps the legend, the goldens and cross-table comparability one
 # story, and beta is deliberately conservative near 0 and 1 where Wilson is not.
-# WARNING -- where it is EXACT (Last Phase z16-iiiii, D5): survey rescales its beta interval by
-# degf/(degf + 1)... i.e. by the number of PSUs, which this closed form does not hold. At the WEIGHTED
-# basis that factor is 1 (the flat design has degf = n - 1, and n_eff <= n), so `ci_beta` IS
-# svyciprop(method = "beta") there. Under a REAL svydesign with few PSUs it is therefore slightly
-# anti-conservative; making it exact would mean storing n_psu beside `n_eff`, i.e. a second field for
-# one opt-in interval. Documented in ?tab_ci rather than approximated.
-ci_beta <- function(p, n, conf_level = 0.95) {
+# The SECOND half of Korn-Graubard, and the reason this takes two sample sizes (Last Phase z16-iiiii):
+# beta quantiles have no degrees of freedom of their own, so survey carries the design's in by shrinking
+# the effective n FIRST -- `n.eff * (qt(a, nrow - 1) / qt(a, degf))^2`, the ratio of the SRS critical
+# value to the design's. `n_raw` is that `nrow`: the cell's own unweighted base, which the caller already
+# holds (the `tot_n` field). Without it, a design built on few PSUs printed an interval that was measured
+# 25 % too short.
+# DESIGN: the rescale converts an interval referred to n-1 into one referred to `df`, so where there is
+# no design (`df` = Inf, this framework's "refer to z") there is nothing to convert and the factor is 1
+# -- which is also what survey itself gives at ids = ~1, where degf IS n-1. That is what keeps the
+# weights basis, and every unweighted table, byte-identical.
+# WARNING: `df` is the WHOLE design's degf, captured once at the boundary (svy_degf), as it is for every
+# other interval here. survey's own call on a domain uses that domain's -- the same number whenever the
+# row variable is crossed with the PSUs (the ordinary case), smaller when a domain drops whole PSUs.
+ci_beta <- function(p, n, conf_level = 0.95, df = Inf, n_raw = NULL) {
   a  <- (1 - conf_level) / 2
+  dfd <- df_clean(df)
+  if (!is.null(n_raw) && is.finite(dfd[1])) {
+    srs <- as.double(n_raw) - 1
+    n   <- n * ifelse(is.finite(srs) & srs > 0,
+                      (stats::qt(a, srs) / stats::qt(a, dfd[1]))^2, 1)
+  }
   lo <- stats::qbeta(a,     n * p,     n * (1 - p) + 1)
   hi <- stats::qbeta(1 - a, n * p + 1, n * (1 - p))
   bad <- !is.finite(n) | n <= 0 | !is.finite(p)

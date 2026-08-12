@@ -130,25 +130,49 @@ A few other everyday arguments: `na = "drop"` to drop missing values from the ba
 
 ## Weights
 
-The argument `wt =` adds a survey weight. Every percentage and mean is then **weighted**. By default the confidence intervals and tests still use the real, **unweighted** number of respondents — and the table says so in its footer.
+Most survey files come with a **weight**: a number saying how many people in the population each respondent stands for. The argument `wt =` uses it, and every percentage and mean in the table becomes an estimate of the *population* rather than of the people you happened to interview.
+
+That is the easy half. The harder half is the **margin of error** around those percentages — the confidence intervals, the significance stars, the colours and the tests. There, tabxplor has **three weighting levels**, and a table's footer always tells you which one it is on.
+
+### Level 1 — weighted percentages, plain margins of error (the default)
 
 ```{r, echo=TRUE, eval=FALSE}
-data(hdv2003, package = "questionr")
-tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
-#> Weighted by poids; confidence intervals and tests use the unweighted sample size.
+tab(my_survey, education, job, wt = weight, pct = "row")
+#> Weighted by weight; confidence intervals and tests use the unweighted sample size.
 ```
 
-Under **unequal** weights that default carries no design effect, so the intervals run a little too narrow. One argument corrects it — per call, or once for the whole session:
+The percentages are weighted; the margins of error simply count your real respondents. This is the convention almost every teaching text and every point-and-click program uses, and it is why it is the default here. But when the weights are **unequal** it is optimistic: a sample where some people count for four others carries less information than its size suggests, and the intervals come out **usually a bit too narrow**.
+
+### Level 2 — `design_effect = TRUE`
 
 ```{r, echo=TRUE, eval=FALSE}
-tab(hdv2003, nivetud, occup, wt = poids, pct = "row", design_effect = TRUE)
-options(tabxplor.design_effect = TRUE)   # or once, for every table
-#> Weighted by poids; confidence intervals and tests account for the weighting.
+tab(my_survey, education, job, wt = weight, pct = "row", design_effect = TRUE)
+options(tabxplor.design_effect = TRUE)   # or once, for the whole session
+#> Weighted by weight; confidence intervals and tests account for the weighting.
 ```
 
-Now every weighted confidence interval in the table — proportions and means alike — widens honestly, and the whole-table Chi2 / F tests follow. This is **not** an approximation: a weight column *is* a survey design (the simplest one, with no clusters and no strata), and its variance is computed exactly. What it cannot know is what the weights do not record: **clustering** and **calibration**. It also needs the individual weights, so a table built from pre-aggregated counts cannot use it — such a table says so in its footer instead.
+Now the unequal weighting is taken into account in **every** interval, star, colour threshold and whole-table test. This is not a rule of thumb: a column of weights *is* a survey design — the simplest one, with no clusters and no strata — and tabxplor computes that design's variance exactly, reproducing the reference [survey](https://CRAN.R-project.org/package=survey) package to the last digit.
 
-For a **fully design-based** result — clusters, strata, `fpc`, calibration — build a design with the [survey](https://CRAN.R-project.org/package=survey) package and pass it as `data`. Then everything follows the design: the estimates, the Chi2 / ANOVA F p-values, and **every confidence interval, star and colour threshold**.
+Here it is on real data. We give `gss_simple` a made-up weight (never-married people are under-covered in most surveys, so they count for more), and build the same table twice:
+
+```{r, echo = TRUE}
+gss_w <- dplyr::mutate(gss_simple, w = ifelse(marital %in% "Never married", 2.5, 0.8))
+
+tab(gss_w, race, party3, wt = w, pct = "row", ci = "cell", na = "drop")
+```
+
+```{r, echo = TRUE}
+tab(gss_w, race, party3, wt = w, pct = "row", ci = "cell", na = "drop",
+    design_effect = TRUE)
+```
+
+Same percentages, wider brackets, and a footer that says what changed. Behind them, the 16 292 White respondents are now worth about 11 800 — the price of the unequal weights.
+
+If you weight at all, level 2 is the honest reading of your own numbers, and it costs nothing. It is not the default only because switching it on moves every figure in every table anyone has already produced, so it should be a deliberate, visible act rather than a silent one. One more reason to turn it on: a regression table's observed columns are *always* at level 2 (see `vignette("tabxplor-reg")`), so this is what makes a `tab()` percentage and a `tab_reg()` observed percentage on the same data directly comparable.
+
+### Level 3 — a `survey` design
+
+Real surveys are not drawn by picking names at random from the whole country. They are usually **stratified** (drawn separately by region, city size…), often **clustered** (a few neighbourhoods are picked first, then several households inside each), and their weights are usually **calibrated** so the sample matches known population totals for age, sex, region. Those three facts are not in the weight column; they live in extra variables. If your file has them, build a design with the [survey](https://CRAN.R-project.org/package=survey) package and pass it as `data`:
 
 ```{r, echo=TRUE, eval=FALSE}
 library(survey)
@@ -157,19 +181,43 @@ tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
 #> Design-based (survey): weighted estimates, intervals and tests account for the sample design.
 ```
 
-So there are **three positions**, and the footer always tells you which one you are on:
+Everything then follows the design: the estimates, the p-values, and every confidence interval, star and colour threshold.
 
-| you pass | what the intervals and tests carry |
-|---|---|
-| `wt = w` | the weighted estimate, on the raw *n* — no design effect at all |
-| `wt = w` + `design_effect = TRUE` | the unequal weighting, exactly — blind to clustering and calibration |
-| a `survey` design as `data` | the full design: strata, clusters, `fpc`, calibration |
+| you pass | level | what the intervals and tests carry |
+|---|---|---|
+| `wt = w` | 1 | the weighted estimate, on the raw *n* — no design effect at all |
+| `wt = w` + `design_effect = TRUE` | 2 | the unequal weighting, exactly — blind to clustering and calibration |
+| a `survey` design as `data` | 3 | the full design: strata, clusters, `fpc`, calibration |
 
-Turn it on **if you want a `tab()` percentage interval to be comparable with the `Obs_*` column of a `tab_reg()` on the same data**: a regression table's crude companions are always corrected, beside a model column that always was, so at the default position the two functions disagree.
+### What level 2 can and cannot do for you
 
-**Check what your file can actually give you before reaching for the third position.** Look for a stratum, cluster or calibration variable (`strate`, `grappe`, `psu`, `nomen`…). Many released research files ship one calibrated weight and nothing else — the design variables are withheld for confidentiality — and on such a file a design carries only the unequal weighting, i.e. exactly what the option already gives you. The third position pays where the design information exists: a survey you ran yourself, a secure-access file, ESS/SHARE, the OECD assessments.
+Level 2 sees the weights, and nothing else. That matters, because the three things it cannot see do **not** pull in the same direction:
 
-Two more things to know. A design-based table costs roughly three times a weighted one. And the correction is **exact for a single cell**, while a cell-vs-reference *difference* also has a covariance between the two cells that this method cannot carry — so a difference comes out slightly too wide rather than too narrow. It will not hand you a star the design does not support.
+| | seen at level 2 | needs a design (level 3) |
+|---|---|---|
+| unequal weights | **yes, exactly** | |
+| strata, calibration, finite population | | would **narrow** your intervals — by a few percent at most |
+| **clusters** | | can make them **much wider** |
+
+So the two corrections you are missing at level 2 are wildly unequal. Ignoring the strata and the calibration costs a few percent, and in the *safe* direction — your intervals are slightly too cautious. Ignoring **clusters** goes the other way and can be enormous: on a real clustered school survey, an average that level 2 reports with a margin of error of ±3 points really deserves ±9. On the American NHANES health survey, the distribution of ethnicity comes out **nine times** too precise, because that survey is built around exactly that variable. These do not cancel out: when clustering is present, it wins.
+
+**Which surveys are clustered?** Not the ones drawn from a register, or run by web, telephone or mail — there level 2 is simply the right answer, however unequal the weights. But **face-to-face** household surveys are clustered by construction, because sending interviewers to scattered addresses is unaffordable. The French *Enquête Emploi*, for instance, is drawn as groups of about **twenty neighbouring dwellings**; neighbours resemble each other, so twenty interviews in one street tell you less than twenty interviews spread across the country.
+
+**Does it matter for *your* table?** Usually much less than those numbers suggest, and there is a simple test. The cluster effect largely cancels out in a *comparison*, as long as both compared groups are found inside the same neighbourhoods. So ask one question about your row variable:
+
+> Does it **vary within** a neighbourhood, or does it **define** one?
+
+Sex, age, diploma, occupation, income, opinions — these vary within any neighbourhood, so a comparison between their categories is close to right at level 2. Region, urban/rural, city size, type of neighbourhood, local immigrant density — these *are* the neighbourhood, and there level 2 is as wrong as it is for a single percentage. The measurements back this up: on the same clustered file where an average is three times too precise, the *difference* between two groups is only 13 % too precise, and a regression coefficient 8 % — and differences are exactly what tabxplor's colours and stars test.
+
+**Check what your file actually contains before reaching for level 3.** Look for a stratum, cluster or calibration variable (`strate`, `grappe`, `psu`, `nomen`…). Many released research files ship one calibrated weight and nothing else — the cluster is a small geographic area, so it is withheld for confidentiality — and on such a file a `survey` design would carry only the unequal weighting, which is exactly what level 2 already gives you. The European Social Survey is a useful middle case: it does publish its clusters and strata, but in a *separate* file you have to download and merge.
+
+### The fine print
+
+- **Sometimes level 2 makes an interval *narrower*.** That is correct, not a bug. If the weights happen to line up with what you are measuring, unequal selection can carry *more* information than equal selection, and the effective sample size comes out above your number of respondents. (The older approximation tabxplor used could only ever widen; that is why it was replaced by the exact computation.)
+- **Degrees of freedom.** A clustered survey is usually built on few clusters — 15 to 60 is common — and level 3 refers each interval to that number, which widens it again by roughly 8 %. Level 2 has no clusters to count, so it cannot do this: a second, separate reason a face-to-face survey's true margin of error is wider than what level 2 prints.
+- **When level 3 cannot be computed.** If a design's variance fails for a table, it falls back to the level-2 correction and says so in its footer, rather than claiming a design its numbers do not carry.
+- **Exact for a cell, cautious for a difference.** Level 3 is exact for a single percentage; for a cell-vs-reference *difference* it cannot carry the covariance between the two cells, so the difference comes out slightly too wide rather than too narrow. It will never hand you a star the design does not support.
+- **Pre-aggregated counts and cost.** Level 2 needs the individual weights, so a table built with `tab_counts()` from published counts cannot use it — such a table says so in its footer. And a level-3 table costs roughly three times a weighted one.
 
 
 ## Sub-tables
@@ -589,6 +637,7 @@ A handful of `options()` set your preferred defaults once for the whole session 
 - `options(tabxplor.theme = "auto")` — the export theme (`"light"`/`"dark"`/`"auto"`); `set_color_palette(theme = "auto")` does the same for the console.
 - `options(tabxplor.stars = TRUE)` — show significance stars in every table (like `stars = TRUE`).
 - `options(tabxplor.conf_level = 0.9)` — the confidence level for intervals and tests (default `0.95`).
+- `options(tabxplor.design_effect = TRUE)` — on weighted data, make every interval, star, colour threshold and test account for the unequal weighting (see [Weights](#weights)).
 - `options(tabxplor.ci_print = "moe")` — print a confidence interval as a `pct ± margin of error` instead of a `[low; high]` bracket.
 - `options(tabxplor.lang = "fr")` — the language of the colour legends and footers (`"auto"`/`"en"`/`"fr"`).
 

@@ -66,9 +66,11 @@ stars and the bracket never disagree. \code{FALSE} skips the significance comput
 (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial) -- see \code{\link{tab}}. The
 \code{cell} slot also takes \code{"beta"} (Korn-Graubard:
 \code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval on the effective sample size
--- the textbook design-based cell interval, conservative near 0 and 1, and \emph{exact} at the
-weighted basis, where the flat design's df is \eqn{n - 1}; under a real \code{svydesign} it is
-slightly anti-conservative, since survey's own rescaling would need the number of PSUs).}
+-- the textbook design-based cell interval, conservative near 0 and 1. Beta quantiles have no
+degrees of freedom of their own, so under a \code{survey} design the effective base is first
+rescaled by \code{(qt(a, n - 1) / qt(a, degf))^2}, exactly as \code{survey} does, which refers the
+interval to the design's own df; \code{degf} is the whole design's, as it is for every other
+interval here).}
 
 \item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
 \code{ci_method = c(cell = , diff = )} instead.}

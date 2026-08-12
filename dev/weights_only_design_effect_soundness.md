@@ -1088,3 +1088,110 @@ marginal percentage) nor *why it usually matters much less for tabxplor specific
 effect largely cancels in the cell-vs-reference differences the colours and stars actually test).
 Those two sentences are, on this study's evidence, the highest-value addition available to the
 Weights section.
+
+---
+
+## 11. Implementation record — Last Phase z16-iiiiii (2026-08-12)
+
+Every §8.2 item with a maintainer ruling landed. Status of the study: **CLOSED**.
+
+### The one code change (item 8)
+
+`ci_beta()` (`R/tab-agg.R`) gained `df` and `n_raw`, and applies survey's own rescale
+`n_eff * (qt(a, n_raw - 1) / qt(a, degf))^2` before the beta quantiles. Both numbers were already in
+scope at the single call site (the `"beta"` arm of `tab_ci()`): `degf` is the local resolved off the
+columns, `n_raw` is `get_tot_n(col)`, the cell's own unweighted base — so **no new field, no new
+attribute, and no per-domain quantity** had to be computed.
+
+**The guard is what keeps it byte-identical.** The rescale converts an interval referred to `n-1`
+into one referred to the design's df; where there is no design, `degf` is `Inf` (the framework's
+"refer to z"), so the factor is forced to 1 — which is also exactly what `survey` gives at
+`ids = ~1`, where `degf == n-1`. It therefore fires only under a real `svydesign` **and** an opt-in
+`ci_method = c(cell = "beta")`.
+
+Measured on the new fixture (800 rows, 8 PSUs, 2 strata, `nest = TRUE`, row variable crossed with
+the PSUs): factor **0.645**, `n_eff` 350 → 226, interval `[0.2866; 0.3881]` → `[0.2453; 0.3445]`
+against `survey`'s `[0.2453; 0.3445]` — i.e. it had been **25 % too short**, larger than §7.3's
+NHANES estimate of ~15 %. Parity is now exact to 1e-8.
+
+Two things the earlier `R/tab-agg.R` comment (written from D5) got wrong and that are corrected in
+the source: the rescale is **not** `degf/(degf+1)`, and making it exact needs **no** `n_psu` stored
+beside `n_eff`. A third: it claimed `n_eff <= n`, which is B.1's error.
+
+⚠ **The one residual approximation, stated not fixed.** tabxplor refers every interval to the
+**whole** design's df (`svy_degf()`, captured once at the boundary), while `svyciprop` on a domain
+uses that domain's. Verified equal whenever the row variable is crossed with the PSUs (the ordinary
+case), and smaller when a domain drops whole PSUs (measured 6 vs 3). A per-domain df would be a new
+quantity computed for one opt-in method, against the subsystem's one-rule principle.
+
+New fixture: `tests/testthat/test-survey-variance.R`, "ci_method = c(cell = 'beta') IS
+svyciprop(method = 'beta') under a REAL design" — it asserts parity, asserts the interval is wider
+than the un-rescaled one (so it fails without the change), and asserts the no-op at the weights
+basis. `test-flat-design-parity.R` #13 passes **unchanged**, which is the no-op proof.
+
+### The stale statements (items 1–4)
+
+- **B.1** — the "which weights alone never can" clause is gone from `?tab`; level 2 now states that
+  being exact rather than a bound, it can make an interval narrower as well as wider.
+- **B.2** — the `n_eff = n * (n-1)/n` identity is replaced in `?tab` and `NEWS.md` by the correct
+  statement in words (an effective n a whisker below the raw one, `survey`'s `(N-1)/N` factor with
+  `N` the table's respondent count).
+- **B.4** — `design_partial` is documented in `?tab` (both the `@param test` ladder and the details),
+  in `?tabxplor-options`, and as a bullet in the vignettes' fine print.
+- **B.6** — `?tab_reg` no longer lists `svrepdesign()` as an accepted `data` value in the paragraph
+  that refuses it; the two reg vignettes no longer advertise replicate weights as a `svydesign()`
+  use case.
+- **B.4b, B.6c, B.6d were already fixed** by the parallel z16-iiiii Pass 2 (`d11d45f`): the French
+  `design_partial` msgid matches its source again, the dead `test_robust` / `"Kish n_eff"` entries
+  are out of both jamovi catalogues and of `po/R-fr.po`, and the `design_effect` UI label is English
+  in the English YAML with its French in `fr.po`. `R/jmvtab.h.R` still generates the retired
+  `test_robust`; it is generated, and clears at the maintainer's next `jmvtools::prepare()`.
+
+### The Weights section (items 5, 6, 10)
+
+Rewritten in `vignettes/tabxplor.Rmd` and `vignettes/articles/tabxplor-fr.Rmd`, mirrored, as a
+**fuller teaching section** (~40 → ~110 lines) for a reader who has never met a survey design.
+Vocabulary settled with the maintainer: **"the three weighting levels" / "les trois niveaux de
+pondération"**; `?tab` keeps *inference basis* as the technical name of the column attribute.
+
+It carries, in order: one subsection per level, with a **runnable worked example** on `gss_simple`
+plus a clearly-labelled synthetic weight (same percentages, wider brackets, the two footers, and the
+16 292 White respondents worth ~11 800); the ladder table gaining a `level` column; a "what level 2
+can and cannot see" table with the **asymmetry** (strata/calibration would narrow a few percent,
+clusters can widen a lot); the sizes (three times too precise on a clustered school survey, nine
+times on NHANES race); which surveys are clustered (*Enquête Emploi* ≈ 20 neighbouring dwellings; ESS
+ships its clusters in a separate file); and §6's **crossed-vs-nested rule** as the question a reader
+can actually answer — *does your row variable vary within a neighbourhood, or does it define one?* —
+with the 13 % / 8 % measurements that make it the mitigation that matters here.
+
+A `### The fine print` subsection closes it with item 6 (`n_eff` can exceed `n`, and why that is
+correct), item 10 (the degrees-of-freedom gap, ~8 %, and why level 2 structurally cannot have it),
+B.4, the cell-exact/difference-cautious rule and the cost.
+
+Also: `tabxplor.design_effect` was in **no** options list anywhere — added to both intro vignettes'
+Session options; the French *effective sample size* is now one term (`taille d'échantillon
+effective`), recorded with the other survey terms in `dev/french_glossary.md`.
+
+### The `tab()` / `tab_reg()` asymmetry (item 9)
+
+The audit found the opposite of a gap: it was stated four times, in three different rationales, and
+never where the reader first meets `empirical = TRUE`. So: **one sentence early** in both reg
+vignettes, the two near-identical late paragraphs **merged into one**, and a single rationale kept
+everywhere (`tab_reg()` has no choice — its observed columns must match a model column that is
+design-based by construction; `tab()` does, and keeps the descriptive convention). The reg
+vignettes' "only **two** ways" now reads "two ways to hand tabxplor your weights", so it no longer
+collides with the intro's three levels.
+
+### Declined, and staying declined
+
+- **Item 7** (a non-probability-weights sentence) and **item 11** (a `deffc` escape hatch) — ruled
+  out by the maintainer. Item 11 would let a user assert precision the file cannot verify.
+- **Item 9's architectural half**: the `tab()` default stays `FALSE`. The Monte-Carlo puts it last on
+  coverage in all twelve cells tested, and the vignette now says so plainly — but changing it moves
+  every weighted table's stars, which is a release-scale decision.
+- **`method_cell = "beta"` is still not taught in the vignettes.** It belongs to the CI-composition
+  table, and pulling a design-basis-only method into a beginner section buys nothing; `?tab_ci`
+  documents it.
+- One caveat noticed and left alone: at the weights basis tabxplor refers intervals to **z**, where
+  `survey` at `ids = ~1` would use `t(n-1)` — worth 0.1 % at n = 1000, 2.5 % at n = 50. Changing it
+  would move every weighted interval with the option on, for no reachable gain.

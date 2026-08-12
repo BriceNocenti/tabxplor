@@ -119,6 +119,47 @@ test_that("a cell interval under a design is survey's, and is NOT the single-sta
   expect_true(all(is.finite(get_n_eff(cl))))
 })
 
+# Last Phase z16-iiiii (S8.2 item 8). FEW PSUs is the whole point: beta quantiles carry no degrees of
+# freedom of their own, so Korn-Graubard rescales the effective base by (qt(a, n-1) / qt(a, degf))^2 --
+# worth exactly 1 at the flat basis (which is why test-flat-design-parity.R #13 could never see it)
+# and 0.645 here, i.e. an interval that was 25 % too short.
+svv_kg_fixture <- function(n = 800, seed = 11) {
+  set.seed(seed)
+  d <- data.frame(psu   = factor(rep(1:8, each = n / 8)),
+                  strat = factor(rep(1:2, each = n / 2)))
+  d$w   <- stats::runif(n, 0.5, 3)
+  # CROSSED with the PSUs, so degf(subset) == degf(design) and survey is an exact oracle here
+  d$g   <- factor(sample(c("A", "B"), n, TRUE))
+  d$col <- factor(ifelse(stats::rbinom(n, 1, 0.3) == 1, "yes", "no"), levels = c("no", "yes"))
+  d
+}
+
+test_that("ci_method = c(cell = 'beta') IS svyciprop(method = 'beta') under a REAL design", {
+  d   <- svv_kg_fixture()
+  des <- suppressMessages(
+    survey::svydesign(~psu, strata = ~strat, weights = ~w, data = d, nest = TRUE))
+  tt  <- suppressMessages(
+    tab(des, g, col, pct = "row", ci = "cell", ci_method = c(cell = "beta")))
+  i   <- which(as.character(tt[[1]]) == "A")
+  ref <- as.numeric(attr(survey::svyciprop(~I(col == "yes"), subset(des, g == "A"),
+                                           method = "beta"), "ci"))
+  expect_equal(get_ci_inf(tt$yes)[i], ref[1], tolerance = 1e-8)
+  expect_equal(get_ci_sup(tt$yes)[i], ref[2], tolerance = 1e-8)
+
+  # FAILS WITHOUT THE RESCALE: un-rescaled Clopper-Pearson on the same base is strictly narrower
+  raw <- tabxplor:::ci_beta(get_pct(tt$yes)[i], get_n_eff(tt$yes)[i])
+  expect_lt(raw$sup - raw$inf, get_ci_sup(tt$yes)[i] - get_ci_inf(tt$yes)[i])
+
+  # ... and it is a NO-OP wherever there is no design to refer to: same call, weights basis
+  flat <- withr::with_options(
+    list(tabxplor.design_effect = TRUE),
+    tab(d, g, col, wt = w, pct = "row", ci = "cell", ci_method = c(cell = "beta")))
+  j <- which(as.character(flat[[1]]) == "A")
+  expect_equal(get_ci_inf(flat$yes)[j],
+               tabxplor:::ci_beta(get_pct(flat$yes)[j], get_n_eff(flat$yes)[j])$inf,
+               tolerance = 1e-12)
+})
+
 test_that("the cell-vs-reference difference and its stars use the design base", {
   d <- svv_fixture(); des <- svv_des(d)
   dsg <- suppressMessages(tab(des, g, col, pct = "row", ci = "diff", ref = 1, stars = TRUE))

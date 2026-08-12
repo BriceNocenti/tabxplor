@@ -4370,10 +4370,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' directly; simple `y ~ a + b` formulas behave exactly like `dependent = "y"`, `predictors = c("a",
 #' "b")`, while interactions / `poly()` / `I()` terms render as best-effort term rows.
 #'
-#' @param data A data frame, **or a prebuilt survey design** ([survey::svydesign()] /
-#'   [survey::svrepdesign()]). When a design is passed, its weights (and clustering / stratification /
-#'   calibration) drive the estimation and `wt` is ignored. Replicate-weight (`svrepdesign`) and
-#'   two-phase designs are not supported.
+#' @param data A data frame, **or a prebuilt survey design** ([survey::svydesign()]). When a design
+#'   is passed, its weights (and clustering / stratification / calibration) drive the estimation and
+#'   `wt` is ignored. Replicate-weight ([survey::svrepdesign()]) and two-phase designs are refused at
+#'   the boundary rather than approximated.
 #' @param dependent Character outcome variable name(s), **or a model formula** (the escape hatch).
 #'   With a `predictors` character vector, several names give one effect column per outcome; with a
 #'   `predictors` list, a single name is required. A formula supplies its own model (leave
@@ -4590,11 +4590,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   `FALSE`.
 #'
 #'   **Two consequences worth knowing**, both deliberate. First, a weighted `tab_reg()` is *always*
-#'   design-corrected while a weighted [tab()] is *not* unless you ask
-#'   (`options(tabxplor.design_effect = TRUE)`): [tab()] keeps the descriptive convention (a weighted
-#'   estimate on the raw sample size) as its default, and each table's footer says which it used --- so
-#'   the same weight can legitimately give a slightly wider interval here than in a crosstab beside it.
-#'   Turn the option on to make the two agree. Second, the crude percentage *difference* here uses the
+#'   design-corrected while a weighted [tab()] is *not* unless you ask (`design_effect = TRUE`).
+#'   `tab_reg()` has no choice --- its observed columns must be measured like the model column beside
+#'   them, and that one is design-based by construction (\code{survey::svyglm}); [tab()] does, and
+#'   keeps the descriptive convention (a weighted estimate on the raw sample size) as its default.
+#'   Each table's footer says which it used --- so the same weight can legitimately give a slightly
+#'   wider interval here than in a crosstab beside it, and `tab(design_effect = TRUE)` is what brings
+#'   the two into line. Second, the crude percentage *difference* here uses the
 #'   **Wald** interval, matching the model AME so one legend can name one method, where
 #'   `tab(ci = "diff")` uses Newcombe; on a real table they differ by a few tenths of a percent.
 #'

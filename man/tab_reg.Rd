@@ -38,10 +38,10 @@ tab_reg(
 )
 }
 \arguments{
-\item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}} /
-\code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
-calibration) drive the estimation and \code{wt} is ignored. Replicate-weight (\code{svrepdesign}) and
-two-phase designs are not supported.}
+\item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}}). When a design
+is passed, its weights (and clustering / stratification / calibration) drive the estimation and
+\code{wt} is ignored. Replicate-weight (\code{\link[survey:svrepdesign]{survey::svrepdesign()}}) and two-phase designs are refused at
+the boundary rather than approximated.}
 
 \item{dependent}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
 With a \code{predictors} character vector, several names give one effect column per outcome; with a
@@ -207,11 +207,13 @@ from the closed-form cell sums, which for a saturated model is the same estimato
 \code{FALSE}.
 
 \strong{Two consequences worth knowing}, both deliberate. First, a weighted \code{tab_reg()} is \emph{always}
-design-corrected while a weighted \code{\link[=tab]{tab()}} is \emph{not} unless you ask
-(\code{options(tabxplor.design_effect = TRUE)}): \code{\link[=tab]{tab()}} keeps the descriptive convention (a weighted
-estimate on the raw sample size) as its default, and each table's footer says which it used --- so
-the same weight can legitimately give a slightly wider interval here than in a crosstab beside it.
-Turn the option on to make the two agree. Second, the crude percentage \emph{difference} here uses the
+design-corrected while a weighted \code{\link[=tab]{tab()}} is \emph{not} unless you ask (\code{design_effect = TRUE}).
+\code{tab_reg()} has no choice --- its observed columns must be measured like the model column beside
+them, and that one is design-based by construction (\code{survey::svyglm}); \code{\link[=tab]{tab()}} does, and
+keeps the descriptive convention (a weighted estimate on the raw sample size) as its default.
+Each table's footer says which it used --- so the same weight can legitimately give a slightly
+wider interval here than in a crosstab beside it, and \code{tab(design_effect = TRUE)} is what brings
+the two into line. Second, the crude percentage \emph{difference} here uses the
 \strong{Wald} interval, matching the model AME so one legend can name one method, where
 \code{tab(ci = "diff")} uses Newcombe; on a real table they differ by a few tenths of a percent.
 

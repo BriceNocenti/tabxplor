@@ -72,6 +72,8 @@ Une seule règle couvre tous les cas : **l'effet observé est l'effet de ce pré
 
 Un prédicteur continu n'a pas de modalités : seule sa colonne d'**effet** est remplie ; la colonne de base (`Obs_%`, `Obs_mean`, `Obs_rate`) reste vide, et sa distribution — moyenne, écart-type, et moyenne dans chaque groupe de la variable expliquée — est affichée en infobulle html à la place.
 
+Sur des données **pondérées**, une chose mérite d'être sue dès le départ : une colonne observée est toujours mesurée exactement comme la colonne de modèle placée à côté d'elle, si bien que son intervalle de confiance tient compte de la pondération (et, sous un plan `survey`, de tout le plan de sondage). Un tableau croisé de `tab()` ne le fait pas par défaut : ajoutez-y `design_effect = TRUE` si vous voulez que ses pourcentages soient directement comparables à ceux-ci. Voir [Données pondérées et *survey-design*](#données-pondérées-et-survey-design) plus bas.
+
 
 ## Régression logistique (un facteur binaire)
 
@@ -568,14 +570,14 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 
 ## Données pondérées et *survey-design*
 
-Passer une variable de pondération avec `wt =` utilise un *survey design* / **plan de sondage** (`survey::svyglm()`). Le cadre qu'utilise `tabxplor` est simple : l'**estimation du coefficient est pondérée**, et les erreurs-types du modèle prennent en compte les poids inégaux, pour obtenir des intervalles de confiance plus larges mais plus fiables. Les contreparties observées `Obs_*` sont sur la même base, toujours — c'est ce qui les rend comparables à la colonne du modèle placée à côté. `tab()` est plus prudent par défaut : activez `options(tabxplor.design_effect = TRUE)` si vous voulez qu'un intervalle de pourcentage de `tab()` corresponde à ces colonnes (voir `vignette("tabxplor")`).
+Passer une variable de pondération avec `wt =` utilise un *survey design* / **plan de sondage** (`survey::svyglm()`). Le cadre qu'utilise `tabxplor` est simple : l'**estimation du coefficient est pondérée**, et les erreurs-types du modèle prennent en compte les poids inégaux, pour obtenir des intervalles de confiance plus larges mais plus fiables. Les contreparties observées `Obs_*` sont sur la même base, toujours — c'est ce qui les rend comparables à la colonne du modèle placée à côté.
 
 ```{r, eval = FALSE}
 # `weight` est une variable de poids -- le cas courant :
 tab_reg(data, "dependent", c("pred1", "pred2"), wt = "weight")
 ```
 
-Il n'y a que **deux** façons de le dire, et c'est délibéré. Soit vous donnez une variable de poids à `wt =`, soit — lorsque votre fichier porte aussi des strates, des grappes, une correction de population finie ou un calage — vous construisez le plan une fois avec le package [survey](https://CRAN.R-project.org/package=survey) et vous passez **le plan lui-même** comme `data` :
+Il n'y a que **deux façons de transmettre vos poids à tabxplor**, et c'est délibéré. Soit vous donnez une variable de poids à `wt =`, soit — lorsque votre fichier porte aussi des strates, des grappes, une correction de population finie ou un calage — vous construisez le plan une fois avec le package [survey](https://CRAN.R-project.org/package=survey) et vous passez **le plan lui-même** comme `data` :
 
 ```{r, eval = FALSE}
 library(survey)
@@ -587,7 +589,9 @@ Tout suit alors ce plan, dans un seul régime : les coefficients `Model_*` et le
 
 Deux limites honnêtes. Une comparaison *entre deux cellules* (un rapport de cotes observé, une différence de risque) ignore la covariance de plan entre elles, et tombe donc à quelques pourcents de la réponse exacte — contre les 15 à 25 % d'écart de l'époque où ces colonnes étaient calculées comme si l'échantillon était aléatoire simple. Et une variable expliquée à 3 modalités ou plus (nominale, ordinale) n'a pas de *colonne* observée : sa valeur brute est repliée dans la cellule du modèle, sous forme de point, sans intervalle à fonder sur le plan.
 
-Sans plan de sondage, les intervalles des colonnes observées tiennent déjà compte de la pondération exactement (le plan plat, `ids = ~1`) — une correction de l'inégalité des poids seule, aveugle aux grappes et au calage. `tab_reg()` ne lit jamais `tabxplor.design_effect` : cette option est celle de `tab()`, et l'activer est ce qui rend un intervalle de pourcentage de `tab()` comparable à ces colonnes (voir `vignette("tabxplor")`).
+Sans plan de sondage, les intervalles des colonnes observées tiennent déjà compte de la pondération exactement (le plan plat, `ids = ~1`) — une correction de l'inégalité des poids seule, aveugle aux grappes et au calage.
+
+**Pourquoi un `tab_reg()` pondéré n'est pas un `tab()` pondéré.** `tab_reg()` n'a pas le choix : ses colonnes observées doivent être mesurées comme la colonne de modèle placée à côté, et celle-ci est fondée sur le plan par construction (`survey::svyglm()`). `tab()`, lui, a le choix, et garde comme défaut la convention descriptive — une estimation pondérée sur l'effectif brut. La note de bas de page de chaque tableau dit lequel a été utilisé, et `tab(design_effect = TRUE)` est ce qui aligne les deux. Dans le vocabulaire de `vignette("tabxplor")` : `tab_reg()` est toujours au **niveau 2** (ou au niveau 3 sous un plan de sondage), là où `tab()` démarre au niveau 1.
 
 
 ## Comparer plusieurs modèles
@@ -793,6 +797,6 @@ Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque ver
 - `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de regression** dans le module [jamovi](https://www.jamovi.org/download) — installez *tabxplor* depuis la bibliothèque de modules de jamovi (voir `vignette("tabxplor")`).
 - `vignette("tabxplor")` — les tableaux croisés et les repères de couleur.
 - `?tab_reg` pour chaque argument (groupés par usage), et `?tab_reg` &rarr; *Details* pour les choix de modélisation.
-- `survey::svydesign()` pour les plans de sondage complexes (calibration, poids de réplication, corrections de population finie, etc.).
+- `survey::svydesign()` pour les plans de sondage complexes (strates, grappes, calage, corrections de population finie). Les plans à poids de réplication (`svrepdesign()`) ne sont pas pris en charge.
 - **Hors périmètre**, et à ajuster avec leurs propres packages : les modèles de survie / de Cox, les modèles mixtes (multiniveaux) et l'agrégation sur des données multi-imputées.
 - Sur la comparaison d'un coefficient brut et d'un coefficient ajusté, la référence canonique est Clogg, Petkova & Haritou (1995, *AJS* 100(5)), avec le commentaire d'Allison dans le même numéro — c'est ce que calcule `color = "adjustment"`, généralisé ici aux GLM, aux plans de sondage et aux effets marginaux. Pour les modèles logit emboîtés, la décomposition KHB (Karlson, Holm & Breen 2012) sépare la part du changement qui relève de la confusion de celle qui relève du changement d'échelle.

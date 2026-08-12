@@ -90,7 +90,7 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `resid`     | résidu standardisé ajusté (dérivé de `pvalue`, en lecture seule) |
 | `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
-| `n_eff`     | taille d'échantillon efficace utilisée pour l'intervalle de confiance, avec `options(tabxplor.design_effect = TRUE)` ou un plan `survey` |
+| `n_eff`     | taille d'échantillon effective utilisée pour l'intervalle de confiance, avec `options(tabxplor.design_effect = TRUE)` ou un plan `survey` |
 | `obs`       | `tab_reg()` seulement : l'effet observé (brut) auquel l'effet modélisé est comparé |
 | `digits`    | nombre de décimales à afficher (par case) |
 | `display`   | quel champ est affiché (par case) |
