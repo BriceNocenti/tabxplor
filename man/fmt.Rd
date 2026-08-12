@@ -72,7 +72,9 @@ fmt(
   color_signif = "ignore",
   model_family = "",
   role = "",
-  conf_level = NA_real_
+  conf_level = NA_real_,
+  degf = NA_real_,
+  basis = "n"
 )
 
 is_fmt(x)
@@ -303,6 +305,19 @@ thresholds were computed at, as a single number in (0, 1). \code{NA} (the defaul
 \code{options("tabxplor.conf_level")}. It is stored per COLUMN because colours are resolved per
 column at print time and cannot see the table's \code{conf_level} argument -- without it a table
 built at a 99 percent level would be greyed at 95 percent.}
+
+\item{degf}{The degrees of freedom this column's interval is referred to: a survey design's
+\code{#PSU - #strata}, which matters below about 30 primary sampling units. \code{NA} (the
+default) means "refer to the normal quantile", which is every unweighted and every
+weights-only table.}
+
+\item{basis}{How this column's interval and significance were computed --- \code{"n"} (the raw
+sample size), \code{"weights"} (the exact design effect of the weights), \code{"design"} (a full
+\code{survey} design: strata, clusters, \code{fpc}, calibration), or \code{"design_partial"} (a
+design was given but its variance could not be computed). Default \code{"n"}. Like
+\code{conf_level} it is a per-COLUMN fact, which is what lets a table state honestly, in its
+footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
+the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 

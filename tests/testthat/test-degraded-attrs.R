@@ -129,3 +129,35 @@ test_that("binding tables tolerates a missing `test` attribute", {
   expect_no_error(dplyr::bind_rows(a, b))
   expect_no_error(vctrs::vec_rbind(a, b))
 })
+
+test_that("a table stripped of `meta` still refers its intervals to the design df", {
+  # Last Phase z16-iiiii: THE reason `degf` and `basis` left meta$inference for the fmt columns.
+  # A number must not depend on a table attribute: `meta` is dropped by any rebuild that does not
+  # carry it (two such sites were found in this very phase) and by plenty of ordinary data-frame
+  # handling, and tab_ci() then silently fell back to z -- measured 9 % too narrow at 13 PSUs.
+  skip_if_not_installed("survey")
+  set.seed(41)
+  n  <- 320L
+  dd <- tibble::tibble(
+    psu   = rep(1:8, each = n / 8L),
+    strat = rep(1:2, each = n / 2L),
+    w     = stats::rgamma(n, 2, 2),
+    g     = factor(sample(c("a", "b"), n, TRUE)),
+    y     = factor(sample(c("no", "yes"), n, TRUE))
+  )
+  des <- survey::svydesign(ids = ~psu, strata = ~strat, weights = ~w, data = dd, nest = TRUE)
+  t   <- suppressMessages(tab_plain(des, g, y, pct = "row"))
+  bare <- strip_attr(t, "meta")
+  expect_null(tabxplor:::get_meta(bare))                          # non-vacuous: the metadata is gone
+  # ... and the fact survives anyway, because it rides the columns
+  expect_identical(tabxplor:::tab_inference_basis(bare), "design")
+  expect_identical(tabxplor:::tab_inference_degf(bare), as.double(survey::degf(des)))
+  ci_full <- suppressMessages(tab_ci(t,    ci = "cell"))
+  ci_bare <- suppressMessages(tab_ci(bare, ci = "cell"))
+  expect_identical(get_ci_inf(ci_bare[["yes"]]), get_ci_inf(ci_full[["yes"]]))
+  # and t(degf) is genuinely WIDER than the z the stripped table used to fall back to
+  ci_z <- suppressMessages(tab_ci(bare, ci = "cell", degf = Inf))
+  hw   <- function(x) (get_ci_sup(x) - get_ci_inf(x)) / 2
+  ok   <- is.finite(hw(ci_bare[["yes"]])) & is.finite(hw(ci_z[["yes"]]))
+  expect_gt(sum(hw(ci_bare[["yes"]])[ok] > hw(ci_z[["yes"]])[ok] + 1e-9), 0L)
+})

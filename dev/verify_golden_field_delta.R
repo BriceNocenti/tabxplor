@@ -26,21 +26,26 @@
 devtools::load_all("~/github/tabxplor", quiet = TRUE)
 source("tests/testthat/helper-golden.R")
 
-# Last Phase z13: `conf_level` = 0.95 on every column (the goldens are built at the default, which is
-# also options("tabxplor.conf_level") -- that equality is why the rendering does not move).
-ADDED_ATTRS   <- character(0)
-EXPECTED_ATTR <- list()
+# Last Phase z16-iiiii: `degf` + `basis` -- the two per-column attributes that took over from the
+# table-level meta$inference. Every golden case is UNWEIGHTED, so the honest values are "no design df"
+# and "no claim": NA and "n", i.e. exactly the constructor defaults, which is why the rendering does
+# not move either.
+ADDED_ATTRS   <- c("degf", "basis")
+EXPECTED_ATTR <- list(degf = NA_real_, basis = "n")
 
 # Last Phase z16-i: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
 # (`deff` = the design effect the row's test corrected by). A classic-basis table never fills it, so on
 # these goldens it must be present and all-NA.
-ADDED_TEST_COLS <- c("deff")
+ADDED_TEST_COLS <- character(0)
 
 # Last Phase z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
 # basis). Unlike a field or a test column it has a definite VALUE, and it is stored only on the
 # WEIGHTED cases -- an unweighted golden must keep exactly the metadata it had. Declare it here and
 # the check prints what it actually found, per case.
-ADDED_META_FIELDS <- c("inference")
+# Last Phase z16-iiiii REMOVES one instead: `inference` left `meta` for the two column attributes
+# above. No golden case is weighted, so none of them stored it -- declare nothing.
+ADDED_META_FIELDS   <- character(0)
+REMOVED_META_FIELDS <- c("inference")
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
@@ -117,6 +122,21 @@ for (nm in names(cases)) {
         issues <- c(issues, paste0(nm, " / test / ", cl, ": new column is NOT empty"))
     }
     an$test <- an$test[, setdiff(names(an$test), add), drop = FALSE]
+  }
+  # A phase can also REMOVE a `meta` sub-field -- z16-iiiii moved `inference` out to two per-column
+  # attributes. Symmetric to the addition check: declare it, and the script proves that the ONLY
+  # table-attribute delta is its disappearance (and prints what was dropped, per case).
+  if (length(REMOVED_META_FIELDS)) {
+    remm <- setdiff(names(ao$meta), names(an$meta))
+    if (!setequal(remm, intersect(REMOVED_META_FIELDS, remm)))
+      issues <- c(issues, paste0(nm, ": UNDECLARED removed `meta` field(s): ",
+                                 paste(setdiff(remm, REMOVED_META_FIELDS), collapse = ", ")))
+    for (fl in remm)
+      cat(sprintf("      %-24s dropped meta$%s = %s\n", nm, fl,
+                  paste(names(ao$meta[[fl]]), unlist(ao$meta[[fl]]), sep = "=", collapse = ", ")))
+    ao$meta <- ao$meta[setdiff(names(ao$meta), remm)]
+    if (!length(ao$meta)) ao$meta <- NULL
+    if (is.null(an$meta)) ao <- ao[names(ao) != "meta"]
   }
   if (length(ADDED_META_FIELDS)) {
     addm <- setdiff(names(an$meta), names(ao$meta))

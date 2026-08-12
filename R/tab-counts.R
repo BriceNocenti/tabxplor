@@ -374,6 +374,10 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,
+    # Last Phase z16-iiiii: pre-aggregated counts carry no per-observation Sum(w^2), so this table
+    # cannot serve the weighted basis -- declared here rather than discovered in the leaf, so the
+    # footer states basis "n" from the start and no design-based omnibus is attempted on aggregate rows.
+    agg_only = TRUE,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort
   )
 

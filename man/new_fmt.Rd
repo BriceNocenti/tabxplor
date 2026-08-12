@@ -38,6 +38,8 @@ new_fmt(
   model_family = "",
   role = "",
   conf_level = NA_real_,
+  degf = NA_real_,
+  basis = "n",
   ...,
   class = character()
 )

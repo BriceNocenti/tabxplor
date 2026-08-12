@@ -225,6 +225,17 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' \code{options("tabxplor.conf_level")}. It is stored per COLUMN because colours are resolved per
 #' column at print time and cannot see the table's \code{conf_level} argument -- without it a table
 #' built at a 99 percent level would be greyed at 95 percent.
+#' @param degf The degrees of freedom this column's interval is referred to: a survey design's
+#' \code{#PSU - #strata}, which matters below about 30 primary sampling units. \code{NA} (the
+#' default) means "refer to the normal quantile", which is every unweighted and every
+#' weights-only table.
+#' @param basis How this column's interval and significance were computed --- \code{"n"} (the raw
+#' sample size), \code{"weights"} (the exact design effect of the weights), \code{"design"} (a full
+#' \code{survey} design: strata, clusters, \code{fpc}, calibration), or \code{"design_partial"} (a
+#' design was given but its variance could not be computed). Default \code{"n"}. Like
+#' \code{conf_level} it is a per-COLUMN fact, which is what lets a table state honestly, in its
+#' footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
+#' the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -358,7 +369,9 @@ fmt <- function(n         = integer(),
                 color_signif = "ignore",
                 model_family = ""   ,   # Phase 15e: per-column regression family ("" on crosstabs)
                 role         = ""   ,   # Phase 17c: per-column role -- "model"/"emp" on reg columns
-                conf_level   = NA_real_) { # Last Phase z13: the level this column's interval was built at
+                conf_level   = NA_real_, # Last Phase z13: the level this column's interval was built at
+                degf         = NA_real_, # Last Phase z16-iiiii: the design df its critical value uses
+                basis        = "n"     ) { # ... and HOW its interval was computed (see new_fmt())
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -426,6 +439,8 @@ fmt <- function(n         = integer(),
   model_family <- vctrs::vec_recycle(vctrs::vec_cast(model_family, character()), size = 1)
   role         <- vctrs::vec_recycle(vctrs::vec_cast(role        , character()), size = 1)
   conf_level   <- vctrs::vec_recycle(vctrs::vec_cast(conf_level  , double()   ), size = 1)
+  degf         <- vctrs::vec_recycle(vctrs::vec_cast(degf        , double()   ), size = 1)
+  basis        <- vctrs::vec_recycle(vctrs::vec_cast(basis       , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -436,7 +451,7 @@ fmt <- function(n         = integer(),
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
           color = color, color_signif = color_signif, model_family = model_family,
-          role = role, conf_level = conf_level)
+          role = role, conf_level = conf_level, degf = degf, basis = basis)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -1115,17 +1130,103 @@ set_conf_level <- function(x, conf_level) {
   `attr<-`(x, "conf_level", conf_level)
 }
 
-# Project the table's confidence level onto every fmt column, at each build tail -- the ONE point where
-# the call's `conf_level` and the finished columns are both in scope. Doing it per fmt() call site would
-# mean a dozen-plus builders, each of which the next new builder would have to find again.
+# Last Phase z16-iiiii: `degf` and `basis`, the twins of conf_level -- the level an interval was built
+# AT, the degrees of freedom it is referred to, and HOW it was computed. Same two-accessor split for
+# `degf` (RAW for the reconcilers, resolved to Inf = refer to z for the engines); `basis` needs only
+# one, its own default "n" already being the honest unknown.
 #' @keywords internal
 #' @noRd
-tab_stamp_conf_level <- function(tabs, conf_level) {
-  if (length(conf_level) == 0L || !is.finite(conf_level[1])) return(tabs)
+fmt_degf_attr <- function(x) {
+  d <- attr(x, "degf", exact = TRUE)
+  if (is.null(d)) NA_real_ else d
+}
+
+#' @keywords internal
+#' @noRd
+get_degf <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_dbl(x, get_degf))
+  d <- fmt_degf_attr(x)
+  if (!is.finite(d) || d <= 0) Inf else d
+}
+
+#' @keywords internal
+#' @noRd
+get_basis <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, get_basis))
+  b <- attr(x, "basis", exact = TRUE)
+  if (is.null(b) || !length(b) || is.na(b[1]) || !nzchar(b[1])) "n" else as.character(b)[1]
+}
+
+# THE total order of the four inference bases, WEAKEST first. A merge of two columns -- or of two
+# tables -- can only claim what its weakest part carried. Declared here, beside the attribute it ranks;
+# R/survey-design.R produces the values.
+#' @keywords internal
+#' @noRd
+basis_rank <- function(b) {
+  r <- match(b %||% "n", c("n", "weights", "design_partial", "design"))
+  if (is.na(r)) 1L else r                     # an unknown basis claims nothing
+}
+
+#' @keywords internal
+#' @noRd
+basis_weakest <- function(a, b) if (basis_rank(a) <= basis_rank(b)) a else b
+
+# THE inference facts of a whole TABLE, DERIVED from its fmt columns (Last Phase z16-iiiii). They used
+# to be a stored table attribute, `meta$inference`; deriving them means a table cannot lose them while
+# keeping its columns, which is what two rebuild sites and every raw `data.frame()` round-trip used to
+# do. The table-level answer is the weakest basis and the smallest degrees of freedom its columns
+# carry -- the same "a merge can only claim what its weakest part carried" rule the ptype2 reconcile
+# applies, asked of a whole table at once.
+#' @keywords internal
+#' @noRd
+tab_inference_basis <- function(x) {
+  if (!is.data.frame(x)) return(get_basis(x))
+  b <- purrr::map_chr(purrr::keep(x, is_fmt), get_basis)
+  if (!length(b)) "n" else purrr::reduce(b, basis_weakest)
+}
+
+#' @keywords internal
+#' @noRd
+tab_inference_degf <- function(x) {
+  if (!is.data.frame(x)) return(get_degf(x))
+  d <- purrr::map_dbl(purrr::keep(x, is_fmt), fmt_degf_attr)
+  d <- d[is.finite(d) & d > 0]
+  if (!length(d)) Inf else min(d)
+}
+
+#' @keywords internal
+#' @noRd
+set_degf <- function(x, degf) {
+  degf <- vctrs::vec_recycle(vctrs::vec_cast(degf, double()), size = 1)
+  `attr<-`(x, "degf", degf)
+}
+
+#' @keywords internal
+#' @noRd
+set_basis <- function(x, basis) {
+  basis <- vctrs::vec_recycle(vctrs::vec_cast(basis, character()), size = 1)
+  `attr<-`(x, "basis", basis)
+}
+
+# Project the table's inference facts onto every fmt column, at each build tail -- the ONE point where
+# the call's settings and the finished columns are both in scope. Doing it per fmt() call site would
+# mean a dozen-plus builders, each of which the next new builder would have to find again.
+# Last Phase z16-iiiii: was tab_stamp_conf_level(); one sweep now carries all three, because they are
+# one fact ("how was this column's interval computed") and were drifting apart across two carriers.
+# Each argument is skipped when absent, so a caller that knows only the level still behaves as before.
+#' @keywords internal
+#' @noRd
+tab_stamp_inference <- function(tabs, conf_level = NULL, degf = NULL, basis = NULL) {
+  ok_num <- function(v) length(v) > 0L && is.finite(v[1])
+  ok_chr <- function(v) length(v) > 0L && !is.na(v[1]) && nzchar(v[1])
+  if (!ok_num(conf_level) && !ok_num(degf) && !ok_chr(basis)) return(tabs)
   if (is.list(tabs) && !is.data.frame(tabs))
-    return(purrr::map(tabs, tab_stamp_conf_level, conf_level))
-  for (nm in names(tabs)) if (is_fmt(tabs[[nm]]))
-    tabs[[nm]] <- set_conf_level(tabs[[nm]], conf_level[1])
+    return(purrr::map(tabs, tab_stamp_inference, conf_level, degf, basis))
+  for (nm in names(tabs)) if (is_fmt(tabs[[nm]])) {
+    if (ok_num(conf_level)) tabs[[nm]] <- set_conf_level(tabs[[nm]], conf_level[1])
+    if (ok_num(degf))       tabs[[nm]] <- set_degf(      tabs[[nm]], degf[1])
+    if (ok_chr(basis))      tabs[[nm]] <- set_basis(     tabs[[nm]], basis[1])
+  }
   tabs
 }
 
@@ -1507,6 +1608,18 @@ new_fmt <- function(n         = integer(),
                     # resolved per column at print time and cannot see the table's `conf_level`
                     # argument -- without it a table built at 99 % was greyed at 95 %.
                     conf_level = NA_real_,
+                    # Last Phase z16-iiiii: the two facts that say HOW this column's interval was
+                    # computed, beside the level it was computed AT. They are per-COLUMN for the same
+                    # reason `conf_level` is, and for one more: a table ATTRIBUTE is the fragile
+                    # carrier -- `meta$inference` held them until now, and two rebuild sites
+                    # (tab_spread(), reg_build()'s split branch) dropped the whole of `meta`, so a
+                    # design-based table printed the footer of an unweighted one and `tab_ci()` on the
+                    # step path silently fell back to z (measured 9 % too narrow at 13 PSUs). A column
+                    # carries its own inference through anything that keeps the vector.
+                    #   degf  the design's degrees of freedom (#PSU - #strata); NA = refer to z
+                    #   basis "n" | "weights" | "design_partial" | "design" (R/survey-design.R)
+                    degf      = NA_real_,
+                    basis     = "n"  ,
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1597,6 +1710,7 @@ new_fmt <- function(n         = integer(),
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
     color = color, color_signif = color_signif[1], model_family = model_family[1],
     role = role[1], conf_level = conf_level[1],
+    degf = degf[1], basis = basis[1],
     class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
@@ -4825,11 +4939,12 @@ tab_weight_line <- function(x, lang = NULL) {
     wt <- tryCatch(get_reg_meta(x)$wt, error = function(e) NULL)
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
   wt    <- as.character(wt)[1]
-  inf   <- tryCatch(get_inference(x), error = function(e) NULL)
-  # Last Phase z16-iv (W-A): the basis is the STORED fact, read through its one resolver. The
+  # Last Phase z16-iv (W-A): the basis is a STORED fact, read through its one resolver. The
   # `.svy_weights`-column NAME-SNIFF that stood here (`%||% if (identical(wt, svy_wt_col)) "design"`)
-  # is gone: it was W5 all over again, and it became load-bearing only because tab_compact() dropped
-  # meta$inference on every >=2 row_var table. It now carries it.
+  # is gone: it was W5 all over again.
+  # Last Phase z16-iiiii: it is stored on the COLUMNS and derived here, so the sentence survives every
+  # rebuild that keeps them -- tab_spread() and reg_build()'s split branch each used to drop the table
+  # attribute it was read from, and print the sentence of an unweighted table over design-based numbers.
   basis <- tryCatch(tab_inference_basis(x), error = function(e) "n")
   # `.svy_weights` is the INTERNAL name of a design's sampling weights and must never be printed. The
   # two design sentences never interpolate `wt`, so this only fires when a design table's stored
@@ -4840,12 +4955,12 @@ tab_weight_line <- function(x, lang = NULL) {
     basis,
     "design" = gettext(
       "Design-based (survey): weighted estimates, intervals and tests account for the sample design."),
-    "design_partial" = gettextf(
-      "Design-based (survey) estimates; this table's design variance could not be computed (%s), so its intervals account for the weighting only.",
-      switch(inf[["note"]] %||% "failed",
-             "size"        = gettext("too large"),
-             "unsupported" = gettext("design not supported"),
-             gettext("computation failed"))),
+    # Last Phase z16-iiiii: the CLAIM is a property of the numbers and is carried on the columns; the
+    # REASON is a build event, and it is now named where it is actionable and where the user is when
+    # it happens -- svy_var_degraded()'s message. Keeping it here would have cost a third column
+    # attribute (or a six-valued enum) to say something no exported table can act on.
+    "design_partial" = gettext(
+      "Design-based (survey) estimates; this table's design variance could not be computed, so its intervals account for the weighting only."),
     "weights" = gettextf(
       "Weighted by %s; confidence intervals and tests account for the weighting.", wt),
     gettextf("Weighted by %s; confidence intervals and tests use the unweighted sample size.", wt)
@@ -5068,6 +5183,14 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   cl_x         <- fmt_conf_level_attr(x)
   cl_y         <- fmt_conf_level_attr(y)
   same_cl      <- (is.na(cl_x) && is.na(cl_y)) || isTRUE(cl_x == cl_y)
+  # Last Phase z16-iiiii: binding two columns binds two CLAIMS about how their numbers were computed,
+  # and the honest merged claim is the WEAKEST -- one row_var's variance degrading to the weighting
+  # does not make the other's design-based. The widest critical value wins for the same reason, so
+  # `degf` takes the MINIMUM of the non-NA ones. This is exactly tab_inference_bind()'s algebra, which
+  # used to live on the table attribute and had to be CALLED; here it fires on every c() / vec_c() /
+  # bind / group without anyone remembering to.
+  dg           <- c(fmt_degf_attr(x), fmt_degf_attr(y))
+  dg           <- dg[is.finite(dg) & dg > 0]
   #l            <- length(x)
 
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
@@ -5090,7 +5213,9 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     color_signif = if (same_signif) signif_x else "ignore",
     model_family = if (same_mf) mf_x else "",
     role         = if (same_role) role_x else "",
-    conf_level   = if (same_cl) cl_x else NA_real_
+    conf_level   = if (same_cl) cl_x else NA_real_,
+    degf         = if (length(dg)) min(dg) else NA_real_,
+    basis        = basis_weakest(get_basis(x), get_basis(y))
   )
 }
 #' Find common ptype between fmt and double
@@ -5169,7 +5294,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           color_signif = get_color_signif(to),
           model_family = get_model_family(to),
           role         = get_role(to),
-          conf_level   = fmt_conf_level_attr(to)
+          conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to)
 
   )
 
@@ -5200,7 +5325,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       color_signif = get_color_signif(to),
       model_family = get_model_family(to),
       role         = get_role(to),
-      conf_level   = fmt_conf_level_attr(to),
+      conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to),
 
   )
 #' Convert fmt into double
@@ -5233,7 +5358,7 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       color_signif = get_color_signif(to),
       model_family = get_model_family(to),
       role         = get_role(to),
-      conf_level   = fmt_conf_level_attr(to)
+      conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -5390,7 +5515,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       color_signif = get_color_signif(x),
       model_family = get_model_family(x),
       role         = get_role(x),
-      conf_level   = fmt_conf_level_attr(x)
+      conf_level   = fmt_conf_level_attr(x), degf = fmt_degf_attr(x), basis = get_basis(x)
     ),
     "/" = ,
     "*" = new_fmt(
@@ -5431,7 +5556,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       color_signif = get_color_signif(x),
       model_family = get_model_family(x),
       role         = get_role(x),
-      conf_level   = fmt_conf_level_attr(x)
+      conf_level   = fmt_conf_level_attr(x), degf = fmt_degf_attr(x), basis = get_basis(x)
     ),
     vctrs::stop_incompatible_op(op, x, y)
   )
@@ -5521,7 +5646,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          color_signif = get_color_signif (.x),
                          model_family = get_model_family (.x),
                          role         = get_role         (.x),
-                         conf_level   = fmt_conf_level_attr(.x)
+                         conf_level   = fmt_conf_level_attr(.x), degf = fmt_degf_attr(.x), basis = get_basis(.x)
          ),
          "mean" = new_fmt(display = get_display(.x)[1],
                           digits  = max(get_digits(.x)),
@@ -5559,7 +5684,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           color_signif = get_color_signif (.x),
                           model_family = get_model_family (.x),
                           role         = get_role         (.x),
-                          conf_level   = fmt_conf_level_attr(.x)
+                          conf_level   = fmt_conf_level_attr(.x), degf = fmt_degf_attr(.x), basis = get_basis(.x)
          ),
          vctrs::vec_math_base(.fn, get_num(.x), ...) )
 }

@@ -3559,6 +3559,22 @@ reg_inference <- function(shared) {
   leaf_inference(svy_inference_basis(ds, ds$wt, force = TRUE), ds, ds$wt)
 }
 
+# THE `meta$ci_settings` of a regression table -- what the colour legend names as the interval method.
+# 14v-ii / 17h: the numeric/ratio methods are read STRAIGHT from the REG_EMPIRICAL fact table (Student
+# mean-diff = OLS, quasi-Poisson rate-ratio = the phi-scaled model), so the legend names exactly what
+# the crude CI used.
+# Last Phase z16-iiiii: extracted because reg_build() wrote it TWICE and the two copies had drifted --
+# the split_var branch listed only conf_level / method_cell / method_diff, so a split gaussian or
+# poisson table's legend lost the name of the very interval its Obs_* columns print.
+#' @keywords internal
+#' @noRd
+reg_ci_settings <- function(conf_level, method) {
+  list(conf_level = conf_level, method_cell = NA_character_,
+       method_diff = method, method_ratio = "katz",
+       method_mean_diff  = REG_EMPIRICAL$gaussian$method_mean_diff,
+       method_mean_ratio = REG_EMPIRICAL$poisson$method_mean_ratio)
+}
+
 reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, reference = NULL,
                       reref = FALSE, skeleton_data = data) {
   # `shared` bundles every per-call setting the leaves + assembler read (built once in tab_reg), replacing
@@ -3637,12 +3653,20 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
       tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
     }
+    reg_inf <- reg_inference(shared)
     grouped <- combined |>
-      tab_stamp_conf_level(conf_level) |>          # Last Phase z13 (D3): the per-column level
+      # Last Phase z13 (D3) + z16-iiiii: the per-column level, design df and inference basis
+      tab_stamp_inference(conf_level, reg_inf$degf, reg_inf$basis) |>
+      # Last Phase z16-iiiii (defect 2): the ci_settings literal that stood here was a THREE-key
+      # reduction of the non-split branch's six, so a split table's legend could not name its own
+      # interval method -- reg_ci_settings() is now the one source.
+      # NOT carried from the groups, deliberately: `empirical_tips` and `assumptions` are per-GROUP
+      # facts (crude tooltips keyed var\rlevel\rcategory; the observed curve of each predictor) and
+      # `meta` has no per-group slot, so merging them would attach the FIRST group's numbers to every
+      # other group's cells. Absent is honest; wrong is not. (A split table's sparklines are already
+      # baked into its row labels at build time, and reg_check_plots() refits from reg_meta$fit_spec.)
       new_tab(subtext = subtext, test = tests,
-              meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                                             method_diff = method),
-                          inference = reg_inference(shared),
+              meta = list(ci_settings = reg_ci_settings(conf_level, method),
                           vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
       dplyr::group_by(!!rlang::sym(split_var), var)
     # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
@@ -4228,28 +4252,25 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
+  reg_inf <- reg_inference(shared)
   tab |>
-    # Last Phase z13 (D3): the level every interval in this table was built at, on each fmt column --
-    # the colour engine is per column and cannot read meta$ci_settings. It is what makes the gap
-    # interval (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`.
-    tab_stamp_conf_level(conf_level) |>
+    # Last Phase z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
+    # df it is referred to and the basis it was computed on, all on each fmt column -- the colour
+    # engine is per column and cannot read meta$ci_settings. It is what makes the gap interval
+    # (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`; and it is where the
+    # footer now reads the basis from (ruling 1: a weighted tab_reg() is ALWAYS on the weighted basis,
+    # model column and crude companions alike).
+    tab_stamp_inference(conf_level, reg_inf$degf, reg_inf$basis) |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
-                        # Last Phase z16-i: the inference basis (ruling 1: a weighted tab_reg() is
-                        # ALWAYS on the weighted basis, model column and crude companions alike).
-                        inference = reg_inference(shared),
                         # Last Phase z15: the observed curves the sparklines were drawn from, and the
                         # only thing reg_check_plots() needs that a refit cannot give back.
                         assumptions = assumptions,
                         # Phase k: variable labels for the opt-in name display-swap (absent when none).
                         vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL,
-                        # 14v-ii / 17h: the numeric/ratio methods the empirical columns use, read STRAIGHT
-                        # from the REG_EMPIRICAL fact table (Student mean-diff = OLS, quasi-Poisson rate-
-                        # ratio = the phi-scaled model), so the legend names exactly what the crude CI used.
-                        ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                                           method_diff = method, method_ratio = "katz",
-                                           method_mean_diff  = REG_EMPIRICAL$gaussian$method_mean_diff,
-                                           method_mean_ratio = REG_EMPIRICAL$poisson$method_mean_ratio))) |>
+                        # the interval methods the legend names -- see reg_ci_settings(), shared with
+                        # the split_var branch so the two cannot drift again.
+                        ci_settings = reg_ci_settings(conf_level, method))) |>
     dplyr::group_by(var)
 }
 
@@ -5511,7 +5532,16 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     empirical <- FALSE
   }
 
-  design_spec <- list(design = design_obj, wt = wt)
+  # Last Phase z16-iiiii (defect 3): `degf` (#PSU - #strata) is captured ONCE at the boundary
+  # (svy_unwrap_data -> svy$spec$degf) and this literal used to drop it, so tab_reg() was the only
+  # consumer of a design that never saw its degrees of freedom. The model columns were on t(degf)
+  # regardless -- stats::df.residual() of an svyglm IS the design df (see reg_glance()) -- while the
+  # crude Obs_* columns stayed on z: measured at degf = 8, the crude bracket came out 15 % NARROWER
+  # than the model bracket beside it, in a table whose whole premise (ruling 1) is that the two are
+  # comparable. NULL for a plain data frame, exactly as in tab()'s spec.
+  # WARNING: `design_obj` is re-assigned above (its `$variables` are swapped, and reg_relevel_design()
+  #   may relevel a factor inside it). Neither touches PSUs or strata, so `degf` is stable.
+  design_spec <- list(design = design_obj, wt = wt, degf = svy$spec$degf)
   # Phase 15e: check the Suggests deps of EVERY family present (nnet for multinomial, MASS for ordinal...).
   for (fm in unique(families_vec))
     reg_check_deps(fm, weighted, needs_marginaleffects = effect %in% c("ame", "ame_ratio") || mnl_vsrest ||

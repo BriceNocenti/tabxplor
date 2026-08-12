@@ -320,38 +320,58 @@ Replicate-weight (`svrepdesign`) and two-phase designs are **refused** with a me
 `svydesign()` — a clear refusal, never an approximation. The design reaches `tab()`'s workers through the
 `.ship` payload (once per worker), not `shared` (which copied the whole dataset per row_var).
 
-### The inference basis (Last Phase z16-i)
+### The inference basis (Last Phase z16-i, moved onto the columns in z16-iiiii)
 
 `wt` says how the **estimate** is computed. A second, orthogonal fact says how the **interval and the
 test** are — and the framework needed four encodings of one thing because there was no slot for it.
 
-**`svy_inference_basis(design_spec, wt, force =)`** is THE resolver and the ONLY place the option or
-the design object is read. Four values: `"n"` (the raw sample size — unweighted, or weighted with the
-option off, which is the default), `"weights"` (the design effect of the weights, exactly: the flat
-`ids = ~1` design), `"design"` (strata, clusters, `fpc`, calibration), `"design_partial"` (a design was
-given but its variance could not be computed here). It resolves ONCE in `tab_setup()` and rides
-`ctx$inference_basis`; `force = TRUE` is `tab_reg()`'s own rule (its crude `Obs_*` columns are always on
-the weighted basis, beside a model column that always was, so the option is `tab()`-scoped).
+**`svy_inference_basis(design_spec, wt, force =, can_serve =)`** is THE resolver and the ONLY place the
+option or the design object is read. Four values: `"n"` (the raw sample size — unweighted, or weighted
+with the option off, which is the default), `"weights"` (the design effect of the weights, exactly: the
+flat `ids = ~1` design), `"design"` (strata, clusters, `fpc`, calibration), `"design_partial"` (a design
+was given but its variance could not be computed here). It resolves ONCE in `tab_setup()` and rides
+`ctx$inference_basis`. `force = TRUE` is `tab_reg()`'s own rule (its crude `Obs_*` columns are always on
+the weighted basis, beside a model column that always was, so the option is `tab()`-scoped);
+`can_serve` is the INPUT's half — z16-iiiii folded in the declared `ctx$agg_only` ("this call holds a
+pre-aggregate, not microdata"), which pre-aggregated counts set, so the basis a table reports is
+already one it can honour. That single fact used to be re-derived three incompatible ways downstream:
+`has_w2` in one leaf, `num_served` in the other, and `is.null(fine_fused) || by_table` in the omnibus
+gate — which now reads simply `basis != "n" && chi2`.
 
-It is then **STORED**, in `meta$inference = list(basis, degf, note)` (`get_inference()` /
-`new_inference_attr()`, `R/tab_classes.R`), written by `leaf_inference()` — shared by both leaves and by
-`tab_assemble_tables()`, so the pipeline and the exported step path cannot disagree. Absent when
-nothing is weighted. Three things follow that could not exist before:
+**Where it is stored: on the COLUMNS, as the 13th and 14th fmt attributes** (`degf`, `basis`;
+`R/fmt_class.R`, beside `conf_level`, which is there for the same reason). It was
+`meta$inference = list(basis, degf, note)` until z16-iiiii, and a table attribute proved to be the
+fragile carrier: **three** rebuild sites were found dropping the whole of `meta` — `tab_compact()`
+(z16-iv), and then `tab_spread()` and `reg_build()`'s `split_var` branch (z16-iiiii) — so a
+design-based table printed the footer of an unweighted one, and `tab_ci()` on the exported step path
+silently fell back to `z` (measured 9 % too narrow at 13 PSUs). A number must not depend on a table
+attribute. One sweep writes all three facts at each build tail — **`tab_stamp_inference(tabs,
+conf_level, degf, basis)`**, the former `tab_stamp_conf_level()` — fed by `leaf_inference()`, which
+both leaves, `tab_assemble_tables()` and `tab_reg()` share.
 
-* `tab_weight_line()` generates ONE footer sentence per basis instead of recognising the internal
-  `.svy_weights` column name — the last role-guessed-from-a-name in the weights subsystem. The
-  `"n"`-and-weighted sentence is the important one: it is the DEFAULT, so the package's least
-  defensible position stops being silent.
-* A degrade is a STATE, not a console message. `svy_var_degraded()` records its reason in a
-  build-scoped flag (`R/survey-variance.R`) that `leaf_inference()` reads into `"design_partial"` + its
-  reason, so a table cannot assert a design its numbers do not carry through every export, forever.
-  Its twin `svy_degrade_unserved()` says "the weighted basis was asked for and this input cannot serve
-  it" — pre-aggregated counts carry no per-observation `Σw²` — and the table then states basis `"n"`.
-  Nothing had to know it was `tab_counts()`.
-* `degf` (the design's `#PSU − #strata`, captured at the boundary) rides to `tab_ci()`, which reads it
-  off the table when not given, so the step path gets it too. `conf_level_to_crit(conf_level, df)`
-  (`R/tab-agg.R`) is the ONE critical value of every interval — `qt(p, Inf)` being bit-identical to
-  `qnorm(p)`, the default is byte-identical to the z the engines used before.
+Four things follow:
+
+* **The bind rule fires by itself.** "A merge can only claim what its weakest part carried" moved from
+  `tab_inference_bind()` — a function someone had to remember to call — into
+  `vec_ptype2.tabxplor_fmt.tabxplor_fmt()`, where every `c()` / `vec_c()` / bind / group applies it:
+  weakest `basis` (`basis_rank()`), smallest non-NA `degf` (the widest critical value).
+* **The table-level answer is DERIVED**, `tab_inference_basis()` / `tab_inference_degf()` — the weakest
+  basis and smallest `degf` over a table's fmt columns. `tab_weight_line()` generates ONE footer
+  sentence per basis from it, and `tab_ci()` reads `degf` off the columns (per column, which is more
+  correct than one table-wide number). The `"n"`-and-weighted sentence is the important one: it is the
+  DEFAULT, so the package's least defensible position stops being silent.
+* **A degrade is a STATE, not a console message.** `svy_var_degraded()` records it in a build-scoped
+  flag (`R/survey-variance.R`) that `leaf_inference()` turns into basis `"design_partial"`, so a table
+  cannot assert a design its numbers do not carry through every export, forever. Its twin
+  `svy_degrade_unserved()` is now the narrow case only (a hand-built `.fine` predating the `w2`
+  contract); `tab_counts()` declares `agg_only` instead of being discovered. ⚠ The degrade REASON
+  (`size` / `failed`) is named in that message, where it is actionable, and is no longer carried on the
+  table: the CLAIM is a property of the numbers, the reason is a build event.
+* `degf` (the design's `#PSU − #strata`, captured at the boundary) reaches `tab_reg()` too since
+  z16-iiiii — its `design_spec` literal used to rebuild the spec and throw `degf` away, so its model
+  columns sat on `t(degf)` (an `svyglm`'s `df.residual()` IS the design df) while its crude `Obs_*`
+  columns sat on `z`: at `degf = 8`, a crude bracket 15 % narrower than the model bracket beside it, in
+  a table whose whole premise is that the two are comparable.
 
 ### Design-based cell variances (`R/survey-variance.R`, Last Phase z14-ii)
 
@@ -404,7 +424,12 @@ own `Σw²` discarded, i.e. the limit for a cell carrying no information. Measur
 either direction once the outcome follows the weight, and unable to move with the outcome at all.
 
 `num_moment_scan()` accumulates `Σw²`, `Σw²x`, `Σw²x²` whenever the table is WEIGHTED (never on an
-option), and the factor scan its `Σw²` likewise, so the aggregate has ONE shape — toggling the option is
+option), and the factor scan its `Σw²` likewise — **including the jamovi cached tier-1 aggregate since
+z16-iiiii**, without which `jmv_cache_aggregate()` emitted only `(n, wn)` and the live `design_effect`
+checkbox corrected the MEAN cell intervals while leaving the PERCENTAGES on the raw *n*, corrected
+neither p-value (a mixed table lost its numeric `F_design` too), and printed a footer denying the one
+correction that had happened. `Σw²` is additive, so the `.fine` rollup is an identity regroup. So the
+aggregate has ONE shape — toggling the option is
 a jamovi cache HIT, not a re-aggregate. All three are additive, so the wide rollup, the Total column and
 the total rows get the right `A`/`S`/`B` by summation, with no special case.
 
@@ -418,7 +443,7 @@ SE(log OR); the omnibus chi2 and F == `svychisq` / `svyglm + regTermTest` to `1e
 weighted mean over a domain (a predictor level), so `reg_empirical()` takes `design_spec` and asks
 `svy_var_mean()` for `Var_design` per level, writing Korn–Graubard's device into the bases it already
 had (`emp_n_draw` for every proportion-scale interval, `emp_n_ci` for the mean-scale ones); its rung now
-comes from the shared `svy_inference_mode()` rather than a local `getOption()` read. Two small
+comes from the shared `svy_inference_basis()` rather than a local `getOption()` read. Two small
 generalisations were enough: **`wmult`** (a per-row weight multiplier, because a grouped-binomial row is
 a cluster of `trials` draws — the general ratio form, not a second formula), and level-INDEX domain keys,
 which make the domain identical by construction to the grid's own `ok & x == l` and put a predictor level

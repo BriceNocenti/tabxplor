@@ -148,10 +148,18 @@ svy_var_bail <- function(reason = c("size", "unsupported", "failed")) {
 
 svy_var_degraded <- function(reason = NULL) {
   if (is.null(reason)) reason <- get0("pending", envir = svy_degrade_env, ifnotfound = NULL)
-  assign("reason", reason %||% "failed", envir = svy_degrade_env)
+  reason <- reason %||% "failed"
+  assign("reason", reason, envir = svy_degrade_env)
   assign("pending", NULL, envir = svy_degrade_env)
+  # Last Phase z16-iiiii: the message NAMES the reason. The claim ("design_partial") is a property of
+  # the numbers and rides the columns; the reason is a build event, so it belongs where the user is
+  # when it happens and where it is actionable -- "too large" says to reduce the table, which an
+  # exported footer read months later could not act on anyway.
   cli::cli_inform(c(
-    "!" = "The sample design's variance could not be computed for this table.",
+    "!" = switch(reason,
+                 "size"        = "This table is too large for the sample design's variance.",
+                 "unsupported" = "This sample design is not supported by the variance engine.",
+                 "The sample design's variance could not be computed for this table."),
     "i" = "Its confidence intervals fall back to the weighting alone."))
 }
 

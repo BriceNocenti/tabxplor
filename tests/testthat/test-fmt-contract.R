@@ -48,7 +48,11 @@ fmt_contract_attr_defaults <- list(
   model_family = "", role = "",
   # Last Phase z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
   # colour engine falls back to options(tabxplor.conf_level), i.e. the pre-z13 behaviour.
-  conf_level = NA_real_
+  conf_level = NA_real_,
+  # Last Phase z16-iiiii: the 13th and 14th -- HOW this column's interval was computed. They were
+  # meta$inference, a TABLE attribute, until two rebuild sites were found dropping the whole of `meta`.
+  # NA / "n" = an unweighted or weights-only table: refer to z, claim no design effect.
+  degf = NA_real_, basis = "n"
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

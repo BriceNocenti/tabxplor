@@ -91,6 +91,27 @@ test_that("cold build == tab(cleannames = FALSE); warm == cold", {
   }
 })
 
+test_that("the weighted basis reaches the cached FACTOR aggregate too (design_effect)", {
+  # Last Phase z16-iiiii. jmv_cache_aggregate()'s factor tier-1 emitted only (n, wn), while its
+  # numeric twin emitted the moment triples -- so in jamovi, ticking `design_effect` corrected the
+  # MEAN cell intervals, left the PERCENTAGES on the raw n, corrected NEITHER p-value (the omnibus
+  # gate skipped the whole grid whenever a cached `.fine` was present, so a mixed table lost its
+  # numeric F_design as well), and the footer then denied the one correction that had happened.
+  # Failing-first: without the `w2` column and its rollup, `n_eff` is all-NA on the cache path.
+  withr::local_options(tabxplor.design_effect = TRUE)
+  o <- jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), wt = "w",
+                pct = "row", chi2 = TRUE, na = "drop")
+  cold <- jmvtab_build(gssw, o, NULL)
+  warm <- jmvtab_build(gssw, o, cold$store)
+  expect_equal(cold$tabs, jmv_oracle(o, gssw))    # the cache path IS the oracle, correction included
+  expect_equal(warm$tabs, cold$tabs)
+  t  <- cold$tabs
+  ne <- get_n_eff(t[[which(purrr::map_lgl(t, ~ is_fmt(.) && get_type(.) == "row"))[[1]]]])
+  expect_gt(sum(is.finite(ne)), 0L)               # non-vacuous: percentages ARE corrected now
+  expect_identical(tabxplor:::tab_inference_basis(t), "weights")
+  expect_true(all(c("chi2_design", "F_design") %in% get_test(t)$test))
+})
+
 # Phase 15c: na = "drop_all" used to collapse na_num to a SCALAR "keep", but jmv_cache_aggregate()'s
 # numeric tier-1 loop indexes ctx$na_num[[i]] per row_var -> "subscript out of bounds" for a 2nd
 # row_var with a numeric col_var. tab_prepare_pop() now emits a per-row_var list; still byte-identical.

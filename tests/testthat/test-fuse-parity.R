@@ -27,7 +27,10 @@ build_fine <- function(data, keycols, wtname = NULL) {
   if (is.null(wtname)) {
     dt[, list(n = .N), keyby = keycols]
   } else {
-    dt[, list(n = .N, wn = sum(as.numeric(get(wtname)), na.rm = TRUE)), keyby = keycols]
+    # Last Phase z16-iiiii: Sigma w^2 alongside Sigma w, exactly as jmv_cache_aggregate() now emits it
+    # -- it is what lets a pre-aggregate serve the WEIGHTED inference basis (see the test below).
+    dt[, list(n = .N, wn = sum(as.numeric(get(wtname)), na.rm = TRUE),
+              w2 = sum(as.numeric(get(wtname))^2, na.rm = TRUE)), keyby = keycols]
   }
 }
 
@@ -76,4 +79,36 @@ testthat::test_that("tab_build factor path: default (no fusion) == .by_table (ra
     tabxplor:::tab_build(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE),
     tabxplor:::tab_build(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE,
                          .by_table = TRUE))
+})
+
+testthat::test_that("a `.fine` carrying Sigma w^2 serves the weighted basis, exactly as a raw scan", {
+  # Last Phase z16-iiiii, the FACTOR twin of test-num-fuse-parity.R's `_w2` round-trip. Until this
+  # phase jmv_cache_aggregate() emitted only (n, wn), so `has_w2` was FALSE on the cache path: in
+  # jamovi, ticking `design_effect` widened the MEAN cell intervals and left the PERCENTAGES alone,
+  # while the footer denied the one correction that had happened. Failing-first: without the `w2`
+  # rollup in plain_core(), `n_eff` here is all-NA and the raw scan's is not.
+  withr::local_options(tabxplor.design_effect = TRUE)
+  gss  <- make_gss()
+  fine <- build_fine(gss, c("marital", "race", "partyid"), "w")
+  fused <- tabxplor:::tab_plain(gss, race, partyid, marital, wt = w, pct = "row",
+                                na = "drop", .fine = fine)
+  raw   <- tabxplor:::tab_plain(gss, race, partyid, marital, wt = w, pct = "row",
+                                na = "drop")
+  testthat::expect_equal(fused, raw)
+  ne <- get_n_eff(raw[[which(purrr::map_lgl(raw, is_fmt))[[1]]]])
+  testthat::expect_gt(sum(is.finite(ne)), 0L)                     # non-vacuous
+  testthat::expect_identical(tabxplor:::tab_inference_basis(fused), "weights")
+})
+
+testthat::test_that("a legacy `.fine` WITHOUT Sigma w^2 still degrades to the raw basis", {
+  # The leaf keeps its own guard: tab_plain() is exported and reachable with a hand-built aggregate
+  # that predates the w2 contract. It must fall back, not claim a correction it cannot compute.
+  withr::local_options(tabxplor.design_effect = TRUE)
+  gss  <- make_gss()
+  fine <- build_fine(gss, c("marital", "race", "partyid"), "w")
+  fine[, "w2" := NULL]
+  t <- tabxplor:::tab_plain(gss, race, partyid, marital, wt = w, pct = "row",
+                            na = "drop", .fine = fine)
+  testthat::expect_true(all(is.na(get_n_eff(t[[which(purrr::map_lgl(t, is_fmt))[[1]]]]))))
+  testthat::expect_identical(tabxplor:::tab_inference_basis(t), "n")
 })

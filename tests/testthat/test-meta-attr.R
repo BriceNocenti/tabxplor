@@ -108,6 +108,28 @@ test_that("every table rebuild carries an UNKNOWN meta sub-field (no re-enumerat
   expect_identical(kept(dplyr::bind_rows(tl[[1]], tl[[1]])), list(kept = TRUE))  # the vctrs reconcile
   expect_identical(kept(tab_transpose(tl[[1]])),             list(kept = TRUE))  # rewrites vars only
   expect_identical(kept(dplyr::filter(tl[[1]], TRUE)),       list(kept = TRUE))  # a dplyr verb
+  # Last Phase z16-iiiii (defect 1): tab_spread() -- exported, AND what tab(spread_vars =) calls --
+  # ended in a bare new_tab(tabs, subtext =, test =) literal, so EVERY spread table silently lost its
+  # whole meta. It was the SECOND rebuild-from-a-literal site, which z16-iv's record said did not exist.
+  ts <- probe(tab(forcats::gss_cat, marital, race, relig, pct = "row"))
+  expect_identical(kept(tab_spread(ts, relig)), list(kept = TRUE))
+})
+
+test_that("tab_spread() keeps the weight footer, and narrows only tab_vars", {
+  skip_if_no_gettext()
+  d <- forcats::gss_cat[!is.na(forcats::gss_cat$tvhours) & forcats::gss_cat$tvhours > 0, ]
+  withr::local_options(list(tabxplor.design_effect = TRUE, tabxplor.lang = "en"))
+  flat <- tab(d, marital, race, relig, wt = tvhours, pct = "row")
+  wide <- tab(d, marital, race, relig, wt = tvhours, pct = "row", spread_vars = relig)
+  expect_identical(tabxplor:::tab_inference_basis(flat), "weights")   # non-vacuous
+  expect_identical(tabxplor:::tab_inference_basis(wide), "weights")
+  expect_identical(tab_weight_line(wide), tab_weight_line(flat))
+  # the spread tab_var became columns; the row/col VARIABLE names are untouched by the pivot
+  v_flat <- tabxplor:::get_vars_attr(flat); v_wide <- tabxplor:::get_vars_attr(wide)
+  expect_identical(v_wide$tab_vars, character(0))
+  expect_identical(v_wide$row_vars, v_flat$row_vars)
+  expect_identical(v_wide$col_vars, v_flat$col_vars)
+  expect_identical(v_wide$wt,       v_flat$wt)
 })
 
 test_that("a >=2 row_var table keeps meta$inference (the footer cannot invert)", {
@@ -128,19 +150,25 @@ test_that("an UNWEIGHTED merge still carries no inference (absent-when-unset)", 
   expect_false("inference" %in% names(tabxplor:::get_meta(m)))
 })
 
-test_that("the inference bind rule is min over n < weights < design_partial < design", {
-  mk <- function(b, d = NA_real_) list(inference = tabxplor:::new_inference_attr(b, degf = d))
-  bs <- function(x, y) tabxplor:::tab_meta_bind(x, y)$inference$basis
+test_that("the weakest-claim rule lives on the COLUMN reconcile now", {
+  # Last Phase z16-iiiii: `inference` left `meta` for two per-column attributes, so the bind algebra
+  # left tab_inference_bind() for vec_ptype2.tabxplor_fmt.tabxplor_fmt() -- where it fires on every
+  # c() / bind / group without anyone having to call it.
+  mk <- function(b, d = NA_real_) tabxplor:::set_degf(tabxplor:::set_basis(fmt(1:2), b), d)
+  bs <- function(x, y) tabxplor:::get_basis(c(x, y))
   expect_identical(bs(mk("design"),         mk("weights")), "weights")
   expect_identical(bs(mk("weights"),        mk("design")),  "weights")   # symmetric
   expect_identical(bs(mk("n"),              mk("design")),  "n")
   expect_identical(bs(mk("design_partial"), mk("design")),  "design_partial")
   expect_identical(bs(mk("design"),         mk("design")),  "design")
-  expect_identical(tabxplor:::tab_meta_bind(mk("design", 30), mk("design", 12))$inference$degf, 12)
-  expect_null(tabxplor:::tab_meta_bind(mk("design"), mk("design"))$inference$degf)  # NA stays ABSENT
-  # a one-sided bind is a pass-through, not a downgrade
-  expect_identical(tabxplor:::tab_meta_bind(mk("design"), NULL)$inference$basis, "design")
-  expect_identical(tabxplor:::tab_meta_bind(NULL, mk("design"))$inference$basis, "design")
+  # the widest critical value wins: the SMALLEST design df survives a bind
+  expect_identical(tabxplor:::fmt_degf_attr(c(mk("design", 30), mk("design", 12))), 12)
+  expect_identical(tabxplor:::fmt_degf_attr(c(mk("design", 30), mk("design"))), 30)  # NA is not a claim
+  expect_true(is.na(tabxplor:::fmt_degf_attr(c(mk("design"), mk("design")))))
+  # and it reaches a whole TABLE through the derived reader
+  t <- tab(forcats::gss_cat, marital, race, pct = "row")
+  expect_identical(tabxplor:::tab_inference_basis(t), "n")
+  expect_identical(tabxplor:::tab_inference_degf(t), Inf)
 })
 
 test_that("tab_weight_line() reads the STORED basis, never the .svy_weights column name", {
@@ -154,4 +182,72 @@ test_that("tab_weight_line() reads the STORED basis, never the .svy_weights colu
   v <- get_vars_attr(t); v$wt <- ".svy_weights"
   t2 <- tabxplor:::set_meta_field(tabxplor:::set_meta_field(t, "vars", v), "inference", NULL)
   expect_null(tab_weight_line(t2))
+})
+
+# === SECTION: the regression rebuild sites (Last Phase z16-iiiii) =================================
+
+test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked", {
+  skip_if_no_gettext()
+  skip_if_not_installed("survey")
+  withr::local_options(list(tabxplor.lang = "en"))
+  set.seed(11)
+  n <- 400L
+  d <- tibble::tibble(
+    g = factor(sample(c("a", "b"), n, TRUE)),
+    s = factor(sample(c("north", "south"), n, TRUE)),
+    y = factor(sample(c("no", "yes"), n, TRUE)),
+    w = stats::rgamma(n, 2, 2)
+  )
+  mk <- function(...) suppressMessages(
+    tab_reg(d, dependent = "y", predictors = "g", family = "binomial", wt = "w", ...))
+  flat <- mk()
+  # spread_models = TRUE is the DEFAULT, and it is the shape that lost everything: it routes through
+  # reg_spread_models() -> tab_spread(), whose bare new_tab() literal dropped the whole meta, so the
+  # table asserted "intervals use the unweighted sample size" while its models came from svyglm.
+  wide <- mk(split_var = "s")
+  tall <- mk(split_var = "s", spread_models = FALSE)
+  expect_identical(tabxplor:::tab_inference_basis(flat), "weights")   # non-vacuous
+  expect_identical(tabxplor:::tab_inference_basis(wide), "weights")
+  expect_identical(tabxplor:::tab_inference_basis(tall), "weights")
+  expect_match(tab_weight_line(wide), "account for the weighting")
+  expect_identical(tab_weight_line(wide), tab_weight_line(flat))
+})
+
+test_that("a split tab_reg()'s ci_settings names the same methods as an unsplit one", {
+  set.seed(12)
+  n <- 300L
+  d <- tibble::tibble(
+    g = factor(sample(c("a", "b"), n, TRUE)),
+    s = factor(sample(c("north", "south"), n, TRUE)),
+    y = stats::rnorm(n)
+  )
+  mk <- function(...) suppressMessages(
+    tab_reg(d, dependent = "y", predictors = "g", family = "gaussian", ...))
+  # the split branch used to write a THREE-key reduction of the six the unsplit branch writes, so a
+  # split gaussian/poisson table's legend could not name the interval its Obs_* columns print.
+  expect_identical(names(get_ci_settings(mk(split_var = "s", spread_models = FALSE))),
+                   names(get_ci_settings(mk())))
+})
+
+test_that("tab_reg() on a survey design keeps the design's degrees of freedom", {
+  skip_if_not_installed("survey")
+  set.seed(13)
+  n <- 400L
+  dd <- tibble::tibble(
+    psu   = rep(1:10, each = n / 10L),
+    strat = rep(1:2,  each = n / 2L),
+    w     = stats::rgamma(n, 2, 2),
+    g     = factor(sample(c("a", "b", "c"), n, TRUE)),
+    y     = factor(sample(c("no", "yes"), n, TRUE))
+  )
+  des <- survey::svydesign(ids = ~psu, strata = ~strat, weights = ~w, data = dd, nest = TRUE)
+  # tab_reg() rebuilt its design_spec from a literal AFTER the boundary had computed degf, so it was
+  # the one design consumer that never saw it: its model columns were on t(degf) (df.residual() of an
+  # svyglm IS the design df) while its crude Obs_* columns stayed on z.
+  tr <- suppressMessages(
+    tab_reg(des, dependent = "y", predictors = "g", family = "binomial", empirical = TRUE))
+  tt <- suppressMessages(tab(des, g, y, pct = "row", ci = "cell"))
+  # (svy_degf() stores it as a double; survey::degf() returns an integer)
+  expect_identical(tabxplor:::tab_inference_degf(tr), as.double(survey::degf(des)))
+  expect_identical(tabxplor:::tab_inference_degf(tr), tabxplor:::tab_inference_degf(tt))
 })

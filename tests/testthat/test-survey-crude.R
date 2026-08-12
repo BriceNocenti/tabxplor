@@ -252,7 +252,7 @@ test_that("a design whose variance cannot be computed says so and falls back", {
 })
 
 test_that("a stale degrade flag from an EARLIER call cannot mislabel tab_reg() (W-C)", {
-  # The flag is process-scoped and reg_inference() reads it into meta$inference. tab() has reset it
+  # The flag is process-scoped and reg_inference() reads it into the columns' `basis`. tab() has reset it
   # per call since z16-i; tab_reg() never did, so one degraded table anywhere earlier in the session
   # permanently made every later reg table claim "design_partial" -- whose footer denies a variance
   # that WAS computed.
@@ -264,7 +264,7 @@ test_that("a stale degrade flag from an EARLIER call cannot mislabel tab_reg() (
   expect_identical(svy_degrade_get(), "size")
   stale <- suppressMessages(tab_reg(des, "y", "x", family = "binomial"))
   expect_identical(tab_inference_basis(stale), "design")
-  expect_identical(get_inference(stale), get_inference(clean))
+  expect_identical(tab_inference_degf(stale), tab_inference_degf(clean))
   svy_degrade_reset()
 })
 

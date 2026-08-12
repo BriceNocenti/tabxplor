@@ -238,51 +238,13 @@ set_row_roles <- function(x, roles) {
 }
 get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 
-# Last Phase z16-i: `inference` -- THE stored fact "how were this table's intervals and tests
-# computed", `list(basis = , degf = , note = )`. `wt` says how the ESTIMATE is computed; this says how
-# the INFERENCE is. Before, the basis was resolved at build (svy_inference_basis) and thrown away, so
-# the footer could not name it, a degraded design could not be recorded, and tab_weight_line() had to
-# re-derive "this is design-based" by string-sniffing the internal `.svy_weights` column name.
-#   basis  "n" | "weights" | "design" | "design_partial"   (see R/survey-design.R)
-#   degf   the design's degrees of freedom (NA otherwise) -- the critical value of every interval
-#   note   why a design degraded, only on "design_partial": "size" | "unsupported" | "failed"
-# Stored only when the table is weighted, so an unweighted table carries no `inference` and no golden
-# moves ("absent when unset", Phase 17b).
-get_inference <- function(x) get_meta(x)[["inference"]]
-set_inference  <- function(x, inference) set_meta_field(x, "inference", inference)
-
-new_inference_attr <- function(basis = "n", degf = NA_real_, note = NULL) {
-  out <- list(basis = basis)
-  degf <- suppressWarnings(as.double(degf)[1])
-  if (length(degf) == 1L && !is.na(degf) && is.finite(degf)) out$degf <- degf
-  if (!is.null(note) && nzchar(note)) out$note <- note
-  out
-}
-
-# The BASIS of a table, resolved for display: the stored fact, else "n" (a hand-built table, an older
-# object, a table whose metadata a pipeline dropped -- all of which mean "no design effect claimed").
-tab_inference_basis <- function(x) get_inference(x)[["basis"]] %||% "n"
-
-# The BIND rule of `inference` (Last Phase z16-iv, W-A): merging two tables merges two claims, and the
-# honest merged claim is the WEAKEST -- if one row_var's variance degraded to the weighting and
-# another's did not, the merged table's intervals are not all design-based. Minimum over
-# `inference_basis_order` (R/survey-design.R, which owns the enum); `degf` the minimum of the non-NA
-# ones (the smallest design refers the widest critical value); `note` rides the basis that won.
-# Rebuilt through new_inference_attr(), so an NA degf / empty note stay ABSENT rather than NA-filled.
-tab_inference_bind <- function(x, y) {
-  if (is.null(x)) return(y)
-  if (is.null(y)) return(x)
-  rank <- function(i) {
-    r <- match(i[["basis"]] %||% "n", inference_basis_order)
-    if (is.na(r)) 1L else r                       # an unknown basis claims nothing
-  }
-  weak <- if (rank(x) <= rank(y)) x else y
-  dg   <- c(x[["degf"]], y[["degf"]])
-  dg   <- dg[!is.na(dg) & is.finite(dg)]
-  new_inference_attr(basis = weak[["basis"]] %||% "n",
-                     degf  = if (length(dg)) min(dg) else NA_real_,
-                     note  = weak[["note"]])
-}
+# Last Phase z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
+# computed" is now two per-COLUMN attributes, `basis` and `degf` (R/fmt_class.R), read back through the
+# DERIVED tab_inference_basis() / tab_inference_degf(). A table attribute is the fragile carrier: two
+# rebuild sites dropped the whole of `meta` (tab_spread(), reg_build()'s split branch), so a
+# design-based table printed the footer of an unweighted one and tab_ci() on the step path silently
+# fell back to z. The bind rule went with it -- "the weakest claim wins" now lives in the fmt ptype2
+# reconcile, where it fires on every c() / bind / group without anyone having to call it.
 
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
@@ -386,9 +348,7 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
 #' @noRd
 meta_bind_rules <- list(
   # a partial per-scale override on either side survives (push_color_breaks() precedence)
-  color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m },
-  # merging two tables merges two CLAIMS about how their numbers were computed: the weakest wins
-  inference    = function(x, y) tab_inference_bind(x, y)
+  color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m }
 )
 
 # The attribute reconcile for a BIND of two tables (the vctrs ptype2/cast pair). `subtext` unions;
@@ -1309,8 +1269,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   subtext <- get_subtext(tabs[[1]])
-  render_extras_first <- get_render_extras(tabs[[1]])
-  ci_settings_first   <- get_ci_settings(tabs[[1]])
   # Last Phase z16-iv (W-A): captured HERE, while `tabs` is still the LIST -- tab_stack_tables() below
   # rebinds it to a plain tibble carrying no table attributes at all, which is why this merge was the
   # one place in the package that could lose a `meta` sub-field.
@@ -1378,17 +1336,18 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
       dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
   }
 
-  # Phase 10i-B: carry the add_n/add_pct intent through the merge (all per-row_var tabs share it).
   # Last Phase z16-iv (W-A): CARRY the merged tables' whole `meta` (tab_meta_merge = reduce through
-  # tab_meta_bind) and overwrite only the three fields this merge genuinely recomputes. The fresh
+  # tab_meta_bind) and overwrite only what this merge genuinely recomputes. The fresh
   # `meta = list(...)` literal that stood here dropped every sub-field it did not name -- so a
   # >=2 row_var table lost `inference`, printed the OPPOSITE footer sentence, and lost `degf` on the
   # exported tab_ci() step path (measured: intervals 9 % too narrow at 13 PSUs).
+  # Last Phase z16-iiiii: `vars` is the ONLY genuine recompute. The explicit
+  # `render_extras = <tabs[[1]]'s>` / `ci_settings = <tabs[[1]]'s>` overwrites that stood beside it
+  # were the left fold's own output written out by hand -- except when tabs[[1]] alone lacked the
+  # field, where the overwrite DELETED what a later table carried. Reachable only through the
+  # exported tab_compact() on a hand-assembled list; carrying it is the better answer.
   tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
-                  meta = tab_meta_merge(metas_in,
-                                        render_extras = render_extras_first,
-                                        ci_settings   = ci_settings_first,
-                                        vars          = vars_merged)) |>
+                  meta = tab_meta_merge(metas_in, vars = vars_merged)) |>
     dplyr::group_by(!!rlang::sym("row_var"))
 
   # if (pvalue_lines) {

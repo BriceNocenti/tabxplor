@@ -47,10 +47,8 @@
 svy_wt_col  <- ".svy_weights"
 svy_row_col <- ".svy_row"
 
-# THE total order of the four inference bases, WEAKEST first (see the DESIGN block above). Declared
-# once, here, beside the resolver that produces them; tab_inference_bind() (R/tab_classes.R) takes the
-# minimum, so a merged or bound table can never claim more inference than its weakest part carried.
-inference_basis_order <- c("n", "weights", "design_partial", "design")
+# The four inference bases this resolver produces are RANKED weakest-first by basis_rank()
+# (R/fmt_class.R), beside the per-column `basis` attribute they are stored in.
 
 # THE class list. Shared by the entry points that accept a design and by tab_counts(), which refuses
 # one -- so "what is a design" cannot be answered two ways.
@@ -138,9 +136,14 @@ svy_check_test <- function(test, arg = "test") {
 # `force` is how tab_reg() states its own rule (ruling 1): its crude Obs_* columns are ALWAYS on the
 # weighted basis when weighted, so they always match the Model_* column beside them; the option is
 # tab()-scoped and tab_reg() never reads it.
-svy_inference_basis <- function(design_spec, wt, force = FALSE) {
+# `can_serve` (Last Phase z16-iiiii) is the INPUT's half of the answer: the weighted basis needs a
+# per-observation Sum(w^2), which pre-aggregated counts do not carry. Declared once in the ctx
+# (`agg_only`) and folded in HERE, so the basis a table reports is already the one it can honour --
+# the same fact used to be re-derived three incompatible ways downstream (`has_w2` in one leaf,
+# `num_served` in the other, `is.null(fine_fused) || by_table` in the omnibus gate).
+svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE) {
   if (!is.null(design_spec) && !is.null(design_spec$design))          return("design")
-  if (length(wt) > 0L &&
+  if (length(wt) > 0L && isTRUE(can_serve) &&
       (isTRUE(force) || isTRUE(getOption("tabxplor.design_effect", FALSE)))) return("weights")
   "n"
 }

@@ -1458,6 +1458,10 @@ new_ctx <- function(...) {
     # inputs (= each formal's current default)
     pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
     OR = "no", chi2 = FALSE, inference_basis = "n", design_spec = NULL,
+    # Last Phase z16-iiiii: "this call holds a pre-aggregate, not microdata" -- declared by
+    # tab_counts(), read ONCE by tab_setup()'s svy_inference_basis(can_serve =). Such an input carries
+    # no per-observation Sum(w^2), so it cannot serve the weighted basis and must not claim it.
+    agg_only = FALSE,
     na = "keep", levels = "all",
     cleannames = NULL, output = "single",
     other_if_less_than = 0, other_level = "Others",
@@ -1822,7 +1826,9 @@ tab_setup <- function(ctx) {
   # Last Phase z14-i: the test RUNG is derived HERE, the one place that holds both the resolved weight
   # and the design_spec -- so tab(), tab_many() and tab_counts() cannot disagree about it (before, only
   # tab() had the rule, which left tab_many() silently always classic).
-  inference_basis <- svy_inference_basis(design_spec, wt)
+  # Last Phase z16-iiiii: `agg_only` -- "this call holds a pre-aggregate, not microdata" -- is declared
+  # by tab_counts() and folded in here, so the basis is resolved ONCE against what the input can serve.
+  inference_basis <- svy_inference_basis(design_spec, wt, can_serve = !isTRUE(agg_only))
   # Last Phase a bug-fix: a weight that is ALSO a selected variable is nonsensical (you cannot weight a
   # mean by the same column you are averaging, nor cross a variable by itself) and used to abort with a
   # cryptic data.table error. Fail early with a clear message. num_moment_scan is otherwise shadow-proof,
@@ -2390,9 +2396,12 @@ tab_transform <- function(ctx) {
   # then call svy_degrade_unserved() and the table states basis "n") must not carry a design-based p
   # either. `color = "contrib"` already forces chi2 (resolve_color_auto), so this costs no new
   # svychisq on exactly the tables W-B is about. Plain tab()/tab_many() always have fine_fused NULL.
+  # Last Phase z16-iiiii: the gate is now just "the basis asks for it, and a test was asked for". Its
+  # third clause re-derived, in a third spelling, the fact tab_setup() already resolved: an input that
+  # cannot serve the weighted basis never reaches basis != "n" now (svy_inference_basis(can_serve =)),
+  # and svy_omnibus_grid() runs on `data`, which is microdata on every path that gets here.
   robust_tests <- NULL
-  if (!identical(inference_basis, "n") && isTRUE(chi2) &&
-      (identical(inference_basis, "design") || by_table || is.null(fine_fused))) {
+  if (!identical(inference_basis, "n") && isTRUE(chi2)) {
     robust_tests <- svy_omnibus_grid(
       data, row_var, as.character(col_vars),
       stats::setNames(as.logical(col_vars_num), as.character(col_vars)),
@@ -2667,20 +2676,18 @@ tab_assemble_tables <- function(ctx) {
                              tab_vars = as.character(tab_vars),
                              wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
                              var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
-  # Last Phase z16-i: STORE the inference basis (see get_inference()). Only when weighted -- an
-  # unweighted table has nothing to say and keeps its exact former metadata. `svy_var_degraded()` may
-  # have downgraded the design to its weights during the build, which `ctx$inference_degraded`
-  # records; the footer then says so, instead of asserting a design the numbers do not carry (W4).
+  # Last Phase z16-i: resolve the inference basis. `svy_var_degraded()` may have downgraded the design
+  # to its weights during the build; the footer then says so, instead of asserting a design the
+  # numbers do not carry (W4). z16-iiiii: it is STAMPED on the columns, not stored in `meta`.
   inference <- leaf_inference(inference_basis, design_spec, wt)
-  # Phase 17b: the three 2.0.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
-  meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr,
-               inference = inference)
+  # Phase 17b: the two 2.0.0-new attrs left here are ONE `meta` list (drop-NULL happens in new_tab()).
+  meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
   # Last Phase z13 (D3): project the call's confidence level onto every fmt column. `meta$ci_settings`
   # records it for the legend, but the colour engine is per COLUMN and never sees the table -- so
   # without this stamp every threshold in it falls back to the global option, and a table built at
   # conf_level = 0.99 prints 99 % intervals while greying at 95 %. Stamped whatever `ci` says: the
   # level is also the alpha of the contrib significance gate and of the p-value cell.
-  tab <- tab_stamp_conf_level(tab, conf_level)
+  tab <- tab_stamp_inference(tab, conf_level, inference$degf, inference$basis)
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
@@ -2813,12 +2820,28 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
   subtext <- get_subtext(tabs)
   test    <- get_test(tabs)
+  # Last Phase z16-iiiii (defect 1): capture `meta` HERE, while `tabs` is still a tab -- the
+  # tidyr::pivot_wider() below returns a plain tibble carrying no table attributes. This function
+  # ended in a bare `new_tab(tabs, subtext =, test =)` literal, so EVERY spread table silently lost
+  # its whole `meta`: the weight footer and the inference basis (measured: basis "weights" -> "n",
+  # i.e. the footer stated the opposite of what was computed), the CI-method legend, the variable
+  # roles and the add_n/add_pct intent. tab_spread() is exported AND it is what tab(spread_vars =)
+  # calls, so this was the second rebuild-from-a-literal site (z16-iv's record claims tab_compact()
+  # was the only one). See tab_meta_merge()'s WARNING: never a fresh `meta = list(...)`.
+  meta_in  <- get_meta(tabs)
+  vars_out <- get_vars_attr(tabs)
 
   get_vars   <- tab_get_vars(tabs)
   col_levels <- get_vars$col_vars_levels |> purrr::flatten_chr()
   row_var    <- get_vars$row_var
   tab_vars   <- get_vars$tab_vars
   tab_vars_new <- tab_vars[!tab_vars %in% spread_vars]
+  # The ONE role this pivot genuinely changes: the spread tab_vars became columns. `row_vars` and
+  # `col_vars` are variable NAMES, which the pivot does not touch (it only suffixes the column
+  # labels), so they stand. Mutating the stored list rather than rebuilding it through
+  # new_vars_attr() keeps `wt`, `var_labels` and a user `caption` -- none of which that constructor
+  # can express.
+  if (!is.null(vars_out)) vars_out$tab_vars <- as.character(tab_vars_new)
 
   na_values <- purrr::map(dplyr::ungroup(tabs)[col_levels],
                           ~ fmt0(type = get_type(.x), display = get_display(.x[1]))) |>
@@ -2908,12 +2931,14 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   tabs <- complete_partial_totals(tabs)
 
 
+  meta_out <- tab_meta_merge(list(meta_in), vars = vars_out)
+
   if (lv1_group_vars(tabs)) {
-    new_tab(tabs, subtext = subtext, test = test)
+    new_tab(tabs, subtext = subtext, test = test, meta = meta_out)
   } else {
 
     group_dat <- dplyr::group_data(tabs)
-    new_grouped_tab(tabs, groups = group_dat, subtext = subtext, test = test)
+    new_grouped_tab(tabs, groups = group_dat, subtext = subtext, test = test, meta = meta_out)
   }
 
 }
@@ -4010,20 +4035,22 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # the option is on, so the aggregate has ONE shape -- toggling tabxplor.design_effect is then a
   # jamovi cache HIT instead of a full re-aggregate. Whether it is USED is the basis (`want_neff`).
   weighted <- length(wt) != 0
-  # the flat design's nPSU: the number of observations the table is built from, i.e. survey's own n
-  # for `svydesign(ids = ~1, data = <this data>)`. It only feeds the finite-sample factor n/(n-1), and
-  # it is meaningful ONLY on the raw scan -- which is also the only path that can produce Sigma w^2,
-  # so leaf_neff()'s `has_w2` guard is what keeps the `.fine` branch from ever reaching it.
-  n_obs <- NA_real_
   if (use_raw) {
-    n_obs <- nrow(data)
     long <- data[, list(n  = .N,
                         wn = if(weighted) { sum(eval(wt), na.rm = TRUE) } else {double()},
                         w2 = if(weighted) { sum(eval(wt)^2, na.rm = TRUE) } else {double()}),
                  keyby = eval(c(tab_row_names2, "col_var"))]
   } else {
     ocv  <- as.character(col_var)
-    long <- if (length(wt) != 0) {
+    # Last Phase z16-iiiii: Sigma w^2 is ADDITIVE, so a pre-aggregate that carries it rolls up like
+    # `wn` and the leaf gets the exact flat-design variance from it. That is what makes the jamovi
+    # `design_effect` checkbox reach a PERCENTAGE (its cached factor aggregate is the only `.fine`
+    # producer that can supply it -- tab_counts() genuinely cannot, and correctly does not).
+    keep_w2 <- weighted && "w2" %in% names(.fine)
+    long <- if (keep_w2) {
+      .fine[, list(n = as.integer(sum(n)), wn = sum(wn), w2 = sum(w2)),
+            keyby = eval(c(tab_row_names, ocv))]
+    } else if (weighted) {
       .fine[, list(n = as.integer(sum(n)), wn = sum(wn)), keyby = eval(c(tab_row_names, ocv))]
     } else {
       .fine[, list(n = as.integer(sum(n))),              keyby = eval(c(tab_row_names, ocv))]
@@ -4031,10 +4058,16 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     if (ocv != "col_var") data.table::setnames(long, ocv, "col_var")
   }
 
-  # Last Phase s: Sigma w^2 is produced only on the microdata scan (the `.fine`/counts path cannot
-  # produce it, and the unweighted scan carries an EMPTY `w2` column like the empty `wn`, so a bare
-  # `"w2" %in% names` would be a false positive). `has_w2` is a fact about THIS DATA: gate on weighted
-  # AND actual presence.
+  # The flat design's nPSU: the number of observations the table is built from, i.e. survey's own n
+  # for `svydesign(ids = ~1, data = <this data>)`. It feeds only the finite-sample factor n/(n-1).
+  # Last Phase z16-iiiii: read off the AGGREGATE, on both branches -- byte-identical to the former
+  # `nrow(data)` on the raw path (`.N` partitions the frame), and the only definition that also works
+  # when the leaf was handed a pre-aggregate. It is the convention num_core() already used.
+  n_obs <- sum(as.double(long$n))
+
+  # Last Phase s: Sigma w^2 comes from the microdata scan, or (z16-iiiii) from a pre-aggregate that
+  # carries it. The unweighted scan produces an EMPTY `w2` column like the empty `wn`, so a bare
+  # `"w2" %in% names` would be a false positive: `has_w2` gates on weighted AND actual presence.
   has_w2 <- weighted && "w2" %in% names(long)
   # W9: the weighted basis was asked for but this input cannot serve it (pre-aggregated counts carry
   # no per-observation Sum(w^2)) -> the table states basis "n" (svy_degrade_unserved()).
@@ -4459,40 +4492,40 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   result <- if (tab_var_1lv) {
     vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
                                tab_vars = character(0), wt = plain_wt)
-    new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr, inference = plain_inf)) |>
+    new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr)) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
                                tab_vars = purrr::map_chr(tab_vars, rlang::as_name), wt = plain_wt)
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
-                    meta = list(vars = vars_attr, inference = plain_inf))
+                    meta = list(vars = vars_attr))
   }
 
-  # Last Phase z13 (D3): see num_core -- the level on every fmt column, for the per-column colour engine.
-  result <- tab_stamp_conf_level(result, conf_level)
+  # Last Phase z13 (D3) + z16-iiiii: the level, the design df and the basis on every fmt COLUMN, for
+  # the per-column colour engine and for tab_ci() -- see tab_stamp_inference().
+  result <- tab_stamp_inference(result, conf_level, plain_inf$degf, plain_inf$basis)
 
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else the fmt table.
   if (df || num) leaf_extract_raw(result, df, num, row_var) else result
 }
 
 
-# leaf_inference() -- the `meta$inference` fact of ONE built table (Last Phase z16-i). Absent when
-# nothing is weighted (so an unweighted table's metadata is byte-unchanged); otherwise the resolved
-# basis, downgraded to "design_partial" + its reason when the design's variance producer had to fall
-# back during THIS build (svy_degrade_get(), reset per row_var by tab_transform / the leaf wrappers).
-# Shared by both leaves and by tab_assemble_tables, so the stored fact cannot differ between the
-# pipeline and the exported step path.
+# leaf_inference() -- the inference facts of ONE built table (Last Phase z16-i): the resolved basis,
+# downgraded to "design_partial" when the design's variance producer had to fall back during THIS
+# build (svy_degrade_get(), reset per row_var by tab_transform / the leaf wrappers), plus the design's
+# degrees of freedom. Shared by both leaves and by tab_assemble_tables, so the fact cannot differ
+# between the pipeline and the exported step path.
+# Last Phase z16-iiiii: it FEEDS tab_stamp_inference() -- the two facts are stamped on every fmt
+# COLUMN instead of stored in `meta$inference`, so they survive every rebuild that keeps the columns.
+# An unweighted table gets the defaults ("n", NA) and is byte-unchanged.
 #' @keywords internal
 #' @noRd
 leaf_inference <- function(basis, design_spec, wt) {
-  if (!svy_weighted(design_spec, wt)) return(NULL)
-  dg <- svy_degrade_get()
+  if (!svy_weighted(design_spec, wt)) return(list(basis = NULL, degf = NULL))
   if (identical(basis, "weights") && svy_degrade_unserved_get()) basis <- "n"
-  new_inference_attr(
-    basis = if (identical(basis, "design") && !is.null(dg)) "design_partial" else basis,
-    degf  = design_spec$degf %||% NA_real_,
-    note  = dg)
+  if (identical(basis, "design") && !is.null(svy_degrade_get()))  basis <- "design_partial"
+  list(basis = basis, degf = design_spec$degf %||% NA_real_)
 }
 
 
@@ -5696,18 +5729,19 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   num_inf <- leaf_inference(inference_basis, design_spec, wt)
   result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext, meta = list(inference = num_inf)) |>
+    new_tab(tabs, subtext = subtext) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
-                    meta = list(inference = num_inf))
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
 
-  # Last Phase z13 (D3): the level this leaf's intervals were built at, on every fmt column -- the
-  # colour engine is per column and cannot see the call's `conf_level`. Stamped in the LEAF so a direct
-  # tab_num() carries it too; the pipeline restamps the same value at tab_assemble_tables().
-  result <- tab_stamp_conf_level(result, conf_level)
+  # Last Phase z13 (D3) + z16-iiiii: the level this leaf's intervals were built at, the design df they
+  # are referred to and the basis they were computed on, all on every fmt COLUMN -- the colour engine
+  # is per column and cannot see the call's `conf_level`, and tab_ci() on the exported step path must
+  # find the design df on the object it is handed. Stamped in the LEAF so a direct tab_num() carries
+  # them too; the pipeline restamps the same values at tab_assemble_tables().
+  result <- tab_stamp_inference(result, conf_level, num_inf$degf, num_inf$basis)
 
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else return the
   # PRE-FINALISE fmt table (colour is finalised once by the caller: the public tab_num() wrapper).
@@ -5861,7 +5895,10 @@ tab_ci <- function(tabs,
   # Last Phase z16-i (W7): the DESIGN's degrees of freedom. Taken from the table's own stored
   # inference fact when the caller does not supply one, so the exported STEP path
   # (tab_plain(design) |> tab_ci()) refers its intervals to t(degf) exactly as the pipeline does.
-  if (is.null(degf)) degf <- get_inference(tabs)[["degf"]] %||% Inf
+  # Last Phase z16-iiiii: read off the COLUMNS (the smallest design df any of them carries), not off a
+  # table attribute -- that is what makes the exported step path, and a table a pipeline has stripped
+  # of its metadata, still refer their intervals to t(degf) instead of silently falling back to z.
+  if (is.null(degf)) degf <- tab_inference_degf(tabs)
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no", "ratio")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all")),
@@ -6154,7 +6191,7 @@ tab_ci <- function(tabs,
   # Last Phase z13 (D3): this step COMPUTES the intervals, so it owns their level -- otherwise
   # tab_plain() |> tab_ci(conf_level = 0.99) would store 99 % bounds under the leaf's 95 % stamp and
   # the engine would grey at the wrong level.
-  tabs <- tab_stamp_conf_level(tabs, conf_level)
+  tabs <- tab_stamp_inference(tabs, conf_level)
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, test = test)

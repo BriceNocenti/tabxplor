@@ -160,7 +160,7 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 10L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 11L   # bump on any store-shape change -> discard stale stores
                             # 9 = Last Phase z8: the fmt record gained the `gap_se` field, so a tier-3
                             #     carrier stored by an older session has a 20-field frame.
                             # (8: Last Phase z5 -- the `obs` field | 7: Last Phase j -- the `test`
@@ -311,8 +311,15 @@ jmv_cache_aggregate <- function(ctx) {
         } else {
           keycols <- c(tab_vars, rv, cv)
           dt <- data.table::as.data.table(data[c(keycols, if (weighted) wt_chr)])
+          # Last Phase z16-iiiii: Sigma w^2 alongside Sigma w, whenever the table is WEIGHTED (the
+          # ruling-8 shape the raw scan and num_moment_scan() already follow: ONE aggregate, so
+          # toggling `design_effect` is a cache HIT). Without it this aggregate could not serve the
+          # weighted basis, and the checkbox moved the MEAN cell intervals while leaving the
+          # PERCENTAGES and both p-values uncorrected -- with the footer denying the one correction
+          # that did happen.
           pair <- if (weighted) {
-            dt[, list(n = .N, wn = sum(as.numeric(eval(rlang::sym(wt_chr))), na.rm = TRUE)),
+            dt[, list(n = .N, wn = sum(as.numeric(eval(rlang::sym(wt_chr))), na.rm = TRUE),
+                      w2 = sum(as.numeric(eval(rlang::sym(wt_chr)))^2, na.rm = TRUE)),
                keyby = keycols]
           } else {
             dt[, list(n = .N), keyby = keycols]

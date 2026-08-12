@@ -145,7 +145,7 @@ test_that("9. unweighted output is untouched by the option, and carries no n_eff
   on  <- fdp_on(tab(d, grp, col, pct = "row", ci = "cell"))
   expect_identical(tab_md(off), tab_md(on))
   expect_true(all(is.na(get_n_eff(on[["yes"]]))))
-  expect_null(tabxplor:::get_inference(on))
+  expect_identical(tabxplor:::tab_inference_basis(on), "n")   # nothing to serve -> no claim
 })
 
 test_that("10. equal weights give n_eff = n * (N-1)/N (the finite-sample factor, S8.1)", {

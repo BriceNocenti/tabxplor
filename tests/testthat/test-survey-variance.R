@@ -264,10 +264,10 @@ test_that("the basis is ONE resolved fact, and it is stored on the table", {
   plain <- tab(d, g, col, pct = "row", ci = "cell")
   expect_true(all(is.na(get_n_eff(plain[["yes"]]))))
   expect_identical(tabxplor:::tab_inference_basis(plain), "n")
-  expect_null(tabxplor:::get_inference(plain))          # absent when unset (unweighted)
-  # a weighted table at the default basis STORES the fact, so its footer can say so
+  expect_true(is.na(tabxplor:::fmt_degf_attr(plain[["yes"]])))   # no design df to refer to
+  # a weighted table at the default basis carries the fact on its columns, so its footer can say so
   w1 <- tab(d, g, col, wt = w, pct = "row")
-  expect_identical(tabxplor:::get_inference(w1)$basis, "n")
+  expect_identical(tabxplor:::tab_inference_basis(w1), "n")
 })
 
 test_that("tab_plain() and tab_num() on a design take the same path as tab()", {
