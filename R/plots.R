@@ -114,8 +114,8 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
     return(columns)                                    # the reader's own order, honoured verbatim
   }
   role <- vapply(nm, function(n) as.character(get_role(x[[n]]))[1], character(1))
-  typ  <- vapply(nm, function(n) as.character(get_type(x[[n]]))[1], character(1))
-  keep <- role != "n" & typ != "n"
+  typ  <- vapply(nm, function(n) fmt_var_kind(x[[n]]), character(1))
+  keep <- role != "n" & typ != "count"
   if (!isTRUE(totals))
     keep <- keep & !vapply(nm, function(n) isTRUE(is_totcol(x[[n]])[1]), logical(1))
   nm <- nm[keep]; role <- role[keep]
@@ -140,7 +140,7 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
     lv <- lv[vapply(lv, function(n) {
       col <- x[[n]]
       d   <- display_primary(get_display(col))
-      f   <- if (identical(as.character(get_type(col))[1], "mean")) get_mean(col) else get_pct(col)
+      f   <- if (identical(fmt_var_kind(col), "mean")) get_mean(col) else get_pct(col)
       any(d %in% c("pct", "mean")) && any(is.finite(f))
     }, logical(1))]
     out <- unique(c(out, lv))
@@ -148,7 +148,7 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
   nm[nm %in% out]                                      # table order, not selection order
 }
 
-# The crude counterpart of a model column, by STORED facts: role "emp", the same estimand (`ci_type`),
+# The crude counterpart of a model column, by STORED facts: role "emp", the same estimand (`scale`),
 # and -- when several qualify -- the same `col_var`. Never by the "Obs_" name prefix: that pairing is
 # the defect or_plot() shipped with (`^Emp\\.`, silently dead after the Phase-g rename).
 #' @keywords internal
@@ -156,8 +156,10 @@ est_crude_of <- function(x, col_nm) {
   nm  <- names(x)[vapply(x, is_fmt, logical(1))]
   emp <- nm[vapply(nm, function(n) identical(as.character(get_role(x[[n]]))[1], "emp"), logical(1))]
   if (!length(emp)) return(NA_character_)
-  cit <- as.character(get_ci_type(x[[col_nm]]))[1]
-  emp <- emp[vapply(emp, function(n) identical(as.character(get_ci_type(x[[n]]))[1], cit), logical(1))]
+  # Phase 19b: pair on the STORED SCALE -- "is this the crude twin of that model column" is exactly
+  # "does it estimate the same thing", which is now one attribute instead of a coarser `ci_type`.
+  scl <- get_scale(x[[col_nm]])
+  emp <- emp[vapply(emp, function(n) identical(get_scale(x[[n]]), scl), logical(1))]
   if (!length(emp)) return(NA_character_)
   if (length(emp) > 1L) {
     cv  <- as.character(get_col_var(x[[col_nm]]))[1]
@@ -304,7 +306,7 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     # panel needs no line anyway: its baseline level is drawn, marked, as a point of its own.
     ref_v <- if (!identical(scl$kind, "level")) rep(scl$neutral, length(col))
              else if (!identical(role, "")) rep(NA_real_, length(col))
-             else if (identical(as.character(get_type(col))[1], "mean")) get_ref_means(col)
+             else if (identical(fmt_var_kind(col), "mean")) get_ref_means(col)
              else get_ref_pct(col)
 
     d <- tibble::tibble(

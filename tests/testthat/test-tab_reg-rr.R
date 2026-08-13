@@ -268,7 +268,7 @@ test_that("ame_ratio colours as a RATIO even with exponentiate = FALSE", {
                                 exponentiate = FALSE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
   expect_equal(get_color(t[[nm]])[1], "OR")
-  expect_equal(get_ci_type(t[[nm]]), "or")
+  expect_equal(get_scale(t[[nm]]), "odds_ratio")
 })
 
 test_that("ame_ratio: the legend names RR, not OR, on both the model and the crude column", {
@@ -301,7 +301,7 @@ test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
                                 empirical = TRUE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
   # still an additive risk DIFFERENCE with its "{diff} ({pct})" cell and diff colour
-  expect_equal(get_ci_type(t[[nm]]), "diff")
+  expect_equal(get_scale(t[[nm]]), "points")
   expect_equal(get_color(t[[nm]])[1], "diff")
   expect_true("Obs_diff" %in% names(t))
   expect_false("Obs_RR" %in% names(t))

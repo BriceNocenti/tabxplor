@@ -42,8 +42,11 @@ fmt_contract_field_types <- c(
 # one table can mix several dependents of different families and each column keeps its effect wording.
 # Phase 17c ADDED `role` (10 -> 11): a reg column's role ("model"/"emp", "" on cross-tables), read by
 # the colour legend to name each column's effect without matching its rendered "Emp." label.
+# Phase 19b REPLACED `type` (8 values, two jobs) with `scale` + `pct_base`, and DELETED `ci_type`
+# (the stored interval is always on the estimate's own scale, and "is there one" is a data fact).
+# Net 14 -> 15 attributes.
 fmt_contract_attr_defaults <- list(
-  type = "n", comp_all = NA, ref = "", ci_type = "",
+  scale = "level_n", comp_all = NA, ref = "", pct_base = "none",
   col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
   model_family = "", role = "",
   # Phase 18z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
@@ -52,7 +55,10 @@ fmt_contract_attr_defaults <- list(
   # Phase 18z16-iiiii: the 13th and 14th -- HOW this column's interval was computed. They were
   # meta$inference, a TABLE attribute, until two rebuild sites were found dropping the whole of `meta`.
   # NA / "n" = an unweighted or weights-only table: refer to z, claim no design effect.
-  degf = NA_real_, basis = "n"
+  degf = NA_real_, basis = "n",
+  # Phase 19b: the 15th -- WHICH interval engine built this column's bounds ("" = none). It was
+  # meta$ci_settings, a table-wide vector the legend indexed BY MEASURE (D8).
+  ci_method = ""
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {
@@ -88,11 +94,11 @@ testthat::test_that("fmt carries exactly the contracted column attributes with r
 
 testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and attributes", {
   x <- fmt(
-    n = c(10L, 20L), type = "row", digits = 1L, display = c("n", "pct"),
+    n = c(10L, 20L), scale = "level_pct", pct_base = "row", digits = 1L, display = c("n", "pct"),
     wn = c(9.5, 19.4), pct = c(NA, 0.5), mean = c(NA, NA), diff = c(NA, 0.1),
     ctr = c(NA, 0.3), var = c(NA, NA), ci = c(NA, 0.02),
     in_totrow = c(FALSE, TRUE), in_refrow = c(TRUE, FALSE),
-    comp_all = TRUE, ref = "tot", ci_type = "cell", col_var = "sex",
+    comp_all = TRUE, ref = "tot", col_var = "sex",
     totcol = FALSE, color = "diff"
   )
 
@@ -117,7 +123,7 @@ testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and
 # ci_inf/ci_sup bounds around the estimate the interval is centred on (here the proportion
 # pct), and get_ci() / $ci read the half-width back as ci_sup - centre.
 testthat::test_that("fmt(ci=) stores absolute bounds and get_ci() reads the half-width back", {
-  x <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
+  x <- fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
   testthat::expect_identical(vctrs::field(x, "ci_sup"), c(NA_real_, 0.52))  # pct + ci
   testthat::expect_identical(vctrs::field(x, "ci_inf"), c(NA_real_, 0.48))  # pct - ci
   testthat::expect_equal(get_ci(x), c(NA_real_, 0.02))       # half-width read back

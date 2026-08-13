@@ -10,6 +10,9 @@
 #     table loses its "pvalue" body row -> its per-cell hex fixture drops that row's cells; every
 #     other cell's colour is byte-identical, contrib being computed at build before the row was ever
 #     added). The other data rows are unchanged.
+#   Phase 19b: ALL 15 regenerated -- the `type` -> `scale` + `pct_base` attribute split (KEY 2).
+#     Colour SLOTS are unchanged by construction (the plan reads the stored scale where it used to
+#     re-derive the same facts from `type` / `ci_type`); only the stored attributes differ.
 #   CONSCIOUSLY REGENERATED at Step 3: c_mean_diff (numeric diff -> Glass's delta), and the
 #     pct CI-gated modes c_diff_ci / c_after_ci / c_ci (asymmetric-interval upper-arm fix).
 #   Phase 18z16-iv: c_contrib_wt_grey ADDED (nothing regenerated). It closes the gap that let W-B

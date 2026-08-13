@@ -10,6 +10,13 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 19b: ALL 36 regenerated -- the per-column attribute `type` split into `scale` + `pct_base`
+#     and `ci_type` was deleted (KEY 2). NO field and NO cell value moved: dev/verify_golden_field_
+#     delta.R proved, on all 1787 cells, that each stored `scale` is exactly what the deleted
+#     est_scale_key() dispatch derived from that column's own (type, ci_type) -- except an OR table's
+#     REFERENCE column, which now says `odds_ratio` like its siblings instead of "" (D19). The same
+#     pass added `ci_method` (which engine built these bounds; "" = none), proved per column against
+#     the invariant "names a method iff the old ci_type was not ''/'no'", and DROPPED meta$ci_settings.
 #   Phase 18z8: ALL 36 regenerated -- the record gained a 21st per-cell field `gap_se` (the SE of
 #     the gap between a cell's estimate and `obs`). dev/verify_golden_field_delta.R -- the proving
 #     script, now COMMITTED rather than rewritten each time -- checked 1787 cells and reported the

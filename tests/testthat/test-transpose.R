@@ -26,7 +26,8 @@ testthat::test_that("transpose of a row% table == a native col% table (structure
   testthat::expect_identical(tab_get_vars(tr)$col_vars, "marital")
   # axis flags per fmt column
   for (nm in names(tr)[purrr::map_lgl(tr, is_fmt)]) {
-    testthat::expect_identical(get_type(tr[[nm]]),   get_type(native[[nm]]))
+    testthat::expect_identical(get_scale(tr[[nm]]),    get_scale(native[[nm]]))
+    testthat::expect_identical(get_pct_base(tr[[nm]]), get_pct_base(native[[nm]]))
     testthat::expect_identical(get_col_var(tr[[nm]]), get_col_var(native[[nm]]))
     testthat::expect_identical(is_totcol(tr[[nm]]),  is_totcol(native[[nm]]))
     testthat::expect_identical(is_refcol(tr[[nm]]),  is_refcol(native[[nm]]))
@@ -53,7 +54,7 @@ testthat::test_that("transpose(transpose(x)) restores the original", {
   tr2  <- xpose(xpose(orig))
   testthat::expect_identical(names(tr2), names(orig))
   testthat::expect_equal(get_pct(tr2[["White"]]), get_pct(orig[["White"]]))
-  testthat::expect_identical(get_type(tr2[["White"]]), get_type(orig[["White"]]))
+  testthat::expect_identical(get_scale(tr2[["White"]]),    get_scale(orig[["White"]]))
   testthat::expect_identical(is_totcol(tr2[["Total"]]), is_totcol(orig[["Total"]]))
 })
 
@@ -93,7 +94,7 @@ testthat::test_that("numeric cells keep their OWN colour on transpose (the findi
   cvm     <- rdu$roles$col_var_map
   is_tot  <- data_i %in% rdu$roles$totcols
   is_n    <- unname(cvm[data_i]) %in% "all_col_vars"
-  types   <- vapply(data_i, function(j) get_type(rdu$tab[[j]]), character(1))
+  types   <- vapply(data_i, function(j) tabxplor:::fmt_var_kind(rdu$tab[[j]]), character(1))
   is_mean <- types %in% "mean" & !is_tot & !is_n
   is_fac  <- !is_tot & !is_n & !is_mean
   order_i <- c(data_i[is_fac], data_i[is_tot], data_i[is_n], data_i[is_mean])

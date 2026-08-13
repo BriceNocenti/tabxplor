@@ -43,7 +43,7 @@ test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
   skip_if_not_installed("broom")
   d <- reg_data() |> dplyr::mutate(score = age + 0.5)                 # non-integer -> continuous
   expect_message(col_tab <- tab_reg(d, "score", "race"), "continuous")
-  expect_identical(get_type(col_tab[["Model_\u03b2"]]), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(col_tab[["Model_\u03b2"]]), "coef")
 })
 
 # ---- gaussian beta: parity + additive fmt shape ---------------------------------------------
@@ -57,9 +57,9 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
                  cleannames = FALSE)
   col <- t1[["Model_\u03b2"]]
 
-  expect_identical(get_type(col), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_display(col)[1], "coef")
-  expect_identical(get_ci_type(col), "diff")
+  expect_identical(get_scale(col), "raw_diff")
   expect_identical(get_color(col), "diff")
   expect_identical(get_color_signif(col), "grey_non_signif")
 
@@ -109,9 +109,9 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
                                   cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
-  expect_identical(get_type(col), "row")
+  expect_identical(get_pct_base(col), "row")
   expect_identical(get_display(col)[1], "or")
-  expect_identical(get_ci_type(col), "or")
+  expect_identical(get_scale(col), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the IRR = exp(coef) is the Poisson
@@ -140,8 +140,8 @@ test_that("exponentiate=FALSE on a logit yields raw log-odds (additive coef shap
   d   <- reg_data()
   col <- tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE,
                  cleannames = FALSE)[["Model_\u03b2"]]
-  expect_identical(get_type(col), "coef")
-  expect_identical(get_ci_type(col), "diff")
+  expect_identical(tabxplor:::fmt_var_kind(col), "coef")
+  expect_identical(get_scale(col), "log_coef")   # a link-scale (log-odds) coefficient
 
   dm <- d |> dplyr::filter(!is.na(race), !is.na(married))
   dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
@@ -192,8 +192,8 @@ test_that("mixed binomial + gaussian: per-column families + byte-parity vs stand
   expect_identical(get_model_family(mix[[or_col]]),   "binomial")
   expect_identical(get_model_family(mix[[beta_col]]), "gaussian")
   # and keeps its own fmt shape
-  expect_identical(get_ci_type(mix[[or_col]]),   "or")
-  expect_identical(get_type(mix[[beta_col]]),    "coef")
+  expect_identical(get_scale(mix[[or_col]]), "odds_ratio")
+  expect_identical(tabxplor:::fmt_var_kind(mix[[beta_col]]), "coef")
 
   # a mixed build must NOT perturb any per-column value (identical to the standalone single-family col)
   expect_equal(get_or(mix[[or_col]]),        get_or(bin[["Model_OR"]]))
@@ -341,9 +341,9 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
                                   cleannames = FALSE))
   col <- t1[["Model_OR"]]
 
-  expect_identical(get_type(col), "row")
+  expect_identical(get_pct_base(col), "row")
   expect_identical(get_display(col)[1], "or")
-  expect_identical(get_ci_type(col), "or")
+  expect_identical(get_scale(col), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
   dm$race <- forcats::fct_drop(factor(dm$race))
@@ -380,8 +380,8 @@ test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the
   b <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                 exponentiate = FALSE,
                                 cleannames = FALSE))[["Model_\u03b2"]]
-  expect_identical(get_type(b), "coef")
-  expect_identical(get_ci_type(b), "diff")
+  expect_identical(tabxplor:::fmt_var_kind(b), "coef")
+  expect_identical(get_scale(b), "log_coef")
 })
 
 test_that("trials errors outside the binomial family; ordinary >2-level binomial still aborts", {
@@ -501,9 +501,9 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   # one OR column per non-reference outcome category, "vs <ref>" in the label
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
   col1 <- t1[["Dem vs Ind"]]
-  expect_identical(get_type(col1), "row")
+  expect_identical(get_pct_base(col1), "row")
   expect_identical(get_display(col1)[1], "or")
-  expect_identical(get_ci_type(col1), "or")
+  expect_identical(get_scale(col1), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
   dm$race   <- forcats::fct_drop(dm$race)
@@ -548,9 +548,9 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),
                                   family = "ordinal", cleannames = FALSE))
   col <- t1[["Model_OR"]]
-  expect_identical(get_type(col), "row")
+  expect_identical(get_pct_base(col), "row")
   expect_identical(get_display(col)[1], "or")
-  expect_identical(get_ci_type(col), "or")
+  expect_identical(get_scale(col), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race), !is.na(age))
   dm$race <- forcats::fct_drop(dm$race)
@@ -635,8 +635,8 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
                  cleannames = FALSE)
   col <- t1[["Model_AME"]]
 
-  expect_identical(get_type(col), "row")
-  expect_identical(get_ci_type(col), "diff")
+  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_scale(col), "points")   # a binomial AME is a risk difference, in points
   expect_identical(get_color(col), "diff")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
@@ -682,8 +682,8 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame", multiplier = 1,
                  cleannames = FALSE)[["Model_AME"]]
-  expect_identical(get_type(col), "coef")
-  expect_identical(get_ci_type(col), "diff")
+  expect_identical(tabxplor:::fmt_var_kind(col), "coef")
+  expect_identical(get_scale(col), "raw_diff")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   dm$race <- forcats::fct_drop(dm$race)
@@ -705,7 +705,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   effect = "ame", cleannames = FALSE))[["Model_AME"]]
-  expect_identical(get_type(col), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   dm$race <- forcats::fct_drop(dm$race)
@@ -808,7 +808,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
                  at = "reference", multiplier = 1, cleannames = FALSE)
   col <- t1[["Model_MER"]]                           # the label switches AME -> MER at reference
-  expect_identical(get_type(col), "row")
+  expect_identical(get_pct_base(col), "row")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
   dm$race    <- forcats::fct_drop(dm$race)
@@ -835,7 +835,7 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", at = "reference",
                 cleannames = FALSE)
   expect_true(all(c("Ind vs rest", "Dem vs rest", "Rep vs rest") %in% names(t1)))
-  expect_identical(get_ci_type(t1[["Dem vs rest"]]), "or")
+  expect_identical(get_scale(t1[["Dem vs rest"]]), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
   dm$race   <- forcats::fct_drop(dm$race)

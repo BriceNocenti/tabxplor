@@ -1062,21 +1062,23 @@ color_pct_text_is_ratio <- function(spec) {
 }
 
 # The per-column measure vector (text[, background]) the spec assigns to a column, given its built
-# color + type. NULL = leave the column as the pipeline built it (e.g. contrib/OR under a pct/mean
-# spec, or a type the spec does not mention).
+# color + what the column is. NULL = leave the column as the pipeline built it (e.g. contrib/OR under
+# a pct/mean spec, or a kind the spec does not mention).
+# Phase 19b: `numeric` = "this column does not summarise a percentage" (a mean, a count, a
+# coefficient) and `pct` = "it has a percentage base" -- the two halves the old 8-value `type` was
+# being partitioned into here, by two hand-written vectors, in four places.
 #' @keywords internal
-resolve_col_measures <- function(spec, type, built) {
-  if (spec$mode == "auto") {                                # color = TRUE smart per-type default
+resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
+  if (spec$mode == "auto") {                                # color = TRUE smart per-kind default
     if (built == "OR")      return("OR")
     if (built == "contrib") return(NULL)                    # counts / all -> keep contrib
-    if (type %in% c("mean", "n", "coef"))             return("ratio")          # numeric -> ratio text
-    if (type %in% c("row", "col", "all", "all_tabs")) return(c("diff", "ratio"))  # factor -> diff + ratio bg
+    if (numeric_col) return("ratio")                        # numeric -> ratio text
+    if (pct_col)     return(c("diff", "ratio"))             # factor  -> diff + ratio bg
     return(NULL)
   }
   if (spec$mode == "by_type") {
     if (built %in% c("OR", "contrib")) return(NULL)         # not keyable by pct/mean -> keep built
-    key <- if (type %in% c("mean", "n", "coef")) "mean"
-           else if (type %in% c("row", "col", "all", "all_tabs")) "pct" else NA_character_
+    key <- if (numeric_col) "mean" else if (pct_col) "pct" else NA_character_
     if (is.na(key) || is.null(spec$types[[key]])) return(NULL)
     m <- spec$types[[key]]
     return(if (is.na(m[2])) m[1] else m)
@@ -1090,9 +1092,9 @@ resolve_col_measures <- function(spec, type, built) {
 #' @keywords internal
 finalize_one_col <- function(col, spec) {
   built <- get_color(col)
-  type  <- get_type(col)
   if (built %in% c("", "no")) return(col)                  # the pipeline did not color this column
-  measures <- resolve_col_measures(spec, type, built)
+  measures <- resolve_col_measures(spec, fmt_var_kind(col) != "pct", get_pct_base(col) != "none",
+                                   built)
   if (is.null(measures)) return(col)
   if (length(measures) == 1L && measures %in% c("", "no")) return(col)
   set_color_signif(set_color(col, measures), spec$signif)
@@ -2724,13 +2726,6 @@ tab_assemble_tables <- function(ctx) {
     render_extras$common_totrow     <- TRUE
     render_extras$common_totrow_ref <- any(ref == "tot")
   }
-  # Phase 13b / 14v-ii: record which CI method / confidence level was actually used, so
-  # tab_color_legend() can name it (only meaningful when a CI was computed; harmless otherwise -- absent
-  # settings fall back). 14v-ii adds the numeric + ratio methods (welch/student, robust/quasi/poisson,
-  # katz); the legend picks the relevant one off the column's type / ci_type.
-  ci_settings <- if (!identical(ci, "no")) {
-    list(conf_level = inference$conf_level, method = inference$method)
-  } else NULL
   # Phase 14d: record the variable ROLES here, where they are known. Recovering them from the finished
   # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
   # Phase 16d: also record the weight column NAME (character(0) when unweighted) -> the footer "Weighted
@@ -2740,7 +2735,7 @@ tab_assemble_tables <- function(ctx) {
                              wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
                              var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
   # Phase 17b: the two 2.0.0-new attrs left here are ONE `meta` list (drop-NULL happens in new_tab()).
-  meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
+  meta <- list(render_extras = render_extras, vars = vars_attr)
   # Phase 18z13 (D3): project the call's confidence level onto every fmt column. `meta$ci_settings`
   # records it for the legend, but the colour engine is per COLUMN and never sees the table -- so
   # without this stamp every threshold in it falls back to the global option, and a table built at
@@ -2907,7 +2902,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   if (!is.null(vars_out)) vars_out$tab_vars <- as.character(tab_vars_new)
 
   na_values <- purrr::map(dplyr::ungroup(tabs)[col_levels],
-                          ~ fmt0(type = get_type(.x), display = get_display(.x[1]))) |>
+                          ~ fmt0(scale = get_scale(.x), display = get_display(.x[1]))) |>
     purrr::set_names(col_levels)
 
 
@@ -3122,8 +3117,10 @@ tab_transpose <- function(tabs, name = NULL) {
   rep_name <- if (length(rep_name) > 0) rep_name[[1]] else fmtc[[1]]
   rep_attrs <- purrr::set_names(
     lapply(fmt_col_attrs, function(a) attr(tabs[[rep_name]], a, exact = TRUE)), fmt_col_attrs)
-  old_type <- if (is.null(rep_attrs$type)) "row" else rep_attrs$type
-  new_type <- switch(old_type, row = "col", col = "row", old_type)
+  # Phase 19b: transposing swaps the percentage BASE (a row % becomes a column %), never the
+  # estimate scale -- the numbers are the same numbers, read along the other axis.
+  old_base <- if (is.null(rep_attrs$pct_base)) "row" else rep_attrs$pct_base
+  new_base <- switch(old_base, row = "col", col = "row", old_base)
 
   # --- the pivot: old columns become rows, old row_var levels become columns ---
   if (is.null(name)) name <- if (!is.na(old_col_var)) old_col_var else "variables"
@@ -3145,7 +3142,7 @@ tab_transpose <- function(tabs, name = NULL) {
   for (nm in new_fmtc) {
     col <- wide[[nm]]
     for (a in fmt_col_attrs) attr(col, a) <- rep_attrs[[a]]    # restore uniform col_var attributes
-    col <- set_type(col, new_type)                            # row <-> col
+    col <- set_pct_base(col, new_base)                        # row % <-> col %
     # new col_var = the old row variable this column's rows came from (per column when merged)
     col <- set_col_var(col, if (merged) unname(src_row_var[[nm]]) else row_var)
     col <- as_totcol(col, FALSE)
@@ -4494,7 +4491,19 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     pct %in% c("row", "col") & ref != "no"            ~ "diff",
     TRUE                                              ~ ""
   )
-  type_1   <- dplyr::if_else(pct != "no", pct, "n")
+  # Phase 19b (KEY 2): the leaf STAMPS what its columns estimate. `pct_base` is the percentage's own
+  # base ("none" for a count column); `scale` is the estimate's scale -- a level here, since the leaf
+  # builds cells. tab_ci() upgrades it to `points` / `odds_ratio` / `pct_ratio` when it computes a
+  # contrast interval, and tab_apply_reference() stamps `odds_ratio` where it builds the Woolf one.
+  base_1   <- dplyr::if_else(pct != "no", pct, "none")
+  # An OR table's columns estimate an ODDS RATIO -- all of them, including the reference one, whose
+  # own OR bounds are NA by construction (D19: under the pre-19b `ci_type` it alone said "", i.e. it
+  # claimed to estimate something different from its siblings, and z17 had to patch that back by
+  # reading the rendered `display`). Everything else is a LEVEL here; tab_ci() upgrades it to
+  # `points` / `pct_ratio` when it computes a contrast interval.
+  scale_1  <- dplyr::case_when(display_1 %in% c("or", "or_pct") ~ "odds_ratio",
+                               pct != "no"                      ~ "level_pct",
+                               TRUE                             ~ "level_n")
   ref_1    <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
   comp_1   <- dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA)
   colvar_1 <- rlang::as_name(col_var)
@@ -4526,8 +4535,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     purrr::pmap_dfc(function(...) {
       a <- list(...)
       # 14z: a[[11..13]] carry the empirical-OR interval (all-NA unless a colour policy/stars asked for
-      # it). ci_type "or" is set PER COLUMN only where real bounds exist -> the ref2/Total columns (NA'd
-      # in tab_apply_reference) and every non-OR table keep ci_type "" byte-for-byte.
+      # it). Phase 19b: the scale is column-INVARIANT (scale_1 above) -- the ref2/Total columns' NA
+      # bounds are what makes them carry no interval and no significance, which is a data fact, not a
+      # second vocabulary (D19).
       fmt_materialize_col(
         frame = list(
           n         = as.integer(a[[1]]), display = display_1, digits = digits_v,
@@ -4536,8 +4546,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
           pvalue    = a[[13]], or = a[[7]], tot_n = a[[10]], n_eff = a[[14]],
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
-          type      = type_1, comp_all = comp_1, ref = ref_1,
-          ci_type   = if (!all(is.na(a[[11]]))) "or" else "", col_var = colvar_1,
+          scale     = scale_1, comp_all = comp_1, ref = ref_1,
+          # the only interval this leaf computes itself is the empirical-OR one (ci_or, Woolf's
+          # log-OR); the cell / contrast intervals are tab_ci()'s, and it stamps its own engine.
+          ci_method = if (!all(is.na(a[[11]]))) "woolf" else "",
+          pct_base  = base_1, col_var = colvar_1,
           totcol    = a[[8]], refcol = a[[9]], color = color_1, color_signif = "ignore")
       )
     })
@@ -4552,7 +4565,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   no_col_vars_cols <- get_col_var(tabs) == "no_col_var" #& pct %in% c("row", "col", "all", "all_tabs")
   if (any(no_col_vars_cols) ) {
     tabs <- tabs |>
-      dplyr::mutate(n = set_display(.data$n, "n") |> set_type("n") |> as_totcol(FALSE)) |>
+      dplyr::mutate(n = set_display(.data$n, "n") |> set_count_col() |> as_totcol(FALSE)) |>
       dplyr::relocate("n", .after = tidyselect::last_col())
 
     if (pct %in% c("row", "col", "all", "all_tabs")) {
@@ -4564,7 +4577,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     }
 
     if (length(wt) != 0) tabs <- tabs |>
-        dplyr::mutate(wn = set_display(.data$n, "wn") |> set_type("n")) |>
+        dplyr::mutate(wn = set_display(.data$n, "wn") |> set_count_col()) |>
         dplyr::relocate("wn", .after = tidyselect::last_col() )
   }
 
@@ -5786,6 +5799,19 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # the per-column case_when becomes a base if/else (scalar conditions, only one branch evaluated) --
   # byte-identical. NA_reals is reused for the always-NA fields (pct/ctr/tot_n/or) new_fmt defaults.
   display_1 <- if (ci_visible) { "mean_ci" } else { "mean" }
+  # Phase 19b (KEY 2): what these columns estimate. A cell interval leaves the column a LEVEL (a mean
+  # with its own interval is still a mean); a contrast interval makes it a mean DIFFERENCE, or a
+  # ratio of means when that is the scale asked for.
+  scale_num <- if (ci %in% c("diff", "diff_row", "diff_col")) {
+    if (identical(ci_scale[1], "ratio")) "mean_ratio" else "mean_diff"
+  } else "level_mean"
+  # ... and WHICH engine built its bounds (D8). A one-sample cell interval on a mean is a Student t
+  # pivot -- which the legend used to announce as "Welch t", because it had to pick a slot back out
+  # of a table-wide vector by measure.
+  method_num <- if (identical(ci, "no")) ""
+                else if (identical(ci, "cell")) "student"
+                else if (identical(ci_scale[1], "ratio")) inference$method[["mean_ratio"]]
+                else inference$method[["mean_diff"]]
   ref_1     <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
   comp_1    <- dplyr::if_else(ref != "no" | ci != "no", comp == "all", NA)
   NA_reals  <- rep(NA_real_, nrow(tabs_n))
@@ -5816,10 +5842,12 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals, n_eff = a[[12]],
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
-          # 14v-ii: a ratio-scale mean interval is stored as ci_type = "ratio" (neutral 1), so
-          # ci_center()/format()/the colour gate read the ratio bounds, not a diff mislabelled ratio.
-          type      = "mean", comp_all = comp_1, ref = ref_1,
-          ci_type   = if (identical(ci_scale[1], "ratio") && ci == "diff") "ratio" else ci,
+          # Phase 19b: the numeric leaf computes its OWN interval (unlike the factor one, which waits
+          # for tab_ci()), so it stamps the finished scale here. 14v-ii: a ratio-scale mean interval
+          # lives on `mean_ratio` (neutral 1), so ci_center()/format()/the colour gate read the ratio
+          # bounds, not a difference mislabelled as a ratio.
+          scale     = scale_num, comp_all = comp_1, ref = ref_1,
+          pct_base  = "none", ci_method = method_num,
           col_var   = a[[7]],
           totcol    = FALSE, refcol = FALSE, color = color, color_signif = "ignore")
       )
@@ -6069,7 +6097,12 @@ tab_ci <- function(tabs,
   comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
   tabs <- tabs |> tab_match_comp_and_tottab(comp)
 
-  type <- get_type(tabs)
+  # Phase 19b: which axis the comparison runs along (`pct_base`) and whether the column summarises a
+  # mean -- the two facts this step was reading out of the old `type` attribute.
+  base   <- get_pct_base(tabs)
+  vkind  <- fmt_var_kind(tabs)
+  is_rm  <- base == "row" | vkind == "mean"          # the reference is a ROW
+  ci_able <- vkind == "mean" | base != "none"        # a count / a coefficient carries no cell CI
   tot_cols <- detect_totcols(tabs)
   tot_cols[is.na(ci)] <- list(rlang::sym(""))
   names_totcols <- tot_cols |> purrr::map_chr(as.character) |> unique() |>
@@ -6090,14 +6123,14 @@ tab_ci <- function(tabs,
     purrr::discard(\(s) s == "")
 
   ci[fmtc] <- dplyr::case_when(
-    !type[fmtc] %in% c("mean", "row", "col", "all", "all_tabs") ~ "no"      ,
+    !ci_able[fmtc]                                              ~ "no"      ,
     ci[fmtc] == "cell"                                          ~ "cell"    ,
-    ci[fmtc] == "diff"   & type[fmtc] %in% c("row", "mean")     ~ "diff_row",
-    ci[fmtc] == "diff"   & type[fmtc] == "col"                  ~ "diff_col",
+    ci[fmtc] == "diff"   & is_rm[fmtc]                          ~ "diff_row",
+    ci[fmtc] == "diff"   & base[fmtc] == "col"                  ~ "diff_col",
 
-    ci[fmtc] == "auto"   & type[fmtc] %in% c("row", "mean")     ~ "diff_row",
-    ci[fmtc] == "auto"   & type[fmtc] == "col"                  ~ "diff_col",
-    ci[fmtc] == "auto"   & type[fmtc] %in% c("all","all_tabs")  ~ "cell"    ,
+    ci[fmtc] == "auto"   & is_rm[fmtc]                          ~ "diff_row",
+    ci[fmtc] == "auto"   & base[fmtc] == "col"                  ~ "diff_col",
+    ci[fmtc] == "auto"   & base[fmtc] %in% c("all","all_tabs")  ~ "cell"    ,
 
     TRUE                                                        ~ "no"
   )
@@ -6105,8 +6138,7 @@ tab_ci <- function(tabs,
 
   #Depending of ci type, totals and reference cols (for diff), not calculate ci
   ci <- dplyr::if_else(
-    condition = (!type %in% c("row", "col", "all", "all_tabs", "mean")) |
-      (ci %in% c("diff_col", "spread_col") & type == "mean"),
+    condition = !ci_able | (ci %in% c("diff_col", "spread_col") & vkind == "mean"),
     true = "no",
     false = ci
   )
@@ -6138,7 +6170,7 @@ tab_ci <- function(tabs,
     # `.[dplyr::last(which(<mask>))]` under grouping. The old `tot_rows` was DEAD (computed, never read).
     ci_cols   <- names(ci_yes)[ci_yes]
     diff_cols <- names(ci_yes)[ci %in% c("diff_row", "diff_col")]
-    mean_cols <- names(ci_yes)[ci == "diff_row" & type == "mean"]
+    mean_cols <- names(ci_yes)[ci == "diff_row" & vkind == "mean"]
 
     gid  <- dplyr::group_indices(tabs)
     gids <- unique(gid)
@@ -6157,7 +6189,7 @@ tab_ci <- function(tabs,
     x_n <- ref <- ref_var <- ref_n <- ci_inf <- ci_sup <- pvalue <- empty
     for (nm in ci_cols) {
       col <- tabs[[nm]]
-      tp  <- get_type(col)
+      tp  <- fmt_var_kind(col)
       rp  <- group_last_pos(ref_mask(col))                     # per-row reference-row index (NA if none)
       rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
       # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
@@ -6166,16 +6198,10 @@ tab_ci <- function(tabs,
       # Phase 19a folds that coalesce, written out at all five read sites below, into fmt_base().
       x_n[[nm]] <- dplyr::if_else(
         rtona, NA_integer_,
-        switch(tp,
-               # BUG FIX (found in Phase 18z16-ii, pre-existing and weight-independent): "all" /
-               # "all_tabs" were missing here, so `tab(pct = "all", ci = "cell")` -- which the `auto`
-               # rule itself routes to a CELL interval -- died in if_else() with "`false` must be a
-               # vector, not `NULL`". Their base is `tot_n` like every other proportion.
-               "col"      = ,
-               "row"      = ,
-               "all"      = ,
-               "all_tabs" = fmt_base(col),
-               "mean"     = fmt_base(col, mean = TRUE)))
+        # every proportion's base is `tot_n`, a mean's is `n`. (Phase 18z16-ii had to add "all" /
+        # "all_tabs" to a hand-written list of percentage types here, which is exactly the kind of
+        # omission `var_kind` removes: there is one arm per KIND of column, not one per type value.)
+        if (identical(tp, "mean")) fmt_base(col, mean = TRUE) else fmt_base(col))
       if (nm %in% diff_cols) {
         if (ci[[nm]] == "diff_col") {
           rcol        <- tabs[[as.character(ref_cols[[nm]])]]  # the reference COLUMN (its own base)
@@ -6237,6 +6263,7 @@ tab_ci <- function(tabs,
                          conf_level = conf_level, method = method_diff, want_p = want_p,
                          df = degf)))
       ci_inf[[nm]] <- res$inf; ci_sup[[nm]] <- res$sup; pvalue[[nm]] <- res$pvalue
+
     }
 
     # Phase 9b-5 increment 2: apply the precomputed CI bounds/pvalue (loop above) + `comp_all` + the
@@ -6248,7 +6275,7 @@ tab_ci <- function(tabs,
     vis_mask     <- visible & ci != "no"
     visible_cols <- names(visible)[!is.na(vis_mask) & vis_mask]
     display      <- stats::setNames(lapply(visible_cols, function(nm)
-      if (ci[[nm]] == "cell") ifelse(type[[nm]] == "mean", "mean_ci", "pct_ci") else "ci"), visible_cols)
+      if (ci[[nm]] == "cell") ifelse(vkind[[nm]] == "mean", "mean_ci", "pct_ci") else "ci"), visible_cols)
     # comp_all touches ALL fmt columns (if diff_row); otherwise only the CI + visible columns.
     write_cols   <- if (diff_row_any) names(tabs)[purrr::map_lgl(tabs, is_fmt)]
                     else union(ci_cols, visible_cols)
@@ -6272,18 +6299,34 @@ tab_ci <- function(tabs,
     if (length(grp)) tabs <- dplyr::group_by(tabs, dplyr::across(dplyr::all_of(grp)), .drop = drp)
 
 
-    #Change ci_type and color, even for totals with no ci result
+    #Change the scale and the color, even for totals with no ci result
     ci_with_ref <- stringi::stri_replace_first_regex(ci_with_ref, "_row|_col", "")
-    # Phase 14b / 14v-ii: name the SCALE the bounds were actually built on, so every reader
-    # (ci_center(), format()'s bracket, the colour significance gate, the legend) dispatches off the
-    # stored attribute rather than re-deriving the colour spec. 14v-ii: means now also take the ratio
-    # branch above (ci_mean_ratio), so the `type != "mean"` exclusion is gone -- a ratio mean gets
-    # ci_type = "ratio" (neutral 1, bare bracket) like a ratio proportion.
-    if (identical(ci_scale[1], "ratio")) {
-      is_ratio_ci <- ci_with_ref == "diff"
-      ci_with_ref[is_ratio_ci] <- "ratio"
-    }
+    # Phase 19b (KEY 2): this step does not RECORD ITS ARGUMENT any more -- it stamps what the column
+    # now estimates. Adding a contrast interval to a percentage column CHANGES WHAT THAT COLUMN IS
+    # (`level_pct` -> `points`), and every reader (ci_center(), format()'s bracket, the colour
+    # significance gate, the legend, the forest-plot axis) reads that one fact instead of re-deriving
+    # a colour spec. A `cell` interval changes nothing: a mean with its own interval is still a mean.
+    # 14v-ii: a mean also takes the ratio branch above (ci_mean_ratio), so a ratio mean lands on
+    # `mean_ratio` (neutral 1, bare bracket) like a ratio proportion.
     ci_yes_ref  <- !is.na(ci_with_ref) & !ci_with_ref == "no"
+    ci_ratio    <- identical(ci_scale[1], "ratio")
+    ci_scale_of <- function(col, ci_ref) {
+      if (!identical(ci_ref, "diff")) return(get_scale(col))   # "cell": the level scale stands
+      if (identical(fmt_var_kind(col), "mean")) if (ci_ratio) "mean_ratio" else "mean_diff"
+      else                                      if (ci_ratio) "pct_ratio"  else "points"
+    }
+    # Phase 19b (D8): WHICH engine built these bounds, stamped where it is known instead of being
+    # picked back out of a table-wide vector BY MEASURE (an eight-branch chain that could name a
+    # method the bounds were never built with -- most visibly a one-sample cell interval on a mean,
+    # announced as "Welch t"). Like the scale above it is stamped for the WHOLE col_var, totals and
+    # reference columns included: their own bounds are NA by construction, and THAT is the data fact
+    # saying "no interval here" -- exactly the rule D19 settled for the odds-ratio scale.
+    ci_method_of <- function(col, ci_ref) {
+      is_mean <- identical(fmt_var_kind(col), "mean")
+      if (identical(ci_ref, "cell")) { if (is_mean) "student" else method_cell }
+      else if (is_mean) { if (ci_ratio) method_mean_ratio else method_mean_diff }
+      else              { if (ci_ratio) "katz"            else method_diff      }
+    }
 
     # Phase 17d: `color` may arrive as a legacy combined string (the resolve cascade's color_ci, or a
     # direct tab_ci(color = "after_ci") on the deprecated step path). Decode it ONCE into the clean
@@ -6295,7 +6338,8 @@ tab_ci <- function(tabs,
       purrr::map2_df(tabs[ci_yes_ref],
                      ci_with_ref[ci_yes_ref],
                      function(col, ci_ref) {
-                       col <- set_ci_type(col, ci_ref)
+                       col <- set_scale(col, ci_scale_of(col, ci_ref))
+                       col <- set_ci_method(col, ci_method_of(col, ci_ref))
                        if (set_ci_col) {
                          col <- set_color(col, col_dec$measure)
                          if (!is.null(col_dec$policy)) col <- set_color_signif(col, col_dec$policy)
@@ -6392,7 +6436,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   is_a_mean <-
     purrr::map_lgl(col_vars_levels, function(levs) {
       cols <- purrr::map_chr(levs, rlang::as_name)
-      any(vapply(cols, function(cc) get_type(tabs[[cc]]) == "mean", logical(1)))
+      any(vapply(cols, function(cc) fmt_var_kind(tabs[[cc]]) == "mean", logical(1)))
     })
   # Phase 3b: mean col_vars now get an ANOVA F (the chi2 mirror), so an all-means table is no
   # longer skipped -- only the factor total-row/total-col scaffolding (which is factor-oriented)
@@ -6560,7 +6604,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       col_vars_levels[mean_cvs],
       function(levels, cv) {
         cols <- purrr::map_chr(levels, rlang::as_name)
-        keep <- purrr::map_lgl(cols, ~ get_type(tabs[[.x]]) == "mean" &&
+        keep <- purrr::map_lgl(cols, ~ fmt_var_kind(tabs[[.x]]) == "mean" &&
                                  !any(is_totcol(tabs[[.x]])))
         col  <- cols[keep][1]
         if (is.na(col)) return(NULL)
@@ -6724,7 +6768,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
   # `color = "contrib"` under a significance policy. Only under `do_ctr` (contrib coloring is on); the
   # pipeline computes contributions solely then (calc = c("ctr","p")), so plain tables are untouched.
   pval_after <- if (do_ctr) purrr::set_names(lapply(fmt_nms, function(nm) get_pvalue(tabs[[nm]])), fmt_nms)
-  elig_col  <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) != "mean" &&
+  elig_col  <- purrr::keep(fmt_nms, function(nm) fmt_var_kind(tabs[[nm]]) != "mean" &&
                              get_col_var(tabs[[nm]]) != "no_col_var")
   # Phase 18z4: the residual's INFERENCE BASE, read off the total column's grand-total cell (the
   # LAST element of each subtable slice, exactly where var_contrib_ctr_signed reads the weighted N).
@@ -6843,11 +6887,16 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     comp_all_val <- comp[1] == "all"
 
     if (!is.na(color[1]) && color[1] != "no") {
+      # Phase 19b: which KINDS of column `color = "contrib"` may paint. A count column has no
+      # percentage base, so it is named by its var_kind; the rest by theirs.
       color_condition <- switch(color[1],
-        "auto"    = c("n", "all", "all_tabs"),
-        "all"     = c("n", "row", "col", "all", "all_tabs"),
+        "auto"    = c("all", "all_tabs"),
+        "all"     = c("row", "col", "all", "all_tabs"),
         "all_pct" = c("all", "all_tabs"))
-      color_apply <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) %in% color_condition)
+      want_counts <- color[1] %in% c("auto", "all")
+      color_apply <- purrr::keep(fmt_nms, function(nm)
+        get_pct_base(tabs[[nm]]) %in% color_condition ||
+          (want_counts && fmt_var_kind(tabs[[nm]]) == "count"))
     }
   }
 
@@ -6967,7 +7016,7 @@ tab_match_groups_and_totrows <- function(tabs) {
 
 #' @keywords internal
 tab_add_totcol_if_no <- function(tabs) {
-  if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean")) { # & !only_one_column
+  if (!any(is_totcol(tabs)) & ! all(fmt_var_kind(tabs) == "mean")) { # & !only_one_column
     only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
     tabs <- tabs |> tab_tot("col", totcol = "last")
     if (!only_one_column) warning("no total column, one was added (from the last non-mean column)")
@@ -7473,7 +7522,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
     # cols, with pct = "row"
     last_totcols_pct_rows <- tabs_text |>
       purrr::imap_chr(
-        ~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row" &
+        ~ dplyr::last(names(.x)[is_totcol(.x) & get_pct_base(.x) == "row" &
                                   get_col_var(.x) != "no_col_var" &
                                   tab_get_vars(.)$row_var != "no_row_var"]) |>
           purrr::set_names(.y)
@@ -7501,7 +7550,8 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                               #which(get_reference(!!rlang::sym(.y), "lines"))
                   )
               ) |>
-                set_type("col") |> as_totcol(FALSE) |> set_color("no") |>
+                set_scale("level_pct") |> set_pct_base("col") |>
+                as_totcol(FALSE) |> set_color("no") |>
                 set_col_var("all_col_vars") |>
                 set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
                 set_ctr(NA_real_) |> set_var(NA_real_)
@@ -7517,7 +7567,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
             last_totcols_pct_rows, ~ dplyr::mutate(
               .x, # !!rlang::sym(paste0(names(.y), "_n"))
               n = set_display(!!rlang::sym(.y), "n") |>
-                set_type("n") |> as_totcol(FALSE) |> set_color("no") |>
+                set_count_col() |> as_totcol(FALSE) |> set_color("no") |>
                 set_col_var("all_col_vars") |>
                 set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
                 set_pct(NA_real_) |> set_ctr(NA_real_) |> set_var(NA_real_)
@@ -7539,7 +7589,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
 
 
       last_totrow_pct_cols <- tabs_text |>
-        purrr::map(~ names(.)[get_type(.) == "col" & get_col_var(.) != "no_col_var" &
+        purrr::map(~ names(.)[get_pct_base(.) == "col" & get_col_var(.) != "no_col_var" &
                                  names(.) != "col_pct"] )
       last_totrow_pct_cols_no_empty <- purrr::map_lgl(last_totrow_pct_cols, ~ length(.) > 0)
       # last_totrow_pct_cols <- last_totrow_pct_cols[last_totrow_pct_cols_no_empty]
@@ -7655,7 +7705,7 @@ tab_is_or_display <- function(tab) {
 # Phase 16c: for an OR/RRR table the "100%" is dropped -> the cell shows only `n={n}` (the base).
 # NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
 tab_fold_addn_incell <- function(tab) {
-  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_type(tab) == "row" &
+  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_pct_base(tab) == "row" &
                                      get_col_var(tab) != "no_col_var"])
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
   is_or <- tab_is_or_display(tab)
@@ -7698,7 +7748,7 @@ tab_fold_addn_incell <- function(tab) {
 tab_or_total_col <- function(tab, backend, add_n_on) {
   if (!is.data.frame(tab) || !tab_is_or_display(tab)) return(tab)
   tot_nm <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) &&
-                                        get_type(.) == "row" && get_col_var(.) != "no_col_var")]
+                                        get_pct_base(.) == "row" && get_col_var(.) != "no_col_var")]
   if (!length(tot_nm)) return(tab)
   if (identical(backend, "xl") || !isTRUE(add_n_on)) {
     tab <- dplyr::select(tab, -tidyselect::all_of(tot_nm))
@@ -7726,10 +7776,15 @@ tab_apply_n_min <- function(tab, n_min) {
   fmt_names <- names(tab)[purrr::map_lgl(tab, is_fmt)]
   if (length(fmt_names) == 0) return(tab)
 
-  type   <- purrr::map_chr(tab[fmt_names], get_type)
+  # Phase 19b: a "row-oriented" column is one whose base is a ROW (a row / all-tabs percentage, or a
+  # mean); a "col-oriented" one is a column percentage. Two stored facts, where this read the old
+  # 8-value `type`.
+  base   <- purrr::map_chr(tab[fmt_names], get_pct_base)
+  vkind  <- purrr::map_chr(tab[fmt_names], fmt_var_kind)
+  row_like <- base %in% c("row", "all") | vkind == "mean"
   totcol <- purrr::map_lgl(tab[fmt_names], is_totcol)
 
-  cell_base <- function(col) if (get_type(col) == "mean") get_n(col) else get_tot_n(col)
+  cell_base <- function(col) if (fmt_var_kind(col) == "mean") get_n(col) else get_tot_n(col)
 
   # --- protected rows (never dropped) --------------------------------------------------------
   # Phase 10i-B: n_min runs at build on the CORE table -- the add_n/add_pct/p-value extras are
@@ -7741,7 +7796,7 @@ tab_apply_n_min <- function(tab, n_min) {
   protect <- totrow | tottab
 
   # --- row-drop + cell-blank on row-oriented columns -----------------------------------------
-  row_cols <- fmt_names[type %in% c("row", "all", "mean")]  # totcol INCLUDED in the max
+  row_cols <- fmt_names[row_like]                           # totcol INCLUDED in the max
   if (length(row_cols) > 0) {
     bases    <- purrr::map(tab[row_cols], ~ { b <- cell_base(.); b[is.na(b)] <- Inf; b })
     row_base <- purrr::reduce(bases, pmax)
@@ -7756,7 +7811,7 @@ tab_apply_n_min <- function(tab, n_min) {
     }
   }
   # blank surviving weak cells (row-oriented, non-total stat columns)
-  blank_cols <- fmt_names[type %in% c("row", "all", "mean") & !totcol]
+  blank_cols <- fmt_names[row_like & !totcol]
   blank_cols <- intersect(blank_cols, names(tab))
   if (length(blank_cols) > 0) {
     tab <- dplyr::mutate(tab, dplyr::across(
@@ -7771,7 +7826,7 @@ tab_apply_n_min <- function(tab, n_min) {
   }
 
   # --- column-drop on col-oriented columns (pct = "col") -------------------------------------
-  drop_cols <- fmt_names[type == "col" & !totcol]
+  drop_cols <- fmt_names[base == "col" & !totcol]
   drop_cols <- intersect(drop_cols, names(tab))
   if (length(drop_cols) > 0) {
     weak <- purrr::map_lgl(tab[drop_cols], ~ {

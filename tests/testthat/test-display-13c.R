@@ -6,7 +6,7 @@ div_glyph  <- intToUtf8(0x00f7)  # divide sign
 
 testthat::test_that("composite {} tokens are padded to a uniform width per column", {
   x <- set_display(
-    fmt(n = c(17L, 5416L, 743L), type = "row", pct = c(1, 1, 1), display = "pct"),
+    fmt(n = c(17L, 5416L, 743L), scale = "level_pct", pct_base = "row", pct = c(1, 1, 1), display = "pct"),
     "{pct} (n={n})")
   f <- format(x)
   # the {n} field is right-aligned to the column-max width so numbers line up in a monospace font.
@@ -15,7 +15,7 @@ testthat::test_that("composite {} tokens are padded to a uniform width per colum
 })
 
 testthat::test_that("format() stays byte-identical (no primary_nchar attr) when bold_split is off", {
-  x <- set_display(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct"),
+  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct"),
                    "{pct} (n={n})")
   testthat::expect_null(attr(format(x), "primary_nchar"))
   testthat::expect_identical(format(x), c("40% (n=10)", "60% (n=20)"))
@@ -23,7 +23,7 @@ testthat::test_that("format() stays byte-identical (no primary_nchar attr) when 
 
 testthat::test_that("ratio (rr) display shows the multiplicative x / div sign", {
   x <- set_display(
-    fmt(n = rep(1L, 4), type = "row", pct = rep(0.5, 4),
+    fmt(n = rep(1L, 4), scale = "level_pct", pct_base = "row", pct = rep(0.5, 4),
         ratio = c(2, 0.5, 1, 0.998), display = "pct"),
     "rr")
   f <- format(x)
@@ -35,7 +35,7 @@ testthat::test_that("ratio (rr) display shows the multiplicative x / div sign", 
 
 testthat::test_that("ratio display trims trailing zeros and pads for alignment", {
   x <- set_display(
-    fmt(n = rep(1L, 3), type = "row", pct = rep(0.5, 3),
+    fmt(n = rep(1L, 3), scale = "level_pct", pct_base = "row", pct = rep(0.5, 3),
         ratio = c(1.5, 0.25, 3.333), display = "pct"),
     "rr")
   f <- format(x)

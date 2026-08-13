@@ -91,17 +91,17 @@ testthat::test_that("validate_display_template() aborts on malformed / unknown {
 # === format() rendering of general + expert templates =============================
 
 testthat::test_that("an expert {diff} [{ci}] template renders both fields", {
-  x <- fmt(n = c(100L, 100L), type = "row", pct = c(0.4, 0.6), diff = c(0.1, -0.1),
-           ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02), ci_type = "diff", display = "diff")
+  x <- fmt(n = c(100L, 100L), scale = "points", pct_base = "row", pct = c(0.4, 0.6), diff = c(0.1, -0.1),
+           ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02), display = "diff")
   out <- format(set_display(x, "{diff} [{ci}]"))
   testthat::expect_true(all(grepl("\\[", out)))          # the [ci] literal + bracket present
   testthat::expect_true(all(grepl("^[+-]", out)))        # the diff sign leads (primary)
 })
 
 testthat::test_that("stars ride the PRIMARY token, not the secondary (not doubled)", {
-  x <- fmt(n = c(100L, 100L), type = "row", pct = c(0.4, 0.6),
+  x <- fmt(n = c(100L, 100L), scale = "points", pct_base = "row", pct = c(0.4, 0.6),
            diff = c(0.1, -0.1), ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02),
-           pvalue = c(0.0005, 0.03), ci_type = "diff", display = "pct")
+           pvalue = c(0.0005, 0.03), display = "pct")
   # stars are opt-in in format(): request them explicitly (they show at the main display).
   plain <- format(x, stars = TRUE)                            # "40%***", "60%*"
   comp  <- format(set_display(x, "{pct} ({n})"), stars = TRUE)  # "40%*** (100)", "60%* (100)"
@@ -111,7 +111,7 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
 })
 
 testthat::test_that("a composite cell missing a field is left as the plain primary", {
-  x <- fmt(n = c(10L, NA_integer_), type = "row", pct = c(0.4, 0.6), display = "pct")
+  x <- fmt(n = c(10L, NA_integer_), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct")
   out <- format(set_display(x, "{pct} ({n})"))
   testthat::expect_identical(out[1], "40% (10)")
   testthat::expect_identical(out[2], "60%")        # n is NA -> plain primary kept, no "(NA)"
@@ -120,7 +120,7 @@ testthat::test_that("a composite cell missing a field is left as the plain prima
 # === consumer safety: a hand-injected bad template must not crash any consumer =====
 
 testthat::test_that("every display consumer survives a hand-injected malformed template", {
-  x <- set_display(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct"), "{bad")
+  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct"), "{bad")
   testthat::expect_no_error(format(x))
   testthat::expect_no_error(get_num(x))
   testthat::expect_no_error(set_num(x, c(1, 2)))
@@ -203,7 +203,7 @@ testthat::test_that("tab(display = 'num_ci') == '{pct} {ci}' / '{mean} {ci}' per
     format(t_mix),
     format(tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "{pct} {ci}"))
   )                                                                     # factors -> {pct}; age col type stays mean
-  testthat::expect_identical(get_type(t_mix[["age"]]), "mean")
+  testthat::expect_identical(tabxplor:::fmt_var_kind(t_mix[["age"]]), "mean")
 })
 
 testthat::test_that("set_display(x, 'num_ci') == tab(display = 'num_ci') (same overlay, post-hoc)", {

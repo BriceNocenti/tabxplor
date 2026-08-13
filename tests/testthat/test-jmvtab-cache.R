@@ -109,7 +109,7 @@ test_that("the weighted basis reaches the cached FACTOR aggregate too (design_ef
   expect_equal(cold$tabs, jmv_oracle(o, gssw))    # the cache path IS the oracle, correction included
   expect_equal(warm$tabs, cold$tabs)
   t  <- cold$tabs
-  ne <- get_n_eff(t[[which(purrr::map_lgl(t, ~ is_fmt(.) && get_type(.) == "row"))[[1]]]])
+  ne <- get_n_eff(t[[which(purrr::map_lgl(t, ~ is_fmt(.) && get_pct_base(.) == "row"))[[1]]]])
   expect_gt(sum(is.finite(ne)), 0L)               # non-vacuous: percentages ARE corrected now
   expect_identical(tabxplor:::tab_inference_basis(t), "weights")
   expect_true(all(c("chi2_design", "F_design") %in% get_test(t)$test))
@@ -208,7 +208,7 @@ test_that("numeric-valued col_vars become mean columns (match R; jamovi factors 
   r <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "tvhours_f"), NULL)
   fmt <- setdiff(names(r$tabs)[purrr::map_lgl(r$tabs, is_fmt)], "n")
   expect_identical(fmt, "tvhours_f")                       # ONE mean column, not one per value
-  expect_true(get_type(r$tabs[["tvhours_f"]])[1] == "mean")
+  expect_true(tabxplor:::fmt_var_kind(r$tabs[["tvhours_f"]]) == "mean")
   # a genuine categorical (non-numeric levels) is untouched -> columns
   r2 <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row"), NULL)
   expect_gt(length(names(r2$tabs)[purrr::map_lgl(r2$tabs, is_fmt)]), 2)

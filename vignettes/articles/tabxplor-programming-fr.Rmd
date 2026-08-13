@@ -188,7 +188,9 @@ tab(gss_simple, race, marital, race, pct = "row") |>
 
 Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
 
-- `type` — `get_type()` / `set_type()` : `"n"`, `"mean"`, `"row"`, `"col"`, `"all"`, `"all_tabs"` (ou `"coef"` pour les coefficients bêtas d’une régression linéaire). Il détermine quels calculs effectuent les fonctions `tab_*`.
+- `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable expliquée), un rapport (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
+- `pct_base` — `get_pct_base()` / `set_pct_base()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
+- `ci_method` — `get_ci_method()` : quelle méthode a calculé les bornes de cette colonne (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`…; `""` si la colonne ne porte pas d’intervalle).
 - `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
 - `col_var` — `get_col_var()` : le nom de la variable en colonne (un tableau peut en contenir plusieurs, un nom différent ajoute une bordure verticale entre les différences variables de colonne).
 - `comp_all` — `get_comp_all()` : avec des `tab_vars`, la référence de comparaison est-elle le sous-tableau (`FALSE`) ou le tableau entier (`TRUE`) ?

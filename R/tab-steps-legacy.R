@@ -50,7 +50,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 
   row_var   <- rlang::sym(get_vars$row_var)
   tab_vars  <- rlang::syms(get_vars$tab_vars)
-  mean_vars <- (get_type(tabs) == "mean") |> purrr::keep(\(x) x) |> names()
+  mean_vars <- (fmt_var_kind(tabs) == "mean") |> purrr::keep(\(x) x) |> names()
 
 
   groups  <- dplyr::group_vars(tabs)
@@ -197,7 +197,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
   row_var         <- rlang::sym(get_vars$row_var)
   #col_vars        <- rlang::sym(get_vars$col_vars)
   col_vars_levels_mean <- purrr::map(get_vars$col_vars_levels, rlang::syms)
-  mean_vars <- get_type(tabs) == "mean"
+  mean_vars <- fmt_var_kind(tabs) == "mean"
   col_vars_levels <- purrr::discard(col_vars_levels_mean, names(col_vars_levels_mean) %in% names(mean_vars))
   tab_vars        <- rlang::syms(get_vars$tab_vars)
 
@@ -436,7 +436,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
   #row_var         <- rlang::sym(get_vars$row_var) #col_var ??
   col_vars_with_all<- rlang::syms(get_vars$col_vars)
   col_vars_no_all  <- col_vars_with_all |> purrr::discard(\(s) as.character(s) == "all_col_vars")
-  col_means  <- (get_type(tabs) == "mean") |> purrr::keep(\(x) x) |> names()
+  col_means  <- (fmt_var_kind(tabs) == "mean") |> purrr::keep(\(x) x) |> names()
   # col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
   tab_vars         <- rlang::syms(get_vars$tab_vars)
 
@@ -452,8 +452,8 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 
     if (all(pct == "no")) {
       tabs <- tabs |> dplyr::mutate(dplyr::across(
-        where(~ get_type(.) %in% c("row", "col", "all", "all_tabs")),
-        ~ set_pct(., NA_real_) |> set_type("n") |>
+        where(~ get_pct_base(.) != "none"),
+        ~ set_pct(., NA_real_) |> set_count_col() |>
           set_display("wn")
       ))
       if (length(col_means) == 0) return(tabs)
@@ -518,14 +518,15 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 
         tabs <- tabs |>
           dplyr::mutate(dplyr::across(
-            where(~ is_fmt(.) & !get_type(.) == "mean"),
+            where(~ is_fmt(.) & !fmt_var_kind(.) == "mean"),
             ~ set_pct(., pct_formula(
               .,
               pct = pct_nat[[dplyr::cur_column()]],
               tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
             )) |>
               set_display(ifelse(pct_nat[[dplyr::cur_column()]] != "no", "pct", "wn")) |>
-              set_type(pct_nat[[dplyr::cur_column()]])
+              set_pct_base(pct_nat[[dplyr::cur_column()]]) |>
+                set_scale("level_pct")
           ))
       }
 
@@ -540,7 +541,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
                 pct = "all_tabs",
                 tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
               )) |>
-                set_display("pct") |> set_type("all_tabs")
+                set_display("pct") |> set_scale("level_pct") |> set_pct_base("all_tabs")
             ))
           )
       }
@@ -579,7 +580,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
     comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
   }
 
-  type <- get_type(tabs)
+  type <- fmt_kind_label(tabs)
   #Calculate diffs (used to color pct depending on spread from row or col mean)
   if (ref[1] != "no" & any(type %in% c("row", "col", "mean")) ) {
     # diff_formula <- function(x, type, dif, refer) {
@@ -606,14 +607,14 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 
       tabs <-
         dplyr::mutate(tabs, dplyr::across(
-          where(~ get_type(.) == "col") & tidyselect::all_of(reference_cols),
+          where(~ get_pct_base(.) == "col") & tidyselect::all_of(reference_cols),
           as_refcol
         ))
       # is_refcol(tabs)
 
       tabs <-
         dplyr::mutate(tabs, dplyr::across(
-          where(~ get_type(.) %in% c("row", "mean")),
+          where(~ get_pct_base(.) == "row" | fmt_var_kind(.) == "mean"),
           ~ as_refrow(., dplyr::row_number() == 1 &
                         (comp == "tab" | (comp == "all" & is_tottab(.)) ) )
         ))
@@ -625,7 +626,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
         dplyr::with_groups(
           NULL,
           ~ dplyr::mutate(., dplyr::across(
-            where(~ get_type(.) %in% c("row", "col", "mean")),
+            where(~ get_pct_base(.) %in% c("row", "col") | fmt_var_kind(.) == "mean"),
             ~ set_diff(., diff_formula(
               .,
               type = type[[dplyr::cur_column()]],
@@ -638,7 +639,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
     } else {
       tabs <- tabs |>
         dplyr::mutate(dplyr::across(
-          where(~ get_type(.) %in% c("row", "col", "mean") ) &
+          where(~ get_pct_base(.) %in% c("row", "col") | fmt_var_kind(.) == "mean") &
             !( where(is_totcol) &
                  tidyselect::any_of(names(reference)[reference == ""]) ),
           ~ set_diff(., diff_formula(

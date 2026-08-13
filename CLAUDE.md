@@ -1295,6 +1295,71 @@ reporting its own already-landed change as a PROBLEM on four cases.
 
 No `.a.yaml`/`.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still owns that.
 
+#### Phase 19b — KEY 2: what a column estimates
+
+**DONE (2026-08-13).** Full suite green: **FAIL 0, WARN 0, SKIP 4, PASS 5787**. The delta is *proved*,
+not asserted: `dev/verify_golden_field_delta.R` checks, on all **1787 cells of the 36 structural
+goldens**, that each stored `scale` is exactly what the deleted dispatch derived from that column's own
+`(type, ci_type, var)` — and that every field and every other attribute is bit-identical.
+`_snaps/golden.md` and `_snaps/render-html.md` did **not** move: no rendered output changed.
+
+**The library became the stored fact.** `EST_SCALES` gained the `level_n` row it lacked (`type = "n"`
+borrowed `level_pct`, whose `est_field` is `pct` — the code documented the fudge), a `mixed` row (the
+bind neutral, content-identical to what the old dispatch answered for `type = "mixed"`), and four
+declared columns: **`ladder`** (`pct`/`std`/`log`), **`var_kind`** (`pct`/`mean`/`count`/`coef`),
+**`geometry`** (the word 19d/19e's arguments will resolve into) and `sd_from` extended to the level
+rows. The `or` row is **`odds_ratio`**, so the row and the geometry word agree. `ladder` is the
+collapse that paid best: `MEASURES$scale` is a three-entry map `c(pct=, std=, log=)` the COLUMN indexes,
+so `std_when`'s four values, `is_mean`, `is_std_diff`, `use_std`, `is_logcoef` and the
+`is_logcoef && measure == "diff"` special case are **one lookup**; `std_when` survives only as
+`scale_from = "gap"` on the two gap measures.
+
+**Three attributes in, one vocabulary and a `meta` sub-field out.** `scale` + `pct_base` + `ci_method`
+(15 attributes); `type` and `ci_type` **deleted**, `meta$ci_settings` **deleted** with
+`get/set_ci_settings`, `default_ci_settings`, `ci_method_of` and `reg_ci_settings`. Deleted by
+construction: `fmt_est_field()` and its copies (**D17** — two rules that disagreed on 178 of 190 golden
+columns are one), `est_scale_key()`'s order-dependent dispatch **and its `var` sniff** (the "the ORDER
+of the branches is the contract" warning is gone with it), `fmt_scale_key()`'s `display` fallback,
+`fmt_color_plan()`'s seven predicates, `legend_specs()`'s six, and `legend_method_name()`'s
+eight-branch chain — an `est_scale_key()` dispatch written a second time in a third vocabulary.
+
+**D19 closed**: an OR table's reference column carries `odds_ratio` like its siblings (its all-NA bounds
+are the data fact saying "no interval here"), where it used to stamp `""` and z17 had to patch the axis
+back by reading the rendered `display`. **D8 closed and made unrepresentable**: the method is stamped
+where the interval is computed and named through the declared `CI_METHOD_LABELS`, so a `ci = "cell"`
+mean now says *Student t* (it said *Welch t*) and a poisson crude IRR says *Katz on the log rate-ratio*
+(it said *Wald*). **D18** finished: `has_ci` is the scale's declared `kind`, so `ci = "cell"`'s
+deliberate exclusion from the significance gate is a property of the scale instead of a value silently
+missing from a five-element vector.
+
+⚠ **Maintainer ruling, superseding §4 ★ and the study's naming option 3: a clean break, not derived
+accessors.** `get_type()` / `set_type()` / `get_ci_type()` / `set_ci_type()` are **removed**, and
+`fmt()` lost `type =` / `ci_type =` (it gains a `...` whose only job is to abort with the mapping —
+the error is the documentation, delivered where the mistake is made). So the ~40 internal readers
+migrated *in this phase* rather than keeping the old vocabulary alive internally, and nothing derived
+survives to be re-derived. `NEWS.md` announces it under *Removed / defunct*; both programming
+vignettes' taught line is updated (one line each — the rest of the vignette work stays 19n's).
+
+**Two roadmap instructions were NOT followed, and why.** (i) *"fold `raw_diff`/`mean_diff` into one row,
+they differ only in `sd_from`"* — they also differ in `gap_key` (`adj_diff_std` vs `adj_diff`), so
+folding them would re-derive both from `model_family`, i.e. re-introduce a dispatch. Two rows kept;
+every stamping site knows which it is building. (ii) *"the `gof` special case becomes a declared
+`geometry = "none"`"* — `gof` is a per-cell **`display`** token (a footer cell sits in the same column
+as coefficients), so it cannot become a column attribute; `fmt_color_slots()`'s mask stays, with a
+`# WARNING:` saying why. Recorded for 19l.
+
+**`ordered` was deferred to 19f** (maintainer's call): measured, it has **no reader on a built table**
+today — it is read once from the raw data in `tab_setup()` for `OR = "cumOR"` and discarded — so §5.1's
+own admission test ("does a reader exist?") fails. 19f lands it with its row-axis half.
+
+**Also found in passing**: `ci_type` could literally hold `"no"` (`num_core` recorded its `ci` ARGUMENT
+rather than the fact) — one more instance of the disease. `verify_golden_field_delta.R` learned two
+modes: `REMOVED_ATTRS`, and an `EXPECTED_ATTR` entry that may be a **predicate**
+`function(old_attrs, new_value, col)` — which is what turns this phase's central claim into a
+per-column proof. jamovi cache schema **12 → 13** (a tier-3 carrier's per-column `meta` list carries the
+new names). No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still
+owns that.
+
 ---
 
 

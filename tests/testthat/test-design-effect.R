@@ -75,7 +75,7 @@ testthat::test_that("mean cell CI: n_eff surfaced + interval widens under kish",
                              tab_num(d, g, x, wt = w, ci = "cell", na = "drop"))
   on  <- withr::with_options(list(tabxplor.design_effect = TRUE),
                              tab_num(d, g, x, wt = w, ci = "cell", na = "drop"))
-  mcol <- names(on)[purrr::map_lgl(on, ~ is_fmt(.) && get_type(.) == "mean")][1]
+  mcol <- names(on)[purrr::map_lgl(on, ~ is_fmt(.) && tabxplor:::fmt_var_kind(.) == "mean")][1]
   testthat::expect_true(all(is.na(get_n_eff(off[[mcol]]))))
   testthat::expect_gt(sum(is.finite(get_n_eff(on[[mcol]]))), 0L)
   hw_off <- ci_hw(off[[mcol]]); hw_on <- ci_hw(on[[mcol]])

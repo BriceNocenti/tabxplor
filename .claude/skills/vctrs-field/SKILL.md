@@ -21,9 +21,13 @@ allowed-tools: Read, Grep, Edit
   - `rr` was renamed `ratio` (read-side alias only).
 - **ATTRIBUTES**: scalar per column, accessed via `attr()`. Currently **11**, and the list is
   **DERIVED**, never hand-written: `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names,
-  "...", "class"))` (~L1533) = `type, comp_all, ref, ci_type, col_var, totcol, refcol, color,`
-  `color_signif, model_family, role`. Adding an attribute to `new_fmt()`'s signature therefore adds it
-  to every rebuild site automatically — that is the point, do not reintroduce a literal list.
+  "...", "class"))` = `scale, comp_all, ref, pct_base, col_var, totcol, refcol, color, color_signif,`
+  `model_family, role, conf_level, degf, basis, ci_method` (**15** since Phase 19b). Adding an attribute
+  to `new_fmt()`'s signature therefore adds it to every rebuild site automatically — that is the point,
+  do not reintroduce a literal list.
+  - `scale` is the key into the declared library `EST_SCALES` — WHAT the column estimates. Read it
+    through `fmt_scale_row()` / `fmt_var_kind()` / `get_pct_base()`; **never** re-derive a scale from a
+    display, a family, or whether `var` happens to be non-NA (that is exactly the dispatch 19b deleted).
 
 Re-grep exact line numbers before editing; the anchors below drift.
 
@@ -84,7 +88,7 @@ Re-grep exact line numbers before editing; the anchors below drift.
    A build-time `stopifnot()` refuses to install the package if you skip this, and the E1 fixture in
    `test-fmt_class.R` covers the new row automatically — it loops over the rule table itself.
 
-Optionally add a getter/setter (pattern near `get_type()`/`set_type()`, or the
+Optionally add a getter/setter (pattern near `get_scale()`/`set_scale()`, or the
 `fmt_conf_level_attr()` / `get_conf_level()` pair when the RAW read the reconcilers need must differ
 from the resolved one the engines want). **Do NOT hand-edit `vec_ptype2` / `vec_cast` / `vec_arith` /
 `vec_math`** — the seven literal attribute lists that used to live there are exactly what E1 deleted;

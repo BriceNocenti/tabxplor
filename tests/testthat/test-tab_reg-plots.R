@@ -101,7 +101,7 @@ test_that("Phase 18z13: a model column is told from its observed twin by ROLE", 
   skip_if_not_installed("broom")
   d <- reg_plot_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
-  or_cols <- names(t)[vapply(t, function(c) is_fmt(c) && identical(get_ci_type(c), "or"), logical(1))]
+  or_cols <- names(t)[vapply(t, function(c) is_fmt(c) && identical(get_scale(c), "odds_ratio"), logical(1))]
   testthat::expect_true("Obs_OR" %in% or_cols)          # the fixture must actually have both
   testthat::expect_true("Model_OR" %in% or_cols)
   roles <- vapply(or_cols, function(n) as.character(tabxplor:::get_role(t[[n]]))[1], character(1))

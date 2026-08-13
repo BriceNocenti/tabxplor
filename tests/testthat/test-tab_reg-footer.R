@@ -13,7 +13,7 @@ reg_data <- function() {
 # ---- the "gof" display token ----------------------------------------------------------------
 
 test_that("the 'gof' token renders a plain big-mark number (per-cell digits) and is uncolored", {
-  x   <- fmt(display = "gof", type = "n", n = NA_integer_,
+  x   <- fmt(display = "gof", scale = "level_n", n = NA_integer_,
              diff = c(5231, 0.033, 28766.4), digits = c(0L, 3L, 0L))
   txt <- format(x)
   expect_equal(trimws(txt), c("5 231", "0.033", "28 766"))

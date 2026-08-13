@@ -182,7 +182,6 @@ testthat::test_that("want_p = FALSE and cell intervals carry no p-value", {
 # === SECTION: stars agree with the p-value threshold (universal inclusion) ============
 
 testthat::test_that("get_stars() maps p-values to the documented thresholds", {
-  x <- fmt(n = rep(30L, 5), type = "row", pct = rep(0.5, 5),
-           ci_type = "diff", pvalue = c(0.20, 0.08, 0.03, 0.005, NA))
+  x <- fmt(n = rep(30L, 5), scale = "points", pct_base = "row", pct = rep(0.5, 5), pvalue = c(0.20, 0.08, 0.03, 0.005, NA))
   testthat::expect_identical(get_stars(x), c("", "*", "**", "***", ""))
 })

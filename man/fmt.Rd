@@ -5,8 +5,10 @@
 \alias{is_fmt}
 \alias{get_num}
 \alias{set_num}
-\alias{get_type}
-\alias{set_type}
+\alias{get_scale}
+\alias{set_scale}
+\alias{get_pct_base}
+\alias{set_pct_base}
 \alias{is_totrow}
 \alias{as_totrow}
 \alias{is_tottab}
@@ -20,12 +22,11 @@
 \alias{set_comp_all}
 \alias{get_ref_type}
 \alias{set_diff_type}
-\alias{get_ci_type}
-\alias{set_ci_type}
 \alias{get_col_var}
 \alias{set_col_var}
 \alias{get_model_family}
 \alias{set_model_family}
+\alias{get_ci_method}
 \alias{is_refcol}
 \alias{as_refcol}
 \alias{get_color}
@@ -39,10 +40,9 @@
 \usage{
 fmt(
   n = integer(),
-  type = "n",
+  scale = "level_n",
   digits = rep(0L, length(n)),
-  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col", "all",
-    "all_tabs") ~ "pct", TRUE ~ "n"),
+  display = switch(est_var_kind(scale[1]), mean = "mean", pct = "pct", "n"),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
@@ -64,7 +64,7 @@ fmt(
   in_refrow = rep(FALSE, length(n)),
   comp_all = NA,
   ref = "",
-  ci_type = "",
+  pct_base = "none",
   col_var = "",
   totcol = FALSE,
   refcol = FALSE,
@@ -74,7 +74,9 @@ fmt(
   role = "",
   conf_level = NA_real_,
   degf = NA_real_,
-  basis = "n"
+  basis = "n",
+  ci_method = "",
+  ...
 )
 
 is_fmt(x)
@@ -83,9 +85,13 @@ get_num(x)
 
 set_num(x, value)
 
-get_type(x, ...)
+get_scale(x, ...)
 
-set_type(x, type)
+set_scale(x, scale)
+
+get_pct_base(x, ...)
+
+set_pct_base(x, pct_base)
 
 is_totrow(x, ...)
 
@@ -113,10 +119,6 @@ get_ref_type(x, ...)
 
 set_diff_type(x, ref)
 
-get_ci_type(x, ...)
-
-set_ci_type(x, ci_type)
-
 get_col_var(x, ...)
 
 set_col_var(x, col_var)
@@ -124,6 +126,8 @@ set_col_var(x, col_var)
 get_model_family(x, ...)
 
 set_model_family(x, model_family)
+
+get_ci_method(x, ...)
 
 is_refcol(x, ...)
 
@@ -147,16 +151,23 @@ set_digits(x, value)
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
 to calculate confidence intervals.}
 
-\item{type}{The type of the column, which defines the type of background calculation
-to be made (as a single string, since it's not a field but an attribute) :
+\item{scale}{What the column estimates, as a single string (an attribute, not a field): one key
+into the declared library of estimate scales. It says which field holds the estimate, what its
+null value is, whether the scale is additive or multiplicative, and which colour ladder it reads.
 \itemize{
-\item \code{"n"}: counts
-\item \code{"mean"}: mean column (from numeric variables)
-\item \code{"row"}: row percentages
-\item \code{"col"}: column percentages
-\item \code{"all"}: frequencies by subtable/group (i.e. by \code{tab_vars})
-\item \code{"all_tabs"}: frequencies for the whole table
-}}
+\item \code{"level_n"}: counts
+\item \code{"level_pct"}: percentages (\code{pct_base} says of what)
+\item \code{"level_mean"}: means (from numeric variables)
+\item \code{"points"}: a difference between two percentages, in percentage points
+\item \code{"mean_diff"}: a difference between two means, in the outcome's own units
+\item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
+\item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
+\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+\item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
+\item \code{"mixed"}: what binding columns of unlike scales collapses to
+}
+Replaces the \code{type} and \code{ci_type} arguments of tabxplor 1.x, together with
+\code{pct_base}.}
 
 \item{digits}{The number of digits, as an integer, or an integer vector the length
 of \code{n}.}
@@ -241,8 +252,9 @@ predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured
 A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.}
 
 \item{gap_se}{The standard error of the GAP between this cell's estimate and \code{obs},
-on the estimate's own test scale (the log-ratio when \code{ci_type} is \code{"or"} or
-\code{"ratio"}, the plain difference when \code{"diff"}). Written by \code{tab_reg} where
+on the estimate's own test scale (the log-ratio on a multiplicative \code{scale} --
+\code{odds_ratio} / \code{pct_ratio} / \code{mean_ratio} -- the plain difference otherwise).
+Written by \code{tab_reg} where
 the two estimates are independent (\code{split_var} groups), so that
 \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
 else, which leaves the significance policies inert there.
@@ -260,16 +272,10 @@ A double vector the length of \code{n}. Non-displayed.}
 
 \item{ref}{The type of difference of the vector. Cf. \code{\link{tab}}.}
 
-\item{ci_type}{The type of confidence intervals of the vector (calculate
-with \code{\link{tab_ci}}) :
-\itemize{
-\item \code{""} or \code{"no"}: no ci have been calculated
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"auto"}: \code{"diff"} for means and row/col percentages,
-\code{"cell"} for frequencies ("all", "all_tabs").
-}}
+\item{pct_base}{For a percentage column, what the percentage is a percentage OF, and hence which
+axis its reference lies on (as a single string): \code{"row"}, \code{"col"}, \code{"all"}
+(frequencies by subtable / group, i.e. by \code{tab_vars}), \code{"all_tabs"} (frequencies for
+the whole table), or \code{"none"} (counts, means, coefficients).}
 
 \item{col_var}{The name of the \code{col_var} used to calculate the vector}
 
@@ -325,12 +331,12 @@ design was given but its variance could not be computed). Default \code{"n"}. Li
 footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
 the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.}
 
+\item{...}{Used in methods to add arguments in the future.}
+
 \item{x}{The object to test, to get a field in, or to modify.}
 
 \item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
 or attribute using a given "set" function.}
-
-\item{...}{Used in methods to add arguments in the future.}
 
 \item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
 to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
@@ -345,7 +351,11 @@ A double vector.
 
 A modified fmt vector.
 
-A character vector with the vectors type.
+A character vector with the vectors scale.
+
+A modified fmt vector.
+
+A character vector with the vectors percentage base.
 
 A modified fmt vector.
 
@@ -373,10 +383,6 @@ A logical vector with the fmt vectors type attributes
 
 A modified fmt vector.
 
-A logical vector with the fmt vectors ci_type attributes
-
-A modified fmt vector.
-
 A logical vector with the fmt vectors col_var attributes
 
 A modified fmt vector.
@@ -385,6 +391,8 @@ A character vector with the fmt vectors' model_family attributes (\code{""} when
 e.g. on cross-tables). On a data.frame, one value per column.
 
 A modified fmt vector.
+
+A character vector with the vectors interval method ("" when no interval was computed).
 
 A logical vector with the fmt vectors is_refcol attributes
 
@@ -424,9 +432,13 @@ using \pkg{vctrs}.
 
 \item \code{set_num()}: set the currently displayed field (not changing display type)
 
-\item \code{get_type()}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_scale()}: get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_type()}: set the column type attribute of a \code{fmt} vector
+\item \code{set_scale()}: set the estimate scale attribute of a \code{fmt} vector
+
+\item \code{get_pct_base()}: get the percentage base of fmt columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_pct_base()}: set the percentage base attribute of a \code{fmt} vector
 
 \item \code{is_totrow()}: test function to detect cells in total rows
 (at \code{fmt} level or \code{tab} level)
@@ -459,10 +471,6 @@ all of them in the whole tibble.
 
 \item \code{set_diff_type()}: set the differences type attribute of a \code{fmt} vector
 
-\item \code{get_ci_type()}: get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_ci_type()}: set the confidence intervals type attribute of a \code{fmt} vector
-
 \item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 
 \item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
@@ -471,6 +479,8 @@ all of them in the whole tibble.
 
 \item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (Phase 15e: the per-column
 regression family, "" on crosstabs)
+
+\item \code{get_ci_method()}: get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
 
 \item \code{is_refcol()}: test function for reference columns (at \code{fmt} level or \code{tab} level)
 

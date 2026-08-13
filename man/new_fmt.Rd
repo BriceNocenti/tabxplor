@@ -6,7 +6,7 @@
 \usage{
 new_fmt(
   n = integer(),
-  type = "n",
+  scale = "level_n",
   digits = NULL,
   display = NULL,
   wn = NULL,
@@ -29,7 +29,7 @@ new_fmt(
   in_refrow = NULL,
   comp_all = NA,
   ref = "",
-  ci_type = "",
+  pct_base = "none",
   col_var = "",
   totcol = FALSE,
   refcol = FALSE,
@@ -40,6 +40,7 @@ new_fmt(
   conf_level = NA_real_,
   degf = NA_real_,
   basis = "n",
+  ci_method = "",
   ...,
   class = character()
 )

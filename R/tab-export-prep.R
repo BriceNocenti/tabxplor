@@ -247,7 +247,7 @@ tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
   if (length(cvs) == 0) return(empty)
 
   base_of <- function(col) {
-    if (get_type(col) == "mean") get_n(col) else get_tot_n(col)
+    if (fmt_var_kind(col) == "mean") get_n(col) else get_tot_n(col)
   }
 
   # a matrix of bases: rows = table rows, cols = col_vars
@@ -618,7 +618,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
     if (endsWith(nms[j], suff)) {
       clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
     } else if (isTRUE(name_cols) && identical(nms[j], cvm[[j]]) && is_fmt(tab[[j]]) &&
-               identical(get_type(tab[[j]]), "mean")) {
+               identical(fmt_var_kind(tab[[j]]), "mean")) {
       # A numeric col_var contributes a column bearing the VARIABLE's own name, so under its own span
       # the name was said twice ("tvhours" over "tvhours") -- three times in Excel, which also splits
       # off a "<var>_sd" sibling. The span says which variable; the level header says which STATISTIC.

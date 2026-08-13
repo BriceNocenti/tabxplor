@@ -402,7 +402,7 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #
 #   testthat::expect_false( # return col_all
 #     tabs |> tab_tot() |> dplyr::ungroup() |> tab_pct("col") |> dplyr::ungroup() |>
-#       dplyr::select(where(~is_fmt(.) & ! get_type(.) == "mean")) |>
+#       dplyr::select(where(~is_fmt(.) & ! tabxplor:::fmt_var_kind(.) == "mean")) |>
 #       dplyr::filter(is_totrow(.) & ! is_tottab(.)) |>
 #       dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ get_pct(.) == 1)) |>
 #       dplyr::summarise(dplyr::across(.cols = dplyr::everything(), .fns = all)) |>

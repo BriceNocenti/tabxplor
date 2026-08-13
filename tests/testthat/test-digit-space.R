@@ -37,7 +37,7 @@ testthat::test_that("format(): the thousands mark is the pad glyph, per medium",
 testthat::test_that("format(): a composite's mark and its padding are the SAME glyph", {
   # the reported bug: "100% (n=  849)" was padded with figure spaces while "(n=1 811)" separated
   # with an ASCII space -- so the digits the padding had just aligned fell out of line again.
-  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), type = "row", display = "{pct} (n={n})")
+  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_base = "row", display = "{pct} (n={n})")
   h <- format(x, html = TRUE)
   # Phase g (A6): the html/nbsp medium joins the template literal " (n=" with a NON-BREAKING space so
   # the composite does not wrap; the inner digits keep the figure-space pad.
@@ -53,7 +53,7 @@ testthat::test_that("format(): a composite's mark and its padding are the SAME g
 
 mean_col <- function(digits = 1L) {
   fmt(mean = c(1.0, 1.7, 10.25), var = c(NA, 2.1^2, 3^2), n = rep(5L, 3),
-      display = "mean", type = "mean", digits = digits)
+      display = "mean", scale = "level_mean", digits = digits)
 }
 
 testthat::test_that("format(): a mean with no sd is padded to the tail, so the means align", {
@@ -84,7 +84,7 @@ testthat::test_that("format(): an EMPTY mean cell stays NA -- it is not padded",
   # NA -> the literal string "NA" + spaces. Only `na` (which kable/md pass as "") hid it; the
   # console, which keeps NA, printed "NA       ".
   x <- fmt(mean = c(1.0, NA, 2.5), var = c(NA, NA, 4), n = c(5L, 0L, 5L),
-           display = "mean", type = "mean", digits = 1L)
+           display = "mean", scale = "level_mean", digits = 1L)
   f <- format(x, special_formatting = TRUE)
   testthat::expect_true(is.na(f[2]))
   testthat::expect_false(any(grepl("NA", f[!is.na(f)], fixed = TRUE)))
@@ -92,7 +92,7 @@ testthat::test_that("format(): an EMPTY mean cell stays NA -- it is not padded",
 })
 
 testthat::test_that("format(): a mean column with no sd at all is untouched", {
-  x <- fmt(mean = c(1.0, 2.0), var = c(NA, NA), n = c(5L, 5L), display = "mean", type = "mean",
+  x <- fmt(mean = c(1.0, 2.0), var = c(NA, NA), n = c(5L, 5L), display = "mean", scale = "level_mean",
            digits = 1L)
   testthat::expect_identical(format(x, special_formatting = TRUE), c("1.0", "2.0"))
 })
@@ -110,7 +110,7 @@ testthat::test_that("format(bold_split): only the MEAN of a mean (sd) cell is th
 testthat::test_that("format(): primary_nchar is attached only when something splits", {
   # the contract: off by default -> attribute-free output; and no bare all-NA attribute either
   testthat::expect_null(attr(format(mean_col(), special_formatting = TRUE), "primary_nchar"))
-  plain <- fmt(pct = c(0.4, 0.6), n = c(10L, 10L), type = "row")
+  plain <- fmt(pct = c(0.4, 0.6), n = c(10L, 10L), scale = "level_pct", pct_base = "row")
   testthat::expect_null(attr(format(plain, bold_split = TRUE), "primary_nchar"))
 })
 
@@ -139,7 +139,7 @@ testthat::test_that("tab_md() pads a composite's (n=...) with figure space, not 
 
 testthat::test_that("format()'s DEFAULT pad (the console) stays ASCII", {
   # the console must NOT move to figure space -- a monospace ASCII space is already one digit wide.
-  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), type = "row", display = "{pct} (n={n})")
+  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_base = "row", display = "{pct} (n={n})")
   testthat::expect_identical(format(x), c("100% (n=  849)", "100% (n=3 648)"))
 })
 
@@ -148,11 +148,11 @@ testthat::test_that("format()'s DEFAULT pad (the console) stays ASCII", {
 testthat::test_that("format(): a gof / pvalue footer cell reaches the column edge (no star pad)", {
   # in a starred column, a "gof" (N/AIC) or "pvalue" summary cell reserves NO star column, so a
   # right-aligned summary number reaches the edge instead of lining up under the starred data.
-  x <- fmt(n = c(100L, 100L, NA, NA),
+  x <- fmt(scale = "points", n = c(100L, 100L, NA, NA),
            pct    = c(0.4, 0.6, NA, 0.03),          # pvalue cell stores its p in pct
            diff   = c(0.1, -0.1, 21483, NA),        # gof cell stores its stat in diff
            ci_inf = c(0.05, -0.2, NA, NA), ci_sup = c(0.15, -0.05, NA, NA),
-           pvalue = c(0.0005, 0.5, NA, NA), ci_type = "diff",
+           pvalue = c(0.0005, 0.5, NA, NA),
            display = c("diff", "diff", "gof", "pvalue"), digits = c(0L, 0L, 0L, 2L))
   f <- format(x, special_formatting = TRUE, na = "", stars = TRUE, html = TRUE)
   # the diff data cell IS star-padded to width 3 (stars left, fig pad right)
@@ -166,9 +166,9 @@ testthat::test_that("format(): a gof / pvalue footer cell reaches the column edg
 
 testthat::test_that("tab_xl(): the star literal is padded with figure spaces", {
   testthat::skip_if_not_installed("openxlsx2")
-  x <- fmt(n = rep(100L, 3), type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
+  x <- fmt(n = rep(100L, 3), scale = "points", pct_base = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
            ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-           pvalue = c(0.0005, 0.5, 0.07), ci_type = "diff", display = "pct")
+           pvalue = c(0.0005, 0.5, 0.07), display = "pct")
   st <- get_stars(x)
   testthat::expect_identical(st, c("***", "", "*"))
   # the width every cell's star field is padded to = the column max ("" counts 0)

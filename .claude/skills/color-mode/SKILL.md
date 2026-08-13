@@ -53,7 +53,7 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `reg_write_group_obs`, R/tab_reg.R), and `fmt_adjustment_score()` reads it. Three facts drive the
   rest: `ref_kind = "observed"/"group"` (checked by `measure_own_ref()`, which makes the measure name
   ITSELF in the legend instead of borrowing the column's effect word, and resolves its reference phrase
-  PER CHANNEL); `std_when = "additive"` (the scale keys off the ESTIMATE's `ci_type`, since `Model_OR`
+  PER CHANNEL); `scale_from = "gap"` (the ladder keys off the ESTIMATE's own stored `scale`, since `Model_OR`
   and `Model_AME` are both `type = "row"`); and `force_policy = "ignore"`, applied by
   **`measure_policy(m, policy)`** -- the twin of `measure_facts()`, called by the plan AND the legend,
   for a measure with no significance test of its own. Scales `adj_ratio` / `adj_diff`. The SIGN is
@@ -86,10 +86,11 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `legend_render_line(medium)` (console crayon / html `text_spec` / md pandoc span / excel `fmt_txt`
   runs / plain). `tab_color_legend(x, medium=, style=, lang=)`: console = terse, exports = prose
   (translatable via `gettext`, domain `R-tabxplor`, FR in `po/R-fr.po`; `lang` sets the `LANGUAGE`
-  env for the build). It NAMES the CI method/level from the table's stored **`ci_settings`** attribute
-  (`list(conf_level, method_cell, method_diff, method_ratio, method_mean_diff, method_mean_ratio)` since
-  14v-ii — the legend picks the relevant one off the column type/ci_type, set in `tab_assemble_tables`, carried through dplyr;
-  `default_ci_settings()` fallback). Shade names ("blue"/"yellow-red") come from `legend_shade_names()`
+  env for the build). It NAMES the CI method/level from the COLUMN's own stored **`ci_method`** /
+  **`conf_level`** attributes (Phase 19b), through the declared `CI_METHOD_LABELS` table
+  (one row per engine, keyed on what the PRODUCER stamped where the interval was computed; `""` = no
+  interval -> the legend names none, instead of falling back to a table-wide default it might not have
+  used). Shade names ("blue"/"yellow-red") come from `legend_shade_names()`
   (default palette only). Changing legend wording → regen `_snaps/golden.md` + `_snaps/render-html.md`
   (per-CELL hex `test-color-golden.R` must stay green — the legend never touches cell colours).
 

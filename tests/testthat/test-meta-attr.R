@@ -10,13 +10,17 @@ test_that("meta gathers the attrs and every legacy getter reads into it", {
   expect_type(m, "list")
   expect_true(!is.null(get_vars_attr(t)))
   expect_true(!is.null(get_render_extras(t)))
-  expect_true(!is.null(get_ci_settings(t)))          # ci = "auto" -> ci_settings recorded
   # the getters read the SAME objects the meta list holds
   expect_identical(get_vars_attr(t), m$vars)
-  expect_identical(get_ci_settings(t), m$ci_settings)
+  # Phase 19b: which interval METHOD was used is a per-COLUMN fact, not a meta sub-field. A count
+  # column carries no interval, so it names none -- which is the point: the method describes THIS
+  # column's bounds, not a table-wide setting the legend then indexes by measure (D8).
+  expect_true(all(get_ci_method(t)[purrr::map_lgl(t, is_fmt)] == ""))
+  tp <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "diff")
+  expect_true(all(get_ci_method(tp)[purrr::map_lgl(tp, is_fmt)] == "newcombe"))
 })
 
-test_that("meta (vars / ci_settings / render_extras) survives a dplyr pipeline", {
+test_that("meta (vars / render_extras) survives a dplyr pipeline", {
   t <- tab(forcats::gss_cat, marital, race, ci = "auto")
   out <- t |>
     dplyr::filter(TRUE) |>
@@ -24,18 +28,16 @@ test_that("meta (vars / ci_settings / render_extras) survives a dplyr pipeline",
     dplyr::arrange(dplyr::desc(.data[[names(t)[[1]]]])) |>
     dplyr::select(-".zzz")
   expect_false(is.null(get_vars_attr(out)))
-  expect_false(is.null(get_ci_settings(out)))
   expect_false(is.null(get_render_extras(out)))
   expect_identical(get_vars_attr(out), get_vars_attr(t))
 })
 
-test_that("set_render_extras(NULL) clears ONLY render_extras, keeping vars/ci_settings", {
+test_that("set_render_extras(NULL) clears ONLY render_extras, keeping vars", {
   t <- tab(forcats::gss_cat, marital, race, ci = "auto")
   expect_false(is.null(get_render_extras(t)))
   t2 <- set_render_extras(t, NULL)
   expect_null(get_render_extras(t2))
   expect_false(is.null(get_vars_attr(t2)))          # untouched
-  expect_false(is.null(get_ci_settings(t2)))        # untouched
 })
 
 test_that("an unset table carries NO meta attribute (absent-when-unset)", {
@@ -238,7 +240,7 @@ test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked
   expect_identical(tab_weight_line(wide), tab_weight_line(flat))
 })
 
-test_that("a split tab_reg()'s ci_settings names the same methods as an unsplit one", {
+test_that("a split tab_reg()'s columns name the same interval methods as an unsplit one", {
   set.seed(12)
   n <- 300L
   d <- tibble::tibble(
@@ -250,8 +252,9 @@ test_that("a split tab_reg()'s ci_settings names the same methods as an unsplit 
     tab_reg(d, dependent = "y", predictors = "g", family = "gaussian", ...))
   # the split branch used to write a THREE-key reduction of the six the unsplit branch writes, so a
   # split gaussian/poisson table's legend could not name the interval its Obs_* columns print.
-  expect_identical(names(get_ci_settings(mk(split_var = "s", spread_models = FALSE))),
-                   names(get_ci_settings(mk())))
+  # Phase 19b: the methods ride the COLUMNS, so a rebuild site cannot lose them at all.
+  meth <- function(t) sort(unique(get_ci_method(t)[purrr::map_lgl(t, is_fmt)]))
+  expect_identical(meth(mk(split_var = "s", spread_models = FALSE)), meth(mk()))
 })
 
 test_that("tab_reg() on a survey design keeps the design's degrees of freedom", {

@@ -224,7 +224,7 @@ test_that("gaussian empirical: Obs_mean uncoloured, Obs_diff coloured by SD(Y) (
   d <- emp_data()
   t <- tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE, cleannames = FALSE)
   expect_identical(get_color(t[["Obs_mean"]]), "")          # base descriptive: uncoloured
-  expect_identical(get_type(t[["Obs_diff"]]),  "coef")
+  expect_identical(tabxplor:::fmt_var_kind(t[["Obs_diff"]]), "coef")
   expect_identical(get_color(t[["Obs_diff"]]), "diff")
   # var = var(Y) (constant), so the std-diff colour matches the model beta column exactly
   vy <- stats::var(d$tvhours)
@@ -238,7 +238,7 @@ test_that("poisson empirical: Obs_rate (ratio colour) + Obs_IRR", {
                                 cleannames = FALSE))
   expect_true(all(c("Obs_rate", "Obs_IRR") %in% names(t)))
   expect_identical(get_color(t[["Obs_rate"]]), "ratio")
-  expect_identical(get_type(t[["Obs_IRR"]]),   "row")
+  expect_identical(get_pct_base(t[["Obs_IRR"]]), "row")
 })
 
 test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_rate + Obs_IRR)", {
@@ -261,7 +261,7 @@ test_that("exponentiate = FALSE: a binomial coefficient is coloured (log_odds sc
   t <- suppressWarnings(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
                                 exponentiate = FALSE, cleannames = FALSE))
   bc <- t[["Model_\u03b2"]]
-  expect_identical(get_type(bc), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(bc), "coef")
   expect_identical(get_model_family(bc), "binomial")
   # the fix: log-odds coefficients are coloured against the LOGGED odds_ratio scale, so a non-trivial
   # coefficient gets a non-zero palette slot (pre-g fed sqrt(NA) and greyed every cell out)
@@ -281,8 +281,8 @@ test_that("exponentiate = FALSE + empirical: Obs_log(OR) / Obs_log(IRR), logged 
   expect_true(all(c("Obs_%", "Obs_log(OR)") %in% names(tb)))
   expect_false("Obs_OR" %in% names(tb))
   lc <- tb[["Obs_log(OR)"]]
-  expect_identical(get_type(lc), "coef")
-  expect_identical(get_ci_type(lc), "diff")
+  expect_identical(tabxplor:::fmt_var_kind(lc), "coef")
+  expect_identical(get_scale(lc), "log_coef")
   or <- get_or(tbo[["Obs_OR"]]); df <- get_diff(lc); k <- !is.na(or) & !is.na(df)
   expect_equal(df[k], log(or[k]), tolerance = 1e-8)                 # value: diff == log(OR)
   expect_equal(get_ci_inf(lc)[k], log(get_ci_inf(tbo[["Obs_OR"]])[k]), tolerance = 1e-8)  # logged CI
@@ -291,7 +291,7 @@ test_that("exponentiate = FALSE + empirical: Obs_log(OR) / Obs_log(IRR), logged 
   tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                  exponentiate = FALSE, cleannames = FALSE))
   expect_true(all(c("Obs_rate", "Obs_log(IRR)") %in% names(tp)))
-  expect_identical(get_type(tp[["Obs_log(IRR)"]]), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(tp[["Obs_log(IRR)"]]), "coef")
 })
 
 test_that("empirical works with a VECTOR of dependents (one crude companion per dependent)", {

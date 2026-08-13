@@ -53,7 +53,7 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   data_i  <- setdiff(unname(roles$fmt_cols), unname(roles$sd_cols))
   is_tot  <- data_i %in% roles$totcols
   is_n    <- unname(cvm[data_i]) %in% "all_col_vars"
-  types   <- vapply(data_i, function(j) get_type(tab[[j]]), character(1))
+  types   <- vapply(data_i, function(j) fmt_var_kind(tab[[j]]), character(1))
   is_mean <- types %in% "mean" & !is_tot & !is_n
   is_fac  <- !is_tot & !is_n & !is_mean
   order_i <- c(data_i[is_fac], data_i[is_tot], data_i[is_n], data_i[is_mean])

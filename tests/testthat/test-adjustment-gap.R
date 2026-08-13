@@ -269,7 +269,7 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
                                                  effect = "ame", empirical = TRUE,
                                                  color = c("diff", "adjustment"))))
   x <- gapb_model_col(t)
-  testthat::expect_identical(as.character(get_ci_type(x))[1], "diff")
+  testthat::expect_identical(get_scale(x), "raw_diff")   # a count AME, in the outcome's own units
   testthat::expect_true(all(is.na(get_obs(x))))
   testthat::expect_true(all(is.na(get_gap_se(x))))
   # the coefficient path on the same data DOES match scales, so it keeps both

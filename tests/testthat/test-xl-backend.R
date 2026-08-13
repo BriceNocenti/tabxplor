@@ -79,7 +79,7 @@ test_that("xlb_na_argname resolves the exact NA formal across openxlsx2 versions
 test_that("xl_materialize_data blanks NaN so Excel shows an empty cell, not #VALUE! (Phase q)", {
   # openxlsx2 renders a NaN numeric cell as an Excel error even when NA is blanked (the na arg only covers
   # NA), so an empty summary cell that computes to NaN must be coerced to NA before the write.
-  x  <- fmt(n = 1L, mean = NaN, type = "mean", display = "mean", digits = 1L)
+  x  <- fmt(n = 1L, mean = NaN, scale = "level_mean", display = "mean", digits = 1L)
   tb <- tibble::tibble(v = x)
   out <- xl_materialize_data(tb, fmt_cols = 1L, text_fmt_cols = integer(0))
   expect_true(is.na(out$v))

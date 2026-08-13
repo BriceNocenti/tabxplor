@@ -203,30 +203,30 @@ testthat::test_that("other_if_less_than = 0 keeps all categories", {
 # === SECTION: fmt object edge cases ===========================================
 
 testthat::test_that("get_wn falls back to n when wn is NA", {
-  x <- fmt(n = 5L, type = "n")
+  x <- fmt(n = 5L, scale = "level_n")
   testthat::expect_equal(get_wn(x), 5)
 })
 
 testthat::test_that("fmt arithmetic preserves class", {
-  x <- fmt(n = 5L, type = "n")
-  y <- fmt(n = 3L, type = "n")
+  x <- fmt(n = 5L, scale = "level_n")
+  y <- fmt(n = 3L, scale = "level_n")
   result <- x + y
   testthat::expect_true(is_fmt(result))
   testthat::expect_equal(get_n(result), 8L)
 })
 
 testthat::test_that("fmt handles NA n values", {
-  x <- fmt(n = NA_integer_, type = "n")
+  x <- fmt(n = NA_integer_, scale = "level_n")
   testthat::expect_true(is.na(get_n(x)))
 })
 
 testthat::test_that("is_totrow returns FALSE for non-total rows", {
-  x <- fmt(n = 5L, type = "n")
+  x <- fmt(n = 5L, scale = "level_n")
   testthat::expect_false(is_totrow(x))
 })
 
 testthat::test_that("is_totcol returns FALSE for non-total columns", {
-  x <- fmt(n = 5L, type = "n")
+  x <- fmt(n = 5L, scale = "level_n")
   testthat::expect_false(is_totcol(x))
 })
 

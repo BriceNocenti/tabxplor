@@ -303,6 +303,9 @@
   the same interval method as the column beside it.
 * `tab_reg(trials = "<column name>")` now gives a clear error naming the argument, instead of failing
   deep inside `glm()`.
+* **The colour legend no longer names an interval method the bounds were not built with.** Each column
+  now records its own (`get_ci_method()`), so a mean's one-sample cell interval is called a Student t
+  interval rather than a Welch one, and a Poisson crude rate ratio is called Katz rather than Wald.
 
 ## Deprecations
 
@@ -326,6 +329,16 @@ Removed / defunct (now error):
   `set_color_breaks()` and returns a modifiable `ggplot`).
 * `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
   `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
+* **The `fmt` column attributes `type` and `ci_type`, with `get_type()` / `set_type()` /
+  `get_ci_type()` / `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments.** A column now
+  states **what it estimates**: `scale =` (`"level_pct"`, `"level_mean"`, `"level_n"`, `"points"`,
+  `"mean_diff"`, `"raw_diff"`, `"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`, `"log_coef"`) plus
+  `pct_base =` (`"row"` / `"col"` / `"all"` / `"all_tabs"` / `"none"`), read with `get_scale()` /
+  `get_pct_base()`. `ci_type` is gone rather than renamed: the stored interval is always on the
+  estimate's own scale, and whether a column *has* one is read from its bounds. `fmt()` answers a
+  `type =` / `ci_type =` call with the mapping to the new arguments. This only concerns code that
+  builds or inspects `fmt` vectors directly (see `vignette("tabxplor-programming")`); every `tab()`
+  and `tab_reg()` table is unchanged, cell for cell.
 
 
 # tabxplor 1.3.1

@@ -603,9 +603,10 @@ testthat::test_that("the released method_cell / method_diff are soft-deprecated 
     old <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wald"), "deprecated")
   new <- tab(gss, race, marital, pct = "row", ci = "cell", ci_method = c(cell = "wald"))
   testthat::expect_equal(old, new)
-  testthat::expect_identical(get_ci_settings(new)$method[["cell"]], "wald")
+  # Phase 19b: the resolved method is stamped on the COLUMNS that used it
+  testthat::expect_true(all(get_ci_method(new)[purrr::map_lgl(new, is_fmt)] == "wald"))
   # the vector is PARTIAL: an unnamed slot keeps its default, exactly like `ref` / `pct`
-  testthat::expect_identical(unname(get_ci_settings(new)$method),
+  testthat::expect_identical(unname(tabxplor:::resolve_ci_method(c(cell = "wald"))),
                              c("wald", "newcombe", "welch", "robust"))
   # and one validator answers for every entry point
   testthat::expect_error(tab(gss, race, marital, ci_method = c(diff = "wilson")), "newcombe")

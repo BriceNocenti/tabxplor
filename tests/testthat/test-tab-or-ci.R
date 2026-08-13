@@ -23,7 +23,7 @@ woolf <- function(a, b, cc, dd, conf = 0.95) {
 test_that("color_signif = 'ignore' (default) leaves the empirical OR without a CI (byte-unchanged)", {
   t <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
   yes <- t[["yes"]]
-  expect_identical(unique(as.character(get_ci_type(yes))), "")
+  expect_false(tabxplor:::fmt_has_interval(yes))
   expect_true(all(is.na(get_ci_inf(yes))))
   expect_true(all(is.na(get_ci_sup(yes))))
   expect_true(all(is.na(get_pvalue(yes))))
@@ -33,7 +33,7 @@ test_that("a colour policy gives the empirical OR a Woolf interval (matches the 
   t   <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
              color_signif = "grey_non_signif")
   yes <- t[["yes"]]
-  expect_identical(as.character(get_ci_type(yes))[1], "or")
+  expect_identical(get_scale(yes), "odds_ratio")
 
   # group c (row 3) vs the reference row (group a, row 1), on {yes, no=ref2 level}
   w <- woolf(a = 60, b = 40, cc = 30, dd = 70)
@@ -47,7 +47,7 @@ test_that("a colour policy gives the empirical OR a Woolf interval (matches the 
   # intervals (no column is forced to "1"); ref2 is ignored. The "no" column is the exact reciprocal
   # of "yes", with reciprocal-swapped bounds; only the reference row stays NA.
   no <- t[["no"]]
-  expect_identical(as.character(get_ci_type(no))[1], "or")
+  expect_identical(get_scale(no), "odds_ratio")
   expect_equal(get_or(no)[3],     1 / w$or,  tolerance = 1e-8)
   expect_equal(get_ci_inf(no)[3], 1 / w$sup, tolerance = 1e-8)
   expect_equal(get_ci_sup(no)[3], 1 / w$inf, tolerance = 1e-8)
@@ -96,7 +96,7 @@ test_that("3+ level factor: OR of each level vs the ref2 baseline is the conditi
   #   conditional 2x2 on {d3, d1}: a = 50, b = 30 (x) ; c = 20, d = 60 (ref)
   w <- woolf(a = 50, b = 30, cc = 20, dd = 60)
   d3 <- t[["d3"]]
-  expect_identical(as.character(get_ci_type(d3))[1], "or")
+  expect_identical(get_scale(d3), "odds_ratio")
   expect_equal(get_or(d3)[2],     w$or,  tolerance = 1e-8)   # = (50*60)/(30*20) = 5
   expect_equal(get_ci_inf(d3)[2], w$inf, tolerance = 1e-8)
   expect_equal(get_ci_sup(d3)[2], w$sup, tolerance = 1e-8)
@@ -117,8 +117,8 @@ test_that("Phase 16c: a binary col_var references the complement (no column forc
   expect_false(all(no[!is.na(no)]  == 1))
   # ... the two are exact reciprocals, and both carry an OR interval (ref2 is ignored for binary)
   expect_equal(no[!is.na(no)], (1 / yes)[!is.na(yes)], tolerance = 1e-8)
-  expect_identical(as.character(get_ci_type(t[["yes"]]))[1], "or")
-  expect_identical(as.character(get_ci_type(t[["no"]]))[1],  "or")
+  expect_identical(get_scale(t[["yes"]]), "odds_ratio")
+  expect_identical(get_scale(t[["no"]]),  "odds_ratio")
 })
 
 test_that("Phase 16c: an OR table's total column shows only the base n, not 100%", {

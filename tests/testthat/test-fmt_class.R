@@ -5,37 +5,37 @@ testthat::test_that("class is right", {
 
 testthat::test_that("fmt prints without error", {
   testthat::expect_output(
-    print(fmt(n = c(5, 10, 15), type = "n", display = c("n", "row", "mean"),
+    print(fmt(n = c(5, 10, 15), scale = "level_n", display = c("n", "row", "mean"),
               wn = c(4.7, 12.1, 13.9), digits = 1, pct = c(NA, 0.63, NA),
               mean = c(NA, NA, 27.3)))
   )
   testthat::expect_output(print(tibble::tibble(
-    fmt(n = c(15, 10, 5), type = "row", display = c("n", "row", "mean"),
+    fmt(n = c(15, 10, 5), scale = "level_pct", pct_base = "row", display = c("n", "row", "mean"),
         wn = c(13.9, 12.1, 4.7), digits = 0, pct = c(NA, 0.22, NA),
         mean = c(NA, NA, 21))
   )))
 })
 
 #test of common type :
-# vec_ptype_show(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
+# vec_ptype_show(fmt(1, "level_pct", pct_base = "row", pct = 0.255), fmt(2, "level_pct", pct_base = "row", pct = 0.987))
 # vec_ptype_show(fmt(), double(), fmt())
-# vec_ptype_common(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_ptype2(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_ptype2(fmt(1, "row", pct = 0.255), fmt(2, "col", pct = 0.987))
+# vec_ptype_common(fmt(1, "level_pct", pct_base = "row", pct = 0.255), fmt(2, "level_pct", pct_base = "row", pct = 0.987))
+# vec_ptype2(fmt(1, "level_pct", pct_base = "row", pct = 0.255), fmt(2, "level_pct", pct_base = "row", pct = 0.987))
+# vec_ptype2(fmt(1, "level_pct", pct_base = "row", pct = 0.255), fmt(2, "level_pct", pct_base = "col", pct = 0.987))
 
 testthat::test_that("class is right after conversion", {
   testthat::expect_s3_class(vec_cast(5, fmt()), "tabxplor_fmt")
   testthat::expect_s3_class(vec_cast(5L, fmt()), "tabxplor_fmt")
   testthat::expect_type(vec_cast(fmt(6), double()), "double")
   testthat::expect_type(vec_cast(fmt(6), integer()), "integer")
-  testthat::expect_type(vec_cast(fmt(1, "row", pct = 0.6005), character()), "character")
+  testthat::expect_type(vec_cast(fmt(1, "level_pct", pct_base = "row", pct = 0.6005), character()), "character")
   testthat::expect_s3_class(vec_cast(NA, fmt()), "tabxplor_fmt")
 })
-# vec_cast(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
+# vec_cast(fmt(1, "level_pct", pct_base = "row", pct = 0.255), fmt(2, "level_pct", pct_base = "row", pct = 0.987))
 
 testthat::test_that("combinations with c() work", {
-  testthat::expect_s3_class(vec_c(fmt(1, "row", pct = 0.255),
-                                  fmt(2, "row", pct = 0.987)), "tabxplor_fmt")
+  testthat::expect_s3_class(vec_c(fmt(1, "level_pct", pct_base = "row", pct = 0.255),
+                                  fmt(2, "level_pct", pct_base = "row", pct = 0.987)), "tabxplor_fmt")
   testthat::expect_s3_class(c(fmt(1), fmt(2))                , "tabxplor_fmt")
   testthat::expect_s3_class(vec_c(fmt(3), 1)                 , "tabxplor_fmt")
   testthat::expect_s3_class(vec_c(fmt(3), 1L)                , "tabxplor_fmt")
@@ -48,64 +48,64 @@ testthat::test_that("comparisons and sorting work", {
 })
 
 testthat::test_that("model_family column attribute round-trips and reconciles (Phase 15e)", {
-  f <- fmt(c(7, 19), "row", or = c(1.2, 0.8), model_family = "binomial")
+  f <- fmt(c(7, 19), "level_pct", pct_base = "row", or = c(1.2, 0.8), model_family = "binomial")
   testthat::expect_identical(get_model_family(f), "binomial")
   testthat::expect_identical(get_model_family(set_model_family(f, "poisson")), "poisson")
-  testthat::expect_identical(get_model_family(fmt(1, "row", pct = 0.3)), "")   # inert default
+  testthat::expect_identical(get_model_family(fmt(1, "level_pct", pct_base = "row", pct = 0.3)), "")   # inert default
 
   # vec_c of two different families collapses to "" (like col_var -> "several_vars"); same survives
   testthat::expect_identical(
     get_model_family(vec_c(f, set_model_family(f, "gaussian"))), "")
   testthat::expect_identical(
-    get_model_family(vec_c(f, fmt(3, "row", or = 2, model_family = "binomial"))), "binomial")
+    get_model_family(vec_c(f, fmt(3, "level_pct", pct_base = "row", or = 2, model_family = "binomial"))), "binomial")
 
   # arithmetic carries x's family; cast copies model_family from `to`
   testthat::expect_identical(get_model_family(f + f), "binomial")
   testthat::expect_identical(get_model_family(vec_cast(2.5, f)), "binomial")
 
   # data.frame getter -> one value per column
-  df <- tibble::tibble(a = f, b = fmt(1, "row", pct = 0.3))
+  df <- tibble::tibble(a = f, b = fmt(1, "level_pct", pct_base = "row", pct = 0.3))
   testthat::expect_identical(unname(get_model_family(df)), c("binomial", ""))
 })
 
 testthat::test_that("arithmetic between fmt and fmt works", {
-  a <- fmt(5, "n"  , 0, wn = 5.1)
-  b <- fmt(1, "n"   , 0, pct  = 0.25000001, wn =  1.5)
+  a <- fmt(5, "level_n"  , 0, wn = 5.1)
+  b <- fmt(1, "level_n"   , 0, pct  = 0.25000001, wn =  1.5)
   testthat::expect_equal(get_n(a + b), 6)
   testthat::expect_equal(get_wn(a + b), 5.1 + 1.5)
 
-  testthat::expect_warning((fmt(15L, "row" , 1, pct =  0.55, wn = 15.1) -
-                              fmt(  2L, "mean", 0, mean = 0.25000001, wn =  2.5 )))
+  testthat::expect_warning((fmt(15L, "level_pct", pct_base = "row" , 1, pct =  0.55, wn = 15.1) -
+                              fmt(  2L, "level_mean", 0, mean = 0.25000001, wn =  2.5 )))
 
-  a <- fmt(25, "row" , 2, pct =  0.55      , wn = 25.1)
-  b <- fmt(3 , "row" , 3, pct  = 0.25000001, wn =  3.5)
+  a <- fmt(25, "level_pct", pct_base = "row" , 2, pct =  0.55      , wn = 25.1)
+  b <- fmt(3 , "level_pct", pct_base = "row" , 3, pct  = 0.25000001, wn =  3.5)
   testthat::expect_equal(get_pct(a - b), 0.55 - 0.25000001)
 
-  a <- fmt(25, "row" , 2, pct =  0.55      , wn = 25.1)
-  b <- fmt(3 , "row" , 3, pct  = 0.25000001, wn =  3.5 )
+  a <- fmt(25, "level_pct", pct_base = "row" , 2, pct =  0.55      , wn = 25.1)
+  b <- fmt(3 , "level_pct", pct_base = "row" , 3, pct  = 0.25000001, wn =  3.5 )
   testthat::expect_equal(get_pct(a / b), 0.55 / 0.25000001)
 
-  a <- fmt(35, "mean" , 3, mean = 3.55, wn = 35.1)
-  b <- fmt(4 , "mean" , 0, mean = 1.60, wn =  4.5)
+  a <- fmt(35, "level_mean" , 3, mean = 3.55, wn = 35.1)
+  b <- fmt(4 , "level_mean" , 0, mean = 1.60, wn =  4.5)
   testthat::expect_equal(get_mean(a + b), (3.55 * 35.1 + 1.60 * 4.5)/(35.1 + 4.5))
 })
 
 testthat::test_that("arithmetic between fmt and numeric works", {
-  (fmt(45, "row" , 4, pct =  0.55, wn = 5.1) + 0.7)|> testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(55, "mean", 3, mean = 2.55, wn = 55.1) - 1) |> testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(65, "row", 2, pct =  0.55, wn = 65.1) / 2)  |> testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(75, "n" ,-1, pct =  0.55, wn = 75.1) * 3)   |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(45, "level_pct", pct_base = "row" , 4, pct =  0.55, wn = 5.1) + 0.7)|> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(55, "level_mean", 3, mean = 2.55, wn = 55.1) - 1) |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(65, "level_pct", pct_base = "row", 2, pct =  0.55, wn = 65.1) / 2)  |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(75, "level_n" ,-1, pct =  0.55, wn = 75.1) * 3)   |> testthat::expect_s3_class("tabxplor_fmt")
   (fmt(1) + 1)                                     |> testthat::expect_s3_class("tabxplor_fmt")
-  (1 + fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
-  (1 - fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
-  (2 / fmt(3, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
-  (5 * fmt(1, "n", 2)           )                  |> testthat::expect_s3_class("tabxplor_fmt")
-  (-fmt(1, "row", pct = 0.12)   )                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (1 + fmt(1, "level_pct", pct_base = "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (1 - fmt(1, "level_pct", pct_base = "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (2 / fmt(3, "level_pct", pct_base = "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (5 * fmt(1, "level_n", 2)           )                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (-fmt(1, "level_pct", pct_base = "row", pct = 0.12)   )                  |> testthat::expect_s3_class("tabxplor_fmt")
 })
 
 testthat::test_that("math (sum and mean) between fmt and fmt works", {
   testthat::expect_equal(get_n(sum(fmt(1), fmt(1))), 2)
-  testthat::expect_equal(get_n(mean(fmt(1, "n", 2), fmt(1, "n", 2))), 1)
+  testthat::expect_equal(get_n(mean(fmt(1, "level_n", 2), fmt(1, "level_n", 2))), 1)
 })
 
 testthat::test_that("fmt vectors works with mutate", {
@@ -126,7 +126,7 @@ testthat::test_that("fmt vectors works with mutate", {
 })
 
 testthat::test_that("fmt work with $", { #and [[
-  fmt_vect <- fmt(n = c(1, 2), type = "n")
+  fmt_vect <- fmt(n = c(1, 2), scale = "level_n")
   testthat::expect_equal(fmt_vect$n, c(1, 2))
   testthat::expect_equal(fmt_vect$digits, c(0, 0))
   #testthat::expect_equal(fmt_vect[["n"]], c(1, 2))
@@ -140,7 +140,7 @@ testthat::test_that("fmt work with $", { #and [[
 # shared helpers (display_primary / parse_display_template / validate_display_template) + edge cases.
 
 testthat::test_that("composite {} template renders 'primary (secondary)' on value cells", {
-  x <- set_display(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct"),
+  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct"),
                    "{pct} ({n})")
   testthat::expect_identical(format(x), c("40% (10)", "60% (20)"))   # byte-identical to Phase 10c
   y <- set_display(x, "{n} ({pct})")
@@ -150,7 +150,7 @@ testthat::test_that("composite {} template renders 'primary (secondary)' on valu
 })
 
 testthat::test_that("a composite cell resolves to its PRIMARY (get_num / Excel / tibble header)", {
-  x0 <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct")
+  x0 <- fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct")
   xs <- set_display(x0, "{pct} ({n})")
   # get_num() and the Excel bypass show the primary field -- byte-identical to the plain column.
   testthat::expect_identical(get_num(xs), get_num(x0))
@@ -160,7 +160,7 @@ testthat::test_that("a composite cell resolves to its PRIMARY (get_num / Excel /
 })
 
 testthat::test_that("format() is byte-identical when no cell is a composite", {
-  x0 <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct")
+  x0 <- fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct")
   testthat::expect_identical(format(x0), c("40%", "60%"))
 })
 
@@ -185,8 +185,8 @@ testthat::test_that("tab(display = ) writes the {} template into the display FIE
 
 
 
-# x <- fmt(n = c(2, 1), type = "row", pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
-# y <- fmt(n = c(3, 9), type = "n"  , pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
+# x <- fmt(n = c(2, 1), scale = "level_pct", pct_base = "row", pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
+# y <- fmt(n = c(3, 9), scale = "level_n"  , pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
 # z <- c(x, y)
 #
 # x ; y ; z
@@ -225,7 +225,8 @@ test_that("model_family is carried through the fmt carrier round-trip (Defect 1,
   expect_true("conf_level" %in% fmt_col_attrs)             # Phase 18z13: the 12th
   expect_true("degf"  %in% fmt_col_attrs)                  # Phase 18z16-iiiii: the 13th
   expect_true("basis" %in% fmt_col_attrs)                  #                       and the 14th
-  expect_length(fmt_col_attrs, 14L)
+  expect_true("ci_method" %in% fmt_col_attrs)              # Phase 19b: the 15th
+  expect_length(fmt_col_attrs, 15L)
 
   tb <- tab(forcats::gss_cat, marital, race)
   tb[["Black"]] <- set_model_family(tb[["Black"]], "binomial")
@@ -270,15 +271,17 @@ test_that("every fmt column attribute is DECLARED, and a bind yields its neutral
   expect_identical(attributes(tabxplor:::fmt_ptype_empty)[fmt_col_attrs],
                    attributes(tabxplor:::new_fmt())[fmt_col_attrs])
 
-  a <- fmt(1:2, "row", pct = c(.1, .2), ref = "tot",   ci_type = "cell", col_var = "v1",
+  a <- fmt(1:2, "level_pct", pct_base = "row", pct = c(.1, .2), ref = "tot", col_var = "v1",
            totcol = TRUE,  refcol = TRUE,  color = c("diff", "ratio"),
            color_signif = "grey_non_signif", model_family = "binomial", role = "model",
-           conf_level = 0.99, degf = 30, basis = "design", comp_all = TRUE)
-  b <- fmt(1:2, "col", pct = c(.3, .4), ref = "first", ci_type = "diff", col_var = "v2",
+           conf_level = 0.99, degf = 30, basis = "design", ci_method = "newcombe",
+           comp_all = TRUE)
+  b <- fmt(1:2, "points", pct_base = "col", pct = c(.3, .4), ref = "first", col_var = "v2",
            totcol = FALSE, refcol = FALSE, color = c("contrib", "OR"),
            color_signif = "ignore", model_family = "poisson", role = "emp",
-           conf_level = 0.90, degf = 12, basis = "weights", comp_all = FALSE)
-  # NON-VACUOUS: all 14 must really differ, else every assertion below proves nothing.
+           conf_level = 0.90, degf = 12, basis = "weights", ci_method = "wilson",
+           comp_all = FALSE)
+  # NON-VACUOUS: all 15 must really differ, else every assertion below proves nothing.
   expect_true(all(!mapply(identical, tabxplor:::fmt_attrs_of(a), tabxplor:::fmt_attrs_of(b))))
 
   got <- tabxplor:::fmt_attrs_of(suppressWarnings(vctrs::vec_c(a, b)))
@@ -299,7 +302,7 @@ test_that("fmt arithmetic reconciles the INFERENCE claim instead of taking x's (
   # z16-iiiii, but vec_arith took x's conf_level/degf/basis blindly -- so `x - y` kept x's account
   # of how ITS interval was computed and stapled it onto a number that is half y's.
   mk <- function(cl, dg, bs) tabxplor:::set_basis(
-    tabxplor:::set_degf(tabxplor:::set_conf_level(fmt(1:2, "row", pct = c(.1, .2)), cl), dg), bs)
+    tabxplor:::set_degf(tabxplor:::set_conf_level(fmt(1:2, "level_pct", pct_base = "row", pct = c(.1, .2)), cl), dg), bs)
   a <- mk(0.99, 30, "design")
   b <- mk(0.90, 12, "weights")
 
@@ -318,6 +321,6 @@ test_that("fmt arithmetic reconciles the INFERENCE claim instead of taking x's (
 test_that("adding a count column to a percentage one WARNS instead of erroring (E1)", {
   # `comp_all` is NA on a count column, so `same_comp` is three-valued and the guard `if (!same_comp)`
   # aborted with "missing value where TRUE/FALSE needed". The reconcile itself was always NA-safe.
-  expect_warning(out <- fmt(5L) + fmt(5L, "row", pct = .5, comp_all = FALSE))
+  expect_warning(out <- fmt(5L) + fmt(5L, "level_pct", pct_base = "row", pct = .5, comp_all = FALSE))
   expect_true(is.na(get_comp_all(out, replace_na = FALSE)))   # NA-vs-set stays NA (rule "comp3")
 })

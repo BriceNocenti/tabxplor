@@ -14,9 +14,9 @@
 #     fixed-dispersion glm (binomial/poisson), t(df.residual) for lm / quasi* / weighted svyglm --
 #     matching broom's z/t p exactly. method="profile" (unweighted glm): confint + LR-test p.
 #   - Effect shape is driven by `exponentiate` (default "nongaussian"): MULTIPLICATIVE (OR/IRR) ->
-#     the `or` field, type="row", display="or", ci_type="or", color="OR" (neutral 1, 1/x reciprocal);
+#     the `or` field, scale="odds_ratio", display="or", color="OR" (neutral 1, 1/x reciprocal);
 #     ADDITIVE (gaussian beta / log-odds) -> the `diff` field, type="coef", display="coef",
-#     ci_type="diff", color="diff" (neutral 0), with `var`=var(Y) so the colour is the effect-size
+#     scale="raw_diff", color="diff" (neutral 0), with `var`=var(Y) so the colour is the effect-size
 #     beta/SD(Y) against the mean_diff (Cohen) breaks -- the additive twin of OR-coloured-by-ratio.
 #   - 12c-ii: `trials` fits a summed-score outcome as GROUPED binomial (cbind(score, trials-score));
 #     a model FORMULA in `dependent` is the escape hatch -- a simple `y ~ a + b` reduces to the
@@ -1406,7 +1406,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
 # model get the neutral value (0 / 1, no CI/p); predictors ABSENT from this model stay NA (empty
 # cells); the Constant carries the intercept (baseline) estimate.
 reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shape,
-                       color, color_signif, model_family = "") {
+                       color, color_signif, model_family = "", method = "wald") {
   td  <- fit_res$tidy
   m   <- match(skeleton$term, td$term)
   est <- td$estimate[m]
@@ -1433,7 +1433,9 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): whole-model N is in the footer, not a per-cell "n:"
       or = est, ci_inf = lo, ci_sup = hi, pvalue = p,
-      type = "row", display = "or", digits = 2L, ref = "1", ci_type = "or",
+      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",
+      # the model's own interval: a Wald one on the LOG scale (or the profile-likelihood one)
+      ci_method = if (identical(method, "profile")) "profile" else "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -1442,7 +1444,12 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): whole-model N is in the footer, not a per-cell "n:"
       diff = est, ci_inf = lo, ci_sup = hi, pvalue = p,
       var = rep(fit_res$var_y, n_rows),                 # var(Y): standardizes beta/SD(Y) for colour
-      type = "coef", display = "coef", digits = 2L, ci_type = "diff",
+      # Phase 19b: a link-scale coefficient (a log-odds / log-rate) and an outcome-unit one (a
+      # gaussian beta) are DIFFERENT scales, and the difference is the family -- stated here, where it
+      # is known, instead of being sniffed downstream from whether `var` happens to be non-NA.
+      scale = if (reg_fam_logscale(model_family)) "log_coef" else "raw_diff",
+      display = "coef", digits = 2L,
+      ci_method = if (identical(method, "profile")) "profile" else "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -1451,7 +1458,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
 
 # Phase 12h: apply the `estimate_display` layout to ONE coefficient column. "value" = unchanged (plain
 # OR / IRR / beta); "ci" = the `est_ci` token (estimate + a VISIBLE [ci_inf; ci_sup] bracket, dispatching
-# OR vs beta on ci_type); "prob" / "ame" = FOLD the model-adjusted predicted probability / average
+# OR vs beta on the stored scale); "prob" / "ame" = FOLD the model-adjusted predicted probability / average
 # marginal effect into the OR cell via the {} grammar ("{or} ({pct})" / "{or} ({diff})"), reusing
 # reg_marginal(). The fold is binomial-coefficient-only (guaranteed by the tab_reg() degrade): stars ride
 # the OR (the primary token) and its CI drives the colour; the (annotation) is a descriptive companion.
@@ -1941,7 +1948,7 @@ reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inver
       a <- a[ok, , drop = FALSE]; idx <- idx[ok]
       est <- a$ame; lo <- a$ame_lo; hi <- a$ame_hi
       # reg_marginal() exp()s a log-ratio before returning, so log it back: this function's contract is
-      # the NATIVE (link) scale, and reg_fit_overlay() re-exponentiates per the shape's own ci_type.
+      # the NATIVE (link) scale, and reg_fit_overlay() re-exponentiates per the shape's own scale.
       if (ratio) { est <- log(est); lo <- log(lo); hi <- log(hi) }
       rows[[length(rows) + 1L]] <- tibble::tibble(
         category = ifelse(is.na(a$group), "", a$group), row = idx,
@@ -1963,19 +1970,20 @@ reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inver
 # `Obs_%`'s `diff` field and COLOURED a cell that displays nothing. emit() is the one place the effect
 # shape is known and only the effect column is touched.
 #
-# The estimate lands in the field its `ci_type` declares (fmt_est_of()'s rule), exp()d exactly when that
-# ci_type is "or" -- which is also what tells this function whether the shape is an exponentiated effect
-# or its log twin. `n` is deliberately left NA: like the model column's, a fit-derived row's base is the
+# The estimate lands in the field its `scale` declares (fmt_center_field()'s rule), exp()d exactly when
+# that scale is `odds_ratio` -- which is also what tells this function whether the shape is an
+# exponentiated effect or its log twin. `n` is deliberately left NA: like the model column's, a fit-derived row's base is the
 # whole model N, which belongs in the footer, not in a per-cell "n:".
 #' @keywords internal
 reg_fit_overlay <- function(col, eff, est, shape) {
   if (is.null(est) || !nrow(est)) return(list(col = col, eff = eff))
   idx <- est$row
   e <- est$est; lo <- est$lo; hi <- est$hi; p <- est$p
-  if (identical(as.character(shape$ci_type)[1], "or")) {
+  scl <- EST_SCALES[[shape$scale]]
+  if (isTRUE(scl$mult)) {
     e <- exp(e); lo <- exp(lo); hi <- exp(hi)
   }
-  fld <- fmt_est_field(shape$ci_type)
+  fld <- scl$est_field
   get_est <- switch(fld, "or" = get_or, "ratio" = get_ratio, get_diff)
   set_est <- switch(fld, "or" = set_or, "ratio" = set_ratio, set_diff)
   poke <- function(v, value) { v[idx] <- value; v }
@@ -1988,11 +1996,12 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 }
 
 # The empirical (crude) companion FACT TABLE: per family (binomial / gaussian / poisson), the SHAPE of
-# the base descriptive column + the crude-effect column (fmt type / display / digits / ref / ci_type /
+# the base descriptive column + the crude-effect column (fmt scale / pct_base / display / digits / ref /
 # colour measure + the visible name), plus the CI METHOD literal the crude interval uses. The per-family
 # CI MATH stays code below (ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio take
 # different arguments), but the near-identical fmt() calls collapse into ONE builder (emp_col), and the
-# `method_*` literals are the SAME the colour legend names -- ci_settings reads them straight from here
+# `method_*` literals are the SAME the colour legend names -- each shape row also declares the engine
+# its own column's bounds were built with (`ci_method`, Phase 19b), stamped by emp_col()
 # (reg_build), so "the empirical CI matches the model CI" is data, not a hand-synced pair (Phase 17h).
 #   binomial : Obs_% (risk-diff colour, WALD) + Obs_OR (ratio, Woolf log-OR) | ame: + Obs_diff (WALD).
 #   gaussian : Obs_mean (mean+sd, UNCOLOURED, one-sample t) + Obs_diff (Student t = OLS, diff/SD(Y)).
@@ -2013,29 +2022,29 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 REG_EMPIRICAL <- list(
   binomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff", link = "logit")),
+    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    or     = list(nm = "Obs_OR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
+    or_log = list(nm = "Obs_log(OR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "woolf", color = "diff", link = "logit")),
   # Phase 18z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
   # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
   # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
   # of the whole feature: the observed companion must be on the same scale as the model column.
   rr = list(
     method_diff = "wald", coef = "rr", coef_log = "rr_log",
-    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = "identity"),
-    rr     = list(nm = "Obs_RR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR",   link = "log"),
-    rr_log = list(nm = "Obs_log(RR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff", link = "log")),
+    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    rr     = list(nm = "Obs_RR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "katz", color = "OR",   link = "log"),
+    rr_log = list(nm = "Obs_log(RR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "katz", color = "diff", link = "log")),
   gaussian = list(
     method_mean_diff = "student", coef = "diff", coef_log = "diff",
-    base = list(nm = "Obs_mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = "",     link = NA_character_),
-    diff = list(nm = "Obs_diff", type = "coef", display = "coef", digits = 2L, ref = NA_character_,  ci_type = "diff",  color = "diff", link = "identity")),
+    base = list(nm = "Obs_mean", scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "",     link = NA_character_),
+    diff = list(nm = "Obs_diff", scale = "raw_diff",  display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "diff", link = "identity")),
   poisson = list(
     method_mean_ratio = "quasipoisson", coef = "irr", coef_log = "irr_log",
-    base    = list(nm = "Obs_rate",     type = "mean", display = "mean", digits = 2L, ref = "1",           ci_type = "ratio", color = "ratio", link = NA_character_),
-    irr     = list(nm = "Obs_IRR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR",    link = "log"),
-    irr_log = list(nm = "Obs_log(IRR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff",  link = "log")),
+    base    = list(nm = "Obs_rate",     scale = "mean_ratio", display = "mean", digits = 2L, ref = "1", pct_base = "none", ci_method = "quasipoisson", color = "ratio", link = NA_character_),
+    irr     = list(nm = "Obs_IRR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "katz", color = "OR",    link = "log"),
+    irr_log = list(nm = "Obs_log(IRR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "katz", color = "diff",  link = "log")),
   # Phase 18z10 -- the three families that had no crude twin at all.
   #
   # grouped_binomial (`trials =`): the univariable model is STILL saturated for a factor predictor, so
@@ -2045,23 +2054,23 @@ REG_EMPIRICAL <- list(
   # one family needing both grid parts at once is why `emp_base` had to split into emp_prop / emp_mean.
   grouped_binomial = list(
     method_diff = "wald", method_mean_diff = "student", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_mean",     type = "mean", display = "mean", digits = 2L, ref = NA_character_, ci_type = "cell",  color = "",     link = NA_character_),
-    ame    = list(nm = "Obs_diff",     type = "row",  display = "diff", digits = 0L, ref = "tot",         ci_type = "diff",  color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",       type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)",  type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff", link = "logit")),
+    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "",     link = NA_character_),
+    ame    = list(nm = "Obs_diff",     scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    or     = list(nm = "Obs_OR",       scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
+    or_log = list(nm = "Obs_log(OR)",  scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "woolf", color = "diff", link = "logit")),
   # multinomial: one crude column PER OUTCOME CATEGORY would double an already wide table, so these
   # shapes are `visible = FALSE` -- the crude number rides IN-CELL in the model column's `obs` field
   # (maintainer's ruling Q4, rendered as "{or} ({obs})" / "{diff} ({obs})"). `obs` is defined as "the
   # value this cell is compared to, ON THE CELL'S OWN SCALE", so an invisible shape still has to declare
-  # its ci_type and link exactly like a visible one. The crude effect is closed-form: the univariable
+  # its scale and link exactly like a visible one. The crude effect is closed-form: the univariable
   # multinomial is saturated, and its OR is the {j, ref} x {level, ref level} Woolf ratio -- the very
   # number tab(pct = "row", OR = "OR") prints.
   multinomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    or        = list(nm = NA_character_, type = "row", display = "or",   digits = 2L, ref = "1",   ci_type = "or",   color = "OR",   link = "logit", visible = FALSE, per_category = TRUE),
-    or_log    = list(nm = NA_character_, type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff", color = "diff", link = "logit", visible = FALSE, per_category = TRUE),
-    ame       = list(nm = NA_character_, type = "row", display = "diff", digits = 0L, ref = "tot", ci_type = "diff", color = "diff", link = "identity", visible = FALSE, per_category = TRUE),
-    ame_ratio = list(nm = NA_character_, type = "row", display = "or",   digits = 2L, ref = "1",   ci_type = "or",   color = "OR",   link = "log",   visible = FALSE, per_category = TRUE)),
+    or        = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "woolf", color = "OR",   link = "logit", visible = FALSE, per_category = TRUE),
+    or_log    = list(nm = NA_character_, scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "woolf", color = "diff", link = "logit", visible = FALSE, per_category = TRUE),
+    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE),
+    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "katz", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE)),
   # ordinal: proportional odds is a CONSTRAINT, so the univariable model is NOT saturated and there is no
   # closed form (measured: the three closed-form substitutes drift by 2.4-5.4 %, of the same order as the
   # first colour break -- and the drift IS the PO violation, so it would inject a data-dependent offset
@@ -2070,10 +2079,10 @@ REG_EMPIRICAL <- list(
   # the same reason -- ruling Q6 (same estimand, link, CI rule, multiplier) holds by construction.
   ordinal = list(
     coef = "cumor", coef_log = "cumor_log",
-    cumor     = list(nm = "Obs_cumOR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",   color = "OR",   link = "logit", from = "fit"),
-    cumor_log = list(nm = "Obs_log(cumOR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff", color = "diff", link = "logit", from = "fit"),
-    ame       = list(nm = NA_character_, type = "row", display = "diff", digits = 0L, ref = "tot", ci_type = "diff", color = "diff", link = "identity", visible = FALSE, per_category = TRUE, from = "fit"),
-    ame_ratio = list(nm = NA_character_, type = "row", display = "or",   digits = 2L, ref = "1",   ci_type = "or",   color = "OR",   link = "log",   visible = FALSE, per_category = TRUE, from = "fit"))
+    cumor     = list(nm = "Obs_cumOR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "wald_log", color = "OR",   link = "logit", from = "fit"),
+    cumor_log = list(nm = "Obs_log(cumOR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "wald_log", color = "diff", link = "logit", from = "fit"),
+    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE, from = "fit"),
+    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "wald_log", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE, from = "fit"))
 )
 
 # The three optional SHAPE facts z10 added, with their defaults in one place (a shape row states only
@@ -2166,7 +2175,8 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   emp_col <- function(shape, fields, n_eff = NULL) {
     measure <- if (emp_off || !nzchar(shape$color)) "" else shape$color
     args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
-      type = shape$type, display = shape$display, digits = shape$digits, ci_type = shape$ci_type,
+      scale = shape$scale, pct_base = shape$pct_base, display = shape$display, digits = shape$digits,
+      ci_method = shape$ci_method %||% "",
       color = measure, color_signif = if (nzchar(measure)) color_signif else "ignore",
       col_var = shape$nm, comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp"))
     if (!is.na(shape$ref)) args$ref <- shape$ref
@@ -2188,7 +2198,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   # the model columns' `obs` field, which backs `color = "adjustment"` and the `{obs}` display token.
   # Taken from the local the shape was built from -- never re-read out of the fmt column by name.
   # Phase 18z8-B: the effect SHAPE ROW travels with it, giving the gap test both facts it needs --
-  # `link` (the crude estimator's link) and `ci_type` (proof that the crude and model columns are the
+  # `link` (the crude estimator's link) and `scale` (proof that the crude and model columns are the
   # SAME estimand) -- and any future shape fact for free, with no new element to thread.
   # Phase 18z9/z10: the fit-derived rows are spliced HERE -- the one place the effect shape is known,
   # so no return arm changes and the base column (which on the binomial `ame` branch shares its field
@@ -2384,16 +2394,16 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
 # === the model-vs-observed GAP standard error (Phase 18z8-B) =====================================
 
 # reg_same_estimand() -- do the crude companion and the model column measure the SAME thing? Both
-# declare their scale as a `ci_type` (the shape row's, the column attribute's), so this is one fact
-# comparison rather than a family/effect table kept in sync. It gates BOTH `obs` and its gap SE, which
-# closes a z5 defect: reg_empirical_columns() ignores `effect` on the poisson branch, so
-# effect = "ame" paired an ADDITIVE count AME ("diff") with the crude rate RATIO ("or") and z5 scored
-# the difference of two scales. Checked against all nine live family x effect combinations: it fires on
-# that one and on nothing else.
+# declare their SCALE (the shape row's, the column attribute's), so this is one fact comparison rather
+# than a family/effect table kept in sync. It gates BOTH `obs` and its gap SE, which closes a z5
+# defect: reg_empirical_columns() ignores `effect` on the poisson branch, so effect = "ame" paired an
+# ADDITIVE count AME with the crude rate RATIO and z5 scored the difference of two scales. Phase 19b
+# made the comparison strictly sharper -- `points` vs `raw_diff` used to be one value ("diff"), and
+# they are two genuinely different estimands (percentage points vs the outcome's own units).
 #' @keywords internal
 reg_same_estimand <- function(shape, col)
   !is.null(shape) &&
-  identical(as.character(shape$ci_type)[1], as.character(get_ci_type(col))[1])
+  identical(as.character(shape$scale)[1], as.character(get_scale(col))[1])
 
 # reg_same_frame() -- were the model and its crude companion fitted on the SAME observations? The crude
 # frame drops on `union_predictors` (+ whatever `na` shares), the model on its own predictors; the first
@@ -2437,7 +2447,7 @@ reg_same_frame <- function(mdata, f) {
 #   * `shape`             the crude twin's REG_EMPIRICAL row: absent = no observed effect at all
 #                         (multinomial, ordinal, grouped binomial) -> `obs` is already NA.
 #   * `f$fit`             NULL on the jamovi digest path, where the fitted object was distilled away.
-#   * ci_type match       the crude and model columns must be the SAME estimand. This also closes a z5
+#   * scale match         the crude and model columns must be the SAME estimand. This also closes a z5
 #                         defect: reg_empirical_columns() ignores `effect` on the poisson branch, so
 #                         effect = "ame" pairs an ADDITIVE count AME with a MULTIPLICATIVE crude rate
 #                         ratio -- z5 wrote that ratio into `obs` and scored a gap between two scales.
@@ -2770,7 +2780,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      type = "row", display = display, digits = 1L, ci_type = "diff",
+      scale = "points", pct_base = "row", display = display, digits = 1L, ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2791,7 +2801,8 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      type = "row", display = display, digits = 1L, ref = "1", ci_type = "or",
+      scale = "odds_ratio", pct_base = "row", display = display, digits = 1L, ref = "1",
+      ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2802,7 +2813,8 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      type = "row", display = display, digits = 2L, ref = "1", ci_type = "or",
+      scale = "odds_ratio", pct_base = "row", display = display, digits = 2L, ref = "1",
+      ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2814,7 +2826,10 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
-      type = "coef", display = display, digits = 2L, ci_type = "diff",
+      # a marginal effect on the OUTCOME's scale (a gaussian AME, a poisson COUNT AME) -- never a
+      # link-scale coefficient, whatever the family, which is exactly what used to make this column
+      # and the raw coefficient beside it indistinguishable except through the `var` field.
+      scale = "raw_diff", display = display, digits = 2L, ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2826,7 +2841,8 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
 # them to the shared predictor skeleton unchanged. Label = "<j> vs <ref>: OR" (prefixed by the
 # dependent when several dependents / models coexist, to disambiguate). Returns a list of {label, col}.
 reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_signif,
-                                 eff_word, cleannames, prefix_dep, model_family = "multinomial") {
+                                 eff_word, cleannames, prefix_dep, model_family = "multinomial",
+                                 method = "wald") {
   y_ref <- reg_cleanup(f$y_ref, cleannames)
   purrr::map(f$y_levels, function(j) {
     sub      <- f
@@ -2840,7 +2856,7 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
     # model name + effect span them once. The repeated ": OR" is stripped from the per-category NAME.
     list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
          col   = reg_column(skeleton, sub, sp$predictors, sp$label, effect_shape, color, color_signif,
-                            model_family = model_family))
+                            model_family = model_family, method = method))
   })
 }
 
@@ -3493,7 +3509,7 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level, multi
 #' @keywords internal
 reg_gap_se_of <- function(col, crit) {
   lo <- get_ci_inf(col); hi <- get_ci_sup(col)
-  if (as.character(get_ci_type(col))[1] %in% c("or", "ratio")) {
+  if (isTRUE(fmt_scale_row(col)$mult)) {          # a multiplicative scale -> the SE lives on the log
     ok <- is.finite(lo) & is.finite(hi) & lo > 0 & hi > 0
     ifelse(ok, (log(hi) - log(lo)) / (2 * crit), NA_real_)
   } else {
@@ -3526,8 +3542,8 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
   ref_k  <- key_of(ref_d)
   fmt_nm <- names(ref_d)[purrr::map_lgl(ref_d, is_fmt)]
   crit   <- if (identical(method, "profile")) NA_real_ else zscore_formula(conf_level)
-  # the estimate a column stores, dispatched on its ci_type -- fmt_est_of() is the ONE such rule, shared
-  # with fmt_gap_parts() and the crude numeric overlay (an `Obs_rate` column is ci_type "ratio" and keeps
+  # the estimate a column stores, dispatched on its stored scale -- fmt_est_of() is the ONE such rule,
+  # shared with fmt_gap_parts() and the crude numeric overlay (an `Obs_rate` column is `mean_ratio` and keeps
   # its estimate in `ratio`, not `diff`).
   est_of <- fmt_est_of
   for (i in seq_along(parts)) {
@@ -3609,22 +3625,6 @@ reg_inference <- function(shared, degraded = FALSE) {
 }
 
 # THE `meta$ci_settings` of a regression table -- what the colour legend names as the interval method.
-# 14v-ii / 17h: the numeric/ratio methods are read STRAIGHT from the REG_EMPIRICAL fact table (Student
-# mean-diff = OLS, quasi-Poisson rate-ratio = the phi-scaled model), so the legend names exactly what
-# the crude CI used.
-# Phase 18z16-iiiii: extracted because reg_build() wrote it TWICE and the two copies had drifted --
-# the split_var branch listed only conf_level / the cell + diff methods, so a split gaussian or
-# poisson table's legend lost the name of the very interval its Obs_* columns print.
-#' @keywords internal
-#' @noRd
-reg_ci_settings <- function(conf_level, method) {
-  list(conf_level = conf_level,
-       method = c(cell       = NA_character_,          # a reg table has no proportion cell interval
-                  diff       = method,                 # the model's own: "wald" / "profile"
-                  mean_diff  = REG_EMPIRICAL$gaussian$method_mean_diff,
-                  mean_ratio = REG_EMPIRICAL$poisson$method_mean_ratio))
-}
-
 reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, reference = NULL,
                       reref = FALSE, skeleton_data = data) {
   # `shared` bundles every per-call setting the leaves + assembler read (built once in tab_reg), replacing
@@ -3710,17 +3710,17 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       # table-wide basis here would overwrite a group whose design variance succeeded with the verdict
       # of a group that had to fall back.
       tab_stamp_inference(conf_level) |>
-      # Phase 18z16-iiiii (defect 2): the ci_settings literal that stood here was a THREE-key
-      # reduction of the non-split branch's six, so a split table's legend could not name its own
-      # interval method -- reg_ci_settings() is now the one source.
+      # Phase 19b: the interval METHOD rides the columns (`ci_method`), so this branch cannot lose
+      # it -- the z16-iiiii defect (a THREE-key reduction of the non-split branch's six, leaving a
+      # split table's legend unable to name its own interval method) is now unrepresentable.
       # NOT carried from the groups, deliberately: `empirical_tips` and `assumptions` are per-GROUP
       # facts (crude tooltips keyed var\rlevel\rcategory; the observed curve of each predictor) and
       # `meta` has no per-group slot, so merging them would attach the FIRST group's numbers to every
       # other group's cells. Absent is honest; wrong is not. (A split table's sparklines are already
       # baked into its row labels at build time, and reg_check_plots() refits from reg_meta$fit_spec.)
       new_tab(subtext = subtext, test = tests,
-              meta = list(ci_settings = reg_ci_settings(conf_level, method),
-                          vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
+              meta = list(
+                vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
       dplyr::group_by(!!rlang::sym(split_var), var)
     # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
     # is not multinomial (a multinomial has several columns for one model, so side-by-side is ambiguous).
@@ -3884,7 +3884,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       sp_col   <- sp$color
       if (sp_fam == "multinomial") {
         cols <- reg_columns_multinom(skeleton, f, sp, sp_shape, sp_col, color_signif,
-                                     sp_eff, cleannames, prefix_dep, model_family = sp_fam)
+                                     sp_eff, cleannames, prefix_dep, model_family = sp_fam,
+                                     method = method)
         # Phase 12h: estimate_display="ci" adds the visible interval to each category's OR column
         # (the prob/ame folds are degraded to "ci" for MNL in tab_reg()).
         if (estimate_display != "value") {
@@ -3898,7 +3899,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         cv  <- if (is_comparison) sp$label
                else reg_shared_col_var(sp_fam, sp$dependent, f$positive_level, cleannames)
         col <- reg_column(skeleton, f, model_predictors, cv, sp_shape, sp_col, color_signif,
-                          model_family = sp_fam)
+                          model_family = sp_fam, method = method)
         col <- reg_apply_estimate_display(col, estimate_display, skeleton, f, sp, sp_fam,
                                           design_spec, conf_level, numeric_preds, model_predictors,
                                           multiplier = multiplier)
@@ -4020,7 +4021,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                                          reg_design_vars(design_spec))),
                               skeleton, wt = design_spec$wt)
       nm  <- if (n_dep_all > 1L) paste0("n [", dep_i, "]") else "n"
-      tab[[nm]] <- fmt(n = cnt$n, wn = cnt$wn, type = "n", display = "n", digits = 0L,
+      tab[[nm]] <- fmt(n = cnt$n, wn = cnt$wn, scale = "level_n", display = "n", digits = 0L,
                        color = "", color_signif = "ignore", col_var = "n", comp_all = FALSE,
                        # in_refrow is NOT decorative: tab_bold_rows() ANDs it across every
                        # discriminating column, so omitting it would un-bold every reference row.
@@ -4321,7 +4322,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   tab |>
     # Phase 18z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
     # df it is referred to and the basis it was computed on, all on each fmt column -- the colour
-    # engine is per column and cannot read meta$ci_settings. It is what makes the gap interval
+    # engine is per column and cannot read a table attribute. It is what makes the gap interval
     # (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`; and it is where the
     # footer now reads the basis from (ruling 1: a weighted tab_reg() is ALWAYS on the weighted basis,
     # model column and crude companions alike).
@@ -4332,10 +4333,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                         # only thing reg_check_plots() needs that a refit cannot give back.
                         assumptions = assumptions,
                         # Phase k: variable labels for the opt-in name display-swap (absent when none).
-                        vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL,
-                        # the interval methods the legend names -- see reg_ci_settings(), shared with
-                        # the split_var branch so the two cannot drift again.
-                        ci_settings = reg_ci_settings(conf_level, method))) |>
+                        vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL
+                        )) |>
     dplyr::group_by(var)
 }
 

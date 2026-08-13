@@ -117,7 +117,7 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   dcol <- tab(gss, marital, race, pct = "row", digits = 1L)[["Black"]]
   # Phase 13c-v: a pct diff gets an explicit +/- sign; contrib too; a ratio gets a leading x.
   testthat::expect_equal(format(set_display(dcol, "diff"), syntax = "excel")[[1]], "+0.0%;-0.0%")
-  ccol <- fmt(n = 1L, ctr = 0.05, type = "row", display = "ctr", digits = 1L)
+  ccol <- fmt(n = 1L, ctr = 0.05, scale = "level_pct", pct_base = "row", display = "ctr", digits = 1L)
   testthat::expect_equal(format(ccol, syntax = "excel")[[1]], "+0.0%;-0.0%")
   rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 1L)
   # Phase q: the leading multiply sign is BACKSLASH-escaped (\×#,##0.0), not double-quote-wrapped -- a raw

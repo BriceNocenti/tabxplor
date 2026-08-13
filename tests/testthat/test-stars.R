@@ -7,9 +7,9 @@ gss <- forcats::gss_cat
 
 # a synthetic diff column with three significance levels stored in `pvalue`
 star_col <- function() {
-  fmt(n = rep(100L, 3), type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
+  fmt(n = rep(100L, 3), scale = "points", pct_base = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
       ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-      pvalue = c(0.0005, 0.5, 0.07), ci_type = "diff", display = "pct")
+      pvalue = c(0.0005, 0.5, 0.07), display = "pct")
 }
 
 testthat::test_that("format(): stars are opt-in (default off), appended only with stars = TRUE", {

@@ -550,7 +550,7 @@ ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe",
 
 # MULTIPLICATIVE shape, proportion RATIO: Katz's log-RR interval (Phase 14b) --
 # exp(log(p1/p2) +/- z * se), se(log RR) = sqrt((1-p1)/(n1 p1) + (1-p2)/(n2 p2)). The bounds are on
-# the RATIO scale (neutral 1), stored as ci_type = "ratio", and its dual is the log-RR Wald test, so
+# the RATIO scale (neutral 1), stored as scale = "pct_ratio", and its dual is the log-RR Wald test, so
 # bracket <-> stars stay exact duals (§20) like every other method here.
 #
 # Why it exists: `ratio` had no native interval, so a ratio-coloured cell borrowed the DIFFERENCE
@@ -618,7 +618,7 @@ df_or_design <- function(df, df_design) {
 #   quasipoisson Poisson se * sqrt(phi), phi the pooled two-group Pearson dispersion (= quasi-Poisson
 #                regression's se): Student t(n1+n2-2). Auto-degrades to the naive Poisson when phi ~= 1.
 # Rule B (§48): the df is the method's own, not stars-gated. Neutral 1 on the ratio scale
-# (ci_type = "ratio"); dual = the log-ratio Wald/t test, so bracket <-> stars stay duals. Weighted
+# (scale = "mean_ratio"); dual = the log-ratio Wald/t test, so bracket <-> stars stay duals. Weighted
 # rule (§14): weighted means/variances, unweighted n1/n2. WARNING: undefined at m <= 0 -> NA bounds/p
 # (an empty group is left uncoloured/unstarred).
 ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,

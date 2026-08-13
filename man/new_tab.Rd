@@ -45,9 +45,6 @@ when unset):
 \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
 \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 print/export time from this attribute rather than baked into the table.
-\item \code{ci_settings} -- display-only metadata for the colour legend,
-\code{list(conf_level =, method = c(cell =, diff =, mean_diff =, mean_ratio =))}: which level and
-confidence-interval methods were actually used. Absent makes the legend fall back to defaults.
 \item \code{vars} -- the table's variable roles,
 \code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
 rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).

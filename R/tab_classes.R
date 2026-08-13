@@ -72,9 +72,6 @@
 #'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
 #'   \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 #'   print/export time from this attribute rather than baked into the table.
-#'   \item \code{ci_settings} -- display-only metadata for the colour legend,
-#'   \code{list(conf_level =, method = c(cell =, diff =, mean_diff =, mean_ratio =))}: which level and
-#'   confidence-interval methods were actually used. Absent makes the legend fall back to defaults.
 #'   \item \code{vars} -- the table's variable roles,
 #'   \code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
 #'   rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).
@@ -110,12 +107,12 @@ new_tab <-
 
     out <- tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
                               nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
-    # Phase 17b: every 2.0.0-new table attribute (render_extras / ci_settings / vars / empirical_tips /
+    # Phase 17b: every 2.0.0-new table attribute (render_extras / vars / empirical_tips /
     # reg_meta / color_breaks) is now ONE `meta` named list -- one formal, one attribute, one tab_attrs()
     # line, one bind reconcile (was six of each). Sub-fields left NULL are dropped, so a table given
     # nothing carries no `meta` attribute at all (raw tab_plain / hand-built / older objects stay clean).
     # The former per-field prose lives on the `@param meta` roxygen; the accessors below (get_vars_attr,
-    # get_ci_settings, ...) keep their names and read straight into this list.
+    # get_vars_attr, ...) keep their names and read straight into this list.
     if (!is.null(meta)) meta <- meta[!vapply(meta, is.null, logical(1))]
     if (length(meta)) attr(out, "meta") <- meta
     out
@@ -174,14 +171,14 @@ set_test <- function(x, test) {
 }
 
 # Phase 17b: the `meta` table attribute -- ONE named list gathering every 2.0.0-new table attribute
-# (render_extras / ci_settings / vars / empirical_tips / reg_meta / color_breaks). get_meta() returns
+# (render_extras / vars / empirical_tips / reg_meta / color_breaks). get_meta() returns
 # NULL when absent, so every get_meta(x)[["field"]] yields NULL exactly like the old attr_getter did.
 get_meta <- function(x) attr(x, "meta", exact = TRUE)
 
 # set_meta_field() -- write ONE meta sub-field, preserving the others. Assigning NULL REMOVES the field
 # (base-R list semantics), and an emptied meta drops the whole attribute -- this is what keeps the
 # "absent when unset" property (a table given nothing carries no `meta` attribute) AND makes
-# set_render_extras(x, NULL) (tab_materialize_extras) clear render_extras WITHOUT touching ci_settings /
+# set_render_extras(x, NULL) (tab_materialize_extras) clear render_extras WITHOUT touching
 # vars. So every set_* below is one call, and byte-identity at the attribute level is preserved.
 set_meta_field <- function(x, field, value) {
   m <- get_meta(x)
@@ -199,13 +196,11 @@ set_meta_field <- function(x, field, value) {
 get_render_extras <- function(x) get_meta(x)[["render_extras"]]
 set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras", render_extras)
 
-# Phase 13b: `ci_settings` -- display-only metadata for the colour legend, a small list
-# `list(conf_level = <num>, method = <the named four-slot vector>)` recording which CI method /
-# confidence level tab()/tab_ci() actually used, so tab_color_legend() can name it accurately (e.g.
-# "Newcombe score interval, 95% confidence"). get_ci_settings() falls back to the package defaults when
-# absent (heavy dplyr chains / raw tab_plain / older objects).
-get_ci_settings <- function(x) get_meta(x)[["ci_settings"]]
-set_ci_settings <- function(x, ci_settings) set_meta_field(x, "ci_settings", ci_settings)
+# Phase 19b deleted `ci_settings` (with get/set_ci_settings, default_ci_settings and ci_method_of):
+# WHICH interval method a column's bounds were built with is a per-COLUMN fact now (`ci_method`,
+# beside `conf_level` / `degf` / `basis`), stamped where the interval is computed. Storing it
+# table-wide meant the legend had to pick a slot back out of the vector BY MEASURE, through an
+# eight-branch chain -- which is how it could name a method the bounds were never built with (D8).
 
 # Phase 14d: `vars` -- the table's OWN record of its variable roles,
 # `list(row_vars = <chr>, col_vars = <chr>, tab_vars = <chr>, compacted = <lgl>, wt =, caption =)`,
@@ -304,23 +299,6 @@ new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
   }
   out
 }
-# The package CI defaults, used when a table carries no `ci_settings`. DERIVED from tab()'s formals
-# (Phase 17a) rather than hand-mirrored, so the two can never drift: each default is the tab() formal
-# evaluated (conf_level resolves getOption("tabxplor.conf_level", 0.95), exactly as tab() would).
-default_ci_settings <- function() {
-  list(conf_level = eval(formals(tab)$conf_level), method = default_ci_method())
-}
-
-# One slot of a table's stored CI-method vector, falling back to the package default when the table
-# carries none (or names none for that slot -- a regression table has no `cell` method). The legend is
-# its only consumer, and it must never claim a method the interval was not built with.
-#' @keywords internal
-#' @noRd
-ci_method_of <- function(cis, slot) {
-  v <- cis$method[[slot]]
-  if (is.null(v) || is.na(v)) default_ci_method()[[slot]] else v
-}
-
 # === SECTION: the ONE table-attribute carry (Phase 14d / 17b) ======================================
 # Every table-level attribute is listed HERE, once. Before this, each of the ~34 dplyr S3 methods /
 # vctrs reconcilers named all of them by hand, so each attribute paid the same ~34-site edit; a table
@@ -1305,7 +1283,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
   tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )
 
-  # var_type <- tabs |> map(get_type) |> first()
   # var_type <- first(unique(type[!type %in% c("", "n")]))
   #
   # color_type <- tabs |> map(get_color) |> first()
@@ -1348,7 +1325,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # >=2 row_var table lost `inference`, printed the OPPOSITE footer sentence, and lost `degf` on the
   # exported tab_ci() step path (measured: intervals 9 % too narrow at 13 PSUs).
   # Phase 18z16-iiiii: `vars` is the ONLY genuine recompute. The explicit
-  # `render_extras = <tabs[[1]]'s>` / `ci_settings = <tabs[[1]]'s>` overwrites that stood beside it
+  # `render_extras = <tabs[[1]]'s>` overwrites that stood beside it
   # were the left fold's own output written out by hand -- except when tabs[[1]] alone lacked the
   # field, where the overwrite DELETED what a later table carried. Reachable only through the
   # exported tab_compact() on a hand-assembled list; carrying it is the better answer.
@@ -1473,7 +1450,7 @@ mat_add_n_pct <- function(tab, backend, ctx) {
 #' @keywords internal
 #' @noRd
 mat_sd_twin <- function(tab) {
-  is_mean_col <- function(col) is_fmt(col) && identical(get_type(col), "mean") &&
+  is_mean_col <- function(col) is_fmt(col) && identical(fmt_var_kind(col), "mean") &&
     any(get_display(col) %in% c("mean", "mean_ci"))
   means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
   for (nm in means) {
@@ -1665,7 +1642,7 @@ tab_pvalue_lines <- function(tabs) {
   # the per-column fill for a non-value / no-test-here position: the column's first display token with
   # n = NA (byte-identical to the pre-16a masked fill, locked by test-golden / export-parity).
   fill_cell <- function(nm) {
-    f <- fmt0(dplyr::first(get_display(tabs[[nm]])), type = get_type(tabs[[nm]]))
+    f <- fmt0(dplyr::first(get_display(tabs[[nm]])), scale = get_scale(tabs[[nm]]))
     vctrs::field(f, "n") <- NA_integer_
     f
   }
@@ -1751,7 +1728,7 @@ reg_footer_lines <- function(tabs) {
     else                               rep("Model fit", K)
 
   # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
-  # vars / empirical_tips / ci_settings / reg_meta named one by one; is_reg detection must not depend on
+  # vars / empirical_tips / reg_meta named one by one; is_reg detection must not depend on
   # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
   # Phase 18z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
   # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
@@ -2227,7 +2204,10 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   tottabs <- is_tottab(x)
-  type    <- get_type(x)
+  # Phase 19b: the tooltip asks the same two questions of the column as everything else -- what it
+  # summarises (`var_kind`) and, for the interval lines, what it estimates (the scale row).
+  scl     <- fmt_scale_row(x)
+  vkind   <- scl$var_kind
   digits  <- get_digits(x)
   # Phase 10i-A: a composite cell ("{pct} (n={n})") suppresses the tooltip line for its PRIMARY
   # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
@@ -2252,7 +2232,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # `type == "mean"` was excluded, so a mean column showed no ratio line at all -- though under the
   # default color = TRUE the ratio is exactly what colours it.
   ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% "ratio" &
-    type %in% c("col", "row", "mean")
+    (get_pct_base(x) %in% c("col", "row") | vkind == "mean")
   # A reference cell's whole comparison group collapses to ONE "ref": its diff is 0 and its ratio 1
   # by construction, so "diff: ref ; ratio: x1" said nothing, twice. The cell already prints
   # "ref:38%" -- the tooltip only has to name the role, and keep the load-bearing "n:".
@@ -2273,7 +2253,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # counterpart. Surface it on hover, next to the `sd:` it is measured in. Only where sd_ref
   # resolves: an absent / zero-variance reference row leaves the ratio undefined (and the cell
   # uncoloured), so it earns no line.
-  ok_std  <- ok_diff & !ref_grp & type == "mean"
+  ok_std  <- ok_diff & !ref_grp & vkind == "mean"
   out_std <- if (any(ok_std)) {
     std <- get_diff(x) / suppressWarnings(sqrt(get_ref_var(x)))
     std[!is.finite(std)] <- NA_real_
@@ -2281,8 +2261,10 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    paste0(gettext("std diff"), ": ", sprintf("%+.2f", std), "sd"), "")
   } else blank
 
-  ci_type  <- get_ci_type(x)
-  ci_start <- switch(ci_type, "cell" = "ci: ", "")
+  # a LEVEL scale carrying bounds = a cell interval (it is labelled, and printed on its own line);
+  # an EFFECT scale's interval is the contrast's, and is folded into the diff line below.
+  ci_cell  <- identical(scl$kind, "level") && fmt_has_interval(x)
+  ci_start <- if (ci_cell) "ci: " else ""
   has_ci   <- !is.na(get_ci(x))
   out_ci   <- if (any(has_ci)) {
     dplyr::if_else(
@@ -2297,25 +2279,25 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   # str_trim: on a reference cell out_diff is the bare "ref" and out_ci is empty (a reference is
   # never compared to itself -> NA bounds), which would otherwise leave a trailing space.
-  out_diff <- switch(ci_type,
-                     "diff"  = ,
-                     "ratio" = stringi::stri_trim(paste0(out_diff, " ",
-                                                        stringi::stri_replace_first_regex(out_ci, "%$", ""))),
-                     out_diff)
-  out_ci   <- switch(ci_type, "cell" = out_ci, "")
+  # the difference / ratio scales fold their bracket into the diff line; the odds-ratio one does not
+  # (its bracket rides the `or` display), and a level scale keeps its own "ci:" line.
+  if (scl$geometry %in% c("difference", "ratio") && !identical(scl$est_field, "or"))
+    out_diff <- stringi::stri_trim(paste0(out_diff, " ",
+                                          stringi::stri_replace_first_regex(out_ci, "%$", "")))
+  if (!ci_cell) out_ci <- ""
 
-  cond_pct <- type %in% c("col", "row", "all", "all_tabs") &
+  cond_pct <- get_pct_base(x) != "none" &
     !is.na(get_pct(x)) & !shows("pct") & !disp %in% c("pct_ci")
   out_pct <- if (any(cond_pct)) {
     dplyr::if_else(cond_pct, tip_num(set_display(x, "pct")), "")
   } else blank
 
-  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !shows("mean") & !disp %in% c("mean_ci")
+  cond_mean <- vkind == "mean" & !is.na(get_mean(x)) & !shows("mean") & !disp %in% c("mean_ci")
   out_mean <- if (any(cond_mean)) {
     dplyr::if_else(cond_mean, tip_num(set_display(x, "mean")), "")
   } else blank
 
-  cond_sd <- type == "mean" & !is.na(get_var(x)) & !shows("var")
+  cond_sd <- vkind == "mean" & !is.na(get_var(x)) & !shows("var")
   out_sd <- if (any(cond_sd)) {
     vr <- get_var(x)                                   # get_var()/get_digits(), not the `$` proxy pull
     dplyr::if_else(
@@ -2335,7 +2317,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "ratio")) ), "")
   } else blank
 
-  cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &
+  cond_or <- get_pct_base(x) %in% c("col", "row") & !is.na(get_or(x)) &
     !shows("or") & !disp %in% c("or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")
@@ -2382,7 +2364,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     sc   <- fmt_adjustment_score(x)
     bd   <- fmt_gap_bounds(x)
     pv   <- test_fmt_pvalue(fmt_gap_p(x))
-    mult <- as.character(get_ci_type(x))[1] %in% c("or", "ratio")
+    mult <- isTRUE(fmt_scale_row(x)$mult)
     num  <- function(v) if (mult) paste0("\u00d7", formatC(v, format = "f", digits = 2))
             else sprintf("%+.2f", v)
     dplyr::if_else(cond_gap & is.finite(sc) & is.finite(bd$lo) & !is.na(pv),
@@ -4117,7 +4099,7 @@ get_color_breaks_attr <- function(x) get_meta(x)[["color_breaks"]]
 set_color_breaks_attr <- function(x, cb) {
   if (is.null(cb)) return(x)
   if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, set_color_breaks_attr, cb))
-  # set_meta_field MERGES into any existing meta (vars / ci_settings / render_extras built earlier).
+  # set_meta_field MERGES into any existing meta (vars / render_extras built earlier).
   set_meta_field(x, "color_breaks", cb)
 }
 

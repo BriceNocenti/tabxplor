@@ -140,7 +140,7 @@ test_that("multiplier scales obs by the SAME k as the estimate (SS9 Q6)", {
 
 test_that("the score is toward/away from the null, not raw up/down", {
   mk <- function(est, obs) fmt(n = rep(1L, length(est)), or = est, obs = obs,
-                              type = "row", display = "or", ci_type = "or", ref = "1",
+                              scale = "odds_ratio", pct_base = "row", display = "or", ref = "1",
                               color = "adjustment")
   # both ATTENUATED by the same factor 1.2, one protective one risky -> same side, same magnitude
   s <- tabxplor:::fmt_adjustment_score(mk(c(0.5 * 1.2, 2 / 1.2), c(0.5, 2)))
@@ -155,13 +155,13 @@ test_that("the score is toward/away from the null, not raw up/down", {
   # equal estimates are neutral, whatever the scale
   testthat::expect_equal(tabxplor:::fmt_adjustment_score(mk(2, 2)), 1)
   add <- fmt(n = c(1L, 1L), diff = c(0.1, -0.1), obs = c(0.1, -0.1),
-             type = "row", display = "diff", ci_type = "diff", color = "adjustment")
+             scale = "points", pct_base = "row", display = "diff", color = "adjustment")
   testthat::expect_equal(tabxplor:::fmt_adjustment_score(add), c(0, 0))
 })
 
 test_that("an additive effect scores the absolute gap, signed by the null rule", {
   add <- fmt(n = rep(1L, 2), diff = c(0.30, -0.30), obs = c(0.20, -0.20),
-             type = "row", display = "diff", ci_type = "diff", color = "adjustment")
+             scale = "points", pct_base = "row", display = "diff", color = "adjustment")
   # both moved 0.10 FURTHER from 0 -> same pole, same magnitude (never +0.10 vs -0.10)
   testthat::expect_equal(tabxplor:::fmt_adjustment_score(add), c(0.10, 0.10))
 })

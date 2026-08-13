@@ -77,7 +77,7 @@ test_that("the grouped binomial's BASE column is the mean SCORE, not a share of 
   got  <- get_mean(t[["Obs_mean"]])[k]
   expect_equal(unname(got), unname(want[as.character(t$levels)[k]]), tolerance = 1e-8)
   expect_gt(max(want), 1)                       # a SCORE out of 10, not a proportion in [0, 1]
-  expect_identical(get_type(t[["Obs_mean"]]), "mean")
+  expect_identical(tabxplor:::fmt_var_kind(t[["Obs_mean"]]), "mean")
 })
 
 

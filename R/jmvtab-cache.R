@@ -160,7 +160,10 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 12L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 13L   # bump on any store-shape change -> discard stale stores
+                            # 13 = Phase 19b (KEY 2): a tier-3 carrier's per-column `meta` list carries
+                            #     `scale` + `pct_base` instead of `type` + `ci_type`, and gains
+                            #     `ci_method`. A pre-13 carrier has the old names -> unusable.
                             # 12 = Phase 18z16-iiiii: the tier-3 tuple folds the five method_* keys
                             #     into one `ci_method` vector, and the columns carry degf/basis.
                             # 9 = Phase 18z8: the fmt record gained the `gap_se` field, so a tier-3
@@ -523,7 +526,7 @@ jmv_apply_display <- function(tabs, opts) {
     if (opts$ci == "cell" && opts$pct %in% c("row", "col")) {
       tb <- dplyr::mutate(tb, dplyr::across(
         dplyr::where(is_fmt) &
-          -(tidyselect::any_of(c("n", "wn")) & dplyr::where(~ get_type(.) == "n")),
+          -(tidyselect::any_of(c("n", "wn")) & dplyr::where(~ fmt_var_kind(.) == "count")),
         ~ set_display(., "pct_ci")
       ))
     }
@@ -780,7 +783,7 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
 
   fmt_names <- names(carrier$fmt)
   pct_cols  <- fmt_names[vapply(fmt_names,
-                                function(nm) identical(carrier$fmt[[nm]]$meta$type, "row"),
+                                function(nm) identical(carrier$fmt[[nm]]$meta$pct_base, "row"),
                                 logical(1))]
   n_field   <- carrier$fmt[[fmt_names[[1]]]]$frame$n
 
@@ -926,7 +929,7 @@ jmv_reapply_digits <- function(carrier, digits) {
   one <- function(cr) {
     for (nm in names(cr$fmt)) {
       frame  <- cr$fmt[[nm]]$frame
-      base_d <- if (cr$fmt[[nm]]$meta$type == "mean") {
+      base_d <- if (identical(est_var_kind(cr$fmt[[nm]]$meta$scale), "mean")) {
         m <- suppressWarnings(max(frame$mean, na.rm = TRUE))
         if (m <= 1) max(digits, 2L) else if (m <= 10) max(digits, 1L) else digits
       } else as.integer(digits)

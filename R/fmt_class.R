@@ -3,7 +3,17 @@
 # KEY CONSTRAINTS:
 #   - Adding a new field requires updating: new_fmt(), fmt(), format.tabxplor_fmt(),
 #     pillar_shaft.tabxplor_fmt(), vec_arith methods, and possibly tab_pct/tab_ci/tab_chi2.
+#     Adding a per-column ATTRIBUTE is two lines since Phase 19a: a new_fmt() formal + one row in
+#     `fmt_attr_rules` (a build-time stopifnot refuses the install if the row is missing).
 #   - Fields are per-cell (vctrs::field), attributes are per-column (attr). Do not confuse.
+#   - WHAT A COLUMN ESTIMATES is STORED, not derived (Phase 19b / KEY 2): `scale` is one key into the
+#     declared library EST_SCALES (which field holds the estimate, its null, its geometry, its colour
+#     ladder, where its SD comes from), and `pct_base` is which axis its reference lies on. Together
+#     they replaced `type` (8 values doing two jobs) and DELETED `ci_type` -- the stored interval is
+#     always on the estimate's own scale, and "is there one here" is a data fact (all-NA bounds), not
+#     a second vocabulary. `ci_method` says which engine built those bounds. Read them through
+#     fmt_scale_row() / fmt_var_kind() / get_pct_base(); never re-derive a scale from a display, a
+#     family, or whether `var` happens to be non-NA.
 #   - pct is stored as 0-1 internally; multiplied by 100 only in format().
 #   - `diff` is always a DIFFERENCE (Phase 2 flipped the numeric one; the ratio moved to `ratio`).
 #   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
@@ -97,16 +107,27 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'
 #' @param n The underlying count, as an integer vector of length \code{n()}. It is used
 #' to calculate confidence intervals.
-#' @param type The type of the column, which defines the type of background calculation
-#' to be made (as a single string, since it's not a field but an attribute) :
+#' @param scale What the column estimates, as a single string (an attribute, not a field): one key
+#' into the declared library of estimate scales. It says which field holds the estimate, what its
+#' null value is, whether the scale is additive or multiplicative, and which colour ladder it reads.
 #' \itemize{
-#'   \item \code{"n"}: counts
-#'   \item \code{"mean"}: mean column (from numeric variables)
-#'   \item \code{"row"}: row percentages
-#'   \item \code{"col"}: column percentages
-#'   \item \code{"all"}: frequencies by subtable/group (i.e. by \code{tab_vars})
-#'   \item \code{"all_tabs"}: frequencies for the whole table
+#'   \item \code{"level_n"}: counts
+#'   \item \code{"level_pct"}: percentages (\code{pct_base} says of what)
+#'   \item \code{"level_mean"}: means (from numeric variables)
+#'   \item \code{"points"}: a difference between two percentages, in percentage points
+#'   \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
+#'   \item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
+#'   \item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
+#'   \item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+#'   \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
+#'   \item \code{"mixed"}: what binding columns of unlike scales collapses to
 #' }
+#' Replaces the \code{type} and \code{ci_type} arguments of tabxplor 1.x, together with
+#' \code{pct_base}.
+#' @param pct_base For a percentage column, what the percentage is a percentage OF, and hence which
+#' axis its reference lies on (as a single string): \code{"row"}, \code{"col"}, \code{"all"}
+#' (frequencies by subtable / group, i.e. by \code{tab_vars}), \code{"all_tabs"} (frequencies for
+#' the whole table), or \code{"none"} (counts, means, coefficients).
 #' @param digits The number of digits, as an integer, or an integer vector the length
 #' of \code{n}.
 #' @param display The display type : the name of the field you want to show when printing
@@ -174,8 +195,9 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
 #' A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.
 #' @param gap_se The standard error of the GAP between this cell's estimate and \code{obs},
-#' on the estimate's own test scale (the log-ratio when \code{ci_type} is \code{"or"} or
-#' \code{"ratio"}, the plain difference when \code{"diff"}). Written by \code{tab_reg} where
+#' on the estimate's own test scale (the log-ratio on a multiplicative \code{scale} --
+#' \code{odds_ratio} / \code{pct_ratio} / \code{mean_ratio} -- the plain difference otherwise).
+#' Written by \code{tab_reg} where
 #' the two estimates are independent (\code{split_var} groups), so that
 #' \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
 #' else, which leaves the significance policies inert there.
@@ -187,16 +209,8 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param comp_all  \code{FALSE} when the comparison level is the subtable/group,
 #' \code{TRUE} when it is the whole table
 #' @param ref The type of difference of the vector. Cf. \code{\link{tab}}.
-#' @param ci_type The type of confidence intervals of the vector (calculate
-#'  with \code{\link{tab_ci}}) :
-#' \itemize{
-#'   \item \code{""} or \code{"no"}: no ci have been calculated
-#'   \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'   \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'   relative total cell (or relative first cell when \code{ref = "first"}).
-#'   \item \code{"auto"}: \code{"diff"} for means and row/col percentages,
-#'   \code{"cell"} for frequencies ("all", "all_tabs").
-#'  }
+#' @param ... Not used. It exists only so that the arguments removed in tabxplor 2.0.0
+#' (\code{type}, \code{ci_type}) get an error naming their replacement.
 #' @param col_var The name of the \code{col_var} used to calculate the vector
 #' @param totcol \code{TRUE} when the vector is a total column
 #' @param refcol \code{TRUE} when the vector is a reference column
@@ -337,13 +351,11 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'     .names = "{.col}_sd"
 #'   ))
 fmt <- function(n         = integer(),
-                type      = "n",
+                scale     = "level_n",
 
                 digits    = rep(0L      , length(n)),
-                display   = dplyr::case_when(
-                  type == "mean"                                ~ "mean",
-                  type %in% c("row", "col", "all", "all_tabs")  ~ "pct" ,
-                  TRUE                                          ~ "n"    ),
+                display   = switch(est_var_kind(scale[1]),
+                                   mean = "mean", pct = "pct", "n"),
 
                 wn        = rep(NA_real_, length(n)),
                 pct       = rep(NA_real_, length(n)),
@@ -369,7 +381,7 @@ fmt <- function(n         = integer(),
 
                 comp_all  = NA   ,
                 ref = ""   ,
-                ci_type   = ""   ,
+                pct_base  = "none",
                 col_var   = ""   ,
                 totcol    = FALSE,
                 refcol    = FALSE,
@@ -379,7 +391,17 @@ fmt <- function(n         = integer(),
                 role         = ""   ,   # Phase 17c: per-column role -- "model"/"emp" on reg columns
                 conf_level   = NA_real_, # Phase 18z13: the level this column's interval was built at
                 degf         = NA_real_, # Phase 18z16-iiiii: the design df its critical value uses
-                basis        = "n"     ) { # ... and HOW its interval was computed (see new_fmt())
+                basis        = "n"     , # ... and HOW its interval was computed (see new_fmt())
+                ci_method    = ""      , # Phase 19b: which interval ENGINE built its bounds
+                ...) {
+
+  # Phase 19b (KEY 2): `type` and `ci_type` are GONE, replaced by `scale` + `pct_base`. `...` exists
+  # only to catch them and answer with the mapping, at the moment of the mistake -- an "unused
+  # argument" error would not say what to write instead.
+  fmt_abort_legacy_args(...)
+  if (length(scale) != 1L || is.na(scale) || !scale %in% EST_SCALE_KEYS)
+    cli::cli_abort(c("{.arg scale} must be one of {.val {EST_SCALE_KEYS}}.",
+                     "x" = "Got {.val {scale}}."), call = NULL)
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -422,9 +444,11 @@ fmt <- function(n         = integer(),
   # for cell means, the proportion otherwise), matching how tab_ci()/tab_num() now store real
   # asymmetric bounds. Explicit ci_inf/ci_sup win; get_ci() reads the half-width back as
   # ci_sup - centre. See dev/tabxplor_2.0.0_decisions.md §1, §20.
+  # Phase 19b: the centre is the scale's declared `est_field` -- ONE rule (fmt_center_field()'s),
+  # where this used to be a fourth private copy keyed on (ci_type, type).
   est_center <- dplyr::coalesce(
-    if (ci_type %in% c("diff", "diff_row", "diff_col")) diff else
-      if (type == "mean") mean else pct,
+    switch(EST_SCALES[[scale[1]]]$est_field,
+           or = or, ratio = ratio, diff = diff, mean = mean, n = as.double(n), pct),
     0)
   ci_sup  <- dplyr::coalesce(ci_sup, est_center + ci)
   ci_inf  <- dplyr::coalesce(ci_inf, est_center - ci)
@@ -433,10 +457,10 @@ fmt <- function(n         = integer(),
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
   in_refrow <- vctrs::vec_recycle(vctrs::vec_cast(in_refrow, logical()), size = max_size)
 
-  type      <- vctrs::vec_recycle(vctrs::vec_cast(type     , character()), size = 1)
+  scale     <- vctrs::vec_recycle(vctrs::vec_cast(scale    , character()), size = 1)
   comp_all  <- vctrs::vec_recycle(vctrs::vec_cast(comp_all , logical()  ), size = 1)
   ref <- vctrs::vec_recycle(vctrs::vec_cast(ref, character()), size = 1)
-  ci_type   <- vctrs::vec_recycle(vctrs::vec_cast(ci_type  , character()), size = 1)
+  pct_base  <- vctrs::vec_recycle(vctrs::vec_cast(pct_base , character()), size = 1)
   col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
   refcol    <- vctrs::vec_recycle(vctrs::vec_cast(refcol   , logical()  ), size = 1)
@@ -449,6 +473,7 @@ fmt <- function(n         = integer(),
   conf_level   <- vctrs::vec_recycle(vctrs::vec_cast(conf_level  , double()   ), size = 1)
   degf         <- vctrs::vec_recycle(vctrs::vec_cast(degf        , double()   ), size = 1)
   basis        <- vctrs::vec_recycle(vctrs::vec_cast(basis       , character()), size = 1)
+  ci_method    <- vctrs::vec_recycle(vctrs::vec_cast(ci_method   , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -456,10 +481,36 @@ fmt <- function(n         = integer(),
           ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
           n_eff = n_eff, obs = obs, gap_se = gap_se,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
-          type = type, comp_all = comp_all,  ref = ref,
-          ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
+          scale = scale, comp_all = comp_all,  ref = ref,
+          pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
           color = color, color_signif = color_signif, model_family = model_family,
-          role = role, conf_level = conf_level, degf = degf, basis = basis)
+          role = role, conf_level = conf_level, degf = degf, basis = basis,
+          ci_method = ci_method)
+}
+
+# The `type` / `ci_type` obituary, delivered where the mistake is made. Phase 19b deleted both; the
+# error names the replacement rather than leaving R to say "unused argument".
+#' @keywords internal
+#' @noRd
+fmt_abort_legacy_args <- function(...) {
+  bad <- names(list(...))
+  if (!length(bad)) return(invisible(NULL))
+  hint <- c(
+    type    = "{.arg type} is now {.arg scale} + {.arg pct_base}: a row percentage is
+               {.code scale = \"level_pct\", pct_base = \"row\"}, a mean {.code scale = \"level_mean\"},
+               a count {.code scale = \"level_n\"}, a regression beta {.code scale = \"raw_diff\"}.",
+    ci_type = "{.arg ci_type} is gone: the stored interval is always on the estimate's own
+               {.arg scale}. A difference interval on a row percentage is
+               {.code scale = \"points\"}, on a mean {.code scale = \"mean_diff\"}, an odds ratio
+               {.code scale = \"odds_ratio\"}, a ratio {.code scale = \"pct_ratio\"} /
+               {.code \"mean_ratio\"}.")
+  known <- intersect(bad, names(hint))
+  if (!length(known))
+    cli::cli_abort("Unused argument{?s} in {.fn fmt}: {.arg {bad}}.", call = NULL)
+  cli::cli_abort(c("{.fn fmt} no longer has {.arg {known}} (tabxplor 2.0.0).",
+                   stats::setNames(unname(hint[known]), rep("i", length(known))),
+                   "i" = "See {.code ?fmt} and {.code names(tabxplor:::EST_SCALES)}."),
+                 call = NULL)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -533,12 +584,10 @@ get_num <- function(x) {
   # set_num() has a matching arm.
   out[!nas & display == "obs"    ] <- get_obs (x)[!nas & display == "obs"    ]
   # Phase 12h: est_ci = "<estimate> [ci_inf; ci_sup]" (regression OR / beta with a visible interval).
-  # The PRIMARY number is the point estimate: the OR (ci_type=="or") or the coefficient (else). ci_type
-  # is a per-column scalar attribute, so one branch per column (never mixed within a column).
+  # The PRIMARY number is the point estimate, i.e. the scale's declared `est_field` -- a per-column
+  # scalar attribute, so one branch per column (never mixed within a column).
   est_ci_m <- !nas & display == "est_ci"
-  if (any(est_ci_m)) {
-    out[est_ci_m] <- (if (identical(as.character(get_ci_type(x))[1], "or")) get_or(x) else get_diff(x))[est_ci_m]
-  }
+  if (any(est_ci_m)) out[est_ci_m] <- fmt_est_of(x)[est_ci_m]
   # Phase 7g: "blank" is a display-only mask (the n_min helper sets it on small-base cells);
   # it carries NO number (format() emits ""), while the underlying n/pct/tot_n stay intact so
   # the mask is fully reversible by resetting `display`.
@@ -574,59 +623,101 @@ set_num <- function(x, value) {
   or_m <- !nas & display %in% c("or", "OR", "or_pct", "OR_pct")
   out[or_m] <- set_or(x[or_m], value[or_m])
   out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])  # Phase 18z5
-  # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
+  # Phase 12h: est_ci writes back to its point-estimate field, like get_num reads it -- the scale's
+  # declared `est_field`, so the read and the write map cannot drift.
   est_ci_m <- !nas & display == "est_ci"
   if (any(est_ci_m)) {
-    out[est_ci_m] <- if (identical(as.character(get_ci_type(x))[1], "or")) {
-      set_or(x[est_ci_m], value[est_ci_m])
-    } else {
-      set_diff(x[est_ci_m], value[est_ci_m])
-    }
+    setter <- switch(fmt_center_field(x), or = set_or, ratio = set_ratio,
+                     mean = set_mean, pct = set_pct, set_diff)
+    out[est_ci_m] <- setter(x[est_ci_m], value[est_ci_m])
   }
   out
 }
 
-#' @describeIn fmt get types of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @describeIn fmt get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @param x The object to test, to get a field in, or to modify.
 #' @param ... Used in methods to add arguments in the future.
-#' @return A character vector with the vectors type.
+#' @return A character vector with the vectors scale.
 #' @export
-get_type <- function(x, ...) UseMethod("get_type")
-#' Get types of fmt columns
+get_scale <- function(x, ...) UseMethod("get_scale")
+#' Get the estimate scale of fmt columns
 #' @inheritParams fmt
 #' @return An empty character vector.
 #' @export
 #' @keywords internal
-get_type.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("type")(x)),
-         yes = purrr::attr_getter("type")(x),
-         no  = "") #NA_character_
+get_scale.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("scale")(x)),
+         yes = purrr::attr_getter("scale")(x),
+         no  = "mixed")
 }
-#' Get types of fmt columns
-#' @method get_type tabxplor_fmt
+#' Get the estimate scale of fmt columns
+#' @method get_scale tabxplor_fmt
 #' @inheritParams fmt
-#' @return A single string with the vector's type.
+#' @return A single string with the vector's scale.
 #' @export
 #' @keywords internal
-get_type.tabxplor_fmt <- function(x, ...) attr(x, "type", exact = TRUE)
-#' Get types of fmt columns
+get_scale.tabxplor_fmt <- function(x, ...) attr(x, "scale", exact = TRUE)
+#' Get the estimate scale of fmt columns
 #' @inheritParams fmt
-#' @return A character vector with the data.frame column's types.
+#' @return A character vector with the data.frame column's scales.
 #' @export
 #' @keywords internal
-get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
+get_scale.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_scale(.))
 
-#' @describeIn fmt set the column type attribute of a \code{fmt} vector
+#' @describeIn fmt set the estimate scale attribute of a \code{fmt} vector
 #' @return A modified fmt vector.
 #' @export
-set_type      <- function(x, type) {
-  if (type %in% c("no", "", NA_character_)) type <- "n"
-  # "coef" (Phase 12c): a regression-coefficient column (gaussian beta). It routes the effect-size
-  # color (mean_diff Cohen scale, standardized by beta/SD(Y) via the `var` field) and the raw
-  # `display="coef"` render, without abusing "mean"/"row" or fighting get_ref_var() (whose
-  # refrow-at-END grouping is built for crosstab subtable totals). OR/IRR stay on "row".
-  stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n", "coef"))
-  `attr<-`(x ,"type"    , type)
+set_scale     <- function(x, scale) {
+  scale <- as.character(scale)[1]
+  # Phase 19b: the scale is a KEY into the declared library EST_SCALES, so the vocabulary and the
+  # allow-list are one object -- adding a scale row is what adds a legal value.
+  stopifnot(scale %in% EST_SCALE_KEYS)
+  `attr<-`(x, "scale", scale)
+}
+
+#' @describeIn fmt get the percentage base of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @return A character vector with the vectors percentage base.
+#' @export
+get_pct_base <- function(x, ...) UseMethod("get_pct_base")
+#' Get the percentage base of fmt columns
+#' @inheritParams fmt
+#' @return An empty character vector.
+#' @export
+#' @keywords internal
+get_pct_base.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("pct_base")(x)),
+         yes = purrr::attr_getter("pct_base")(x),
+         no  = "none")
+}
+#' Get the percentage base of fmt columns
+#' @method get_pct_base tabxplor_fmt
+#' @inheritParams fmt
+#' @return A single string with the vector's percentage base.
+#' @export
+#' @keywords internal
+get_pct_base.tabxplor_fmt <- function(x, ...) attr(x, "pct_base", exact = TRUE)
+#' Get the percentage base of fmt columns
+#' @inheritParams fmt
+#' @return A character vector with the data.frame column's percentage bases.
+#' @export
+#' @keywords internal
+get_pct_base.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_base(.))
+
+# A column REPURPOSED as a plain count (the no-col_var `n`/`wn` columns, the Excel `add_n` layout
+# column): it estimates a count, of nothing. Both halves in one call, because setting only the scale
+# would leave a stale `pct_base` claiming the counts are percentages of a row.
+#' @keywords internal
+#' @noRd
+set_count_col <- function(x) set_pct_base(set_scale(x, "level_n"), "none")
+
+#' @describeIn fmt set the percentage base attribute of a \code{fmt} vector
+#' @return A modified fmt vector.
+#' @export
+set_pct_base  <- function(x, pct_base) {
+  pct_base <- as.character(pct_base)[1]
+  if (is.na(pct_base) || pct_base %in% c("no", "", "n")) pct_base <- "none"
+  stopifnot(pct_base %in% PCT_BASES)
+  `attr<-`(x, "pct_base", pct_base)
 }
 
 
@@ -817,7 +908,7 @@ set_display.tabxplor_fmt <- function(x, value) {
 # Why this exists: shared by set_display.tabxplor_fmt() and tab_apply_display() so the "num_ci" alias
 # resolves the same way whether requested at build (tab(display=)) or post-hoc (set_display()).
 fmt_apply_num_ci <- function(col) {
-  base <- if (identical(get_type(col), "mean")) "mean" else "pct"
+  base <- if (identical(fmt_var_kind(col), "mean")) "mean" else "pct"
   tmpl <- paste0("{", base, "} {ci}")
   fields <- parse_display_template(tmpl)$fields
   d <- get_display(col)
@@ -835,7 +926,7 @@ set_display.data.frame <- function(x, value) {
   x |>
     dplyr::mutate(dplyr::across(
       dplyr::where(is_fmt) & -(tidyselect::any_of(c("n", "wn")) &
-                                 dplyr::where(~ get_type(.) == "n")),
+                                 dplyr::where(~ fmt_var_kind(.) == "count")),
       ~ set_display(., value)
     ))
 }
@@ -989,52 +1080,19 @@ set_diff_type   <- function(x, ref) {
 
 
 
-#' @describeIn fmt get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors ci_type attributes
-#' @export
-get_ci_type <- function(x, ...) UseMethod("get_ci_type")
-#' Get confidence intervals type of fmt columns
-#' @method get_ci_type default
-#' @inheritParams fmt
-#' @return A single character with the ci_type attribute.
-#' @export
+# Phase 19b (KEY 2) deleted `ci_type` and its four accessors. The stored interval is ALWAYS on the
+# estimate's own scale (tested column by column: every apparent counter-example was either all-NA
+# bounds or a defect), so a second vocabulary for "which scale is the interval on" said nothing
+# `scale` does not, and made the incoherent state -- an odds-ratio display over a percentage-point
+# interval -- representable. Its five values map onto stored facts:
+#   ""       -> no interval: all(is.na(get_ci_inf(x)))          [a DATA fact, not a vocabulary]
+#   "cell"   -> a `level_*` scale that HAS bounds
+#   "or"     -> scale "odds_ratio"     |  "ratio" -> the two ratio scales
+#   "diff"   -> the three difference scales (points / mean_diff / raw_diff)
+# "diff_row" / "diff_col" belonged to the `ci` ARGUMENT's vocabulary and could never be stored (D18).
 #' @keywords internal
-get_ci_type.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("ci_type")(x)),
-         yes = purrr::attr_getter("ci_type")(x),
-         no  = "") #NA_character_
-}
-#' Get confidence intervals type of fmt columns
-#' @method get_ci_type tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single character with the ci_type attribute.
-#' @export
-#' @keywords internal
-get_ci_type.tabxplor_fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
-#' Get confidence intervals type of fmt columns
-#' @method get_ci_type data.frame
-#' @inheritParams fmt
-#' @return A character vector with the ci_type attributes.
-#' @export
-#' @keywords internal
-get_ci_type.data.frame <- function(x, ...) {
-  purrr::map_chr(x, ~ get_ci_type(.))
-}
-
-
-#' @describeIn fmt set the confidence intervals type attribute of a \code{fmt} vector
-# @param ci_type The type of confidence interval calculated in "ci", as a single string.
-#' @return A modified fmt vector.
-#' @export
-set_ci_type   <- function(x, ci_type) {
-  # The two MULTIPLICATIVE interval scales (neutral 1, read by ci_center() + the colour significance
-  # gate + format()'s bracket), as opposed to the additive diff* ones (neutral 0):
-  #   "or"    (Phase 12a) -- a log-OR Wald exp() interval, centred on the odds ratio.
-  #   "ratio" (Phase 14b) -- a Katz log-RR exp() interval, centred on the cell/reference ratio.
-  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col", "or", "ratio",
-                           "no", "", NA_character_))
-  `attr<-`(x ,"ci_type" , ci_type)
-}
+#' @noRd
+fmt_has_interval <- function(x) !all(is.na(get_ci_inf(x)))
 
 
 #' @describeIn fmt get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
@@ -1214,6 +1272,45 @@ set_degf <- function(x, degf) {
 set_basis <- function(x, basis) {
   basis <- vctrs::vec_recycle(vctrs::vec_cast(basis, character()), size = 1)
   `attr<-`(x, "basis", basis)
+}
+
+#' @describeIn fmt get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @return A character vector with the vectors interval method ("" when no interval was computed).
+#' @export
+get_ci_method <- function(x, ...) UseMethod("get_ci_method")
+#' Get the interval method of fmt columns
+#' @inheritParams fmt
+#' @return An empty character vector.
+#' @export
+#' @keywords internal
+get_ci_method.default <- function(x, ...) {
+  m <- purrr::attr_getter("ci_method")(x)
+  if (is.null(m) || is.na(m)) "" else m
+}
+#' Get the interval method of fmt columns
+#' @method get_ci_method tabxplor_fmt
+#' @inheritParams fmt
+#' @return A single string with the vector's interval method.
+#' @export
+#' @keywords internal
+get_ci_method.tabxplor_fmt <- function(x, ...) {
+  m <- attr(x, "ci_method", exact = TRUE)
+  if (is.null(m) || is.na(m)) "" else m
+}
+#' Get the interval method of fmt columns
+#' @method get_ci_method data.frame
+#' @inheritParams fmt
+#' @return A character vector with the data.frame column's interval methods.
+#' @export
+#' @keywords internal
+get_ci_method.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_ci_method(.))
+
+#' @keywords internal
+#' @noRd
+set_ci_method <- function(x, ci_method) {
+  ci_method <- vctrs::vec_recycle(vctrs::vec_cast(ci_method, character()), size = 1)
+  if (is.na(ci_method)) ci_method <- ""
+  `attr<-`(x, "ci_method", ci_method)
 }
 
 # Project the table's inference facts onto every fmt column, at each build tail -- the ONE point where
@@ -1565,6 +1662,250 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 # INTERNAL FUNCTIONS #####################################################################
 
 
+# === SECTION: the ESTIMATE's scale (Phase 18z17; STORED since Phase 19b / KEY 2) =================
+#
+# `MEASURES` above says what a COLOUR MEASURE is; this says what a COLUMN ESTIMATES.
+#
+# Phase 19b: the key is a STORED COLUMN ATTRIBUTE (`scale`), not a dispatch. Until then it was
+# re-derived at every read from (type, ci_type, display, model_family) plus a sniff of whether the
+# per-cell `var` field happened to be non-NA -- a rule whose own comment had to warn that "the ORDER
+# of the branches is the contract", which is the signature of under-determined input. Storing it
+# deleted that dispatch, the `var` sniff, the `display` fallback, `fmt_est_field()`'s six copies, the
+# seven derived predicates of fmt_color_plan(), the six of legend_specs(), and the whole `ci_type`
+# vocabulary (D17, D18, D19 close by construction).
+#
+# Four consumers were each re-deriving half of it: format() (compound display x type x ci_type
+# predicates), fmt_color_plan() (std_when + fmt_gap_scale_key), the legend (unit_kind), and a plot
+# (which had a private hard-coded ladder). What none of them stated in one place: for THIS column,
+# what is the neutral value, is the scale additive or multiplicative, what unit is its axis in, and
+# which break ladder does the ESTIMATE live on (not the colour measure -- they may differ: a
+# `color = "adjustment"` Model_OR column has odds_ratio gridlines and an adj_ratio colour ladder).
+#
+# EST_SCALES is the declared record library (the REG_CHECKS / REG_EMPIRICAL shape); the `scale`
+# attribute is the key into it; fmt_scale_of() resolves the per-column parts (the ladder, SD(Y), the
+# secondary axis).
+#   kind       "effect" (there is a null to draw, and a stored interval can be tested against it)
+#              | "level" (a percentage / a mean / a count: no null). THIS IS `has_ci`: a level
+#              column's own one-proportion interval has no reference null, so the significance gate
+#              must not read it -- the deliberate exclusion of `ci = "cell"`, now declared.
+#   geometry   the WORD the two producers' arguments resolve into (19d `color=`, 19e `measure=`):
+#              "ratio" | "difference" | "log" | "level". The argument names the geometry; the
+#              attribute names the ROW -- one vocabulary, two grains, never swapped.
+#   var_kind   what the column summarises: "pct" | "mean" | "count" | "coef". With `pct_base` this
+#              is exactly the old `type` attribute, split into its two honest halves.
+#   ladder     which break scale a colour MEASURE reads on this column: "pct" | "std" | "log"
+#              (MEASURES$<m>$scale is a 3-entry map keyed by it). It replaces `is_mean` /
+#              `is_std_diff` / `use_std` / `is_logcoef` and the legend's `is_pct` / `is_num`, which
+#              were four spellings of `ladder != "pct"` in four files.
+#   neutral    the null value, on the estimate's own scale
+#   trans      the axis transform -- "log10" makes x2 and 1/2 equidistant from 1, which is the whole
+#              reason a ratio forest plot is logarithmic
+#   mult       multiplicative fold (the fmt_color_slots center-1 rule)
+#   is_pct     the estimate renders x100
+#   est_field  the fmt field the estimate lives in -- fmt_center_field() IS this entry
+#   unit       the axis title, as a KEY (translated at render, never here: a top-level gettext()
+#              would freeze the build locale)
+#   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks
+#   gap_key    the adj_* ladder its GAP reads -- fmt_gap_scale_key() IS this column
+#   label_meas which MEASURES row supplies the break glyphs ("or" -> "2" / "1/2", "diff" -> "+5" / "-5")
+#   sd_from    where the SD-standardized ladder's divisor comes from: a regression column's stored
+#              var(Y) ("var") or a crosstab cell's REFERENCE variance ("ref_var"). NULL = no
+#              standardization. This is fmt_color_plan()'s old `if (type == "coef")` sd_ref split.
+#   sec        NULL, or the secondary axis this scale needs to stay readable (SS7.4): whenever the
+#              colour ladder lives on a different scale from the printed estimate, that ladder's scale
+#              becomes the secondary axis.
+#' @keywords internal
+EST_SCALES <- list(
+  odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
+                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "or",    unit = "or",
+                    break_key = "odds_ratio", gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
+                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "ratio", unit = "ratio",
+                    break_key = "pct_ratio",  gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
+                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "ratio", unit = "rate_ratio",
+                    break_key = "mean_ratio", gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
+  # WARNING: raw_diff and mean_diff are NOT one row with two `sd_from` values -- their `gap_key`
+  # differs too (adj_diff_std vs adj_diff), and folding them would mean re-deriving both from
+  # `model_family`, i.e. re-introducing the dispatch this key exists to delete. Every stamping site
+  # knows which of the two it is building.
+  raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
+                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "units",
+                    break_key = "mean_diff",  gap_key = "adj_diff_std",
+                    label_meas = "diff", sec = "sd", sd_from = "var"),
+  # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
+  # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
+  mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
+                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "units",
+                    break_key = "mean_diff",  gap_key = "adj_diff",
+                    label_meas = "diff", sec = "sd", sd_from = "ref_var"),
+  # measure = "log" (was exponentiate = FALSE): printed on the link scale, coloured on the logged
+  # odds_ratio ladder -- which is what `ladder = "log"` selects, in one lookup instead of the
+  # `is_logcoef && measure == "diff"` test that used to sit in fmt_color_plan().
+  log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
+                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "log",
+                    break_key = "odds_ratio", gap_key = "adj_diff_log",
+                    label_meas = "diff", sec = "exp"),
+  points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
+                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
+                    est_field = "diff",  unit = "points",
+                    break_key = "pct_diff",   gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL),
+  # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
+  # per-column value, filled by the consumer), and no ladder of their own -- the colour ladder of a
+  # level column grades its DIFFERENCE, so putting it on the level axis would be a lie. `gap_key` is
+  # "adj_diff" only so that fmt_gap_scale_key() stays byte-identical on a column no gap measure can
+  # actually ride. Phase 19b gave `level_n` its own row: `type = "n"` used to borrow level_pct, whose
+  # est_field is `pct`, and the code documented the fudge.
+  level_pct  = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
+                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
+                    est_field = "pct",   unit = "pct",
+                    break_key = NA_character_, gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL),
+  level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
+                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "mean",  unit = "units",
+                    break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
+                    label_meas = "diff", sec = NULL),
+  level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
+                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "n",     unit = "count",
+                    break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
+                    label_meas = "diff", sec = NULL),
+  # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
+  # is level_pct's, which is exactly what the pre-19b dispatch answered for the old `type = "mixed"`
+  # neutral -- so a mixed bind behaves as it always did, and vec_arith's mismatch warning has a real
+  # fact to test instead of a magic string.
+  mixed      = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
+                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
+                    est_field = "pct",   unit = "pct",
+                    break_key = NA_character_, gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL)
+)
+
+# The declared vocabularies, derived from the library so an allow-list cannot drift from it.
+#' @keywords internal
+EST_SCALE_KEYS <- names(EST_SCALES)
+# One scale KEY's var_kind (new_fmt() reads it for the `display` default, before any column exists).
+#' @keywords internal
+est_var_kind <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$var_kind
+#' @keywords internal
+PCT_BASES <- c("row", "col", "all", "all_tabs", "none")
+
+# THE reader: one column's scale row. `kind` is the consumer's OVERRIDE (forest_plot(what =) is the
+# only caller that passes one): "level" asks for the level twin of an effect scale, "effect" for the
+# effect twin of a level one -- a column with no stored contrast interval still HAS a difference, it
+# just has no whisker to draw around it.
+#' @keywords internal
+fmt_scale_key <- function(x, kind = c("auto", "effect", "level")) {
+  key <- get_scale(x)
+  switch(match.arg(kind),
+         auto   = key,
+         level  = EST_SCALES[[key]]$level_twin  %||% key,
+         effect = EST_SCALES[[key]]$effect_twin %||% key)
+}
+
+# The two overrides above, declared beside the library rather than as a branch inside a dispatch.
+for (.k in EST_SCALE_KEYS) {
+  EST_SCALES[[.k]]$level_twin  <- switch(EST_SCALES[[.k]]$var_kind,
+                                         mean = "level_mean", count = "level_n", "level_pct")
+  EST_SCALES[[.k]]$effect_twin <- if (identical(EST_SCALES[[.k]]$kind, "effect")) .k
+                                  else switch(EST_SCALES[[.k]]$var_kind,
+                                              mean = "mean_diff", count = "mean_diff", "points")
+}
+rm(.k)
+
+# The whole row for one column, defaulted so a hand-built or downgraded column cannot error.
+#' @keywords internal
+fmt_scale_row <- function(x) EST_SCALES[[fmt_scale_key(x)]] %||% EST_SCALES[["mixed"]]
+
+# What the column summarises -- "pct" | "mean" | "count" | "coef". With get_pct_base() this is the
+# old `type` attribute, split in two. It is the ONE predicate the ~40 former get_type() readers share.
+#' @keywords internal
+fmt_var_kind <- function(x) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, fmt_var_kind))
+  fmt_scale_row(x)$var_kind
+}
+
+# The short human LABEL of what a column is -- "row%" / "col%" / "all%" / "all_tabs%" / "mean" / "n" /
+# "coef" / "mixed". It is the pillar ptype abbreviation and the wording of the two arithmetic
+# warnings, i.e. a rendered string, never a fact to branch on: read `pct_base` / `var_kind` for that.
+# (It reproduces the values of the pre-19b `type` attribute, which is why the tibble headers and the
+# warning texts are byte-unchanged.)
+#' @keywords internal
+fmt_kind_label <- function(x) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, fmt_kind_label))
+  base <- get_pct_base(x)
+  if (!identical(base, "none")) return(paste0(base, "%"))
+  switch(fmt_var_kind(x), mean = "mean", count = "n", coef = "coef", "mixed")
+}
+
+# WHICH field holds the value the stored interval is centred on -- a property OF THE SCALE, declared
+# once in EST_SCALES. Readers: ci_center() (what get_ci() / get_ci_moe() / format() subtract from),
+# fmt_est_of() (the gap system) and fmt_scale_of(). Phase 19b: ONE rule where there were two that
+# disagreed on 178 of 190 golden columns (D17).
+#' @keywords internal
+fmt_center_field <- function(x) fmt_scale_row(x)$est_field
+
+# The whole record for one column: the EST_SCALES row, plus the parts that need the column itself --
+# the estimate field, SD(Y), and the ladder resolved through color_scales() (so a user's
+# set_color_breaks() moves the plot's gridlines exactly as it moves the table's colours).
+# `breaks` are AXIS POSITIONS (both sides, plus the neutral), not the positive magnitudes the colour
+# engine folds; `break_dir` says which side each came from, so the label can pick its glyph.
+#' @keywords internal
+fmt_scale_of <- function(x, kind = "auto") {
+  key <- fmt_scale_key(x, kind)
+  s   <- EST_SCALES[[key]]
+  s$key       <- key
+  s$sd_y      <- NA_real_
+  s$breaks    <- numeric(0)
+  s$break_dir <- integer(0)
+  s$break_mag <- numeric(0)
+  # the SD the standardized ladder divides by, from the same source fmt_color_plan()'s sd_ref block
+  # uses: a regression column's stored var(Y), a crosstab mean's REFERENCE cell variance.
+  if (!is.null(s$sd_from)) {
+    v <- if (identical(s$sd_from, "var")) get_var(x) else get_ref_var(x)
+    v <- v[is.finite(v) & v > 0]
+    s$sd_y <- if (length(v)) sqrt(v[1]) else NA_real_
+  }
+
+  if (!is.na(s$break_key)) {
+    sc <- color_scales(x)[[s$break_key]]
+    if (identical(key, "log_coef") && !is.null(sc)) sc <- log_odds_scale(sc)
+    over  <- if (is.null(sc)) numeric(0) else sc$over$breaks
+    under <- if (is.null(sc)) numeric(0) else sc$under$breaks
+    over  <- over[ is.finite(over) ]
+    under <- under[is.finite(under)]
+    if (!is.null(s$sd_from)) {                        # the ladder is in SD units -> units of Y
+      if (!is.finite(s$sd_y)) { over <- numeric(0); under <- numeric(0) }
+      else { over <- over * s$sd_y; under <- under * s$sd_y }
+    }
+    pos <- if (isTRUE(s$mult)) c(rev(1 / under), s$neutral, over)
+           else                c(rev(-under),    s$neutral, over)
+    s$breaks    <- pos
+    s$break_dir <- c(rep(-1L, length(under)), 0L, rep(1L, length(over)))
+    # the MAGNITUDE each position stands for -- what legend_break_label() takes, since the legend
+    # names a threshold ("1/2", "-5") and not a coordinate. Keeping it here is what lets an axis and
+    # a footer print the same glyph for the same break.
+    s$break_mag <- c(rev(under), 0, over)
+  }
+  if (!is.null(s$sd_from) && !is.finite(s$sd_y)) s$sec <- NULL
+  s
+}
+
+
+
+
 # DESIGN: new_fmt() is the internal constructor. Attributes (type, color, ci_type, etc.)
 #   are SCALAR per-column, not per-cell. Fields (n, pct, diff, etc.) are per-cell vectors.
 #   This distinction is fundamental: attributes describe column semantics,
@@ -1575,7 +1916,7 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #' @keywords internal
 # @export
 new_fmt <- function(n         = integer(),
-                    type      = "n"          ,
+                    scale     = "level_n"    ,
 
                     digits    = NULL,
                     display   = NULL,
@@ -1602,7 +1943,7 @@ new_fmt <- function(n         = integer(),
 
                     comp_all  = NA   ,
                     ref = ""   ,
-                    ci_type   = ""   ,
+                    pct_base  = "none",
                     col_var   = ""   ,
                     totcol    = FALSE,
                     refcol    = FALSE,
@@ -1628,6 +1969,17 @@ new_fmt <- function(n         = integer(),
                     #   basis "n" | "weights" | "design_partial" | "design" (R/survey-design.R)
                     degf      = NA_real_,
                     basis     = "n"  ,
+                    # Phase 19b (KEY 2): WHICH interval engine built this column's bounds -- "wilson" /
+                    # "wald" / "beta" / "newcombe" / "ac" / "welch" / "student" / "katz" / "woolf" /
+                    # "robust" / "quasipoisson" / "poisson" / "wald_log" / "profile"; "" = no interval.
+                    # It is a per-COLUMN fact (a cell interval used method_cell, a contrast one
+                    # method_diff, a mean difference method_mean_diff), and it was stored TABLE-wide in
+                    # meta$ci_settings, from which the legend picked a slot back by MEASURE through an
+                    # eight-branch chain -- which could name a method the bounds were never built with
+                    # (D8: a `ci = "cell"` mean's one-sample interval was announced as "Welch t").
+                    # Storing it beside `conf_level` / `degf` / `basis` completes the "how was this
+                    # column's interval computed" quartet and empties meta$ci_settings.
+                    ci_method = ""   ,
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1653,7 +2005,8 @@ new_fmt <- function(n         = integer(),
   #   at 1e6 cells: 9.9 MB instead of 129.7 MB; about half the sharing survives the pipeline).
   #   The `display` default is base-R for the same reason: the dplyr::case_when() it replaces cost
   #   90 us per call, more than half the whole constructor, on all 210 calls of a tab_many() build.
-  #   `%in%` (not ==) so an NA `type` falls through to "n", exactly as case_when did.
+  #   Phase 19b: the `display` default now reads the scale's declared `var_kind` -- the same answer
+  #   the old `type` test gave, on a fact that is stated once (`mixed`, the bind neutral, keeps "n").
   #   WARNING: NULL defaults, so a field passed as NULL is "unset", not an error. No caller does
   #   that; if one ever needs an empty column it must pass a 0-length vector with length(n) == 0.
   #   See dev/empty_vctrs_fields_sparse_record.md (why the fields stay ALWAYS present).
@@ -1661,9 +2014,8 @@ new_fmt <- function(n         = integer(),
   nas  <- rep(NA_real_, size)
   fls  <- rep(FALSE   , size)
   if (is.null(display)) {
-    display <- rep("n", length(type))
-    display[type %in% c("row", "col", "all", "all_tabs")] <- "pct"
-    display[type %in% "mean"                            ] <- "mean"
+    display <- if (identical(scale[1], "mixed")) "n"
+               else switch(est_var_kind(scale[1]), pct = "pct", mean = "mean", "n")
   }
   if (is.null(digits)) digits <- rep(0L, size)
   if (is.null(wn    )) wn     <- nas
@@ -1699,9 +2051,9 @@ new_fmt <- function(n         = integer(),
   # vctrs::vec_assert(in_totrow, logical())
   # vctrs::vec_assert(in_tottab, logical())
   #
-  # vctrs::vec_assert(type    , character(), size = 1)
+  # vctrs::vec_assert(scale   , character(), size = 1)
   # vctrs::vec_assert(comp_all, logical()  , size = 1)
-  # vctrs::vec_assert(ci_type , character(), size = 1)
+  # vctrs::vec_assert(pct_base, character(), size = 1)
   # vctrs::vec_assert(col_var , character(), size = 1)
   # vctrs::vec_assert(totcol  , logical()  , size = 1)
   # vctrs::vec_assert(color   , character(), size = 1)
@@ -1714,11 +2066,11 @@ new_fmt <- function(n         = integer(),
          tot_n = tot_n, n_eff = n_eff, obs = obs, gap_se = gap_se,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
-    type = type, comp_all = comp_all, ref = ref,
-    ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
+    scale = scale, comp_all = comp_all, ref = ref,
+    pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
     color = color, color_signif = color_signif[1], model_family = model_family[1],
     role = role[1], conf_level = conf_level[1],
-    degf = degf[1], basis = basis[1],
+    degf = degf[1], basis = basis[1], ci_method = ci_method[1],
     class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
@@ -1736,8 +2088,8 @@ fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "rat
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
 # formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
-# type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, model_family, role,
-# conf_level, degf, basis.
+# scale, comp_all, ref, pct_base, col_var, totcol, refcol, color, color_signif, model_family, role,
+# conf_level, degf, basis, ci_method.
 # Read by fmt_unwrap / tab_stack_tables (tab.R), the column reconcile (tab_classes.R), the four
 # reconstructors below (through fmt_attr_rules) and tab-test-display.R. `color` is carried WHOLE
 # (length 1 or 2).
@@ -1784,10 +2136,10 @@ fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "cla
 #' @keywords internal
 #' @noRd
 fmt_attr_rules <- list(
-  type         = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE ),
+  scale        = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE ),
   comp_all     = list(neutral = FALSE,          merge = "comp3",       arith = "merge",   scalar = TRUE ),
   ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
-  ci_type      = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
+  pct_base     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE ),
   col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE ),
   totcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
   refcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
@@ -1797,7 +2149,10 @@ fmt_attr_rules <- list(
   role         = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE ),
   conf_level   = list(neutral = NA_real_,       merge = "same",        arith = "merge",   scalar = TRUE ),
   degf         = list(neutral = NA_real_,       merge = "min",         arith = "merge",   scalar = TRUE ),
-  basis        = list(neutral = "n",            merge = "weakest",     arith = "merge",   scalar = TRUE )
+  basis        = list(neutral = "n",            merge = "weakest",     arith = "merge",   scalar = TRUE ),
+  # arithmetic destroys the interval (the bounds are reset to NA just below), so a sum must not keep
+  # claiming Newcombe; binding unlike methods keeps no claim either.
+  ci_method    = list(neutral = "",             merge = "same",        arith = "neutral", scalar = TRUE )
 )
 
 # THE completeness assertion, and it must run at PACKAGE BUILD (R CMD INSTALL / pkgload::load_all),
@@ -1909,8 +2264,8 @@ fmt_ptype_attrs <- function(a) {
 
 
 #' @keywords internal
-fmt0 <- function(display = "n", digits = 0, type = "n") {
-  new_fmt(n = 0L, display = display, digits = as.integer(digits), type = type)
+fmt0 <- function(display = "n", digits = 0, scale = "level_n") {
+  new_fmt(n = 0L, display = display, digits = as.integer(digits), scale = scale)
 }
 
 
@@ -2000,11 +2355,11 @@ get_ci_sup <- fmt_field_factory("ci_sup")
 # Phase 3a: ci_inf/ci_sup now hold real asymmetric ABSOLUTE bounds. See §1, §20.
 #' @keywords internal
 # Phase 18z17: the field choice is fmt_center_field() -- the ONE rule, shared with fmt_scale_of()
-# (which needs the same answer to say what the column estimates) and delegating its effect half to
-# fmt_est_field(), the gap system's own rule. Phase 12a: an OR CI is centred on the odds ratio;
-# Phase 14b: a Katz RR CI on the ratio.
+# (which needs the same answer to say what the column estimates) and with the gap system.
+# Phase 19b: it is now a single lookup on the STORED scale, so the two rules that used to answer
+# this question (and disagreed on 178 of 190 golden columns, D17) are one.
 #' @keywords internal
-ci_center  <- function(x) vctrs::field(x, fmt_center_field(get_ci_type(x), get_type(x)))
+ci_center  <- function(x) as.double(vctrs::field(x, fmt_center_field(x)))
 # @describeIn fmt get the confidence-interval half-width (upper arm, from the stored bounds)
 #' @keywords internal
 # @export
@@ -2168,24 +2523,15 @@ fmt_resid <- function(x) {
 #   sign  the NULL DIRECTION: +1 when the estimate is FURTHER from the null than `obs` (the model
 #         strengthened the effect), -1 when nearer (it attenuated it), 0 when equal.
 
-# fmt_est_field() / fmt_est_of() -- Phase 18z9: WHICH field holds a column's point estimate, keyed on
-# its declared `ci_type`. ONE rule: an "or" column keeps its estimate in `or`, a "ratio" column in
-# `ratio` (an Obs_rate column is ci_type "ratio"), everything else -- a beta, an AME, a risk difference,
-# a logged OR/RR/IRR -- in `diff`. It was written out three times (here, reg_write_group_gap()'s local
-# est_of, and the crude numeric overlay would have been a fourth), which is one encoding too many for a
-# fact that decides where a number is READ and WRITTEN.
+# fmt_est_of() -- Phase 18z9: WHICH field holds a column's point estimate. Phase 19b: it IS the
+# scale's declared `est_field` (fmt_center_field()), so the second rule that used to answer this --
+# fmt_est_field(ci_type), an "or"/"ratio"/else switch written out six times -- is gone. D17 closed.
 #' @keywords internal
-fmt_est_field <- function(ci_type)
-  switch(as.character(ci_type)[1], "or" = "or", "ratio" = "ratio", "diff")
-
-#' @keywords internal
-fmt_est_of <- function(x)
-  switch(fmt_est_field(get_ci_type(x)), "or" = get_or(x), "ratio" = get_ratio(x), get_diff(x))
+fmt_est_of <- function(x) as.double(vctrs::field(x, fmt_center_field(x)))
 
 #' @keywords internal
 fmt_gap_parts <- function(x) {
-  cit  <- as.character(get_ci_type(x))[1]
-  mult <- cit %in% c("or", "ratio")
+  mult <- isTRUE(fmt_scale_row(x)$mult)
   obs  <- get_obs(x)
   est  <- fmt_est_of(x)
   if (mult) {
@@ -2672,46 +3018,52 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   ok <- !na_out & !nas
 
 
-  type    <- get_type(x)
-  ci_type <- get_ci_type(x)
+  # Phase 19b: ONE lookup on the stored scale, where this block used to open with two attribute reads
+  # and then re-derive five geometric facts from them.
+  scl      <- fmt_scale_row(x)
+  is_mean  <- identical(scl$var_kind, "mean")
+  is_coef  <- identical(scl$var_kind, "coef")
+  # the stored interval's own geometry: multiplicative (odds_ratio / the two ratio scales), a real
+  # difference (points / mean_diff / raw_diff / log_coef), or a ratio specifically.
+  ci_mult  <- isTRUE(scl$mult)
+  ci_ratio <- ci_mult && !identical(scl$est_field, "or")
+  ci_diff  <- scl$geometry %in% c("difference", "log")
 
   pm <- stringi::stri_unescape_unicode("\\u00b1") # sign "plus minus"
 
   pct_or_ci     <- ok & display %in% c("pct", "pct_ci", "diff", "ci", "ctr") &
-    !(display %in% c("ci", "diff") & type == "mean")
+    !(display %in% c("ci", "diff") & is_mean)
   pct_ci  <- ok & display == "pct_ci"
   mean_ci <- ok & display == "mean_ci"
-  diff_mean <- ok & display == "diff" & type == "mean"
+  diff_mean <- ok & display == "diff" & is_mean
 
-  # Phase 14b: the stored interval's SCALE, a scalar (ci_type is a column attribute). The additive
-  # diff* scales are shown x100 with a "%"; the multiplicative "ratio" one is a bare ratio (neutral 1)
-  # -- never x100, never clamped to [0;100], no "%". Same shape as a mean's absolute bounds, hence
-  # `ci_bare`, which is what the branches below actually key on.
-  ci_mult   <- ci_type %in% c("or", "ratio")
-  ci_bare   <- (type == "mean") | ci_mult
+  # Phase 14b: the additive diff* scales are shown x100 with a "%"; the multiplicative ones are a bare
+  # ratio (neutral 1) -- never x100, never clamped to [0;100], no "%". Same shape as a mean's absolute
+  # bounds, hence `ci_bare`, which is what the branches below actually key on.
+  ci_bare   <- is_mean | ci_mult
 
   # Phase 18z5: `obs` prints exactly like the estimate it is compared to -- a crude OR reads like
   # the Model_OR beside it, a crude risk difference like its AME, a crude log(OR) like the raw
-  # coefficient. The scale is a per-COLUMN fact (`ci_type` / `type` are scalar attributes), so this is
-  # ONE branch per column, never a per-cell test: the same shape as get_num()'s est_ci arm.
+  # coefficient. The scale is a per-COLUMN fact, so this is ONE branch per column, never a per-cell
+  # test: the same shape as get_num()'s est_ci arm.
   obs_m    <- ok & display == "obs"
   obs_mult <- ci_mult                          # OR / RR / IRR       -> like `or`  (bare, big.mark, 2 dg)
-  obs_coef <- !ci_mult && type == "coef"       # beta / log(OR)      -> like `coef` (plain)
-  obs_pct  <- !ci_mult && type != "coef"       # AME / risk-diff     -> like `diff` (x100, signed, %)
+  obs_coef <- !ci_mult && is_coef              # beta / log(OR)      -> like `coef` (plain)
+  obs_pct  <- !ci_mult && !is_coef             # AME / risk-diff     -> like `diff` (x100, signed, %)
   if (obs_mult) digits[obs_m & digits < 2L] <- 2L
   obs_as_pct <- obs_m & obs_pct
-  disp_ci   <- display == "ci" & ci_type %in% c("diff", "ratio") & !nas
+  disp_ci   <- display == "ci" & (ci_diff | ci_ratio) & !nas
   # A ratio interval on a pct column would inherit that column's digits = 0 and print "[1;2]".
   # 2 decimals, exactly like the `or` displays just above: a ratio bracket is the same kind of
   # quantity, and at 1 decimal the bounds routinely round equal -- which makes the block below
   # collapse the bracket to a bare point estimate ("0.6" for a real [0.55;0.63]).
-  digits[!nas & display == "ci" & ci_type == "ratio" & digits < 2L] <- 2L
+  digits[!nas & display == "ci" & ci_ratio & digits < 2L] <- 2L
   plus_ci <- (pct_ci | mean_ci) # ci_pct_mean
   plus_disp_ci <- (plus_ci | disp_ci)
   # plus_ci <- (ci_pct_mean | disp_ci)# & !is.na(get_ci(x))
 
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
-  pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
+  pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & is_mean)
   pct_no_ci     <- pct_no_ci | obs_as_pct                     # Phase 18z5
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
@@ -2720,7 +3072,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   diff_signed   <- (ok & display %in% c("diff", "resid")) | obs_as_pct   # Phase 18z5
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
                                         "OR", "OR_pct", "gof", "resid") |    # Phase 12f: gof -> big.mark
-                           (display == "ci" & type == "mean") )
+                           (display == "ci" & is_mean) )
   n_wn          <- n_wn | (obs_m & obs_mult)                  # Phase 18z5
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
@@ -2896,16 +3248,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 
  if (ci_print_moe) {
-   out[type_ci] <- switch(
-     type,
-     "n"       = ,
-     "coef"    = ,                                     # Phase 12c: coef CI moe is unit-scale (no %)
-     "mean"    = paste0(pm, out[type_ci]),
-     "row"     = ,
-     "col"     = ,
-     "all"     = ,
-     "all_tabs"= paste0(pm, out[type_ci], "%") |> stringi::stri_replace_all_regex("%%", "%")
-   )
+   # Phase 19b: a "%" exactly on the columns whose values ARE percentages -- one declared fact where
+   # this was an 8-arm switch on `type` with no default (a "mixed" column returned NULL).
+   out[type_ci] <- if (identical(scl$var_kind, "pct"))
+     paste0(pm, out[type_ci], "%") |> stringi::stri_replace_all_regex("%%", "%")
+   else paste0(pm, out[type_ci])
  }
 
 
@@ -2933,14 +3280,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     disp_est_ci <- display == "est_ci" & !nas           # Phase 12h: estimate + visible CI bracket
     # get_var() (the vctrs::field accessor) not x$var (the dplyr::pull `$` method): x$var here ran
     # unconditionally for EVERY column and was ~28% of format() self-time (Phase 10c profile).
-    disp_mean_sd <- display == "mean" & type == "mean" & !nas & !is.na(get_var(x))
+    disp_mean_sd <- display == "mean" & is_mean & !nas & !is.na(get_var(x))
     # Phase 14h: a mean cell whose var is NA gets no "(sigma sd)" tail, so under the column's
     # right-align the whole cell slides right and its mean stops lining up with the others
     # ("1.0" against "1.7 (s2.1)"). Padded to the tail's width below.
     # WARNING: `!na_out` is load-bearing -- an EMPTY cell also has an NA var, and padding it would
     # paste onto the NA, turning it into the literal string "NA" + spaces. Only the `na` argument
     # (kable/md pass "") hid that; the console, which keeps NA, printed it.
-    disp_mean_nosd <- display == "mean" & type == "mean" & !nas & !na_out & is.na(get_var(x))
+    disp_mean_nosd <- display == "mean" & is_mean & !nas & !na_out & is.na(get_var(x))
 
     if (any (disp_mean_sd)) {
       sd <-
@@ -2979,7 +3326,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
       ref     <- ref_cells[disp_diff]
       reffmt  <- set_display(x[disp_diff],
-                             ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
+                             ifelse(scl$var_kind %in% c("count", "mean"), "mean", "pct")) |>
         format() #|> stringi::stri_trim()
       out[disp_diff] <- ifelse(ref,
                                paste0("ref:", reffmt),
@@ -2990,7 +3337,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
       ref     <- ref_cells[disp_moe]
       reffmt  <- set_display(x[disp_moe],
-                             ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
+                             ifelse(scl$var_kind %in% c("count", "mean"), "mean", "pct")) |>
         format()
       out[disp_moe] <- ifelse(ref,
                               paste0("ref:x-", reffmt),
@@ -3210,7 +3557,6 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   nas     <- is.na(display)
   color   <- get_color(x)
   color_bg <- get_color_bg(x)                        # Phase 5: the background channel measure
-  type    <- get_type(x)
   #totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   #tottabs <- is_tottab(x)
@@ -3444,201 +3790,14 @@ log_odds_scale <- function(or_scale) {
 fmt_gap_scale_key <- function(x) EST_SCALES[[fmt_scale_key(x)]]$gap_key
 
 
-# === SECTION: the ESTIMATE's scale (Phase 18z17) =================================================
-#
-# `MEASURES` above says what a COLOUR MEASURE is; this says what a COLUMN ESTIMATES. Different
-# question, but the SAME dispatch fmt_gap_scale_key() performs just above, which is why this is one
-# generalisation and not a second fact table (dev/regression_effect_plots.md SS2.3a, SS20).
-#
-# Four consumers were each re-deriving half of it: format() (compound display x type x ci_type
-# predicates), fmt_color_plan() (std_when + fmt_gap_scale_key), the legend (unit_kind), and a plot
-# (which had a private hard-coded ladder). What none of them stated in one place: for THIS column,
-# what is the neutral value, is the scale additive or multiplicative, what unit is its axis in, and
-# which break ladder does the ESTIMATE live on (not the colour measure -- they may differ: a
-# `color = "adjustment"` Model_OR column has odds_ratio gridlines and an adj_ratio colour ladder).
-#
-# EST_SCALES is the declared record library (the REG_CHECKS / REG_EMPIRICAL shape); fmt_scale_key() is
-# the dispatch; fmt_scale_of() resolves the per-column parts (the ladder, SD(Y), the secondary axis).
-#   kind       "effect" (there is a null to draw) | "level" (a percentage / a mean: no null)
-#   neutral    the null value, on the estimate's own scale
-#   trans      the axis transform -- "log10" makes x2 and 1/2 equidistant from 1, which is the whole
-#              reason a ratio forest plot is logarithmic
-#   mult       multiplicative fold (the fmt_color_slots center-1 rule)
-#   is_pct     the estimate renders x100
-#   est_field  the fmt field the estimate lives in -- fmt_center_field() IS this entry
-#   unit       the axis title, as a KEY (translated at render, never here: a top-level gettext()
-#              would freeze the build locale)
-#   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks
-#   gap_key    the adj_* ladder its GAP reads -- fmt_gap_scale_key() IS this column
-#   label_meas which MEASURES row supplies the break glyphs ("or" -> "2" / "1/2", "diff" -> "+5" / "-5")
-#   sec        NULL, or the secondary axis this scale needs to stay readable (SS7.4): whenever the
-#              colour ladder lives on a different scale from the printed estimate, that ladder's scale
-#              becomes the secondary axis.
-# A count column (`type = "n"`, no interval) resolves to level_pct, which is what ci_center() has
-# always answered there; it carries no estimate, so tab_estimates() drops it by ROLE before asking.
-#' @keywords internal
-EST_SCALES <- list(
-  or         = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "or",    unit = "or",
-                    break_key = "odds_ratio", gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
-  pct_ratio  = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "ratio",
-                    break_key = "pct_ratio",  gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
-  mean_ratio = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "rate_ratio",
-                    break_key = "mean_ratio", gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
-  # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder
-  raw_diff   = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units",
-                    break_key = "mean_diff",  gap_key = "adj_diff_std",
-                    label_meas = "diff", sec = "sd", sd_from = "var"),
-  # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
-  # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
-  mean_diff  = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units",
-                    break_key = "mean_diff",  gap_key = "adj_diff",
-                    label_meas = "diff", sec = "sd", sd_from = "ref_var"),
-  # exponentiate = FALSE: printed on the link scale, coloured on the logged odds_ratio ladder
-  log_coef   = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "log",
-                    break_key = "odds_ratio", gap_key = "adj_diff_log",
-                    label_meas = "diff", sec = "exp"),
-  points     = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "diff",  unit = "points",
-                    break_key = "pct_diff",   gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL),
-  # the two LEVEL scales: a cell percentage / a mean. No null to draw (the reference is a per-column
-  # value, filled by the consumer), and no ladder -- the colour ladder of a level column grades its
-  # DIFFERENCE, so putting it on the level axis would be a lie. `gap_key` is "adj_diff" only so that
-  # fmt_gap_scale_key() stays byte-identical on a column no gap measure can actually ride.
-  level_pct  = list(kind = "level",  neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "pct",   unit = "pct",
-                    break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL),
-  level_mean = list(kind = "level",  neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "mean",  unit = "units",
-                    break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL)
-)
-
-# THE dispatch. Its ORDER is the contract, for the reason fmt_gap_scale_key()'s comment above gives:
-# a poisson count AME and a raw poisson coefficient are identical in (type, ci_type, model_family) and
-# only `var` separates them, so the var clause must precede the log-coefficient one, and that one the
-# percentage-point default. The two level clauses come LAST: a column whose stored interval is a
-# difference is an effect column whatever it displays (Obs_% and Obs_diff are field-identical and
-# differ only in `display`, so reading `display` here would make the scale a per-CELL fact).
-#
-# `kind` is the consumer's OVERRIDE, not a second dispatch: "level" jumps to the two last clauses,
-# "effect" skips them (a column with no stored contrast interval still HAS a difference -- it just has
-# no whisker to draw around it). Every caller but forest_plot(what =) leaves it at "auto", where the
-# ladder is the one above, unchanged.
-#
-# It is written on SCALARS so that three callers share it: fmt_scale_key() (a column), and
-# fmt_center_field(), which has only (ci_type, type) and needs no more -- the two clauses it therefore
-# cannot reach, raw_diff and log_coef, both read the same field as the clause it lands on instead.
-#' @keywords internal
-est_scale_key <- function(ci_type, type, has_var = FALSE, logscale = FALSE,
-                          kind = c("auto", "effect", "level"), display = NA_character_) {
-  kind <- match.arg(kind)
-  cit  <- as.character(ci_type)[1]
-  typ  <- as.character(type)[1]
-  if (identical(kind, "level")) return(if (identical(typ, "mean")) "level_mean" else "level_pct")
-  # No stored interval: the only remaining statement about what this column IS is what it DISPLAYS --
-  # a stored field, not a rendered string. Without it, `tab(OR = TRUE)`'s reference column (whose OR
-  # bounds are NA by construction, so ci_type is "") read as a percentage while its siblings read as
-  # odds ratios, and the axis followed the reference. `display` is per-CELL on marginal columns, hence
-  # a single summary value here and never a per-row fact.
-  if (!nzchar(cit) && !is.na(display)) {
-    dk <- switch(display, or = "or", OR = "or", or_pct = "or", OR_pct = "or", ratio = "ratio",
-                 pct = "pct", pct_ci = "pct", mean = "mean", mean_ci = "mean",
-                 diff = "diff", coef = "diff", NA_character_)
-    if (identical(dk, "or"))    return("or")
-    if (identical(dk, "ratio")) return(if (identical(typ, "mean")) "mean_ratio" else "pct_ratio")
-    if (identical(dk, "diff"))  return(if (identical(typ, "mean")) "mean_diff"  else "points")
-    if (identical(dk, "pct"))   return("level_pct")
-    if (identical(dk, "mean"))  return("level_mean")
-  }
-  if (identical(cit, "or"))                                 return("or")
-  if (identical(cit, "ratio"))
-    return(if (identical(typ, "mean")) "mean_ratio" else "pct_ratio")
-  if (identical(typ, "coef") && isTRUE(has_var))            return("raw_diff")
-  if (identical(typ, "coef") && isTRUE(logscale))           return("log_coef")
-  if (cit %in% c("diff", "diff_row", "diff_col") || identical(kind, "effect"))
-    return(if (identical(typ, "mean")) "mean_diff" else "points")
-  if (identical(typ, "mean"))                               return("level_mean")
-  "level_pct"
-}
-
-#' @keywords internal
-fmt_scale_key <- function(x, kind = "auto") {
-  d <- unique(display_primary(get_display(x)))
-  d <- d[!d %in% c("blank", "gof", "pvalue")]
-  est_scale_key(get_ci_type(x), get_type(x), !all(is.na(get_var(x))),
-                reg_fam_logscale(get_model_family(x)), kind,
-                display = if (length(d) == 1L) d else NA_character_)
-}
-
-# WHICH field holds the value the stored interval is centred on -- a property OF THE SCALE, so it is
-# declared once in EST_SCALES and read back through the same dispatch. Two readers: ci_center() (what
-# get_ci() / get_ci_moe() / format() subtract from) and fmt_scale_of().
-#' @keywords internal
-fmt_center_field <- function(ci_type, type) EST_SCALES[[est_scale_key(ci_type, type)]]$est_field
-
-# The whole record for one column: the EST_SCALES row, plus the parts that need the column itself --
-# the estimate field, SD(Y), and the ladder resolved through color_scales() (so a user's
-# set_color_breaks() moves the plot's gridlines exactly as it moves the table's colours).
-# `breaks` are AXIS POSITIONS (both sides, plus the neutral), not the positive magnitudes the colour
-# engine folds; `break_dir` says which side each came from, so the label can pick its glyph.
-#' @keywords internal
-fmt_scale_of <- function(x, kind = "auto") {
-  key <- fmt_scale_key(x, kind)
-  s   <- EST_SCALES[[key]]
-  s$key       <- key
-  s$sd_y      <- NA_real_
-  s$breaks    <- numeric(0)
-  s$break_dir <- integer(0)
-  s$break_mag <- numeric(0)
-  # the SD the standardized ladder divides by, from the same source fmt_color_plan()'s sd_ref block
-  # uses: a regression column's stored var(Y), a crosstab mean's REFERENCE cell variance.
-  if (!is.null(s$sd_from)) {
-    v <- if (identical(s$sd_from, "var")) get_var(x) else get_ref_var(x)
-    v <- v[is.finite(v) & v > 0]
-    s$sd_y <- if (length(v)) sqrt(v[1]) else NA_real_
-  }
-
-  if (!is.na(s$break_key)) {
-    sc <- color_scales(x)[[s$break_key]]
-    if (identical(key, "log_coef") && !is.null(sc)) sc <- log_odds_scale(sc)
-    over  <- if (is.null(sc)) numeric(0) else sc$over$breaks
-    under <- if (is.null(sc)) numeric(0) else sc$under$breaks
-    over  <- over[ is.finite(over) ]
-    under <- under[is.finite(under)]
-    if (!is.null(s$sd_from)) {                        # the ladder is in SD units -> units of Y
-      if (!is.finite(s$sd_y)) { over <- numeric(0); under <- numeric(0) }
-      else { over <- over * s$sd_y; under <- under * s$sd_y }
-    }
-    pos <- if (isTRUE(s$mult)) c(rev(1 / under), s$neutral, over)
-           else                c(rev(-under),    s$neutral, over)
-    s$breaks    <- pos
-    s$break_dir <- c(rep(-1L, length(under)), 0L, rep(1L, length(over)))
-    # the MAGNITUDE each position stands for -- what legend_break_label() takes, since the legend
-    # names a threshold ("1/2", "-5") and not a coordinate. Keeping it here is what lets an axis and
-    # a footer print the same glyph for the same break.
-    s$break_mag <- c(rev(under), 0, over)
-  }
-  if (!is.null(s$sd_from) && !is.finite(s$sd_y)) s$sec <- NULL
-  s
-}
-
-
 #' @keywords internal
 fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = NULL) {
   channel <- match.arg(channel)
   n    <- length(x)
-  type <- get_type(x)
+  # Phase 19b (KEY 2): the column's stored scale row. It replaced is_mean / is_std_diff / is_logcoef /
+  # ci_mult / use_std / has_ci / ci_neutral / the sd_ref source -- seven predicates that each
+  # re-derived, from (type, ci_type, model_family), a fact the column now states.
+  scl  <- fmt_scale_row(x)
   # `channel` selects the SLOT TABLE / palette family (text vs bg spread intensities differently).
   # The MEASURE is the `color` arg when given, else the text-channel measure -- so
   # fmt_get_color_code(type="bg") still renders the text selection in the bg palette (golden), and
@@ -3661,43 +3820,22 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # plan this returns, so it inherits the resolution rather than repeating it.
   policy  <- measure_policy(measure, if (!is.null(signif)) signif else get_color_signif(x), x)
 
-  is_mean <- type %in% c("mean", "n")
-  # Phase 12c: a "coef" column (gaussian regression beta) colours the STANDARDIZED effect beta/SD(Y)
-  # against the mean_diff (Cohen 0.2/0.5/0.8/1.2) breaks -- the additive twin of OR-by-ratio. It uses
-  # the mean_diff scale like a mean-diff, but standardizes by its OWN `var` field (= var(Y), constant),
-  # NOT by get_ref_var() (whose refrow-at-END grouping is meaningless for a regression skeleton).
-  is_std_diff <- is_mean || type == "coef"
-  # Phase g: a NON-gaussian coefficient (exponentiate = FALSE: a log-odds / log-rate / cumulative-logit
-  # coefficient) has no var(Y) to standardize by (it lived on the LINK scale, so SD(Y) is undefined) --
-  # the pre-g code fed sqrt(NA) and greyed every cell out. Instead it colours on the LOG of the
-  # odds_ratio scale (center 0, no SD-division), so a coefficient of log(2) reads the same intensity as
-  # an OR of 2 -- the exponentiate=TRUE twin. Derived from odds_ratio so the two always agree. A
-  # gaussian beta keeps its own SD-standardized mean_diff scale (var(Y) is meaningful there).
-  # Phase 18z3: the family list is reg_fam_logscale() (R/tab_reg.R) -- ONE predicate shared with the
-  # legend's twin gate below, which used to repeat this vector verbatim and be kept in sync by comment.
-  is_logcoef <- type == "coef" && reg_fam_logscale(get_model_family(x))
   # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
   # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
-  # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
+  # kept in sync by hand.
   # Phase 18z4: read through measure_facts(), which folds in a measure's per-policy override (only
   # contrib has one: `guaranteed_effect` swaps the relative contribution for the absolute residual).
   md      <- measure_facts(measure, policy)
-  # the stored interval's SCALE (a scalar column attribute); also the significance neutral below.
-  cit     <- get_ci_type(x)
-  ci_mult <- cit %in% c("or", "ratio")
-  # Phase 18z5: "additive" keys the scale on the ESTIMATE's own scale rather than on the column kind
-  # -- Model_OR and Model_AME are both type "row", so only ci_type separates a multiplicative effect
-  # from an additive one.
-  use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "additive" = !ci_mult,
-                    "na" = TRUE)
+  ci_mult <- isTRUE(scl$mult)          # the stored interval's geometry (neutral 1 vs neutral 0)
   sc      <- color_scales(x)
   # Phase 18z13: the selected scale as a KEY, kept on the plan -- the legend then takes its glyphs
-  # and its unit from the scale actually used (D4) instead of from a static measure field. The two gap
-  # measures dispatch on the ESTIMATE's own scale (D2, fmt_gap_scale_key); `diff` keeps its one runtime
-  # swap (a log-scale coefficient reads the logged OR ladder, so it matches its exponentiated twin).
-  scale_key <- if (identical(md$std_when, "additive")) fmt_gap_scale_key(x)
-               else if (is_logcoef && measure == "diff") "log_odds"
-               else md$scale[[if (use_std) "std" else "pct"]]
+  # and its unit from the scale actually used (D4) instead of from a static measure field.
+  # Phase 19b: WHICH of a measure's three ladders a column reads is the column's declared `ladder`
+  # ("pct" | "std" | "log"), so the three-way choice that used to be `use_std` + an `is_logcoef &&
+  # measure == "diff"` special case is one lookup. The two gap measures still dispatch on the
+  # ESTIMATE's own scale (D2, `scale_from = "gap"`), which is the same idea one level up.
+  scale_key <- if (identical(md$scale_from, "gap")) fmt_gap_scale_key(x)
+               else md$scale[[scl$ladder]]
   scale   <- switch(scale_key,
                     "log_odds"     = log_odds_scale(sc[["odds_ratio"]]),
                     # the gap of a log-scale coefficient is the LOG of the gap of its exponentiated
@@ -3715,10 +3853,13 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # Standardized by SD(Y) when the SCALE says so -- Glass's delta for a numeric `diff`, and (z13) the
   # additive gap of an arbitrary-unit outcome. The gate used to name the measure and re-derive the
   # column kind; `mean_diff` was the only pre-z13 scale with std = TRUE and `diff` the only measure
-  # naming it, with use_std == is_std_diff, so the two dropped conjuncts were implied.
+  # naming it, so the dropped conjuncts were implied.
+  # Phase 19b: WHERE the SD comes from is the scale's declared `sd_from` -- a regression column's
+  # stored var(Y), a crosstab cell's REFERENCE variance -- which is the same entry fmt_scale_of()
+  # reads for the plot's SD axis, so the table and the plot cannot standardize by different numbers.
   sd_ref <- NULL
   if (isTRUE(scale$std)) {
-    sd_ref      <- if (type == "coef") sqrt(get_var(x)) else sqrt(get_ref_var(x))
+    sd_ref      <- if (identical(scl$sd_from, "var")) sqrt(get_var(x)) else sqrt(get_ref_var(x))
     raw         <- raw / sd_ref
     raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
   }
@@ -3736,15 +3877,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # score's own scale and sign -- so this block, the floor block below and the direction match in
   # `grey_non_signif` all keep working with no measure-specific branch.
   bd          <- md$bounds(x)
-  # Phase 19a (D18): "diff_row"/"diff_col" are GONE from this set. They belong to the `ci` ARGUMENT's
-  # vocabulary, not to the stored `ci_type` attribute -- tab_ci() strips the "_row"/"_col" suffix
-  # immediately before the only dynamic set_ci_type() write, and every other ci_type write in the
-  # package is a literal ("", "diff", "or", "ratio", "cell"). So both arms were dead in a live
-  # predicate, and their presence made the reader doubt the one absence that IS deliberate:
-  # WARNING: "cell" is excluded ON PURPOSE. A one-proportion interval is centred on the cell itself
-  # and has no reference null, so there is nothing for the significance gate to test it against.
-  has_ci      <- cit %in% c("diff", "or", "ratio")
-  ci_neutral  <- if (ci_mult) 1 else 0
+  # Phase 19b: "does this column carry an interval the significance gate can test" IS the scale's
+  # declared `kind`. An "effect" scale has a null value to test against; a "level" one does not --
+  # which is where `ci = "cell"`'s deliberate exclusion now lives, as a property of the scale rather
+  # than as a value silently missing from a five-element vector.
+  # WARNING: a one-proportion cell interval is centred on the cell itself and has NO reference null,
+  # so it must never reach this gate -- that is exactly what `kind == "level"` says.
+  has_ci      <- identical(scl$kind, "effect")
+  ci_neutral  <- if (is.na(scl$neutral)) 0 else scl$neutral
   sig_pos <- has_ci & bd$lo > ci_neutral
   sig_neg <- has_ci & bd$hi < ci_neutral
   sig_pos[is.na(sig_pos)] <- FALSE
@@ -3791,7 +3931,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
       nt_to + (pt_to - nt_to) * (q - nt_from) / (pt_from - nt_from)
     # The scrub stays scoped to the conversions (a 0/0 there gives NaN); leaving it off the
     # unconverted measures is what keeps every existing colour byte-identical.
-    ci_is_ratio <- identical(cit, "ratio")
+    ci_is_ratio <- identical(scl$est_field, "ratio")
     if (measure == "ratio" && !ci_is_ratio) {          # diff bound -> ratio bound
       floor_q <- rescale_bound(floor_q, get_diff(x),  0, get_ratio(x), 1)
       floor_q[!is.finite(floor_q)] <- NA_real_
@@ -4042,9 +4182,14 @@ fmt_face_semantic <- function(theme = "light") {
 #                      being already relative to it (or/contrib/reg effect).
 # Engine fields (Phase 17d, read by fmt_color_plan):
 #   raw                a getter closure(x) -> the observed per-cell quantity that is scored + coloured.
-#   scale              named c(std=, pct=) of color_scales() keys; `std_when` picks which (see below).
-#   std_when           which column kinds take the `std` scale key: "std_diff" (is_mean || coef, factor
-#                      pct otherwise) | "mean" (is_mean) | "na" (both keys equal -> selector inert).
+#   scale              named c(pct=, std=, log=) of color_scales() keys, ONE PER LADDER. The COLUMN
+#                      says which of the three it reads (EST_SCALES$ladder), so a measure declares
+#                      its ladders and never asks what kind of column it is on. (Phase 19b: this
+#                      replaced `std_when`, a selector whose four values re-derived `is_mean` /
+#                      `is_std_diff` / `is_logcoef` from `type` inside the plan.)
+#   scale_from         (optional) "gap": this measure scores a GAP, so its ladder comes from the
+#                      ESTIMATE's own scale (fmt_gap_scale_key), not from `scale` -- the same idea
+#                      one level up. Absent = read `scale`.
 #   sig_source         where significance comes from: "bounds" (an interval, read through `bounds`) |
 #                      "pvalue" (contrib -- no interval, reads the stored standardized-residual p-value).
 #   bounds             (optional, Phase 18z8) closure(x) -> list(lo, hi), THE interval the two
@@ -4081,24 +4226,27 @@ MEASURES <- list(
   diff    = list(word = "difference",           word_i18n = TRUE,  break_over = "+",       break_under = "-",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
                  has_ref_lead = TRUE,
-                 raw = function(x) get_diff(x),  scale = c(std = "mean_diff",  pct = "pct_diff"),
-                 std_when = "std_diff", sig_source = "bounds", gate_row = "refrow"),
+                 raw = function(x) get_diff(x),
+                 scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
+                 sig_source = "bounds", gate_row = "refrow"),
   ratio   = list(word = "ratio",                word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
-                 raw = function(x) get_ratio(x), scale = c(std = "mean_ratio", pct = "pct_ratio"),
-                 std_when = "mean",     sig_source = "bounds", gate_row = "refrow"),
+                 raw = function(x) get_ratio(x),
+                 scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
+                 sig_source = "bounds", gate_row = "refrow"),
   or      = list(word = "OR",                   word_i18n = FALSE, break_over = "",        break_under = "1/",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = FALSE,
-                 raw = function(x) get_or(x),    scale = c(std = "odds_ratio", pct = "odds_ratio"),
-                 std_when = "na",       sig_source = "bounds", gate_row = "refrow"),
+                 raw = function(x) get_or(x),
+                 scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
+                 sig_source = "bounds", gate_row = "refrow"),
   contrib = list(word = "contribution to Chi2", word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_times,
                  break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
                  has_ref_lead = FALSE,
                  raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
-                 scale = c(std = "contrib", pct = "contrib"),
-                 std_when = "na",       sig_source = "pvalue", gate_row = "totrow",
+                 scale = c(pct = "contrib", std = "contrib", log = "contrib"),
+                 sig_source = "pvalue", gate_row = "totrow",
                  # Phase 18z4: contrib is the ONE measure whose reading changes with the significance
                  # policy, so the divergence is a FIELD (an override applied by measure_facts()), never a
                  # switch arm. `ignore` / `grey_non_signif` colour the RELATIVE contribution (a share of
@@ -4110,13 +4258,13 @@ MEASURES <- list(
                  # threshold form it used to repeat by hand follow from the scale it swaps to, and now
                  # come from `by_scale$zscore` -- one override mechanism, keyed on the scale.
                  guar = list(word = "standardized residual", break_origin = "threshold",
-                             scale = c(std = "zscore", pct = "zscore")),
+                             scale = c(pct = "zscore", std = "zscore", log = "zscore")),
                  by_scale = list(zscore = list(break_over = "+", break_under = "-",
                                                threshold_mult = FALSE, unit_kind = "none"))),
   # Phase 18z5 -- the two tab_reg-only measures. They score the SAME quantity through the SAME
   # helper (how far the model estimate sits from the value stored in `obs`) and differ ONLY in what
-  # that value is, hence in the reference the legend names. `std_when = "additive"` selects the scale
-  # from the estimate's own scale rather than from the column kind: an OR / RR / IRR is folded around
+  # that value is, hence in the reference the legend names. `scale_from = "gap"` takes the ladder from
+  # the ESTIMATE's own scale rather than from the column kind: an OR / RR / IRR is folded around
   # 1 on `adj_ratio`, a beta / AME / risk-difference around 0 on `adj_diff`.
   # Both derive their interval from the stored `gap_se` (Phase 18z8), so both read `color_signif`
   # normally -- WHERE tab_reg could write one. Where it could not, `force_policy` (now a predicate on
@@ -4131,15 +4279,15 @@ MEASURES <- list(
   adjustment     = list(word = "adjustment",    word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
-                 raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
-                 std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
+                 raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
+                 sig_source = "bounds", bounds = fmt_gap_bounds,
                  gate_row = "refrow", force_policy = fmt_gap_force_policy,
                  by_scale = GAP_ADDITIVE_FACTS),
   between_groups = list(word = "between groups", word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
-                 raw = function(x) fmt_adjustment_score(x), scale = c(std = "adj_diff", pct = "adj_ratio"),
-                 std_when = "additive", sig_source = "bounds", bounds = fmt_gap_bounds,
+                 raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
+                 sig_source = "bounds", bounds = fmt_gap_bounds,
                  gate_row = "refrow", force_policy = fmt_gap_force_policy,
                  by_scale = GAP_ADDITIVE_FACTS)
 )
@@ -4401,13 +4549,13 @@ legend_reg_eff_word <- function(col, meta) {
   #     fitted (a logistic fit still yields a marginal RR), so it wins over the family switch; it also
   #     covers the crude Obs_RR companion, which carries the model's family attribute.
   # (b) family "rr" -- the modified Poisson, whose exp(coef) is a risk ratio by construction.
-  if (identical(get_ci_type(col), "or")) {
+  if (identical(get_scale(col), "odds_ratio")) {
     if (identical(meta$effect, "ame_ratio")) return("RR")
     return(switch(fam, "poisson" = , "quasipoisson" = "IRR", "rr" = "RR", "OR"))
   }
   if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
     if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
-    if (identical(get_type(col), "coef")) return(.lg_beta)   # gaussian beta
+    if (identical(fmt_var_kind(col), "coef")) return(.lg_beta)   # gaussian beta
   }
   NA_character_
 }
@@ -4484,66 +4632,83 @@ legend_ref_phrase <- function(spec, lang) {
 # the CI-method name (NA when there is none, e.g. contrib). Phase 18z8: `measure` defaults to the
 # text channel's but is passed explicitly per channel by legend_resolve_spec -- a gap measure on the
 # background names ITS OWN test, not the text channel's model interval.
+# THE interval-method labels (Phase 19b): one row per engine the package can run, keyed on the
+# `ci_method` attribute the producer stamps. Each entry is a FUNCTION so gettext() runs at render --
+# a top-level gettext() would freeze the build locale (the REG_CHECKS rule).
+# WARNING: the keys are the values the producers write (tab_ci(), the two leaves, reg_column(),
+# emp_col() through REG_EMPIRICAL) -- adding an engine means adding a row here, and a missing row
+# degrades to the generic phrase rather than naming the wrong method.
+#' @keywords internal
+CI_METHOD_LABELS <- list(
+  wilson       = function() gettext("Wilson score interval"),
+  wald         = function() gettext("Wald interval"),
+  beta         = function() gettext("Korn-Graubard (beta) interval"),
+  newcombe     = function() gettext("Newcombe score interval"),
+  ac           = function() gettext("Wald interval with Agresti-Caffo adjustment"),
+  welch        = function() gettext("Welch t interval"),
+  student      = function() gettext("Student t interval"),
+  # katz is handled in legend_method_name() too: on counts it is a RATE ratio. This row is the
+  # proportion default, kept so a lookup never falls through to the generic phrase.
+  katz         = function() gettext("Katz interval on the log risk-ratio"),
+  woolf        = function() gettext("Wald interval on the log odds-ratio"),
+  robust       = function() gettext("robust-Poisson (delta) interval"),
+  quasipoisson = function() gettext("quasi-Poisson interval"),
+  poisson      = function() gettext("Poisson interval"),
+  profile      = function() gettext("profile-likelihood interval")
+  # `wald_log` is handled in legend_method_name(): its label needs the effect word.
+)
+# Phase 18w: potools extracts translatable strings by STATIC analysis, and the labels above are
+# reached through a dynamic lookup. This dead-code anchor lists them so they land in the .pot; it is
+# never executed. Keep in sync with CI_METHOD_LABELS.
+if (FALSE) c(gettext("Wilson score interval"), gettext("Wald interval"),
+             gettext("Korn-Graubard (beta) interval"), gettext("Newcombe score interval"),
+             gettext("Wald interval with Agresti-Caffo adjustment"), gettext("Welch t interval"),
+             gettext("Student t interval"), gettext("Katz interval on the log risk-ratio"),
+             gettext("Wald interval on the log odds-ratio"),
+             gettext("robust-Poisson (delta) interval"), gettext("quasi-Poisson interval"),
+             gettext("Poisson interval"), gettext("profile-likelihood interval"),
+             gettext("Katz interval on the log rate-ratio"))
+
 legend_method_name <- function(spec, measure = spec$measure_text) {
-  cis <- spec$ci_settings
   # Phase 18z5 / z8: these measures score a GAP between two estimates, so the model's own Wald
-  # interval (which the is_reg branch below would claim) is never the right name -- each has a test of
-  # its own, and they are DIFFERENT tests. `between_groups` compares two DISJOINT subpopulations, so
-  # the two estimates are independent and quadrature is exact; `adjustment` compares two estimates
-  # fitted on the SAME rows, so its variance is the difference of their influence functions, which is
-  # the only quantity carrying the covariance between them (R/reg-influence.R).
+  # interval is never the right name -- each has a test of its own, and they are DIFFERENT tests.
+  # `between_groups` compares two DISJOINT subpopulations, so the two estimates are independent and
+  # quadrature is exact; `adjustment` compares two estimates fitted on the SAME rows, so its variance
+  # is the difference of their influence functions, which is the only quantity carrying the
+  # covariance between them (R/reg-influence.R). Neither is the column's own stored interval.
   if (identical(measure, "between_groups"))
     return(gettext("z test on the difference between two independent estimates"))
   if (identical(measure, "adjustment"))
     return(gettext("z test on the difference between two estimates fitted on the same sample"))
-  if (isTRUE(spec$is_reg)) {
-    if (identical(ci_method_of(cis, "diff"), "profile"))
-      return(gettext("profile-likelihood interval"))
-    # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
-    # ratio and the cumulative OR -- naming it "log odds-ratio" unconditionally called a Poisson IRR an
-    # odds ratio. The effect word (the column-name suffix the package itself writes) is the scale.
-    if (identical(spec$ci_type, "or")) {
-      w <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
-      return(switch(w,
-                    "IRR" = gettext("Wald interval on the log rate-ratio"),
-                    "OR"  = gettext("Wald interval on the log odds-ratio"),
-                    "RR"  = gettext("Wald interval on the log risk-ratio"),
-                    gettext("Wald interval on the log scale")))
-    }
-    return(gettext("Wald interval"))
+  if (identical(measure, "contrib")) return(NA_character_)   # no interval at all
+  # Phase 19b (D8): the column NAMES ITS OWN engine. This was an eight-branch chain that re-derived
+  # (is_reg, ci_type, is_mean, measure) to pick a slot out of a table-wide `ci_settings` vector --
+  # i.e. an est_scale_key() dispatch written a second time, in a third vocabulary, and one that could
+  # claim a method the bounds were never built with. Now: one lookup in a declared table.
+  m <- spec$ci_method
+  if (is.null(m) || is.na(m) || !nzchar(m)) return(NA_character_)
+  # Two labels need a second fact: an OR, an IRR and an RR are the same interval on the same log
+  # scale, and only the effect WORD tells them apart (14c: naming it "log odds-ratio" unconditionally
+  # called a Poisson rate ratio an odds ratio). `woolf` needs none -- a 2x2 log-OR is an odds ratio by
+  # construction -- and neither does any additive method.
+  if (m %in% c("wald_log", "katz")) {
+    w <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
+    if (identical(m, "katz"))
+      return(switch(w, "IRR" = gettext("Katz interval on the log rate-ratio"),
+                    gettext("Katz interval on the log risk-ratio")))
+    return(switch(w,
+                  "IRR" = gettext("Wald interval on the log rate-ratio"),
+                  "OR"  = gettext("Wald interval on the log odds-ratio"),
+                  "RR"  = gettext("Wald interval on the log risk-ratio"),
+                  gettext("Wald interval on the log scale")))
   }
-  if (identical(measure, "or")) return(gettext("Wald interval on the log odds-ratio"))
-  if (identical(measure, "contrib")) return(NA_character_)
-  # 14v-ii: a mean names the method actually used, from ci_settings. A ratio-of-means (ci_type "ratio")
-  # is one of the dispersion-ladder intervals (robust / quasi / naive Poisson); a mean difference is
-  # Welch or pooled Student (the `mean_diff` slot).
-  if (isTRUE(spec$is_mean)) {
-    if (identical(spec$ci_type, "ratio")) {
-      return(switch(ci_method_of(cis, "mean_ratio"),
-                    "robust"       = gettext("robust-Poisson (delta) interval"),
-                    "quasipoisson" = gettext("quasi-Poisson interval"),
-                    "poisson"      = gettext("Poisson interval"),
-                    gettext("confidence interval")))
-    }
-    return(switch(ci_method_of(cis, "mean_diff"),
-                  "welch"   = gettext("Welch t interval"),
-                  "student" = gettext("Student t interval"),
-                  gettext("confidence interval")))
-  }
-  # Phase 14b: the STORED interval names itself. A ratio-coloured proportion column carries the Katz
-  # log-RR bounds, not one of the `diff` difference approximations the switch below names --
-  # and the legend must not claim a method the bracket was never built with.
-  if (identical(spec$ci_type, "ratio")) return(gettext("Katz interval on the log risk-ratio"))
-  switch(ci_method_of(cis, "diff"),
-         "newcombe" = gettext("Newcombe score interval"),
-         "ac"       = gettext("Wald interval with Agresti-Caffo adjustment"),
-         "wald"     = gettext("Wald interval"),
-         gettext("confidence interval"))
+  lab <- CI_METHOD_LABELS[[m]]
+  if (is.null(lab)) gettext("confidence interval") else lab()
 }
 
 # "<method>, 95% confidence" (or just the confidence text when there is no method name).
 legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
-  conf <- gettextf("%s%% confidence", legend_num(spec$ci_settings$conf_level * 100, lang))
+  conf <- gettextf("%s%% confidence", legend_num(spec$conf_level * 100, lang))
   m    <- legend_method_name(spec, measure)
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
@@ -4953,7 +5118,6 @@ legend_specs <- function(x, theme = "light") {
 
   meta   <- get_reg_meta(x)
   is_reg <- !is.null(meta)                            # Phase 14w: robust, survives footer materialisation
-  cis    <- get_ci_settings(x); if (is.null(cis)) cis <- default_ci_settings()
   shades <- legend_shade_names(theme)
   # Phase 16d: the mean_diff scale in force (pushed per render). Its `std` flag decides whether a numeric
   # mean / regression-coef diff is sd-standardized (SD units) or raw (custom breaks -> std FALSE). This
@@ -4985,31 +5149,36 @@ legend_specs <- function(x, theme = "light") {
     plan_txt <- pl$text
     plan_bg  <- pl$bg
     if (is.null(plan_txt) && is.null(plan_bg)) return(NULL)
-    type     <- get_type(col)
-    is_coef  <- identical(type, "coef")
-    is_mean  <- type %in% c("mean", "n")
+    # Phase 19b: the column's stored scale row answers all of these. They used to be six private
+    # re-derivations from `type` + `model_family` -- the same facts fmt_color_plan() derived on its
+    # own side, which is how `is_std` came to describe a DIFFERENT ladder from the one the cells were
+    # coloured on (it read `mean_diff`'s std flag whatever scale the plan had selected).
+    scl      <- fmt_scale_row(col)
+    is_coef  <- identical(scl$var_kind, "coef")
+    is_mean  <- scl$var_kind %in% c("mean", "count")
     # Phase 16d: three diff "kinds" -- factor pct (x100, "points"), numeric/coef STANDARDIZED (SD) and
     # numeric/coef RAW (custom mean_diff breaks: as-is, no unit). is_pct drives the x100; is_std drives
     # the "SD"/"standardized" wording. Reading mean_diff_std keeps the legend and the cells consistent.
-    is_num   <- is_mean || is_coef
-    is_pct   <- !is_num
-    # Phase g: a NON-gaussian coefficient (exponentiate = FALSE) colours on the LOGGED odds_ratio scale
-    # (log_odds_scale), NOT the SD-standardized mean_diff -- so its legend must NOT say "SD" (the breaks
-    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Phase 18z3:
-    # this and fmt_color_plan's gate now SHARE reg_fam_logscale() -- they cannot drift apart any more.
-    is_logcoef <- is_coef && reg_fam_logscale(get_model_family(col))
-    is_std   <- is_num && mean_diff_std && !is_logcoef
+    is_pct   <- identical(scl$ladder, "pct")
+    # Phase g: a NON-gaussian coefficient (measure = "log") colours on the LOGGED odds_ratio scale,
+    # NOT the SD-standardized mean_diff -- so its legend must NOT say "SD" (the breaks are
+    # log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). That whole
+    # three-way distinction IS `ladder`, which is why one lookup replaces three predicates here.
+    is_std   <- identical(scl$ladder, "std") && mean_diff_std
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
-    orient   <- if (identical(type, "col")) "col" else "row"
+    orient   <- if (identical(get_pct_base(col), "col")) "col" else "row"
     eff_word <- if (isTRUE(is_reg)) legend_reg_eff_word(col, meta) else NA_character_
     # Phase 17c: the emp/model split reads the column's STORED `role` attr (written by the reg builders),
     # not the "Emp." name prefix. Fall back to "model" if an old/hand-built reg column lacks it.
     role     <- if (isTRUE(is_reg)) { r <- get_role(col); if (nzchar(r)) r else "model" } else "model"
     ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg,
                                 policy = policy)
-    ci_type  <- get_ci_type(col)
+    scale_key <- get_scale(col)
+    # Phase 19b: how THIS column's interval was computed -- both facts per column now.
+    ci_method <- get_ci_method(col)
+    conf_lvl  <- get_conf_level(col)
     # Phase 18z13 (D8): does this column carry a test on SOME rows only? A gap measure's SE is
     # missing wherever it could not be computed -- a group with an empty cell yields an infinite log
     # interval, a profile bracket is not est +/- crit*se -- and those rows then render exactly like a
@@ -5026,8 +5195,9 @@ legend_specs <- function(x, theme = "light") {
          partial_test = partial_test, no_obs = no_obs,
          measure_text = m_txt, measure_bg = m_bg,
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
-         policy = policy, orientation = orient, ci_type = ci_type,
-         is_reg = is_reg, eff_word = eff_word, role = role, ci_settings = cis, shades = shades,
+         policy = policy, orientation = orient, scale = scale_key,
+         ci_method = ci_method, conf_level = conf_lvl,
+         is_reg = is_reg, eff_word = eff_word, role = role, shades = shades,
          theme = theme,
          model_family = get_model_family(col),        # Phase 18z5: the collapsibility caveat below
          ref = ref)
@@ -5428,7 +5598,12 @@ tab_weight_line <- function(x, lang = NULL) {
 
 #' @keywords internal
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
-  type        <- get_type(x)
+  # Phase 19b: `pct_base` says which AXIS this column's reference lies on (a row percentage and a
+  # regression coefficient both compare against a reference ROW; a column percentage against a
+  # reference COLUMN), and `var_kind` says what the column summarises. Together they are the old
+  # 8-value `type`, split into the two questions this function was really asking of it.
+  base        <- get_pct_base(x)
+  vkind       <- fmt_var_kind(x)
   ref   <- get_ref_type(x)
   comp_all    <- get_comp_all(x)
   totcol      <- is_totcol(x)
@@ -5443,16 +5618,19 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
   n      <- length(x)
   none   <- logical(n)                   # == rep(FALSE, length(x))
-  is_rm  <- type %in% c("row", "mean")   # scalar: row/mean share the reference logic
+  is_rm  <- base == "row" | vkind == "mean"  # scalar: row%/mean share the reference logic (a ROW)
+  is_col <- base == "col"
+  is_all <- base == "all"
+  is_all_tabs <- base == "all_tabs"
   comp_t <- isTRUE(comp_all)             # NA-safe scalar branch selectors: comp_all may be NA,
   comp_f <- isFALSE(comp_all)            #   then neither arm fires -> `none` (as the old case_when)
   m      <- mode[1]
 
   # DESIGN (Phase 10c): the former 3 x switch(mode) x dplyr::case_when collapsed to base boolean
-  # composition. Every branch selector (type/comp_all/ref/color/totcol/refcol) is a SCALAR column
+  # composition. Every branch selector (pct_base/var_kind/comp_all/ref/color/totcol/refcol) is a SCALAR column
   # attribute, so each case_when really selected ONE arm; the arms are pure per-cell boolean of the
   # subsettable field masks (totrows/refrows/tottab_*). Byte-identical to the case_when output (incl.
-  # the comp_all==NA "fall through to all-FALSE" and the mode/type default arms), with no per-arm
+  # the comp_all==NA "fall through to all-FALSE" and the mode/scale default arms), with no per-arm
   # rep(FALSE)/DataMask allocation. Equivalence relied on by format()'s .ref memoization:
   # get_reference(x[mask], mode) == get_reference(x, mode)[mask].
   if (color %in% c("OR", "or")) {
@@ -5460,14 +5638,14 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
            "cells" = ,                                      # cells and lines identical for OR
            "lines" = if      (is_rm && comp_f) refrows
                      else if (is_rm && comp_t) tottab_ref
-                     else if (type == "col")   rep(refcol, n)
+                     else if (is_col)          rep(refcol, n)
                      else                      none,
            "all_totals" = if      (is_rm && ref == "tot" && comp_f) totrows | refcol
                           else if (is_rm && ref == "tot" && comp_t) tottab_line | refcol
-                          else if (type == "col" && ref == "tot")   totrows | refcol
+                          else if (is_col && ref == "tot")          totrows | refcol
                           else if (is_rm && comp_f)                 refrows | refcol
                           else if (is_rm && comp_t)                 tottab_ref | refcol
-                          else if (type == "col")                   refrows | refcol
+                          else if (is_col)                          refrows | refcol
                           else                                      none
     )
 
@@ -5475,18 +5653,18 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
     switch(m,
            "cells" = if      (is_rm && comp_f)    totrows & !totcol
                      else if (is_rm && comp_t)    tottab_line & !totcol
-                     else if (type == "col")      totcol & !totrows
-                     else if (type == "all")      totrows & totcol
-                     else if (type == "all_tabs") tottab_line & totcol
+                     else if (is_col)             totcol & !totrows
+                     else if (is_all)             totrows & totcol
+                     else if (is_all_tabs)        tottab_line & totcol
                      else                         none,
            "lines" = if      (is_rm && comp_f)    totrows
                      else if (is_rm && comp_t)    tottab_line
-                     else if (type == "col")      rep(totcol, n)
-                     else if (type == "all")      totrows & totcol
-                     else if (type == "all_tabs") tottab_line & totcol
+                     else if (is_col)             rep(totcol, n)
+                     else if (is_all)             totrows & totcol
+                     else if (is_all_tabs)        tottab_line & totcol
                      else                         none,
-           "all_totals" = if (type %in% c("n", "col", "all") || (is_rm && comp_f)) totrows | totcol
-                          else if (type == "all_tabs" || (is_rm && comp_t))        tottab_line | totcol
+           "all_totals" = if (vkind == "count" || is_col || is_all || (is_rm && comp_f)) totrows | totcol
+                          else if (is_all_tabs || (is_rm && comp_t))                    tottab_line | totcol
                           else                                                     none
     )
 
@@ -5502,15 +5680,15 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
     switch(m,
            "cells" = if      (is_rm && comp_f) refrows & !totcol
                      else if (is_rm && comp_t) tottab_ref & !totcol
-                     else if (type == "col")   refcol & !totrows
+                     else if (is_col)          refcol & !totrows
                      else                      none,
            "lines" = if      (is_rm && comp_f) refrows
                      else if (is_rm && comp_t) tottab_ref
-                     else if (type == "col")   rep(refcol, n)
+                     else if (is_col)          rep(refcol, n)
                      else                      none,
            "all_totals" = if      (is_rm && comp_f) refrows | totcol
                           else if (is_rm && comp_t) tottab_ref | totcol
-                          else if (type == "col")   totrows | refcol
+                          else if (is_col)          totrows | refcol
                           else                      none
     )
   }
@@ -5546,10 +5724,16 @@ fmt_ptype_label <- function(x, prefix, pct_pvalue_collapse) {
   display <- display_primary(get_display(x)) |> unique()
   if (pct_pvalue_collapse && identical(sort(display), c("pct", "pvalue"))) display <- "pct"
   display <- ifelse(length(display) > 1, "mixed", display)
-  type    <- get_type(x)
-  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
-  ci <- get_ci_type(x)
-  if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
+  type    <- fmt_kind_label(x)
+  # Phase 19b: the interval's KIND, for this label only -- a level scale with stored bounds is a
+  # "cell" interval, an effect scale's additive one a "diff". Both are rendered LABELS here, not
+  # facts: the fact is the column's scale.
+  if (display == "ci" && fmt_has_interval(x)) {
+    scl <- fmt_scale_row(x)
+    ci  <- if (identical(scl$kind, "level")) "cell"
+           else if (scl$geometry %in% c("difference", "log")) "diff" else ""
+    if (nzchar(ci)) display <- paste0("ci_", ci)
+  }
 
   pat_anchor <- if (nzchar(prefix)) "-" else "^"   # boundary before a doubled "<t>-<t>"
   rep_anchor <- if (nzchar(prefix)) "-" else ""
@@ -5785,9 +5969,11 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
   ax    <- fmt_attrs_of(x)
   ay    <- fmt_attrs_of(y)
   attrs <- fmt_attrs_arith(ax, ay)
-  type_x       <- ax[["type"]]
   col_var_x    <- ax[["col_var"]]
-  same_type    <- type_x    == ay[["type"]]
+  # Phase 19b: the warning is about mixing percentage BASES, or a percentage with a mean -- i.e. the
+  # kind label, not the estimate scale. Adding a row% column to its own difference column is a
+  # legitimate operation and must stay silent, exactly as it was.
+  same_type    <- fmt_kind_label(x) == fmt_kind_label(y)
   same_col_var <- col_var_x == ay[["col_var"]]
   same_comp    <- ax[["comp_all"]] == ay[["comp_all"]] |
     (is.na(ax[["comp_all"]]) & is.na(ay[["comp_all"]]))
@@ -5797,7 +5983,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
   if (!same_type) warning("operation ", op,
                           " over columns with different pct types, ",
                           "or mixing pct and means (",
-                          type_x, "/", ay[["type"]], ")")
+                          fmt_kind_label(x), "/", fmt_kind_label(y), ")")
   # isFALSE, not `!`: `same_comp` is THREE-valued (comp_all is NA on a count column, so a count + a
   # pct gives NA) and a bare `if (!NA)` ERRORS -- adding a count column to a percentage one aborted
   # instead of warning. The reconcile itself has always been NA-safe (rule "comp3").
@@ -5815,7 +6001,9 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       display = get_display(x),      #dplyr::if_else(get_display(x) == get_display(x)), true = get_display(x), false = "n),
       n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #|> positive_integer(),
       wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #|> positive_double(),
-      pct     = if (same_type & !type_x %in% c("col", "mean", "n") ) {
+      # a sum of two ROW percentages is a percentage of the same base; a sum of two column / mean /
+      # count columns is not (Phase 19b: `pct_base` is the fact that was being read out of `type`).
+      pct     = if (same_type & ax[["pct_base"]] %in% c("row", "all", "all_tabs")) {
         tidyr::replace_na(vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), NA_real_)
       } else {
         rep_NA_real
@@ -5916,10 +6104,11 @@ vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - opera
 vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   # Phase 19a / E1: ONE vector in, one out -- so there is nothing to reconcile and every per-column
   # attribute is carried whole from `.x`, spliced by name into both arms (they used to repeat the
-  # 14-attribute list). `type` is read off the same list, not through a second getter call.
+  # 14-attribute list). The scale is read off the same list, not through a second getter call.
   am   <- fmt_attrs_of(.x)
-  type <- am[["type"]]
-  if (!is.na(type) && type == "mixed") warning(
+  scl  <- am[["scale"]]
+  base <- am[["pct_base"]]
+  if (!is.na(scl) && scl == "mixed") warning(
     "operation ", .fn,
     " within a variable mixing different types of percentages"
   )
@@ -5929,7 +6118,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          digits = min(get_digits(.x)),
                          n      = vctrs::vec_math_base(.fn, get_n(.x)  , ...),
                          wn     = vctrs::vec_math_base(.fn, get_wn(.x) , ...),
-                         pct    = ifelse(! type %in% c("row", "col"),
+                         pct    = ifelse(! base %in% c("row", "col"),
                                          yes = vctrs::vec_math_base(.fn, get_pct(.x), ...),
                                          no  = NA_real_) |>
                            tidyr::replace_na(NA_real_),

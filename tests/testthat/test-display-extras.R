@@ -35,7 +35,7 @@ testthat::test_that("tab_materialize_extras('xl') re-creates the add_n `n` colum
   t   <- tab(gss, marital, race, pct = "row", add_n = TRUE)
   hyd <- tabxplor:::tab_materialize_extras(t, backend = "xl", pvalue = FALSE)
   testthat::expect_true("n" %in% names(hyd))
-  testthat::expect_identical(get_type(hyd$n), "n")
+  testthat::expect_identical(tabxplor:::fmt_var_kind(hyd$n), "count")
   testthat::expect_equal(get_n(hyd$n), get_n(t$Total))          # the base counts of the Total column
 })
 

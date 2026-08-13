@@ -69,12 +69,11 @@ color_golden_syn_diff_fmt <- function() {
   # resolves to a real base without erroring.
   fmt(
     n         = c(n, 200L),
-    type      = "row",
+    scale = "level_pct", pct_base = "row",
     pct       = c(pct, 0.40),
     diff      = c(diff, 0),
     mean      = c(ratio, 1),   # legacy x2 overload (current engine reads get_mean)
-    ratio     = c(ratio, 1),   # Phase-5 engine reads get_ratio for the x2
-    ci_type   = "",
+    ratio     = c(ratio, 1),   # Phase-5 engine reads get_ratio for the x2,
     ref       = "tot",
     comp_all  = FALSE,
     color     = "diff",

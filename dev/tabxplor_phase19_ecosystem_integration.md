@@ -67,7 +67,7 @@ Phase 19 is **not a feature phase**. It exists to make the package's own model e
    is exactly what it claims (`dev/verify_golden_field_delta.R`, which learns one new mode per new
    kind of delta).
 9. **End-of-phase documentation discipline** (CLAUDE.md § The last step of every implementation):
-   file-header docstrings, `# DESIGN:` / `# WARNING:` tags, the CLAUDE.md phase "DONE" summary,
+   file-header docstrings, `# DESIGN:` / `# WARNING:` tags, the CLAUDE.md phase "DONE" summary (do **NOT** write it in the current file, but only in CLAUDE.md),
    `dev/tabxplor_architecture.md` when structure changes *only*.
 
 ### What must survive, unchanged in spirit
@@ -146,7 +146,7 @@ plan was written (marked ★).
 | ★ **`spread`**                                                                 | one implementation, `tab_spread()` keeps its name and absorbs `reg_spread_models()`; **one argument name on both producers**                   |
 | ★ **KEY 5**                                                                    | **in Phase 19**, sequenced late, after KEY 1, gated on the jamovi cold+warm+reref lock                                                         |
 | ★ **release**                                                                  | **all of Phase 19 lands before the 2.0.0 CRAN release** — one set of shims, introduced once                                                    |
-| KEY 7 entry points                                                             | (b): `tab_many()` becomes a one-line deprecated shim;        |
+| KEY 7 entry points                                                             | (b): `tab_many()` becomes a one-line deprecated shim;                                                                                          |
 | `.fit_cache` / reref                                                           | (a) keep as is — 450 lines and the 11-conjunct predicate stay; do not "improve" it in this phase                                               |
 | jamovi boundary                                                                | (b) a shared resolver both boundaries call + a **generated** table for the JS eligibility rules                                                |
 | `exponentiate`                                                                 | **deleted** → `measure = "log"`, old name kept as a documented synonym                                                                         |
@@ -416,7 +416,6 @@ no redesign, and delete everything with zero readers — so the design phases wo
 
 **Verification**: targeted + the fixtures for D16/D27. **Zero golden churn** — everything here is
 byte-identical except the two defect fixtures.
-
 
 
 ---
@@ -1056,8 +1055,8 @@ so passing it explicitly is hygiene); D24 was checked and **not** confirmed.
 | D16 (bind_rows drops attrs)    | **19a** | D20 (`OR` + `ci="cell"`)    | 19d   |
 | D27 (`ref2 = "last"`)          | **19a** | D21 (mismatched interval)   | 19d   |
 | D5, D7, D14, D15, D18, "D3"    | 19a     | D22 (`{or}` prints `pct`)   | 19d   |
-| D8 (legend method name)        | 19b     | D23 (display ≠ interval)    | 19d   |
-| D17, D19                       | 19b     | D26 (stars vs color_signif) | 19d   |
+| D8 (legend method name)        | **19b** | D23 (display ≠ interval)    | 19d   |
+| D17, D19                       | **19b** | D26 (stars vs color_signif) | 19d   |
 | D4 (allow-lists disagree)      | 19c     | D28 (`ci="cell"` no stars)  | 19d   |
 | D25 (reg colour contradiction) | 19e     | D6 (recursion drops args)   | 19e   |
 | D1 (transpose `keep_black`)    | 19h     | D2 (print + kableExtra)     | 19h   |

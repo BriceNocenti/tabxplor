@@ -33,11 +33,11 @@ test_that("fmt_scale_of() reads every column shape", {
   expect_identical(key(tab(d, race, tvhours, pct = "row", ci = "cell"), "tvhours"),   "level_mean")
   expect_identical(key(tab(d, race, tvhours, pct = "row", ci = "diff"), "tvhours"),   "mean_diff")
   or <- tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)
-  expect_identical(key(or, "2-Independent, other"), "or")
+  expect_identical(key(or, "2-Independent, other"), "odds_ratio")
 
   # regressions: one key per family x effect
   b  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
-  expect_identical(key(b, "Model_OR"), "or")
+  expect_identical(key(b, "Model_OR"), "odds_ratio")
   bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE))
   expect_identical(key(bl, mod_col(bl)), "log_coef")
   g  <- suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian"))
@@ -102,7 +102,7 @@ test_that("ci_center() and fmt_gap_scale_key() are the same dispatch", {
     # they answer the same question wherever an interval exists. Where none does, ci_center() has no
     # subject and fmt_scale_of() falls back to what the column DISPLAYS -- which is what stops
     # `tab(OR = TRUE)`'s reference column (OR bounds NA by construction) reading as a percentage.
-    if (nzchar(as.character(get_ci_type(col))[1])) {
+    if (tabxplor:::fmt_has_interval(col)) {
       expect_identical(tabxplor:::ci_center(col), vctrs::field(col, s$est_field))
       n <- n + 1L
     }
@@ -114,16 +114,16 @@ test_that("ci_center() and fmt_gap_scale_key() are the same dispatch", {
 test_that("with no stored interval the scale follows the display", {
   d <- te_data()
   t <- tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)
-  ref <- names(t)[vapply(t, function(c) is_fmt(c) && !nzchar(as.character(get_ci_type(c))[1]),
+  ref <- names(t)[vapply(t, function(c) is_fmt(c) && !tabxplor:::fmt_has_interval(c),
                          logical(1))]
   expect_gt(length(ref), 0L)                                  # the reference column
   for (nm in ref) {
-    expect_identical(tabxplor:::fmt_scale_of(t[[nm]])$key, "or")
+    expect_identical(tabxplor:::fmt_scale_of(t[[nm]])$key, "odds_ratio")
     expect_identical(tabxplor:::fmt_scale_of(t[[nm]])$est_field, "or")
   }
   # so the whole table plots on ONE scale, and the axis is not decided by the reference column
   e <- est(t)
-  expect_identical(unique(e$scale_key), "or")
+  expect_identical(unique(e$scale_key), "odds_ratio")
 })
 
 
@@ -223,7 +223,7 @@ test_that("the plotted estimate IS the number the table stores and prints", {
       s   <- e[e$column == nm & !duplicated(e$row), , drop = FALSE]
       # (a) the estimate is exactly the field the STORED interval is centred on (where there is one:
       #     an intervalless column follows its `display` instead -- see the fixture above)
-      if (nzchar(as.character(get_ci_type(col))[1]))
+      if (tabxplor:::fmt_has_interval(col))
         expect_equal(s$estimate, tabxplor:::ci_center(col)[s$row], tolerance = 0)
       else
         expect_equal(s$estimate,

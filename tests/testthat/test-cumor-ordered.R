@@ -108,7 +108,7 @@ test_that("cumOR carries a Woolf interval and stars when a policy asks for one",
   expect_equal(get_ci_inf(t[["a"]])[hi], ex$inf, tolerance = 1e-10)
   expect_equal(get_ci_sup(t[["a"]])[hi], ex$sup, tolerance = 1e-10)
   expect_equal(get_pvalue(t[["a"]])[hi], ex$pvalue, tolerance = 1e-10)
-  expect_identical(as.character(get_ci_type(t[["a"]])), "or")
+  expect_identical(as.character(get_scale(t[["a"]])), "odds_ratio")
 })
 
 test_that("the `na = 'keep'` column never becomes a cut point", {

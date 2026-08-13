@@ -135,7 +135,7 @@ test_that("`guaranteed_effect` colours the CI FLOOR of the gap, on the null-dire
 test_that("the score's sign wins over the raw gap's, so a protective effect folds correctly", {
   # est 0.50 attenuated to 0.60 -> the raw gap is POSITIVE (log .6 > log .5) but the effect moved
   # TOWARD the null, so both the colour and its interval must land on the under side.
-  x <- fmt(n = 1L, or = 0.60, obs = 0.50, gap_se = 0.05, type = "row", ci_type = "or",
+  x <- fmt(n = 1L, or = 0.60, obs = 0.50, gap_se = 0.05, scale = "odds_ratio", pct_base = "row",
            display = "or", color = "between_groups", color_signif = "grey_non_signif")
   testthat::expect_lt(fmt_adjustment_score(x), 1)              # attenuated
   testthat::expect_gt(fmt_gap_raw(x), 0)                       # ... though the raw gap is positive

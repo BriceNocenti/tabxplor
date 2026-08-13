@@ -58,17 +58,17 @@ testthat::test_that("only a ratio TEXT channel switches the stored interval to K
   diff_cases  <- list(TRUE, "diff", c("diff", "ratio"), c(pct = "diff"))
   for (cc in ratio_cases) {
     t <- tab(d, race, marital, pct = "row", color = cc, color_signif = "grey_non_signif")
-    testthat::expect_identical(get_ci_type(t$Married), "ratio")
+    testthat::expect_identical(get_scale(t$Married), "pct_ratio")
   }
   for (cc in diff_cases) {                       # the defaults must be untouched
     t <- tab(d, race, marital, pct = "row", color = cc, color_signif = "grey_non_signif")
-    testthat::expect_identical(get_ci_type(t$Married), "diff")
+    testthat::expect_identical(get_scale(t$Married), "points")
   }
 })
 
 testthat::test_that("ci = 'cell' has no ratio counterpart (a one-proportion interval)", {
   t <- tab(d, race, marital, pct = "row", color = "ratio", ci = "cell")
-  testthat::expect_identical(get_ci_type(t$Married), "cell")
+  testthat::expect_identical(get_scale(t$Married), "level_pct")
 })
 
 testthat::test_that("a MEAN now gets a ratio-of-means interval under a ratio colour (14v-ii)", {
@@ -76,8 +76,8 @@ testthat::test_that("a MEAN now gets a ratio-of-means interval under a ratio col
   # 14v-ii ships ci_mean_ratio, so a ratio-coloured mean owns a real ratio interval (ci_type "ratio").
   t <- tab(d, race, c(marital, tvhours), pct = "row", color = "ratio",
            color_signif = "grey_non_signif")
-  testthat::expect_identical(get_ci_type(t$Married), "ratio")
-  testthat::expect_identical(get_ci_type(t$tvhours), "ratio")
+  testthat::expect_identical(get_scale(t$Married), "pct_ratio")
+  testthat::expect_identical(get_scale(t$tvhours), "mean_ratio")
 })
 
 testthat::test_that("tab_resolve_settings only asks for the ratio scale where a diff CI is built", {
@@ -117,7 +117,7 @@ testthat::test_that("CI <-> stars stay exact duals on the ratio scale", {
               color_signif = "grey_non_signif", stars = TRUE, conf_level = cl,
               output_list = TRUE)
     for (one in tt) for (cc in one[purrr::map_lgl(one, is_fmt)]) {
-      if (!identical(get_ci_type(cc), "ratio")) next
+      if (!identical(get_scale(cc), "pct_ratio")) next
       p <- get_pvalue(cc); lo <- get_ci_inf(cc); hi <- get_ci_sup(cc)
       k <- !is.na(p) & !is.na(lo)
       checked <- checked + sum(k)
@@ -148,7 +148,7 @@ testthat::test_that("the legend names Katz, not a diff method it was not built w
 testthat::test_that("grey_non_signif greys exactly the cells whose ratio interval includes 1", {
   t   <- tab(d, race, marital, pct = "row", color = "ratio", color_signif = "grey_non_signif")
   for (cc in t[purrr::map_lgl(t, is_fmt)]) {
-    if (!identical(get_ci_type(cc), "ratio")) next
+    if (!identical(get_scale(cc), "pct_ratio")) next
     sl  <- fmt_color_channels(cc)$text
     sig <- (get_ci_inf(cc) > 1 | get_ci_sup(cc) < 1) %in% TRUE
     testthat::expect_true(all(sl[!sig] == 0L | is.na(sl[!sig])))
@@ -160,7 +160,7 @@ testthat::test_that("guaranteed_effect colours the right SIDE on a ratio interva
            color_signif = "guaranteed_effect", output_list = TRUE)
   n <- 0L
   for (one in t) for (cc in one[purrr::map_lgl(one, is_fmt)]) {
-    if (!identical(get_ci_type(cc), "ratio")) next
+    if (!identical(get_scale(cc), "pct_ratio")) next
     sl <- fmt_color_channels(cc)$text; rr <- get_ratio(cc)
     k  <- !is.na(sl) & sl > 0L & !is.na(rr)
     n  <- n + sum(k)
@@ -173,7 +173,7 @@ testthat::test_that("a derived diff background channel agrees with the ratio tex
   t <- tab(d, race, marital, pct = "row", color = c("ratio", "diff"),
            color_signif = "guaranteed_effect")
   for (cc in t[purrr::map_lgl(t, is_fmt)]) {
-    if (!identical(get_ci_type(cc), "ratio")) next
+    if (!identical(get_scale(cc), "pct_ratio")) next
     ch <- fmt_color_channels(cc)
     k  <- !is.na(ch$text) & !is.na(ch$bg) & ch$text > 0L & ch$bg > 0L
     testthat::expect_identical(ch$text[k] <= 4L, ch$bg[k] <= 4L)   # same direction
@@ -185,7 +185,7 @@ testthat::test_that("the significance gate keys on the stored ci_type, not on th
   t  <- tab(d, race, marital, pct = "row", color = c("ratio", "diff"),
             color_signif = "grey_non_signif")
   cc <- t$Married
-  testthat::expect_identical(get_ci_type(cc), "ratio")
+  testthat::expect_identical(get_scale(cc), "pct_ratio")
   bg <- fmt_color_channels(cc)$bg
   testthat::expect_true(any(!is.na(bg) & bg > 0L))     # not greyed wholesale by a neutral mismatch
 })
@@ -201,7 +201,7 @@ testthat::test_that("a ratio-coloured MEAN stores ci_type='ratio' + ratio-scale 
     dplyr::filter(!is.na(tvhours))
   t   <- tab(d2, race, tvhours, ref = 1, color = "ratio", ci = "diff", stars = TRUE)
   col <- t$tvhours
-  testthat::expect_identical(get_ci_type(col), "ratio")
+  testthat::expect_identical(get_scale(col), "mean_ratio")
   testthat::expect_equal(ci_center(col), get_ratio(col))          # centred on the ratio, not the diff
   # the stored bounds bracket the ratio, not the difference; a diff CI would bracket get_diff (~1.4)
   k <- !is.na(get_ci_inf(col))

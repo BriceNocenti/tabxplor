@@ -37,7 +37,7 @@
     Code
       print(sort(setdiff(names(attributes(x)), c("names", "class", "row.names"))))
     Output
-       [1] "basis"        "ci_type"      "col_var"      "color"        "color_signif"
-       [6] "comp_all"     "conf_level"   "degf"         "model_family" "ref"         
-      [11] "refcol"       "role"         "totcol"       "type"        
+       [1] "basis"        "ci_method"    "col_var"      "color"        "color_signif"
+       [6] "comp_all"     "conf_level"   "degf"         "model_family" "pct_base"    
+      [11] "ref"          "refcol"       "role"         "scale"        "totcol"      
 

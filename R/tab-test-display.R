@@ -126,7 +126,7 @@ test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "wel
 # NA / "" leaves the bare "pvalue" token. The label is a text-backend suffix only (Excel keeps the raw p).
 pvalue_line_fmt <- function(p, label = NA_character_) {
   disp <- ifelse(is.na(label) | !nzchar(label), "pvalue", paste0("{pvalue} (", label, ")"))
-  fmt(display = disp, type = "n", n = NA_integer_, pvalue = p, digits = 2L)
+  fmt(display = disp, scale = "level_n", n = NA_integer_, pvalue = p, digits = 2L)
 }
 
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
@@ -276,10 +276,10 @@ reg_footer_plan <- function(reg) {
 # A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
 # `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the
 # stat). A missing stat -> a "blank" cell (renders "").
-reg_gof_cell   <- function(value, digits) fmt(display = "gof", type = "n", n = NA_integer_,
+reg_gof_cell   <- function(value, digits) fmt(display = "gof", scale = "level_n", n = NA_integer_,
                                               diff = value, digits = as.integer(digits))
 reg_pvalue_cell <- function(p) pvalue_line_fmt(p)
-reg_blank_cell  <- function() fmt(display = "blank", type = "n", n = NA_integer_)
+reg_blank_cell  <- function() fmt(display = "blank", scale = "level_n", n = NA_integer_)
 
 # The inline-export STATISTIC cell (the `tabxplor.test_lines = "stat"` row) -- a "gof" number carrying
 # the test statistic with adaptive precision (integers over 100, else 1-2 decimals). The df is dropped
@@ -290,7 +290,7 @@ stat_line_fmt <- function(statistic) {
               ifelse(abs(statistic) >= 100, 0L, ifelse(abs(statistic) >= 10, 1L, 2L)))
   cells <- lapply(seq_along(statistic), function(i)
     if (is.na(statistic[i])) reg_blank_cell()
-    else fmt(display = "gof", type = "n", n = NA_integer_, diff = statistic[i], digits = d[i]))
+    else fmt(display = "gof", scale = "level_n", n = NA_integer_, diff = statistic[i], digits = d[i]))
   do.call(vctrs::vec_c, cells)
 }
 

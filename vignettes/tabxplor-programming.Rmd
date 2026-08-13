@@ -194,7 +194,9 @@ tab(gss_simple, race, marital, race, pct = "row") |>
 
 Besides its per-cell fields, each `fmt` column carries a few **column-level attributes**, read and set with `get_*` / `set_*` (or `is_*` / `as_*` for the logical ones):
 
-- `type` — `get_type()` / `set_type()`: `"n"`, `"mean"`, `"row"`, `"col"`, `"all"`, `"all_tabs"` (or `"coef"` for regression betas). It drives which calculations `tab_*` functions perform.
+- `scale` — `get_scale()` / `set_scale()`: **what the column estimates**. A level (`"level_n"`, `"level_pct"`, `"level_mean"`), a difference (`"points"` for percentage points, `"mean_diff"`, `"raw_diff"` for a regression coefficient in the outcome's own units), a ratio (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) or a link-scale coefficient (`"log_coef"`). It says which field holds the estimate, what its null value is, and which colour ladder it is read on.
+- `pct_base` — `get_pct_base()` / `set_pct_base()`: for a percentage, what it is a percentage *of* — `"row"`, `"col"`, `"all"`, `"all_tabs"`, or `"none"` for counts, means and coefficients.
+- `ci_method` — `get_ci_method()`: which interval engine built this column's bounds (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`, …; `""` when the column carries no interval).
 - `color` — `get_color()` / `set_color()`: the colour measure of the column (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
 - `col_var` — `get_col_var()`: the name of the column variable (a table can hold several).
 - `comp_all` — `get_comp_all()`: with `tab_vars`, is the comparison reference the sub-table (`FALSE`) or the whole table (`TRUE`)?

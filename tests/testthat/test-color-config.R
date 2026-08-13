@@ -340,7 +340,7 @@ testthat::test_that("color = TRUE + a color_signif policy computes the differenc
     t <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, color_signif = pol)
     fmt_cols <- t[purrr::map_lgl(t, is_fmt)]
     testthat::expect_true(any(!is.na(unlist(purrr::map(fmt_cols, get_ci_sup)))), label = pol)
-    testthat::expect_true(any(get_ci_type(t) == "diff"), label = pol)
+    testthat::expect_true(any(get_scale(t) == "points"), label = pol)
   }
 })
 
@@ -376,12 +376,12 @@ testthat::test_that("an explicit ci = 'cell' with a color_signif policy is an er
 testthat::test_that("contrib / OR never get a difference CI forced on them", {
   # contrib has no difference CI (documented gap)
   t <- tab(forcats::gss_cat, race, marital, color = "contrib", color_signif = "grey_non_signif")
-  testthat::expect_false(any(get_ci_type(t) == "diff"))
+  testthat::expect_false(any(get_scale(t) == "points"))
 
   # OR is pct = "row", so it matches the diff-family predicate -- but it carries its OWN ci_type =
   # "or" bounds (centre 1). Forcing a difference CI (centre 0) would have its inf tested against the
   # OR neutral 1 -> never significant -> the policy would grey the WHOLE table.
   o <- tab(forcats::gss_cat, marital, race, pct = "col", OR = "OR", color = TRUE,
            color_signif = "grey_non_signif")
-  testthat::expect_false(any(get_ci_type(o) == "diff"))
+  testthat::expect_false(any(get_scale(o) == "points"))
 })

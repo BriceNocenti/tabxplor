@@ -32,7 +32,7 @@ testthat::test_that("ratio prose uses the Total column and the x/1 operators", {
   testthat::expect_match(l, "\u00d72")            # x2 (the over-only default)
 })
 
-testthat::test_that("the CI method + confidence level come from the stored ci_settings", {
+testthat::test_that("the CI method + confidence level come from the column stored facts", {
   # the default diff method = newcombe
   tb1 <- tab(gss, marital, race, pct = "row", color = "diff",
              color_signif = "grey_non_signif", ci = "diff")
@@ -63,12 +63,17 @@ testthat::test_that("guaranteed_effect annotates the margin of error on the over
   testthat::expect_match(l, "Grey: not significantly different from the Total row after the margin of error")
 })
 
-testthat::test_that("graceful fallback to package defaults when ci_settings is absent", {
+testthat::test_that("a column with no stored method names no method (Phase 19b, D8)", {
+  # the legend must never CLAIM a method: a hand-built / downgraded column that carries no
+  # `ci_method` gets the confidence text alone, where the pre-19b legend fell back to a table-wide
+  # default and could name an interval the bounds were never built with.
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
             color_signif = "grey_non_signif", ci = "diff")
-  tb <- set_ci_settings(tb, NULL)                 # Phase 17b: ci_settings lives in meta -> drop via setter
-  l <- leg_en(tb)
-  testthat::expect_match(l, "Newcombe score interval, 95% confidence")   # the defaults
+  testthat::expect_match(leg_en(tb), "Newcombe score interval, 95% confidence")
+  tb2 <- dplyr::mutate(tb, dplyr::across(dplyr::where(is_fmt), ~ tabxplor:::set_ci_method(., "")))
+  l2  <- leg_en(tb2)
+  testthat::expect_match(l2, "95% confidence")
+  testthat::expect_no_match(l2, "Newcombe")
 })
 
 testthat::test_that("numeric diff prose shows the standardized SD thresholds, not percents", {
