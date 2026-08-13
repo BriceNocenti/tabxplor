@@ -624,21 +624,11 @@ tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, re
   grp_lv  <- unique(group_of)
   fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
 
-  # Phase 17c: extend the stored row-role vector (meta$vars$row_roles) in the SAME group-interleaved
-  # order build_nonfmt uses, so the appended footer rows carry their stored kind. row_role(g) returns
-  # the K roles of group g's footer block ("pvalue" / "gof"). Consumers then read tab_row_roles()
-  # instead of matching the English footer label.
-  if (!is.null(row_role)) {
-    rr_in <- attrs$meta$vars$row_roles
-    if (is.null(rr_in) || length(rr_in) != length(group_of))
-      rr_in <- dplyr::if_else(is_totrow(tabs), "total", "data")
-    attrs$meta$vars$row_roles <- unlist(lapply(grp_lv, function(g) {
-      base <- rr_in[group_of == g]
-      if (g %in% footer_groups) c(base, row_role(g)) else base
-    }))
-  }
-
   # per fmt column: interleave [group field-frame, group footer-frame] over groups, stack once.
+  # Phase 19f: `row_role(g)` is STAMPED on the footer cells' own `row_kind` field ("pvalue" / "gof" /
+  # "blank"), so the appended rows say what they are and ride every later slice. 17c had to extend a
+  # positional meta$vars$row_roles vector here, in the same group-interleaved order build_nonfmt
+  # uses -- two orderings that had to be kept in step by hand.
   build_col <- function(nm) {
     meta   <- purrr::set_names(
       lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
@@ -646,19 +636,24 @@ tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, re
       idx <- which(group_of == g)
       of  <- fmt_data_wn(tabs[[nm]][idx])
       if (!g %in% footer_groups) return(list(of))
-      fr  <- fmt_data_wn(fmt_cell(nm, g))
-      list(of, fr)
+      cell <- fmt_cell(nm, g)
+      if (!is.null(row_role)) cell <- set_row_kind(cell, row_role(g))
+      list(of, fmt_data_wn(cell))
     }), recursive = FALSE)
     fmt_stack_frames(frames, meta)
   }
   # non-fmt column: each group's original values then (for a footer group) its K footer strings.
+  # WARNING: a declared index column (tabxplor_lvl) must be REBUILT with its declaration -- the bare
+  # `factor()` below drops the class, and with it the column's role.
   build_nonfmt <- function(nm) {
     orig     <- tabs[[nm]]
     combined <- unlist(lapply(grp_lv, function(g)
       c(as.character(orig)[group_of == g],
         if (g %in% footer_groups) nonfmt_val(nm, g) else character(0))))
     if (is.factor(orig)) {
-      lv <- levels(orig); factor(combined, levels = c(lv, setdiff(unique(combined), lv)))
+      lv  <- levels(orig)
+      out <- factor(combined, levels = c(lv, setdiff(unique(combined), lv)))
+      lvl_restore(out, orig)
     } else combined
   }
 

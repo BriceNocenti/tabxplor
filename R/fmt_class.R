@@ -204,7 +204,12 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
 #' else, which leaves the significance policies inert there.
 #' A double vector the length of \code{n}. Non-displayed.
-#' @param in_totrow \code{TRUE} when the cell is part of a total row
+#' @param row_kind What kind of row the cell sits in --- one of \code{"data"} (the neutral: an
+#' ordinary body row), \code{"total"}, and the five synthetic display rows \code{"n"},
+#' \code{"pct"}, \code{"pvalue"}, \code{"gof"}, \code{"blank"}. A character vector the length
+#' of \code{n}. Since tabxplor 2.0.0 it replaces the logical \code{in_totrow} field, which is kept
+#' as a soft-deprecated argument and as a read-only \code{$in_totrow}.
+#' @param in_totrow `r lifecycle::badge("deprecated")` Use \code{row_kind = "total"}.
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
 #' (cf. \code{ref})
@@ -376,9 +381,10 @@ fmt <- function(n         = integer(),
                 obs       = rep(NA_real_, length(n)),
                 gap_se    = rep(NA_real_, length(n)),
 
-                in_totrow = rep(FALSE, length(n)),
+                row_kind  = rep("data", length(n)),
                 in_tottab = rep(FALSE, length(n)),
                 in_refrow = rep(FALSE, length(n)),
+                in_totrow = NULL,
 
 
                 comp_all  = NA   ,
@@ -455,7 +461,20 @@ fmt <- function(n         = integer(),
   ci_sup  <- dplyr::coalesce(ci_sup, est_center + ci)
   ci_inf  <- dplyr::coalesce(ci_inf, est_center - ci)
 
-  in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
+  # Phase 19f (KEY 1): `in_totrow` was a two-valued encoding of a fact with seven values -- a body
+  # row, a total row, and the five SYNTHETIC rows the display materialisers add (base n, row %,
+  # p-value, GOF, spacer), which had to be tracked in a parallel positional vector because the record
+  # could not say them. `row_kind` is that fact, in the record, so it rides every slice, bind and
+  # rebuild for free. `in_totrow =` is kept as a soft-deprecated spelling of `row_kind = "total"`.
+  if (!is.null(in_totrow)) {
+    lifecycle::deprecate_soft("2.0.0", "fmt(in_totrow = )", "fmt(row_kind = )")
+    in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
+    row_kind  <- dplyr::if_else(in_totrow, "total", "data")
+  }
+  row_kind  <- vctrs::vec_recycle(vctrs::vec_cast(row_kind , character()), size = max_size)
+  if (!all(row_kind %in% ROW_KINDS))
+    cli::cli_abort(c("{.arg row_kind} must be one of {.val {ROW_KINDS}}.",
+                     "x" = "Got {.val {setdiff(row_kind, ROW_KINDS)}}."), call = NULL)
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
   in_refrow <- vctrs::vec_recycle(vctrs::vec_cast(in_refrow, logical()), size = max_size)
 
@@ -482,7 +501,7 @@ fmt <- function(n         = integer(),
           diff = diff, ratio = ratio, ctr = ctr, var = var,
           ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
           n_eff = n_eff, obs = obs, gap_se = gap_se,
-          in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
+          row_kind = row_kind, in_tottab = in_tottab, in_refrow = in_refrow,
           scale = scale, comp_all = comp_all,  ref = ref,
           pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
           color = color, color_signif = color_signif, model_family = model_family,
@@ -742,9 +761,44 @@ is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @return A logical vector with the totrow field.
 #' @export
 #' @keywords internal
-is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_totrow")
+is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "row_kind") == "total"
 
-# Phase 9b-3: aggregate a per-cell fmt flag (in_totrow / in_tottab / in_refrow) across a data.frame's
+#' @describeIn fmt get the "row_kind" field: what kind of row each cell sits in
+#' (one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
+#' \code{"gof"}, \code{"blank"}).
+#' @return A character vector with the fmt vector's row_kind field.
+#' @export
+get_row_kind <- function(x) {
+  if (!is_fmt(x)) return(rep("data", length(x)))
+  vctrs::field(x, "row_kind")
+}
+
+#' @describeIn fmt set the "row_kind" field
+#' @param row_kind The kind of row a cell sits in (see \code{\link{get_row_kind}}).
+#' @return A modified fmt vector with the row_kind field changed.
+#' @export
+set_row_kind <- function(x, row_kind) {
+  row_kind <- vctrs::vec_recycle(vctrs::vec_cast(row_kind, character()), length(x))
+  stopifnot(all(row_kind %in% ROW_KINDS))
+  vctrs::`field<-`(x, "row_kind", row_kind)
+}
+
+# Phase 19f: the per-ROW kind of a whole table -- the reduce of `row_kind` across its fmt columns,
+# "first non-data wins" (a row is never two kinds at once in practice, so the ORDER of ROW_KINDS is a
+# tie-break that never fires). This is what replaced meta$vars$row_roles: the same answer, read from
+# the record instead of from a positional vector that only existed during one render pass and that
+# every consumer OUTSIDE that pass had to reconstruct by matching English row labels.
+#' @keywords internal
+#' @noRd
+fmt_row_kind <- function(x) {
+  cols     <- unclass(x)
+  fmt_cols <- cols[vapply(cols, is_fmt, logical(1))]
+  if (length(fmt_cols) == 0L) return(character(0L))
+  kinds <- lapply(fmt_cols, function(col) vctrs::field(col, "row_kind"))
+  purrr::reduce(kinds, function(a, b) dplyr::if_else(a == "data", b, a))
+}
+
+# Phase 9b-3: aggregate a per-cell fmt flag (row_kind / in_tottab / in_refrow) across a data.frame's
 # fmt columns to a per-ROW logical. Byte-identical to the former `select(where(is_fmt)) |> map_df |>
 # if_all/if_any` but reads the field directly + reduces (28x faster on a grouped table; is_totrow /
 # is_tottab / is_refrow are on many hot paths). DESIGN: the old `partial` warning branch was DEAD CODE
@@ -754,7 +808,11 @@ fmt_row_flag <- function(x, field, partial = FALSE) {
   cols     <- unclass(x)
   fmt_cols <- cols[vapply(cols, is_fmt, logical(1))]
   if (length(fmt_cols) == 0L) return(logical(0L))
-  flags <- lapply(fmt_cols, function(col) vctrs::field(col, field))
+  # Phase 19f: `row_kind` is a character field, so the total-row flag is derived per column before the
+  # all/any reduce -- the fold itself is unchanged.
+  flags <- if (identical(field, "row_kind"))
+    lapply(fmt_cols, function(col) vctrs::field(col, "row_kind") == "total")
+  else lapply(fmt_cols, function(col) vctrs::field(col, field))
   purrr::reduce(flags, if (partial) `|` else `&`)
 }
 
@@ -765,15 +823,16 @@ fmt_row_flag <- function(x, field, partial = FALSE) {
 #' @export
 #' @keywords internal
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
-  fmt_row_flag(x, "in_totrow", partial)
+  fmt_row_flag(x, "row_kind", partial)
 }
 
-#' @describeIn fmt set the "in_totrow" field (belong to total row)
+#' @describeIn fmt set the "total" row kind (belong to total row)
 #' @return A modified fmt vector with totrow field changed.
 #' @export
 as_totrow  <- function(x, in_totrow = TRUE) {
   vctrs::vec_assert(in_totrow, logical())
-  vctrs::`field<-`(x, "in_totrow", vctrs::vec_recycle(in_totrow, length(x)))
+  in_totrow <- vctrs::vec_recycle(in_totrow, length(x))
+  set_row_kind(x, dplyr::if_else(in_totrow, "total", "data"))
 }
 
 #' Complete partial total rows
@@ -1913,7 +1972,11 @@ new_fmt <- function(n         = integer(),
                     obs       = NULL,
                     gap_se    = NULL,
 
-                    in_totrow = NULL,
+                    # Phase 19f (KEY 1): what KIND of row this cell sits in -- see ROW_KINDS
+                    # (R/row-model.R). It replaced the logical `in_totrow`; is_totrow() is now the
+                    # derived read `row_kind == "total"`, and the five synthetic display rows carry
+                    # their own kind instead of a parallel positional vector that lived one render.
+                    row_kind  = NULL,
                     in_tottab = NULL,
                     in_refrow = NULL,
 
@@ -2009,7 +2072,7 @@ new_fmt <- function(n         = integer(),
   if (is.null(n_eff )) n_eff  <- nas
   if (is.null(obs   )) obs    <- nas
   if (is.null(gap_se)) gap_se <- nas
-  if (is.null(in_totrow)) in_totrow <- fls
+  if (is.null(row_kind )) row_kind  <- rep("data", size)
   if (is.null(in_tottab)) in_tottab <- fls
   if (is.null(in_refrow)) in_refrow <- fls
 
@@ -2040,7 +2103,7 @@ new_fmt <- function(n         = integer(),
          diff = diff, ratio = ratio, ctr = ctr, var = var,
          ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or,
          tot_n = tot_n, n_eff = n_eff, obs = obs, gap_se = gap_se,
-         in_totrow = in_totrow, in_tottab = in_tottab,
+         row_kind = row_kind, in_tottab = in_tottab,
          in_refrow = in_refrow),
     scale = scale, comp_all = comp_all, ref = ref,
     pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -2060,7 +2123,7 @@ new_fmt <- function(n         = integer(),
 # fmt_col_attrs automatically. Order follows the new_rcrd() list() above; do NOT reorder.
 fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
                      "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs", "gap_se",
-                     "in_totrow", "in_tottab", "in_refrow")
+                     "row_kind", "in_tottab", "in_refrow")
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
 # formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
@@ -3673,6 +3736,11 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
   } else if (name == "tot_wn") {
     get_tot_wn(x)
+
+  } else if (name == "in_totrow") {
+    # Phase 19f: `in_totrow` is no longer a field ("what kind of row is this" has seven values, not
+    # two -- see row_kind). The README teaches `$` field access, so the logical read keeps working.
+    is_totrow(x)
 
   } else {
     dplyr::pull(vctrs::vec_proxy(x), name)
@@ -6322,7 +6390,9 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
 
       # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
       # arguably it should follow x alone (x - a non-total y should probably stay total).
-      in_totrow = is_totrow(x) & is_totrow(y),
+      # Phase 19f: the same rule generalised to the seven kinds -- agreeing operands keep the kind,
+      # disagreeing ones fall back to the neutral "data".
+      row_kind  = dplyr::if_else(get_row_kind(x) == get_row_kind(y), get_row_kind(x), "data"),
       in_refrow = is_refrow(x) & is_refrow(y),
       in_tottab = is_tottab(x) & is_tottab(y)
     ), attrs)),
@@ -6350,7 +6420,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       obs    = rep_NA_real,
       gap_se = rep_NA_real,
 
-      in_totrow = is_totrow(x),
+      row_kind  = get_row_kind(x),
       in_refrow = is_refrow(x),
       in_tottab = is_tottab(x)
     ), attrs)),
@@ -6433,7 +6503,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          obs    = NA_real_,
                          gap_se = NA_real_,
 
-                         in_totrow = all(is_totrow(.x)),
+                         row_kind  = if (length(unique(get_row_kind(.x))) == 1L)
+                           get_row_kind(.x)[1] else "data",
                          in_refrow = all(is_refrow(.x)),
                          in_tottab = all(is_tottab(.x)) #any ?
          ), am)),
@@ -6458,7 +6529,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           obs     = NA_real_,
                           gap_se  = NA_real_,
 
-                          in_totrow = FALSE,
+                          row_kind  = "data",
                           in_refrow = FALSE,
                           in_tottab = all(is_tottab(.x)) #any ?
          ), am)),

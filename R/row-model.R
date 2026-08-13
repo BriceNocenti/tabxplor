@@ -1,0 +1,255 @@
+# =====================================================================================================
+# R/row-model.R -- THE ROW MODEL (Phase 19f, KEY 1)
+# =====================================================================================================
+# A tabxplor COLUMN is exhaustively self-describing (15 attributes: what it estimates, what it is for,
+# how it was computed, how it is coloured). Before this file a ROW had nothing, and "what is this row"
+# was re-derived from four unrelated sources: a per-cell logical `in_totrow`, a DISPLAY-TIME positional
+# character vector (`meta$vars$row_roles`), a magic-named label column with three naming conventions,
+# and comparisons of rendered `format()` strings. This module gives the row axis the same treatment.
+#
+# TWO facts, TWO carriers -- and the split is load-bearing:
+#
+#   1. WHAT KIND OF ROW IS THIS  ->  the `row_kind` FIELD of tabxplor_fmt (R/fmt_class.R).
+#      It cannot live anywhere else: fmt_color_plan() calls is_totrow() on a LONE extracted column
+#      with no table in scope, and test-degraded-attrs.R locks that contract. `row_kind` replaces the
+#      two-valued `in_totrow` with the seven values the fact actually has (ROW_KINDS below), so the
+#      synthetic n / pct / p-value / GOF rows stop needing a parallel vector that only existed during
+#      one render pass.
+#
+#   2. WHAT IS THIS LABEL COLUMN FOR  ->  `tabxplor_lvl`, a factor SUBCLASS carrying two ordinary
+#      column attributes (`role`, `var`) plus `ordered` (per variable, so a merged column stops losing
+#      it). It IS a factor -- is.factor(), levels(), as.character(), arrange()'s factor order,
+#      filter(levels == "Total"), group_by() and printing all keep working with no method written --
+#      which is why the four label-block shapes could be migrated instead of a fifth being added.
+#      Measured: `[`, filter, arrange, mutate, slice, as.data.frame, group_by, vec_slice and forcats'
+#      fct_drop/fct_rev/fct_relevel preserve class AND attributes with ZERO code; only vec_c/bind_rows
+#      and droplevels() need a method (they rebuild the factor from scratch).
+#
+# WARNING: `role` says what the COLUMN is; `var` says which VARIABLE its labels belong to. On a merged
+# `levels` column `var` is NA -- several variables' levels live there, and that is exactly what the
+# `var`-role column beside it spells out per row. Never infer either from a column NAME.
+# =====================================================================================================
+
+
+# --- the declared row-kind vocabulary ----------------------------------------------------------------
+# Every value `row_kind` may take, in reading order. "data" is the neutral (a real body row);
+# everything else is a synthetic or summary row some producer added:
+#   total    a total row (what `in_totrow` used to say, and the only kind is_totrow() asks about)
+#   n        the add_n base-count row
+#   pct      the add_pct row percentage row
+#   pvalue   an appended test row (crosstab chi2/F, or a reg per-term test line)
+#   gof      a regression goodness-of-fit / model-summary footer row
+#   blank    a spacer row between footer blocks
+# The ORDER matters: fmt_row_kind() reduces several columns' kinds to one per row by "first non-data
+# wins", and a row is never two kinds at once in practice, so the order is a tie-break that never fires.
+ROW_KINDS <- c("data", "total", "n", "pct", "pvalue", "gof", "blank")
+
+
+# --- the declared label-column roles -----------------------------------------------------------------
+# "level"    the column holding the row LEVELS (`marital`, or the literal `levels` when merged)
+# "var"      the column naming, per row, WHICH variable that row's level belongs to (merged tables,
+#            and a regression's predictor column -- which is why tab_reg() stops punning it as a
+#            fake sub-table variable)
+# "tab_var"  a sub-table variable (`tab_vars =`), which is ALSO a dplyr grouping column
+LVL_ROLES <- c("level", "var", "tab_var")
+
+
+# --- the class ----------------------------------------------------------------------------------------
+
+#' A declared tabxplor label column
+#'
+#' `tabxplor_lvl` is a light **factor subclass** carrying what a row-index column is *for*: its
+#' `role` (`"level"` / `"var"` / `"tab_var"`), the `var` its labels belong to, and — per variable —
+#' whether that variable was `ordered` in the source data. It is still a factor
+#' (`is.factor()` is `TRUE`), so every base, dplyr and forcats operation keeps working unchanged.
+#'
+#' @param x A factor (or anything `factor()` accepts).
+#' @param role One of `"level"`, `"var"`, `"tab_var"`.
+#' @param var The variable name the labels belong to; `NA` on a merged `levels` column.
+#' @param ordered A named logical vector, one entry per variable, saying whether that variable was
+#'   ordered in the source data. A single-variable column keeps its own `ordered` class as well.
+#'
+#' @return A `tabxplor_lvl` vector.
+#' @export
+#' @keywords internal
+new_lvl <- function(x, role = "level", var = NA_character_, ordered = NULL) {
+  if (!is.factor(x)) x <- factor(x)
+  x <- unlvl(x)
+  if (is.null(ordered)) {
+    ordered <- if (!is.na(var[1])) stats::setNames(is.ordered(x), var[1]) else logical(0)
+  }
+  structure(x, role = as.character(role)[1], var = as.character(var)[1],
+            ordered = ordered, class = unique(c("tabxplor_lvl", class(x))))
+}
+
+#' @rdname new_lvl
+#' @export
+#' @keywords internal
+is_lvl <- function(x) inherits(x, "tabxplor_lvl")
+
+# Strip the declaration back to a plain factor. The inverse of new_lvl(); used by every vctrs method
+# below so the factor machinery does the real work and this file only re-stamps the facts.
+#' @keywords internal
+#' @noRd
+unlvl <- function(x) {
+  if (!inherits(x, "tabxplor_lvl")) return(x)
+  attr(x, "role") <- NULL; attr(x, "var") <- NULL; attr(x, "ordered") <- NULL
+  class(x) <- setdiff(class(x), "tabxplor_lvl")
+  x
+}
+
+#' @keywords internal
+#' @noRd
+lvl_role <- function(x) if (is_lvl(x)) attr(x, "role", exact = TRUE) else NA_character_
+#' @keywords internal
+#' @noRd
+lvl_var  <- function(x) if (is_lvl(x)) attr(x, "var" , exact = TRUE) else NA_character_
+# The per-variable `ordered` map. On a merged `levels` column this is the ONLY surviving record that
+# some of the stacked variables were ordinal: the factor itself must be plain (vctrs rightly refuses
+# to combine two ordered factors with different level sets), so the fact moves to the declaration.
+#' @keywords internal
+#' @noRd
+lvl_ordered <- function(x) {
+  if (!is_lvl(x)) return(logical(0))
+  o <- attr(x, "ordered", exact = TRUE)
+  if (is.null(o)) logical(0) else o
+}
+
+# Re-stamp `to` with `from`'s declaration (used by the `[` method and by every producer that rebuilds
+# a label column from scratch).
+#' @keywords internal
+#' @noRd
+lvl_restore <- function(to, from) {
+  if (!is_lvl(from)) return(to)
+  new_lvl(to, lvl_role(from), lvl_var(from), lvl_ordered(from))
+}
+
+# Reconcile two declarations on a bind: the same fact survives, differing facts fall back to the
+# neutral (role "level", no single variable). The `ordered` maps UNION -- that is what lets a merged
+# table remember which of its stacked variables were ordinal after the factor itself went plain.
+#' @keywords internal
+#' @noRd
+lvl_reconcile <- function(x, y) {
+  ox <- lvl_ordered(x); oy <- lvl_ordered(y)
+  o  <- c(ox, oy[!names(oy) %in% names(ox)])
+  list(role    = if (identical(lvl_role(x), lvl_role(y))) lvl_role(x) else "level",
+       var     = if (identical(lvl_var(x) , lvl_var(y) )) lvl_var(x)  else NA_character_,
+       ordered = o)
+}
+
+
+# --- the ~4 methods a factor subclass needs -----------------------------------------------------------
+# Everything else (filter / arrange / mutate / slice / group_by / as.data.frame / forcats) preserves
+# both class and attributes with no code -- measured, see the header.
+
+#' @export
+`[.tabxplor_lvl` <- function(x, ..., drop = FALSE) {
+  out <- NextMethod("[")            # -> `[.factor`, which keeps class but drops other attributes
+  lvl_restore(out, x)
+}
+
+#' @export
+droplevels.tabxplor_lvl <- function(x, ...) lvl_restore(droplevels(unlvl(x), ...), x)
+
+#' @export
+vec_ptype2.tabxplor_lvl.tabxplor_lvl <- function(x, y, ...) {
+  r <- lvl_reconcile(x, y)
+  new_lvl(vctrs::vec_ptype2(unlvl(x), unlvl(y), ...), r$role, r$var, r$ordered)
+}
+#' @export
+vec_ptype2.tabxplor_lvl.factor    <- function(x, y, ...) vctrs::vec_ptype2(unlvl(x), y, ...)
+#' @export
+vec_ptype2.factor.tabxplor_lvl    <- function(x, y, ...) vctrs::vec_ptype2(x, unlvl(y), ...)
+#' @export
+vec_ptype2.tabxplor_lvl.character <- function(x, y, ...) vctrs::vec_ptype2(unlvl(x), y, ...)
+#' @export
+vec_ptype2.character.tabxplor_lvl <- function(x, y, ...) vctrs::vec_ptype2(x, unlvl(y), ...)
+
+#' @export
+vec_cast.tabxplor_lvl.tabxplor_lvl <- function(x, to, ...)
+  lvl_restore(vctrs::vec_cast(unlvl(x), unlvl(to), ...), to)
+#' @export
+vec_cast.tabxplor_lvl.factor    <- function(x, to, ...) lvl_restore(vctrs::vec_cast(x, unlvl(to), ...), to)
+#' @export
+vec_cast.factor.tabxplor_lvl    <- function(x, to, ...) vctrs::vec_cast(unlvl(x), to, ...)
+#' @export
+vec_cast.tabxplor_lvl.character <- function(x, to, ...) lvl_restore(vctrs::vec_cast(x, unlvl(to), ...), to)
+#' @export
+vec_cast.character.tabxplor_lvl <- function(x, to, ...) vctrs::vec_cast(unlvl(x), to, ...)
+
+
+# --- reading the declaration back off a table ---------------------------------------------------------
+
+# tab_index_cols() -- the DECLARED row-index block of a table: every tabxplor_lvl column, in column
+# order, with its role and variable. This is what replaced `tab_get_vars()`'s "the last factor column
+# is the row variable, the others are tab_vars" heuristic and `tab_vars_recorded()`'s stored
+# `meta$vars` triple. Returns a 0-row tibble on a table that declares nothing (a hand-built frame, an
+# object from an older version, or a column re-created by `mutate(levels = as.character(levels))`) --
+# the callers then fall back, exactly as they did before, and say so.
+#' @keywords internal
+#' @noRd
+tab_index_cols <- function(tabs) {
+  if (!is.data.frame(tabs)) return(NULL)
+  cols <- unclass(tabs)
+  keep <- vapply(cols, is_lvl, logical(1))
+  if (!any(keep)) return(NULL)
+  nms <- names(cols)[keep]
+  list(name = nms,
+       role = vapply(cols[keep], lvl_role, character(1), USE.NAMES = FALSE),
+       var  = vapply(cols[keep], lvl_var , character(1), USE.NAMES = FALSE))
+}
+
+# tab_declared_vars() -- the variable model DERIVED from the declared columns, in the shape every
+# consumer already asks for. NULL when the table declares nothing.
+#   row_var    the COLUMN holding the row levels (role "level")
+#   tab_vars   the sub-table columns (role "tab_var"), in column order
+#   var_col    the column NAMING each row's variable (role "var"), if any
+#   row_vars   the SOURCE variable names -- the `var` column's values on a merged table, the level
+#              column's own `var` attribute otherwise
+#   compacted  several row_vars merged into one table == a "var"-role column exists
+# WARNING: `row_var` (singular, a column name) and `row_vars` (plural, source variable names) differ
+# on a merged table and always have. Keep the two apart; a title wants the plural, an index the
+# singular.
+#' @keywords internal
+#' @noRd
+tab_declared_vars <- function(tabs) {
+  idx <- tab_index_cols(tabs)
+  if (is.null(idx)) return(NULL)
+  lvl_col <- idx$name[idx$role == "level"]
+  if (length(lvl_col) != 1L) return(NULL)
+  var_col <- idx$name[idx$role == "var"]
+  row_vars <- if (length(var_col) == 1L) {
+    v <- tabs[[var_col[1]]]
+    lv <- levels(v); if (is.null(lv)) unique(as.character(v)) else lv
+  } else {
+    v <- idx$var[idx$role == "level"]
+    if (is.na(v)) character(0) else v
+  }
+  list(row_var   = lvl_col,
+       tab_vars  = idx$name[idx$role == "tab_var"],
+       var_col   = if (length(var_col) == 1L) var_col[1] else character(0),
+       row_vars  = as.character(row_vars),
+       compacted = length(var_col) == 1L)
+}
+
+# tab_stamp_index() -- declare a table's row-index columns in ONE call, at the point the producer
+# knows the truth. Every producer (both leaves, tab_counts(), tab_compact(), tab_reg(), the
+# transpose) calls exactly this, so there is one stamping idiom and no producer assembles a `vars`
+# list any more.
+#   level    the column holding the row levels
+#   var      the source variable name that column's levels belong to (NA on a merged column)
+#   tab_vars the sub-table columns
+#   var_col  the column naming each row's variable (merged / regression tables)
+#' @keywords internal
+#' @noRd
+tab_stamp_index <- function(tabs, level = NULL, var = NA_character_, tab_vars = character(0),
+                            var_col = NULL, ordered = NULL) {
+  nms <- names(tabs)
+  if (!is.null(level) && length(level) == 1L && level %in% nms)
+    tabs[[level]] <- new_lvl(tabs[[level]], "level", var, ordered)
+  if (!is.null(var_col) && length(var_col) == 1L && var_col %in% nms)
+    tabs[[var_col]] <- new_lvl(tabs[[var_col]], "var", NA_character_, logical(0))
+  for (tv in intersect(as.character(tab_vars), nms))
+    tabs[[tv]] <- new_lvl(tabs[[tv]], "tab_var", tv, stats::setNames(is.ordered(tabs[[tv]]), tv))
+  tabs
+}

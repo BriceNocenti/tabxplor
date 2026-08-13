@@ -5,7 +5,9 @@
 
 * **`tab()` is now the unified entry point.** It accepts **several `row_vars` / `col_vars`**
   (e.g. `tab(data, c(race, relig), marital)`), merged into one table by default or returned as a list
-  with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias.
+  with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias. Several `row_vars` and
+  `tab_vars` now **compose** — `tab(data, c(race, relig), marital, tab_vars = year)` returns a table
+  where it used to silently return a list.
 * **Redesigned colour API.** Position picks the visual channel (1st value → text, 2nd → background),
   names pick the column type (`pct` / `mean`); `color = TRUE` is the smart per-type default. New OKLCH
   light/dark palettes, 24-bit truecolor console, `set_color_palette()` (replaces `set_color_style()`),
@@ -313,6 +315,11 @@
   interval rather than a Welch one, and a Poisson crude rate ratio is called Katz rather than Wald.
 
 ## Deprecations
+
+* **The `in_totrow` cell field is replaced by `row_kind`**, which says what kind of row a cell sits
+  in (`"data"` / `"total"` and the synthetic display rows `"n"`, `"pct"`, `"pvalue"`, `"gof"`,
+  `"blank"`). `is_totrow()` and `as_totrow()` are unchanged, `x$in_totrow` still returns the logical,
+  and `fmt(in_totrow = )` is soft-deprecated in favour of `fmt(row_kind = )`.
 
 Soft-deprecated (still work):
 

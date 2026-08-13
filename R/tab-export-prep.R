@@ -351,7 +351,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # call, and the symmetric one (the col side removes the span row, never the level names).
   # (the local is `name_col`, not `row_var`: with a column of that name in the frame, a same-named
   # local is the tidyselect data-mask trap tab_transpose() documents at tab.R ~L2425.)
-  name_col <- if (isTRUE(rv$compacted) && "row_var" %in% names(tab)) "row_var" else character(0)
+  # Phase 19f: the DECLARED "var"-role column, whatever it is called -- `row_var` on a merged
+  # crosstab, `var` on a regression (where it used to masquerade as a sub-table variable).
+  name_col <- intersect(rv$var_col, names(tab))
   if (length(name_col) > 0 && !var_names %in% c("both", "rows")) {
     tab      <- dplyr::select(tab, -tidyselect::all_of(name_col))
     name_col <- character(0)
@@ -360,7 +362,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # `row_var` column. Swap those values for variable labels when tabxplor.var_labels is on (display only;
   # the swap happens before wrap so a long label wraps too). No-op off / when no label is recorded.
   if (length(name_col) > 0)
-    tab[["row_var"]] <- var_label_display(as.character(tab[["row_var"]]), tab)
+    tab[[name_col]] <- var_label_display(as.character(tab[[name_col]]), tab)
   if (!is.null(wrap)) {
     pre_wrap_names <- names(tab)
     tab <- tab_wrap_text(tab,
@@ -436,9 +438,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
   # both render engines). A "total block" is a maximal run of total rows OR the synthetic n / pvalue /
   # row_pct / reg-GOF rows; the first row of each run gets a top border, the last a bottom border.
-  # Phase 17c: read the STORED per-row role (tab_row_roles) instead of matching un-translated English row
+  # Phase 19f: read the row's own `row_kind` (tab_row_roles) instead of matching un-translated English row
   # labels -- so it no longer silently misses jamovi's gettext labels (the role model retires the
-  # c("n","pvalue","row_pct", reg_footer_labels()) whitelist). Byte-identical on every stored-role table.
+  # c("n","pvalue","row_pct", reg_footer_labels()) whitelist), and it now rides every slice of the table.
   tot_block <- tab_row_roles(tab) != "data"
   tb_edges  <- roles_totblock_edges(tot_block)
   totblock_top    <- tb_edges$top
@@ -535,6 +537,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     # Both come from the `vars` ATTRIBUTE, so they are unaffected by the ungroup/drop/wrap above.
     vars = list(degrade = FALSE, row_var = row_var_name, tab_vars = tab_vars,
                 row_vars = rv$row_vars, compacted = isTRUE(rv$compacted),
+                var_col = rv$var_col,
                 col_vars = rv$col_vars, col_vars_levels = rv$col_vars_levels),
     roles = list(fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
                  row_var_col = row_var_col, totcols = totcols, totrows = totrows,
@@ -703,7 +706,7 @@ rd_caption <- function(rd, user_caption = NULL) {
 # Phase 17g: the top/bottom border rows of each "total block" -- a maximal run of TRUE in `in_block`
 # (total rows + the synthetic n / pvalue / row_pct / reg-GOF rows). First row of a run gets a top
 # border, last a bottom border. The formula is a fact of the render model, so it lives ONCE: shared by
-# prep_one_table() (block from the stored tab_row_roles) and tx_transpose_render() (block from the
+# prep_one_table() (block from the row_kind field, tab_row_roles) and tx_transpose_render() (block from the
 # flipped indices). NOTE the rest of the two role models are DIFFERENT computations -- prep derives
 # roles from the fmt table (is_fmt/is_totcol/...), transpose from the flipped positional grid -- so a
 # single roles_from(tab) builder does not fit without rewriting the golden-locked transpose path; only

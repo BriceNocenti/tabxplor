@@ -39,6 +39,19 @@ ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
 
+# Phase 19f (KEY 1) needs TWO modes this script did not have, both declared here.
+#
+# RENAMED_FIELDS -- a field REPLACED by another that says the same thing plus more. `in_totrow`
+# (logical) became `row_kind` (7 values), so "unchanged" is not bit-identity but a stated MAPPING:
+# the new field must equal map(old) on every cell of every golden. That is the phase's central claim
+# about the record, proved rather than asserted.
+RENAMED_FIELDS <- list(
+  in_totrow = list(to = "row_kind", map = function(v) ifelse(v, "total", "data"))
+)
+# DECLARED_INDEX_COLS -- the non-fmt label columns that gain the tabxplor_lvl class. Their VALUES
+# must be identical (a declaration is not data); only class/role/var/ordered may appear.
+DECLARE_INDEX_COLS <- TRUE
+
 ADDED_TEST_COLS <- character(0)
 
 # Phase 18z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
@@ -59,7 +72,19 @@ REMOVED_META_FIELDS <- character(0)
 # Phase 19a: nothing is reshaped. (The z16-iiiii `ci_settings` rule that used to sit here was left
 # behind after its goldens were regenerated, so it then compared two copies of the NEW shape and
 # reported four false PROBLEMS -- hence the reset warning at the top.)
-RESHAPED_META_FIELDS <- list()
+RESHAPED_META_FIELDS <- list(
+  # Phase 19f: `meta$vars` loses the whole variable MODEL -- row_vars / col_vars / tab_vars /
+  # compacted are DERIVED now (from the declared index columns above and from the fmt columns' own
+  # `col_var`), and row_roles is the `row_kind` field. What may remain is only what no column can
+  # carry. The derivation itself is proved by the per-column lines this script prints and by
+  # test-export-prep.R; here we prove nothing ELSE was dropped and nothing carried was altered.
+  vars = function(old, new) {
+    derived <- c("row_vars", "col_vars", "tab_vars", "compacted", "row_roles")
+    kept    <- setdiff(names(old), derived)
+    if (!all(names(new) %in% c(kept, "wt", "caption", "var_labels"))) return(FALSE)
+    all(vapply(kept, function(k) identical(old[[k]], new[[k]]), logical(1)))
+  }
+)
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"
@@ -82,12 +107,28 @@ for (nm in names(cases)) {
   added <- character(0)
   for (col in names(old)) {
     if (!is_fmt(old[[col]])) {
-      if (!identical(old[[col]], new[[col]]))
+      # Phase 19f: a declared index column keeps its VALUES and gains only its declaration.
+      if (DECLARE_INDEX_COLS && is_lvl(new[[col]])) {
+        flat <- unlvl(new[[col]])
+        if (!identical(old[[col]], flat))
+          issues <- c(issues, paste0(nm, " / ", col, ": declared index column's VALUES changed"))
+        else cat(sprintf("      %-24s %s declared role=%s var=%s\n", nm, col,
+                         lvl_role(new[[col]]), lvl_var(new[[col]])))
+      } else if (!identical(old[[col]], new[[col]])) {
         issues <- c(issues, paste0(nm, " / ", col, ": non-fmt column CHANGED"))
+      }
       next
     }
     do <- as.list(vctrs::vec_data(old[[col]]))
     dn <- as.list(vctrs::vec_data(new[[col]]))
+    for (rn in names(RENAMED_FIELDS)) {                      # Phase 19f: the stated field MAPPING
+      r <- RENAMED_FIELDS[[rn]]
+      if (!rn %in% names(do) || !r$to %in% names(dn)) next
+      if (!identical(r$map(do[[rn]]), dn[[r$to]]))
+        issues <- c(issues, paste0(nm, " / ", col, " / ", rn, " -> ", r$to,
+                                   ": the renamed field is NOT the declared mapping of the old one"))
+      do[[rn]] <- NULL; dn[[r$to]] <- NULL
+    }
     added <- union(added, setdiff(names(dn), names(do)))
     if (length(setdiff(names(do), names(dn))))
       issues <- c(issues, paste0(nm, " / ", col, ": field(s) REMOVED: ",

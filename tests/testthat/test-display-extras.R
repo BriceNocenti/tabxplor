@@ -318,10 +318,10 @@ testthat::test_that("materialised synthetic rows carry a STORED role aligned to 
   lab <- as.character(m[[tabxplor:::tab_render_vars(m)$row_var]])
   # the stored role agrees with the (English) label on every synthetic row
   testthat::expect_true(all(rr[lab == "n"]       == "n"))
-  testthat::expect_true(all(rr[lab == "row_pct"] == "row_pct"))
+  testthat::expect_true(all(rr[lab == "row_pct"] == "pct"))
   testthat::expect_true(all(rr[lab == "pvalue"]  == "pvalue"))
   testthat::expect_true(all(rr[lab == "Total"]   == "total"))
-  testthat::expect_true(any(rr == "n") && any(rr == "row_pct") && any(rr == "pvalue"))
+  testthat::expect_true(any(rr == "n") && any(rr == "pct") && any(rr == "pvalue"))
 })
 
 testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext robustness)", {
@@ -333,15 +333,14 @@ testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext 
   # p-value label now states the test ("pvalue (Chi2)"), so find each synthetic row's actual label by role.
   lv  <- levels(m[[rvc]])
   rr0 <- tabxplor:::tab_row_roles(m)
-  cur <- vapply(c("n", "row_pct", "pvalue"),
+  cur <- vapply(c("n", "pct", "pvalue"),
                 function(role) as.character(m[[rvc]])[which(rr0 == role)[1]], character(1))
   levels(m[[rvc]])[match(cur, lv)] <- c("effectif", "%_ligne", "p")
   # the STORED role vector is unchanged -> the synthetic rows are still known
   rr  <- tabxplor:::tab_row_roles(m)
-  testthat::expect_true(any(rr == "n") && any(rr == "row_pct") && any(rr == "pvalue"))
+  testthat::expect_true(any(rr == "n") && any(rr == "pct") && any(rr == "pvalue"))
   testthat::expect_true(all(tabxplor:::tab_row_roles(m)[!rr %in% "data"] != "data"))
-  # WITHOUT the stored vector the label fallback would MISS them (proving the vector is load-bearing)
-  m2  <- tabxplor:::set_row_roles(m, NULL)
-  fb  <- tabxplor:::tab_row_roles(m2)
-  testthat::expect_false(any(fb %in% c("n", "row_pct")))   # translated labels are invisible to the fallback
+  # Phase 19f: there is no vector left to strip -- the kind is IN the record, so a relabelled row
+  # cannot lose it. The fallback fires only for a frame with no fmt columns at all.
+  testthat::expect_true(all(tabxplor:::tab_row_roles(tibble::tibble(a = 1:3)) == "data"))
 })

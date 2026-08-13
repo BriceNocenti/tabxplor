@@ -837,7 +837,7 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   tabs_pct <- data.table::as.data.table(labels)
   for (nm in pct_cols) tabs_pct[, (nm) := carrier$fmt[[nm]]$frame$pct]
 
-  totrow_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_totrow
+  totrow_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$row_kind == "total"
   tottab_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_tottab
 
   ref_res <- tab_apply_reference(

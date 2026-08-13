@@ -41,7 +41,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `n_eff` | double | Phase 18s: the effective sample size used for this cell's CI, `p(1-p)/Var_design(p)` (a mean: `s²/Var_design(x̄)`) -- from the closed-form flat-design variance under `options(tabxplor.design_effect = TRUE)` on weighted data, from `survey::svyrecvar` under a real design, else `NA` (the CI falls back to the raw unweighted base). Non-displayed |
 | `obs` | double | Phase 18z5: the value this cell's estimate is COMPARED TO by the `tab_reg` colour measures -- the observed/crude effect (`color = "adjustment"`) or the reference group's estimate (`"between_groups"`), on the cell's own scale. `NA` everywhere else, which is what leaves those cells uncoloured. Displayable as `{obs}` |
 | `gap_se` | double | Phase 18z8: the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale (log-ratio for `or`/`ratio`, plain difference for `diff`). Written where the two estimates are independent (`split_var` groups, by quadrature from the two stored Wald intervals), which is what lets `color_signif` apply to `between_groups`. `NA` elsewhere -> the policies stay inert. Non-displayed |
-| `in_totrow` | logical | Cell belongs to a total row |
+| `row_kind` | character | What KIND of row the cell sits in: `data` (the neutral) / `total` / the five synthetic display rows `n`, `pct`, `pvalue`, `gof`, `blank`. Phase 19f; `is_totrow()` is the derived read `== "total"`, `$in_totrow` a read alias |
 | `in_tottab` | logical | Cell belongs to the total table |
 | `in_refrow` | logical | Cell belongs to the reference row |
 
@@ -145,70 +145,50 @@ sub-field (a `NULL` value removes it). The sub-fields:
 - `color_breaks` (Phase 13a) — the per-table colour-break override; joined `meta` in Phase 17b so it now
   SURVIVES a dplyr pipeline (was a standalone attribute set last, silently dropped by any verb between
   build and render — defect 7). Still installed transiently at render by `push_color_breaks()`.
-- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted, wt, caption, row_roles)` — the
-  table's OWN record of its variable roles, written where the truth is known (`tab_assemble_tables()` /
-  `tab_compact()` / `tab_plain()` at build since Phase 17b, and re-keyed by `tab_transpose()`). The
-  `caption` sub-field is set by the exported `set_caption()` / read by `get_caption()` and every
-  exporter's caption fallback (ahead of `reg_title`). The `row_roles` sub-field is the **row-role model**
-  (Phase 17c, below). **The roles cannot be recovered from a built
-  table**: `tab_compact()`
-  renames column 1 to the literal `"levels"` and keeps the row-variable names only as levels of a
-  synthetic column *named* `row_var`, so the "last factor is the row_var, the others are tab_vars"
-  heuristic reported `row_var = "levels", tab_vars = "row_var"` on a merged table with no tab_vars —
-  which is why `tab_transpose()` aborted over tab_vars that were never there and a `tab_xl` title read
-  *"levels by multi (tabbed by row_var)"*. Sniffing for a column named `row_var` would be the ad-hoc
-  layer this replaces. `tab_get_vars()` / `tab_render_vars()` read it via `tab_vars_recorded()`, which
-  **validates it against the real columns** (a dplyr chain can rename or drop them) and returns NULL →
-  the heuristic fallback, so hand-built tables (`tab_plain()`, `tab_num()`, older objects) still work.
-  ⚠ `tab_get_vars()`'s `row_var`/`tab_vars` stay **column** names (what consumers index with);
-  `row_vars` carries the **source** names, which differ on a merged table.
+- `vars`: only what NO column can carry --- `wt`, `caption`, `var_labels`. Phase 19f (KEY 1) emptied
+  it of the variable MODEL: `row_vars` / `tab_vars` / `compacted` come from the DECLARED index columns
+  (`tab_declared_vars()`), `col_vars` from the fmt columns' own `col_var` attribute, and `row_roles`
+  from the `row_kind` field. The `caption` sub-field is set by the exported `set_caption()` / read by
+  `get_caption()` and every exporter's caption fallback (ahead of `reg_title`).
 
-Constructors: `new_tab(tabs, subtext, test, meta)` (the old `chi2 =` argument still works, mapped to
-`test`; Phase 17b replaced the five 2.0.0-new formals with the single `meta` list) and
-`new_grouped_tab(tabs, groups, …)`.
+### The row model (Phase 19f, KEY 1 --- `R/row-model.R`)
 
-**Adding a `meta` sub-field** is one getter + (rarely) one producer line — never a constructor formal.
-`tab_attrs()` returns exactly **three** things (`subtext`, `test`, `meta`); `tab_restore(out, from)`
-rebuilds a table from a template (used by every dplyr S3 method, with `lv1_group_vars()`'s
-auto-downgrade) and `tab_bind_attrs(x, other)` reconciles a bind (the vctrs `ptype2`/`cast` pair:
-`subtext` unions, the row-bound `test` rbinds, and `tab_meta_bind()` reconciles the `meta` sub-fields
-element-wise through the DECLARED `meta_bind_rules` table — default "x wins, other fills a `NULL`",
-`color_breaks` merging per named scale, `inference` taking the WEAKEST basis, so a bound table can never
-claim more inference than its weakest part carried). A table rebuilt from SEVERAL inputs (`tab_compact()`
-on ≥2 `row_vars`, `tab_transpose()`) must go through **`tab_meta_merge(metas, ...)`** — reduce, then
-overwrite only what it recomputes — never a fresh `meta = list(...)` literal, which drops every sub-field
-it does not name. That is exactly how `meta$inference` was lost before z16-iv (an inverted footer
-sentence, and `degf` gone from the exported step path); the guard is the field-AGNOSTIC probe in
-`test-meta-attr.R`, which stamps a sub-field nothing knows about and asserts it survives. Before
-Phase 14d each verb named every attribute by hand (~34-site edits, silent drops); Phase 17b collapsed
-the six 2.0.0-new attrs into `meta` so the carry list is now three lines total. The jamovi tier-3 carrier
-stores `attributes(tab)` verbatim, so `meta` round-trips transparently (schema bumped to invalidate
-stores holding the old multi-attr shape).
+A tabxplor COLUMN is exhaustively self-describing. A ROW had nothing, and "what is this row" was
+re-derived from four unrelated sources: a per-cell logical `in_totrow`, a *display-time* positional
+character vector `meta$vars$row_roles`, a magic-named label column with three naming conventions, and
+comparisons of rendered `format()` strings. Phase 19f gives the row axis the same treatment, with
+**two facts and two carriers**:
 
-### The row-role model (`meta$vars$row_roles`, Phase 17c)
+**1. `row_kind`, a FIELD of the record** (`ROW_KINDS` = `data` / `total` / `n` / `pct` / `pvalue` /
+`gof` / `blank`). It replaces `in_totrow` --- the record stays at 21 fields --- and it cannot live
+anywhere else: `fmt_color_plan()` calls `is_totrow()` on a LONE extracted column with no table in
+scope (locked by `test-degraded-attrs.R`). Every producer stamps the rows it creates
+(`tab_append_pctcol_rows(role =)`, `tab_append_footer(row_role =)`), so the kinds ride every slice,
+bind, arrange and rebuild. `fmt_row_kind(tab)` reduces them to one per row ("first non-`data` wins");
+`tab_row_roles()` is that read, and its label-matching fallback now fires only for a frame with no
+fmt columns at all. `is_totrow()` / `as_totrow()` / `$in_totrow` are derived reads of it.
 
-Synthetic rows created at DISPLAY time — the add_n / add_pct base-`n` and `row_pct` rows, the chi2/F
-`pvalue` rows, the regression `gof`/`blank` footer rows — used to be re-detected downstream by matching
-their rendered English row label (`%in% c("n", "pvalue", "row_pct", …)`), which silently broke under
-jamovi's gettext translation. Phase 17c stores each row's **kind** instead. `meta$vars$row_roles` is a
-positional character vector (`"data"`/`"total"`/`"n"`/`"row_pct"`/`"pvalue"`/`"gof"`/`"blank"`), length
-`nrow`, stamped entirely within the one uninterrupted materialise pass:
+**2. `tabxplor_lvl`, a factor SUBCLASS on the index columns**, carrying three ordinary column
+attributes: `role` (`"level"` / `"var"` / `"tab_var"`), `var` (the variable its labels belong to; `NA`
+on a merged `levels` column) and `ordered` (a named logical, ONE ENTRY PER VARIABLE --- which is how a
+merged table keeps the fact that some of its stacked variables were ordinal after the factor itself
+must go plain). It IS a factor, so `is.factor()`, `levels()`, `as.character()`, `arrange()`'s factor
+order, `filter(levels == "Total")`, `group_by()` and printing all keep working with no method written;
+only `vec_c`/`bind_rows` (ptype2 + cast), `droplevels()` and `[` need one. Every producer declares its
+index in ONE call, `tab_stamp_index()`: both leaves, `tab_compact()`, `tab_reg()`, the transpose.
 
-- **seeded** at the top of `tab_materialize_extras()` from the drift-free `is_totrow()` flag;
-- **extended** by each row-adder — `tab_add_n_pct()` threads `role` through `tab_append_pctcol_rows()`
-  (spliced by the SAME re-order as the rows), `tab_append_footer()` interleaves a `row_role(g)` closure
-  per group exactly as it interleaves the non-fmt columns;
-- **sliced** by `tab_collapse_total_rows()` alongside its row drop.
+Read back through **`tab_declared_vars(tabs)`** --- `row_var` (the level COLUMN), `tab_vars`,
+`var_col` (the column naming each row's variable), `row_vars` (the SOURCE names) and `compacted`.
+`tab_render_vars()` / `tab_get_vars()` call it first and keep the last-factor heuristic as a clearly
+marked degraded path (a hand-built frame, or `mutate(levels = as.character(levels))`).
 
-It is never persisted in the user-facing built table (materialise is display-only). Consumers read the
-resolver **`tab_row_roles(tab)`** (`R/tab.R`, next to `tab_render_vars`): the stored vector when present
-and length-matching, else a clearly-marked FALLBACK reproducing the old `is_totrow` + English-label
-detection for hand-/step-built tables (a table with no stored vector never has a `row_pct` row, so the
-fallback needs no `row_pct` case — exact by construction). The retired consumers: export-prep's tot-block
-border (`tab_row_roles(tab) != "data"`), `tab_collapse_total_rows`'s summary-row sweep, and the transpose
-absorb heuristic (fixed structurally on `col_var == "all_col_vars"`, since transposed "rows" come from
-original columns). Column-side kinds stayed structural and English-free (`<var>_sd` suffix, `type=="n"`,
-`col_var=="all_col_vars"`, `is_totcol()`), so there is deliberately **no** `col_roles` vector.
+**What it deleted or unlocked.** `tab_reg()` stops punning a predictor as `tab_vars = "var"`;
+`tab_collapse_total_rows()` compares a KEY (`n`/`wn`/`pct`/`mean`) instead of a rendered `format()`
+pass; `tab_estimates()` gets real roles instead of an English-label fallback; the export prep's
+variable-name column is `rv$var_col`, one rule for a merged crosstab and a regression; and
+**`tab(d, c(marital, relig), race, tab_vars = black)` returns a table** --- `can_merge <-
+length(tab_vars) == 0` is gone, since the row-variable axis is a declared column and no longer
+competes with `tab_vars` for the single dplyr grouping slot.
 
 ### tabxplor_grouped_tab — Subtabled Results
 
@@ -1869,7 +1849,7 @@ re-derived half of (`format()`, `fmt_color_plan()`, the legend, and `or_plot()`'
   calls WITHOUT a display because it answers about the INTERVAL, not the column.
 - **`tab_estimates()`** (`R/plots.R`, internal, reachable as `forest_plot(return_data = TRUE)`): one
   long tibble, one row per (table row × plotted column). It computes NOTHING. Column axis = `role` +
-  `col_var` + `is_totcol`; row axis = `tab_render_vars()` + `tab_row_roles()` over the four label-block
+  `col_var` + `is_totcol`; row axis = `tab_render_vars()` + `tab_row_roles()` over the declared label-block
   shapes; scale = `fmt_scale_of()`; colour = `resolve_color_channel_plans()` + `fmt_col_ann()` (the
   EXPORTERS' resolver, so a point is the cell's colour down to the greys). The facet key is derived
   once (ruling D7): `col_var`, unless a `col_var` holds several columns of the SAME role — multinomial

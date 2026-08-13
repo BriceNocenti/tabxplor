@@ -11,7 +11,7 @@
        [1] "n"         "display"   "digits"    "wn"        "pct"       "mean"     
        [7] "diff"      "ratio"     "ctr"       "var"       "ci_inf"    "ci_sup"   
       [13] "pvalue"    "or"        "tot_n"     "n_eff"     "obs"       "gap_se"   
-      [19] "in_totrow" "in_tottab" "in_refrow"
+      [19] "row_kind"  "in_tottab" "in_refrow"
     Code
       cat("\nfield types:\n")
     Output
@@ -27,8 +27,8 @@
          "double"    "double"    "double"    "double"    "double"    "double" 
            pvalue          or       tot_n       n_eff         obs      gap_se 
          "double"    "double"    "double"    "double"    "double"    "double" 
-        in_totrow   in_tottab   in_refrow 
-        "logical"   "logical"   "logical" 
+         row_kind   in_tottab   in_refrow 
+      "character"   "logical"   "logical" 
     Code
       cat("\ncolumn attributes:\n")
     Output

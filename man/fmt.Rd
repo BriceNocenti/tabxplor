@@ -10,6 +10,8 @@
 \alias{get_pct_base}
 \alias{set_pct_base}
 \alias{is_totrow}
+\alias{get_row_kind}
+\alias{set_row_kind}
 \alias{as_totrow}
 \alias{is_tottab}
 \alias{as_tottab}
@@ -59,9 +61,10 @@ fmt(
   n_eff = rep(NA_real_, length(n)),
   obs = rep(NA_real_, length(n)),
   gap_se = rep(NA_real_, length(n)),
-  in_totrow = rep(FALSE, length(n)),
+  row_kind = rep("data", length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
+  in_totrow = NULL,
   comp_all = NA,
   ref = "",
   pct_base = "none",
@@ -94,6 +97,10 @@ get_pct_base(x, ...)
 set_pct_base(x, pct_base)
 
 is_totrow(x, ...)
+
+get_row_kind(x)
+
+set_row_kind(x, row_kind)
 
 as_totrow(x, in_totrow = TRUE)
 
@@ -260,12 +267,14 @@ the two estimates are independent (\code{split_var} groups), so that
 else, which leaves the significance policies inert there.
 A double vector the length of \code{n}. Non-displayed.}
 
-\item{in_totrow}{\code{TRUE} when the cell is part of a total row}
+\item{row_kind}{The kind of row a cell sits in (see \code{\link{get_row_kind}}).}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
 
 \item{in_refrow}{\code{TRUE} when the cell is part of a reference row
 (cf. \code{ref})}
+
+\item{in_totrow}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{row_kind = "total"}.}
 
 \item{comp_all}{\code{FALSE} when the comparison level is the subtable/group,
 \code{TRUE} when it is the whole table}
@@ -361,6 +370,10 @@ A modified fmt vector.
 
 A logical vector with the fmt vectors totrow field.
 
+A character vector with the fmt vector's row_kind field.
+
+A modified fmt vector with the row_kind field changed.
+
 A modified fmt vector with totrow field changed.
 
 A logical vector with the fmt vectors tottab field.
@@ -443,7 +456,13 @@ using \pkg{vctrs}.
 \item \code{is_totrow()}: test function to detect cells in total rows
 (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_totrow()}: set the "in_totrow" field (belong to total row)
+\item \code{get_row_kind()}: get the "row_kind" field: what kind of row each cell sits in
+(one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
+\code{"gof"}, \code{"blank"}).
+
+\item \code{set_row_kind()}: set the "row_kind" field
+
+\item \code{as_totrow()}: set the "total" row kind (belong to total row)
 
 \item \code{is_tottab()}: test function to detect cells in total tables
 (at \code{fmt} level or \code{tab} level)

@@ -264,6 +264,22 @@ R/
 │                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
 │                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
+├── row-model.R      (~245 L) Phase 19f (KEY 1): THE ROW MODEL -- what a row IS, given the same treatment
+│                              a column already had. TWO facts, TWO carriers. (1) **ROW_KINDS** +
+│                              the `row_kind` FIELD (data/total/n/pct/pvalue/gof/blank) replacing
+│                              the logical `in_totrow`: it cannot leave the record, because
+│                              fmt_color_plan() asks is_totrow() of a LONE column. (2) **tabxplor_lvl**,
+│                              a factor SUBCLASS on the index columns carrying `role`
+│                              (level/var/tab_var), `var` and `ordered` (a named logical, ONE ENTRY
+│                              PER VARIABLE -- how a merged `levels` column keeps which of its
+│                              stacked variables were ordinal once the factor itself must go plain).
+│                              It IS a factor, so is.factor/levels/as.character/arrange/filter/
+│                              group_by/print need NO method; only vec_c+bind_rows (ptype2/cast),
+│                              droplevels() and `[` do. ONE stamping idiom, tab_stamp_index(), called
+│                              by both leaves + tab_counts + tab_compact + tab_reg + the transpose;
+│                              ONE read, tab_declared_vars() -> row_var / tab_vars / var_col /
+│                              row_vars / compacted, which tab_render_vars()/tab_get_vars() call
+│                              first (the last-factor heuristic survives as the DEGRADED path only).
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab-resolve.R    (~230 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -1689,6 +1705,94 @@ and is keyed on the **resolved** `OR` route (display/ref/ref2), not the retired 
 (19d's debt); `dev/verify_color_attrs.R` and the golden cell review (19l); the deprecation-warning
 corpus migration (19l).
 
+#### Phase 19f — KEY 1: the row model (Option C)
+
+**DONE (2026-08-14).** Full-suite checkpoint: **FAIL 8, PASS 5823, SKIP 4** — and the 8 are *exactly*
+the pre-existing `test-jmvtab-cache.R` failures 19d's summary flagged (verified by re-running that
+file on the 19d commit: same 8 line numbers, same count). **No rendered output moved**: not one
+`_snaps/*.md` changed except `fmt-contract.md`'s field list. The structural goldens moved and the
+delta is **proved, not asserted** — `dev/verify_golden_field_delta.R`, taught two new modes, checks on
+all **1795 cells of the 36 goldens** that `row_kind` is exactly `ifelse(in_totrow, "total", "data")`,
+that every other field and column attribute is bit-identical, that each declared index column's
+VALUES are unchanged, and that `meta$vars` lost only the facts that are now derived.
+
+**Two facts, two carriers — and the split is load-bearing.** (i) `row_kind`, a **field**
+(`data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`), replacing the logical `in_totrow` — the record stays
+at 21 fields. It cannot live anywhere else: `fmt_color_plan()` calls `is_totrow()` on a LONE extracted
+column with no table in scope. (ii) **`tabxplor_lvl`**, a factor **subclass** on the index columns
+carrying `role` / `var` / `ordered` as ordinary column attributes. Measured, and it is why the
+migration was affordable: `[`, filter, arrange, mutate, slice, group_by, as.data.frame, vec_slice and
+forcats' fct_drop/fct_rev/fct_relevel keep class **and** attributes with **zero code**; only
+`vec_c`/`bind_rows`, `droplevels()` and `[` needed one. `is.factor()` stays TRUE, so the 39 `is.factor`
+sites did not move, and `tab$marital` keeps its friendly name.
+
+**Every producer declares, every consumer reads.** ONE stamping call, `tab_stamp_index()`, in both
+leaves, `tab_compact()`, `tab_reg()` and the transpose; ONE read, `tab_declared_vars()`.
+`tab_vars_recorded()` is deleted. What went with them:
+
+- **`meta$vars` lost the whole variable model.** `row_vars` / `tab_vars` / `compacted` are the declared
+  columns, `col_vars` always was the fmt columns' own attribute, and `row_roles` is the field. `vars`
+  keeps only `wt` / `caption` / `var_labels` — what no column can carry. `new_vars_attr()` went from
+  six formals to two.
+- **`meta$vars$row_roles` is gone**, with `set_row_roles`/`get_row_roles_raw` and the seed/extend/slice
+  bookkeeping in three files. It was a *positional* vector created at RENDER and living one render
+  pass, so every consumer outside that pass fell back to matching English row labels — the i18n hazard
+  17c closed for the exporters was still open for everything else, **by design**. Now the rows carry
+  their kind through every slice.
+- **`tab_reg()` stops punning.** A predictor is `role = "var"`, not `tab_vars = "var"` — a fake
+  sub-table variable it was reported as because that was the only slot the grouped-tab machinery
+  offered.
+- **`tab_collapse_total_rows()` compares a KEY** (`n`/`wn`/`pct`/`mean`) instead of running a full
+  `format()` pass over every fmt column of every block. It is also stricter in the right direction:
+  two blocks with genuinely different bases that happened to *round* to the same printed cell used to
+  be collapsed into one Total whose N was only one of theirs.
+- **The export prep's variable-name column is `rv$var_col`** — one rule where a merged crosstab tested
+  for a column literally NAMED `"row_var"` and the regression needed a second, different clause
+  (which also sniffed the grouping). Same in `tab_estimates()`.
+
+**The composition limit is lifted.** `tab(d, c(marital, relig), race, tab_vars = year)` returns a
+**table**, not a silent list: `can_merge <- length(tab_vars) == 0` is deleted, and `tab_compact()`
+groups by `(tab_vars, row_var)` with the sub-table axis outer (a stable re-order, so each variable's
+own row order survives). A documented product limitation disappears. Found while implementing:
+`tab_compact()` renamed **column 1** to `"levels"`, which with `tab_vars` is a sub-table column — so
+the composition could not have worked even with the grouping slot freed. It renames the *declared*
+level column now.
+
+**`ordered` landed, as 19b deferred it.** A merged `levels` column must stay a plain factor (vctrs
+rightly refuses to combine two ordered factors with different level sets), but the FACT now survives:
+each piece's declared `ordered` map is carried through the flattening and **unioned** by the vec_c
+reconcile, so a merged table knows which of its stacked variables were ordinal. It used to lose that
+outright.
+
+**Retro-compat kept where it is CRAN-public**: `fmt(in_totrow =)` is a soft-deprecated spelling of
+`row_kind = "total"`, `$in_totrow` is a read alias (the README teaches `$` field access), and
+`is_totrow()` / `as_totrow()` are unchanged derived reads.
+
+**HONEST CONCERNS.**
+
+- **The 8 `test-jmvtab-cache.R` failures are still red**, unchanged and untouched by this phase. They
+  are 19d's tier-3 carrier hole (`or` is reference-dependent on every table now and the re-ref /
+  relevel paths do not recompute it). Still a genuine correctness hole in the live jamovi module;
+  19k owns it and it must not slip past 19k.
+- **The reg `var` column now renders as the variable-NAME column** (`var_name_col`: rotated vertical
+  in html/xl, italic, droppable by `var_names = "none"`), where it used to render as a plain kept
+  tab_var. No snapshot moved, so nothing in the test corpus exercises that path visually — the change
+  is *asserted* by the uniform rule, not *seen*. Worth one eyeball at the 19n documentation pass.
+- **`ordered` on the COLUMN axis was not done.** The §4 ★ ruling says "both axes"; the row axis had a
+  real defect (a merged table losing it) and now has a real carrier, but a col-axis `ordered` would be
+  a 16th fmt attribute with **no reader anywhere** — 19b's own admission test — plus stamping in four
+  producers and a golden move. Deferred with that reason stated, not forgotten.
+- `dev/verify_color_attrs.R` was not run (19d/19c's standing debt); nothing in this phase touches the
+  colour vocabulary, and the golden delta proof covers the stored colour attributes cell by cell.
+- `?tab` / `NEWS.md` / the vignettes still describe the pre-19d surface (19d's debt, still open).
+- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed**; 19k still owns that.
+
+**FOLLOW-UPS.** 19g (`meta$spec`) can now derive half its `vars` and key the `test` tibble on
+`(scope, var, level, col)`; 19h's `tab_shape()` capability predicate replaces the five scattered
+aborts (`tab_compact` / `tab_transpose` / `tx_transpose_render`) that this phase left in place; the
+column-axis `ordered` when a reader exists (19m or later); the reg `var`-column rendering eyeball
+(19n).
+
 
 ---
 
@@ -1797,5 +1901,3 @@ After verification passes, always :
    - the phase **"DONE" summary**, under its own `#### Phase <x> — <title>` header in the roadmap section. **CLAUDE.md is the ONLY place it goes**: not in `dev/*.md`, not in your chat response (there, give a short readable account, not the summary text). The maintainer moves done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
 4. `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary (most of the time, it’s not necessary).
 5. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)
-
-

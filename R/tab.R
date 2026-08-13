@@ -2977,10 +2977,11 @@ tab_assemble_tables <- function(ctx) {
   # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
   # Phase 16d: also record the weight column NAME (character(0) when unweighted) -> the footer "Weighted
   # by <wt>." line. `wt` is a local from list2env(ctx) -- the resolved weight name (see tab_transform()).
-  vars_attr <- new_vars_attr(row_vars = row_var, col_vars = as.character(col_vars),
-                             tab_vars = as.character(tab_vars),
-                             wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
-                             var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
+  # Phase 19f (KEY 1): the variable MODEL is declared on the index columns themselves (stamped by the
+  # leaves, read back by tab_declared_vars()); what is recorded here is what no column can carry.
+  vars_attr <- new_vars_attr(
+    wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
+    var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
   # Phase 17b: the two 2.0.0-new attrs left here are ONE `meta` list (drop-NULL happens in new_tab()).
   meta <- list(render_extras = render_extras, vars = vars_attr)
   # Phase 18z13 (D3): project the call's confidence level onto every fmt column. `meta$ci_settings`
@@ -3015,12 +3016,13 @@ tab_assemble_output <- function(ctx) {
   list2env(ctx, environment())
 
   # === STAGE: assemble output shape (§13 truth table) ===
-  # Merge the per-row_var tables into one only in "single" mode (tab() default) and only when
-  # there are no tab_vars (merging with tab_vars is deferred, §7). `tabxplor.output_kable` also
-  # forces a merge (its historical behaviour). A length-1 list (single row_var) is never merged
+  # Merge the per-row_var tables into one only in "single" mode (tab() default). `tabxplor.output_kable`
+  # also forces a merge (its historical behaviour). A length-1 list (single row_var) is never merged
   # -- it is unwrapped below instead.
-  can_merge <- length(tab_vars) == 0
-  merge_now <- (output == "single" | getOption("tabxplor.output_kable") == TRUE) & can_merge
+  # Phase 19f (KEY 1): `can_merge <- length(tab_vars) == 0` is GONE. Several row_vars and tab_vars used
+  # to compete for the one dplyr grouping slot, so asking for both silently returned a LIST rather
+  # than a table -- a documented product limitation. The row-variable axis is a declared column now.
+  merge_now <- output == "single" | getOption("tabxplor.output_kable") == TRUE
   if (merge_now &
       !(is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1 ) ) {
     tabs <- tabs |> tab_compact() # pvalue_lines = FALSE
@@ -3316,7 +3318,7 @@ tab_transpose <- function(tabs, name = NULL) {
   # The level names are suffixed `_<var>` ONLY where two row_vars share one, mirroring the convention
   # tab() itself uses for colliding col_var levels (`Other_race`) -- and the exporters' suffix
   # stripping (tab_col_var_header) reverses it.
-  merged      <- isTRUE(tab_vars_recorded(tabs)$compacted)
+  merged      <- isTRUE(tab_declared_vars(tabs)$compacted)
   src_row_var <- NULL
   if (merged) {
     src   <- as.character(tabs[["row_var"]])
@@ -3332,8 +3334,8 @@ tab_transpose <- function(tabs, name = NULL) {
     row_var <- ".tx_key"
   }
 
-  # --- capture the axis roles BEFORE the pivot (in_totrow / in_refrow are uniform across fmt cols) ---
-  totrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_totrow")
+  # --- capture the axis roles BEFORE the pivot (row_kind / in_refrow are uniform across fmt cols) ---
+  totrow_lgl   <- is_totrow(tabs[[fmtc[1]]])
   refrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_refrow")
   totcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_totcol)]
   refcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_refcol)]
@@ -3410,7 +3412,10 @@ tab_transpose <- function(tabs, name = NULL) {
     wide[[lab]] <- as_refcol(wide[[lab]], TRUE)
   }
 
-  wide[[name]] <- factor(new_labels, levels = new_labels)
+  # Phase 19f: the transposed table declares its own index -- one level column, named after the old
+  # col_var, whose `var` IS that variable. `compacted` is FALSE again by construction: the merged
+  # shape is gone, undone by the pivot, so there is no "var"-role column to declare.
+  wide[[name]] <- new_lvl(factor(new_labels, levels = new_labels), "level", name)
 
   # re-key the whole-table test tibble: the new row_var is the old col_var and vice versa.
   test <- get_test(tabs)
@@ -3433,10 +3438,7 @@ tab_transpose <- function(tabs, name = NULL) {
   # construction instead of by this call remembering to carry it.
   attrs$meta <- tab_meta_merge(
     list(attrs$meta),
-    vars = new_vars_attr(row_vars = name,
-                         col_vars = unique(purrr::map_chr(wide[new_fmtc], get_col_var)),
-                         tab_vars = character(0),
-                         wt = get_vars_attr(tabs)$wt))   # Phase 16d: weight survives transpose
+    vars = new_vars_attr(wt = get_vars_attr(tabs)$wt))   # Phase 16d: weight survives transpose
   rlang::exec(new_tab, wide, !!!attrs)
 }
 
@@ -3444,26 +3446,16 @@ tab_transpose <- function(tabs, name = NULL) {
 
 
 
-# Phase 14d: read the RECORDED roles (the `vars` attribute), validated against the table's actual
-# columns -- a dplyr chain can rename or drop the very columns the attribute names, and a stale
-# attribute must never beat what is really there. NULL -> the caller keeps the column-type heuristic.
-# CONTRACT: the returned `row_var`/`tab_vars` are COLUMN names (what every consumer indexes with),
-# NOT the source variable names. On a compacted table those differ: the row levels live in a column
-# literally named "levels" and the source names only in the `row_var` column's values -- which is
-# exactly why the roles have to be recorded. `row_vars` carries the source names for the few callers
-# that want them (the tab_xl title).
-#' @keywords internal
-tab_vars_recorded <- function(tabs) {
-  v <- get_vars_attr(tabs)
-  if (is.null(v)) return(NULL)
-  nms     <- names(tabs)
-  row_col <- if (isTRUE(v$compacted)) "levels" else v$row_vars
-  if (length(row_col) != 1 || !row_col %in% nms) return(NULL)
-  tab_vars <- v$tab_vars
-  if (!all(tab_vars %in% nms)) return(NULL)
-  list(row_var = row_col, tab_vars = tab_vars,
-       row_vars = v$row_vars, compacted = isTRUE(v$compacted))
-}
+# Phase 19f (KEY 1): the roles come from the COLUMNS that declare them (tab_declared_vars(), see
+# R/row-model.R), not from a stored `vars` triple that a dplyr chain could leave stale. NULL -> the
+# caller keeps the column-type heuristic, which is now the DEGRADED path only (a hand-built frame, an
+# object from an older version, or `mutate(levels = as.character(levels))`).
+# CONTRACT unchanged: `row_var`/`tab_vars` are COLUMN names (what every consumer indexes with), NOT
+# the source variable names. On a merged table those differ -- the row levels live in a column
+# literally named "levels" and the source names in the `var`-role column's values -- which is exactly
+# what a declared role expresses and a name convention cannot. `row_vars` carries the source names
+# for the few callers that want them (the tab_xl title).
+
 
 
 #' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
@@ -3478,7 +3470,7 @@ tab_vars_recorded <- function(tabs) {
 # @examples
 tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
   stopifnot(is.data.frame(tabs))
-  rec <- tab_vars_recorded(tabs)
+  rec <- tab_declared_vars(tabs)
 
   if ("col_vars" %in% vars) {
     fmtc <- purrr::map_lgl(tabs, is_fmt)
@@ -3529,28 +3521,17 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 # BYTE-IDENTICAL to tab_get_vars() for every well-formed table (verified across the fixtures);
 # it only fixes the mis-positioned-factor case and the no-factor/no-fmt crashes.
 #' @keywords internal
-# Phase 17c: the resolved per-row role vector ("data"/"total"/"n"/"row_pct"/"pvalue"/"gof"/"blank"),
-# length nrow(tab). Returns the STORED display-time vector (seeded by tab_materialize_extras(), extended
-# by the row-adding materialisers, sliced by tab_collapse_total_rows) when present and length-matching;
-# else a FALLBACK for hand-/step-built tables, reproducing the old is_totrow + English-label detection.
-# A table with no stored vector never has a "row_pct" row (only materialise creates one, and it stamps
-# the vector), so the fallback needs no row_pct case -- exact by construction. Consumers read THIS, never
-# a rendered row label -- the role-model contract (survives jamovi gettext, unlike a label whitelist).
+# Phase 19f (KEY 1): the per-row kind ("data"/"total"/"n"/"pct"/"pvalue"/"gof"/"blank"), length
+# nrow(tab) -- read straight off the record's `row_kind` field (fmt_row_kind()). It used to be a
+# positional character vector stored in meta$vars$row_roles, seeded at RENDER and living exactly one
+# render pass, so every consumer outside that pass fell back to matching English row labels. Now the
+# rows carry their own kind through every slice, bind, arrange and rebuild, and the label-matching
+# fallback below fires only for a frame with NO fmt columns at all.
 tab_row_roles <- function(tab) {
   n <- nrow(tab)
-  stored <- get_row_roles_raw(tab)
-  if (!is.null(stored) && length(stored) == n) return(as.character(stored))
-  roles <- rep("data", n)
-  rv  <- tryCatch(tab_render_vars(tab)$row_var, error = function(e) NULL)
-  lab <- if (!is.null(rv) && length(rv) == 1L && !is.na(rv) && rv %in% names(tab))
-    as.character(tab[[rv]]) else rep(NA_character_, n)
-  roles[lab %in% "n"]                 <- "n"
-  roles[lab %in% "row_pct"]           <- "row_pct"
-  roles[lab %in% "pvalue"]            <- "pvalue"
-  # z15: a per-predictor footer row reads "<label>: <predictor>", so match on the label part.
-  roles[sub(":.*$", "", lab) %in% reg_footer_labels()] <- "gof"
-  roles[is_totrow(tab)]               <- "total"
-  roles
+  kinds <- fmt_row_kind(tab)
+  if (length(kinds) == n) return(kinds)
+  rep("data", n)
 }
 
 tab_render_vars <- function(tabs) {
@@ -3577,7 +3558,7 @@ tab_render_vars <- function(tabs) {
   # the fallback for a table that never recorded them (tab_plain(), a hand-built frame, an older
   # object). row_var = last factor NOT in the grouping; tab_vars = every other factor (column order,
   # so it matches tab_get_vars() exactly). An ungrouped table falls back to the last-factor heuristic.
-  rec <- tab_vars_recorded(tabs)
+  rec <- tab_declared_vars(tabs)
   if (!is.null(rec)) {
     row_var  <- rec$row_var
     tab_vars <- rec$tab_vars
@@ -3601,6 +3582,11 @@ tab_render_vars <- function(tabs) {
   list(degrade = FALSE, row_var = row_var, tab_vars = tab_vars,
        row_vars = if (!is.null(rec)) rec$row_vars else row_var,
        compacted = !is.null(rec) && isTRUE(rec$compacted),
+       # Phase 19f: the DECLARED "var"-role column -- the one naming, per row, which variable that
+       # row belongs to. It is `row_var` on a merged crosstab and `var` on a regression, which is
+       # why every consumer used to test for a column literally NAMED "row_var" and then needed a
+       # second, different rule for the regression shape.
+       var_col = if (!is.null(rec)) rec$var_col else character(0),
        col_vars = col_vars_names, col_vars_levels = col_vars_levels)
 }
 
@@ -3806,7 +3792,7 @@ tab_prepare <-
 #
 # A carrier COLUMN = list(frame, meta):
 #   frame : named list of the 18 per-cell FIELDS, each length nrow, correctly typed (landmine L1):
-#           n/digits integer, in_totrow/in_tottab/in_refrow logical, display character, the 12
+#           n/digits integer, in_tottab/in_refrow logical, row_kind/display character, the 12
 #           other numerics double. new_fmt() does NO casting, so the carrier owns the types.
 #   meta  : named list of the per-column ATTRIBUTES = `fmt_col_attrs` (defined in fmt_class.R, DERIVED
 #           from new_fmt()'s formals so an attribute can never again be forgotten here). `color` is
@@ -4536,7 +4522,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   }
 
   tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
-  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab
+  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab; kind_vector <- tt$kind
 
 
 
@@ -4811,7 +4797,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
           wn        = a[[2]], pct = a[[3]], mean = NA_reals, diff = a[[4]], ratio = a[[5]],
           ctr       = NA_reals, var = NA_reals, ci_inf = a[[11]], ci_sup = a[[12]],
           pvalue    = a[[13]], or = a[[7]], tot_n = a[[10]], n_eff = a[[14]],
-          in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
+          row_kind  = kind_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
           scale     = scale_1, comp_all = comp_1, ref = ref_1,
           # the only interval this leaf computes itself is the empirical-OR one (ci_or, Woolf's
@@ -4863,14 +4849,17 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # step path) carries the fact its footer and its tab_ci() need -- the pipeline overwrites it with
   # the same value at assemble.
   plain_inf <- leaf_inference(inference, unserved, degraded)
+  # Phase 19f (KEY 1): the leaf DECLARES its row-index columns, in one call, where the truth is known
+  # -- instead of assembling a `vars` list that consumers then had to validate against the real
+  # columns. `tab_render_vars()` reads the declaration; nothing guesses "the last factor column".
+  tabs <- tab_stamp_index(tabs, level = rlang::as_name(row_var),
+                          var = rlang::as_name(row_var),
+                          tab_vars = purrr::map_chr(tab_vars, rlang::as_name))
+  vars_attr <- new_vars_attr(wt = plain_wt)
   result <- if (tab_var_1lv) {
-    vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
-                               tab_vars = character(0), wt = plain_wt)
     new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr)) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
-    vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
-                               tab_vars = purrr::map_chr(tab_vars, rlang::as_name), wt = plain_wt)
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
                     meta = list(vars = vars_attr))
@@ -5888,7 +5877,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   }
 
   tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
-  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab
+  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab; kind_vector <- tt$kind
   comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
 
   #Differences and confidence intervals
@@ -6146,7 +6135,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           wn        = a[[2]], pct = NA_reals, mean = a[[3]], diff = a[[5]], ratio = a[[9]],
           ctr       = NA_reals, var = a[[4]], ci_inf = a[[10]], ci_sup = a[[6]],
           pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals, n_eff = a[[12]],
-          in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
+          row_kind  = kind_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
           # Phase 19b: the numeric leaf computes its OWN interval (unlike the factor one, which waits
           # for tab_ci()), so it stamps the finished scale here. 14v-ii: a ratio-scale mean interval
@@ -6175,6 +6164,12 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
                                     ~ length(unique(.)) == 1))
 
   num_inf <- leaf_inference(inference, unserved, degraded)
+  # Phase 19f (KEY 1): the numeric leaf declares its index columns too -- it recorded NO `vars` at all
+  # before, so tab_num()'s row variable was found by the last-factor heuristic new_vars_attr() existed
+  # to replace.
+  tabs <- tab_stamp_index(tabs, level = rlang::as_name(row_var),
+                          var = rlang::as_name(row_var),
+                          tab_vars = purrr::map_chr(tab_vars, rlang::as_name))
   result <- if (tab_var_1lv) {
     new_tab(tabs, subtext = subtext) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
@@ -7464,7 +7459,10 @@ leaf_totrow_tottab <- function(tabs, row_var, tab_vars) {
     )) |>
       tibble::deframe()
   }
-  list(totrow = totrow_vector, tottab = tottab_vector)
+  # Phase 19f: `kind` is what the record stores (row_kind); the two logicals stay because the
+  # reference / total-column machinery below still asks the two questions separately.
+  list(totrow = totrow_vector, tottab = tottab_vector,
+       kind   = dplyr::if_else(totrow_vector, "total", "data"))
 }
 
 
@@ -7796,9 +7794,10 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color, stars,
 # WARNING: the group column must NOT be relabelled -- the copy keeps its sub-table's `row_var` value
 # so it stays inside that group; `transform` only relabels tab_get_vars()$row_var (= "levels" on a
 # compacted tab, the real row_var otherwise).
-# Phase 17c: `role` -- the stored kind ("row_pct" / "n") of the appended rows. The incoming
-# meta$vars$row_roles is extended by K then spliced through the SAME re-order, so it stays aligned to
-# the rows (NA role = don't touch, for any non-materialiser caller).
+# Phase 19f: `role` -- the row_kind ("pct" / "n") STAMPED on the appended rows' fmt cells. It rides
+# the rows through the splice below with no bookkeeping at all; 17c had to extend a positional vector
+# by K and push it through the same re-order to keep it aligned. NA = don't stamp (a non-materialiser
+# caller).
 tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
   gv   <- dplyr::group_vars(tab)
   flat <- dplyr::ungroup(tab)
@@ -7815,15 +7814,13 @@ tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
   anchor <- vapply(grps, function(g) { i <- which(gid == g);       i[[length(i)]] }, integer(1))
   ord    <- order(src)
   src    <- src[ord]; anchor <- anchor[ord]
-  out    <- dplyr::bind_rows(flat, transform(dplyr::slice(flat, src)))
+  added  <- transform(dplyr::slice(flat, src))
+  if (!is.na(role))                                  # the new rows say what they ARE, in the record
+    added <- dplyr::mutate(added, dplyr::across(dplyr::where(is_fmt), ~ set_row_kind(., role)))
+  out    <- dplyr::bind_rows(flat, added)
   # splice: bind_rows put the new rows at the very end, so re-order by "just after my sub-table".
   reord  <- order(c(seq_len(n0), anchor + 0.5))
   out    <- dplyr::slice(out, reord)
-  if (!is.na(role)) {                                # extend + splice row_roles alongside the rows
-    rr <- get_row_roles_raw(tab)
-    if (is.null(rr) || length(rr) != n0) rr <- dplyr::if_else(is_totrow(flat), "total", "data")
-    out <- set_row_roles(out, c(rr, rep(role, length(src)))[reord])
-  }
   if (length(gv) > 0) dplyr::group_by(out, dplyr::across(tidyselect::all_of(gv))) else out
 }
 
@@ -7950,10 +7947,11 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                         ),
                         dplyr::across(
                           all_of(row_lab),
-                          ~ factor("row_pct")
+                          # WARNING: a declared index column must keep its declaration (Phase 19f)
+                          ~ lvl_restore(factor("row_pct"), .)
                         )
                       )
-                  }, role = "row_pct")
+                  }, role = "pct")
                 } else {
                   ..1
                 }
@@ -7982,7 +7980,8 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                                   ),
                                   dplyr::across(
                                     all_of(row_lab),
-                                    ~ factor("n")
+                                    # WARNING: a declared index column must keep its declaration (Phase 19f)
+                                    ~ lvl_restore(factor("n"), .)
                                   )
                                 )
                             }, role = "n")

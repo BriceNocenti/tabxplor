@@ -31,8 +31,8 @@ testthat::test_that("transpose of a row% table == a native col% table (structure
     testthat::expect_identical(get_col_var(tr[[nm]]), get_col_var(native[[nm]]))
     testthat::expect_identical(is_totcol(tr[[nm]]),  is_totcol(native[[nm]]))
     testthat::expect_identical(is_refcol(tr[[nm]]),  is_refcol(native[[nm]]))
-    testthat::expect_identical(vctrs::field(tr[[nm]], "in_totrow"),
-                               vctrs::field(native[[nm]], "in_totrow"))
+    testthat::expect_identical(tabxplor:::get_row_kind(tr[[nm]]),
+                               tabxplor:::get_row_kind(native[[nm]]))
   }
   # rendered markdown is identical
   testthat::expect_identical(tab_md(tr, print = FALSE), tab_md(native, print = FALSE))

@@ -186,14 +186,15 @@ testthat::test_that("range_totcol is a dormant NULL slot in the render model", {
 
 # === SECTION: recorded variable roles (Phase 14d) ===========================
 
-testthat::test_that("the `vars` attribute records the roles a merged table cannot show", {
+testthat::test_that("the DECLARED index columns say what a merged table cannot show", {
   # tab_compact() renames column 1 to the literal "levels" and keeps the row-variable names only as
-  # levels of a synthetic column NAMED "row_var" -- so the column-type heuristic read that meta column
-  # as a tab_var. Recording the roles at build time is the fix.
+  # values of a synthetic column named "row_var" -- so the column-type heuristic read that column as a
+  # tab_var. Phase 19f: the columns DECLARE their role, so it is read, not recorded and not guessed.
   merged <- tab(gss, c(race, relig), marital, pct = "row")
-  v <- tabxplor:::get_vars_attr(merged)
+  v <- tabxplor:::tab_declared_vars(merged)
   testthat::expect_equal(v$row_vars, c("race", "relig"))   # the SOURCE names, unrecoverable otherwise
   testthat::expect_true(v$compacted)
+  testthat::expect_equal(v$var_col, "row_var")
   testthat::expect_length(v$tab_vars, 0L)
   # tab_get_vars() keeps its COLUMN-name contract, and now tells the truth about tab_vars
   testthat::expect_equal(tab_get_vars(merged)$row_var, "levels")
@@ -210,11 +211,12 @@ testthat::test_that("`vars` survives dplyr verbs, and a stale one loses to the r
                  function(x) dplyr::arrange(x))) {
     testthat::expect_length(tab_get_vars(f(merged))$tab_vars, 0L)
   }
-  # a `vars` naming columns that are gone must not win over what is actually there
-  faked <- tabxplor:::set_vars_attr(tab(gss, race, marital, pct = "row"),
-                                    tabxplor:::new_vars_attr(row_vars = "gone_var"))
-  testthat::expect_null(tabxplor:::tab_vars_recorded(faked))
-  testthat::expect_equal(tab_get_vars(faked)$row_var, "race")   # heuristic fallback
+  # Phase 19f degraded mode: strip the declaration off the label column (what
+  # `mutate(levels = as.character(levels))` does) -> the heuristic fallback, clearly marked as such.
+  bare <- tab(gss, race, marital, pct = "row")
+  bare$race <- factor(as.character(bare$race), levels = levels(bare$race))
+  testthat::expect_null(tabxplor:::tab_declared_vars(bare))
+  testthat::expect_equal(tab_get_vars(bare)$row_var, "race")   # heuristic fallback
 })
 
 testthat::test_that("a table with no recorded roles still detects them (tab_num / hand-built)", {

@@ -20,7 +20,7 @@
 fmt_contract_fields <- c(
   "n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
   "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs", "gap_se",
-  "in_totrow", "in_tottab", "in_refrow"
+  "row_kind", "in_tottab", "in_refrow"
 )
 
 # Storage type of each field (typeof), as guaranteed by the vec_cast lines in fmt().
@@ -29,7 +29,7 @@ fmt_contract_field_types <- c(
   pct = "double", mean = "double", diff = "double", ratio = "double", ctr = "double",
   var = "double", ci_inf = "double", ci_sup = "double", pvalue = "double", or = "double",
   tot_n = "double", n_eff = "double", obs = "double", gap_se = "double",
-  in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
+  row_kind = "character", in_tottab = "logical", in_refrow = "logical"
 )
 
 # The 10 per-column attributes and their constructor defaults. Phase 5 added `color_signif`
@@ -97,7 +97,7 @@ testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and
     n = c(10L, 20L), scale = "level_pct", pct_base = "row", digits = 1L, display = c("n", "pct"),
     wn = c(9.5, 19.4), pct = c(NA, 0.5), mean = c(NA, NA), diff = c(NA, 0.1),
     ctr = c(NA, 0.3), var = c(NA, NA), ci = c(NA, 0.02),
-    in_totrow = c(FALSE, TRUE), in_refrow = c(TRUE, FALSE),
+    row_kind = c("data", "total"), in_refrow = c(TRUE, FALSE),
     comp_all = TRUE, ref = "tot", col_var = "sex",
     totcol = FALSE, color = "diff"
   )

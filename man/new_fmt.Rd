@@ -24,7 +24,7 @@ new_fmt(
   n_eff = NULL,
   obs = NULL,
   gap_se = NULL,
-  in_totrow = NULL,
+  row_kind = NULL,
   in_tottab = NULL,
   in_refrow = NULL,
   comp_all = NA,

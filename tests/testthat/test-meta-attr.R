@@ -44,7 +44,7 @@ test_that("an unset table carries NO meta attribute (absent-when-unset)", {
   e <- new_tab(tibble::tibble(a = 1:2))
   expect_null(attr(e, "meta", exact = TRUE))
   # emptying the last meta field removes the whole attribute
-  t  <- set_vars_attr(new_tab(tibble::tibble(a = 1:2)), new_vars_attr(row_vars = "a"))
+  t  <- set_vars_attr(new_tab(tibble::tibble(a = 1:2)), new_vars_attr(wt = "a"))
   expect_false(is.null(attr(t, "meta", exact = TRUE)))
   t0 <- set_vars_attr(t, NULL)
   expect_null(attr(t0, "meta", exact = TRUE))

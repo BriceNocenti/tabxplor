@@ -3673,7 +3673,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                        skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
       list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
-                                     "{split_var}" := factor(g, levels = sl), .before = 1L),
+                                     "{split_var}" := new_lvl(factor(g, levels = sl),
+                                                              "tab_var", split_var), .before = 1L),
            test = tst)
     })
     # Phase 18z5: `color = "between_groups"` scores each group's estimate against the REFERENCE
@@ -4000,9 +4001,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     }
   }
 
+  # Phase 19f (KEY 1): a regression DECLARES its index like every other producer -- `var` is the
+  # column naming each row's variable (role "var"), `levels` holds the levels (role "level"). It used
+  # to be a pun: `tab_render_vars()` reported the predictor as `tab_vars = "var"`, a fake sub-table
+  # variable, because the grouped-tab machinery offered no other slot.
   tab <- tibble::tibble(
-    var    = forcats::fct_inorder(skeleton$var),
-    levels = forcats::fct_inorder(disp_levels)
+    var    = new_lvl(forcats::fct_inorder(skeleton$var), "var"),
+    levels = new_lvl(forcats::fct_inorder(disp_levels) , "level")
   )
   # Phase 18z13 (SS7.1): the N behind each predictor level, right after the labels -- where STROBE
   # reads it and where the comparable packages put it. It is a BUILT column, not a `render_extras`

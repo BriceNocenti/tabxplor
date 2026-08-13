@@ -91,7 +91,7 @@ tx_plot_theme <- function(cols) {
 #
 # The three axes, each from a STORED fact and never from a rendered label:
 #   * columns   `role` ("model" / "emp" / "n" / "") + `col_var` + `is_totcol`
-#   * rows      tab_render_vars() (which of the four label-block shapes this is) + tab_row_roles()
+#   * rows      tab_render_vars() (the DECLARED index columns, 19f) + tab_row_roles() (the row_kind field)
 #   * scale     fmt_scale_of() (R/fmt_class.R), so the estimate, its neutral, its transform, its unit
 #               and its ladder are one record and not four re-derivations
 # and the colour comes from resolve_color_channel_plans() -> fmt_channel_codes(), the same two calls
@@ -204,8 +204,9 @@ est_row_axis <- function(x) {
                      "i" = "It needs a factor row variable and at least one value column."))
   grp   <- dplyr::group_vars(x)
   lvl_c <- rv$row_var
-  var_c <- if ("var" %in% grp && "var" %in% names(x)) "var"
-           else if (isTRUE(rv$compacted) && "row_var" %in% names(x)) "row_var" else NA_character_
+  # Phase 19f: the DECLARED "var"-role column -- one rule for a merged crosstab and a regression,
+  # where this had one clause per shape (and the regression one keyed on the grouping).
+  var_c <- if (length(rv$var_col) == 1L && rv$var_col %in% names(x)) rv$var_col else NA_character_
   var   <- if (is.na(var_c)) rep(lvl_c, nrow(x)) else as.character(x[[var_c]])
   gcols <- setdiff(grp, c(var_c, lvl_c))
   grpv  <- if (length(gcols))

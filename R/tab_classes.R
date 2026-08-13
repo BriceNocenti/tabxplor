@@ -202,36 +202,19 @@ set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras
 # table-wide meant the legend had to pick a slot back out of the vector BY MEASURE, through an
 # eight-branch chain -- which is how it could name a method the bounds were never built with (D8).
 
-# Phase 14d: `vars` -- the table's OWN record of its variable roles,
-# `list(row_vars = <chr>, col_vars = <chr>, tab_vars = <chr>, compacted = <lgl>, wt =, caption =)`,
-# written where the truth is known (tab_assemble_tables / tab_compact / tab_counts / tab_reg / tab_plain)
-# and read by tab_get_vars() / tab_render_vars().
-# WHY: the roles CANNOT be recovered from a built table. tab_compact() renames column 1 to the literal
-# "levels" and stores the row-variable names only as factor LEVELS of a synthetic column named
-# "row_var" -- so the "last factor column is the row_var, the others are tab_vars" heuristic reports
-# `row_var = "levels", tab_vars = "row_var"` on a merged table that has no tab_vars at all. That is why
-# tab_transpose() aborted with a message about tab_vars that were never there, and why a tab_xl title
-# read "levels by multi (tabbed by row_var)". Sniffing for a column NAMED "row_var" would be the
-# ad-hoc layer this replaces: record the roles instead of inferring them.
-# `compacted` = several row_vars were merged into one table (so `row_vars` has length > 1 and the
-# row-variable name lives in the `row_var` column's values, not in a column name).
-# The heuristic stays as the fallback for hand-built tables (a raw tibble of fmt columns, an object from
-# an older version), so nothing user-facing breaks.
+# `vars` -- what NO column can carry: the weight name, a user caption, the variable-label map.
+# Phase 19f (KEY 1) emptied it of the variable MODEL. `row_vars` / `col_vars` / `tab_vars` /
+# `compacted` / `row_roles` all lived here and are DERIVED now:
+#   row_vars / tab_vars / compacted  <- the declared tabxplor_lvl index columns (tab_declared_vars())
+#   col_vars                         <- the fmt columns' own `col_var` attribute (it always was)
+#   row_roles                        <- the `row_kind` field (fmt_row_kind())
+# WHY that matters: the roles were STORED but the columns are the truth, so every consumer had to
+# validate the store against the real columns and fall back when a dplyr chain had renamed them --
+# and `row_roles` was worse, a positional character vector that existed only during one render pass,
+# so every consumer OUTSIDE that pass (tab_estimates(), anything added later) fell back to matching
+# ENGLISH row labels. A column that declares itself needs neither.
 get_vars_attr <- function(x) get_meta(x)[["vars"]]
 set_vars_attr <- function(x, vars) set_meta_field(x, "vars", vars)
-
-# Phase 17c: the DISPLAY-time positional row-role vector (values "data"/"total"/"n"/"row_pct"/"pvalue"/
-# "gof"/"blank"), stored in meta$vars$row_roles. Seeded by tab_materialize_extras(), extended by the
-# row-adding materialisers (tab_add_n_pct via tab_append_pctcol_rows, and tab_append_footer), sliced by
-# tab_collapse_total_rows -- so every synthetic-row consumer reads the stored kind instead of matching
-# an English row label. It is never persisted in the user-facing built table (materialise is display-only).
-# The RESOLVER with the hand-built-table fallback is tab_row_roles() (R/tab.R); these are the raw store.
-set_row_roles <- function(x, roles) {
-  v <- get_vars_attr(x); if (is.null(v)) v <- new_vars_attr()
-  v$row_roles <- roles                 # NULL clears it (base-R list semantics)
-  set_vars_attr(x, v)
-}
-get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 
 # Phase 18z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
 # computed" is now two per-COLUMN attributes, `basis` and `degf` (R/fmt_class.R), read back through the
@@ -280,11 +263,8 @@ set_caption <- function(x, caption) {
 #' @rdname set_caption
 #' @export
 get_caption <- function(x) get_meta(x)[["vars"]][["caption"]]
-new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
-                          tab_vars = character(0), compacted = FALSE, wt = NA_character_,
-                          var_labels = character(0)) {
-  out <- list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
-              tab_vars = as.character(tab_vars), compacted = isTRUE(compacted))
+new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
+  out <- list()
   # Phase 16d: the weight column NAME drives the footer "Weighted by <wt>." line. It is stored ONLY when
   # there IS a weight -- an unweighted table's `vars` attribute is unchanged (no field), so no golden /
   # serialized table churns and get_vars_attr(x)$wt is simply NULL. (get_weight_name reads it either way.)
@@ -1158,7 +1138,7 @@ kable_tabxplor_style <- function(tabs,
 promote_totrow_to_refrow <- function(col) {
   in_refrow <- vctrs::field(col, "in_refrow")
   if (any(in_refrow)) return(col)             # sub-table already has a reference row
-  totrow <- vctrs::field(col, "in_totrow")
+  totrow <- is_totrow(col)
   if (!any(totrow)) return(col)
   in_refrow[totrow] <- TRUE
   vctrs::field(col, "in_refrow") <- in_refrow
@@ -1198,9 +1178,12 @@ tab_stack_tables <- function(tables) {
       # -- and vctrs rightly refuses to combine two ordered factors with different level sets (or an
       # ordered one with a plain factor). Drop the class here, at the one place the axes are merged;
       # a single-row_var table keeps its ordered column untouched.
+      # Phase 19f: the class goes, the FACT stays. Each piece's declared `ordered` map (one entry per
+      # variable) is carried through the flattening and UNIONED by the vec_c reconcile, so a merged
+      # table still knows which of its stacked variables were ordinal -- it used to lose that outright.
       if (length(pieces) > 1L && any(purrr::map_lgl(pieces, is.ordered)))
         pieces <- purrr::map(pieces, function(p)
-          if (is.ordered(p)) factor(p, levels = levels(p), ordered = FALSE) else p)
+          if (is.ordered(p)) lvl_restore(factor(p, levels = levels(p), ordered = FALSE), p) else p)
       do.call(vctrs::vec_c, pieces)                        # factor level union / plain concat
     }
   })
@@ -1230,14 +1213,21 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # read its synthetic `row_var` meta column as a tab_var and took the bail below. Now that the roles
   # are recorded, that table truthfully reports NO tab_vars, so the guard has to be explicit or it
   # would merge a second time (col 1 "row_var" -> "levels", a new `row_var` on top).
-  if (any(purrr::map_lgl(tabs, ~ isTRUE(get_vars_attr(.)$compacted)))) return(tabs_base)
+  if (any(purrr::map_lgl(tabs, ~ isTRUE(tab_declared_vars(.)$compacted)))) return(tabs_base)
 
-  if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0 )) ) {
-    # Merging across row_vars WITH tab_vars is deferred (§7): keep the multi-table structure.
-    message("since some tab_vars were provided, tab_compact() was not used")
+  # Phase 19f (KEY 1): merging several row_vars BESIDE tab_vars is no longer deferred. It used to be
+  # impossible because both needed the single dplyr grouping slot -- `can_merge <- length(tab_vars)
+  # == 0` in tab_assemble_output() was the surrender, and `tab(d, c(marital, relig), race,
+  # tab_vars = black)` silently returned a LIST instead of a table. The row-variable axis is a
+  # DECLARED column now, so the two compose: group by (tab_vars, row_var). The only thing still
+  # refused is a set of tables that disagree about WHICH tab_vars they have -- there is no one
+  # sub-table axis to merge them on.
+  merge_tab_vars <- purrr::map(tabs, ~ tab_get_vars(.)$tab_vars)
+  if (length(unique(merge_tab_vars)) > 1L) {
+    message("since the tables have different tab_vars, tab_compact() was not used")
     return(tabs_base)
-    #stop("tab_compact() can't be used with tab_vars")
   }
+  merge_tab_vars <- merge_tab_vars[[1]]
 
   same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
   same_col_vars <- same_col_vars |>
@@ -1258,20 +1248,10 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # one place in the package that could lose a `meta` sub-field.
   metas_in <- purrr::map(tabs, get_meta)
 
-  # Phase 14d: the ONE place the row-variable names must be harvested per-tab, not from tabs[[1]] --
-  # the merge is about to destroy them (col 1 -> the literal "levels"; the names survive only as
-  # levels of the synthetic `row_var` factor). Recorded, so no consumer has to guess them back.
+  # Phase 19f: the row-variable NAMES are no longer harvested here -- they are the levels of the
+  # declared "var"-role column the merge creates below, read back by tab_declared_vars(). What is
+  # left is what no column can carry.
   vars_merged <- new_vars_attr(
-    row_vars  = purrr::map_chr(tabs, ~ {
-      v  <- get_vars_attr(.)
-      rv <- dplyr::first(if (is.null(v)) tab_get_vars(.)$row_var else v$row_vars)
-      # Phase 14i: was `%||% NA_character_`. Base `%||%` is R >= 4.4 only and the package supports
-      # R >= 4.1, importing it from nowhere (cf. resolve_export_opts()) -- so this errored on 4.1-4.3.
-      if (is.null(rv)) NA_character_ else rv
-    }),
-    col_vars  = longest_col_vars,
-    tab_vars  = character(0),          # guaranteed: the tab_vars bail above returned already
-    compacted = TRUE,
     wt        = get_vars_attr(tabs[[1]])$wt,  # Phase 16d: the weight survives a compact merge
     # Phase k: the per-tab variable labels (each row_var's + the shared col_vars') survive the merge
     # too -- union across the merged tables, first name wins, so the opt-in name swap still works.
@@ -1300,11 +1280,27 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # field frame there (still per sub-table, so `any(in_refrow)` stays grouped per row_var), and the
   # cross-table attribute reconcile reuses vec_ptype_common (L3). The per-tab prep (rename col 1 ->
   # "levels", add the row_var meta factor) is cheap (no row-reconstruction).
+  # Phase 19f (KEY 1): the merged table DECLARES its two-column index -- `row_var` is the column that
+  # names, per row, which variable that row belongs to (role "var"), `levels` holds the levels (role
+  # "level", `var` NA: several variables live there). No consumer sniffs for a column NAMED "row_var"
+  # any more, and `compacted` is the mere presence of the "var"-role column.
+  # WARNING: rename the DECLARED level column, never "column 1" -- with tab_vars the first column is
+  # a sub-table variable, and `.cols = 1` renamed THAT to "levels" (which is why the composition was
+  # impossible to see working even once the grouping slot was freed).
   prepped <- tabs |> purrr::imap(
-    ~ dplyr::rename_with(.x, ~"levels", .cols =  1) |>
-      dplyr::mutate(row_var = as.factor(.y), .before = 1)
+    ~ dplyr::rename_with(.x, ~"levels",
+                         .cols = tidyselect::all_of(tab_get_vars(.x)$row_var)) |>
+      dplyr::mutate(row_var = new_lvl(as.factor(.y), "var")) |>
+      # the index block leads, sub-table axis first: [tab_vars] row_var levels
+      dplyr::relocate(tidyselect::all_of(c(merge_tab_vars, "row_var")))
   )
   tabs <- tab_stack_tables(prepped)
+  # With tab_vars, the sub-table axis is the OUTER one (one sub-table per tab_var level, each holding
+  # every row_var's block) -- the stack is row_var-major, so re-order. order() is stable, so each
+  # table's own row order and the table order both survive inside a tab_var level.
+  if (length(merge_tab_vars) > 0)
+    tabs <- tabs[do.call(order, unname(lapply(merge_tab_vars,
+                                              function(v) as.integer(tabs[[v]])))), ]
 
   # tabs$Danser |> vctrs::vec_data()
   # tabs |> tab_kable()
@@ -1331,7 +1327,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # exported tab_compact() on a hand-assembled list; carrying it is the better answer.
   tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
                   meta = tab_meta_merge(metas_in, vars = vars_merged)) |>
-    dplyr::group_by(!!rlang::sym("row_var"))
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c(merge_tab_vars, "row_var"))))
 
   # if (pvalue_lines) {
   #   tabs <- tabs |> tab_pvalue_lines()
@@ -1363,11 +1359,9 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
   backend <- match.arg(backend)
 
-  # Phase 17c: seed the display-time row-role vector ("total"/"data" from the drift-free is_totrow flag).
-  # Each row-adding spec below EXTENDS it (add_n_pct -> "n"/"row_pct", footer -> "pvalue"/"gof"/"blank");
-  # collapse_totals slices it. Consumers (export-prep tot_block, collapse) read tab_row_roles() rather
-  # than matching an English row label -- the whole point of the role model.
-  tab <- set_row_roles(tab, dplyr::if_else(is_totrow(tab), "total", "data"))
+  # Phase 19f (KEY 1): nothing to seed. Every row already carries its own kind in the record
+  # (`row_kind`), so the row-adding specs below stamp the rows they create and the slicing ones just
+  # slice -- where 17c had to seed, extend and re-slice a positional vector that lived one render.
 
   # Phase 17g: the synthetic extras are now DECLARED specs run by tab_materialize(). The add_n / add_pct
   # display intent is read ONCE here into `ctx` (a spec cannot re-read it after add_n_pct clears
@@ -1487,7 +1481,7 @@ mat_sd_twin <- function(tab) {
 #' @keywords internal
 #' @noRd
 tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
-  if (!isTRUE(get_vars_attr(tab)$compacted)) return(tab)   # single row_var / tab_vars: untouched
+  if (!isTRUE(tab_declared_vars(tab)$compacted)) return(tab)  # single row_var / tab_vars: untouched
   is_tot <- is_totrow(tab)
   tot    <- which(is_tot)
   if (length(tot) < 2L) return(tab)
@@ -1504,7 +1498,7 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   grp_col <- dplyr::group_vars(tab)
   grp     <- if (length(grp_col) >= 1L && grp_col[1] %in% names(tab)) as.character(tab[[grp_col[1]]]) else
     rep(NA_character_, n_row)
-  is_summary <- tab_row_roles(tab) %in% c("n", "row_pct")
+  is_summary <- tab_row_roles(tab) %in% c("n", "pct")
 
   block_rows <- function(i) {
     rows <- i; j <- i + 1L
@@ -1513,12 +1507,20 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   }
   blocks <- lapply(tot, block_rows)
 
-  # "As displayed" signature: text format() over EVERY fmt column across the block's rows -- the single
-  # canonical predicate for all backends (two totals in one column pad to the same width, so string
-  # equality is displayed equality; comparing every column also catches the xl pct="row" case where the
-  # base n is a separate column, and any mean/_sd column).
+  # Phase 19f: the block signature is a KEY, not a rendered format() pass over every fmt column.
+  # The question the collapse asks is "do these blocks describe the same population?", and its own
+  # answer says so: under na = "keep" / "drop_all" / "common_base" every block's total is identical
+  # BY CONSTRUCTION (same base), only na = "drop" (each row_var drops its own missing values) makes
+  # them differ. So the key is the block's counts and the marginals computed from them --
+  # n / wn / pct / mean, four fields, read straight off the record. It is also STRICTER in the right
+  # direction than the string it replaces: two blocks with genuinely different bases that happened to
+  # round to the same printed cell were collapsed into one Total whose N was only one of theirs.
+  sig_fields <- c("n", "wn", "pct", "mean")
   sig <- vapply(blocks, function(rows)
-    paste(unlist(lapply(fmt_nms, function(nm) format(tab[[nm]][rows]))), collapse = "\r"),
+    paste(unlist(lapply(fmt_nms, function(nm) {
+      cell <- tab[[nm]][rows]
+      lapply(sig_fields, function(f) vctrs::field(cell, f))
+    })), collapse = "\r"),
     character(1))
 
   if (length(unique(sig)) > 1L) {                          # genuinely different totals -> keep them all
@@ -1535,8 +1537,7 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   drop_rows <- unlist(blocks[-length(blocks)])             # keep the LAST block's total; drop the rest
   keep <- setdiff(seq_len(n_row), drop_rows)
   out  <- tab[keep, ]                                       # global indices -> class/attrs/grouping kept
-  rr   <- get_row_roles_raw(tab)                            # slice the row-role vector with the rows
-  if (!is.null(rr) && length(rr) == n_row) out <- set_row_roles(out, rr[keep])
+  # Phase 19f: nothing to re-slice -- each row's kind rides its own cells.
 
   # Phase 18m: the shared Total gets its OWN group (a blank row_var, its level stays "Total") after a
   # blank-line separator -- not tucked under the last row_var. Reassign the surviving total block (Total
@@ -2630,7 +2631,7 @@ group_by.tabxplor_tab <- function(.data,
       # as a temp column (grouped-transmute needs a per-group-subsettable column, not an env vector) --
       # byte-identical to the old row-label match on a materialised table, but robust to a relabelled UI.
       # Compute the flag OUTSIDE add_column: inside it, `.data` resolves to the rlang pronoun, not the table.
-      .srole <- tab_row_roles(.data) %in% c("row_pct", "n", "pvalue")
+      .srole <- tab_row_roles(.data) %in% c("pct", "n", "pvalue")
       .data <- .data |>
         dplyr::select(-tidyselect::any_of(".__srole")) |>
         tibble::add_column(.__srole = .srole)
