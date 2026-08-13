@@ -123,8 +123,21 @@ R/
 │                              directly, so forcing runs ONCE + colour finalises ONCE downstream (no
 │                              double finalize, no .color_deprecate). df=/num= build normally then pull
 │                              get_num() per cell via leaf_extract_raw(); shared tails leaf_totrow_tottab()
-│                              + leaf_rename_totals(). tab_apply_reference() = the ONE reference executor
+│                              + leaf_rename_totals(). Both public leaves take a real `display =` (19d
+│                              tail) and run the SAME tab_apply_display() the pipeline runs, so the
+│                              `OR` retirement route is lossless on them too -- the leaf and the
+│                              wrapper speak ONE display grammar. tab_apply_reference() = the ONE
+│                              reference executor
 │                              (tab_num's diff_index_mean twin + inline calculate_refrows copy DELETED).
+│                              display_write_col() = THE per-column display-template writer, shared by
+│                              build-time tab(display =) and post-hoc set_display(col, "num_ci")
+│                              (fmt_apply_num_ci DELETED: the two copies disagreed on every total row).
+│                              D22 is PER-CELL there -- a template is written only where every one of
+│                              its fields exists -- and D23 (display_refuse_mismatch) refuses two
+│                              EFFECT geometries, never a LEVEL beside a comparison interval
+│                              ("48% [-3;+4]" IS the flagship cell). WARNING: its `across()` callback
+│                              must stay a NAMED function -- dplyr inlines an anonymous one into the
+│                              data mask, `r$col` yields NULL, and across() DROPS the column.
 │                              tab_prepare(), tab_ci(), tab_chi2(), tab_spread(), tab_get_vars(),
 │                              tab_render_vars() (Phase 10c: robust group_vars-based role detection +
 │                              graceful degrade, used by print + exporters),
@@ -267,6 +280,19 @@ R/
 │                              one step after 17d decoded such strings away at the boundary. Each
 │                              consumer asks the measure instead: measure_stage() (leaf vs test
 │                              step), measure_applies() (can it colour a mean), measure_forces().
+│                              19d: THE comparison chain (`color` -> `display` -> the difference) via
+│                              display_comparison()/tab_leaf_comparison(); resolve_ci_value() (the
+│                              c("auto","no","cell","ref") anchor + its soft-deprecations);
+│                              resolve_leaf_ci() = the SAME rules for a leaf called directly AND for
+│                              the jamovi boundary (jmvtab_build's 2 hand-mirrored ci rules are gone);
+│                              measure_geometry() = which of the 3 geometries owns the stored interval
+│                              ("or"/"ratio"/"diff"), shared with the jmvtab tier-3 cache TUPLE so the
+│                              cache and the pipeline cannot disagree (a diff<->ratio toggle changes
+│                              the interval, so it can never be a re-paint); ci_disable_signif() =
+│                              D28's ONE rule (`ci = "cell"` informs and disables stars/color_signif),
+│                              called by both resolvers AND by tab()'s argument boundary -- the last
+│                              because the STORED policy attribute is written from the colour spec,
+│                              not from what the resolver decided.
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
@@ -1564,6 +1590,104 @@ commit**: the tree is red. What follows is what is really in it.
 **FOLLOW-UPS.** Finish the test tail and the golden review (immediately); `?tab` + `NEWS.md` +
 the architecture guide (immediately, they belong to this phase); re-measure the odds-ratio cost on a
 wide table (19l); `jmv_tab3_rerefable`'s now-vestigial `color = "auto"` + `ci` exclusion (19k).
+
+#### Phase 19d — KEY 8a: the `tab()` comparison surface (session 2 — the tail)
+
+**PHASE 19e: BLOCKED — NOT STARTED.** This session was asked for 19e and found the tree red exactly
+as 19d's own summary warned. Closing that tail is a hard prerequisite (19e's declared sentinels
+`test-tab_reg*.R` were themselves among the failures), and it consumed the whole session:
+**FAIL 48 → 8, PASS 5773 → 5822**, with every remaining failure confined to ONE subsystem, the
+jamovi tier-3 cache. **Nothing of 19e's own content was implemented** — no `effect` × `measure`, no
+`exponentiate`/`at`/`ame_ratio` deletion, no `display =` on `tab_reg()`, no capability table, no
+D25/D6. Start it on this commit, which is green everywhere except `test-jmvtab-cache.R`.
+
+**Nine defects, all of them 19d's own, each with the fixture that fails without the fix.**
+
+- **The odds-ratio tooltip leaked onto every percentage table** (`OR: 1.00` on a plain `tab()` hover).
+  Root cause is the phase's own rule broken: the gate asked whether the `or` FIELD is populated, and
+  19d made it populated everywhere. It reads the column's **declared `scale`** now (`odds_ratio` =
+  this table compares on it) — *or* a non-empty `role`, because on a **regression** column the odds
+  ratio is not a by-product but the model's own estimate, deliberately attached beside an AME.
+- **`display` was refusing its own flagship cell.** D23 compared the template's estimate geometry to
+  the column's interval geometry and aborted on `{pct} {ci}` — i.e. on `48% [-3;+4]`, which is what
+  `display = "num_ci"` literally expands to. A **level names no comparison**, so it constrains the
+  bracket not at all; the class D23 closes is two EFFECT geometries disagreeing.
+- **`display = "num_ci"` and its documented equivalent `"{pct} {ci}"` disagreed on every total row**,
+  because they were two implementations. Folded into ONE writer, **`display_write_col()`**, shared by
+  the build-time `tab(display =)` and the post-hoc `set_display(col, "num_ci")`; `fmt_apply_num_ci()`
+  is DELETED. D22 became **per-cell** in the fold (a total row is the reference, so it has no
+  difference interval and keeps a bare `pct`), and the note still fires only where a field is empty in
+  the whole column.
+- ⚠ **`across()` + an inline anonymous `.fns` = silent column loss.** dplyr INLINES an anonymous
+  function body into the mutate expression, so `r <- f(col)` then `r$col` resolves against the data
+  mask and yields NULL — and NULL from `across()` **drops the column**. Measured: every `<fmt>` column
+  vanished, `tab(display = ...)` returned the label column alone. The writer is a NAMED function now,
+  with the warning next to it.
+- **`ci = "cell"` + a policy was informed, disabled — and then STORED anyway.** The resolvers
+  disabled it locally while `finalize_color_spec()` wrote the original `color_signif` onto every
+  column, so the table claimed a gate it did not apply. The rule is ONE function,
+  **`ci_disable_signif()`**, called by both resolvers and by `tab()`'s argument boundary (idempotent,
+  so exactly one message).
+- **A numeric `sup_cols` column lost its interval and greyed itself out.** `can_compare` asked one
+  per-TABLE question ("are the factor columns on row/col %"), but a MEAN needs no percentage base —
+  it compares to its reference row always. It is per-column-kind now (`pct_rowcol | has_num`).
+- **`ci_scale` stopped being per-row_var** when 19d made `geom` follow the scalar `color`, so a
+  vector `ci` collapsed to one entry. Recycled, and pinned to entries that actually build a reference
+  interval.
+- **19d's full-word colour rename had not reached `EST_SCALES$label_meas`** (still `"or"`/`"diff"`),
+  which is a MEASURES **key**: the forest plot's axis lost its `1/2` glyphs and errored on lookup.
+  Two more stale keys in `legend_measure_word()` / `legend_reg_adapter()` (the French legend printed
+  `diff` for *différence*).
+- `tab_deprecate_or()` refuses a **vector** `OR` (the row_var axis is globalised and `display` is
+  scalar, so there is nowhere for it to land) instead of silently keeping the first entry.
+
+**The gap 19d flagged and handed forward is closed here instead: `tab_plain()` and `tab_num()` gain a
+real `display =`.** 19d's summary called the `OR` route "lossy on the leaves, decide in 19h"; but the
+leaf and the wrapper speaking two grammars is the disease, not a scheduling question. Both leaves now
+run the SAME `tab_apply_display()` the pipeline runs, so `tab_plain(OR = "OR")` is lossless and
+`tab_num(display =)` exists at all. `tab_num` also resolves the comparison chain (`color` →
+`display`) for its interval scale.
+
+**The jamovi boundary got its correctness half** (its consolidation stays 19k's). `jmvtab_build()`'s
+**two hand-mirrored `ci` rules are deleted** for one `resolve_leaf_ci()` call — they had fallen behind
+19d, so a `stars = FALSE` factor table let the re-ref compute an interval the fresh rebuild leaves NA:
+a cached table that disagreed with a rebuilt one. The tier-3 tuple gained the **interval geometry**
+(`measure_geometry()`, extracted so the cache and the pipeline cannot disagree about it) — a
+diff↔ratio toggle used to be an exact tuple HIT and re-painted a ratio over the difference interval —
+and is keyed on the **resolved** `OR` route (display/ref/ref2), not the retired option. Cache schema
+**13 → 14**.
+
+**HONEST CONCERNS.**
+
+- **`test-jmvtab-cache.R` is the one red file: 8 failures.** 7 pre-existed on the 19d commit; **1 is
+  new**, from my tuple rework, which I could not finish verifying. They are all the tier-3 armed
+  CARRIER, and they share one cause I identified but did not fix: **19d made `or` a
+  reference-dependent field on every table, and the tier-3 re-ref / level-relevel paths do not
+  recompute it** (`or_compare = TRUE` in `jmv_tab3_reref()` is a first step; `jmv_relevel_cols()`
+  reorders columns, which changes which level is `ref2`, and recomputes nothing). Two assertions also
+  expect a re-ref HIT where the stricter tuple now rebuilds. **This is 19k's subsystem and it should
+  be finished there, with the cold+warm+re-ref lock** — but it is a genuine correctness hole in the
+  live jamovi module today, not a cosmetic one, so it must not be deferred past 19k.
+- **The golden review 19d owed is still not done cell by cell.** `_golden/` was regenerated in 19d and
+  `verify_golden_field_delta.R` was not run then and is not run here. What IS now true: `test-golden.R`
+  and every `_snaps/` file pass unchanged, and this session's only golden edit was migrating
+  `helper-golden.R` off the deprecated `ci = "diff"` (lossless — it maps to `ci = "ref"`), which is
+  what was polluting two snapshots with a lifecycle warning. Two stray `_snaps/*.new.md` artifacts
+  committed by 19d are deleted.
+- **`dev/verify_color_attrs.R` was still not run** before/after. It is the characterisation net 19c
+  built for this migration and it remains 19d's biggest unclosed hole.
+- **124 deprecation WARNINGs remain in the suite** — the test corpus still calls `ci = "diff"` /
+  `OR = TRUE` / `color = "OR"` widely. Harmless (the shims work, that is what they assert), but it
+  hides new warnings. A mechanical corpus migration belongs to 19l.
+- `?tab`'s `OR`/`ci`/`color` blocks and `NEWS.md` still describe the pre-19d surface (19d's own
+  follow-up, still open); `dev/tabxplor_architecture.md` untouched.
+- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed**; 19k still owns
+  carrying the new `color` / `ci` vocabulary into the UI.
+
+**FOLLOW-UPS.** 19e, in full, on this commit (nothing of it exists). Then: the tier-3 `or` recompute
++ the two re-ref hit expectations (19k, at the latest); `?tab` + `NEWS.md` + the architecture guide
+(19d's debt); `dev/verify_color_attrs.R` and the golden cell review (19l); the deprecation-warning
+corpus migration (19l).
 
 
 ---

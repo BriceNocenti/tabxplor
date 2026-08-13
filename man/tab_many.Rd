@@ -31,7 +31,7 @@ tab_many(
   ref = "auto",
   ref2 = "first",
   comp = "tab",
-  ci = "no",
+  ci = "auto",
   conf_level = conf_level_default(),
   stars = NULL,
   ci_method = NULL,
@@ -51,6 +51,7 @@ tab_many(
   n_min = 0,
   color_signif = "ignore",
   color_breaks = NULL,
+  display = NULL,
   parallel = NULL,
   filter
 )

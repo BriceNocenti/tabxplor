@@ -92,6 +92,12 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # SAME predicates and must run BEFORE it (see there).
   pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
   num_only   <- sum(col_vars_text) == 0
+  # A MEAN column can always be compared to its reference row -- it needs no percentage base. So "can
+  # this table carry a comparison interval" is per-column-KIND, not per-table: `pct_rowcol` answers for
+  # the factor columns, `has_num` for the numeric ones. Collapsing the two (a table is "comparable"
+  # only if its FACTOR columns are on row/col %) is what left `tab(..., sup_cols = <numeric>,
+  # color_signif = ...)` with no interval and therefore every cell greyed.
+  has_num    <- any(!col_vars_text)
   # Phase 19d: the odds ratio is computed on EVERY row/col-percentage table now, so "is this an OR
   # table" stopped being an input. `color = "auto"` therefore never resolves to the odds ratio: the
   # automatic reading of a percentage table is its difference, and an odds ratio is asked for by name.
@@ -139,22 +145,16 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # the LEAF computes (ci_type/scale `odds_ratio`); "ratio" -> Katz / ratio-of-means; "diff" -> the
   # difference methods. `color_ratio_ci` says the two-channel spec put the ratio on the TEXT channel
   # (the measure the reader sees owns the interval); a deprecated `ci = "ratio"` pins it directly.
-  geom <- ifelse(measure_of == "odds_ratio", "or",
-          ifelse(measure_of == "ratio" | isTRUE(color_ratio_ci) | ci_ratio_req, "ratio", "diff"))
+  geom <- measure_geometry(measure_of, color_ratio_ci, ci_ratio_req)
 
   # Phase 19d (D28): `ci = "cell"` and the significance machinery, from ONE rule. The cell interval
   # answers "how precise is this 26 %", which no comparison can be tested against -- so `stars` and
   # `color_signif` are INFORMED AND DISABLED (maintainer's ruling), where before `color_signif`
   # aborted and `stars` was silently dropped: two consumers of one fact, two behaviours.
   signif_on <- !identical(color_signif, "ignore") && !is.na(color_signif[1])
-  if (any(ci == "cell") && (signif_on || isTRUE(stars))) {
-    cli::cli_inform(c(
-      "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
-                   "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
-      "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
-    ))
-    color_signif <- "ignore"; signif_on <- FALSE; stars <- FALSE
-  }
+  d <- ci_disable_signif(ci, color_signif, stars)
+  color_signif <- d$color_signif ; stars <- d$stars
+  signif_on <- !identical(color_signif, "ignore") && !is.na(color_signif)
 
   # WHERE the interval sits. A measure declares `requires["ci"] == "gated"` = "only when a policy is
   # in force, since that is what reads the interval"; `stars` reads the same interval's p-value; and
@@ -167,7 +167,7 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   gated <- signif_on &
     vapply(gate_measure, measure_forces, logical(1), "ci", TRUE, USE.NAMES = FALSE)
   # a comparison interval needs a comparison: a reference, and columns that can carry one.
-  can_compare <- (num_only | pct_rowcol) & !(ref %in% c("no", "") | is.na(ref))
+  can_compare <- (num_only | pct_rowcol | has_num) & !(ref %in% c("no", "") | is.na(ref))
   want_ref    <- (gated | isTRUE(stars) | ci == "ref") & can_compare
   ci[ci == "auto"] <- "no"
   ci[want_ref & ci == "no"] <- "ref"
@@ -210,7 +210,10 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # Which SCALE the cell-vs-reference interval is expressed on: Katz log-RR bounds (neutral 1) when
   # the reader sees the ratio, the difference methods (neutral 0) otherwise. Only where a difference
   # CI is computed at all -- `ci = "cell"` is a one-proportion interval with no reference.
-  ci_scale <- ifelse(geom == "ratio", "ratio", "diff")
+  # ... and only WHERE one is built: `ci` is per row_var, `geom` follows `color` (scalar unless the
+  # caller varied it), so the two are recycled together and an entry with no reference interval
+  # ("cell"/"no") keeps the neutral "diff".
+  ci_scale <- ifelse(vctrs::vec_recycle(geom, length(ci)) == "ratio" & ci == "diff", "ratio", "diff")
 
   # Phase 7d-ii: DATA-FREE cache-key material for the persisted jmvtab cache tiers 0-2
   # (dev/tabxplor_jmvtab_cache_design.md §3). Symbolic only: the module (Phase 7e) turns the
@@ -264,6 +267,41 @@ resolve_ci_value <- function(ci, user_env = rlang::caller_env(2)) {
   ci
 }
 
+# measure_geometry() -- Phase 19d/19e: WHICH of the three geometries owns a table's stored interval,
+# given the comparison it makes. "or" -> the Woolf log-OR bounds the LEAF computes; "ratio" -> Katz /
+# ratio-of-means; "diff" -> the difference methods. Stated ONCE because the jamovi cache tuple must
+# agree with the pipeline about it (a diff <-> ratio toggle changes the interval, so it cannot be a
+# cache re-paint). `color_ratio_ci` says the two-channel spec put the ratio on the TEXT channel (the
+# measure the reader sees owns the interval); `ci_ratio_req` is a deprecated `ci = "ratio"` pinning it.
+#' @keywords internal
+#' @noRd
+measure_geometry <- function(measure, color_ratio_ci = FALSE, ci_ratio_req = FALSE) {
+  ifelse(measure == "odds_ratio", "or",
+  ifelse(measure == "ratio" | isTRUE(color_ratio_ci) | ci_ratio_req, "ratio", "diff"))
+}
+
+# ci_disable_signif() -- Phase 19d (D28), THE single statement of the rule, so its three consumers
+# (the pipeline resolver, the leaf resolver, and tab()'s own argument boundary -- which must apply it
+# too, because the stored `color_signif` attribute is written from the color SPEC, not from what the
+# resolver decided) cannot drift. The cell interval answers "how precise is this 26 %", which no
+# comparison can be tested against: `stars` and `color_signif` are INFORMED and DISABLED. Before,
+# `color_signif` aborted and `stars` was silently dropped -- two consumers of one fact, two
+# behaviours. Idempotent, so the boundary applying it first silences the resolvers.
+#' @keywords internal
+#' @noRd
+ci_disable_signif <- function(ci, color_signif = "ignore", stars = FALSE) {
+  out <- list(color_signif = color_signif, stars = stars)
+  signif_on <- length(color_signif) > 0L && !is.na(color_signif[1]) &&
+    !identical(color_signif[1], "ignore")
+  if (!any(ci == "cell", na.rm = TRUE) || !(signif_on || isTRUE(stars))) return(out)
+  cli::cli_inform(c(
+    "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
+                 "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
+    "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
+  ))
+  list(color_signif = "ignore", stars = FALSE)
+}
+
 # display_comparison() -- Phase 19d: which comparison a `display` template NAMES, read from its
 # PRIMARY token. The second link of the comparison chain (`color` -> `display` -> the difference):
 # a user who asks to SEE odds ratios and leaves the colour automatic gets odds-ratio colours, stars
@@ -297,15 +335,9 @@ display_comparison <- function(display) {
 #' @noRd
 resolve_leaf_ci <- function(ci, color, color_signif = "ignore", stars = FALSE, ref = "tot") {
   ci        <- resolve_ci_value(if (is.null(ci)) "auto" else ci)[1]
+  d         <- ci_disable_signif(ci, color_signif, stars)
+  color_signif <- d$color_signif ; stars <- d$stars
   signif_on <- !identical(color_signif[1], "ignore") && !is.na(color_signif[1])
-  if (identical(ci, "cell") && (signif_on || isTRUE(stars))) {
-    cli::cli_inform(c(
-      "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
-                   "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
-      "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
-    ))
-    signif_on <- FALSE; stars <- FALSE
-  }
   can_compare <- !(ref[1] %in% c("no", "")) && !is.na(ref[1])
   gated <- signif_on && measure_forces(color, "ci", TRUE)
   if (identical(ci, "auto")) ci <- if ((gated || isTRUE(stars)) && can_compare) "ref" else "no"

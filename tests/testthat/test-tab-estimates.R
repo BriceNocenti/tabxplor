@@ -285,7 +285,7 @@ test_that("the colours are the table's own slots and hexes", {
     expect_identical(s$slot_bg,   cd$bg_slot[s$row])
   }
   expect_true(any(e$slot_text > 0L))                          # never vacuous
-  expect_identical(unique(e$measure), "diff")
+  expect_identical(unique(e$measure), "difference")
   expect_identical(unique(e$policy),  "grey_non_signif")
   # the print palette speaks through the FACE, which the model carries too
   ep <- est(t, theme = "print")

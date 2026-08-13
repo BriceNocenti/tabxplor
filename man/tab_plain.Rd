@@ -12,6 +12,7 @@ tab_plain(
   wt,
   pct = "no",
   color = "no",
+  display = NULL,
   OR = "no",
   na = "keep",
   ref = "auto",
@@ -63,6 +64,10 @@ totals (or from first cells when \code{ref = "first"}).
 \item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
 color based on odds ratios (or relative risks ratios)
 }}
+
+\item{display}{A \code{{}} display template applied to the built table -- the same grammar
+\code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
+or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
 for a binary variable the usual odds ratio; for a variable with 3 levels or more,

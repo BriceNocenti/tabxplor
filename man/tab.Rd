@@ -24,7 +24,7 @@ tab(
   ref = "auto",
   ref2 = "first",
   comp = "tab",
-  ci = "no",
+  ci = "auto",
   conf_level = conf_level_default(),
   stars = NULL,
   ci_method = NULL,

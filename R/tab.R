@@ -712,6 +712,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # so it is NOT size-1-asserted. It is parsed to a spec here; the pipeline runs on the text-channel
   # legacy string, then finalize_color_spec() sets the final color / color_signif attributes.
   color_spec <- normalize_color_spec(color, color_signif)
+  # Phase 19d (D28), applied HERE because the stored `color_signif` attribute is written from this
+  # spec by finalize_color_spec(): a policy the resolver silently disabled would still be STORED on
+  # every column, i.e. the table would claim a gate it does not apply. One rule, one message.
+  ci_off <- ci_disable_signif(ci, color_spec$signif, stars)
+  color_spec$signif <- ci_off$color_signif ; stars <- ci_off$stars
   color <- color_spec$legacy
   vctrs::vec_assert(pct  , size = 1)
   # Phase 6d (§4): `ref` may be a (named) vector -- one reference row per row_var -- so it is NOT
@@ -854,6 +859,12 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 tab_deprecate_or <- function(OR, display, ref2, ref) {
   out <- list(display = display, ref2 = ref2, ref = ref)
   if (length(OR) == 0L) return(out)
+  # The row_var axis is globalised on tab() (Phase 6), and `display` -- the argument `OR` retires
+  # onto -- is scalar, so a per-row_var vector has nowhere to land. Refuse rather than silently keep
+  # the first entry.
+  if (length(OR) > 1L)
+    cli::cli_abort(c("{.arg OR} must be a single value.",
+                     "i" = "It is retired: use {.code display = \"{{or}}\"} (scalar, like every {.arg display})."))
   if (is.logical(OR)) OR <- if (isTRUE(OR[1])) "OR" else "no"
   OR <- as.character(OR)[1]
   if (is.na(OR) || OR %in% c("no", "")) return(out)
@@ -906,15 +917,39 @@ tab_apply_display <- function(tabs, display) {
   if (is.null(display) || length(display) == 0L) return(tabs)
   ds <- display[[1]]
   if (is.na(ds) || ds %in% c("", "no")) return(tabs)
-  # "num_ci" is a type-adaptive alias, not a single {} template: per column it applies "{pct} {ci}"
-  # (percentages) or "{mean} {ci}" (means), so a mixed factor + numeric table resolves each column by
-  # its own type. fmt_apply_num_ci() reuses the same value-cell eligibility as the template path
-  # below, so the CI shown is whatever the table computed (cell / difference / ratio).
-  if (identical(ds, "num_ci")) {
-    set_one <- function(tab) dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), fmt_apply_num_ci))
-    return(if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one))
+  ds <- if (identical(ds, "num_ci")) ds else validate_display_template(ds)
+  missing_tok <- character()
+  # WARNING: this must be a NAMED function, never an anonymous one written inside across(). dplyr
+  # INLINES an anonymous `.fns` body into the mutate expression, where `r <- display_write_col(...)`
+  # then `r$col` resolves against the data mask and yields NULL -- and a NULL from across() DROPS the
+  # column. Measured: every <fmt> column of the table silently disappeared, leaving only the labels.
+  write_col <- function(col) {
+    r <- display_write_col(col, ds)
+    missing_tok <<- union(missing_tok, r$missing)
+    r$col
   }
-  tmpl   <- validate_display_template(ds)
+  set_one <- function(tab) dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), write_col))
+  out <- if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
+  if (length(missing_tok)) display_note_empty(missing_tok)
+  out
+}
+
+# display_write_col() -- THE one writer of a display template onto a column, shared by the build-time
+# `tab(display =)` (tab_apply_display, over a table) and the post-hoc `set_display(col, "num_ci")`
+# (over a lone column, no table in scope). Phase 19e folded the second copy in: they had drifted --
+# the alias skipped a cell whose interval is empty, the template wrote the composite anyway, so
+# `display = "num_ci"` and its own documented equivalent `display = "{pct} {ci}"` disagreed on every
+# total row. Returns the column plus the fields that were empty in the WHOLE column (D22's note,
+# which only the table-level caller can sensibly emit once).
+#
+# `tmpl` is a validated {} template, or the type-adaptive alias "num_ci": not a single template but
+# "{pct} {ci}" on a percentage column and "{mean} {ci}" on a mean one, so a mixed table resolves each
+# column by its own kind.
+#' @keywords internal
+#' @noRd
+display_write_col <- function(col, tmpl) {
+  if (identical(tmpl, "num_ci"))
+    tmpl <- paste0("{", if (identical(fmt_var_kind(col), "mean")) "mean" else "pct", "} {ci}")
   fields <- parse_display_template(tmpl)$fields
   # Phase 19d: a ONE-FIELD "composite" is not a composite -- it is that field's own display, and it
   # must render exactly as the pipeline's own token does. Writing "{or}" as the bare `or` token is
@@ -923,33 +958,33 @@ tab_apply_display <- function(tabs, display) {
   # 1/x form and its reference-cell annotation. One general rule, no curated recipe.
   # Restricted to the tokens the pipeline itself writes as a bare display: `resid` is derived and
   # `obs`/`var`/`ctr` have no simple-token renderer of their own.
-  bare   <- if (length(fields) == 1L && identical(tmpl, paste0("{", fields, "}")) &&
-                fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
-  missing_tok <- character()
-  set_one <- function(tab) {
-    dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), function(col) {
-      d <- get_display(col)
-      # Only genuine value cells -- the p-value / blank / total-marker cells keep their own token.
-      elig <- d %in% c("pct", "mean", "n", "wn")
-      if (!any(elig)) return(col)
-      # Phase 19d (D23): the stored interval is the one this column's comparison is tested on, and a
-      # `{ci}` bracket renders THAT interval. A template that prints one geometry's estimate beside
-      # another's bracket is REFUSED (ruling d) rather than silently printed -- measured today as
-      # `x1.8 ([2;4]%)`, a ratio over a percentage-POINT interval.
-      display_refuse_mismatch(col, fields, tmpl)
-      # Phase 19d (D22): a token whose field is empty renders VOID, and the note names the argument
-      # that would fill it. It used to silently SUBSTITUTE the column's own primary field -- so
-      # `display = "{or}"` on a table with no odds ratio printed the percentage, and the stored
-      # `display` came back `pct`: a plausible table that is not the one asked for.
-      for (f in fields)
-        if (all(is.na(get_num(set_display(col, f))[elig]))) missing_tok <<- union(missing_tok, f)
-      d[elig] <- bare
-      set_display(col, d)
-    }))
+  bare <- if (length(fields) == 1L && identical(tmpl, paste0("{", fields, "}")) &&
+              fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
+  d    <- get_display(col)
+  # Only genuine value cells -- the p-value / blank / total-marker cells keep their own token.
+  elig <- d %in% c("pct", "mean", "n", "wn")
+  if (!any(elig)) return(list(col = col, missing = character()))
+  # Phase 19d (D23): the stored interval is the one this column's comparison is tested on, and a
+  # `{ci}` bracket renders THAT interval. A template that prints one geometry's estimate beside
+  # another's bracket is REFUSED (ruling d) rather than silently printed -- measured today as
+  # `x1.8 ([2;4]%)`, a ratio over a percentage-POINT interval.
+  display_refuse_mismatch(col, fields, tmpl)
+  # Phase 19d (D22): a token whose field is empty renders VOID, and the note names the argument that
+  # would fill it. It used to silently SUBSTITUTE the column's own primary field -- so
+  # `display = "{or}"` on a table with no odds ratio printed the percentage, and the stored `display`
+  # came back `pct`: a plausible table that is not the one asked for.
+  # It is a PER-CELL rule: the template is written on the cells that can carry EVERY one of its
+  # fields (a total row is the reference, so it has no difference interval and "{pct} {ci}" leaves it
+  # a bare `pct`). The note fires only where a field is empty in the whole column -- the case where
+  # what the user asked for is genuinely not in this table.
+  missing <- character()
+  for (f in fields) {
+    have <- !is.na(get_num(set_display(col, f)))
+    if (all(!have[elig])) missing <- union(missing, f)
+    elig <- elig & have
   }
-  out <- if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
-  if (length(missing_tok)) display_note_empty(missing_tok)
-  out
+  d[elig] <- bare
+  list(col = set_display(col, d), missing = missing)
 }
 
 # The display tokens the PIPELINE itself writes as a bare value (so a one-field template collapses
@@ -1002,6 +1037,11 @@ display_refuse_mismatch <- function(col, fields, tmpl) {
   if (is.null(have)) return(invisible(NULL))
   want <- unname(DISPLAY_TOKEN_GEOMETRY[est[1]])
   if (identical(have, want)) return(invisible(NULL))
+  # WARNING: a LEVEL names no comparison, so it constrains the bracket not at all -- "48% [-3;+4]"
+  # (a percentage beside the difference interval it was tested on) is tabxplor's flagship cell, and
+  # `display = "num_ci"` is literally that template. The class this refusal closes is TWO EFFECT
+  # geometries disagreeing (`{ratio} {ci}` over a percentage-POINT interval), never a level.
+  if ("level" %in% c(have, want)) return(invisible(NULL))
   cli::cli_abort(c(
     "{.arg display} = {.val {tmpl}} prints a {.field {want}} beside a {.field {have}} interval.",
     "x" = "A cell carries ONE interval, and this column's is on the {.field {have}} scale.",
@@ -3956,6 +3996,9 @@ fmt_stack_frames <- function(frames, meta) {
 #' \code{options("tabxplor.design_effect")}.
 #' @param stars Set to \code{TRUE} to compute the significance stars attached to the
 #' odds-ratio confidence intervals (with `OR`).
+#' @param display A \code{{}} display template applied to the built table -- the same grammar
+#'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
+#'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
 #' @param color_signif How significance interacts with `color` (with `OR`):
 #' \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
 #' See \code{\link{tab}}.
@@ -3982,7 +4025,7 @@ fmt_stack_frames <- function(frames, meta) {
 #'   tab_ci(color = "after_ci")
 #' }
 tab_plain <- function(data, row_var, col_var, tab_vars, wt,
-                      pct = "no", color = "no", OR = "no",
+                      pct = "no", color = "no", display = NULL, OR = "no",
                       na = "keep",
                       ref = "auto", ref2 = "first", comp = "tab",
                       totaltab = "line", totaltab_name = "Ensemble",
@@ -4061,11 +4104,12 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # Phase 17f: resolve the leaf's validation + forcing cascade ONCE (shared with tab_transform),
   # then hand the resolved bundle to the compute core. tab_plain never finalises colour -- the outer
   # tab()/tab_many() wrapper is the sole finaliser -- so the core returns the built table directly.
-  # Phase 19d: the ONE `OR` retirement route (tab_plain() has no `display` of its own -- it is a
-  # superseded leaf -- so the route only reaches `ref2`/`ref`; the odds ratio is computed anyway).
-  or_route <- tab_deprecate_or(OR, NULL, ref2, ref)
-  ref2 <- or_route$ref2 ; ref <- or_route$ref
-  comparison <- tab_leaf_comparison(color, or_route$display, pct, ref)
+  # Phase 19d/19e: the ONE `OR` retirement route. The leaf carries a real `display` of its own, so
+  # the route is LOSSLESS here as it is on the pipeline (`OR = "OR"` -> `display = "{or}"`): the leaf
+  # and the wrapper speak one grammar, and a superseded argument no longer degrades on the way in.
+  or_route <- tab_deprecate_or(OR, display, ref2, ref)
+  ref2 <- or_route$ref2 ; ref <- or_route$ref ; display <- or_route$display
+  comparison <- tab_leaf_comparison(color, display, pct, ref)
   # tab_plain() computes no contrast interval of its own (that is tab_ci()'s step) EXCEPT the Woolf
   # log-OR one, which is the odds ratio's -- so the leaf's whole `ci` question is this single
   # predicate, resolved by the shared rule (D28/D29 included).
@@ -4073,7 +4117,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   stars <- r_ci$stars ; color_signif <- r_ci$color_signif
   r <- plain_resolve(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
                      digits, totaltab, tab_vars, comparison = comparison)
-  plain_core(
+  tab_apply_display(plain_core(
     data, row_var, col_var, tab_vars, wt,
     pct = r$pct, color = color, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
     totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
@@ -4085,7 +4129,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     # same inference object tab_setup() builds for the pipeline (no design -> "weights"/"n" from
     # `design_effect` or its option, byte-identical to the leaf's former inline read).
     inference = new_inference(wt, svy$spec, conf_level, design_effect = design_effect)
-  )
+  ), display)
 }
 
 
@@ -5319,6 +5363,9 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 #'   \code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
 #'   (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
 #'   \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.
+#' @param display A \code{{}} display template applied to the built table -- the same grammar
+#'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
+#'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
 #' @param color_signif How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
 #'   / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.
 #' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
@@ -5367,7 +5414,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 #' tab_num(data, category, wind, tot = "row", color = "after_ci")
 #' }
 tab_num <- function(data, row_var, col_vars, tab_vars, wt,
-                    color = "auto", color_signif = "ignore",
+                    color = "auto", display = NULL, color_signif = "ignore",
                     na = c("keep", "drop"),
                     ref = "tot", comp = c("tab", "all"),
                     ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
@@ -5454,8 +5501,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref)
   stars <- r_ci$stars ; color_spec$signif <- r_ci$color_signif
   ci    <- if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
+  # The SAME comparison chain the pipeline resolves (`color` -> `display` -> the difference); a mean
+  # column has no odds ratio, so the only geometry the chain can move here is the ratio.
   ci_scale <- if (identical(measure_key(color_spec$text), "ratio") ||
-                  identical(measure_key(color), "ratio")) "ratio" else "diff"
+                  identical(measure_key(color), "ratio") ||
+                  identical(display_comparison(display), "ratio")) "ratio" else "diff"
   r <- num_resolve(color, ref, ci, tot, comp, totaltab, row_var, col_vars, tab_vars)
   result <- num_core(
     data, row_var, col_vars, tab_vars, wt,
@@ -5472,8 +5522,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   if (df || num) return(result)
 
   # The shared wrapper tail (a no-op finalise for a plain scalar colour passed straight through, e.g.
-  # when tab_many() drives tab_num()). tab_num() has no `display` recipe -> the tail's is a no-op.
-  finalize_color_tail(result, color_spec, color_breaks)
+  # when tab_many() drives tab_num()). Phase 19e: the leaf carries a real `display` too, so the tail
+  # is the SAME one tab()/tab_counts() run -- one grammar, one applier, no leaf-only degradation.
+  finalize_color_tail(result, color_spec, color_breaks, display)
 }
 
 

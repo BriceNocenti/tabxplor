@@ -2317,7 +2317,14 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "ratio")) ), "")
   } else blank
 
-  cond_or <- get_pct_base(x) %in% c("col", "row") & !is.na(get_or(x)) &
+  # WARNING (Phase 19d): the gate is the column's DECLARED scale, never "the `or` field is populated".
+  # Since 19d the odds ratio is computed on every row/col-% column, so the field being non-NA says
+  # nothing about whether this table compares on it -- and the old gate hung a stray "OR: 1.00" line
+  # on the hover of every ordinary percentage table.
+  # ... but on a REGRESSION column the odds ratio is not a by-product at all: it is the model's own
+  # estimate, deliberately attached beside an AME (Phase 12h item E) so the hover carries both
+  # readings of one fit. `role` is the stored fact that separates the two producers.
+  cond_or <- (get_scale(x) == "odds_ratio" | nzchar(get_role(x))) & !is.na(get_or(x)) &
     !shows("or") & !disp %in% c("or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")

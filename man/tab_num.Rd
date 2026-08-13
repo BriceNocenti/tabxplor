@@ -11,16 +11,16 @@ tab_num(
   tab_vars,
   wt,
   color = "auto",
+  display = NULL,
   color_signif = "ignore",
   na = c("keep", "drop"),
   ref = "tot",
   comp = c("tab", "all"),
-  ci = NULL,
+  ci = "auto",
   conf_level = conf_level_default(),
   stars = NULL,
   ci_method = NULL,
   design_effect = NULL,
-  ci_scale = "diff",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = NULL,
@@ -55,6 +55,10 @@ grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
 \code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
 (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
 \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.}
+
+\item{display}{A \code{{}} display template applied to the built table -- the same grammar
+\code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
+or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.}
 
 \item{color_signif}{How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
 / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.}
@@ -121,10 +125,6 @@ reference row; the mean-diff interval then uses the Welch t quantile (z when \co
 \item{ci_method, design_effect}{See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
 slots of \code{ci_method} are meaningful here (a numeric table has no proportion interval).}
 
-\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
-\code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
-as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).}
-
 \item{totaltab}{The total table,
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -165,6 +165,10 @@ correspondence analysis with \pkg{FactoMineR}.}
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
 \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces
 the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.}
+
+\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
+\code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
+as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

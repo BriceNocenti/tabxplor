@@ -85,7 +85,7 @@ test_that("summary / GOF row labels + measure words translate", {
     expect_match(test_es_measure(c("cramer_v", "eta2")), "V de Cram\u00e9r")
     expect_equal(reg_footer_spec()$r2_adj$label, "R2 ajust\u00e9")
     # dynamic gettext(m$word) -- kept extractable by the fmt_class.R anchor
-    expect_equal(legend_measure_word("diff", FALSE, NA, lg), "diff\u00e9rence")
+    expect_equal(legend_measure_word("difference", FALSE, NA, lg), "diff\u00e9rence")
     expect_equal(legend_measure_word("contrib", FALSE, NA, lg), "contribution au Chi2")
   })
 })

@@ -122,22 +122,22 @@ testthat::test_that("tab() color argument forms set the right channels + policy"
   col1 <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
 
   s <- col1(tab(d, marital, race, pct = "row", color = "diff"))          # scalar -> text only
-  testthat::expect_equal(get_color(s), "diff")
+  testthat::expect_equal(get_color(s), "difference")
   testthat::expect_true(is.na(get_color_bg(s)))
 
   tt <- col1(tab(d, marital, race, pct = "row", color = TRUE))           # per-type: factor -> diff + ratio
-  testthat::expect_equal(get_color(tt), "diff")
+  testthat::expect_equal(get_color(tt), "difference")
   testthat::expect_equal(get_color_bg(tt), "ratio")
 
   v <- col1(tab(d, marital, race, pct = "row", color = c("diff", "ratio")))  # positional channels
-  testthat::expect_equal(c(get_color(v), get_color_bg(v)), c("diff", "ratio"))
+  testthat::expect_equal(c(get_color(v), get_color_bg(v)), c("difference", "ratio"))
 
   pt <- col1(tab(d, marital, race, pct = "row", color = c(pct = "ratio")))   # per type (pct)
   testthat::expect_equal(get_color(pt), "ratio")
 
   lst <- col1(tab(d, marital, race, pct = "row",
                   color = list(pct = c("diff", "ratio"), mean = "ratio")))   # list per type
-  testthat::expect_equal(c(get_color(lst), get_color_bg(lst)), c("diff", "ratio"))
+  testthat::expect_equal(c(get_color(lst), get_color_bg(lst)), c("difference", "ratio"))
 
   g <- col1(tab(d, marital, race, pct = "row", color = "diff", color_signif = "grey_non_signif"))
   testthat::expect_equal(get_color_signif(g), "grey_non_signif")
@@ -162,7 +162,7 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
 
   # (1) a numeric auto table with a difference CI stores a real measure -- and colours
   n1 <- col1(tab_num(d, race, c(age, tvhours), ci = "diff"))
-  testthat::expect_equal(get_color(n1), "diff")
+  testthat::expect_equal(get_color(n1), "difference")
   testthat::expect_true(any(fmt_color_channels(n1)$text_slot != 0L))
 
   # (2) the string "auto" + a policy is exactly the logical TRUE + that policy, both producers
@@ -172,7 +172,7 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
                 color_signif = "grey_non_signif"))
   testthat::expect_equal(c(get_color(a), get_color_bg(a), get_color_signif(a)),
                          c(get_color(b), get_color_bg(b), get_color_signif(b)))
-  testthat::expect_equal(get_color(a), "diff")
+  testthat::expect_equal(get_color(a), "difference")
   testthat::expect_equal(get_color_bg(a), "ratio")
 
   # ... and tab_num() agrees with tab() on the same numeric request
@@ -184,7 +184,7 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
 
   # (3) with NO policy the plain `color = "auto"` string is untouched (one channel, as before)
   p <- col1(tab(d, marital, race, pct = "row", color = "auto"))
-  testthat::expect_equal(get_color(p), "diff")
+  testthat::expect_equal(get_color(p), "difference")
   testthat::expect_true(is.na(get_color_bg(p)))
 })
 
@@ -193,25 +193,25 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
 testthat::test_that("the colour vocabulary is declared, not written out", {
   # names(MEASURES) + names(COLOR_ALIASES) is the allow-list
   testthat::expect_setequal(names(MEASURES),
-                            c("diff", "ratio", "or", "contrib", "adjustment", "between_groups"))
-  testthat::expect_equal(measure_key("OR"), "or")
-  testthat::expect_equal("odds_ratio", "OR")
-  testthat::expect_equal(measure_key("after_ci"), "diff")   # an alias resolves to its measure
+                            c("difference", "ratio", "odds_ratio", "contrib", "adjustment", "between_groups"))
+  testthat::expect_equal(measure_key("OR"), "odds_ratio")
+  testthat::expect_equal(measure_key("odds_ratio"), "odds_ratio")
+  testthat::expect_equal(measure_key("after_ci"), "difference")   # an alias resolves to its measure
   testthat::expect_equal(measure_key("no"), "")
   testthat::expect_true(is.na(measure_key("nonesuch")))
 
   # the build classes: diff and ratio share one (the leaf computes both fields together)
-  testthat::expect_equal(measure_builds("ratio"), measure_builds("diff"))
+  testthat::expect_equal(measure_builds("ratio"), measure_builds("difference"))
   testthat::expect_equal(measure_builds("contrib"), "contrib")
   testthat::expect_equal(measure_stage("contrib"), "chi2")   # only the test step stamps it
-  testthat::expect_equal(measure_stage("diff"), "leaf")
+  testthat::expect_equal(measure_stage("difference"), "leaf")
 
   # what each measure declares it needs
   testthat::expect_true(measure_forces("contrib", "chi2"))
   testthat::expect_true(measure_forces("contrib", "totrow"))
-  testthat::expect_false(measure_forces("diff", "ci"))              # not gated -> no interval forced
-  testthat::expect_true(measure_forces("diff", "ci", gated = TRUE))
-  testthat::expect_false(measure_forces("or", "ci", gated = TRUE))  # the OR owns its own bounds
+  testthat::expect_false(measure_forces("difference", "ci"))              # not gated -> no interval forced
+  testthat::expect_true(measure_forces("difference", "ci", gated = TRUE))
+  testthat::expect_true(measure_forces("odds_ratio", "ci", gated = TRUE))  # the leaf owns the Woolf bounds
   testthat::expect_true(measure_forces("adjustment", "empirical"))
 
   # where each may go, and who may ask for it
@@ -222,11 +222,11 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_true(measure_applies("ratio", "num"))
 
   # the `color = TRUE` defaults, one table for the three cascades that used to answer separately
-  testthat::expect_equal(measure_auto("pct", "text"), "diff")
+  testthat::expect_equal(measure_auto("pct", "text"), "difference")
   testthat::expect_equal(measure_auto("pct", "bg"),   "ratio")
   testthat::expect_equal(measure_auto("num", "text"), "ratio")
   testthat::expect_equal(measure_auto("counts", "text"), "contrib")
-  testthat::expect_equal(measure_auto("or_table", "text"), "or")
+  testthat::expect_equal(measure_auto("or_table", "text"), "odds_ratio")
 
   # every scale states its own geometry; a derived one names its parent
   testthat::expect_equal(COLOR_SCALES$pct_ratio$center, 1)
@@ -329,7 +329,7 @@ testthat::test_that("deprecated colour arguments / functions are wired, not erro
   # color = c(text =, background =) -> positional channels
   lifecycle::expect_deprecated(
     tt <- tab(d, race, marital, pct = "row", color = c(text = "diff", background = "ratio")))
-  testthat::expect_equal(unname(fmt_color_attr(tt$Married)), c("diff", "ratio"))
+  testthat::expect_equal(unname(fmt_color_attr(tt$Married)), c("difference", "ratio"))
 
   # color_signif = "color_all_signif" -> "guaranteed_effect"
   lifecycle::expect_deprecated(
@@ -451,12 +451,15 @@ testthat::test_that("color_signif = 'ignore' does NOT force a CI", {
   testthat::expect_true(all(is.na(unlist(purrr::map(fmt_cols, get_ci_sup)))))
 })
 
-testthat::test_that("an explicit ci = 'cell' with a color_signif policy is an error", {
-  testthat::expect_error(
-    tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell",
-        color_signif = "grey_non_signif"),
+# Phase 19d / D28: `ci = "cell"` beside a policy INFORMS and disables -- one rule, both paths.
+# It used to abort for `color_signif` and silently drop the stars.
+testthat::test_that("an explicit ci = 'cell' with a color_signif policy informs and disables", {
+  testthat::expect_message(
+    t <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell",
+             color_signif = "grey_non_signif"),
     "cell"
   )
+  testthat::expect_equal(get_color_signif(t$Married), "ignore")
   # ... but ci = "cell" is fine without a policy
   testthat::expect_no_error(
     tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell"))

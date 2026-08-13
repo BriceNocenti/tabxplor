@@ -893,32 +893,15 @@ return(x)
 set_display.tabxplor_fmt <- function(x, value) {
   # "num_ci" is a type-adaptive alias for the "{base} {ci}" composite: show each value cell with the
   # confidence interval the table already carries (the difference / ratio CI driven by ci = / color,
-  # not a forced cell CI). Resolve it per the column's own type -- see fmt_apply_num_ci().
-  if (length(value) == 1L && identical(as.character(value), "num_ci")) return(fmt_apply_num_ci(x))
+  # not a forced cell CI). Resolve it per the column's own kind through THE shared display writer
+  # (display_write_col, R/tab.R) -- the same one tab(display =) runs, so a post-hoc set_display()
+  # and a build-time one cannot differ.
+  if (length(value) == 1L && identical(as.character(value), "num_ci"))
+    return(display_write_col(x, "num_ci")$col)
   value <- vctrs::vec_cast(value, character()) |> vctrs::vec_recycle(size = length(x))
   vctrs::`field<-`(x, "display", value)
 }
 
-# num_ci is a type-adaptive display alias: it writes the composite "{mean} {ci}" template on numeric
-# (mean) columns and "{pct} {ci}" on percentage/frequency columns, so each value cell shows its base
-# value plus whatever confidence interval the table computes (cell, difference or ratio). It is a
-# pure DISPLAY overlay applied with tab_apply_display()'s EXACT value-cell eligibility, so the result
-# is byte-identical to writing the concrete template per column: only genuine value cells where BOTH
-# fields render (non-NA) get it -- count-only, p-value and total-marker cells keep their own token,
-# a cell with no CI keeps its bare base, and a cell already showing value+CI (pct_ci / mean_ci from
-# ci = "cell") is left untouched (it is already "{base} {ci}").
-# Why this exists: shared by set_display.tabxplor_fmt() and tab_apply_display() so the "num_ci" alias
-# resolves the same way whether requested at build (tab(display=)) or post-hoc (set_display()).
-fmt_apply_num_ci <- function(col) {
-  base <- if (identical(fmt_var_kind(col), "mean")) "mean" else "pct"
-  tmpl <- paste0("{", base, "} {ci}")
-  fields <- parse_display_template(tmpl)$fields
-  d <- get_display(col)
-  elig <- d %in% c("pct", "mean", "n", "wn")
-  for (f in fields) elig <- elig & !is.na(get_num(set_display(col, f)))
-  d[elig] <- tmpl
-  set_display(col, d)
-}
 #' Set the "display" vctrs::field of a \code{fmt} vector.
 #' @inheritParams fmt
 #' @return The entered objects, with all fmt vectors with the wanted display.
@@ -1698,7 +1681,9 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #              would freeze the build locale)
 #   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks
 #   gap_key    the adj_* ladder its GAP reads -- fmt_gap_scale_key() IS this column
-#   label_meas which MEASURES row supplies the break glyphs ("or" -> "2" / "1/2", "diff" -> "+5" / "-5")
+#   label_meas which MEASURES row supplies the break glyphs ("odds_ratio" -> "2" / "1/2",
+#              "difference" -> "+5" / "-5"). WARNING: a MEASURES KEY -- 19d's full-word rename had to
+#              reach here, and did not: the forest axis lost its "1/2" glyphs and errored on lookup.
 #   sd_from    where the SD-standardized ladder's divisor comes from: a regression column's stored
 #              var(Y) ("var") or a crosstab cell's REFERENCE variance ("ref_var"). NULL = no
 #              standardization. This is fmt_color_plan()'s old `if (type == "coef")` sd_ref split.
@@ -1711,17 +1696,17 @@ EST_SCALES <- list(
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
+                    label_meas = "odds_ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio",
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
+                    label_meas = "odds_ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "rate_ratio",
                     break_key = "mean_ratio", gap_key = "adj_ratio",
-                    label_meas = "or",   sec = NULL),
+                    label_meas = "odds_ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
   # WARNING: raw_diff and mean_diff are NOT one row with two `sd_from` values -- their `gap_key`
   # differs too (adj_diff_std vs adj_diff), and folding them would mean re-deriving both from
@@ -1731,14 +1716,14 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units",
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
-                    label_meas = "diff", sec = "sd", sd_from = "var"),
+                    label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
   # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
   mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units",
                     break_key = "mean_diff",  gap_key = "adj_diff",
-                    label_meas = "diff", sec = "sd", sd_from = "ref_var"),
+                    label_meas = "difference", sec = "sd", sd_from = "ref_var"),
   # measure = "log" (was exponentiate = FALSE): printed on the link scale, coloured on the logged
   # odds_ratio ladder -- which is what `ladder = "log"` selects, in one lookup instead of the
   # `is_logcoef && measure == "diff"` test that used to sit in fmt_color_plan().
@@ -1746,12 +1731,12 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "log",
                     break_key = "odds_ratio", gap_key = "adj_diff_log",
-                    label_meas = "diff", sec = "exp"),
+                    label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "diff",  unit = "points",
                     break_key = "pct_diff",   gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL),
+                    label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
   # per-column value, filled by the consumer), and no ladder of their own -- the colour ladder of a
   # level column grades its DIFFERENCE, so putting it on the level axis would be a lie. `gap_key` is
@@ -1762,17 +1747,17 @@ EST_SCALES <- list(
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",
                     break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL),
+                    label_meas = "difference", sec = NULL),
   level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "mean",  unit = "units",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
-                    label_meas = "diff", sec = NULL),
+                    label_meas = "difference", sec = NULL),
   level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "n",     unit = "count",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
-                    label_meas = "diff", sec = NULL),
+                    label_meas = "difference", sec = NULL),
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
   # is level_pct's, which is exactly what the pre-19b dispatch answered for the old `type = "mixed"`
   # neutral -- so a mixed bind behaves as it always did, and vec_arith's mismatch warning has a real
@@ -1781,7 +1766,7 @@ EST_SCALES <- list(
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",
                     break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "diff", sec = NULL)
+                    label_meas = "difference", sec = NULL)
 )
 
 # The declared vocabularies, derived from the library so an allow-list cannot drift from it.
@@ -5034,7 +5019,7 @@ legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
 # non-table special-case is the sd-standardized diff wording (a spec fact, not a measure fact).
 legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignore") {
   if (!is.na(eff_word) && !measure_own_ref(measure)) return(eff_word)
-  if (identical(measure, "diff") && isTRUE(is_std)) return(gettext("standardized difference"))
+  if (identical(measure, "difference") && isTRUE(is_std)) return(gettext("standardized difference"))
   m <- measure_facts(measure, policy)
   if (is.null(m)) return(measure)
   # Phase 19c: `word` is a CLOSURE, so gettext() runs at render (never at build, which would freeze
@@ -5550,9 +5535,9 @@ legend_reg_adapter <- function(specs) {
     if (length(labs) == 1L) for (i in idx) specs[[i]]$ref$label <- labs
     for (i in idx) {
       s <- specs[[i]]
-      if (identical(s$role, "model") && identical(s$measure_text, "diff") && !is.na(s$eff_word)) {
+      if (identical(s$role, "model") && identical(s$measure_text, "difference") && !is.na(s$eff_word)) {
         has_emp <- any(vapply(specs[idx], function(o)
-          identical(o$role, "emp") && identical(o$measure_text, "diff") &&
+          identical(o$role, "emp") && identical(o$measure_text, "difference") &&
           identical(o$policy, s$policy) && identical(o$is_std, s$is_std) &&
           identical(o$orientation, s$orientation), logical(1)))
         if (has_emp) specs[[i]]$eff_word <- NA_character_

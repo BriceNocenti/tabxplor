@@ -60,7 +60,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_display(col)[1], "coef")
   expect_identical(get_scale(col), "raw_diff")
-  expect_identical(get_color(col), "diff")
+  expect_identical(get_color(col), "difference")
   expect_identical(get_color_signif(col), "grey_non_signif")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -282,8 +282,8 @@ test_that("auto colour default is per-family (OR for the logit, diff for the gau
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
-  expect_identical(get_color(mix[["Model_OR [married]"]]),   "OR")
-  expect_identical(get_color(mix[["Model_\u03b2 [tvhours]"]]), "diff")
+  expect_identical(get_color(mix[["Model_OR [married]"]]),   "odds_ratio")
+  expect_identical(get_color(mix[["Model_\u03b2 [tvhours]"]]), "difference")
 })
 
 test_that("family accepts a named vector; auto-detection is per dependent (ambiguous integer names itself)", {
@@ -637,7 +637,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
 
   expect_identical(get_pct_base(col), "row")
   expect_identical(get_scale(col), "points")   # a binomial AME is a risk difference, in points
-  expect_identical(get_color(col), "diff")
+  expect_identical(get_color(col), "difference")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
   dm$race    <- forcats::fct_drop(dm$race)

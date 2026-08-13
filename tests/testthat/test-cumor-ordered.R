@@ -122,21 +122,25 @@ test_that("the `na = 'keep'` column never becomes a cut point", {
   expect_false(all(is.na(get_or(t[["c"]]))))
 })
 
-test_that("an ineligible col_var degrades to no OR, with one message naming the fix", {
+# Phase 19d: the odds ratio is computed on EVERY row/col-% column, so an ineligible col_var no
+# longer degrades to "no odds ratio at all" -- only the CUMULATIVE cut needs an <ordered> factor,
+# and what it degrades to is the plain 2x2 (ref2 = "first"). The message still names the fix.
+test_that("an ineligible col_var degrades to the plain 2x2 OR, with one message naming the fix", {
   d <- ord_data()
   d$nominal <- factor(rep(c("p", "q", "r"), length.out = nrow(d)))
 
   expect_message(t <- tab(d, g, c(y, nominal), pct = "row", ref2 = "cumulative", display = "{or}", na = "drop"),
                  "ordered")
-  expect_false(all(is.na(get_or(t[["a"]]))))               # the ordered col_var still gets cumOR
-  expect_true(is.na(get_or(t[["p"]])[[1]]))                # the nominal one falls back to plain %
-  expect_identical(as.character(get_display(t[["p"]]))[1], "pct")
+  expect_false(all(is.na(get_or(t[["a"]]))))               # the ordered col_var gets the cumulative cut
+  expect_false(all(is.na(get_or(t[["p"]]))))               # the nominal one gets the plain 2x2
+  expect_identical(as.character(get_display(t[["p"]]))[1], "or")
 })
 
 test_that("cumOR needs row percentages, and says so instead of computing nonsense", {
   expect_message(t <- tab(ord_data(), g, y, pct = "col", ref2 = "cumulative", display = "{or}", na = "drop"),
                  "pct")
-  expect_true(all(is.na(get_or(t[["a"]]))))
+  # the CUMULATIVE cut is skipped; a column percentage still carries its own plain 2x2 odds ratio.
+  expect_false(all(is.na(get_or(t[["a"]]))))
 })
 
 
@@ -148,5 +152,5 @@ test_that("color = 'auto' resolves to the OR measure with several factor col_var
   # `auto_or` used to index the per-row_var SCALAR OR with a logical over col_vars, so with >= 2
   # factor col_vars it read c("OR", NA) -> FALSE -> the table silently coloured on the difference.
   t <- tab(d, g, c(y2, y), pct = "row", display = "{or}", ref = "first", color = TRUE, ref2 = 1, na = "drop")
-  expect_identical(as.character(get_color(t[["yes"]])), "OR")
+  expect_identical(as.character(get_color(t[["yes"]])), "odds_ratio")
 })

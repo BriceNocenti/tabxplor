@@ -160,7 +160,7 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 13L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 14L   # bump on any store-shape change -> discard stale stores
                             # 13 = Phase 19b (KEY 2): a tier-3 carrier's per-column `meta` list carries
                             #     `scale` + `pct_base` instead of `type` + `ci_type`, and gains
                             #     `ci_method`. A pre-13 carrier has the old names -> unusable.
@@ -714,10 +714,36 @@ jmv_ci_method <- function(opts) {
 
 #' @keywords internal
 #' @noRd
-jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
-  list(arming = arming, or = opts$OR, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp,
-       ci = ci_resolved, conf_level = opts$conf_level,
+jmv_tab3_tuple <- function(opts, ci_resolved, arming, geom, or_route) {
+  # Phase 19d/19e: `geom` -- which GEOMETRY owns the stored interval -- is part of the tuple, because
+  # since 19d the interval follows the comparison: a difference table stores percentage-POINT bounds,
+  # a ratio table Katz log-RR ones. `arming` cannot answer it (diff and ratio share one build class),
+  # so a diff <-> ratio toggle used to be an exact tuple HIT and re-painted a ratio over the
+  # difference interval -- measured against a plain tab() as a wholly different set of bounds.
+  # Phase 19e: keyed on the RESOLVED route (display / ref / ref2), never on the retired `OR` option.
+  # `OR` is a shim that rewrites all three, so two different `OR` values could share a tuple while the
+  # armed build used different ones -- measured as a cached table displaying "{or}" where a rebuild
+  # displayed the percentage.
+  list(arming = arming, geom = geom,
+       or = identical(display_comparison(or_route$display), "odds_ratio"),
+       display = or_route$display %||% NA_character_,
+       ref = or_route$ref, ref2 = or_route$ref2,
+       comp = opts$comp, ci = ci_resolved, conf_level = opts$conf_level,
        ci_method = jmv_ci_method(opts), stars = opts$stars)
+}
+
+# The MEASURE a jamovi `color` option names ("no"/FALSE -> none, "auto"/TRUE -> the difference, else
+# the declared measure/alias). One reading, shared by the arming class, the geometry and the resolved
+# `ci` -- three facts that must agree about one option.
+#' @keywords internal
+#' @noRd
+jmv_tab3_measure <- function(color) {
+  if (isFALSE(color)) return("no")
+  if (isTRUE(color))  return(measure_auto("pct", "text"))
+  m <- as.character(color)[1]
+  if (identical(m, "auto")) return(measure_auto("pct", "text"))
+  k <- measure_key(m)
+  if (is.na(k) || !nzchar(k)) "no" else k
 }
 
 # Whether a cached armed CARRIER can be RE-REFERENCED (Phase 9b-7): only ref/ref2 changed and the
@@ -729,11 +755,15 @@ jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
 #' @keywords internal
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys <- c("arming", "or", "comp", "ci", "conf_level", "ci_method", "stars")
+  keys <- c("arming", "geom", "or", "display", "comp", "ci", "conf_level", "ci_method", "stars")
   identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
     !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
     identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
-    identical(new_tuple$or, "no")                                     # empirical OR -> rebuild
+    # Phase 19e: the reref rebuilds the interval with tab_ci(), which is the DIFFERENCE engine -- so a
+    # table whose comparison owns a ratio (Katz) or odds-ratio (Woolf) interval cannot be re-ref'd.
+    # `geom` is in the tuple, so this also guarantees old and new agree.
+    identical(new_tuple$geom, "diff") &&
+    isFALSE(new_tuple$or)                                             # an odds-ratio table -> rebuild
 }
 
 # Structural gate for jmv_tab3_reref(): the STORE-KEY-invariant conditions (pct / row_var count /
@@ -787,7 +817,9 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   comp     <- tuple$comp
 
   # Resolve the new reference exactly as the factor leaf would (OR off -> "auto" resolves to "tot").
-  ref_v <- resolve_ref_vector(opts$ref, row_var)
+  # Phase 19e: from the TUPLE's resolved route, not the raw option -- the `OR` shim rewrites `ref`
+  # and `ref2`, so reading `opts` here re-referenced against a different baseline than the build did.
+  ref_v <- resolve_ref_vector(tuple$ref, row_var)
   if (identical(ref_v, "auto")) ref_v <- "tot"
 
   fmt_names <- names(carrier$fmt)
@@ -809,8 +841,8 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   tottab_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_tottab
 
   ref_res <- tab_apply_reference(
-    tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = opts$ref2, comp = comp,
-    or_compare = FALSE, pct = "row", tab_row_names = label_cols,
+    tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = tuple$ref2, comp = comp,
+    or_compare = TRUE, pct = "row", tab_row_names = label_cols,
     tab_vars = rlang::syms(tab_vars), row_var = rlang::sym(row_var),
     tottab_vector = tottab_vector, totrow_vector = totrow_vector,
     cols = stats::setNames(rep(TRUE, length(pct_cols)), pct_cols))
@@ -1006,16 +1038,19 @@ jmvtab_build <- function(data, opts, store) {
   # correctly rebuilds while factor tables stay instant.
   color        <- switch(opts$color, "no" = FALSE, "auto" = TRUE, opts$color)
   color_signif <- opts$color_signif
-  ci           <- opts$ci
   has_num_col  <- any(vapply(col_vars, function(cv) is.numeric(data[[cv]]), logical(1)))
-  if (has_num_col && !isFALSE(color) && color_signif != "ignore" && ci == "auto") ci <- "diff"
-  # Phase 16f: mirror tab_resolve_settings' stars forcing (`stars = TRUE` makes ci = "no" -> "diff" on a
-  # factor row/col pct or a mean, non-OR) so this resolved `ci` matches what tab() will actually build --
-  # it drives the cache tuple, the armed build AND the reref (which recomputes the diff CI + pvalue only
-  # when ci != "no"). Without it, an explicit ci = "no" + stars would arm a pvalue the reref never refreshes.
-  if (isTRUE(opts$stars) && identical(ci, "no") &&
-      !(opts$OR %in% c("OR", "or", "OR_pct", "or_pct", "cumOR")) &&
-      (has_num_col || opts$pct %in% c("row", "col"))) ci <- "ref"
+  # Phase 19e: the resolved `ci` drives the cache tuple, the armed build AND the reref, so it MUST be
+  # what tab() will actually build. It used to be two hand-mirrored rules (a numeric-column policy
+  # nudge + 16f's stars forcing) and they had fallen behind 19d: a factor table with `stars = FALSE`
+  # and no policy gets NO interval now, so the reref recomputed a CI the fresh rebuild leaves NA --
+  # a cached table that disagreed with a rebuilt one. One call to the shared resolver instead.
+  # (19k carries the new `ci` vocabulary into the .a.yaml; until then the UI may still send the
+  # deprecated spelling, whose lifecycle warning has no business in the results panel.)
+  r_ci <- withr::with_options(
+    list(lifecycle_verbosity = "quiet"),
+    resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), color_signif, opts$stars,
+                    if (length(opts$ref)) opts$ref else "auto"))
+  ci <- r_ci$ci
 
   ce <- new.env(parent = emptyenv())
   ce$store  <- jmv_cache_migrate(store)
@@ -1029,7 +1064,8 @@ jmvtab_build <- function(data, opts, store) {
   # --- Tier 3: reuse the built ARMED table when only display / colour / reference changed ---------
   base_key <- jmv_tab3_base_key(opts, ce, row_vars, col_vars, tab_vars, wt_chr)
   arming   <- jmv_tab3_arming(color)
-  tuple    <- jmv_tab3_tuple(opts, ci, arming)
+  or_route <- suppressWarnings(tab_deprecate_or(opts$OR, opts$display, opts$ref2, opts$ref))
+  tuple    <- jmv_tab3_tuple(opts, ci, arming, measure_geometry(jmv_tab3_measure(color)), or_route)
   got      <- jmv_cache_fetch(ce$store, "tab3", base_key)
   ce$store <- got$store
 
@@ -1047,7 +1083,7 @@ jmvtab_build <- function(data, opts, store) {
     ce$store <- jmv_cache_put(ce$store, "tab3", base_key,                # store under the NEW tuple, so a
                               list(carrier = carrier, tuple = tuple))    #   second identical ref is a re-paint hit
   } else {
-    armed   <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym, NULL,
+    armed   <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym, or_route,
                                     row_vars, col_vars, tab_vars, ce)    # canonical armed (see above)
     carrier <- jmv_carrier_unwrap(armed)
     reused  <- FALSE
