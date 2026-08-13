@@ -35,10 +35,11 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-REPO="/home/dev1/github/tabxplor"
-RUNDIR="$REPO/dev/night_run"
+# Overridable so the driver can be rehearsed against a scratch repo.
+REPO="${NIGHT_RUN_REPO:-/home/dev1/github/tabxplor}"
+RUNDIR="${NIGHT_RUN_DIR:-$REPO/dev/night_run}"
 PROMPTS="$RUNDIR/prompts"
-ROADMAP="$REPO/dev/tabxplor_phase19_ecosystem_integration.md"
+ROADMAP="${NIGHT_RUN_ROADMAP:-$REPO/dev/tabxplor_phase19_ecosystem_integration.md}"
 
 FROM=""; TO=""; PHASES=""; PREFIX=""; SUFFIX=""; LIST=0
 

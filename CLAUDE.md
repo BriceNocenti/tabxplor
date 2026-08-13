@@ -1476,13 +1476,6 @@ with the cold+warm+reref lock. And applying `requires["ci"] == "gated"` on the D
 path would fix a real gap (a policy with no explicit `ci` greys every cell — 14a fixed that inside the
 resolver only), but it is a behaviour change on `ci`'s surface → **19d, as D29**.
 
-No `.a.yaml` / `.u.yaml` was touched (maintainer ruling: 19d/19k own the jamovi vocabulary), so **no
-`jmvtools::prepare()` is needed**.
-
-⚠ Note for the next session: `git stash` collided with concurrent writes to `dev/night_run/` from
-another session. The files were restored and verified, but **do not use `git stash` in this repo**
-while a second session may be running — compare against HEAD with `git show HEAD:<file>` instead.
-
 ---
 
 

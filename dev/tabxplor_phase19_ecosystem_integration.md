@@ -990,7 +990,7 @@ This is a *deliberately open* phase. It has a method, not a checklist.
    and some must stay for the degraded contract (`test-degraded-attrs.R`). Tell them apart by
    *reading the contract*, not by guessing.
 4. **Report what did not shrink**, and why. A key that did not pay for itself is a finding worth
-   recording in `dev/tabxplor_2.0.0_decisions.md`, not something to hide.
+   recording, not something to hide.
 
 **Verification**: targeted per deletion. Zero golden churn is the expectation — if a deletion moves
 output, it was not dead.
@@ -1024,7 +1024,7 @@ anything user-visible. Candidate directions, none of them mandates:
 - **The `n`/`wn`/`tot_n`/`n_eff` quartet** is four slots for ~two facts. §6 ruled *one accessor, not a
   merge* — 19a builds the accessor. Is there anything left worth doing here, or is that closed?
 - **Options.** 42 global options is a lot. After 19h merges the three number-font knobs, is there a
-  second cluster answering one question?
+  second cluster answering one question? Or globally useless options that we could remove before release ?
 
 **The discipline that keeps this phase honest**: every proposal must name the *fact* it stores or the
 *rule* it states, and the scattered special cases it collapses. A proposal that only adds capability

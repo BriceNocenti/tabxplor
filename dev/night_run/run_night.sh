@@ -11,15 +11,16 @@
 # A phase that produces no commit halts the run.
 #
 # Usage:
-#   dev/night_run/run_phase19.sh                 # run from the next unfinished phase
-#   dev/night_run/run_phase19.sh 19c             # start at a given phase
-#   dev/night_run/run_phase19.sh 19c 19f         # run an inclusive range
-#   DRY_RUN=1 dev/night_run/run_phase19.sh       # print what would run, do nothing
+#   dev/night_run/run_night.sh                 # run from the next unfinished phase
+#   dev/night_run/run_night.sh 19c             # start at a given phase
+#   dev/night_run/run_night.sh 19c 19f         # run an inclusive range
+#   DRY_RUN=1 dev/night_run/run_night.sh       # print what would run, do nothing
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-REPO="/home/dev1/github/tabxplor"
-RUNDIR="$REPO/dev/night_run"
+# Overridable so the driver can be rehearsed against a scratch repo.
+REPO="${NIGHT_RUN_REPO:-/home/dev1/github/tabxplor}"
+RUNDIR="${NIGHT_RUN_DIR:-$REPO/dev/night_run}"
 LOGDIR="$RUNDIR/logs/$(date +%Y%m%d_%H%M%S)"
 STATE="$RUNDIR/.state"
 RULES="$RUNDIR/rules.md"
@@ -42,6 +43,12 @@ PHASE_TIMEOUT="${PHASE_TIMEOUT:-14400}"   # 4 h
 # until 04:21 when a human woke up. A total timeout alone does not catch either
 # cheaply — it burns the whole 4 h budget before reacting.
 STALL_TIMEOUT="${STALL_TIMEOUT:-1800}"    # 30 min of total silence
+STALL_POLL="${STALL_POLL:-60}"            # how often the watchdog samples (test hook)
+
+# Grace between SIGTERM and SIGKILL. `timeout` alone never escalates, and bash does
+# not interrupt a foreground child on SIGTERM, so without this a stuck phase survives
+# its own timeout. Measured: a hung phase ignored SIGTERM entirely.
+KILL_AFTER="${KILL_AFTER:-60}"
 
 mkdir -p "$LOGDIR"
 cd "$REPO" || exit 1
@@ -117,7 +124,7 @@ for phase in "${phases[@]}"; do
   # A fresh session: no --continue, no --resume, no --session-id reuse.
   # bypassPermissions must be passed EVERY invocation — it is never restored.
   # The autonomy rules go in the system prompt so auto-compaction cannot eat them.
-  timeout --signal=TERM "$PHASE_TIMEOUT" \
+  timeout --signal=TERM --kill-after="$KILL_AFTER" "$PHASE_TIMEOUT" \
     claude -p "$(build_prompt "$phase")" \
       --append-system-prompt-file "$RULES" \
       --permission-mode bypassPermissions \
@@ -133,13 +140,16 @@ for phase in "${phases[@]}"; do
   # Stall watchdog: kill the phase if the event stream goes silent.
   ( last_size=-1; quiet=0
     while kill -0 "$claude_pid" 2>/dev/null; do
-      sleep 60
+      for _ in $(seq "$STALL_POLL"); do
+        sleep 1; kill -0 "$claude_pid" 2>/dev/null || exit 0
+      done
       size=$(stat -c %s "$plog" 2>/dev/null || echo 0)
       if [ "$size" = "$last_size" ]; then
-        quiet=$((quiet + 60))
+        quiet=$((quiet + STALL_POLL))
         if [ "$quiet" -ge "$STALL_TIMEOUT" ]; then
+          touch "$LOGDIR/$phase.stalled"
           echo "STALLED: no output for ${quiet}s, killing $claude_pid" \
-            >> "$LOGDIR/driver.log"
+            | tee -a "$LOGDIR/driver.log"
           kill -TERM "$claude_pid" 2>/dev/null
           sleep 20; kill -KILL "$claude_pid" 2>/dev/null
           exit 0
@@ -166,6 +176,25 @@ for phase in "${phases[@]}"; do
   after=$(git rev-parse HEAD)
   log "Phase $phase : rc=$rc cost≈\$$cost session=$sid cache(1h/5m)=$c1h/$c5m"
 
+  # --- rate-limit / auth stop, distinguished from a real failure -----------
+  if grep -qiE 'usage limit|rate.?limit|Claude AI usage limit reached|quota' "$rlog" "$LOGDIR/$phase.stderr" 2>/dev/null; then
+    echo "$phase" > "$STATE"
+    die "usage limit reached during $phase. State saved: resume with
+         dev/night_run/run_night.sh $phase"
+  fi
+
+  if [ -f "$LOGDIR/$phase.stalled" ]; then
+    echo "$phase" > "$STATE"
+    die "phase $phase STALLED: no output for ${STALL_TIMEOUT}s, so it was killed.
+       Inspect $plog, then resume with:
+         dev/night_run/run_night.sh $phase"
+  fi
+
+  if [ $rc -eq 124 ] || [ $rc -eq 137 ] || [ $rc -eq 143 ]; then
+    echo "$phase" > "$STATE"
+    die "phase $phase exceeded ${PHASE_TIMEOUT}s and was killed. Inspect $plog"
+  fi
+
   # --- billing tripwire -----------------------------------------------------
   # Documented (code.claude.com/docs/en/costs.md): the prompt-cache lifetime "is an
   # hour on a subscription and drops to five minutes once you're drawing on usage
@@ -191,18 +220,6 @@ for phase in "${phases[@]}"; do
          dev/night_run/run_night.sh $phase
        Override deliberately with ALLOW_USAGE_CREDITS=1."
     fi
-  fi
-
-  # --- rate-limit / auth stop, distinguished from a real failure -----------
-  if grep -qiE 'usage limit|rate.?limit|Claude AI usage limit reached|quota' "$rlog" "$LOGDIR/$phase.stderr" 2>/dev/null; then
-    echo "$phase" > "$STATE"
-    die "usage limit reached during $phase. State saved: resume with
-         dev/night_run/run_phase19.sh $phase"
-  fi
-
-  if [ $rc -eq 124 ] || [ $rc -eq 143 ]; then
-    echo "$phase" > "$STATE"
-    die "phase $phase exceeded ${PHASE_TIMEOUT}s and was killed. Inspect $plog"
   fi
 
   # --- the real success test: did a commit land? --------------------------
