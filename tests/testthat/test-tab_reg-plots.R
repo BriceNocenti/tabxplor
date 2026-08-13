@@ -1,6 +1,6 @@
-# Phase 12h / Last Phase z15: regression display plots -- reg_check_plots() (the model checks, drawn)
-# + or_plot() (OR forest plot). Smoke tests: each builds a ggplot/gtable object without error on a null
-# device (visual correctness is checked manually). Guarded by the plotting Suggests (ggplot2/gridExtra).
+# Phase 12h / Last Phase z15: the regression model CHECKS, drawn -- reg_check_plots(). Smoke tests:
+# each builds a gtable without error on a null device (visual correctness is checked manually).
+# Guarded by the plotting Suggests (ggplot2 / gridExtra). The results plot is test-forest-plot.R.
 #
 # CRAN time: a multi-panel grid is seconds of CPU. skip_on_cran() trims the CRAN check without
 # weakening our own CI (devtools / covr / r-lib-actions all set NOT_CRAN=true).
@@ -90,42 +90,28 @@ test_that("reg_check_plots() panel set follows REG_CHECKS, family by family", {
   expect_false(any(c("residuals", "normality") %in% reg_checks_for("binomial", what = "footer")))
 })
 
-# or_plot ---------------------------------------------------------------------------------------
 
-test_that("or_plot() builds a forest plot from a tab_logit table", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+# Last Phase z17: `or_plot()` is GONE (ruling D1 -- never released, and superseded in full by
+# forest_plot(), which reads the same table, obeys set_color_breaks() and returns a modifiable ggplot).
+# Its tests moved to test-forest-plot.R, except this one, which was never about the drawing: telling a
+# MODEL column from its observed twin by ROLE and not by a name prefix is the rule the whole plot
+# system rests on, and it is worth a fixture of its own.
+
+test_that("Last Phase z13: a model column is told from its observed twin by ROLE", {
+  skip_if_not_installed("broom")
   d <- reg_plot_data()
-  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
-  expect_s3_class(or_plot(tab_logit(d, "married", c("race", "age"))), "gtable")
-  # OR < 1 rows + empirical: defaults to the MODEL odds-ratio column (not "Obs_OR"), no message
-  expect_s3_class(or_plot(tab_logit(d, "married", "race", empirical = TRUE)), "gtable")
-})
-
-test_that("or_plot() picks the first model column (message) and rejects a bad column", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
-  d <- reg_plot_data()
-  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
-  t <- multi_logit(d, "married", list(m1 = "race", m2 = c("race", "age")))
-  expect_message(or_plot(t), "Several odds-ratio")
-  expect_error(or_plot(t, column = "nope"), "not an odds-ratio")
-})
-
-test_that("or_plot() errors on a table with no odds-ratio column", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
-  expect_error(or_plot(tab(reg_plot_data(), race, marital)), "odds-ratio")
-})
-
-test_that("Last Phase z13: or_plot() tells a model column from its observed twin by ROLE", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
-  d <- reg_plot_data()
-  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   or_cols <- names(t)[vapply(t, function(c) is_fmt(c) && identical(get_ci_type(c), "or"), logical(1))]
   testthat::expect_true("Obs_OR" %in% or_cols)          # the fixture must actually have both
   testthat::expect_true("Model_OR" %in% or_cols)
-  # ONE model column -> no "several columns" message, and the model one is the default. The old filter
-  # matched the pre-Phase-g "Emp." prefix, so Obs_OR counted as a model column: the message fired and
-  # whichever came first was plotted.
-  testthat::expect_no_message(p <- or_plot(t))
-  testthat::expect_s3_class(p, "gtable")
+  roles <- vapply(or_cols, function(n) as.character(tabxplor:::get_role(t[[n]]))[1], character(1))
+  testthat::expect_identical(unname(roles[or_cols == "Model_OR"]), "model")
+  testthat::expect_identical(unname(roles[or_cols == "Obs_OR"]),   "emp")
+  # and that is what forest_plot() selects on: one model column, no message, the crude one left to
+  # ride as `obs` (the pre-Phase-g "Emp." prefix filter had counted Obs_OR as a model column)
+  skip_if_not_installed("ggplot2")
+  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
+  testthat::expect_no_message(p <- forest_plot(t))
+  testthat::expect_identical(unique(as.character(forest_plot(t, return_data = TRUE)$column)),
+                             "Model_OR")
 })

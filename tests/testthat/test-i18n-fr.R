@@ -135,3 +135,44 @@ test_that("the per-basis weight lines translate", {
     }
   })
 })
+
+# Last Phase z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They
+# go through the same with_legend_lang() seam as the legend, so `lang =` reaches them -- unlike the
+# footer nouns, which resolve on the ambient locale (the glibc catalogue-caching limit z2 recorded).
+z17_plot_msgids <- c("Odds ratio", "Ratio", "Rate ratio", "Percentage points", "Percentage",
+                     "Coefficient (log scale)", "Units of the outcome", "SD of the outcome",
+                     "not significant", "not guaranteed", "below the first threshold")
+
+test_that("the chart's words stay English under the ambient en locale", {
+  with_legend_lang("en", function(lg)
+    for (m in z17_plot_msgids) expect_equal(gettext(m), m))
+  expect_equal(with_legend_lang("en", function(lg) gettextf("%s (%s%% CI)", "OR", "95")),
+               "OR (95% CI)")
+})
+
+test_that("the chart's words translate", {
+  skip_if_no_gettext()
+  with_legend_lang("fr", function(lg) {
+    for (m in z17_plot_msgids) expect_false(identical(gettext(m), m))
+    expect_equal(gettext("not significant"), "non significatif")
+    expect_match(gettextf("%s (%s%% CI)", "OR", "95"), "IC")
+    expect_match(gettextf("vs %s", "la ligne Total"), "^p\\. r\\. \u00e0 ")
+  })
+})
+
+test_that("a forest plot's axis and guide follow lang =", {
+  skip_if_no_gettext()
+  skip_if_not_installed("ggplot2")
+  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
+  d <- gss_cat_data_formatting()
+  t <- tab(d, race, party3, pct = "row", ci = "diff", color = TRUE,
+           color_signif = "grey_non_signif")
+  p_en <- forest_plot(t, lang = "en")
+  p_fr <- forest_plot(t, lang = "fr")
+  expect_equal(p_en$labels$x, "Percentage points (95% CI)")
+  expect_match(p_fr$labels$x, "^Points de pourcentage")
+  nm <- function(p) Filter(function(s) !inherits(s$name, "waiver") && !is.null(s$name),
+                           p$scales$scales)[[1]]$name
+  expect_match(nm(p_en), "^Difference vs ")
+  expect_match(nm(p_fr), "^Diff\u00e9rence p\\. r\\. \u00e0 ")
+})

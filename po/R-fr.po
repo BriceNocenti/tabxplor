@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-12 22:53+0200\n"
+"POT-Creation-Date: 2026-08-13 00:40+0200\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: tabxplor (Last Phase w draft)\n"
 "Language-Team: none\n"
@@ -11,250 +11,250 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: fmt_class.R:3836
+#: fmt_class.R:4016
 msgid "reference group"
 msgstr "groupe de référence"
 
-#: fmt_class.R:3837
+#: fmt_class.R:4017
 msgid "no observed effect"
 msgstr "aucun effet observé"
 
-#: fmt_class.R:3903 fmt_class.R:4119 jmvtab.b.R:127
+#: fmt_class.R:4083 fmt_class.R:4299 jmvtab.b.R:127
 msgid "Total"
 msgstr "Total"
 
-#: fmt_class.R:3904 fmt_class.R:3905
+#: fmt_class.R:4084 fmt_class.R:4085
 msgid "ref."
 msgstr "réf."
 
-#: fmt_class.R:3906 fmt_class.R:4250
+#: fmt_class.R:4086 fmt_class.R:4430
 msgid "vs the mean"
 msgstr "p. r. à la moyenne"
 
-#: fmt_class.R:3987 fmt_class.R:3988
+#: fmt_class.R:4167 fmt_class.R:4168
 msgid "points"
 msgstr "points"
 
-#: fmt_class.R:3987 fmt_class.R:3989
+#: fmt_class.R:4167 fmt_class.R:4169
 msgid "SD"
 msgstr "écarts-types"
 
-#: fmt_class.R:3990
+#: fmt_class.R:4170
 msgid "the mean contribution"
 msgstr "la contribution moyenne"
 
-#: fmt_class.R:4011
+#: fmt_class.R:4191
 msgid "Bold"
 msgstr "Gras"
 
-#: fmt_class.R:4011
+#: fmt_class.R:4191
 msgid "Italic"
 msgstr "Italique"
 
-#: fmt_class.R:4012
+#: fmt_class.R:4192
 msgid "Grey fill"
 msgstr "Aplat gris"
 
-#: fmt_class.R:4020
+#: fmt_class.R:4200
 msgid "Shades of blue"
 msgstr "Nuances de bleu"
 
-#: fmt_class.R:4020
+#: fmt_class.R:4200
 msgid "Shades of yellow to red"
 msgstr "Nuances du jaune au rouge"
 
-#: fmt_class.R:4109
+#: fmt_class.R:4289
 msgid "independence"
 msgstr "l'indépendance"
 
-#: fmt_class.R:4110
+#: fmt_class.R:4290
 msgid "the observed (crude) effect"
 msgstr "l'effet observé (brut)"
 
-#: fmt_class.R:4113
+#: fmt_class.R:4293
 msgid "the reference group's effect"
 msgstr "l'effet du groupe de référence"
 
-#: fmt_class.R:4115
+#: fmt_class.R:4295
 #, c-format
 msgid "the reference category (%s)"
 msgstr "la modalité de référence (%s)"
 
-#: fmt_class.R:4116
+#: fmt_class.R:4296
 msgid "the reference category"
 msgstr "la modalité de référence"
 
-#: fmt_class.R:4118
+#: fmt_class.R:4298
 msgid "column"
 msgstr "colonne"
 
-#: fmt_class.R:4118
+#: fmt_class.R:4298
 msgid "row"
 msgstr "ligne"
 
-#: fmt_class.R:4120
+#: fmt_class.R:4300
 #, c-format
 msgid "the %s %s"
 msgstr "la %2$s %1$s"
 
-#: fmt_class.R:4135
+#: fmt_class.R:4315
 msgid "z test on the difference between two independent estimates"
 msgstr "test z de la différence entre deux estimations indépendantes"
 
-#: fmt_class.R:4137
+#: fmt_class.R:4317
 msgid ""
 "z test on the difference between two estimates fitted on the same sample"
 msgstr ""
 "test z de la différence entre deux estimations ajustées sur le même "
 "échantillon"
 
-#: fmt_class.R:4140
+#: fmt_class.R:4320
 msgid "profile-likelihood interval"
 msgstr "intervalle de vraisemblance"
 
-#: fmt_class.R:4147
+#: fmt_class.R:4327
 msgid "Wald interval on the log rate-ratio"
 msgstr "intervalle de Wald sur le log rapport de taux"
 
-#: fmt_class.R:4148 fmt_class.R:4154
+#: fmt_class.R:4328 fmt_class.R:4334
 msgid "Wald interval on the log odds-ratio"
 msgstr "intervalle de Wald sur le log rapport de cotes"
 
-#: fmt_class.R:4149
+#: fmt_class.R:4329
 msgid "Wald interval on the log risk-ratio"
 msgstr "intervalle de Wald sur le log rapport de risques"
 
-#: fmt_class.R:4150
+#: fmt_class.R:4330
 msgid "Wald interval on the log scale"
 msgstr "intervalle de Wald sur l'échelle logarithmique"
 
-#: fmt_class.R:4152 fmt_class.R:4179
+#: fmt_class.R:4332 fmt_class.R:4359
 msgid "Wald interval"
 msgstr "intervalle de Wald"
 
-#: fmt_class.R:4162
+#: fmt_class.R:4342
 msgid "robust-Poisson (delta) interval"
 msgstr "intervalle de Poisson robuste (delta)"
 
-#: fmt_class.R:4163
+#: fmt_class.R:4343
 msgid "quasi-Poisson interval"
 msgstr "intervalle quasi-Poisson"
 
-#: fmt_class.R:4164
+#: fmt_class.R:4344
 msgid "Poisson interval"
 msgstr "intervalle de Poisson"
 
-#: fmt_class.R:4165 fmt_class.R:4170 fmt_class.R:4180
+#: fmt_class.R:4345 fmt_class.R:4350 fmt_class.R:4360
 msgid "confidence interval"
 msgstr "intervalle de confiance"
 
-#: fmt_class.R:4168
+#: fmt_class.R:4348
 msgid "Welch t interval"
 msgstr "intervalle t de Welch"
 
-#: fmt_class.R:4169
+#: fmt_class.R:4349
 msgid "Student t interval"
 msgstr "intervalle t de Student"
 
-#: fmt_class.R:4175
+#: fmt_class.R:4355
 msgid "Katz interval on the log risk-ratio"
 msgstr "intervalle de Katz sur le log rapport de risques"
 
-#: fmt_class.R:4177
+#: fmt_class.R:4357
 msgid "Newcombe score interval"
 msgstr "intervalle de Newcombe"
 
-#: fmt_class.R:4178
+#: fmt_class.R:4358
 msgid "Wald interval with Agresti-Caffo adjustment"
 msgstr "intervalle de Wald avec ajustement d'Agresti-Caffo"
 
-#: fmt_class.R:4185
+#: fmt_class.R:4365
 #, c-format
 msgid "%s%% confidence"
 msgstr "seuil de confiance à %s %%"
 
-#: fmt_class.R:4187
+#: fmt_class.R:4367
 #, c-format
 msgid "%s, %s"
 msgstr "%s, %s"
 
-#: fmt_class.R:4194
+#: fmt_class.R:4374
 msgid "standardized difference"
 msgstr "différence standardisée"
 
-#: fmt_class.R:4203
+#: fmt_class.R:4383
 msgid "difference"
 msgstr "différence"
 
-#: fmt_class.R:4203
+#: fmt_class.R:4383
 msgid "ratio"
 msgstr "rapport"
 
-#: fmt_class.R:4203
+#: fmt_class.R:4383
 msgid "contribution to Chi2"
 msgstr "contribution au Chi2"
 
-#: fmt_class.R:4204
+#: fmt_class.R:4384
 msgid "standardized residual"
 msgstr "résidu standardisé"
 
-#: fmt_class.R:4204
+#: fmt_class.R:4384
 msgid "adjustment"
 msgstr "ajustement"
 
-#: fmt_class.R:4204
+#: fmt_class.R:4384
 msgid "between groups"
 msgstr "entre groupes"
 
-#: fmt_class.R:4229
+#: fmt_class.R:4409
 msgid "cells"
 msgstr "cases"
 
-#: fmt_class.R:4251
+#: fmt_class.R:4431
 msgid "vs independence"
 msgstr "p. r. à l'indépendance"
 
-#: fmt_class.R:4292
+#: fmt_class.R:4472
 msgid "bg"
 msgstr "fond"
 
-#: fmt_class.R:4298
+#: fmt_class.R:4478
 msgid "or not tested"
 msgstr "ou non testé"
 
-#: fmt_class.R:4301
+#: fmt_class.R:4481
 #, c-format
 msgid "grey: non-significant or under %s"
 msgstr "gris : non significatif ou sous %s"
 
-#: fmt_class.R:4302
+#: fmt_class.R:4482
 msgid "grey: non-significant or small"
 msgstr "gris : non significatif ou faible"
 
-#: fmt_class.R:4306
+#: fmt_class.R:4486
 msgid "all that is significant is colored"
 msgstr "tout ce qui est significatif est coloré"
 
-#: fmt_class.R:4307
+#: fmt_class.R:4487
 msgid "all that is significant is colored, error-adjusted"
 msgstr "tout ce qui est significatif est coloré, marge d'erreur déduite"
 
-#: fmt_class.R:4343
+#: fmt_class.R:4523
 #, c-format
 msgid "%s %s %s"
 msgstr "%s %s à %s"
 
-#: fmt_class.R:4344
+#: fmt_class.R:4524
 #, c-format
 msgid "%s %s"
 msgstr "%s %s"
 
-#: fmt_class.R:4350
+#: fmt_class.R:4530
 #, c-format
 msgid "after subtracting the margin of error (%s)"
 msgstr "après soustraction de la marge d'erreur (%s)"
 
-#: fmt_class.R:4379
+#: fmt_class.R:4559
 msgid ""
 "Part of an odds-ratio gap is non-collapsibility, not confounding: a risk "
 "ratio or a marginal effect is the collapsible comparison."
@@ -263,12 +263,12 @@ msgstr ""
 "non à une variable de confusion : un rapport de risques ou un effet marginal "
 "donnent la comparaison collapsible."
 
-#: fmt_class.R:4391
+#: fmt_class.R:4571
 #, c-format
 msgid "Background colour (%s):"
 msgstr "Couleur de fond (%s) :"
 
-#: fmt_class.R:4412
+#: fmt_class.R:4592
 #, c-format
 msgid ""
 "Coloured: significantly different from %s (%s), by at least the first colour "
@@ -278,7 +278,7 @@ msgstr ""
 "de couleur. Non coloré : soit non significatif, soit une différence "
 "inférieure à %s."
 
-#: fmt_class.R:4415
+#: fmt_class.R:4595
 #, c-format
 msgid ""
 "Coloured: significantly different from %s (%s), by at least the first colour "
@@ -289,11 +289,11 @@ msgstr ""
 "de couleur. Non coloré : soit non significatif, soit une différence trop "
 "petite pour être colorée."
 
-#: fmt_class.R:4421
+#: fmt_class.R:4601
 msgid "Some rows carry no test and are left uncoloured."
 msgstr "Certaines lignes ne portent aucun test et restent non colorées."
 
-#: fmt_class.R:4428
+#: fmt_class.R:4608
 #, c-format
 msgid ""
 "Grey: below the significance threshold (%s). The thresholds above are "
@@ -302,24 +302,41 @@ msgstr ""
 "Grisé : en deçà du seuil de significativité (%s). Les seuils ci-dessus sont "
 "comparables d'un tableau à l'autre."
 
-#: fmt_class.R:4430
+#: fmt_class.R:4610
 #, c-format
 msgid "Grey: not significantly different from %s after the margin of error."
 msgstr ""
 "Grisé : chiffre non significativement différent de %s après la marge "
 "d'erreur."
 
-#: fmt_class.R:4442
+#: fmt_class.R:4622
 #, c-format
 msgid "Background: the same rule, applied to the gap with %s (%s)."
 msgstr "Fond : la même règle, appliquée à l'écart avec %s (%s)."
 
-#: fmt_class.R:4737
+#: fmt_class.R:4917
 #, c-format
 msgid "… +%d vars"
 msgstr "… +%d var."
 
-#: fmt_class.R:4916
+#: fmt_class.R:5041
+#, c-format
+msgid "vs %s"
+msgstr "p. r. à %s"
+
+#: fmt_class.R:5044
+msgid "not significant"
+msgstr "non significatif"
+
+#: fmt_class.R:5045
+msgid "not guaranteed"
+msgstr "non garanti"
+
+#: fmt_class.R:5046
+msgid "below the first threshold"
+msgstr "sous le premier seuil"
+
+#: fmt_class.R:5185
 #, c-format
 msgid ""
 "%s: significantly different from no effect (the reference category in bold; "
@@ -329,7 +346,7 @@ msgstr ""
 "en gras ; pour la Constante, de la valeur nulle), au seuil de confiance de "
 "%s %%"
 
-#: fmt_class.R:4919
+#: fmt_class.R:5188
 #, c-format
 msgid ""
 "%s: significantly different from the reference category (in bold) at the "
@@ -338,18 +355,18 @@ msgstr ""
 "%s : chiffre significativement différent de celui de la modalité de "
 "référence (en gras), au seuil de confiance de %s %%"
 
-#: fmt_class.R:4922
+#: fmt_class.R:5191
 #, c-format
 msgid "%s: at the %s%% level"
 msgstr "%s : au seuil de %s %%"
 
-#: fmt_class.R:4925
+#: fmt_class.R:5194
 msgid "no star: not significant"
 msgstr "aucune étoile : non significatif"
 
 # Last Phase z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
-#: fmt_class.R:4961
+#: fmt_class.R:5230
 msgid ""
 "Design-based (survey): weighted estimates, intervals and tests account for "
 "the sample design."
@@ -357,7 +374,7 @@ msgstr ""
 "Fondé sur le plan de sondage (survey) : estimations, intervalles et tests "
 "pondérés tiennent compte du plan d'échantillonnage."
 
-#: fmt_class.R:4967
+#: fmt_class.R:5236
 msgid ""
 "Design-based (survey) estimates; this table's design variance could not be "
 "computed, so its intervals account for the weighting only."
@@ -368,7 +385,7 @@ msgstr ""
 
 # Last Phase z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
-#: fmt_class.R:4969
+#: fmt_class.R:5238
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests account for the weighting."
@@ -376,7 +393,7 @@ msgstr ""
 "Pondéré par %s ; les intervalles de confiance et les tests tiennent compte "
 "de la pondération."
 
-#: fmt_class.R:4970
+#: fmt_class.R:5239
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests use the unweighted sample "
@@ -392,6 +409,140 @@ msgstr "Ensemble"
 #: jmvtab.b.R:128
 msgid "Others"
 msgstr "Autres"
+
+#: plots.R:376
+msgid "Model"
+msgstr "Modèle"
+
+#: plots.R:505
+msgid ""
+"Observed curve (10 bins, +/-2 SE) against the straight line the model fits."
+msgstr ""
+"Courbe observée (10 classes, +/-2 ET) face à la droite ajustée par le modèle."
+
+#: plots.R:531
+msgid ""
+"Binned residuals against the fitted value; ~95 % should sit in the band."
+msgstr ""
+"Résidus moyens par classe face à la valeur prédite ; ~95 % devraient rester "
+"dans la bande."
+
+#: plots.R:532
+msgid "Fitted value"
+msgstr "Valeur prédite"
+
+#: plots.R:532
+msgid "Mean residual"
+msgstr "Résidu moyen"
+
+#: plots.R:553
+msgid ""
+"Quantile residuals against the normal. The band is POINTWISE: about 5 % of "
+"points fall outside it under a correct model."
+msgstr ""
+"Résidus quantiles face à la loi normale. La bande est PONCTUELLE : environ 5 "
+"% des points en sortent même si le modèle est correct."
+
+#: plots.R:554
+msgid "Theoretical quantiles"
+msgstr "Quantiles théoriques"
+
+#: plots.R:554
+msgid "Quantile residuals"
+msgstr "Résidus quantiles"
+
+#: plots.R:584
+msgid ""
+"Robust against model standard errors, one point per coefficient. On the line "
+"= the family's variance assumption holds."
+msgstr ""
+"Erreurs types robustes face à celles du modèle, un point par coefficient. "
+"Sur la droite = l'hypothèse de variance de la famille tient."
+
+#: plots.R:585
+msgid "Model SE"
+msgstr "ET du modèle"
+
+#: plots.R:585
+msgid "Robust SE"
+msgstr "ET robuste"
+
+#: plots.R:614
+msgid ""
+"How far one respondent moves a coefficient, in its own standard errors. "
+"Influence is leverage x outlyingness, not outlyingness."
+msgstr ""
+"De combien un seul enquêté déplace un coefficient, en erreurs types de ce "
+"coefficient. L'influence est le produit du levier et de l'atypicité, pas "
+"l'atypicité seule."
+
+#: plots.R:615
+msgid "Observation"
+msgstr "Observation"
+
+#: plots.R:615
+msgid "max |dfbetas|"
+msgstr "max |dfbetas|"
+
+#: plots.R:638
+msgid ""
+"Variance inflation per term (5 and 10 are the usual thresholds). It biases "
+"nothing -- it widens intervals."
+msgstr ""
+"Inflation de la variance par terme (5 et 10 sont les seuils usuels). Elle ne "
+"biaise rien : elle élargit les intervalles."
+
+#: plots.R:639
+msgid "VIF"
+msgstr "VIF"
+
+#: plots.R:672
+msgid ""
+"One line per cut of the outcome. Proportional odds means they are parallel."
+msgstr ""
+"Une ligne par seuil de la variable expliquée. L'hypothèse des cotes "
+"proportionnelles signifie qu'elles sont parallèles."
+
+#: plots.R:673
+msgid "Empirical cumulative logit"
+msgstr "Logit cumulé empirique"
+
+#: plots.R:826 plots.R:1083
+msgid "Odds ratio"
+msgstr "Rapport de cotes"
+
+#: plots.R:827
+msgid "Ratio"
+msgstr "Rapport"
+
+#: plots.R:828
+msgid "Rate ratio"
+msgstr "Rapport de taux"
+
+#: plots.R:829
+msgid "Percentage points"
+msgstr "Points de pourcentage"
+
+#: plots.R:830
+msgid "Percentage"
+msgstr "Pourcentage"
+
+#: plots.R:831
+msgid "Coefficient (log scale)"
+msgstr "Coefficient (échelle logarithmique)"
+
+#: plots.R:835
+msgid "Units of the outcome"
+msgstr "Unités de la variable expliquée"
+
+#: plots.R:838
+#, c-format
+msgid "%s (%s%% CI)"
+msgstr "%s (IC à %s %%)"
+
+#: plots.R:1086
+msgid "SD of the outcome"
+msgstr "Écart-type de la variable expliquée"
 
 #: reg-assumptions.R:158
 #, c-format
@@ -606,39 +757,39 @@ msgstr "Wald vs précédent"
 msgid "Delta-AIC vs previous"
 msgstr "Delta-AIC vs précédent"
 
-#: tab_classes.R:2261
+#: tab_classes.R:2264
 msgid "ref"
 msgstr "réf."
 
-#: tab_classes.R:2262
+#: tab_classes.R:2265
 msgid "diff"
 msgstr "écart"
 
-#: tab_classes.R:2278
+#: tab_classes.R:2281
 msgid "std diff"
 msgstr "écart std"
 
-#: tab_classes.R:2345
+#: tab_classes.R:2348
 msgid "mean_ctr"
 msgstr "contrib. moy."
 
-#: tab_classes.R:2345
+#: tab_classes.R:2348
 msgid "contrib"
 msgstr "contrib."
 
-#: tab_classes.R:2357
+#: tab_classes.R:2360
 msgid "std. residual"
 msgstr "résidu std."
 
-#: tab_classes.R:2369
+#: tab_classes.R:2372
 msgid "ref. group"
 msgstr "groupe réf."
 
-#: tab_classes.R:2369
+#: tab_classes.R:2372
 msgid "obs"
 msgstr "obs."
 
-#: tab_classes.R:2386
+#: tab_classes.R:2389
 msgid "gap"
 msgstr "écart"
 
@@ -856,111 +1007,12 @@ msgstr "selon %s"
 msgid "%s (models comparison): %s"
 msgstr "%1$s (comparaison de modèles) : %2$s"
 
-#: tab_reg_plots.R:88
-msgid "Model"
-msgstr "Modèle"
+#~ msgid "Ref."
+#~ msgstr "Réf."
 
-#: tab_reg_plots.R:217
-msgid ""
-"Observed curve (10 bins, +/-2 SE) against the straight line the model fits."
-msgstr ""
-"Courbe observée (10 classes, +/-2 ET) face à la droite ajustée par le modèle."
-
-#: tab_reg_plots.R:243
-msgid ""
-"Binned residuals against the fitted value; ~95 % should sit in the band."
-msgstr ""
-"Résidus moyens par classe face à la valeur prédite ; ~95 % devraient rester "
-"dans la bande."
-
-#: tab_reg_plots.R:244
-msgid "Fitted value"
-msgstr "Valeur prédite"
-
-#: tab_reg_plots.R:244
-msgid "Mean residual"
-msgstr "Résidu moyen"
-
-#: tab_reg_plots.R:265
-msgid ""
-"Quantile residuals against the normal. The band is POINTWISE: about 5 % of "
-"points fall outside it under a correct model."
-msgstr ""
-"Résidus quantiles face à la loi normale. La bande est PONCTUELLE : environ 5 "
-"% des points en sortent même si le modèle est correct."
-
-#: tab_reg_plots.R:266
-msgid "Theoretical quantiles"
-msgstr "Quantiles théoriques"
-
-#: tab_reg_plots.R:266
-msgid "Quantile residuals"
-msgstr "Résidus quantiles"
-
-#: tab_reg_plots.R:296
-msgid ""
-"Robust against model standard errors, one point per coefficient. On the line "
-"= the family's variance assumption holds."
-msgstr ""
-"Erreurs types robustes face à celles du modèle, un point par coefficient. "
-"Sur la droite = l'hypothèse de variance de la famille tient."
-
-#: tab_reg_plots.R:297
-msgid "Model SE"
-msgstr "ET du modèle"
-
-#: tab_reg_plots.R:297
-msgid "Robust SE"
-msgstr "ET robuste"
-
-#: tab_reg_plots.R:326
-msgid ""
-"How far one respondent moves a coefficient, in its own standard errors. "
-"Influence is leverage x outlyingness, not outlyingness."
-msgstr ""
-"De combien un seul enquêté déplace un coefficient, en erreurs types de ce "
-"coefficient. L'influence est le produit du levier et de l'atypicité, pas "
-"l'atypicité seule."
-
-#: tab_reg_plots.R:327
-msgid "Observation"
-msgstr "Observation"
-
-#: tab_reg_plots.R:327
-msgid "max |dfbetas|"
-msgstr "max |dfbetas|"
-
-#: tab_reg_plots.R:350
-msgid ""
-"Variance inflation per term (5 and 10 are the usual thresholds). It biases "
-"nothing -- it widens intervals."
-msgstr ""
-"Inflation de la variance par terme (5 et 10 sont les seuils usuels). Elle ne "
-"biaise rien : elle élargit les intervalles."
-
-#: tab_reg_plots.R:351
-msgid "VIF"
-msgstr "VIF"
-
-#: tab_reg_plots.R:384
-msgid ""
-"One line per cut of the outcome. Proportional odds means they are parallel."
-msgstr ""
-"Une ligne par seuil de la variable expliquée. L'hypothèse des cotes "
-"proportionnelles signifie qu'elles sont parallèles."
-
-#: tab_reg_plots.R:385
-msgid "Empirical cumulative logit"
-msgstr "Logit cumulé empirique"
-
-#: tab_reg_plots.R:500
-msgid "Ref."
-msgstr "Réf."
-
-#: tab_reg_plots.R:589
 #, c-format
-msgid "Odds ratio (%s%% CI, log scale)"
-msgstr "Rapport de cotes (IC à %s %%, échelle log)"
+#~ msgid "Odds ratio (%s%% CI, log scale)"
+#~ msgstr "Rapport de cotes (IC à %s %%, échelle log)"
 
 #~ msgid "too large"
 #~ msgstr "tableau trop grand"

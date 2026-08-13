@@ -1783,6 +1783,9 @@ reg_footer_lines <- function(tabs) {
 #' future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
 #' \code{\link{tab_xl}} (Excel).
 #'
+#' It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
+#' confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
+#'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
 #' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).

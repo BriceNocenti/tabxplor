@@ -755,17 +755,51 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 
 ## Plots
 
-`or_plot()` draws a forest plot of the odds ratios of a finished table. `reg_check_plots()` draws the model checks — the same five nouns as the footer rows, one panel each, faceted across every model in the table:
+### The results: `forest_plot()`
+
+`forest_plot()` draws the finished table — every effect with its confidence interval, its stars and its colour, one panel per model column:
 
 ```{r, eval = FALSE}
-t <- tab_reg(gss_simple, "married", c("race", "age"))
-or_plot(t)
+t <- tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial")
+forest_plot(t)
+```
 
+It **reads the table and never re-fits anything**, so the figure cannot disagree with the numbers you printed: each point is the value in the cell, each gridline is one of your colour breaks (move them with `set_color_breaks()` and the axis moves too), and each point's colour is the cell's colour. It returns an ordinary `ggplot`, so `+ ggplot2::labs(...)` and `ggsave()` work as usual.
+
+The three ways of reading significance become three things you can see:
+
+| `color_signif` | in the table | in the plot |
+|---|---|---|
+| `"ignore"` | colour by the size of the effect | where the point sits, relative to the null line |
+| `"grey_non_signif"` | grey unless the interval excludes the null | whether the whisker crosses the null line |
+| `"guaranteed_effect"` | colour the interval bound nearest the null | how far the near end of the whisker is from it |
+
+### Observed versus modelled, drawn honestly
+
+With `empirical = TRUE`, each modelled effect carries its observed (crude) counterpart, and the plot draws it as a **hollow point with a bracket** — the margin of error *of the difference between the two*:
+
+```{r, eval = FALSE}
+t <- tab_reg(gss_simple, "married", c("race", "rincome"),
+             family = "poisson", empirical = TRUE)      # risk ratios
+forest_plot(t)
+```
+
+Read it as one question: **is the filled point outside the bracket?** If it is, adjustment moved the effect by more than noise — and that is exactly the test the table performs, to the last digit.
+
+It is deliberately *not* two intervals side by side. Comparing two intervals by whether they overlap is a known mistake (Schenker & Gentleman 2001), and it is worse here, because the crude and the adjusted estimate are computed on the same people and are therefore correlated: the right interval is the one *around the difference*, which is what the bracket is. `observed = "ci"` draws the classic two-interval figure if you want it anyway.
+
+A dotted connector with no bracket means the gap could not be tested — most often a conditional odds ratio, which moves under adjustment even with nothing to adjust for (see *Three ways to get this wrong* above).
+
+### The model checks: `reg_check_plots()`
+
+```{r, eval = FALSE}
 reg_check_plots(t, gss_simple)                       # every panel the family allows
 reg_check_plots(t, gss_simple, check = "linearity")  # just one
 ```
 
-These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row of the table, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+The same five nouns as the footer rows, one panel each, faceted across every model in the table. These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+
+Note the opposite contracts: `forest_plot()` never re-fits (the results are in the table), `reg_check_plots()` always does (residuals are not).
 
 ## Where to go next
 

@@ -47,7 +47,18 @@ R/
 │                              [diff], signed AWAY-FROM/TOWARD THE NULL so a protective effect reads like a
 │                              risky one) + z8's fmt_gap_raw/_bounds/_p; fmt_gap_bounds = the interval OF
 │                              THE SCORE (|gap| re-signed by the null direction), so every plan branch works
-│                              on it unchanged; fmt_color_plan/fmt_color_slots/fmt_color_channels;
+│                              on it unchanged; z17: **EST_SCALES + est_scale_key + fmt_scale_of** =
+│                              what a column ESTIMATES (neutral / transform / axis unit key / estimate
+│                              field / the ladder the ESTIMATE lives on / the adj_* one its GAP reads)
+│                              -- ONE dispatch whose ORDER is the contract, of which fmt_gap_scale_key
+│                              and ci_center are now LOOKUPS (fmt_center_field = its estimate-field
+│                              half, called WITHOUT a display because it answers about the INTERVAL);
+│                              legend_guide_spec = the colour legend as a real ggplot GUIDE (NULL when
+│                              the plotted columns form >1 legend_group_by_body group -- one ggplot
+│                              scale, one ladder); fmt_point_palette = the 8 slot colours to paint a
+│                              MARK with (print's text slots are all black, so a point borrows its
+│                              grey ramp: in a forest plot DIRECTION is the position, not the hue);
+│                              fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under; 17d: fmt_color_plan
 │                              reads MEASURES for raw/scale/sig_source/gate_row + z5's std_when="additive"
 │                              (the scale keys off the ESTIMATE's ci_type, since Model_OR and Model_AME
@@ -500,7 +511,7 @@ R/
 │                              fit, terms with 2+ coefficients only) -- a footer LINE, so its
 │                              discriminators must be registered in is_reg_footer + reg_footer_lines'
 │                              carve-out + tab_footer_streams; reg_level_counts() + `add_n = TRUE` = the N
-│                              per predictor level, a BUILT column (role "n", read by or_plot's model pick,
+│                              per predictor level, a BUILT column (role "n", read by forest_plot's model pick,
 │                              reg_spread_models' GOF key and the [dep] strip); reg_detect_family: any
 │                              numeric -> gaussian (integers included), matching the jamovi selector
 │                              z14-iii: reg_empirical(design_spec=) -> the crude bases `emp_n_ci` /
@@ -578,15 +589,30 @@ R/
 │                              SHORTER (measured 380 vs 400 -> the gap test silently skipped, and
 │                              reg_ame_if_maker's `emp + delta` RECYCLED = a wrong number). Padded rows
 │                              carry weight 0, so a zero scatter is exact, not an approximation.
-├── tab_reg_plots.R  (~560 L) The plots of a tab_reg() table: or_plot() (finalfit-style OR forest plot
-│                              ON a tabxplor_tab -- reads fmt fields, NO refit) + z15-iii's
-│                              reg_check_plots() (TEACHING ONLY -- every verdict is already a footer row;
-│                              the panel set IS REG_CHECKS, faceted across every model, one dispatch
-│                              reg_panel_build() of HOW). It refits through reg_fit() from
-│                              reg_meta$fit_spec (~4 KB of strings, never the ~10 MB fits) and ABORTS when
-│                              the data does not reproduce the table's stored N. reg_plot_colors()/
-│                              reg_plot_theme() = the z11 tx_chrome_hex() vocabulary (light/dark/print),
-│                              adopted by or_plot() too. lm_plots() DELETED. ggplot2+gridExtra guarded.
+├── plots.R         (~1010 L) z17 (was tab_reg_plots.R): the package's data CHARTS + the ONE model they
+│                              read. **tab_estimates()** = one long tibble, one row per (table row x
+│                              plotted column), computing NOTHING -- estimate/interval/p from the
+│                              accessors the printed table used, scale from fmt_scale_of(), colour from
+│                              resolve_color_channel_plans() + fmt_col_ann() (the EXPORTERS' resolver, so
+│                              a point is the cell's colour down to the greys), plus `obs` and the gap's
+│                              interval. Its three axes are STORED facts: columns = role + col_var +
+│                              is_totcol (est_plot_columns / est_crude_of, paired by ci_type -- never the
+│                              "Obs_" prefix), rows = tab_render_vars() + tab_row_roles() over the four
+│                              label-block shapes (est_row_axis), facet key DERIVED once (est_facet_keys,
+│                              ruling D7: col_var, unless a col_var holds several columns of ONE role ->
+│                              one panel per column; a crude block serving several models is replicated).
+│                              **forest_plot()** = a renderer with no statistics in it: the gridlines are
+│                              the column's own break ladder (fp_axis_breaks + legend_break_label, so the
+│                              axis and the footer print the same glyph), the two secondary axes come
+│                              from the scale record, the GAP BAND is obs (+-|x/) z*gap_se so containment
+│                              IS fmt_gap_p() < alpha, the guides come from legend_guide_spec() and the
+│                              caption from rd_footer(want_legend = FALSE) + fp_method_line (the ladder
+│                              is never printed twice). ONE ggplot out, so `+ theme()` / ggsave() work.
+│                              + z15-iii's reg_check_plots() (TEACHING ONLY; the panel set IS REG_CHECKS,
+│                              one dispatch reg_panel_build(); refits through reg_fit() from
+│                              reg_meta$fit_spec, ABORTS on an N mismatch) -- the OPPOSITE contract, said
+│                              in both help pages. tx_plot_deps/_colors/_theme = the shared seam (was
+│                              reg_plot_*). or_plot() + lm_plots() DELETED. ggplot2 (>= 3.5.0) guarded.
 ├── jmvtab-cache.R  (~910 L)  17i: the SHARED cache kernel at the top (jmv_cache_config +
 │                             jmv_store_new/migrate/env/fetch/put/evict/cached, ONE byte-bounded LRU
 │                             O(n log n), canonical entry list(value,bytes,seq); jmv_hash/jmv_col_fp),
@@ -878,7 +904,9 @@ this, not the code. Symptoms + rules:
 | `test-tab_logit.R`       | Phase 12a: binomial-wrapper OR/CI/p parity vs glm/svyglm, 1/OR                                  |
 | `test-tab_reg.R`         | Phase 12c/12d/12e: beta/OR/IRR/MNL/ordinal + AME parity vs lm/glm/multinom/polr/marginaleffects |
 | `test-tab_reg-display.R` | Phase 12h: estimate_display (est_ci bracket / prob / ame folds), Excel test label, split footer |
-| `test-tab_reg-plots.R`   | Phase 12h / z15: or_plot() + reg_check_plots() smoke tests (build a gtable without error)      |
+| `test-tab_reg-plots.R`   | Phase 12h / z15: reg_check_plots() smoke tests (build a gtable without error)                  |
+| `test-tab-estimates.R`   | Last Phase z17: the estimate model + fmt_scale_of() -- no graphics device                      |
+| `test-forest-plot.R`     | Last Phase z17: forest_plot() -- ladder == gridlines, cell colour == point, gap band == test  |
 | `test-reg-shape.R`       | Last Phase z15: `shape =`, the plot primitives, the stored curves and the row sparkline        |
 
 ---
@@ -3090,7 +3118,92 @@ opt-in method; the rest is prose. Implementation record: `dev/weights_only_desig
 
 #### Last Phase z17 — `forest_plot` effect + CIs + significance + comparison plots for `tab_reg` and `tab`
 
-Plan and implement for `dev/regression_effect_plots.md`.
+Plan and implement for `dev/regression_effect_plots.md` (§21 = the ten rulings; four more were settled
+when the plan landed: the name is **`forest_plot()`**, the colour legend becomes a real ggplot **guide**
+with the rest of the footer as the caption, a crosstab draws **the quantity its own `ci =` produced**,
+and the layout is **one panel per estimate column** — the literal transposition of the printed table,
+one rule for both classes).
+
+**The one architectural idea.** A column does not say *what it estimates*. `ci_center()` already maps
+`ci_type` → the estimate field and `fmt_gap_scale_key()` already dispatches on
+`(ci_type, type, model_family, has var)`; neither says the neutral, the transform, the axis unit or
+which break ladder the estimate lives on. **`fmt_scale_of(x)`** returns that whole record from ONE
+dispatch (`EST_SCALES` = the declared record library, `REG_CHECKS`-shaped), and the two existing
+helpers derive from it. `tab_estimates(x)` is then a long tibble — one row per (table row × plotted
+column) — and `forest_plot()` is plain ggplot2 over it, with no statistics in it: every number and
+every colour comes from the accessor the printed table used, so table and plot cannot drift.
+
+##### z17-i — the estimate model (no plot yet)
+`fmt_scale_of()` / `EST_SCALES` / `fmt_scale_key()` + `fmt_center_field()` (`ci_center()` and
+`fmt_gap_scale_key()` rewritten on top, byte-identical by construction) · D2: `gap_se` computed
+whenever `empirical = TRUE` and the five correctness clauses hold, the `sp$color` clause dropped ·
+`tab_estimates()` in new `R/plots.R` (class-agnostic, read-only, no refit; the facet key derived once,
+D7) · `test-tab-estimates.R`, no graphics device. Byte-identity target: zero golden/snapshot churn.
+
+##### z17-ii — `forest_plot()` for regression tables
+The renderer: facets, the ladder as gridlines, the two secondary axes (`exp()` for
+`exponentiate = FALSE`, `/ SD(Y)` for a gaussian β), the **gap band** (`obs ± z·gap_se`, whose
+containment is numerically identical to `fmt_gap_p()`), the colour/fill/shape **guides** from the new
+`legend_guide_spec()`, and `rd_footer(want_legend = FALSE)` as the caption. `or_plot()` DELETED (D1,
+superseding z15 R3); `R/tab_reg_plots.R` → `R/plots.R`; the shared seam `reg_plot_*` → `tx_plot_*`;
+`ggplot2` floor 3.4.0 → 3.5.0.
+
+##### z17-iii — crosstabs, the second geometry, and the documentation
+`tab()` tables (D9: plain / compacted / `tab_vars`, `totals = FALSE`, the reference line) ·
+`what = "level"` (D4) · `guide = "bands"` (D5) · `labels =` / `size = "n"` / `facet = FALSE` ·
+`tab_export(format = "forest")` · `?forest_plot`, the four vignettes, `_pkgdown.yml`, NEWS,
+architecture, the ~18 msgids + `po/R-fr.po` + `.mo`. Full suite in BOTH locales.
+
+**DONE (2026-08-13), all three subphases.** Suite green: FAIL 0, WARN 0, SKIP 4, PASS 5702 → the new
+files add ~110 more. **Zero golden and zero snapshot churn for the whole phase** — nothing here changes
+a printed table.
+
+**The missing fact was one sentence: an estimate is a number PLUS A SCALE.** Four consumers each
+re-derived half of it (`format()`'s compound predicates, `fmt_color_plan()`, the legend's `unit_kind`,
+and `or_plot()`'s private hard-coded ladder). **`EST_SCALES` + `est_scale_key()` + `fmt_scale_of()`**
+state it once — nine scales, each with its neutral, transform, axis unit, estimate field, the break
+ladder the ESTIMATE lives on and the `adj_*` one its GAP reads — and `fmt_gap_scale_key()` and
+`ci_center()` became LOOKUPS on it. `tab_estimates()` is then a long tibble that computes NOTHING, and
+`forest_plot()` is a renderer with no statistics in it: table and chart cannot drift, and the contract
+is testable without a graphics device (a tibble has a golden lock; a ggplot has none).
+
+- **Three things the figure does that the table cannot.** The gridlines ARE the colour ladder, so
+  `set_color_breaks()` moves both and the axis prints the same glyphs the footer does
+  (`legend_break_label`, shared). The **gap band** is `obs (± | ×÷) z·gap_se`, so "is the modelled
+  point outside the bracket?" is exactly `fmt_gap_p(x) < 1 − conf_level`, asserted cell by cell — the
+  correction Schenker & Gentleman prescribe, drawn so the reader checks containment instead of the
+  overlap of two correlated intervals. And the three `color_signif` policies acquire exact geometric
+  readings (position / crossing / distance from the null), so one figure explains the colour system.
+- **Ruling D2, and it cost almost nothing.** `gap_se` left the `color = "adjustment"` gate: a fact was
+  being withheld because nobody had asked to COLOUR it, which held while the colour engine was its one
+  reader. `reg_empirical_fit()` already FITS the univariable crude models when `empirical = TRUE`
+  (`want_fit` only decided whether to keep them), so what is added is `reg_coef_if_maker()` +
+  `reg_if_se()`, ~1/8 of a fit per column. Nothing renders differently, hence no golden moves.
+- **Ruling D6, and its honest limit.** `legend_guide_spec()` turns the colour legend into a real ggplot
+  guide from the legend's OWN producers (`legend_break_tokens()` already carries each break's label and
+  slot, and already drops a break that renders identically). But a ggplot has one scale per aesthetic,
+  so it returns NULL when the plotted columns form several `legend_group_by_body()` groups and the
+  caption prints the prose legend instead — the same grouping the footer uses, so the two cannot
+  disagree about how many ladders there are. The caption otherwise carries the footer MINUS the ladder
+  (`rd_footer(want_legend = FALSE)`) plus the interval's method: never printed twice.
+- **`theme = "print"` forced the one deviation from the table palettes.** Its text slots are all black
+  (the table separates the directions by bold vs italic, which a point cannot be), so
+  `fmt_point_palette()` gives a MARK the print palette's grey ramp — and nothing is lost, because in a
+  forest plot DIRECTION is the position relative to the null line. The two ladders then render
+  identically and the guide merges them into one key list, by the dedup `legend_break_tokens()` already
+  had.
+- **Two defects found while implementing.** `tab(OR = TRUE)`'s reference column has NA odds-ratio bounds
+  by construction, so `ci_type` is `""` and it read as a PERCENTAGE — deciding its whole panel's axis
+  (measured: a 0-100 % axis on an odds-ratio plot). `est_scale_key()` gained a display clause for the
+  intervalless case (`display` is a stored FIELD, not a rendered string). And `tibble()` evaluates its
+  arguments sequentially, so `series = if (identical(role, "emp"))` inside the call tested the
+  length-n COLUMN it had just created, silently labelling every crude row "modelled".
+- **Also**: `or_plot()` DELETED (D1 — never released; superseding z15 ruling R3, per the maintainer's
+  "no back-compat on regression functions"), with its inert `point_size`, its private ladder and its two
+  off-palette literals; `R/tab_reg_plots.R` → `R/plots.R` and `reg_plot_*` → `tx_plot_*` (a crosstab
+  chart cannot live in a file named after regressions); `tab_export(format = "forest")`;
+  `ggplot2 (>= 3.5.0)` (the declared floor was below what the code already used — `transform =` is the
+  3.5.0 spelling); 13 new msgids, `po/R-fr.po` + `.mo` recompiled (213 translated, 0 fuzzy).
 
 #### Last Phase zxx — `tab_reg()` parallelisation
 

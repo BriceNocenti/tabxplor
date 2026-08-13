@@ -647,7 +647,9 @@ Go further with the helper functions: \code{\link[=tab_ci]{tab_ci()}} (confidenc
 \code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} / \code{\link[=set_color_style]{set_color_style()}} (colors),
 \code{\link[=tab_chi2]{tab_chi2()}} (statistical tests), \code{\link[=tab_pct]{tab_pct()}} / \code{\link[=tab_tot]{tab_tot()}} (percentages and totals).
 Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
-\code{\link[=tab_plot]{tab_plot()}}. Package-wide defaults live in \link{tabxplor-options}.
+\code{\link[=tab_plot]{tab_plot()}}, and CHART it with \code{\link[=forest_plot]{forest_plot()}} (every cell's estimate, interval and colour --
+\code{tab_plot()} renders the table as an image, \code{forest_plot()} is the real chart).
+Package-wide defaults live in \link{tabxplor-options}.
 
 \code{color = "contrib"} shows each cell's departure from the \strong{log-linear model of independence}
 (that is what the chi-squared is), so it reads as a heatmap of the association pattern. For the

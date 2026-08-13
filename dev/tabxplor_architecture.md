@@ -59,7 +59,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `color` | character | Color scheme (length 1 text, or 2 with a background channel): "no", "diff", "ratio", "contrib", "or", "OR", … |
 | `color_signif` | character | Significance policy: `"ignore"` / `"grey_non_signif"` / `"guaranteed_effect"` |
 | `model_family` | character | Phase 15e: a reg column's own family (`"binomial"`/`"gaussian"`/`"poisson"`/…), `""` on crosstabs — lets one `tab_reg()` table mix families |
-| `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` / `"n"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label, and (z13) by `or_plot()`, `reg_spread_models()` and the `[dep]`-bracket strip (internal `get_role`) |
+| `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` / `"n"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label, and (z13) by `reg_spread_models()` and the `[dep]`-bracket strip; (z17) it is also the COLUMN AXIS of `tab_estimates()` / `forest_plot()` (internal `get_role`) |
 | `conf_level` | double | Last Phase z13: the level THIS column's interval and its significance thresholds were computed at; `NA` = unknown. TWO accessors, and the split is load-bearing: the six reconcilers read the RAW `fmt_conf_level_attr()` so a bind carries "unknown" forward instead of freezing today's option into the result, while the four colour-engine thresholds (`fmt_gap_bounds`, the contrib residual gate, the `guaranteed_effect` origin, the p-value cell slot) read `get_conf_level()`, which falls back to `options("tabxplor.conf_level")`. Stamped by ONE sweep at each build tail (`tab_stamp_conf_level()` in `tab_assemble_tables` / `plain_core` / `num_core` / `tab_ci` / both `tab_reg` tails), never per `fmt()` call site. It is what makes a table built at `conf_level = 0.99` grey at 99 % rather than at the global option |
 
 The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))`, so adding an attribute (a `new_fmt()` formal that is not a field) needs no carry-site edit here — but every explicit reconstructor (`vec_cast`/`vec_ptype2`/`vec_arith`/`vec_math`) still hand-lists it beside `model_family`.
@@ -1686,7 +1686,7 @@ boundary between them and the rest of `tab_reg()` leaked. Eleven fixes; the ones
 - **`reg_level_counts()` + `add_n = TRUE`** — the N behind each predictor level, on the model's own
   frame, as a real BUILT column (the count needs the model frame, which exists only at build time;
   `tab()`'s display-time `add_n` folds into a Total cell a reg table does not have). `role = "n"` is a
-  third stored role with three consumers: `or_plot()`'s model-column pick, `reg_spread_models()`'s GOF
+  third stored role with three consumers: `forest_plot()`'s model-column pick, `reg_spread_models()`'s GOF
   key (the `n` column comes first and would otherwise key every group's footer under its counts), and
   the `[dep]` bracket strip. Tests select reg columns through `tests/testthat/helper-reg.R`'s
   `reg_fmt_cols()`, never by position.
@@ -1799,14 +1799,58 @@ ONE TERM, and nothing else.**
   to a 121-byte inline `<svg><polyline stroke="currentColor">` in `tx_spark_svg()`, called at the
   ordinary-text-cell emission — **the glyph run IS the data**, read straight out of the rendered string,
   so there is no key to keep in sync and it survives transpose / `tab_spread` / any pipeline; the plot
-  medium STRIPS it (`tx_spark_strip()` in `tab_plot()` and `or_plot()` — a graphics device has no block
+  medium STRIPS it (`tx_spark_strip()` in `tab_plot()` — a graphics device has no block
   glyphs and emits one `mbcsToSbcs` failure per label); console, markdown and Excel keep it.
-- **`reg_check_plots()`** (`R/tab_reg_plots.R`, which now holds it + `or_plot()`; `lm_plots()` deleted).
+- **`reg_check_plots()`** (`R/plots.R`, z17's rename of `tab_reg_plots.R`; `lm_plots()` deleted).
   The panel set IS `REG_CHECKS`: it gained a `panel` field and TWO taught-but-never-scored rows
   (`residuals`, `normality` — measured non-discriminating as verdicts, canonical as lessons), which
   carry an EMPTY `types` and so contribute a panel and no footer row. `reg_checks_for(what = "panel")`
   is the same selection rule with a declared filter; `reg_panel_build()` is the one dispatch of HOW.
   It refits through `reg_fit()` itself, from `reg_meta$fit_spec` (~4 KB of strings — never the fits:
   ~10 MB each was Phase o's measured jamovi freeze), and ABORTS when the data does not reproduce the
-  stored N. `reg_plot_colors()` / `reg_plot_theme()` are the z11 `tx_chrome_hex()` vocabulary, adopted
-  by `or_plot()` too (the five hard-coded `"#c00000"` literals are gone).
+  stored N. `tx_plot_colors()` / `tx_plot_theme()` are the z11 `tx_chrome_hex()` vocabulary (the five
+  hard-coded `"#c00000"` literals are gone); z17 renamed them off the `reg_` prefix, since a crosstab
+  chart shares them.
+
+
+### Last Phase z17 — `forest_plot()` and the estimate model
+
+The package's first real data CHART. Everything it needed was already stored per cell and per column;
+what was missing was one fact — **an estimate is a number plus a scale** — which four consumers each
+re-derived half of (`format()`, `fmt_color_plan()`, the legend, and `or_plot()`'s private ladder).
+
+- **`EST_SCALES` + `est_scale_key()` + `fmt_scale_of()`** (`R/fmt_class.R`, beside the colour engine).
+  Nine declared scales (`or`, `pct_ratio`, `mean_ratio`, `raw_diff`, `mean_diff`, `log_coef`, `points`,
+  `level_pct`, `level_mean`), each saying its neutral, transform, axis unit KEY, estimate field, the
+  break ladder the ESTIMATE lives on and the `adj_*` ladder its GAP reads. ONE dispatch, whose ORDER is
+  the contract (the `var` clause must precede the log-coefficient one — see the comment); a `kind`
+  argument filters it for `forest_plot(what =)`, and a `display` clause covers the intervalless case
+  (`tab(OR = TRUE)`'s reference column, whose OR bounds are NA by construction, used to read as a
+  percentage and decide its panel's axis). **`fmt_gap_scale_key()` and `ci_center()` are now lookups on
+  it**, so the three cannot drift; `fmt_center_field()` is the estimate-field half, which `ci_center()`
+  calls WITHOUT a display because it answers about the INTERVAL, not the column.
+- **`tab_estimates()`** (`R/plots.R`, internal, reachable as `forest_plot(return_data = TRUE)`): one
+  long tibble, one row per (table row × plotted column). It computes NOTHING. Column axis = `role` +
+  `col_var` + `is_totcol`; row axis = `tab_render_vars()` + `tab_row_roles()` over the four label-block
+  shapes; scale = `fmt_scale_of()`; colour = `resolve_color_channel_plans()` + `fmt_col_ann()` (the
+  EXPORTERS' resolver, so a point is the cell's colour down to the greys). The facet key is derived
+  once (ruling D7): `col_var`, unless a `col_var` holds several columns of the SAME role — multinomial
+  categories, or a crosstab's column levels — in which case one panel per column; a crude block serving
+  several models is replicated into each model panel.
+- **The gap band** = `obs (± | ×/÷) z·gap_se`, so "the modelled point falls outside the bracket" is
+  exactly `fmt_gap_p(x) < 1 - conf_level`, to machine precision (asserted cell by cell). Ruling D2 made
+  `gap_se` a fact of validity rather than of who asked to colour it: the `sp$color` clause left
+  `reg_gap_se_columns()`, which costs ~1/8 of a fit because the crude univariable models were already
+  being fitted for the crude column.
+- **`legend_guide_spec()`** (`R/fmt_class.R`): the colour legend as a real ggplot GUIDE, from the
+  legend's own producers (`legend_specs` → `legend_resolve_spec` → `legend_break_tokens`, which already
+  drops a break rendering identically to the previous one). ONE ggplot scale per aesthetic means one
+  ladder per key list, so it returns NULL when the plotted columns form several `legend_group_by_body()`
+  groups and the caption prints the prose legend instead. `fmt_point_palette()` is the one deviation
+  from the table palettes and it is forced: `theme = "print"` gives every TEXT slot pure black and
+  separates the directions by typography, which a point cannot carry — so a MARK borrows the print
+  palette's dark grey ramp, and direction is read off the axis, which a table cannot do.
+- **`forest_plot()`** returns ONE `ggplot` (never a `gtable`), so `+ theme()` / `ggsave()` work.
+  `R/tab_reg_plots.R` became `R/plots.R`; `reg_plot_*` became `tx_plot_*`; `or_plot()` is DELETED
+  (ruling D1, never released). Also `tab_export(format = "forest")`, and `ggplot2 (>= 3.5.0)` for
+  `transform =` / `sec_axis(transform =)`.

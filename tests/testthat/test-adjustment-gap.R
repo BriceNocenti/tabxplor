@@ -171,19 +171,34 @@ test_that("no gap_se where the gap has no honest test", {
   testthat::expect_true(none(suppressMessages(tab_reg(
     d, "married", c("race", "party3"), family = "binomial", exponentiate = FALSE,
     empirical = TRUE, color = c("diff", "adjustment")))))
-  # (2) the colour was not asked for -- the test costs ~1/8 of a fit, so it is not computed for nothing
-  testthat::expect_true(none(gapb_tab(d) |> (\(x) x)() |> identity() |>
-    (\(x) suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE)))()))
-  # (3) at the reference profile the model cell is a different estimand (a z5 defect z8-A fixed)
+  # (2) at the reference profile the model cell is a different estimand (a z5 defect z8-A fixed)
   skip_if_not_installed("marginaleffects")
   testthat::expect_true(none(suppressMessages(tab_reg(
     d, "married", c("race", "party3"), family = "binomial", effect = "ame", at = "reference",
     empirical = TRUE, color = c("diff", "adjustment")))))
-  # (4) no crude twin at all: multinomial
+  # (3) no crude twin at all: multinomial
   m <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                 color = c("OR", "adjustment")))
   testthat::expect_true(all(vapply(m[vapply(m, is_fmt, logical(1))],
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
+})
+
+# Last Phase z17 (ruling D2). The gap SE used to be gated on `color = "adjustment"` -- a fact withheld
+# because nobody had asked to COLOUR it, which held only while the colour engine was its one reader.
+# forest_plot() is the second, so the premise is now validity alone: `empirical = TRUE` + the five
+# correctness clauses. Nothing RENDERS differently (a gap measure is still the only consumer of the
+# stored value), which is why the goldens do not move.
+test_that("z17 D2: gap_se is written without asking for the colour", {
+  d <- gapb_data()
+  plain  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE))
+  asked  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE,
+                                     color = c("OR", "adjustment")))
+  gp <- get_gap_se(gapb_model_col(plain))
+  ga <- get_gap_se(gapb_model_col(asked))
+  testthat::expect_true(any(!is.na(gp)))          # would have been all-NA before z17
+  testthat::expect_equal(gp, ga)                  # and it is the SAME number the colour scores
+  # the rendered table is untouched: no measure reads `gap_se` unless it was asked for
+  testthat::expect_identical(format(gapb_model_col(plain)), format(gapb_model_col(asked)))
 })
 
 # Last Phase z13 (D1). Before it, the crude block was built on the UNION of predictors while each model

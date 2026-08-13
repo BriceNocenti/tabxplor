@@ -36,6 +36,17 @@
   the counterpart of the chi-squared for factor columns.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
   sparse table uses Fisher's exact.
+* **`forest_plot()` — a chart of any tabxplor table**, cross-table or regression: every estimate with
+  its confidence interval, its stars and *its own cell colour*, one panel per column of the table.
+  It reads the finished table and re-computes nothing, so the figure cannot disagree with the numbers
+  you printed: the gridlines are your `set_color_breaks()` ladder, the colour key is the table's own
+  legend, and it returns an ordinary `ggplot` you can `+ theme()` and `ggsave()`. By default it draws
+  whatever the table computed (`ci = "cell"` → percentages with their intervals, `ci = "diff"` →
+  differences from the reference, `OR = TRUE` → odds ratios on a log axis). On a regression table with
+  `empirical = TRUE` it draws the observed effect with the margin of error **of the gap** between the
+  two, so "is the point outside the bracket?" is exactly the table's own gap test — rather than the
+  two overlapping intervals that reading invites and that are wrong for correlated estimates.
+  Also reachable as `tab_export(format = "forest")`.
 * **Weights, and survey designs.** A weighted `tab()` estimates the population, and now **says in its
   footer** what its confidence intervals and tests are based on. By default that is still the raw
   number of respondents (no design effect). `options(tabxplor.design_effect = TRUE)` makes every
@@ -70,7 +81,7 @@
   or frequencies + base N) instead of microdata.
 * **`tab_reg()`** — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal),
   with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
-  See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `or_plot()` /
+  See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `forest_plot()` /
   `reg_check_plots()` draw it.
 * **Every regression table now checks itself.** The footer carries five model checks — **Linearity**
   (per continuous predictor), **Proportionality (Brant)**, **Dispersion (robust/model SE)**,
@@ -302,6 +313,8 @@ Removed / defunct (now error):
   forms; the `tabxplor.compact` option (use `output_list =`).
 * `method_ratio` / `method_mean_diff` / `method_mean_ratio` (never released; use `ci_method`).
   A proportion *ratio* has only one interval (Katz), so it was never a choice.
+* `or_plot()` (never released; use `forest_plot()`, which draws every family and effect, follows
+  `set_color_breaks()` and returns a modifiable `ggplot`).
 * `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
   `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
 

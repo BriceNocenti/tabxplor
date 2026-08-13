@@ -9,15 +9,16 @@
 #' Export a tabxplor table to Excel, HTML, Markdown, or a plot
 #'
 #' A single entry point that dispatches to the format-specific exporters
-#' \code{\link{tab_html}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
-#' \code{\link{tab_plot}} (a \code{ggplot}). The four functions share one set of display-option names
-#' and defaults; \code{tab_export()} forwards them and passes any format-specific argument through
-#' \code{...}.
+#' \code{\link{tab_html}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel),
+#' \code{\link{tab_plot}} (the table as an image) and \code{\link{forest_plot}} (a real chart of the
+#' estimates). They share one set of display-option names and defaults; \code{tab_export()} forwards
+#' them and passes any format-specific argument through \code{...}.
 #'
 #' @param x A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.
-#' @param format One of \code{"html"} (the default), \code{"md"} (Markdown),
-#'   \code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}). The HTML backend engine
-#'   (home-built or kableExtra) is chosen with \code{engine =} (see \code{\link{tab_html}}).
+#' @param format One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel),
+#'   \code{"plot"} (an image OF THE TABLE) or \code{"forest"} (a forest plot of its estimates, see
+#'   \code{\link{forest_plot}}). The HTML backend engine (home-built or kableExtra) is chosen with
+#'   \code{engine =} (see \code{\link{tab_html}}).
 #' @param path Optional output file. For \code{"xl"} it is the workbook path; for \code{"md"} and
 #'   \code{"html"} the rendered text is written to it; ignored for \code{"plot"}.
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for the
@@ -47,7 +48,7 @@
 #'
 #' @return The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 #'   string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
-#'   \code{ggplot} (\code{"plot"}).
+#'   \code{ggplot} (\code{"plot"}, \code{"forest"}).
 #' @export
 #'
 #' @examples
@@ -55,7 +56,7 @@
 #' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 #' tab_export(tabs, "md")
 #' }
-tab_export <- function(x, format = c("html", "md", "xl", "plot"), path = NULL,
+tab_export <- function(x, format = c("html", "md", "xl", "plot", "forest"), path = NULL,
                        theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
                        caption = NULL, var_names = NULL, ...) {
@@ -87,6 +88,12 @@ tab_export <- function(x, format = c("html", "md", "xl", "plot"), path = NULL,
       tab_plot(x, theme = theme, html_24_bit = html_24_bit,
                color = color, color_legend = color_legend, lang = lang, transpose = transpose,
                caption = caption, var_names = var_names, ...)
+    },
+    forest = {
+      if (!is.null(path))
+        cli::cli_warn("{.arg path} is ignored for {.code format = \"forest\"} (returns a ggplot).")
+      forest_plot(x, theme = theme, color = color, legend = color_legend, lang = lang,
+                  caption = caption, ...)
     }
   )
 }

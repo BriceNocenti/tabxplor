@@ -2400,10 +2400,18 @@ reg_same_frame <- function(mdata, f) {
 # (crude) counterpart, per skeleton row, so `color = "adjustment"` reads `color_signif` like every other
 # measure. The maths lives in R/reg-influence.R; this is the gate and the loop.
 #
-# DESIGN -- the gate is six facts, each already stored somewhere, and it returns NULL rather than a
-# partial column: a gap SE without an honest premise is worse than none, because MEASURES' force_policy
-# closure reads an all-NA `gap_se` as "no test here" and falls back to the descriptive reading.
-#   * `sp$color`          nobody reads it otherwise, and it costs ~1/8 of a fit (SS8).
+# DESIGN -- the gate is five CORRECTNESS facts, each already stored somewhere, and it returns NULL
+# rather than a partial column: a gap SE without an honest premise is worse than none, because MEASURES'
+# force_policy closure reads an all-NA `gap_se` as "no test here" and falls back to the descriptive
+# reading.
+# Last Phase z17 (ruling D2): the SIXTH clause -- `"adjustment" %in% sp$color` -- is GONE. It gated a
+# fact on who asked to COLOUR it rather than on whether it is valid, which held while the colour engine
+# was the only reader; forest_plot() is the second, and a user who built a table without
+# `color = "adjustment"` then asked for the gap band got no band and no explanation. So `gap_se` is now
+# written wherever `empirical = TRUE` produced a crude twin and the five clauses hold. The cost is small
+# by construction: reg_empirical_fit() already FITS the univariable crude models when `empirical = TRUE`
+# (`want_fit` only decided whether to keep them), so what is added is reg_coef_if_maker() +
+# reg_if_se(), ~1/8 of a fit per column.
 #   * `shape`             the crude twin's REG_EMPIRICAL row: absent = no observed effect at all
 #                         (multinomial, ordinal, grouped binomial) -> `obs` is already NA.
 #   * `f$fit`             NULL on the jamovi digest path, where the fitted object was distilled away.
@@ -2423,7 +2431,6 @@ reg_same_frame <- function(mdata, f) {
 reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_preds,
                                effect, at, wt, fits_crude = NULL, fit_preds = character(0),
                                multiplier = NULL, category = "") {
-  if (!"adjustment" %in% sp$color)                              return(NULL)
   if (is.null(shape) || is.null(f$fit) || is.null(f$data))      return(NULL)
   if (isTRUE(sp$compound) || identical(at, "reference"))        return(NULL)
   if (!reg_same_estimand(shape, model_col))                     return(NULL)
@@ -4062,7 +4069,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           inverse = if (is.null(specs[[i]]$inverse)) inverse_two_level_factors else specs[[i]]$inverse,
           conf_level = conf_level, method = method, skeleton = skeleton, multiplier = multiplier,
           other_preds = union_predictors, effect = effect, wt = design_spec$wt,
-          want_fit = "adjustment" %in% specs[[i]]$color, trials = specs[[i]]$trials,
+          # z17 (D2): always kept. `want_fit` does not decide whether the univariable crude models are
+          # FITTED (they are, to fill the crude column) -- only whether the fitted object survives for
+          # the gap test's crude leg. Since the test no longer waits to be asked for by `color`, it
+          # does. Build-time locals; they never reach the jamovi .fit_cache.
+          want_fit = TRUE, trials = specs[[i]]$trials,
           shape_terms = shape_terms,
           marginal = effect %in% c("ame", "ame_ratio") &&
             (reg_fam_binary(fam_i) || reg_fam_prob(fam_i)))
@@ -4090,9 +4101,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         cols_i$crude_key <- key_i
         # Last Phase z9/z10: the fit-derived crude legs travel too. A row with no closed form has no
         # closed-form crude influence function either (reg_crude_if_maker() is cell-indicator
-        # arithmetic), so it comes from this fit -- the second IF path SS13 forecast. The fits are kept
-        # ONLY when some spec asked for `color = "adjustment"`; they are build-time locals and never
-        # reach the jamovi .fit_cache, whose persisted raw fits were Phase o's freeze.
+        # arithmetic), so it comes from this fit -- the second IF path SS13 forecast. They are
+        # build-time locals and never reach the jamovi .fit_cache, whose persisted raw fits were
+        # Phase o's freeze.
         cols_i$fit_preds <- fit_preds_e
         cols_i$fits      <- fit_i$fits
         cols_i$grid      <- emp_i
@@ -4336,8 +4347,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'     predictor's effect is reported per — one standard deviation by default).
 #'   \item **Survey design**: `wt` for a simple weight, or a prebuilt [survey::svydesign()] as `data`.
 #'   \item **Model checks**: `stats` (the footer rows --- linearity, dispersion, influence,
-#'   collinearity, proportionality), `shape` (the cure for a non-linearity), and the plots
-#'   [reg_check_plots()] / [or_plot()].
+#'   collinearity, proportionality), `shape` (the cure for a non-linearity), and the plot
+#'   [reg_check_plots()]. \item **Chart**: [forest_plot()] draws the finished table.
 #' }
 #'
 #' `predictors` selects the mode: a **character vector** fits one model, and `dependent` may itself
@@ -4833,6 +4844,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   reparametrized from the cached fit (no refit). `NULL` (the default) leaves ordinary calls unchanged.
 #'
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / dependent.
+#'
+#' @seealso [forest_plot()] draws the finished table -- every effect with its interval, its stars and
+#'   its colour, and (with `empirical = TRUE`) the observed effect beside it with the margin of error
+#'   of the gap. [reg_check_plots()] draws the model checks. [tab()] for cross-tables.
 #'
 #' @examples
 #'   data <- gss_cat_data_formatting()

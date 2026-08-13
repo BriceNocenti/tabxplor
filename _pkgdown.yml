@@ -58,15 +58,21 @@ reference:
   - tab_counts
   - tab_plain
 
-- title: Regression shortcuts and plots
+- title: Charts
+  desc: >
+    `forest_plot()` draws the estimates of any tabxplor table -- a cross-table or a regression --
+    with their intervals, their significance and their colours, reading the finished table and
+    never re-fitting. `reg_check_plots()` draws the model checks, which always do.
+  contents:
+  - forest_plot
+  - reg_check_plots
+
+- title: Regression shortcuts
   desc: >
     `tab_logit()` and `multi_logit()` are thin wrappers around `tab_reg()` for logistic models.
-    `or_plot()` and `reg_check_plots()` draw plots from a finished regression table.
   contents:
   - tab_logit
   - multi_logit
-  - or_plot
-  - reg_check_plots
 
 - title: Export a finished table
   desc: >
@@ -85,9 +91,11 @@ reference:
 - title: Captions, options and data
   desc: >
     Colour scales and palettes are customised with `set_color_breaks()`, `set_color_palette()` and
-    `set_color_style()` (documented on the `tab_many()` page).
+    `set_color_style()` (documented on the `tab_many()` page); `conf_level_to_z()` writes a colour
+    threshold as a confidence level.
   contents:
   - set_caption
+  - conf_level_to_z
   - tabxplor-options
   - gss_cat_data_formatting
 

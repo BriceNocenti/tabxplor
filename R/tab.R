@@ -563,7 +563,9 @@ NULL
 #'   [set_color_breaks()] / [set_color_palette()] / [set_color_style()] (colors),
 #'   [tab_chi2()] (statistical tests), [tab_pct()] / [tab_tot()] (percentages and totals).
 #'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
-#'   [tab_plot()]. Package-wide defaults live in [tabxplor-options].
+#'   [tab_plot()], and CHART it with [forest_plot()] (every cell's estimate, interval and colour --
+#'   `tab_plot()` renders the table as an image, `forest_plot()` is the real chart).
+#'   Package-wide defaults live in [tabxplor-options].
 #'
 #'   `color = "contrib"` shows each cell's departure from the **log-linear model of independence**
 #'   (that is what the chi-squared is), so it reads as a heatmap of the association pattern. For the

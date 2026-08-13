@@ -486,6 +486,24 @@ Ce n'est pas qu'une affaire de goût : converties en clarté, les deux direction
 
 **Il est rarement nécessaire de le demander.** Chaque feuille de style embarque déjà cette palette dans un bloc `@media print` : un tableau html en couleurs s'*imprime* — ou s'enregistre en PDF depuis le navigateur — directement prêt pour la publication. Utiliser `options(tabxplor.print_rules = FALSE)` si l'imprimante est en couleurs et que les couleurs sont justement le propos.
 
+## Un graphique du tableau : `forest_plot()`
+
+Un tableau coloré se lit déjà d'un coup d'œil. Quand c'est la structure qui compte, `forest_plot()` trace les mêmes nombres : un point par cellule, son intervalle de confiance en moustache, sa couleur en couleur.
+
+```{r, echo = TRUE, eval = FALSE}
+tab(gss_simple, race, party3, pct = "row", ci = "cell") |>
+  forest_plot()
+```
+
+Il trace **ce que le tableau a calculé** — aucun argument à apprendre : avec `ci = "cell"` le pourcentage de chaque cellule et son intervalle, avec `ci = "diff"` l'écart à la référence et une ligne à zéro, avec `OR = TRUE` les rapports de cotes sur un axe logarithmique. `what = "level"` et `what = "effect"` permettent de forcer l'un ou l'autre.
+
+Deux choses à savoir :
+
+* **Les lignes de grille sont vos seuils de couleur.** Changez-les avec `set_color_breaks()` et l'axe suit le tableau. La légende de couleur à côté du graphique est celle du tableau, avec les mêmes seuils et les mêmes nuances.
+* **Il lit le tableau et ne calcule rien.** Il renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` et `ggsave()` fonctionnent ; `theme = "print"` en donne la version en niveaux de gris, et `guide = "bands"` colore le fond du panneau avec l'échelle elle-même (une bonne façon de *montrer* à une classe ce que les couleurs veulent dire).
+
+À ne pas confondre avec `tab_plot()`, qui fabrique une image *du tableau* (pratique pour coller un tableau coloré là où rien d'autre ne s'affiche). `forest_plot()` est le graphique ; il trace aussi les tableaux de régression — voir `vignette("tabxplor-reg")`.
+
 ## Travailler avec le résultat
 
 `tab()` renvoie un `tibble` (de classe `tabxplor_tab`), donc les verbes `dplyr` fonctionnent tels quels. En réordonnant les lignes, le prédicat `is_totrow()` est utilisé en interne pour garder les lignes Total en place :

@@ -66,29 +66,29 @@ before cutting.
 
 ### 2.1 Size and shape
 
-| | value | source |
-|---|---|---|
-| R source | **38 784 lines**, 19 853 code, **15 909 comment (41 %)** | census |
-| top-level functions | 900, median **17 lines** | census |
-| the four big files | `tab.R` 7 680 · `tab_reg.R` 5 747 · `fmt_class.R` 5 696 · `tab_classes.R` 4 197 | — |
-| the two biggest functions | `reg_build` 1 307 L (432 code) · `tab_reg` 763 L (**484 code**) | `tab_reg.R:3595`, `:4902` |
-| next four | `num_core` 700 · `plain_core` 616 · `format.tabxplor_fmt` 555 · `md_render_one` 425 | — |
-| user messages | **163** `cli_abort/warn/inform`, of which **67 in `tab_reg.R` + 50 in `tab.R` = 72 %** | grep |
-| exported functions | 84 (+ 120 S3 methods) | `NAMESPACE` |
-| global options | **42** | `.onLoad`, `utils.R:53` |
+|                           | value                                                                                  | source                    |
+|---------------------------|----------------------------------------------------------------------------------------|---------------------------|
+| R source                  | **38 784 lines**, 19 853 code, **15 909 comment (41 %)**                               | census                    |
+| top-level functions       | 900, median **17 lines**                                                               | census                    |
+| the four big files        | `tab.R` 7 680 · `tab_reg.R` 5 747 · `fmt_class.R` 5 696 · `tab_classes.R` 4 197        | —                         |
+| the two biggest functions | `reg_build` 1 307 L (432 code) · `tab_reg` 763 L (**484 code**)                        | `tab_reg.R:3595`, `:4902` |
+| next four                 | `num_core` 700 · `plain_core` 616 · `format.tabxplor_fmt` 555 · `md_render_one` 425    | —                         |
+| user messages             | **163** `cli_abort/warn/inform`, of which **67 in `tab_reg.R` + 50 in `tab.R` = 72 %** | grep                      |
+| exported functions        | 84 (+ 120 S3 methods)                                                                  | `NAMESPACE`               |
+| global options            | **42**                                                                                 | `.onLoad`, `utils.R:53`   |
 
 The message distribution is the single most diagnostic number in the table: **nearly three quarters of
 everything the package says to a user is said while negotiating arguments**, before any computation.
 
 ### 2.2 The five crosstab entry points
 
-| function | formals | in `tab()` but not here | here but not in `tab()` |
-|---|---|---|---|
-| `tab()` | **51** | — | — |
-| `tab_many()` | 41 | 14 (`test`, `tot`, `display`, `output_list`, `spread_vars`, …) | 4 (`chi2`, `totrow`, `totcol`, `compact`, `na_drop_all`) |
-| `tab_counts()` | 40 | 16 (`wt`, `levels`, `design_effect`, `parallel`, …) | 6 (`counts`, `wt_counts`, `cols`, `col_name`, `base`, `input`) |
-| `tab_plain()` | 26 | — | `num`, `df`, `.fine`, `.by_table` |
-| `tab_num()` | 27 | — | `ci_scale`, `num`, `df`, `.fine`, `.by_table` |
+| function       | formals | in `tab()` but not here                                        | here but not in `tab()`                                        |
+|----------------|---------|----------------------------------------------------------------|----------------------------------------------------------------|
+| `tab()`        | **51**  | —                                                              | —                                                              |
+| `tab_many()`   | 41      | 14 (`test`, `tot`, `display`, `output_list`, `spread_vars`, …) | 4 (`chi2`, `totrow`, `totcol`, `compact`, `na_drop_all`)       |
+| `tab_counts()` | 40      | 16 (`wt`, `levels`, `design_effect`, `parallel`, …)            | 6 (`counts`, `wt_counts`, `cols`, `col_name`, `base`, `input`) |
+| `tab_plain()`  | 26      | —                                                              | `num`, `df`, `.fine`, `.by_table`                              |
+| `tab_num()`    | 27      | —                                                              | `ci_scale`, `num`, `df`, `.fine`, `.by_table`                  |
 
 `tab()`'s 51 decompose as **6 variable roles + 4 hard-deprecated + 2 soft-deprecated + 1 superseded +
 4 internal dot-args = 34 genuine settings**. `tab_many()` is already soft-deprecated (it warns and
@@ -121,10 +121,10 @@ attributes** (`subtext`, `test`, `meta`).
 
 Measured emptiness by path (probe, `gss_simple`):
 
-| column | fields entirely NA/FALSE |
-|---|---|
-| `tab()` row-% cell | `wn`(unweighted) `mean` `ctr` `var` `pvalue`\* `or` `n_eff` `obs` `gap_se` `in_tottab` `in_refrow` |
-| `tab()` mean cell | `wn` `pct` `ctr` `pvalue` `or` `tot_n` `n_eff` `obs` `gap_se` … |
+| column                 | fields entirely NA/FALSE                                                                           |
+|------------------------|----------------------------------------------------------------------------------------------------|
+| `tab()` row-% cell     | `wn`(unweighted) `mean` `ctr` `var` `pvalue`\* `or` `n_eff` `obs` `gap_se` `in_tottab` `in_refrow` |
+| `tab()` mean cell      | `wn` `pct` `ctr` `pvalue` `or` `tot_n` `n_eff` `obs` `gap_se` …                                    |
 | `tab_reg()` `Model_OR` | `n` `wn` `pct` `mean` `diff` `ratio` `ctr` `var`† `tot_n` `n_eff` `gap_se` `in_totrow` `in_tottab` |
 
 \* non-NA once `ci = "diff"` or stars are on. † non-NA on the coefficient path (`var(Y)`).
@@ -149,7 +149,7 @@ state**. Ordered by leverage, not by cost.
 
 ---
 
-### KEY 1 — Rows have no model. Columns do.
+### KEY 1 — Rows have no model. Columns do
 
 **The fact that is missing:** *what a row is*.
 
@@ -161,21 +161,21 @@ contract (`test-degraded-attrs.R`).
 
 Rows have **none of this**. What a row is gets re-derived, everywhere, from four unrelated sources:
 
-| what is needed | how it is answered today | site |
-|---|---|---|
-| "is this a total row" | a per-**cell** field `in_totrow`, broadcast across the row | `fmt_class.R:650` |
-| "is this a synthetic n / p-value / GOF row" | a **positional character vector** `meta$vars$row_roles` (17c) | `tab_classes.R:234-239` |
-| "which variable does this row belong to" | a **magic-named label column** — `row_var`, or the tab_var's own name, or `var` | measured below |
-| "are two rows structurally the same" | comparing their **rendered `format()` strings** | `tab_classes.R:1546-1549` |
+| what is needed                              | how it is answered today                                                        | site                      |
+|---------------------------------------------|---------------------------------------------------------------------------------|---------------------------|
+| "is this a total row"                       | a per-**cell** field `in_totrow`, broadcast across the row                      | `fmt_class.R:650`         |
+| "is this a synthetic n / p-value / GOF row" | a **positional character vector** `meta$vars$row_roles` (17c)                   | `tab_classes.R:234-239`   |
+| "which variable does this row belong to"    | a **magic-named label column** — `row_var`, or the tab_var's own name, or `var` | measured below            |
+| "are two rows structurally the same"        | comparing their **rendered `format()` strings**                                 | `tab_classes.R:1546-1549` |
 
 The label block has **four shapes** with three naming conventions (measured directly):
 
-| table | leading columns | grouping | `meta$vars` |
-|---|---|---|---|
-| `tab(d, marital, race)` | `marital` | — | `row_vars = marital` |
-| `tab(d, c(marital, relig), race)` | **`row_var`** \| **`levels`** | `row_var` | `row_vars = c(…)`, `compacted = TRUE` |
-| `tab(d, marital, race, tab_vars = black)` | `black` \| `marital` | `black` | `tab_vars = black` |
-| `tab_reg(d, "married", …)` | **`var`** \| **`levels`** | `var` | **absent** |
+| table                                     | leading columns               | grouping  | `meta$vars`                           |
+|-------------------------------------------|-------------------------------|-----------|---------------------------------------|
+| `tab(d, marital, race)`                   | `marital`                     | —         | `row_vars = marital`                  |
+| `tab(d, c(marital, relig), race)`         | **`row_var`** \| **`levels`** | `row_var` | `row_vars = c(…)`, `compacted = TRUE` |
+| `tab(d, marital, race, tab_vars = black)` | `black` \| `marital`          | `black`   | `tab_vars = black`                    |
+| `tab_reg(d, "married", …)`                | **`var`** \| **`levels`**     | `var`     | **absent**                            |
 
 `tab_render_vars()` exists solely to guess which of these it is looking at, and it answers the reg
 table with a **pun**: `tab_vars = "var"`, `row_var = "levels"` — a regression's *predictor* is reported
@@ -241,7 +241,7 @@ this becomes the ad hoc layer this roadmap exists to avoid.
 
 ---
 
-### KEY 2 — A column does not say what it estimates.
+### KEY 2 — A column does not say what it estimates
 
 **The fact that is missing:** *which field holds the estimate, on which scale, against which null.*
 
@@ -282,15 +282,15 @@ Three symptoms prove the fact is genuinely absent, not merely un-factored:
 
 **The key.** Store the estimand. One column attribute carrying `(field, scale, null)`:
 
-| column | `estimand` |
-|---|---|
-| row % | `field = "pct"`, `scale = "proportion"`, `null = NA` |
-| cell-vs-ref difference | `field = "diff"`, `scale = "additive"`, `null = 0` |
-| RR / mean ratio | `field = "ratio"`, `scale = "multiplicative"`, `null = 1` |
-| OR / IRR | `field = "or"`, `scale = "multiplicative"`, `null = 1` |
-| β / AME | `field = "diff"`, `scale = "additive"`, `null = 0` |
-| log-OR (`exponentiate = FALSE`) | `field = "diff"`, `scale = "log"`, `null = 0` |
-| GOF statistic | `field = "diff"`, `scale = "none"` |
+| column                          | `estimand`                                                |
+|---------------------------------|-----------------------------------------------------------|
+| row %                           | `field = "pct"`, `scale = "proportion"`, `null = NA`      |
+| cell-vs-ref difference          | `field = "diff"`, `scale = "additive"`, `null = 0`        |
+| RR / mean ratio                 | `field = "ratio"`, `scale = "multiplicative"`, `null = 1` |
+| OR / IRR                        | `field = "or"`, `scale = "multiplicative"`, `null = 1`    |
+| β / AME                         | `field = "diff"`, `scale = "additive"`, `null = 0`        |
+| log-OR (`exponentiate = FALSE`) | `field = "diff"`, `scale = "log"`, `null = 0`             |
+| GOF statistic                   | `field = "diff"`, `scale = "none"`                        |
 
 and split `type` into `pct_base ∈ {row, col, all, all_tabs, none}` × `col_kind ∈ {count, pct, mean,
 coef}`.
@@ -327,7 +327,7 @@ fields.** Revisit only past ~30 fields (z6's own re-open threshold).
 
 ---
 
-### KEY 3 — Most arguments are consequences, not choices.
+### KEY 3 — Most arguments are consequences, not choices
 
 **The rule that is applied but not stated:** *the derivation graph between arguments.*
 
@@ -339,23 +339,23 @@ plus `tab_setup()` is the same shape.
 Almost none of that is validation. It is **derivation**: computing an argument the user did not set,
 from arguments they did, and telling them about it. The graph, gathered from both boundaries:
 
-| derived | from | site |
-|---|---|---|
-| `exponentiate` | `family != "gaussian"` — its *only* real use, 8 code sites | `tab_reg.R:5145` |
-| `at = "reference"` | degraded to `"average"` in **three** separate blocks | `tab_reg.R:5091, 5126, 5127` |
-| `estimate_display ∈ {prob, ame}` | degraded away when `effect ∈ {ame, ame_ratio}` | `tab_reg.R:5169-5178` |
-| `empirical` | forced `TRUE` by `color = "adjustment"` | `tab_reg.R:5261` |
-| `trials` | *is* a family variant (`crude_key = "grouped_binomial"`) | `tab_reg.R:257-262` |
-| `ci = "diff"` | forced by `color_signif ≠ ignore`, by `stars = TRUE`, by `color ∈ diff-family`, and again at the numeric leaf | `tab-resolve.R:118-127, 165, 177-182`; `tab.R:5163-5171` |
-| `totrow`, `chi2` | forced `TRUE` by `color = "contrib"` (with a `warning()`) | `tab-resolve.R:146-154` |
-| `ref` | *required* by a difference colour (abort); and `ci = "diff"` forces `ref = "tot"` | `tab-resolve.R:159-165`; `tab.R:5173-5176` |
-| `ref` **meaning** | reinterpreted by `pct`: a reference **row** under `"row"`, a reference **column** under `"col"` | `tab.R:1910-1932` |
-| `totaltab` | forced by `comp = "all"`, in **both** leaves, with warnings | `tab.R:3919-3927`, `5206-5213` |
-| `tot_cols_type` | forced to `"no_delete"` by `pct`/`ci`/`chi2`/`OR` | `tab.R:1975-1988` |
-| `color` | `TRUE` → per-column-type measures; `"auto"` → OR / after_ci / diff / contrib | `tab.R:1050-1073`; `tab-resolve.R:129-141` |
-| `basis` | `wt` × design × `design_effect` | `survey-design.R:143-151` |
-| `comp` | `"all"` collapses to `"tab"` without `tab_vars` | `tab.R:1522` |
-| `na = "common_base"` | desugared into `na_drop_all = c(row_var, col_var[1], tab_vars)` + `na = "keep"` | `tab.R:738-743` |
+| derived                          | from                                                                                                          | site                                                     |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
+| `exponentiate`                   | `family != "gaussian"` — its *only* real use, 8 code sites                                                    | `tab_reg.R:5145`                                         |
+| `at = "reference"`               | degraded to `"average"` in **three** separate blocks                                                          | `tab_reg.R:5091, 5126, 5127`                             |
+| `estimate_display ∈ {prob, ame}` | degraded away when `effect ∈ {ame, ame_ratio}`                                                                | `tab_reg.R:5169-5178`                                    |
+| `empirical`                      | forced `TRUE` by `color = "adjustment"`                                                                       | `tab_reg.R:5261`                                         |
+| `trials`                         | *is* a family variant (`crude_key = "grouped_binomial"`)                                                      | `tab_reg.R:257-262`                                      |
+| `ci = "diff"`                    | forced by `color_signif ≠ ignore`, by `stars = TRUE`, by `color ∈ diff-family`, and again at the numeric leaf | `tab-resolve.R:118-127, 165, 177-182`; `tab.R:5163-5171` |
+| `totrow`, `chi2`                 | forced `TRUE` by `color = "contrib"` (with a `warning()`)                                                     | `tab-resolve.R:146-154`                                  |
+| `ref`                            | *required* by a difference colour (abort); and `ci = "diff"` forces `ref = "tot"`                             | `tab-resolve.R:159-165`; `tab.R:5173-5176`               |
+| `ref` **meaning**                | reinterpreted by `pct`: a reference **row** under `"row"`, a reference **column** under `"col"`               | `tab.R:1910-1932`                                        |
+| `totaltab`                       | forced by `comp = "all"`, in **both** leaves, with warnings                                                   | `tab.R:3919-3927`, `5206-5213`                           |
+| `tot_cols_type`                  | forced to `"no_delete"` by `pct`/`ci`/`chi2`/`OR`                                                             | `tab.R:1975-1988`                                        |
+| `color`                          | `TRUE` → per-column-type measures; `"auto"` → OR / after_ci / diff / contrib                                  | `tab.R:1050-1073`; `tab-resolve.R:129-141`               |
+| `basis`                          | `wt` × design × `design_effect`                                                                               | `survey-design.R:143-151`                                |
+| `comp`                           | `"all"` collapses to `"tab"` without `tab_vars`                                                               | `tab.R:1522`                                             |
+| `na = "common_base"`             | desugared into `na_drop_all = c(row_var, col_var[1], tab_vars)` + `na = "keep"`                               | `tab.R:738-743`                                          |
 
 **Three consequences of leaving the graph implicit.**
 
@@ -412,7 +412,7 @@ checked only in `tab_ci` (`:5955`); `pct` only at the leaf (`plain_resolve`, `:3
 
 ---
 
-### KEY 4 — A measure does not declare what it needs.
+### KEY 4 — A measure does not declare what it needs
 
 **The fact that is missing:** *the requirements and the vocabulary of a colour measure.*
 
@@ -427,16 +427,16 @@ The audit found the real checklist: **10 mandatory edit sites across 5 files min
 across 8 files** for a comparison-to-another-column measure. The reason is that the table holds the
 *arithmetic* and the code still holds the *vocabulary*:
 
-| what is still code | where |
-|---|---|
-| **four separate allow-lists** for "is this a legal measure" | `fmt_class.R:1361`, `tab.R:906`; for the background channel `tab.R:944` vs `fmt_class.R:1367` — **which disagree**: `color = c("OR","adjustment")` is legal in `tab_reg()` and illegal in `tab()` |
-| which build steps a measure forces (`ci`, `chi2`, `totrow`, `ref`, `empirical`) | `tab-resolve.R:116-181`; `tab_reg.R:5256-5275` |
-| the 4-way split `color_diff_OR` / `color_ctr` / `color_ci` / `color_num` | `tab-resolve.R:202-227` |
-| which CI method the legend names | `legend_method_name()` `fmt_class.R:4126-4183` — 4 measure literals; **without an arm it silently names a method the bounds were never built with** |
-| the legend subject, the "partial test" clause, the honesty caveat | `fmt_class.R:4229`, `:4661-4663`, `:4376-4381` |
-| the i18n extraction anchor — a hand-maintained duplicate of every `word` | `fmt_class.R:4203-4204` |
-| the scale's `center` / `strict` / `std` | `tab_classes.R:3878, 3879, 3884` — three name-keyed lists |
-| the jamovi vocabulary | `jmvtab.a.yaml:112-113,129` + the generated `.h.R` |
+| what is still code                                                              | where                                                                                                                                                                                             |
+|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **four separate allow-lists** for "is this a legal measure"                     | `fmt_class.R:1361`, `tab.R:906`; for the background channel `tab.R:944` vs `fmt_class.R:1367` — **which disagree**: `color = c("OR","adjustment")` is legal in `tab_reg()` and illegal in `tab()` |
+| which build steps a measure forces (`ci`, `chi2`, `totrow`, `ref`, `empirical`) | `tab-resolve.R:116-181`; `tab_reg.R:5256-5275`                                                                                                                                                    |
+| the 4-way split `color_diff_OR` / `color_ctr` / `color_ci` / `color_num`        | `tab-resolve.R:202-227`                                                                                                                                                                           |
+| which CI method the legend names                                                | `legend_method_name()` `fmt_class.R:4126-4183` — 4 measure literals; **without an arm it silently names a method the bounds were never built with**                                               |
+| the legend subject, the "partial test" clause, the honesty caveat               | `fmt_class.R:4229`, `:4661-4663`, `:4376-4381`                                                                                                                                                    |
+| the i18n extraction anchor — a hand-maintained duplicate of every `word`        | `fmt_class.R:4203-4204`                                                                                                                                                                           |
+| the scale's `center` / `strict` / `std`                                         | `tab_classes.R:3878, 3879, 3884` — three name-keyed lists                                                                                                                                         |
+| the jamovi vocabulary                                                           | `jmvtab.a.yaml:112-113,129` + the generated `.h.R`                                                                                                                                                |
 
 **The key.** Move the vocabulary into the table. Each measure row gains:
 
@@ -481,7 +481,7 @@ must be threaded *beside* the colour string because the legacy encoding cannot c
 
 ---
 
-### KEY 5 — The build still has a second pass.
+### KEY 5 — The build still has a second pass
 
 **The rule that is not honoured:** *2.0.0's own keystone — "the step chain collapses into one aggregate
 core".*
@@ -534,7 +534,7 @@ should be sequenced **after** KEY 1 (which gives the leaf the row identity it ne
 
 ---
 
-### KEY 6 — One table, two identities.
+### KEY 6 — One table, two identities
 
 **The fact that is missing:** *what kind of table this is, and which variables are in it* — stated
 once, for both producers.
@@ -586,20 +586,20 @@ the reg table stops being structurally exceptional at all.
 
 ---
 
-### KEY 7 — The shape of what comes back is a function of the arguments.
+### KEY 7 — The shape of what comes back is a function of the arguments
 
 **The rule that is not stated:** *what `tab()` returns.*
 
 Measured, from one function:
 
-| call | class |
-|---|---|
-| `tab(d, marital, race)` | `tabxplor_tab` |
-| `tab(d, c(marital, relig), race)` | `tabxplor_grouped_tab` |
-| `tab(d, marital, race, tab_vars = black)` | `tabxplor_grouped_tab` |
-| `tab(d, c(marital, relig), race, tab_vars = black)` | **`tabxplor_tabs` (a list)** |
-| `tab(…, output_list = TRUE)` | `tabxplor_tabs` |
-| `options(tabxplor.output_kable = TRUE)` | **changes the merge decision** (`tab.R:2726`) |
+| call                                                | class                                         |
+|-----------------------------------------------------|-----------------------------------------------|
+| `tab(d, marital, race)`                             | `tabxplor_tab`                                |
+| `tab(d, c(marital, relig), race)`                   | `tabxplor_grouped_tab`                        |
+| `tab(d, marital, race, tab_vars = black)`           | `tabxplor_grouped_tab`                        |
+| `tab(d, c(marital, relig), race, tab_vars = black)` | **`tabxplor_tabs` (a list)**                  |
+| `tab(…, output_list = TRUE)`                        | `tabxplor_tabs`                               |
+| `options(tabxplor.output_kable = TRUE)`             | **changes the merge decision** (`tab.R:2726`) |
 
 The last row deserves emphasis: a *display* option, read inside a *build* stage, changes the **shape of
 the returned object**. The fourth row is KEY 1's limit surfacing as an unpredictable return type.
@@ -640,60 +640,60 @@ Ranked within each subsystem by (payoff ÷ churn). "BI" = byte-identical target.
 
 ### 4.1 The fmt record and the colour engine
 
-| # | item | evidence |
-|---|---|---|
-| 1 | **E1: derive the 4 reconstructors from `fmt_col_attrs` + declared reconcile rules** | `fmt_class.R:5152, 5266, 5451, 5608` enumerate 14 attrs by hand; the leaves pass 9 of 14. BI. *Unblocks KEY 2/4/6* |
-| 2 | `estimand` attribute + the `type` split (KEY 2) | `fmt_class.R:2015, 3277-3283, 3310, 3543` |
-| 3 | MEASURES gains `requires`/`channels`/`auto_for`/`method`/`subject` (KEY 4) | 4 allow-lists, 2 of which disagree. BI |
-| 4 | scale table: `center`/`strict`/`std` become columns | `tab_classes.R:3878, 3879, 3884`. BI |
-| 5 | the legend stops re-deriving `is_coef`/`is_mean`/`is_pct`/`is_logcoef`/`is_std` | `fmt_class.R:4631-4640` duplicates the plan's `:3310, 3315, 3324` — and **`is_std` is computed from a different scale than the plan uses**, a latent divergence that happens to agree today |
-| 6 | delete `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct` | zero callers |
-| 7 | one `fmt_base(x)` accessor for the `n_eff → tot_n → n` coalesce | written out at all 5 read sites, `tab.R:6106-6116` |
-| 8 | one `display` token registry | `get_num`/`set_num` are a hand-written 22-arm map (`fmt_class.R:494-585`); **the roxygen documents 11 of the 22 tokens**. 17d deferred this — only the `get_num`/`set_num` half is a clean map |
+| # | item                                                                                | evidence                                                                                                                                                                                       |
+|---|-------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **E1: derive the 4 reconstructors from `fmt_col_attrs` + declared reconcile rules** | `fmt_class.R:5152, 5266, 5451, 5608` enumerate 14 attrs by hand; the leaves pass 9 of 14. BI. *Unblocks KEY 2/4/6*                                                                             |
+| 2 | `estimand` attribute + the `type` split (KEY 2)                                     | `fmt_class.R:2015, 3277-3283, 3310, 3543`                                                                                                                                                      |
+| 3 | MEASURES gains `requires`/`channels`/`auto_for`/`method`/`subject` (KEY 4)          | 4 allow-lists, 2 of which disagree. BI                                                                                                                                                         |
+| 4 | scale table: `center`/`strict`/`std` become columns                                 | `tab_classes.R:3878, 3879, 3884`. BI                                                                                                                                                           |
+| 5 | the legend stops re-deriving `is_coef`/`is_mean`/`is_pct`/`is_logcoef`/`is_std`     | `fmt_class.R:4631-4640` duplicates the plan's `:3310, 3315, 3324` — and **`is_std` is computed from a different scale than the plan uses**, a latent divergence that happens to agree today    |
+| 6 | delete `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct` | zero callers                                                                                                                                                                                   |
+| 7 | one `fmt_base(x)` accessor for the `n_eff → tot_n → n` coalesce                     | written out at all 5 read sites, `tab.R:6106-6116`                                                                                                                                             |
+| 8 | one `display` token registry                                                        | `get_num`/`set_num` are a hand-written 22-arm map (`fmt_class.R:494-585`); **the roxygen documents 11 of the 22 tokens**. 17d deferred this — only the `get_num`/`set_num` half is a clean map |
 
 ### 4.2 The build pipeline
 
-| # | item | evidence |
-|---|---|---|
-| 1 | the settings spine becomes the **only** interface (delete the 20+ flat duplicates) | written `tab.R:2090-2109`, read only at `:1659, 1660, 1685`; every consumer reads the flat copy at `:2114-2127` |
-| 2 | `na_text`/`na_num`/`lvs` join `pairs`/`cols` | the spine comment at `tab.R:2083-2084` **promises** `na` is there; `tab_prepare_pop` never touches `settings`, and `settings$cols$lvs` is **stale** the moment prepare_pop re-resolves levels — and it is the stale copy that is shipped to every worker |
-| 3 | `new_ctx()` declares all ~83 keys, or the stage products move out of ctx | 53 declared vs ~83 live; `pct_vect`/`ref_vect` undeclared while sibling `OR_vect` is — making the guard at `tab.R:2401` **unreachable** |
-| 4 | 17 ctx fields read by exactly one stage → locals | the five `*_quo`, `with_filter`, `other_level`, `totaltab_name`, `n_min`, `spread_vars`, `names_prefix`, `names_sort`, `add_n`, `add_pct`, `common_totrow`, `agg_only`, `ci_method`, `design_effect` |
-| 5 | shared `leaf_head()` + `leaf_finish()` | the inference/basis preamble and the **~30-line result tail** are the same code twice (`tab.R:3947-3970` ≈ `5235-5274`; `4479-4536` ≈ `5759-5791`) |
-| 6 | `num_core`'s ~90 inline lines of moment-sum totals → `build_total_rows`/`finalize_total_rows` | `tab.R:5353-5442` vs the shared `:4169-4200` |
-| 7 | `num_core` records `meta$vars` | `tab.R:5773, 5777` |
-| 8 | pass `meta` explicitly in the step tails | `tab.R:6244, 6255, 6366, 6377` — currently safe only by accident (§11 D3) |
-| 9 | delete `tab_assemble()` (no caller), `ctx$levels_order` (never read in `tab.R`) | `tab.R:2548-2550`, `:1469-1506` |
-| 10 | `resolve_cleannames()` beside `resolve_stars()`/`force_comp()` | the rule is written 4× |
-| 11 | `inference = new_inference()` as a **lazy default** on `plain_core`/`num_core`/`tab_apply_tests` silently re-reads the option if a caller forgets the argument | `tab.R:3941, 5227, 7277` — make it required |
-| 12 | delete `plain_resolve`'s dead `tot` forcing block (6 unreachable `warning()`s) | `tab.R:3859-3894` vs the hard-coded `tab.R:2482` |
+| #  | item                                                                                                                                                           | evidence                                                                                                                                                                                                                                                 |
+|----|----------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | the settings spine becomes the **only** interface (delete the 20+ flat duplicates)                                                                             | written `tab.R:2090-2109`, read only at `:1659, 1660, 1685`; every consumer reads the flat copy at `:2114-2127`                                                                                                                                          |
+| 2  | `na_text`/`na_num`/`lvs` join `pairs`/`cols`                                                                                                                   | the spine comment at `tab.R:2083-2084` **promises** `na` is there; `tab_prepare_pop` never touches `settings`, and `settings$cols$lvs` is **stale** the moment prepare_pop re-resolves levels — and it is the stale copy that is shipped to every worker |
+| 3  | `new_ctx()` declares all ~83 keys, or the stage products move out of ctx                                                                                       | 53 declared vs ~83 live; `pct_vect`/`ref_vect` undeclared while sibling `OR_vect` is — making the guard at `tab.R:2401` **unreachable**                                                                                                                  |
+| 4  | 17 ctx fields read by exactly one stage → locals                                                                                                               | the five `*_quo`, `with_filter`, `other_level`, `totaltab_name`, `n_min`, `spread_vars`, `names_prefix`, `names_sort`, `add_n`, `add_pct`, `common_totrow`, `agg_only`, `ci_method`, `design_effect`                                                     |
+| 5  | shared `leaf_head()` + `leaf_finish()`                                                                                                                         | the inference/basis preamble and the **~30-line result tail** are the same code twice (`tab.R:3947-3970` ≈ `5235-5274`; `4479-4536` ≈ `5759-5791`)                                                                                                       |
+| 6  | `num_core`'s ~90 inline lines of moment-sum totals → `build_total_rows`/`finalize_total_rows`                                                                  | `tab.R:5353-5442` vs the shared `:4169-4200`                                                                                                                                                                                                             |
+| 7  | `num_core` records `meta$vars`                                                                                                                                 | `tab.R:5773, 5777`                                                                                                                                                                                                                                       |
+| 8  | pass `meta` explicitly in the step tails                                                                                                                       | `tab.R:6244, 6255, 6366, 6377` — currently safe only by accident (§11 D3)                                                                                                                                                                                |
+| 9  | delete `tab_assemble()` (no caller), `ctx$levels_order` (never read in `tab.R`)                                                                                | `tab.R:2548-2550`, `:1469-1506`                                                                                                                                                                                                                          |
+| 10 | `resolve_cleannames()` beside `resolve_stars()`/`force_comp()`                                                                                                 | the rule is written 4×                                                                                                                                                                                                                                   |
+| 11 | `inference = new_inference()` as a **lazy default** on `plain_core`/`num_core`/`tab_apply_tests` silently re-reads the option if a caller forgets the argument | `tab.R:3941, 5227, 7277` — make it required                                                                                                                                                                                                              |
+| 12 | delete `plain_resolve`'s dead `tot` forcing block (6 unreachable `warning()`s)                                                                                 | `tab.R:3859-3894` vs the hard-coded `tab.R:2482`                                                                                                                                                                                                         |
 
 ### 4.3 The export stack
 
-| # | item | evidence |
-|---|---|---|
-| 1 | **transpose builds `rd2` by modifying `rd`, not by literal reconstruction** | `tab-transpose-render.R:239-277` is a 39-slot literal; it has **already lost slots twice** (fixed at `:271-273`) and is **losing `ann$keep_black` today**, masked by a silent fallback at `tab-render-html.R:430` — so a transposed reg table's footer rows are wrongly greyed in HTML and nothing tests it |
-| 2 | delete the dead model slots | `range_totcol` (hard-coded NULL at `tab-export-prep.R:510`, with a live 45-line producer `tab_totcol_range()` kept alive only by its own unit test), `vars$col_vars_levels` (no reader), `roles$no_totrows` (assigned then dropped), `ann$anchor` (prep-internal but shipped) |
-| 3 | xl reads `rd$subtext` and `rd_caption()` | it re-derives both (`tab_xl.R:233-234, 249-268`) and rebuilds `start_col_var` (`:445-446`) |
-| 4 | md reads `roles$new_col_var` | it rebuilds it (`tab_md.R:262-273`) and re-blanks headers the prep already blanked (`:375-378`) |
-| 5 | **`theme = "print"` renders `kable_material_dark` on the kableExtra engine** | `tab-render-html.R:294-309` — a black table for the black-and-white publication palette; the comment claiming "only light/dark here" is stale since z11 |
-| 6 | one `"auto"` downgrade | re-implemented **five** times with different rules (`tab-export-prep.R:748`, `tab_classes.R:923-929`, `tab-css.R:100-104`, `tab-render-html.R:667`, `tab_reg_plots.R:48`), and the theme **option pair** differs between the export path and the console path — so a footer rendered outside `rd_footer()` silently picks the console theme |
-| 7 | one number-font decision | three options (`tab_kable_num_font`, `xl_font_num_stars`, `plot_num_font`) answer "what font do starred numbers use", although `roles$has_stars` is already in the model |
-| 8 | `tab_plot` honours the footer model's typography | `tab_classes.R:2151` forces `face = "bold"` on every legend token, discarding the print palette's italic/underline — the one backend that overrides rather than translates |
-| 9 | two definitions of "is this coloured" inside one function | `roles$color_cols` vs `md_has_color()` (`tab_md.R:243` vs `:335`); and `color_cols`/`any_bg` are defined differently in the prep and the transpose |
-| 10 | the `" [dep]"` strip regex is written twice, each commenting on the other | `tab-export-prep.R:646`, `fmt_class.R:4774` |
+| #  | item                                                                         | evidence                                                                                                                                                                                                                                                                                                                                    |
+|----|------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | **transpose builds `rd2` by modifying `rd`, not by literal reconstruction**  | `tab-transpose-render.R:239-277` is a 39-slot literal; it has **already lost slots twice** (fixed at `:271-273`) and is **losing `ann$keep_black` today**, masked by a silent fallback at `tab-render-html.R:430` — so a transposed reg table's footer rows are wrongly greyed in HTML and nothing tests it                                 |
+| 2  | delete the dead model slots                                                  | `range_totcol` (hard-coded NULL at `tab-export-prep.R:510`, with a live 45-line producer `tab_totcol_range()` kept alive only by its own unit test), `vars$col_vars_levels` (no reader), `roles$no_totrows` (assigned then dropped), `ann$anchor` (prep-internal but shipped)                                                               |
+| 3  | xl reads `rd$subtext` and `rd_caption()`                                     | it re-derives both (`tab_xl.R:233-234, 249-268`) and rebuilds `start_col_var` (`:445-446`)                                                                                                                                                                                                                                                  |
+| 4  | md reads `roles$new_col_var`                                                 | it rebuilds it (`tab_md.R:262-273`) and re-blanks headers the prep already blanked (`:375-378`)                                                                                                                                                                                                                                             |
+| 5  | **`theme = "print"` renders `kable_material_dark` on the kableExtra engine** | `tab-render-html.R:294-309` — a black table for the black-and-white publication palette; the comment claiming "only light/dark here" is stale since z11                                                                                                                                                                                     |
+| 6  | one `"auto"` downgrade                                                       | re-implemented **five** times with different rules (`tab-export-prep.R:748`, `tab_classes.R:923-929`, `tab-css.R:100-104`, `tab-render-html.R:667`, `tab_reg_plots.R:48`), and the theme **option pair** differs between the export path and the console path — so a footer rendered outside `rd_footer()` silently picks the console theme |
+| 7  | one number-font decision                                                     | three options (`tab_kable_num_font`, `xl_font_num_stars`, `plot_num_font`) answer "what font do starred numbers use", although `roles$has_stars` is already in the model                                                                                                                                                                    |
+| 8  | `tab_plot` honours the footer model's typography                             | `tab_classes.R:2151` forces `face = "bold"` on every legend token, discarding the print palette's italic/underline — the one backend that overrides rather than translates                                                                                                                                                                  |
+| 9  | two definitions of "is this coloured" inside one function                    | `roles$color_cols` vs `md_has_color()` (`tab_md.R:243` vs `:335`); and `color_cols`/`any_bg` are defined differently in the prep and the transpose                                                                                                                                                                                          |
+| 10 | the `" [dep]"` strip regex is written twice, each commenting on the other    | `tab-export-prep.R:646`, `fmt_class.R:4774`                                                                                                                                                                                                                                                                                                 |
 
 ### 4.4 tab_reg
 
-| # | item | evidence |
-|---|---|---|
-| 1 | **collapse `at` → `effect`, `exponentiate` → `scale`, `estimate_display{prob,ame}` → `effect`, `empirical` ← `color`** (KEY 3a) | removes 4 formals and ~8 guard blocks of `tab_reg.R:5089-5178, 5256-5262` |
-| 2 | three family predicates (`reg_fam_glm`, `_overdispersed`, `_disp_known`) | absorbs 14 of the 21 hard-coded whitelists |
-| 3 | `reg_build`'s four parallel assemblers | AME `:3768-3826`, MNL-vs-rest `:3827-3846`, coefficient `:3847-3877`, and the **complete duplicate** split branch `:3620-3699` with its own `new_tab`/`meta`/`tab_stamp_inference` — which has already drifted once (comment at `:3676-3690`) |
-| 4 | the `shared` bag → a typed record | 24 keys, documented as 20 (`:3598-3603`), mirrored in `fmt_class.R:55-58` to silence `R CMD check`, partially re-listed twice (`:3904, 3911`), with 2 fields declared nowhere |
-| 5 | drop the 5 dead `reg_meta` fields | `shape`, `model_labels`, `conf_level` (no reader); `predictor_types`, `multiplier` (tests only) |
-| 6 | one `stats`/`check` vocabulary | `tab_reg(stats=)` and `reg_check_plots(check=)` are the same `names(REG_CHECKS)` with two argument names and two validators |
-| 7 | **the `.fit_cache`/`reref` path is ~450 lines and an 11-conjunct correctness predicate** | `tab_reg.R:5343-5356` + `reg_build_digest` + `reg_reref_fit_res` + the digest tier. Exists only for the jamovi live UI, and **silently shows fewer footer rows** than the R path (every check returns NULL without a fit). See §10 Q4 |
+| # | item                                                                                                                            | evidence                                                                                                                                                                                                                                      |
+|---|---------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **collapse `at` → `effect`, `exponentiate` → `scale`, `estimate_display{prob,ame}` → `effect`, `empirical` ← `color`** (KEY 3a) | removes 4 formals and ~8 guard blocks of `tab_reg.R:5089-5178, 5256-5262`                                                                                                                                                                     |
+| 2 | three family predicates (`reg_fam_glm`, `_overdispersed`, `_disp_known`)                                                        | absorbs 14 of the 21 hard-coded whitelists                                                                                                                                                                                                    |
+| 3 | `reg_build`'s four parallel assemblers                                                                                          | AME `:3768-3826`, MNL-vs-rest `:3827-3846`, coefficient `:3847-3877`, and the **complete duplicate** split branch `:3620-3699` with its own `new_tab`/`meta`/`tab_stamp_inference` — which has already drifted once (comment at `:3676-3690`) |
+| 4 | the `shared` bag → a typed record                                                                                               | 24 keys, documented as 20 (`:3598-3603`), mirrored in `fmt_class.R:55-58` to silence `R CMD check`, partially re-listed twice (`:3904, 3911`), with 2 fields declared nowhere                                                                 |
+| 5 | drop the 5 dead `reg_meta` fields                                                                                               | `shape`, `model_labels`, `conf_level` (no reader); `predictor_types`, `multiplier` (tests only)                                                                                                                                               |
+| 6 | one `stats`/`check` vocabulary                                                                                                  | `tab_reg(stats=)` and `reg_check_plots(check=)` are the same `names(REG_CHECKS)` with two argument names and two validators                                                                                                                   |
+| 7 | **the `.fit_cache`/`reref` path is ~450 lines and an 11-conjunct correctness predicate**                                        | `tab_reg.R:5343-5356` + `reg_build_digest` + `reg_reref_fit_res` + the digest tier. Exists only for the jamovi live UI, and **silently shows fewer footer rows** than the R path (every check returns NULL without a fit). See §10 Q4         |
 
 ### 4.5 jamovi
 
@@ -702,17 +702,17 @@ The **kernel is the good part**: one store lifecycle, one LRU, two configs (`JMV
 `jmv_backend_*` extraction, and `test-jmvtab-cache.R` locking byte-identity. **No statistics are
 forked.** What is duplicated is the **boundary**:
 
-| # | item | evidence |
-|---|---|---|
-| 1 | the stars→`ci="diff"` forcing is re-implemented **verbatim** | `jmvtab-cache.R:990-992` mirrors `tab-resolve.R:167-182`; the comment admits it |
-| 2 | the digits magnitude floor is **byte-duplicated** | `jmv_reapply_digits()` `:923-938` vs `tab.R:5723-5727` |
-| 3 | `jmv_population_descriptor()` is a line-for-line copy of `tab_cache_keys()`'s branch — **in the same file that also reads the real one** | `:638-646` vs `tab-resolve.R:261-273`; the real one at `:288` |
-| 4 | family detection exists **three** times | `reg_detect_family()` (R), `jmvtab_reg_dep_family()` fallback (R), and **`detectFamily()` in JS** (`jamovi/js/jmvtabreg.js:396-405`) with its own "matches the R side exactly" note. Ditto `familyOptionsFor`/`anyProbScale` vs R's own aborts |
-| 5 | the trials-max rule is duplicated **with a semantic shift** | R takes `max()` only when the user asks (`trials = TRUE`, `tab_reg.R:5213`); jamovi takes it silently for any integer outcome (`jmvtabreg-cache.R:214-227`) |
-| 6 | the multiplier keyword set is copied | `jmvtab_reg_mult_vector()` `:166-177` vs `reg_multiplier_value()` `tab_reg.R:355-368` |
-| 7 | `anova` is the last option travelling as a **global** | `jmvtab.b.R:34-36` (`options()` + `on.exit`); `design_effect` was already converted to an argument. Converting `anova` too shrinks `.run()` to weights → build → render, and removes a stale-cache hazard (it is baked at build and covered only indirectly, via `structural`) |
-| 8 | the jamovi `display` vocabulary ≠ `tab(display=)`'s | the ComboBox offers `pct_ci`/`mean_ci`/`OR`/`OR_pct`, which `validate_display_template()` would reject — so `jmv_apply_display()` cannot call the shared `tab_apply_display()`. An honest structural gap, not an oversight — and the source of §11 D11 |
-| 9 | dead / dangling | `jmvtab_reg_staged()` exists so the staged predicate matches, and `jmvtabreg.b.R:36` **inlines the predicate instead** (only tests call it); `jmvtab_reg_build()` passes `stats = opts$stats`, which `.opts()` never sets |
+| # | item                                                                                                                                     | evidence                                                                                                                                                                                                                                                                       |
+|---|------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | the stars→`ci="diff"` forcing is re-implemented **verbatim**                                                                             | `jmvtab-cache.R:990-992` mirrors `tab-resolve.R:167-182`; the comment admits it                                                                                                                                                                                                |
+| 2 | the digits magnitude floor is **byte-duplicated**                                                                                        | `jmv_reapply_digits()` `:923-938` vs `tab.R:5723-5727`                                                                                                                                                                                                                         |
+| 3 | `jmv_population_descriptor()` is a line-for-line copy of `tab_cache_keys()`'s branch — **in the same file that also reads the real one** | `:638-646` vs `tab-resolve.R:261-273`; the real one at `:288`                                                                                                                                                                                                                  |
+| 4 | family detection exists **three** times                                                                                                  | `reg_detect_family()` (R), `jmvtab_reg_dep_family()` fallback (R), and **`detectFamily()` in JS** (`jamovi/js/jmvtabreg.js:396-405`) with its own "matches the R side exactly" note. Ditto `familyOptionsFor`/`anyProbScale` vs R's own aborts                                 |
+| 5 | the trials-max rule is duplicated **with a semantic shift**                                                                              | R takes `max()` only when the user asks (`trials = TRUE`, `tab_reg.R:5213`); jamovi takes it silently for any integer outcome (`jmvtabreg-cache.R:214-227`)                                                                                                                    |
+| 6 | the multiplier keyword set is copied                                                                                                     | `jmvtab_reg_mult_vector()` `:166-177` vs `reg_multiplier_value()` `tab_reg.R:355-368`                                                                                                                                                                                          |
+| 7 | `anova` is the last option travelling as a **global**                                                                                    | `jmvtab.b.R:34-36` (`options()` + `on.exit`); `design_effect` was already converted to an argument. Converting `anova` too shrinks `.run()` to weights → build → render, and removes a stale-cache hazard (it is baked at build and covered only indirectly, via `structural`) |
+| 8 | the jamovi `display` vocabulary ≠ `tab(display=)`'s                                                                                      | the ComboBox offers `pct_ci`/`mean_ci`/`OR`/`OR_pct`, which `validate_display_template()` would reject — so `jmv_apply_display()` cannot call the shared `tab_apply_display()`. An honest structural gap, not an oversight — and the source of §11 D11                         |
+| 9 | dead / dangling                                                                                                                          | `jmvtab_reg_staged()` exists so the staged predicate matches, and `jmvtabreg.b.R:36` **inlines the predicate instead** (only tests call it); `jmvtab_reg_build()` passes `stats = opts$stats`, which `.opts()` never sets                                                      |
 
 ### 4.6 tab_counts
 
@@ -740,32 +740,32 @@ enforced by **argument omission plus one roxygen paragraph** — and a user pass
 "Cut" = free now (unreleased or internal). "Deprecate" = CRAN etiquette. "Keep" = suspicion checked and
 dismissed.
 
-| item | evidence | verdict |
-|---|---|---|
-| **`filter`** | **0 uses in every corpus**; its documented use case is tested without it; and its cache key is hardcoded `NA_character_` (`tab.R:2066`), so a filter **never invalidates the jamovi cache** | **cut** (already doc-superseded) — or at minimum fix the cache key |
-| `names_prefix`, `names_sort` | 0 uses anywhere, on both `tab()` and `tab_counts()` | **cut** |
-| `levels = "auto"`, per-col_var `levels`/`digits` vectors | 0 uses | **cut the grammars**, keep the scalars |
-| `tab_many()`'s 41 formals | soft-deprecated already, but the only place `chi2`/`totrow`/`totcol` survive; `na_drop_all`/`compact`/`totrow` have 0 uses | **finish it**: `function(...) tab(..., output_list = TRUE)` + the deprecation |
-| `tab_plain()` / `tab_num()` as documented API | 0 vignette uses; literally wrappers over the cores since 17f | **supersede** (keep exported, badge, stop mirroring `tab()`'s arguments) |
-| `sup_cols` | tests only (9 hits); mechanically identical to `col_vars` + `levels = "first"` + `pct = "row"`, and the code says so | keep the deprecation, stop mirroring it |
-| `totcol = "each"` / `"all_col_vars"` | tests only. Worse: the parser returns a **character** for `"last"` and a **list** for the others, so the `identical()` comparisons never fire for the default and **`tot_cols_type == "some"` is the default arm**; `"all_col_vars"` as an *input value* can never produce `tot_cols_type == "all_col_vars"`; and the string `"all_col_vars"` carries **two unrelated meanings** (the total-column tag and the add_n/add_pct helper-column tag) | **cut `"each"`** (≈4 lines) and the unreachable `"all_col_vars"` handler (10 lines); rename one of the two meanings |
-| `tab_totcol_range()` + `range_totcol` | producer alive, consumer commented out, kept by its own unit test | **cut both** (the option is DORMANT since x2) |
-| `ctx$levels_order` | read by no stage in `tab.R` (only `jmvtab-cache.R:405`) | **cut from ctx**, pass directly |
-| `tab_assemble()` | no caller anywhere | **cut** |
-| `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct` | zero callers | **cut** |
-| `jmvtab_reg_staged()` | its own caller inlines the predicate instead | **cut or adopt** |
-| `complete_partial_totals`, `set_ci_type`, `tab_get_wrapped_dimensions` | exported, zero use anywhere | maintainer call (personal tooling?) |
-| `reg_meta$shape`, `$model_labels`, `$conf_level` | no reader | **cut** |
-| `estimate_display = "prob"/"ame"`, `at`, `exponentiate` | duplicate `effect`/`family`; degraded away in 3 blocks / 8 sites | **fold** (KEY 3a) |
-| `color = "ci"` | a pure synonym of `"after_ci"` | **cut** (both already legacy-decoded) |
-| `tabxplor_tabs` | one behavioural bit (`tab_xl.R:214`) + four print methods | keep, but do not grow it; the bit could key on `!is.null(names(x))` |
-| `spread_models` | 7 code sites, least-read public formal | keep (the reg twin of `spread_vars`), re-key on KEY 1 |
-| `tab_md_css()` | one-line alias of `tab_css(chrome = FALSE)` whose `tabs` argument is documented as ignored | keep as alias, drop the argument |
-| `tab_kable()` | pure alias of `tab_html()` | keep (maintainer's explicit z-g decision) |
-| kableExtra engine | legacy — and the one that breaks under `theme = "print"` | keep + **fix D2** |
-| `tabxplor.output_kable` | changes the **shape of the built object** from a display option | keep the option (maintainer ruling), **remove its build-shape power** |
-| the 3 number-font options | one decision, three knobs | merge to one, alias the others |
-| `method = "profile"`, `quasipoisson`, the compound-formula hatch, `mnl_vsrest` | previously settled | keep |
+| item                                                                           | evidence                                                                                                                                                                                                                                                                                                                                                                                                                                        | verdict                                                                                                             |
+|--------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| **`filter`**                                                                   | **0 uses in every corpus**; its documented use case is tested without it; and its cache key is hardcoded `NA_character_` (`tab.R:2066`), so a filter **never invalidates the jamovi cache**                                                                                                                                                                                                                                                     | **cut** (already doc-superseded) — or at minimum fix the cache key                                                  |
+| `names_prefix`, `names_sort`                                                   | 0 uses anywhere, on both `tab()` and `tab_counts()`                                                                                                                                                                                                                                                                                                                                                                                             | **cut**                                                                                                             |
+| `levels = "auto"`, per-col_var `levels`/`digits` vectors                       | 0 uses                                                                                                                                                                                                                                                                                                                                                                                                                                          | **cut the grammars**, keep the scalars                                                                              |
+| `tab_many()`'s 41 formals                                                      | soft-deprecated already, but the only place `chi2`/`totrow`/`totcol` survive; `na_drop_all`/`compact`/`totrow` have 0 uses                                                                                                                                                                                                                                                                                                                      | **finish it**: `function(...) tab(..., output_list = TRUE)` + the deprecation                                       |
+| `tab_plain()` / `tab_num()` as documented API                                  | 0 vignette uses; literally wrappers over the cores since 17f                                                                                                                                                                                                                                                                                                                                                                                    | **supersede** (keep exported, badge, stop mirroring `tab()`'s arguments)                                            |
+| `sup_cols`                                                                     | tests only (9 hits); mechanically identical to `col_vars` + `levels = "first"` + `pct = "row"`, and the code says so                                                                                                                                                                                                                                                                                                                            | keep the deprecation, stop mirroring it                                                                             |
+| `totcol = "each"` / `"all_col_vars"`                                           | tests only. Worse: the parser returns a **character** for `"last"` and a **list** for the others, so the `identical()` comparisons never fire for the default and **`tot_cols_type == "some"` is the default arm**; `"all_col_vars"` as an *input value* can never produce `tot_cols_type == "all_col_vars"`; and the string `"all_col_vars"` carries **two unrelated meanings** (the total-column tag and the add_n/add_pct helper-column tag) | **cut `"each"`** (≈4 lines) and the unreachable `"all_col_vars"` handler (10 lines); rename one of the two meanings |
+| `tab_totcol_range()` + `range_totcol`                                          | producer alive, consumer commented out, kept by its own unit test                                                                                                                                                                                                                                                                                                                                                                               | **cut both** (the option is DORMANT since x2)                                                                       |
+| `ctx$levels_order`                                                             | read by no stage in `tab.R` (only `jmvtab-cache.R:405`)                                                                                                                                                                                                                                                                                                                                                                                         | **cut from ctx**, pass directly                                                                                     |
+| `tab_assemble()`                                                               | no caller anywhere                                                                                                                                                                                                                                                                                                                                                                                                                              | **cut**                                                                                                             |
+| `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct`   | zero callers                                                                                                                                                                                                                                                                                                                                                                                                                                    | **cut**                                                                                                             |
+| `jmvtab_reg_staged()`                                                          | its own caller inlines the predicate instead                                                                                                                                                                                                                                                                                                                                                                                                    | **cut or adopt**                                                                                                    |
+| `complete_partial_totals`, `set_ci_type`, `tab_get_wrapped_dimensions`         | exported, zero use anywhere                                                                                                                                                                                                                                                                                                                                                                                                                     | maintainer call (personal tooling?)                                                                                 |
+| `reg_meta$shape`, `$model_labels`, `$conf_level`                               | no reader                                                                                                                                                                                                                                                                                                                                                                                                                                       | **cut**                                                                                                             |
+| `estimate_display = "prob"/"ame"`, `at`, `exponentiate`                        | duplicate `effect`/`family`; degraded away in 3 blocks / 8 sites                                                                                                                                                                                                                                                                                                                                                                                | **fold** (KEY 3a)                                                                                                   |
+| `color = "ci"`                                                                 | a pure synonym of `"after_ci"`                                                                                                                                                                                                                                                                                                                                                                                                                  | **cut** (both already legacy-decoded)                                                                               |
+| `tabxplor_tabs`                                                                | one behavioural bit (`tab_xl.R:214`) + four print methods                                                                                                                                                                                                                                                                                                                                                                                       | keep, but do not grow it; the bit could key on `!is.null(names(x))`                                                 |
+| `spread_models`                                                                | 7 code sites, least-read public formal                                                                                                                                                                                                                                                                                                                                                                                                          | keep (the reg twin of `spread_vars`), re-key on KEY 1                                                               |
+| `tab_md_css()`                                                                 | one-line alias of `tab_css(chrome = FALSE)` whose `tabs` argument is documented as ignored                                                                                                                                                                                                                                                                                                                                                      | keep as alias, drop the argument                                                                                    |
+| `tab_kable()`                                                                  | pure alias of `tab_html()`                                                                                                                                                                                                                                                                                                                                                                                                                      | keep (maintainer's explicit z-g decision)                                                                           |
+| kableExtra engine                                                              | legacy — and the one that breaks under `theme = "print"`                                                                                                                                                                                                                                                                                                                                                                                        | keep + **fix D2**                                                                                                   |
+| `tabxplor.output_kable`                                                        | changes the **shape of the built object** from a display option                                                                                                                                                                                                                                                                                                                                                                                 | keep the option (maintainer ruling), **remove its build-shape power**                                               |
+| the 3 number-font options                                                      | one decision, three knobs                                                                                                                                                                                                                                                                                                                                                                                                                       | merge to one, alias the others                                                                                      |
+| `method = "profile"`, `quasipoisson`, the compound-formula hatch, `mnl_vsrest` | previously settled                                                                                                                                                                                                                                                                                                                                                                                                                              | keep                                                                                                                |
 
 **And the converse — cold but good, do not cut:** `tab_counts()`, `tab_css()`, `transpose=`, `n_min=`,
 `split_var=`, `score_from_lv1()`, `common_totrow`, `tab_compact()`'s cross-call merge (which is the one
@@ -778,16 +778,16 @@ case `tab()` now does by default).
 
 **Add (2):**
 
-| what | why | cost |
-|---|---|---|
+| what                                               | why                                                                                                                                             | cost                    |
+|----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------|
 | column attribute `estimand = (field, scale, null)` | KEY 2 — deletes `fmt_est_field`, the `var`-sniff, the `ci_mult`/`ci_neutral`/`has_ci`/`sd_ref` re-derivations and the `gof` colour special case | one attribute, after E1 |
-| a **row index model** (keyed, not positional) | KEY 1 | structural, see §9 |
+| a **row index model** (keyed, not positional)      | KEY 1                                                                                                                                           | structural, see §9      |
 
 **Change (2):**
 
-| what | to what |
-|---|---|
-| `type` (8 values, two jobs) | `pct_base` × `col_kind` |
+| what                                        | to what                                                |
+|---------------------------------------------|--------------------------------------------------------|
+| `type` (8 values, two jobs)                 | `pct_base` × `col_kind`                                |
 | `meta` (crosstab) + `reg_meta` (regression) | one `meta$spec` with `kind` + a uniform `vars` (KEY 6) |
 
 **Remove (0 fields, 3 meta sub-fields):** `reg_meta$shape`, `$model_labels`, `$conf_level`.
@@ -937,23 +937,23 @@ for good reasons and only the `get_num`/`set_num` half is genuinely a map; (ii) 
 
 ## 11. Defects found in passing — fix regardless of any redesign
 
-| # | defect | site | severity |
-|---|---|---|---|
-| **D9** | **the jamovi `design_effect` checkbox does nothing.** It is declared in `jmvtab.a.yaml:205` and rendered in `jmvtab.u.yaml:231`, but **absent from the stale generated `R/jmvtab.h.R`**, so `self$options$design_effect` is `NULL` and `isTRUE(NULL)` is `FALSE`. Every claim in the `.a.yaml` help and the `.b.R`/`jmvtab-cache.R` comments about it "moving every interval in the table" is currently untrue in the running module. Pending a maintainer `jmvtools::prepare()` | `jmvtab.h.R` vs `jmvtab.a.yaml:205` | **user-visible** |
-| D1 | transposed reg tables lose `ann$keep_black` → footer rows wrongly greyed in HTML; masked by a silent fallback, untested | `tab-transpose-render.R:212-223` → `tab-render-html.R:430` | user-visible |
-| D2 | `theme = "print"` + `engine = "kableExtra"` renders `kable_material_dark` | `tab-render-html.R:294-309` | user-visible |
-| D11 | jamovi `display` on a **mean** column with `ci = "cell"` sets `pct_ci`, which reads the `pct` field — `NA` on the numeric leaf → the cell renders **empty**. `tab_ci()` had already set `mean_ci` correctly | `jmvtab-cache.R:523-528` vs `tab.R:6181` | user-visible |
-| D4 | background-channel allow-lists disagree: `c("OR","adjustment")` legal in `tab_reg()`, illegal in `tab()` | `tab.R:944` vs `fmt_class.R:1367` | inconsistency |
-| D5 | `tab_reg()`'s `na` message names `"drop_all_models"`, removed in z13 | `tab_reg.R:3152` | message |
-| D6 | the multi-dependent × model-list recursion drops `spread_models` and `.fit_cache` | `tab_reg.R:4948-4956` | silent |
-| D7 | the `ref_vect` NULL guard is unreachable (`ref_vect` is not a declared ctx field, so `is.null()` errors first) | `tab.R:2401` vs `new_ctx()` `:1469` | latent |
-| D8 | `legend_method_name()` falls through silently → can print a CI method the bounds were never built with | `fmt_class.R:4179-4183` | latent |
-| D10 | the stale generated `R/jmvtabreg.h.R` still declares the removed `na = "drop_all_models"` — the live UI can pass a value `tab_reg()` rejects; it also carries four dead options (`ids`/`strata`/`fpc`/`nest`) and `jmvtab.h.R` carries two (`test_robust`, `method_ratio`) | `jmvtabreg.h.R:184-190, 431-434` | pending `prepare()` |
-| D12 | `jmv_tab3_base_key()`'s `reapplied` list contains `"ci_method"`, which is **not a key of `opts`**; the four `method_*` keys therefore land in `structural` and force a full tier-3 rebuild, making the cheap re-ref path unreachable for CI-method toggles | `jmvtab-cache.R:666-668` vs `:712` | perf, no correctness risk |
-| D13 | `tab(filter =)`'s cache key is hardcoded `NA_character_`, so a filter change never invalidates the jamovi cache | `tab.R:2066` | latent (0 known users) |
-| D14 | `@param other_if_less_than` documents an argument `tab_counts()` does not have | `tab-counts.R:222` | doc |
-| D15 | stale comment: `jmvtab-cache.R:858-861` says `design_effect` "rides the global option, set around the build" — `.b.R:38-41` says the opposite and passes it as an argument | `jmvtab-cache.R:858-861` | doc |
-| **D3** | **claim withdrawn.** An earlier draft of this study asserted that `tab_ci()`/`tab_chi2()` **drop** `meta` on the exported step path. They pass no `meta` argument (`tab.R:6244, 6255, 6366, 6377`), but *verified by running it*, `meta` survives — `tibble::new_tibble()` preserves the incoming object's attributes, and `tab_plain() |> tab_chi2() |> tab_ci()` keeps `vars` and a `set_caption()`. It is **undesigned, not broken**; passing `meta` explicitly costs six lines and removes the hazard class | `tab.R:6244` etc. | none (latent) |
+| #      | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | site                                                       | severity                  |
+|--------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|---------------------------|
+| **D9** | **the jamovi `design_effect` checkbox does nothing.** It is declared in `jmvtab.a.yaml:205` and rendered in `jmvtab.u.yaml:231`, but **absent from the stale generated `R/jmvtab.h.R`**, so `self$options$design_effect` is `NULL` and `isTRUE(NULL)` is `FALSE`. Every claim in the `.a.yaml` help and the `.b.R`/`jmvtab-cache.R` comments about it "moving every interval in the table" is currently untrue in the running module. Pending a maintainer `jmvtools::prepare()`                                 | `jmvtab.h.R` vs `jmvtab.a.yaml:205`                        | **user-visible**          |
+| D1     | transposed reg tables lose `ann$keep_black` → footer rows wrongly greyed in HTML; masked by a silent fallback, untested                                                                                                                                                                                                                                                                                                                                                                                          | `tab-transpose-render.R:212-223` → `tab-render-html.R:430` | user-visible              |
+| D2     | `theme = "print"` + `engine = "kableExtra"` renders `kable_material_dark`                                                                                                                                                                                                                                                                                                                                                                                                                                        | `tab-render-html.R:294-309`                                | user-visible              |
+| D11    | jamovi `display` on a **mean** column with `ci = "cell"` sets `pct_ci`, which reads the `pct` field — `NA` on the numeric leaf → the cell renders **empty**. `tab_ci()` had already set `mean_ci` correctly                                                                                                                                                                                                                                                                                                      | `jmvtab-cache.R:523-528` vs `tab.R:6181`                   | user-visible              |
+| D4     | background-channel allow-lists disagree: `c("OR","adjustment")` legal in `tab_reg()`, illegal in `tab()`                                                                                                                                                                                                                                                                                                                                                                                                         | `tab.R:944` vs `fmt_class.R:1367`                          | inconsistency             |
+| D5     | `tab_reg()`'s `na` message names `"drop_all_models"`, removed in z13                                                                                                                                                                                                                                                                                                                                                                                                                                             | `tab_reg.R:3152`                                           | message                   |
+| D6     | the multi-dependent × model-list recursion drops `spread_models` and `.fit_cache`                                                                                                                                                                                                                                                                                                                                                                                                                                | `tab_reg.R:4948-4956`                                      | silent                    |
+| D7     | the `ref_vect` NULL guard is unreachable (`ref_vect` is not a declared ctx field, so `is.null()` errors first)                                                                                                                                                                                                                                                                                                                                                                                                   | `tab.R:2401` vs `new_ctx()` `:1469`                        | latent                    |
+| D8     | `legend_method_name()` falls through silently → can print a CI method the bounds were never built with                                                                                                                                                                                                                                                                                                                                                                                                           | `fmt_class.R:4179-4183`                                    | latent                    |
+| D10    | the stale generated `R/jmvtabreg.h.R` still declares the removed `na = "drop_all_models"` — the live UI can pass a value `tab_reg()` rejects; it also carries four dead options (`ids`/`strata`/`fpc`/`nest`) and `jmvtab.h.R` carries two (`test_robust`, `method_ratio`)                                                                                                                                                                                                                                       | `jmvtabreg.h.R:184-190, 431-434`                           | pending `prepare()`       |
+| D12    | `jmv_tab3_base_key()`'s `reapplied` list contains `"ci_method"`, which is **not a key of `opts`**; the four `method_*` keys therefore land in `structural` and force a full tier-3 rebuild, making the cheap re-ref path unreachable for CI-method toggles                                                                                                                                                                                                                                                       | `jmvtab-cache.R:666-668` vs `:712`                         | perf, no correctness risk |
+| D13    | `tab(filter =)`'s cache key is hardcoded `NA_character_`, so a filter change never invalidates the jamovi cache                                                                                                                                                                                                                                                                                                                                                                                                  | `tab.R:2066`                                               | latent (0 known users)    |
+| D14    | `@param other_if_less_than` documents an argument `tab_counts()` does not have                                                                                                                                                                                                                                                                                                                                                                                                                                   | `tab-counts.R:222`                                         | doc                       |
+| D15    | stale comment: `jmvtab-cache.R:858-861` says `design_effect` "rides the global option, set around the build" — `.b.R:38-41` says the opposite and passes it as an argument                                                                                                                                                                                                                                                                                                                                       | `jmvtab-cache.R:858-861`                                   | doc                       |
+| **D3** | **claim withdrawn.** An earlier draft of this study asserted that `tab_ci()`/`tab_chi2()` **drop** `meta` on the exported step path. They pass no `meta` argument (`tab.R:6244, 6255, 6366, 6377`), but *verified by running it*, `meta` survives — `tibble::new_tibble()` preserves the incoming object's attributes, and `tab_plain() | > tab_chi2() | > tab_ci()` keeps `vars` and a `set_caption()`. It is **undesigned, not broken**; passing`meta` explicitly costs six lines and removes the hazard class | `tab.R:6244` etc.                                          | none (latent)             |
 
 ---
 

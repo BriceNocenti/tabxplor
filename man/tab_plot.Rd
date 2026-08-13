@@ -66,6 +66,9 @@ Superseded (2.0.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{g
 display is limited and it is no longer actively developed. It keeps working and is retained for a
 future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
 \code{\link{tab_xl}} (Excel).
+
+It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
+confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
 }
 \examples{
 \donttest{

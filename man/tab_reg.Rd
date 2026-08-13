@@ -505,8 +505,8 @@ comparison test), \code{split_var} (one table per group), \code{multiplier} (the
 predictor's effect is reported per — one standard deviation by default).
 \item \strong{Survey design}: \code{wt} for a simple weight, or a prebuilt \code{\link[survey:svydesign]{survey::svydesign()}} as \code{data}.
 \item \strong{Model checks}: \code{stats} (the footer rows --- linearity, dispersion, influence,
-collinearity, proportionality), \code{shape} (the cure for a non-linearity), and the plots
-\code{\link[=reg_check_plots]{reg_check_plots()}} / \code{\link[=or_plot]{or_plot()}}.
+collinearity, proportionality), \code{shape} (the cure for a non-linearity), and the plot
+\code{\link[=reg_check_plots]{reg_check_plots()}}. \item \strong{Chart}: \code{\link[=forest_plot]{forest_plot()}} draws the finished table.
 }
 
 \code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{dependent} may itself
@@ -666,4 +666,9 @@ Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies wi
 
 Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
 \emph{BMJ}, 326, 219. --- the \code{color = "between_groups"} test.
+}
+\seealso{
+\code{\link[=forest_plot]{forest_plot()}} draws the finished table -- every effect with its interval, its stars and
+its colour, and (with \code{empirical = TRUE}) the observed effect beside it with the margin of error
+of the gap. \code{\link[=reg_check_plots]{reg_check_plots()}} draws the model checks. \code{\link[=tab]{tab()}} for cross-tables.
 }

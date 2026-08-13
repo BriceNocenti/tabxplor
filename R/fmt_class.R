@@ -1835,13 +1835,12 @@ get_ci_sup <- fmt_field_factory("ci_sup")
 # conservative larger arm for the +/- moe display (Wilson/Newcombe bounds are asymmetric).
 # Phase 3a: ci_inf/ci_sup now hold real asymmetric ABSOLUTE bounds. See §1, §20.
 #' @keywords internal
-ci_center  <- function(x) {
-  if (get_ci_type(x) %in% c("diff", "diff_row", "diff_col")) get_diff(x)
-  else if (get_ci_type(x) == "or")                          get_or(x)   # Phase 12a: OR CI centred on the odds ratio
-  else if (get_ci_type(x) == "ratio")                       get_ratio(x)# Phase 14b: Katz RR CI centred on the ratio
-  else if (get_type(x) == "mean")                            get_mean(x)
-  else                                                       get_pct(x)
-}
+# Last Phase z17: the field choice is fmt_center_field() -- the ONE rule, shared with fmt_scale_of()
+# (which needs the same answer to say what the column estimates) and delegating its effect half to
+# fmt_est_field(), the gap system's own rule. Phase 12a: an OR CI is centred on the odds ratio;
+# Phase 14b: a Katz RR CI on the ratio.
+#' @keywords internal
+ci_center  <- function(x) vctrs::field(x, fmt_center_field(get_ci_type(x), get_type(x)))
 # @describeIn fmt get the confidence-interval half-width (upper arm, from the stored bounds)
 #' @keywords internal
 # @export
@@ -3264,22 +3263,203 @@ log_odds_scale <- function(or_scale) {
 # Last Phase z13 (D2): WHICH break scale a gap measure (`adjustment` / `between_groups`) reads. z5 chose
 # between two scales on `ci_type` alone, so a beta on an outcome recorded in hours, minutes or days read
 # three different ways -- in minutes every cell saturated at the deepest break, in days the feature was
-# entirely dark. The gap of an effect belongs on the same KIND of ladder as the effect itself, which is
-# the dispatch `diff` already performs; this states it for the adj_* ladders.
-#
-# The ORDER is the contract. A poisson count AME and a raw poisson coefficient are indistinguishable in
-# (type, ci_type, model_family) -- both ("coef", "diff", "poisson") -- and `is_logcoef` claims both. What
-# separates them is `var`: var(Y) is written exactly on the columns whose estimate lives in the
-# OUTCOME's own units (reg_column's additive arm and reg_marginal_column's raw arm, both gated on a
-# non-probability scale), which is also the SD the standardization needs. So the var test must precede
-# the log-coefficient one, and that one must precede the percentage-point default.
+# entirely dark. The gap of an effect belongs on the same KIND of ladder as the effect itself.
+# Last Phase z17: that IS the estimate's own scale, so this is now one lookup on EST_SCALES rather than
+# a second copy of the dispatch (which had to carry its own "the order is the contract" warning). The
+# order, and why it must be that order, is stated once, at fmt_scale_key() below.
 #' @keywords internal
-fmt_gap_scale_key <- function(x, type, ci_mult, is_logcoef) {
-  if (isTRUE(ci_mult))                                     return("adj_ratio")      # OR / RR / IRR
-  if (identical(type, "coef") && !all(is.na(get_var(x))))   return("adj_diff_std")  # beta, count AME
-  if (isTRUE(is_logcoef))                                  return("adj_diff_log")   # log(OR) coef
-  "adj_diff"                                                                        # probability points
+fmt_gap_scale_key <- function(x) EST_SCALES[[fmt_scale_key(x)]]$gap_key
+
+
+# === SECTION: the ESTIMATE's scale (Last Phase z17) =================================================
+#
+# `MEASURES` above says what a COLOUR MEASURE is; this says what a COLUMN ESTIMATES. Different
+# question, but the SAME dispatch fmt_gap_scale_key() performs just above, which is why this is one
+# generalisation and not a second fact table (dev/regression_effect_plots.md SS2.3a, SS20).
+#
+# Four consumers were each re-deriving half of it: format() (compound display x type x ci_type
+# predicates), fmt_color_plan() (std_when + fmt_gap_scale_key), the legend (unit_kind), and a plot
+# (which had a private hard-coded ladder). What none of them stated in one place: for THIS column,
+# what is the neutral value, is the scale additive or multiplicative, what unit is its axis in, and
+# which break ladder does the ESTIMATE live on (not the colour measure -- they may differ: a
+# `color = "adjustment"` Model_OR column has odds_ratio gridlines and an adj_ratio colour ladder).
+#
+# EST_SCALES is the declared record library (the REG_CHECKS / REG_EMPIRICAL shape); fmt_scale_key() is
+# the dispatch; fmt_scale_of() resolves the per-column parts (the ladder, SD(Y), the secondary axis).
+#   kind       "effect" (there is a null to draw) | "level" (a percentage / a mean: no null)
+#   neutral    the null value, on the estimate's own scale
+#   trans      the axis transform -- "log10" makes x2 and 1/2 equidistant from 1, which is the whole
+#              reason a ratio forest plot is logarithmic
+#   mult       multiplicative fold (the fmt_color_slots center-1 rule)
+#   is_pct     the estimate renders x100
+#   est_field  the fmt field the estimate lives in -- fmt_center_field() IS this entry
+#   unit       the axis title, as a KEY (translated at render, never here: a top-level gettext()
+#              would freeze the build locale)
+#   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks
+#   gap_key    the adj_* ladder its GAP reads -- fmt_gap_scale_key() IS this column
+#   label_meas which MEASURES row supplies the break glyphs ("or" -> "2" / "1/2", "diff" -> "+5" / "-5")
+#   sec        NULL, or the secondary axis this scale needs to stay readable (SS7.4): whenever the
+#              colour ladder lives on a different scale from the printed estimate, that ladder's scale
+#              becomes the secondary axis.
+# A count column (`type = "n"`, no interval) resolves to level_pct, which is what ci_center() has
+# always answered there; it carries no estimate, so tab_estimates() drops it by ROLE before asking.
+#' @keywords internal
+EST_SCALES <- list(
+  or         = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "or",    unit = "or",
+                    break_key = "odds_ratio", gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  pct_ratio  = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "ratio", unit = "ratio",
+                    break_key = "pct_ratio",  gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  mean_ratio = list(kind = "effect", neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "ratio", unit = "rate_ratio",
+                    break_key = "mean_ratio", gap_key = "adj_ratio",
+                    label_meas = "or",   sec = NULL),
+  # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder
+  raw_diff   = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "units",
+                    break_key = "mean_diff",  gap_key = "adj_diff_std",
+                    label_meas = "diff", sec = "sd", sd_from = "var"),
+  # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
+  # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
+  mean_diff  = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "units",
+                    break_key = "mean_diff",  gap_key = "adj_diff",
+                    label_meas = "diff", sec = "sd", sd_from = "ref_var"),
+  # exponentiate = FALSE: printed on the link scale, coloured on the logged odds_ratio ladder
+  log_coef   = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "diff",  unit = "log",
+                    break_key = "odds_ratio", gap_key = "adj_diff_log",
+                    label_meas = "diff", sec = "exp"),
+  points     = list(kind = "effect", neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
+                    est_field = "diff",  unit = "points",
+                    break_key = "pct_diff",   gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL),
+  # the two LEVEL scales: a cell percentage / a mean. No null to draw (the reference is a per-column
+  # value, filled by the consumer), and no ladder -- the colour ladder of a level column grades its
+  # DIFFERENCE, so putting it on the level axis would be a lie. `gap_key` is "adj_diff" only so that
+  # fmt_gap_scale_key() stays byte-identical on a column no gap measure can actually ride.
+  level_pct  = list(kind = "level",  neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
+                    est_field = "pct",   unit = "pct",
+                    break_key = NA_character_, gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL),
+  level_mean = list(kind = "level",  neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
+                    est_field = "mean",  unit = "units",
+                    break_key = NA_character_, gap_key = "adj_diff",
+                    label_meas = "diff", sec = NULL)
+)
+
+# THE dispatch. Its ORDER is the contract, for the reason fmt_gap_scale_key()'s comment above gives:
+# a poisson count AME and a raw poisson coefficient are identical in (type, ci_type, model_family) and
+# only `var` separates them, so the var clause must precede the log-coefficient one, and that one the
+# percentage-point default. The two level clauses come LAST: a column whose stored interval is a
+# difference is an effect column whatever it displays (Obs_% and Obs_diff are field-identical and
+# differ only in `display`, so reading `display` here would make the scale a per-CELL fact).
+#
+# `kind` is the consumer's OVERRIDE, not a second dispatch: "level" jumps to the two last clauses,
+# "effect" skips them (a column with no stored contrast interval still HAS a difference -- it just has
+# no whisker to draw around it). Every caller but forest_plot(what =) leaves it at "auto", where the
+# ladder is the one above, unchanged.
+#
+# It is written on SCALARS so that three callers share it: fmt_scale_key() (a column), and
+# fmt_center_field(), which has only (ci_type, type) and needs no more -- the two clauses it therefore
+# cannot reach, raw_diff and log_coef, both read the same field as the clause it lands on instead.
+#' @keywords internal
+est_scale_key <- function(ci_type, type, has_var = FALSE, logscale = FALSE,
+                          kind = c("auto", "effect", "level"), display = NA_character_) {
+  kind <- match.arg(kind)
+  cit  <- as.character(ci_type)[1]
+  typ  <- as.character(type)[1]
+  if (identical(kind, "level")) return(if (identical(typ, "mean")) "level_mean" else "level_pct")
+  # No stored interval: the only remaining statement about what this column IS is what it DISPLAYS --
+  # a stored field, not a rendered string. Without it, `tab(OR = TRUE)`'s reference column (whose OR
+  # bounds are NA by construction, so ci_type is "") read as a percentage while its siblings read as
+  # odds ratios, and the axis followed the reference. `display` is per-CELL on marginal columns, hence
+  # a single summary value here and never a per-row fact.
+  if (!nzchar(cit) && !is.na(display)) {
+    dk <- switch(display, or = "or", OR = "or", or_pct = "or", OR_pct = "or", ratio = "ratio",
+                 pct = "pct", pct_ci = "pct", mean = "mean", mean_ci = "mean",
+                 diff = "diff", coef = "diff", NA_character_)
+    if (identical(dk, "or"))    return("or")
+    if (identical(dk, "ratio")) return(if (identical(typ, "mean")) "mean_ratio" else "pct_ratio")
+    if (identical(dk, "diff"))  return(if (identical(typ, "mean")) "mean_diff"  else "points")
+    if (identical(dk, "pct"))   return("level_pct")
+    if (identical(dk, "mean"))  return("level_mean")
+  }
+  if (identical(cit, "or"))                                 return("or")
+  if (identical(cit, "ratio"))
+    return(if (identical(typ, "mean")) "mean_ratio" else "pct_ratio")
+  if (identical(typ, "coef") && isTRUE(has_var))            return("raw_diff")
+  if (identical(typ, "coef") && isTRUE(logscale))           return("log_coef")
+  if (cit %in% c("diff", "diff_row", "diff_col") || identical(kind, "effect"))
+    return(if (identical(typ, "mean")) "mean_diff" else "points")
+  if (identical(typ, "mean"))                               return("level_mean")
+  "level_pct"
 }
+
+#' @keywords internal
+fmt_scale_key <- function(x, kind = "auto") {
+  d <- unique(display_primary(get_display(x)))
+  d <- d[!d %in% c("blank", "gof", "pvalue")]
+  est_scale_key(get_ci_type(x), get_type(x), !all(is.na(get_var(x))),
+                reg_fam_logscale(get_model_family(x)), kind,
+                display = if (length(d) == 1L) d else NA_character_)
+}
+
+# WHICH field holds the value the stored interval is centred on -- a property OF THE SCALE, so it is
+# declared once in EST_SCALES and read back through the same dispatch. Two readers: ci_center() (what
+# get_ci() / get_ci_moe() / format() subtract from) and fmt_scale_of().
+#' @keywords internal
+fmt_center_field <- function(ci_type, type) EST_SCALES[[est_scale_key(ci_type, type)]]$est_field
+
+# The whole record for one column: the EST_SCALES row, plus the parts that need the column itself --
+# the estimate field, SD(Y), and the ladder resolved through color_scales() (so a user's
+# set_color_breaks() moves the plot's gridlines exactly as it moves the table's colours).
+# `breaks` are AXIS POSITIONS (both sides, plus the neutral), not the positive magnitudes the colour
+# engine folds; `break_dir` says which side each came from, so the label can pick its glyph.
+#' @keywords internal
+fmt_scale_of <- function(x, kind = "auto") {
+  key <- fmt_scale_key(x, kind)
+  s   <- EST_SCALES[[key]]
+  s$key       <- key
+  s$sd_y      <- NA_real_
+  s$breaks    <- numeric(0)
+  s$break_dir <- integer(0)
+  s$break_mag <- numeric(0)
+  # the SD the standardized ladder divides by, from the same source fmt_color_plan()'s sd_ref block
+  # uses: a regression column's stored var(Y), a crosstab mean's REFERENCE cell variance.
+  if (!is.null(s$sd_from)) {
+    v <- if (identical(s$sd_from, "var")) get_var(x) else get_ref_var(x)
+    v <- v[is.finite(v) & v > 0]
+    s$sd_y <- if (length(v)) sqrt(v[1]) else NA_real_
+  }
+
+  if (!is.na(s$break_key)) {
+    sc <- color_scales(x)[[s$break_key]]
+    if (identical(key, "log_coef") && !is.null(sc)) sc <- log_odds_scale(sc)
+    over  <- if (is.null(sc)) numeric(0) else sc$over$breaks
+    under <- if (is.null(sc)) numeric(0) else sc$under$breaks
+    over  <- over[ is.finite(over) ]
+    under <- under[is.finite(under)]
+    if (!is.null(s$sd_from)) {                        # the ladder is in SD units -> units of Y
+      if (!is.finite(s$sd_y)) { over <- numeric(0); under <- numeric(0) }
+      else { over <- over * s$sd_y; under <- under * s$sd_y }
+    }
+    pos <- if (isTRUE(s$mult)) c(rev(1 / under), s$neutral, over)
+           else                c(rev(-under),    s$neutral, over)
+    s$breaks    <- pos
+    s$break_dir <- c(rep(-1L, length(under)), 0L, rep(1L, length(over)))
+    # the MAGNITUDE each position stands for -- what legend_break_label() takes, since the legend
+    # names a threshold ("1/2", "-5") and not a coordinate. Keeping it here is what lets an axis and
+    # a footer print the same glyph for the same break.
+    s$break_mag <- c(rev(under), 0, over)
+  }
+  if (!is.null(s$sd_from) && !is.finite(s$sd_y)) s$sec <- NULL
+  s
+}
+
 
 #' @keywords internal
 fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = NULL) {
@@ -3341,7 +3521,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # and its unit from the scale actually used (D4) instead of from a static measure field. The two gap
   # measures dispatch on the ESTIMATE's own scale (D2, fmt_gap_scale_key); `diff` keeps its one runtime
   # swap (a log-scale coefficient reads the logged OR ladder, so it matches its exponentiated twin).
-  scale_key <- if (identical(md$std_when, "additive")) fmt_gap_scale_key(x, type, ci_mult, is_logcoef)
+  scale_key <- if (identical(md$std_when, "additive")) fmt_gap_scale_key(x)
                else if (is_logcoef && measure == "diff") "log_odds"
                else md$scale[[if (use_std) "std" else "pct"]]
   scale   <- switch(scale_key,
@@ -4775,6 +4955,95 @@ legend_streams <- function(x, style, lang, theme = "light") {
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
     })
+  })
+}
+
+# fmt_point_palette() -- Last Phase z17: the 8 slot colours to paint a MARK with (a plotted point, a
+# row band), as opposed to a glyph of text. One deviation from the table palettes, and it is forced:
+# `theme = "print"` gives every TEXT slot pure black and separates the two directions by bold vs
+# italic, which a point cannot be. A mark therefore borrows the print palette's own dark grey ramp
+# (bg_legend, the shades z11 curated to be legible at swatch size). Nothing is lost: in a forest plot
+# the DIRECTION is the position relative to the null line, so colour only has to carry magnitude --
+# the one thing a greyscale ramp does well. Every other theme returns the table's own palette, so a
+# point is the same colour as the cell it came from.
+#' @keywords internal
+fmt_point_palette <- function(theme = "light", channel = c("text", "bg")) {
+  channel <- match.arg(channel)
+  fam <- if (identical(channel, "bg")) "bg"
+         else if (identical(theme, "print")) "bg_legend" else "text"
+  get_color_style("color_code", type = fam, theme = theme)
+}
+
+# legend_guide_spec() -- Last Phase z17 (ruling D6): the colour legend as a real GGPLOT GUIDE instead of
+# a sentence. Same producers, a different medium: legend_specs() -> legend_resolve_spec() ->
+# legend_break_tokens() (which already returns each break's label AND its palette slot, and already
+# drops a break that RENDERS identically to the previous one -- so under `theme = "print"`, whose two
+# directions share one grey ramp, the twin ladders collapse into one key list for free).
+#
+# The honest limit, stated rather than hidden: a ggplot has exactly ONE scale per aesthetic, so a key
+# list can describe only one ladder. When the plotted columns form several legend body-groups (a
+# mixed-family table, a crude column beside a model one with a different measure) this returns NULL and
+# forest_plot() falls back to printing the whole colour legend in the caption -- the same grouping rule
+# (legend_group_by_body) the footer itself uses, so the two can never disagree about how many there are.
+#
+# Returns list(title, keys = data.frame(slot, hex, label), grey_hex, grey_label), or NULL.
+#' @keywords internal
+legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light", lang = NULL) {
+  channel <- match.arg(channel)
+  with_legend_lang(lang, function(lg) {
+    specs <- legend_specs(x, theme)
+    specs <- Filter(function(s) s$col_name %in% cols, specs)
+    if (!length(specs)) return(NULL)
+    specs <- lapply(specs, function(s) legend_resolve_spec(s, lg))
+    pl_of <- function(s) if (identical(channel, "text")) s$plan_txt else s$plan_bg
+    specs <- Filter(function(s) !is.null(pl_of(s)), specs)
+    if (!length(specs)) return(NULL)
+    if (length(legend_group_by_body(specs, "terse", lg)) > 1L) return(NULL)   # several ladders
+
+    spec <- specs[[1]]
+    plan <- pl_of(spec)
+    tk   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, channel, lg, theme)
+    if (!length(tk$over) && !length(tk$under)) return(NULL)
+    hex  <- fmt_point_palette(theme, channel)      # what the PLOT paints, not what the table prints
+    side <- function(toks, glyph) {
+      if (!length(toks)) return(NULL)
+      data.frame(slot  = vapply(toks, function(t) as.integer(t$c), integer(1)),
+                 label = vapply(toks, function(t) paste0(glyph, "\u00a0", t$t), character(1)),
+                 stringsAsFactors = FALSE)
+    }
+    # strongest OVER at the top, then the under side deepening downwards -- the reading order of a
+    # vertical guide beside a forest plot whose x axis runs the same way.
+    keys <- rbind(side(rev(tk$over), .lg_ge), side(tk$under, .lg_le))
+    keys$hex <- hex[keys$slot]
+    # A palette whose two directions render the SAME swatch (theme = "print": one grey ramp, the
+    # table separating over from under by typography, which a point cannot carry) would otherwise
+    # produce duplicate keys. Merge them instead: one swatch, both thresholds -- true whatever the
+    # palette, never fired under light / dark, and the direction is read off the axis anyway, which
+    # is a thing a forest plot can do and a table cannot.
+    if (anyDuplicated(keys$hex)) {
+      keys <- do.call(rbind, lapply(unique(keys$hex), function(h) {
+        k <- keys[keys$hex == h, , drop = FALSE]
+        data.frame(slot = k$slot[1], label = paste(k$label, collapse = " / "), hex = h,
+                   stringsAsFactors = FALSE)
+      }))
+    }
+    ch  <- if (identical(channel, "text")) spec$txt else spec$bg
+    # the MEASURE names the guide, not the subject word: a two-channel table paints a difference and a
+    # ratio of the same cells, and "Cells vs the Total row" twice would say nothing. legend_measure_word
+    # is the legend's own namer -- an effect word (OR / IRR / AME / beta) on a regression column, the
+    # measure ("difference", "ratio", "adjustment") elsewhere.
+    meas <- if (identical(channel, "text")) spec$measure_text else spec$measure_bg
+    word <- legend_measure_word(meas, spec$is_std, spec$eff_word, lg, plan$policy)
+    # the baseline this measure is read against: its OWN, when it has one (the two gap measures name
+    # another column), else the column's -- the same two-step legend_tokens_prose() makes.
+    rw  <- if (isTRUE(ch$has_ref_lead) && !is.na(ch$ref_lead)) ch$ref_lead else spec$ref_phrase
+    list(title = trimws(paste(legend_ucfirst(word),
+                              if (is.na(rw) || !nzchar(rw)) "" else gettextf("vs %s", rw))),
+         keys = keys, grey_hex = tx_chrome_hex(theme)$grey,
+         grey_label = switch(plan$policy,
+                             grey_non_signif   = gettext("not significant"),
+                             guaranteed_effect = gettext("not guaranteed"),
+                             gettext("below the first threshold")))
   })
 }
 

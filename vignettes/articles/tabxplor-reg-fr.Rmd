@@ -780,17 +780,51 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 
 ## Graphiques
 
-`or_plot()` trace un graphique en forêt des rapports de cotes. `reg_check_plots()` trace les vérifications du modèle — les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau :
+### Les résultats : `forest_plot()`
+
+`forest_plot()` trace le tableau fini — chaque effet avec son intervalle de confiance, ses étoiles et sa couleur, un panneau par colonne de modèle :
 
 ```{r, eval = FALSE}
-t <- tab_reg(gss_simple, "married", c("race", "age"))
-or_plot(t)
+t <- tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial")
+forest_plot(t)
+```
 
+Il **lit le tableau et ne réajuste jamais rien** : le graphique ne peut donc pas contredire les nombres que vous avez imprimés. Chaque point est la valeur de la cellule, chaque ligne de grille est l'un de vos seuils de couleur (déplacez-les avec `set_color_breaks()` et l'axe suit), et la couleur de chaque point est celle de sa cellule. La fonction renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)` et `ggsave()` fonctionnent comme d'habitude.
+
+Les trois façons de lire la significativité deviennent trois choses qui se voient :
+
+| `color_signif` | dans le tableau | dans le graphique |
+|---|---|---|
+| `"ignore"` | couleur selon la taille de l'effet | où se place le point par rapport à la ligne nulle |
+| `"grey_non_signif"` | gris si l'intervalle contient la valeur nulle | si la moustache traverse la ligne nulle |
+| `"guaranteed_effect"` | couleur selon la borne la plus proche du nul | la distance entre la ligne nulle et le bout le plus proche de la moustache |
+
+### Observé contre modélisé, tracé honnêtement
+
+Avec `empirical = TRUE`, chaque effet modélisé porte son homologue observé (brut), et le graphique le dessine comme un **point creux muni d'un crochet** — la marge d'erreur *de la différence entre les deux* :
+
+```{r, eval = FALSE}
+t <- tab_reg(gss_simple, "married", c("race", "rincome"),
+             family = "poisson", empirical = TRUE)      # rapports de risques
+forest_plot(t)
+```
+
+Une seule question à se poser : **le point plein est-il en dehors du crochet ?** S'il l'est, l'ajustement a déplacé l'effet plus que le bruit — et c'est exactement le test que fait le tableau, au dernier chiffre près.
+
+Ce ne sont volontairement *pas* deux intervalles côte à côte. Juger deux intervalles à leur recouvrement est une erreur connue (Schenker & Gentleman 2001), et c'est pire ici : l'estimation brute et l'estimation ajustée sont calculées sur les mêmes personnes, donc corrélées. Le bon intervalle est celui *de la différence*, et c'est le crochet. `observed = "ci"` redonne la figure classique à deux intervalles si vous y tenez.
+
+Un trait pointillé sans crochet signifie que l'écart n'a pas pu être testé — le plus souvent un rapport de cotes conditionnel, qui bouge sous ajustement même sans rien à ajuster (voir *Trois façons de se tromper* plus haut).
+
+### Les vérifications du modèle : `reg_check_plots()`
+
+```{r, eval = FALSE}
 reg_check_plots(t, gss_simple)                       # tous les panneaux permis par la famille
 reg_check_plots(t, gss_simple, check = "linearity")  # un seul
 ```
 
-Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
+Les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau. Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
+
+Notez les contrats opposés : `forest_plot()` ne réajuste jamais (les résultats sont dans le tableau), `reg_check_plots()` réajuste toujours (les résidus, eux, n'y sont pas).
 
 ## Pour aller plus loin
 

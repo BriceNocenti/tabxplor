@@ -930,3 +930,93 @@ Reproduced facts, in order of load-bearing-ness:
   palette is the single source; a backend only translates a record into its own vocabulary.
 * `CLAUDE.md` Repository Map — `R/tab_reg_plots.R`, `R/fmt_class.R` (colour engine + legend),
   `R/tab-export-prep.R` (`rd_footer`).
+
+---
+
+# PART VIII — IMPLEMENTATION RECORD
+
+## z17 (2026-08-13) — implemented in three subphases
+
+Suite green: FAIL 0, WARN 0, SKIP 4, PASS 5702 (+~110 over HEAD, all of them the two new test files).
+**Zero golden and zero snapshot churn for the whole phase.** New: `R/plots.R` (the rename of
+`tab_reg_plots.R`), `tests/testthat/test-tab-estimates.R`, `tests/testthat/test-forest-plot.R`.
+
+Four decisions were settled before the plan landed, on top of §21: the name is **`forest_plot()`**
+(D10 confirmed); the colour legend becomes a real ggplot **guide** with the rest of the footer as the
+caption (D6); a crosstab draws **the quantity its own `ci =` produced**; and the layout is **one panel
+per estimate column** — one rule for both classes.
+
+### What was built, against §2.3
+
+`fmt_scale_of()` landed as designed but as **three objects rather than one**: `EST_SCALES` (the
+declared record library, the `REG_CHECKS` shape), `est_scale_key()` (the dispatch, on SCALARS so three
+callers share it) and `fmt_scale_of()` (the per-column resolution: the ladder through `color_scales()`,
+SD(Y), the secondary axis). `fmt_gap_scale_key()` and **`ci_center()`** are now lookups on it —
+§2.3a only promised the first.
+
+Nine scales, not the six §5 listed. Two were missing from the design:
+
+* **`mean_diff`** — a crosstab mean DIFFERENCE. §5 clause 5 would have sent it to `points`, i.e. an
+  axis in percentage points for a difference in hours, and a `pct_diff` ladder for a column the colour
+  engine grades on `mean_diff`. It is `raw_diff`'s twin, differing only in where the SD comes from
+  (`get_ref_var()` rather than the stored `var(Y)`) — which is exactly the split `fmt_color_plan()`'s
+  own `sd_ref` block already makes.
+* **the `display` clause for an intervalless column.** §5 put `display_primary` FIRST, to tell `Obs_%`
+  from `Obs_diff`. That turned out to be the wrong place — `display` is per-CELL on marginal columns,
+  so reading it first makes the SCALE a per-cell fact — but the right rule was hiding next to it:
+  when `ci_type` is `""` there is no interval to describe, and the only remaining statement about the
+  column is what it displays. Without it, `tab(OR = TRUE)`'s reference column (whose OR bounds are NA
+  by construction) read as a percentage and, being the first column, decided the whole panel's axis:
+  measured, a 0-100 % axis under an odds-ratio forest plot.
+
+### Corrections to the design
+
+1. **§8.2's cost estimate for D2 was pessimistic.** Removing the `sp$color` clause does not add a fit
+   per column: `reg_empirical_fit()` already FITS the univariable crude models whenever
+   `empirical = TRUE` (`want_fit` only decided whether to KEEP them, for the gap test's crude leg). The
+   real addition is `reg_coef_if_maker()` + `reg_if_se()`, ~1/8 of a fit.
+2. **§10's "the row band uses `…$bg`" needs one exception, and §12/§7.4 miss it entirely.** Under
+   `theme = "print"` every TEXT slot is `#000000` — the table separates the two directions by bold vs
+   italic, which a point cannot be. `fmt_point_palette()` therefore gives a MARK the print palette's
+   dark grey ramp. Nothing is lost: in a forest plot DIRECTION is the position relative to the null
+   line, so colour only has to carry magnitude. The two ladders then render identically and the guide
+   merges them into one key list, through the dedup `legend_break_tokens()` already performed.
+3. **§13's guide is buildable, with a limit the design did not state.** ggplot has ONE scale per
+   aesthetic, so a key list can describe one ladder. `legend_guide_spec()` returns NULL when the
+   plotted columns form several `legend_group_by_body()` groups, and `forest_plot()` prints the prose
+   legend in the caption instead — the same grouping the footer uses, so they cannot disagree about how
+   many ladders exist. The guide's TITLE comes from `legend_measure_word()` (not `spec$txt$subject`,
+   which is "cells" for every crosstab measure: the text and background guides of a two-channel table
+   would have carried the same title).
+4. **§14.2's crude-replication rule needed a companion**, because faceting by `col_var` alone splits
+   nothing when several columns share one (multinomial categories) and merges nothing when they should
+   (a model and its crude twin). One rule covers both: facet by `col_var`, unless a `col_var` holds
+   several columns of the SAME ROLE. That is also, unchanged, the maintainer's crosstab layout ruling
+   (every column of a crosstab has role `""`, so each gets a panel).
+5. **§15.2's series encoding.** `observed = "ci"` is the only mode that needs the crude COLUMN; "band"
+   and "point" read the `obs` field, which already rides on the model column. The design's
+   `est_plot_columns` sketch would have pulled `Obs_%` in for "point" and drawn the crude effect twice
+   (`Obs_%` and `Obs_diff` are field-identical). `est_crude_of()` pairs exactly one, by `ci_type`.
+
+### Confirmed by measurement during implementation
+
+* **§9.2's identity holds on the real code path**, not only in the probe: `estimate < gap_lo |
+  estimate > gap_hi` equals `gap_p < 1 - conf_level` on every tested row of a modified-Poisson table,
+  and the band's bounds are `obs·exp(±z·gap_se)` to 1e-12 (`test-forest-plot.R`,
+  `test-tab-estimates.R`).
+* **§19.1-19.4's four defects were all real and all disappear with `or_plot()`**: the inert
+  `point_size` (`size = "n"` replaces it, reading the `add_n = TRUE` column and informing when there is
+  none), the private ladder, the two off-palette literals, and the `ggplot2` floor (bumped to 3.5.0).
+* **§16.4's "one loop" no-drift test**: for every family × effect and every crosstab `ci` shape, the
+  plotted estimate is exactly the field the stored interval is centred on, and on a model column it is
+  exactly the number `format()` prints.
+
+### Not built, deliberately
+
+* **`labels = "estimate_ci"`** (§15.3). `labels = "estimate"` re-prints the table's own rendered cell
+  (`format()`, the only string producer), which already includes the stars; a second variant would
+  have needed a display swap per column for a figure whose numbers are in the table two lines above.
+* **A `"plot"` medium in the legend** (§20 already rejected it) and a coloured `"runs"` caption (§13):
+  the ladder is in the guide and on the axis, which is better than either.
+* **jamovi** (§16.5): the `.plot` stub stays. It is two lines plus `.r.yaml` / `.u.yaml` edits that are
+  inert until the maintainer's `jmvtools::prepare()`.
