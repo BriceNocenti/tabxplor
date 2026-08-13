@@ -26,7 +26,7 @@ tab_counts(
   ref2 = "first",
   comp = "tab",
   ci = "no",
-  conf_level = getOption("tabxplor.conf_level", 0.95),
+  conf_level = conf_level_default(),
   stars = NULL,
   ci_method = NULL,
   totaltab = "line",

@@ -311,8 +311,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, bas
   num <- setdiff(reg_numeric_preds(data, sp$predictors), names(shared$shape_terms))
   if (length(num) == 0L) return(NULL)
   weighted <- isTRUE(shared$weighted)
-  use_f    <- sp$family %in% c("gaussian", "quasipoisson")
-  use_wald <- weighted || sp$family == "rr"
+  use_f    <- reg_fam_disp_estimated(sp$family)
+  use_wald <- reg_fam_svy_fitted(sp$family, weighted)
   types    <- c(wald = "linearity_wald", f = "linearity_f", lr = "linearity_lr")
 
   purrr::flatten(purrr::map(num, function(v) {

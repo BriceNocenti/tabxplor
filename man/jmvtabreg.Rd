@@ -20,7 +20,7 @@ jmvtabreg(
   models = NULL,
   baseline = 1,
   compare = "none",
-  na = "drop_by_model",
+  na = "drop_by_outcome",
   run_compare = FALSE,
   refLevels = NULL,
   multiplicator = NULL,
@@ -34,10 +34,6 @@ jmvtabreg(
   subtext = "",
   wrap_rows = 35,
   wrap_cols = 15,
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
   export_format = "excel",
   exportExcel = FALSE,
   export_dir = "~/Documents",
@@ -76,8 +72,11 @@ coefficients on their raw scale. Uncheck to keep every coefficient on the
 coefficient (log / linear) scale.}
 
 \item{effect}{"coefficient" is the native per-family effect (beta / OR /
-IRR). "AME" is the average marginal effect on the response scale (needs the
-marginaleffects package).}
+IRR). "AME" is the average marginal effect on the response scale, a
+difference in percentage points. "RR" is the same quantity as a RATIO --
+the marginal risk ratio (the ratio of adjusted predicted probabilities),
+for binomial / multinomial / ordinal outcomes only. Both need the
+marginaleffects package.}
 
 \item{at}{Where marginal effects are evaluated: averaged over the sample,
 or at the reference profile (other predictors at their reference level /
@@ -97,10 +96,12 @@ likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
 each model against the chosen baseline model, "sequential" against the
 previous one (an AIC difference when not nested).}
 
-\item{na}{"drop by model" fits each model / outcome on its own complete
-cases; "drop all models" uses one shared complete-case population across
-all predictors (equal N; changes the estimates), which a valid
-likelihood-ratio comparison test needs.}
+\item{na}{"drop_by_outcome" (default) fits every model OF ONE OUTCOME on
+the same complete cases, which is what makes the observed columns
+comparable to the model beside them and lets the likelihood-ratio
+comparison run; "drop_by_model" gives each model its own complete cases (a
+model on a different population then gets no observed effect); "drop_all"
+shares one population across every outcome as well.}
 
 \item{run_compare}{.}
 
@@ -137,17 +138,6 @@ effect into the OR cell (binomial coefficient models only).}
 \item{wrap_rows}{.}
 
 \item{wrap_cols}{.}
-
-\item{ids}{Cluster identifiers (survey design), largest to smallest stage.
-Only used with a weight; leave empty for no clustering.}
-
-\item{strata}{Stratification variables (survey design). Only used with a
-weight.}
-
-\item{fpc}{Finite-population correction (survey design). Only used with a
-weight.}
-
-\item{nest}{Set when cluster ids are reused across strata (survey design).}
 
 \item{export_format}{.}
 

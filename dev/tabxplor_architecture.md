@@ -62,7 +62,22 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` / `"n"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label, and (z13) by `reg_spread_models()` and the `[dep]`-bracket strip; (z17) it is also the COLUMN AXIS of `tab_estimates()` / `forest_plot()` (internal `get_role`) |
 | `conf_level` | double | Phase 18z13: the level THIS column's interval and its significance thresholds were computed at; `NA` = unknown. TWO accessors, and the split is load-bearing: the six reconcilers read the RAW `fmt_conf_level_attr()` so a bind carries "unknown" forward instead of freezing today's option into the result, while the four colour-engine thresholds (`fmt_gap_bounds`, the contrib residual gate, the `guaranteed_effect` origin, the p-value cell slot) read `get_conf_level()`, which falls back to `options("tabxplor.conf_level")`. Stamped by ONE sweep at each build tail (`tab_stamp_conf_level()` in `tab_assemble_tables` / `plain_core` / `num_core` / `tab_ci` / both `tab_reg` tails), never per `fmt()` call site. It is what makes a table built at `conf_level = 0.99` grey at 99 % rather than at the global option |
 
-The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))`, so adding an attribute (a `new_fmt()` formal that is not a field) needs no carry-site edit here — but every explicit reconstructor (`vec_cast`/`vec_ptype2`/`vec_arith`/`vec_math`) still hand-lists it beside `model_family`.
+The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))`, so adding an attribute (a `new_fmt()` formal that is not a field) needs no carry-site edit.
+
+**How an attribute is CARRIED — the declared rule table (Phase 19a, "E1").** Until 19a the four reconstructor families still enumerated the attributes by hand, in **seven** blocks (`vec_ptype2.fmt.fmt`; the three `vec_cast.fmt.*` arms; `vec_arith.fmt.fmt` ×2; `vec_math` sum/mean) — so a 15th attribute meant eight edits, and `model_family` was silently dropped for two phases because one list was forgotten. They are now driven by **`fmt_attr_rules`**, defined beside `fmt_col_attrs` in the same shape `meta_bind_rules` + `tab_meta_bind()` use for the table-level `meta`. One row per attribute, four declared columns:
+
+| column | values |
+| --- | --- |
+| `neutral` | what a mismatch collapses to (`"mixed"`, `"several_vars"`, `""`, `"ignore"`, `FALSE`, `NA_real_`, `"n"`) |
+| `merge` | `same` · `comp3` (`comp_all`, 3-valued so NA-vs-set stays NA) · `elementwise` (`color`, per channel) · `min` (`degf`) · `weakest` (`basis`) |
+| `arith` | `merge` · `neutral` (`totcol`/`refcol` — arithmetic destroys the position) · `x` (the display facts `color`/`color_signif`/`model_family`/`role`) |
+| `scalar` | whether `new_fmt()` `[1]`-subsets it (`color` is carried whole) |
+
+The **reader's default is derived from `new_fmt()`'s own formals** (`fmt_attr_default`), so "the reader's default is the constructor's default" is true by construction. `fmt_attrs_of()` reads a column's attributes in one `attributes()` call; `fmt_attrs_merge()` / `fmt_attrs_arith()` apply the rules through precomputed integer index vectors (no closure, no rule-string compare); `fmt_ptype_attrs()` splices onto a build-time zero-length prototype instead of re-running the 21-field constructor. Measured **~2× faster** than the straight-line code it replaced on `vec_ptype2` and `vec_ptype_common` (the compact merge's hottest path), with no end-to-end regression — `dev/benchmarks/e1_fmt_ptype2.R`.
+
+A **build-time `stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs))`** is what makes the rule table exhaustive: it must run at install, because the index vectors are derived at the same moment and a missing row would make the loops silently *skip* an attribute. Mirrored in `test-fmt_class.R` for cached binary installs.
+
+19a also made `vec_arith` reconcile `conf_level`/`degf`/`basis` with the same weakest-claim rule `vec_ptype2` applies — it used to take `x`'s blindly, so `design_column + n_column` claimed `"design"`.
 
 **Critical distinction:** Fields are per-cell vectors (every cell can have a different `n`, `pct`, etc.). Attributes are scalar values describing the entire column (all cells in the column share the same `type`, `color`, etc.). Do not confuse the two when modifying the class.
 

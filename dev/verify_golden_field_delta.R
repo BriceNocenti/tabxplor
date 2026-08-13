@@ -26,12 +26,17 @@
 devtools::load_all("~/github/tabxplor", quiet = TRUE)
 source("tests/testthat/helper-golden.R")
 
-# Phase 18z16-iiiii: `degf` + `basis` -- the two per-column attributes that took over from the
-# table-level meta$inference. Every golden case is UNWEIGHTED, so the honest values are "no design df"
-# and "no claim": NA and "n", i.e. exactly the constructor defaults, which is why the rendering does
-# not move either.
-ADDED_ATTRS   <- c("degf", "basis")
-EXPECTED_ATTR <- list(degf = NA_real_, basis = "n")
+# ⚠ RESET THESE FOUR DECLARATIONS AT THE START OF EVERY PHASE. They describe THIS phase's intended
+# delta, not the history -- a declaration left behind from the previous phase reports its own
+# already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
+# fired on four cases whose committed goldens already carry the new shape).
+#
+# Phase 19a: NOTHING is declared. E1 rewrites the four fmt reconstructors to run off a declared rule
+# table instead of seven hand-written attribute lists, and the phase's whole contract is that this is
+# byte-identical -- no field, no attribute, no test column, no meta sub-field moves. Any delta at all
+# is a bug in the refactor.
+ADDED_ATTRS   <- character(0)
+EXPECTED_ATTR <- list()
 
 # Phase 18z16-i: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
 # (`deff` = the design effect the row's test corrected by). A classic-basis table never fills it, so on
@@ -51,16 +56,10 @@ REMOVED_META_FIELDS <- character(0)
 # `ci_settings`' five `method_*` scalars into ONE named vector, and drops `method_ratio` (a one-value
 # argument). Declare the field with a predicate proving old and new carry the SAME information; the
 # script then treats that sub-field as accounted for and still demands bit-identity of everything else.
-RESHAPED_META_FIELDS <- list(
-  ci_settings = function(old, new) {
-    isTRUE(all.equal(old$conf_level, new$conf_level)) &&
-      identical(unname(new$method[["cell"]]),       old$method_cell) &&
-      identical(unname(new$method[["diff"]]),       old$method_diff) &&
-      identical(unname(new$method[["mean_diff"]]),  old$method_mean_diff) &&
-      identical(unname(new$method[["mean_ratio"]]), old$method_mean_ratio) &&
-      identical(old$method_ratio, "katz")          # the dropped slot had exactly one legal value
-  }
-)
+# Phase 19a: nothing is reshaped. (The z16-iiiii `ci_settings` rule that used to sit here was left
+# behind after its goldens were regenerated, so it then compared two copies of the NEW shape and
+# reported four false PROBLEMS -- hence the reset warning at the top.)
+RESHAPED_META_FIELDS <- list()
 
 cases   <- golden_cases()
 gdir    <- "tests/testthat/_golden"

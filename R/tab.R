@@ -188,6 +188,9 @@ NULL
 #'   \item \code{"tot"}: totals are always used.
 #'   \item \code{"first"}: calculate cell difference or ratio from the first cell
 #' of the row or column (useful to color temporal developments).
+#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
+#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
+#' Resolved inside each subtable when there are \code{tab_vars}.
 #'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
 #'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
 #'   to match with the names of the rows (or columns). Be precise enough to match only one
@@ -579,7 +582,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
-                ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL,
+                ci = "no", conf_level = conf_level_default(), stars = NULL,
                 ci_method = NULL, design_effect = NULL,
                 method_cell = NULL, method_diff = NULL,
                 totaltab = "line", totaltab_name = "Ensemble",
@@ -617,7 +620,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   } else rlang::enquo(col_vars)
 
   cleannames <-
-    if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+    resolve_cleannames(cleannames)
 
   # Phase 18z14-i: a prebuilt survey design passed as `data` is unwrapped at THE one boundary
   # (R/survey-design.R) -- its model frame drives the whole pipeline, its weights become the weight
@@ -1198,6 +1201,9 @@ finalize_one_col <- function(col, spec) {
 #'   \item \code{"tot"}: totals are always used.
 #'   \item \code{"first"}: calculate cell difference or ratio from the first cell
 #' of the row or column (useful to color temporal developments).
+#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
+#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
+#' Resolved inside each subtable when there are \code{tab_vars}.
 #'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
 #'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
 #'   to match with the names of the rows (or columns). Be precise enough to match only one
@@ -1356,7 +1362,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      cleannames = NULL, compact = NULL, #pvalue_line = NULL,
                      other_if_less_than = 0, other_level = "Others",
                      ref = "auto", ref2 = "first", comp = "tab",
-                     ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL, #ci_visible = FALSE,
+                     ci = "no", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
                      ci_method = NULL, design_effect = NULL,
                      method_cell = NULL, method_diff = NULL,
                      totaltab = "line", totaltab_name = "Ensemble",
@@ -1495,9 +1501,21 @@ new_ctx <- function(...) {
     total_names = "Total", add_n = TRUE, add_pct = FALSE, common_totrow = FALSE, digits = 0,
     subtext = "", n_min = 0, by_table = FALSE, parallel = NULL,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
+    # the three jmvtab seams. Phase 19a re-examined `levels_order` (study §5 said "cut from ctx, pass
+    # directly") and KEPT it: its one reader is jmv_cache_aggregate(ctx), reached through
+    # tab_aggregate()'s `if (!is.null(ctx$cache_env)) return(...)` hook, which passes nothing but the
+    # ctx -- so there is no "directly" to pass it. It is a DECLARED field with one legitimate reader,
+    # exactly like its two neighbours here. Revisit in 19k, which owns the jamovi boundary.
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
     # lean-ctx field whose absence was previously covered by an exists() guard
-    cached_tests = NULL, OR_vect = NULL,
+    # Phase 19a (D7): pct_vect / ref_vect join their sibling OR_vect. All three are tab_setup()
+    # products written by tab_rowvar_ctxs(), so on a hand-built ctx they are simply ABSENT -- and
+    # tab_transform() does `list2env(ctx, environment())`, which creates no binding for an absent
+    # key, so `is.null(ref_vect)` did not return TRUE, it ERRORED ("object not found"). The guard
+    # that existed to serve exactly that case could therefore never serve it. Declaring them here is
+    # what makes it live; `pct_vect` additionally had NO guard at all and was kept quiet only by a
+    # globalVariables() entry, which is now unnecessary.
+    cached_tests = NULL, pct_vect = NULL, ref_vect = NULL, OR_vect = NULL,
     # Phase 18z16-iv (W-B): the robust omnibus GRID, produced once in tab_transform() because two
     # consumers need it -- the contrib residual's base (there) and the `test` overlay (assemble).
     robust_tests = NULL,
@@ -1524,6 +1542,27 @@ resolve_stars <- function(stars) {
 force_comp <- function(comp, tab_vars) {
   if (length(tab_vars) == 0 && all(comp == "all")) "tab" else comp
 }
+
+# Phase 19a: the same shape for the two remaining "one rule, written N times" argument defaults.
+#
+# resolve_cleannames(): NULL -> the tabxplor.cleannames option. Sites: tab(), tab_setup(),
+# tab_prepare(), tab_counts(), tab_reg(). The five copies had DRIFTED -- the tab_reg one passed a
+# `FALSE` fallback the other four lacked, so with the option unset (it is not, .onLoad sets FALSE)
+# four of them yielded NULL and one yielded FALSE. Single-sourcing settles it on the safe fallback.
+#
+# conf_level_default(): THE default confidence level, as a formal default. It was the literal
+# `getOption("tabxplor.conf_level", 0.95)` in TEN signatures (tab, tab_many, tab_plain, tab_num,
+# tab_ci, tab_counts, tab_reg, tab_logit, multi_logit, new_inference). The option is still what it
+# reads, and ?tabxplor-options + each @param still name it -- only the ten copies of the expression
+# are gone.
+#' @keywords internal
+#' @noRd
+resolve_cleannames <- function(cleannames) {
+  if (is.null(cleannames)) getOption("tabxplor.cleannames", FALSE) else cleannames
+}
+#' @keywords internal
+#' @noRd
+conf_level_default <- function() getOption("tabxplor.conf_level", 0.95)
 
 
 # tab_build() -- the shared table-building engine behind tab() and tab_many().
@@ -1747,7 +1786,7 @@ tab_setup <- function(ctx) {
   stopifnot(output %in% c("single", "list", "legacy"))
 
   cleannames <-
-    if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+    resolve_cleannames(cleannames)
 
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
   stars <- resolve_stars(stars)
@@ -2299,6 +2338,16 @@ tab_prepare_pop <- function(ctx) {
   #Make a table for each column variable and store them in a list
 
   # --- repack: prepare_pop produces the prepared population + level metadata (tier 0) ---
+  # Phase 19a (study §7.10): the SETTINGS SPINE is refreshed here too, and it must be. `lvs` is
+  # written into ctx$settings$cols by tab_setup() while it may still hold the sentinel "auto";
+  # THIS stage is what resolves it (against the real level counts), and only the flat ctx$lvs used
+  # to be updated -- so the spine's copy stayed "auto", and tab_rowvar_ctxs() shipped that stale
+  # copy to every parallel worker. Dormant when found (settings$cols is read at exactly one site,
+  # only to be copied forward; every live consumer reads the derived `lv1`), but the spine advertises
+  # itself as THE interface and 19i makes it the only one -- the next reader would have silently got
+  # "auto". `lv1`, the fact consumers actually want, is stored beside it rather than re-derived.
+  ctx$settings$cols$lvs <- lvs
+  ctx$settings$cols$lv1 <- lv1
   ctx_update(ctx, list(
     data = data,
     na_text = na_text, na_num = na_num,
@@ -2400,8 +2449,11 @@ tab_transform <- function(ctx) {
   # jmv_cache_aggregate) -- kept whole in the shared ctx, this row_var's entry picked below. new_ctx()'s
   # NULL default carries on the tab()/tab_counts() path -> recompute in tab_apply_tests(). The method_*
   # CI-method fields are likewise always present (new_ctx defaults). Phase 17e: their former exists()
-  # guards are gone. ref_vect (a tab_setup product) defaults to the scalar-ref broadcast over col_vars
-  # only if a hand-built ctx reached transform without it.
+  # guards are gone. pct_vect / ref_vect / OR_vect (tab_setup products, written per row_var by
+  # tab_rowvar_ctxs) default to the scalar broadcast over col_vars only if a hand-built ctx reached
+  # transform without them -- which Phase 19a's new_ctx() declarations are what make REACHABLE (D7:
+  # only OR_vect was declared, so the other two guards errored instead of firing).
+  if (is.null(pct_vect)) pct_vect <- rep(pct, length(col_vars))
   if (is.null(ref_vect)) ref_vect <- rep(ref, length(col_vars))
   # z10: same rule for OR_vect (the per-pair OR, "cumOR" already resolved against each col_var).
   if (is.null(OR_vect))  OR_vect  <- rep(OR , length(col_vars))
@@ -2545,11 +2597,9 @@ tab_transform <- function(ctx) {
 # unwrap, kable). tab_assemble_tables() is SCALAR over one row_var (the outer map in tab_build_tables()
 # drives the row axis); it is byte-identical whether the row_var is built alone or as a slice of an
 # integrated build (the total-col decoupling, Phase 8). See R/tab-parallel.R.
-#' @keywords internal
-#' @noRd
-tab_assemble <- function(ctx) {
-  tab_assemble_output(tab_assemble_tables(ctx))
-}
+# Phase 19a: the `tab_assemble(ctx)` convenience composing the two halves is DELETED -- it had no
+# caller anywhere (tab_build() has called tab_build_tables() then tab_assemble_output() since the
+# Phase 8/9a split). "tab_assemble" survives only as the NAME OF THIS STAGE in the comments.
 
 # SCALAR over ONE row_var. tabs_text / tabs_num are the single built factor / numeric table (or NULL);
 # tests / chi2_num the single test tibbles. Produces ctx$tabs = the single finished tabxplor_tab (its
@@ -3437,7 +3487,7 @@ tab_prepare <-
            other_level = "Others") {
 
     cleannames <-
-      if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+      resolve_cleannames(cleannames)
 
     variables     <- rlang::expr(c(...))
     pos_variables <- tidyselect::eval_select(variables, data)
@@ -3642,6 +3692,9 @@ fmt_stack_frames <- function(frames, meta) {
 #'   \item \code{"tot"}: totals are always used.
 #'   \item \code{"first"}: calculate cell difference or ratio from the first cell
 #' of the row or column (useful to color temporal developments).
+#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
+#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
+#' Resolved inside each subtable when there are \code{tab_vars}.
 #'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
 #'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
 #'   to match with the names of the rows (or columns). Be precise enough to match only one
@@ -3732,7 +3785,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       tot = NULL, total_names = "Total",
                       subtext = "", digits = 0,
                       num = FALSE, df = FALSE,
-                      conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL,
+                      conf_level = conf_level_default(), stars = NULL,
                       design_effect = NULL, color_signif = "ignore",
                       .fine = NULL, .by_table = FALSE
 ) {
@@ -3852,6 +3905,13 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
   }
 
   #tot
+  # WARNING (Phase 19a): the `else` arm below -- the six forcings and their warnings -- is UNREACHABLE
+  # from tab() / tab_many() / tab_counts(). tab_transform() hard-codes `tot = c("row", "col")` in its
+  # plain_resolve() call, so `tot` is non-NULL, neither guard `!"col" %in% tot` / `!"row" %in% tot`
+  # can be TRUE, and the whole arm is a 34-line identity. It is LIVE, however, through the exported
+  # `tab_plain(tot = "row")` -- which is why study §5's "delete it, 6 unreachable warnings" was NOT
+  # applied here: tab_plain() stays public, so these forcings are public behaviour. Revisit in 19h
+  # (the entry-point item) rather than deleting them as dead code.
   if (is.null(tot)) {
     tot <- switch(pct,
                   "no"  = "no",
@@ -3882,7 +3942,9 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
 
     if (!"row" %in% tot) {
       if (pct == "col") {
-        warning("since pct == 'row', total rows were added")
+        # Phase 19a: the message said "pct == 'row'" under the guard `pct == "col"` -- the wrong
+        # orientation word, mirroring the total-COLUMN block above instead of stating its own rule.
+        warning("since pct == 'col', total rows were added")
         tot <- c(tot, "row")
       }
       if (color != "no" & pct == "row" & ref == "tot") {
@@ -3942,7 +4004,11 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
 #' @noRd
 plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na, ref, ref2, comp,
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
-                       stars, color_signif, .fine, .by_table, inference = new_inference()) {
+                       stars, color_signif, .fine, .by_table, inference) {
+  # Phase 19a: `inference` is REQUIRED (it was `= new_inference()`). A lazy default could only
+  # fire on a caller that forgot to thread the build-time object, and would then silently
+  # re-read the global option instead of failing -- the "re-derived downstream" bug the
+  # inference object exists to end. Every call site passes it explicitly.
 
   # Phase 18z16-iiiii: ONE resolved inference object (new_inference(), built in tab_setup) instead
   # of the four flat formals conf_level / design_spec / inference_basis / degf. Unpacked here so the
@@ -4768,7 +4834,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       # the caller's own convention (tab.R below, pre-rename); tab_plain has ONE factor col_var so the
       # non-Total columns ARE its levels.
       ridx0   <- diff_index(ref2, row_var = dplyr::pull(tabs_pct, !!row_var),
-                            num_names = names(cols), pct = "col")
+                            num_names = nm, pct = "col", is_total = nm == "Total")
       ok_ref2 <- length(ridx0) != 0 && !is.na(ridx0) && ridx0 >= 1L && ridx0 <= k
       lv      <- which(nm != "Total")
       binary  <- length(lv) == 2L
@@ -4808,8 +4874,9 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 
   if (pct == "col") {
     refcols <- dplyr::nth(names(cols), diff_index(ref,
-                                                  num_names = names(cols),
-                                                  pct       = pct))
+                                                  num_names = nm,
+                                                  pct       = pct,
+                                                  is_total  = nm == "Total"))
     refcols_vector <- names(cols) == refcols
 
     if (length(refcols) != 0 & !is.na(refcols)) {
@@ -4979,6 +5046,9 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #'   \item \code{"tot"}: totals are always used.
 #'   \item \code{"first"}: calculate cell difference or ratio from the first cell
 #' of the row or column (useful to color temporal developments).
+#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
+#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
+#' Resolved inside each subtable when there are \code{tab_vars}.
 #'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
 #'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
 #'   to match with the names of the rows (or columns). Be precise enough to match only one
@@ -5047,7 +5117,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", color_signif = "ignore",
                     na = c("keep", "drop"),
                     ref = "tot", comp = c("tab", "all"),
-                    ci = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL, #ci_visible = FALSE,
+                    ci = NULL, conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
                     ci_method = NULL, design_effect = NULL, ci_scale = "diff",
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
@@ -5230,7 +5300,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
                      color, na, ref, comp, ci, ci_visible, stars, ci_scale,
                      totaltab, totaltab_name, tot, total_names,
                      subtext, digits, num, df, .fine, .by_table,
-                     inference = new_inference()) {
+                     inference) {                          # REQUIRED -- see plain_core()
 
   # Phase 18z16-iiiii: ONE resolved inference object -- see plain_core(). It also carries the two
   # numeric interval methods, which used to be two more formals threaded through five layers.
@@ -5929,7 +5999,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 tab_ci <- function(tabs,
                    ci = "auto",
                    comp = NULL,
-                   conf_level = getOption("tabxplor.conf_level", 0.95),
+                   conf_level = conf_level_default(),
                    color = "no",
                    visible = FALSE,
                    stars = NULL,
@@ -6092,9 +6162,8 @@ tab_ci <- function(tabs,
       rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
       # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
       # reference cell so its own CI is not computed.
-      # Phase 18s: the CI base is the effective n (`n_eff`, the flat closed form or the design
-      # variance -- see leaf_neff()) when populated, else the raw base -- coalesce(NA, raw) == raw,
-      # byte-identical on basis "n"; elsewhere n_eff < n widens the CI (n_eff > n under stratification).
+      # Phase 18s: the CI base is the effective n (`n_eff`) when populated, else the raw base --
+      # Phase 19a folds that coalesce, written out at all five read sites below, into fmt_base().
       x_n[[nm]] <- dplyr::if_else(
         rtona, NA_integer_,
         switch(tp,
@@ -6105,17 +6174,16 @@ tab_ci <- function(tabs,
                "col"      = ,
                "row"      = ,
                "all"      = ,
-               "all_tabs" = dplyr::coalesce(get_n_eff(col), get_tot_n(col)),
-               "mean"     = dplyr::coalesce(get_n_eff(col), as.double(get_n(col)))))
+               "all_tabs" = fmt_base(col),
+               "mean"     = fmt_base(col, mean = TRUE)))
       if (nm %in% diff_cols) {
         if (ci[[nm]] == "diff_col") {
           rcol        <- tabs[[as.character(ref_cols[[nm]])]]  # the reference COLUMN (its own base)
           ref[[nm]]   <- get_pct(rcol)
-          ref_n[[nm]] <- dplyr::coalesce(get_n_eff(rcol), get_tot_n(rcol))[group_last_pos(is_totrow(col))]
+          ref_n[[nm]] <- fmt_base(rcol)[group_last_pos(is_totrow(col))]
         } else {                                               # diff_row: the reference ROW cell
           ref[[nm]]   <- if (tp == "mean") get_mean(col)[rp] else get_pct(col)[rp]
-          ref_n[[nm]] <- if (tp == "mean") dplyr::coalesce(get_n_eff(col), as.double(get_n(col)))[rp]
-                         else               dplyr::coalesce(get_n_eff(col), get_tot_n(col))[rp]
+          ref_n[[nm]] <- fmt_base(col, mean = tp == "mean")[rp]
         }
         if (nm %in% mean_cols) ref_var[[nm]] <- get_var(col)[rp]
       }
@@ -6242,12 +6310,13 @@ tab_ci <- function(tabs,
   # the engine would grey at the wrong level.
   tabs <- tab_stamp_inference(tabs, conf_level)
 
-  if (lv1_group_vars(tabs)) {
-    new_tab(tabs, subtext = subtext, test = test)
-  } else {
-    new_grouped_tab(tabs, groups = dplyr::group_data(tabs), subtext = subtext,
-                    test = test)
-  }
+  # Phase 19a: this IS tab_restore()'s body (same lv1_group_vars() downgrade, same three attributes)
+  # -- with one difference that mattered: neither tail passed `meta`, so a direct
+  # `tab_plain() |> tab_ci()` on the exported step path silently dropped `vars` / `ci_settings` /
+  # `render_extras` / `color_breaks` / `reg_meta`. It survived only by accident of
+  # tibble::new_tibble() carrying the incoming attributes through, which the grouped branch does not
+  # guarantee. Passing them explicitly removes the whole hazard class from the step path.
+  tab_restore(tabs, tabs, attrs = list(subtext = subtext, test = test, meta = get_meta(tabs)))
 }
 
 
@@ -6364,12 +6433,8 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 
   tabs <- tabs |> dplyr::select(-tidyselect::any_of("tottabs"))
 
-  if (lv1_group_vars(tabs)) {
-    new_tab(tabs, subtext = subtext, test = test_tbl)
-  } else {
-    new_grouped_tab(tabs, groups = dplyr::group_data(tabs), subtext = subtext,
-                    test = test_tbl)
-  }
+  # Phase 19a: tab_restore(), carrying `meta` explicitly -- see the twin tail in tab_ci().
+  tab_restore(tabs, tabs, attrs = list(subtext = subtext, test = test_tbl, meta = get_meta(tabs)))
 }
 
 
@@ -7136,7 +7201,7 @@ relabel_levels_in_varnames <- function(data, col_vars) {
 }
 
 #' @keywords internal
-diff_index <-  function(ref, row_var, num_names, pct) {
+diff_index <-  function(ref, row_var, num_names, pct, is_total = FALSE) {
   if (ref == "tot"   ) return(-1L)
   if (ref == "first" ) return(1L )
   if (is.numeric(ref) | !is.na(suppressWarnings(as.integer(ref)))
@@ -7145,6 +7210,31 @@ diff_index <-  function(ref, row_var, num_names, pct) {
   }
 
   targets <- switch(pct, "row" = row_var, "col" = num_names)
+
+  # Phase 19a (D27): "last", the mirror of "first". It is the ONLY sentinel that needs `targets`, so
+  # it cannot sit with the three above. ONE meaning on both axes -- the last LEVEL -- because a total
+  # is not a level: `ref = "tot"` is what names it, and "last" must not silently become a synonym.
+  # The two axes differ only in how that is EXPRESSED, because the callers work at different grains:
+  #   col  `targets` IS the column set, so exclude the total column(s) and take the last index
+  #        (dplyr::nth() at the pct = "col" site and the `ridx0 >= 1L` guard at the ref2 site both
+  #        want a real 1-based index).
+  #   row  `targets` is the row_var stacked over EVERY sub-table, while the caller compares
+  #        dplyr::row_number() WITHIN one -- so no absolute index can say it. -1L is the sentinel
+  #        calculate_refrows() resolves per sub-table (max(which(!totrow_vector))).
+  # Before this, "last" fell through to the regex matcher, matched nothing, and
+  # first(integer(0)) -> replace_na(0) gave index 0 -> the "no columns were found as reference"
+  # warning and an all-NA `or` field.
+  # WARNING: like "tot"/"first", the sentinel wins over a level LITERALLY named "last"; select such
+  # a level by its integer index instead.
+  # `is_total` is a logical over `targets` supplied by the caller -- the leaf's OWN internal naming
+  # (names(cols) == "Total", the same convention totcol_vector and the binary-OR `lv` already use,
+  # applied before the user's `total_names` are restored), never a rendered user label.
+  if (identical(ref, "last")) {
+    if (identical(pct, "row")) return(-1L)
+    keep <- which(!vctrs::vec_recycle(is_total, length(targets)))
+    return(if (length(keep)) max(keep) else length(targets))
+  }
+
   # Phase 7g-iii: try an EXACT match first, so a chosen level label (which may contain regex
   # metacharacters -- e.g. "$25000 or more" -- or be a substring of another level) selects exactly
   # its own row/column. This is what fixes the jmvtab reference picker: a raw level label is matched
@@ -7181,16 +7271,30 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
                               row_var, tottab_vector, totrow_vector, # pct,
                               num_names) {
   if (ref != "tot") {
+    # Phase 19a (D27): -1L now MEANS something here. It is what diff_index() returns for
+    # ref = "last", and the branch it lands in was previously DEAD -- "tot" is the only other -1L,
+    # and the `ref != "tot"` guard above excludes it. "last" is the mirror of "first", so it must
+    # name the last LEVEL, not the last ROW: a total row is not a level, it is what `ref = "tot"`
+    # selects, and "last" must not silently become a synonym for it. Hence last_lvl() per sub-table,
+    # rather than the dplyr::n() this branch used to hold.
+    # WARNING: diff_index() stays INSIDE the transmute. `!!row_var` is tidy-eval, so each grouped
+    # call sees its OWN sub-table's labels -- which is what makes an exact/regex `ref` resolve per
+    # sub-table. Hoisting it out of the transmute makes `!!row_var` an invalid argument (measured).
+    last_lvl <- function(is_tot) {
+      keep <- which(!is_tot)
+      if (length(keep)) max(keep) else length(is_tot)   # a sub-table of nothing but totals
+    }
     refrows <-
       if(comp == "tab") {
         tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
+          dplyr::mutate(totrow_vector = totrow_vector) |>
           dplyr::group_by(!!!tab_vars) |>
           dplyr::transmute(
             var =
               dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                     num_names = num_names,
                                                     pct = "row") == -1) {
-                dplyr::n()
+                last_lvl(.data$totrow_vector)
               } else {
                 diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               }
@@ -7199,7 +7303,7 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
 
       } else {
         tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
-          dplyr::mutate(tottab_vector = tottab_vector) |>
+          dplyr::mutate(tottab_vector = tottab_vector, totrow_vector = totrow_vector) |>
           dplyr::group_by(!!!tab_vars) |>
           dplyr::transmute(
             var = dplyr::if_else(
@@ -7207,7 +7311,7 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
               true  = dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                             num_names = num_names,
                                                             pct = "row") == -1) {
-                dplyr::n()
+                last_lvl(.data$totrow_vector)
               } else {
                 diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               },
@@ -7277,7 +7381,7 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
 # "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
 tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci, stars,
                             ci_scale = "diff", cached_test = NULL, deff = NULL,
-                            inference = new_inference()) {
+                            inference) {                   # REQUIRED -- see plain_core()
   if (isTRUE(do_chi2)) {
     # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
     # inject the cached omnibus test instead of re-running the vectorised engine. Restricted to

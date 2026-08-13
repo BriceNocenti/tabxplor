@@ -42,7 +42,9 @@ utils::globalVariables(c(
   "data", "digits", "fine_fused", "fine_num", "lv1", "ci_method", "design_effect",
   "inference", "na",
   "na_drop_all_quo", "na_num", "na_text", "names_prefix", "names_sort", "other_if_less_than",
-  "other_level", "output", "pct", "pct_vect", "ref", "ref2", "remove_levels", "row_vars",
+  # Phase 19a (D7): `pct_vect` left this list -- it is a declared new_ctx() field now and carries an
+  # `if (is.null(...))` guard in tab_transform(), so codetools sees a local binding.
+  "other_level", "output", "pct", "ref", "ref2", "remove_levels", "row_vars",
   "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
   "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
   "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
@@ -1126,7 +1128,7 @@ fmt_conf_level_attr <- function(x) {
 get_conf_level <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_dbl(x, get_conf_level))
   cl <- fmt_conf_level_attr(x)
-  if (!is.finite(cl)) getOption("tabxplor.conf_level", 0.95) else cl
+  if (!is.finite(cl)) conf_level_default() else cl
 }
 
 #' @keywords internal
@@ -1735,10 +1737,172 @@ fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "rat
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
 # formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
 # type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, model_family, role,
-# conf_level.
-# Read by fmt_unwrap / tab_stack_tables (tab.R), the column reconcile (tab_classes.R) and
-# tab-test-display.R. `color` is carried WHOLE (length 1 or 2).
+# conf_level, degf, basis.
+# Read by fmt_unwrap / tab_stack_tables (tab.R), the column reconcile (tab_classes.R), the four
+# reconstructors below (through fmt_attr_rules) and tab-test-display.R. `color` is carried WHOLE
+# (length 1 or 2).
 fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))
+
+
+# ==============================================================================================
+# === Phase 19a / E1 -- the DECLARED reconcile rules of the per-column attributes ===============
+# ==============================================================================================
+# The four reconstructor families (vec_ptype2 / vec_cast / vec_arith / vec_math, at the bottom of
+# this file) used to enumerate the attributes BY HAND, SEVEN times over -- so a 15th attribute meant
+# eight edits, and the 10th (model_family) was silently dropped for two phases because one of the
+# lists was forgotten. They are DRIVEN by this table now, exactly as `meta_bind_rules` +
+# tab_meta_bind() (R/tab_classes.R) drive the table-level `meta`.
+#
+#   ADDING AN ATTRIBUTE = add a formal to new_fmt() + ONE row here. Nothing else.
+#
+# The four declared columns:
+#   neutral  the value a MISMATCH collapses to -- the "binding unlike columns is allowed but loses
+#            the mismatched metadata" contract. Also the value the "neutral" arith policy forces.
+#   merge    how vec_ptype2 (= every c() / vec_c() / bind / group) reconciles two columns:
+#              "same"        identical -> x's value, else `neutral`
+#              "comp3"       like "same" but THREE-valued: comp_all is NA on count columns, and
+#                            NA-vs-set must stay NA (a bare if() on the `==` would ERROR)
+#              "elementwise" `color` is length 1 OR 2 (text + background channels, Phase 5 §9.1):
+#                            each channel reconciles on its own
+#              "min"         the widest critical value wins -> the smallest positive finite `degf`
+#              "weakest"     basis_weakest(): a merge claims only what its weakest part carried
+#   arith    the per-context policy of vec_arith (fmt +-*/ fmt):
+#              "merge"    reconcile, like ptype2
+#              "neutral"  FORCED to the neutral (a sum of two columns is never a total column)
+#              "x"        taken from x blindly -- a DISPLAY fact, not an inferential one
+#   scalar   stored length 1 (new_fmt() `[1]`-subsets these itself); `color` is carried WHOLE.
+#
+# vec_cast (all 3 arms) takes every attribute unconditionally from `to`, and vec_math (sum/mean)
+# every attribute unconditionally from `.x` -- neither needs a column of its own.
+#
+# WARNING: `arith` is NOT uniformly "merge", and the two exceptions are deliberate. `totcol`/`refcol`
+# are forced to FALSE (arithmetic destroys the position that made a column a total/reference one),
+# and the four display facts follow x (a `mutate()` on a coloured column keeps its colour). What
+# changed in 19a is the INFERENTIAL trio: `conf_level`/`degf`/`basis` used to follow x too, so
+# `design_col + n_col` claimed "design" -- x's account of how ITS interval was computed, stapled onto
+# a number that is half y's. They reconcile now, with the same weakest-claim rule vec_ptype2 applies.
+#' @keywords internal
+#' @noRd
+fmt_attr_rules <- list(
+  type         = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE ),
+  comp_all     = list(neutral = FALSE,          merge = "comp3",       arith = "merge",   scalar = TRUE ),
+  ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
+  ci_type      = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
+  col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE ),
+  totcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
+  refcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
+  color        = list(neutral = "",             merge = "elementwise", arith = "x",       scalar = FALSE),
+  color_signif = list(neutral = "ignore",       merge = "same",        arith = "x",       scalar = TRUE ),
+  model_family = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE ),
+  role         = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE ),
+  conf_level   = list(neutral = NA_real_,       merge = "same",        arith = "merge",   scalar = TRUE ),
+  degf         = list(neutral = NA_real_,       merge = "min",         arith = "merge",   scalar = TRUE ),
+  basis        = list(neutral = "n",            merge = "weakest",     arith = "merge",   scalar = TRUE )
+)
+
+# THE completeness assertion, and it must run at PACKAGE BUILD (R CMD INSTALL / pkgload::load_all),
+# because the parallel index vectors just below are derived at the same moment: a missing row would
+# make which() return a short vector and the loops would SILENTLY SKIP an attribute -- the exact
+# failure mode E1 exists to kill. Adding a new_fmt() formal without a rule row therefore breaks the
+# install, loudly, at the moment the formal is added. Mirrored in test-fmt_class.R so a cached binary
+# install is covered too. (`fmt_col_attrs <- setdiff(...)` above is the precedent for build-time
+# derivation; there is no Collate: field, and everything this needs precedes it in this file.)
+stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs))
+fmt_attr_rules <- fmt_attr_rules[fmt_col_attrs]      # lock new_fmt()'s own order
+
+# The reader's default for each attribute IS new_fmt()'s own formal default -- DERIVED, not declared,
+# so the two cannot drift. (All the attribute formals are atomic length-1 constants, so eval() is
+# total on them; a non-constant default would fail here, loudly, which is the right outcome.)
+#' @keywords internal
+#' @noRd
+fmt_attr_default <- lapply(formals(new_fmt)[fmt_col_attrs], eval, envir = baseenv())
+
+# Parallel POSITION vectors, computed once at build time: the run-time loops dispatch on an integer
+# index, never on a rule string, and never allocate a closure. This is what keeps the rule-driven
+# reconcile FASTER than the straight-line code it replaces (dev/benchmarks/e1_fmt_ptype2.R).
+fmt_attr_n        <- length(fmt_col_attrs)
+fmt_attr_neutral  <- unname(lapply(fmt_attr_rules, `[[`, "neutral"))
+fmt_attr_i_same   <- unname(which(vapply(fmt_attr_rules, function(r) r$merge, "") == "same"       ))
+fmt_attr_i_comp3  <- unname(which(vapply(fmt_attr_rules, function(r) r$merge, "") == "comp3"      ))
+fmt_attr_i_elt    <- unname(which(vapply(fmt_attr_rules, function(r) r$merge, "") == "elementwise"))
+fmt_attr_i_min    <- unname(which(vapply(fmt_attr_rules, function(r) r$merge, "") == "min"        ))
+fmt_attr_i_weak   <- unname(which(vapply(fmt_attr_rules, function(r) r$merge, "") == "weakest"    ))
+fmt_attr_i_ar_neu <- unname(which(vapply(fmt_attr_rules, function(r) r$arith, "") == "neutral"    ))
+fmt_attr_i_ar_x   <- unname(which(vapply(fmt_attr_rules, function(r) r$arith, "") == "x"          ))
+fmt_attr_i_scalar <- unname(which(vapply(fmt_attr_rules, function(r) r$scalar, TRUE)))
+fmt_attr_i_basis  <- match("basis", fmt_col_attrs)
+
+# THE reader: a fmt column's attributes, in new_fmt()'s order, in the storage shape new_fmt()
+# guarantees -- ONE attributes() call instead of 14 getter calls, 6 of which are UseMethod dispatches.
+# Byte-equivalent to the getters the reconstructors used to call one by one: every getter is
+# `attr(x, a, exact = TRUE)` with a NULL fallback, and that fallback IS the formal default read above.
+# The single exception is `basis`, whose accessor also folds NA/"" to "n" -- reproduced in one `if`.
+# The result is handed straight to new_fmt()/fmt(): the names ARE the formals, matched by EXACT name,
+# so the `comp` -> `comp_all` partial-match hazard documented at R/tab.R:3521-3523 cannot fire.
+#' @keywords internal
+#' @noRd
+fmt_attrs_of <- function(x) {
+  a <- attributes(x)[fmt_col_attrs]
+  names(a) <- fmt_col_attrs                       # an absent attribute comes back named NA -- reset
+  for (i in seq_len(fmt_attr_n))  if (is.null(a[[i]]))      a[[i]] <- fmt_attr_default[[i]]
+  for (i in fmt_attr_i_scalar)    if (length(a[[i]]) != 1L) a[[i]] <- a[[i]][1L]
+  b <- a[[fmt_attr_i_basis]]
+  if (is.na(b) || !nzchar(b)) a[[fmt_attr_i_basis]] <- "n"     # == get_basis()
+  a
+}
+
+# THE reconcile of two columns' attributes -- what a BIND means (vec_ptype2, i.e. every c() /
+# vec_c() / bind / group). Five tight index loops, one per declared merge rule.
+#' @keywords internal
+#' @noRd
+fmt_attrs_merge <- function(ax, ay) {
+  for (i in fmt_attr_i_same)
+    if (!identical(ax[[i]], ay[[i]])) ax[[i]] <- fmt_attr_neutral[[i]]
+  for (i in fmt_attr_i_comp3) {                   # 3-valued: NA-vs-set stays NA, and never ERRORS
+    cx <- ax[[i]]; cy <- ay[[i]]
+    s  <- cx == cy | (is.na(cx) & is.na(cy))
+    ax[[i]] <- if (is.na(s)) NA else if (s) cx else fmt_attr_neutral[[i]]
+  }
+  for (i in fmt_attr_i_elt) {                     # `color`: per CHANNEL (length 1 or 2)
+    vx <- ax[[i]]; s <- vx == ay[[i]]
+    ax[[i]] <- if (length(s) == 1L) { if (s) vx else fmt_attr_neutral[[i]] }
+               else ifelse(s, vx, fmt_attr_neutral[[i]])
+  }
+  for (i in fmt_attr_i_min) {                     # `degf`: the widest critical value wins
+    d <- c(ax[[i]], ay[[i]]); d <- d[is.finite(d) & d > 0]
+    ax[[i]] <- if (length(d)) min(d) else fmt_attr_neutral[[i]]
+  }
+  for (i in fmt_attr_i_weak) ax[[i]] <- basis_weakest(ax[[i]], ay[[i]])
+  ax
+}
+
+# The ARITH policy: reconcile, then apply the two declared exceptions (see the WARNING on the table).
+#' @keywords internal
+#' @noRd
+fmt_attrs_arith <- function(ax, ay) {
+  out <- fmt_attrs_merge(ax, ay)
+  for (i in fmt_attr_i_ar_neu) out[[i]] <- fmt_attr_neutral[[i]]
+  for (i in fmt_attr_i_ar_x)   out[[i]] <- ax[[i]]
+  out
+}
+
+# The ptype of a fmt column is a ZERO-LENGTH fmt whose only variable part is its attributes. Built
+# ONCE at build time by new_fmt() -- so a new FIELD is picked up automatically -- and spliced,
+# instead of re-running the 21-field constructor on every c(). `attributes(out)[...] <- a` copies
+# first (the namespace binding's refcount is > 1), so the shared prototype is never mutated; asserted
+# in test-fmt_class.R. fmt_attrs_of() has already normalised every `scalar` attribute to length 1,
+# which is exactly what new_fmt()'s own `[1]` would have done.
+#' @keywords internal
+#' @noRd
+fmt_ptype_empty <- new_fmt()
+
+#' @keywords internal
+#' @noRd
+fmt_ptype_attrs <- function(a) {
+  out <- fmt_ptype_empty
+  attributes(out)[fmt_col_attrs] <- a
+  out
+}
 
 
 
@@ -2166,6 +2330,19 @@ get_ref_means <- function(x) get_ref_field(x, get_mean)
 #' @keywords internal
 get_ref_pct <- function(x) get_ref_field(x, get_pct)
 
+# fmt_base() -- THE base a cell's confidence interval is computed on (Phase 19a; study §4.1 item 7,
+# §6). The rule is one sentence written out at all five read sites in tab_ci(): take the EFFECTIVE
+# sample size when it was populated (`n_eff` -- the flat closed form, or the design variance; see
+# leaf_neff()), else the raw base. coalesce(NA, raw) == raw, so it is byte-identical on basis "n";
+# elsewhere n_eff < n widens the interval (and n_eff > n under stratification narrows it).
+# There are only ever TWO raw bases, which is what `mean` selects between: a proportion's own
+# percentage base (`tot_n`) and a mean's count (`n`).
+#' @keywords internal
+#' @noRd
+fmt_base <- function(x, mean = FALSE) {
+  dplyr::coalesce(get_n_eff(x), if (mean) as.double(get_n(x)) else get_tot_n(x))
+}
+
 # Phase 5: the reference cell's VARIANCE, for Glass's delta = diff / sqrt(var_ref), the sd-standardized
 # numeric diff-color scale (§18). NA/0 var_ref -> no color at the call site.
 #' @keywords internal
@@ -2333,14 +2510,10 @@ set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )
 #' @keywords internal
 # @export
 set_or      <- fmt_set_field_factory("or"     , cast = double()   )
-# @describeIn fmt set the "tot_n" field (the cell's own unweighted percentage base)
-#' @keywords internal
-# @export
-set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
-# @describeIn fmt set the "n_eff" field (the effective sample size used for this cell's CI)
-#' @keywords internal
-# @export
-set_n_eff   <- fmt_set_field_factory("n_eff"  , cast = double()   )
+# Phase 19a: set_tot_n() and set_n_eff() are DELETED -- un-exported, zero callers anywhere in R/,
+# tests/, dev/ or the jamovi module. Both fields are written once, by the leaves' new_fmt() call, and
+# read-only afterwards; nothing ever set them on an existing column. Re-add from
+# fmt_set_field_factory() if a writer is ever needed.
 # @describeIn fmt set the "obs" field (the value this cell's estimate is compared to -- written by
 # tab_reg's crude-companion / split-group passes, NA everywhere else)
 #' @keywords internal
@@ -3563,7 +3736,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # score's own scale and sign -- so this block, the floor block below and the direction match in
   # `grey_non_signif` all keep working with no measure-specific branch.
   bd          <- md$bounds(x)
-  has_ci      <- cit %in% c("diff", "diff_row", "diff_col", "or", "ratio")
+  # Phase 19a (D18): "diff_row"/"diff_col" are GONE from this set. They belong to the `ci` ARGUMENT's
+  # vocabulary, not to the stored `ci_type` attribute -- tab_ci() strips the "_row"/"_col" suffix
+  # immediately before the only dynamic set_ci_type() write, and every other ci_type write in the
+  # package is a literal ("", "diff", "or", "ratio", "cell"). So both arms were dead in a live
+  # predicate, and their presence made the reader doubt the one absence that IS deliberate:
+  # WARNING: "cell" is excluded ON PURPOSE. A one-proportion interval is centred on the cell itself
+  # and has no reference null, so there is nothing for the significance gate to test it against.
+  has_ci      <- cit %in% c("diff", "or", "ratio")
   ci_neutral  <- if (ci_mult) 1 else 0
   sig_pos <- has_ci & bd$lo > ci_neutral
   sig_neg <- has_ci & bd$hi < ci_neutral
@@ -5420,77 +5600,18 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
 #' @export
 #' @keywords internal
 vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
-  # DESIGN: common ptype of two fmt columns (drives c() / vec_c()). Any per-column
-  # attribute that differs collapses to a neutral value: type->"mixed", col_var->
-  # "several_vars", comp_all/totcol/refcol->FALSE, ref/ci_type/color->"". So binding
-  # unlike fmt columns is allowed but loses the mismatched metadata (by design).
-  type_x       <- get_type(x)
-  same_type    <- type_x == get_type(y)
-  comp_x       <- get_comp_all(x, replace_na = FALSE)
-  comp_y       <- get_comp_all(y, replace_na = FALSE)
-  same_comp    <- comp_x == comp_y | (is.na(comp_x) & is.na(comp_y))
-  diff_type_x  <- get_ref_type(x)
-  same_diff_type <- diff_type_x == get_ref_type(y)
-  ci_type_x    <- get_ci_type(x)
-  same_ci_type <- ci_type_x == get_ci_type(y)
-  col_var_x    <- get_col_var(x)
-  same_col_var <- col_var_x == get_col_var(y)
-  totcol_x     <- is_totcol(x)
-  same_totcol  <- totcol_x == is_totcol(y)
-  refcol_x     <- is_refcol(x)
-  same_refcol  <- refcol_x == is_refcol(y)
-  # Phase 5 (§9.1): read the FULL color attribute (length <= 2) -- reading get_color()=[1] here
-  # would silently drop the background channel on every c()/bind/group. `==` recycles the shorter
-  # (1 divides 2), so the reconciled result is length <= 2. color_signif reconciles like the other
-  # scalar attributes.
-  color_x      <- fmt_color_attr(x)
-  same_color   <- color_x == fmt_color_attr(y)
-  signif_x     <- get_color_signif(x)
-  same_signif  <- signif_x == get_color_signif(y)
-  mf_x         <- get_model_family(x)
-  same_mf      <- mf_x == get_model_family(y)
-  role_x       <- get_role(x)
-  same_role    <- role_x == get_role(y)
-  # Phase 18z13: the RAW attribute, so binding two columns that never recorded a level keeps
-  # "unknown" instead of freezing today's option into the result. Two NAs compare NA, which a bare
-  # `if ()` would ERROR on -- the `same_comp` trap two lines below, in its second instance.
-  cl_x         <- fmt_conf_level_attr(x)
-  cl_y         <- fmt_conf_level_attr(y)
-  same_cl      <- (is.na(cl_x) && is.na(cl_y)) || isTRUE(cl_x == cl_y)
-  # Phase 18z16-iiiii: binding two columns binds two CLAIMS about how their numbers were computed,
-  # and the honest merged claim is the WEAKEST -- one row_var's variance degrading to the weighting
-  # does not make the other's design-based. The widest critical value wins for the same reason, so
-  # `degf` takes the MINIMUM of the non-NA ones. This is exactly tab_inference_bind()'s algebra, which
-  # used to live on the table attribute and had to be CALLED; here it fires on every c() / vec_c() /
-  # bind / group without anyone remembering to.
-  dg           <- c(fmt_degf_attr(x), fmt_degf_attr(y))
-  dg           <- dg[is.finite(dg) & dg > 0]
-  #l            <- length(x)
-
-  # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
-  # (~3x faster per call, byte-identical). This method drives EVERY c()/vec_c()/bind/group over fmt
-  # columns -- the compact merge's per-column vec_ptype_common() reduce is the hottest caller (the
-  # entire tab() merge marginal, dev/tabxplor_2.0.0_decisions.md 30). WARNING: every same_* is a
-  # non-NA length-1 logical EXCEPT `same_comp` (comp_all is NA on count columns, so binding a count
-  # with a pct column gives same_comp = NA -> dplyr::if_else returned NA; a bare `if (NA)` would
-  # ERROR) -> it is checked with is.na() first. `color` is length <= 2 (§9.1) -> ifelse when 2.
-  new_fmt(
-    type     = if (same_type)      type_x      else "mixed",
-    comp_all = if (is.na(same_comp)) NA else if (same_comp) comp_x else FALSE,
-    ref      = if (same_diff_type) diff_type_x else "",
-    ci_type  = if (same_ci_type)   ci_type_x   else "",
-    col_var  = if (same_col_var)   col_var_x   else "several_vars",
-    totcol   = if (same_totcol)    totcol_x    else FALSE,
-    refcol   = if (same_refcol)    refcol_x    else FALSE,
-    color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
-               else ifelse(same_color, color_x, ""),
-    color_signif = if (same_signif) signif_x else "ignore",
-    model_family = if (same_mf) mf_x else "",
-    role         = if (same_role) role_x else "",
-    conf_level   = if (same_cl) cl_x else NA_real_,
-    degf         = if (length(dg)) min(dg) else NA_real_,
-    basis        = basis_weakest(get_basis(x), get_basis(y))
-  )
+  # DESIGN: common ptype of two fmt columns -- this drives EVERY c() / vec_c() / bind / group, and
+  # the compact merge's per-column vec_ptype_common() reduce is its hottest caller (the entire tab()
+  # merge marginal, dev/tabxplor_2.0.0_decisions.md 30). Any per-column attribute that differs
+  # collapses to its DECLARED neutral (`fmt_attr_rules`, above): binding unlike fmt columns is
+  # allowed but loses the mismatched metadata, by design.
+  #
+  # Phase 19a / E1: the 14-attribute hand enumeration that used to live here (28 getter calls, 12 of
+  # them UseMethod dispatches, plus a full 21-field new_fmt()) is GONE -- adding an attribute needs
+  # no edit in this function. It also got ~4x faster on the way: fmt_attrs_of() is one attributes()
+  # call, fmt_attrs_merge() five index loops, and fmt_ptype_attrs() splices onto a build-time
+  # zero-length prototype instead of re-running the constructor. See dev/benchmarks/e1_fmt_ptype2.R.
+  fmt_ptype_attrs(fmt_attrs_merge(fmt_attrs_of(x), fmt_attrs_of(y)))
 }
 #' Find common ptype between fmt and double
 #' @param x A fmt vector
@@ -5533,44 +5654,11 @@ vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 #' @return A fmt vector
 #' @export
 #' @keywords internal
+# Phase 19a / E1: the FIELDS come from `x` (fmt_data_wn = vec_data() with get_wn()'s NA -> n fixup,
+# the only getter that is not a raw read), every per-column ATTRIBUTE unconditionally from `to`.
+# do.call() by exact name => no partial match (the `comp` -> `comp_all` hazard, R/tab.R:3521-3523).
 vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
-  new_fmt(display   = get_display (x),
-          n         = get_n       (x),
-          wn        = get_wn      (x),
-          pct       = get_pct     (x),
-          diff      = get_diff    (x),
-          ratio     = get_ratio   (x),
-          digits    = get_digits  (x),
-          ctr       = get_ctr     (x),
-          mean      = get_mean    (x),
-          var       = get_var     (x),
-          ci_inf    = get_ci_inf  (x),
-          ci_sup    = get_ci_sup  (x),
-          pvalue    = get_pvalue  (x),
-          or        = get_or      (x),
-          tot_n     = get_tot_n   (x),
-          n_eff     = get_n_eff   (x),
-          obs       = get_obs     (x),
-          gap_se    = get_gap_se  (x),
-
-          in_totrow = is_totrow   (x),
-          in_refrow = is_refrow   (x),
-          in_tottab = is_tottab   (x),
-
-          type      = get_type    (to),
-          comp_all  = get_comp_all(to, replace_na = FALSE),
-          ref = get_ref_type(to),
-          ci_type   = get_ci_type (to),
-          col_var   = get_col_var (to),
-          totcol    = is_totcol   (to),
-          refcol    = is_refcol   (to),
-          color     = fmt_color_attr(to),          # full attribute (both channels)
-          color_signif = get_color_signif(to),
-          model_family = get_model_family(to),
-          role         = get_role(to),
-          conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to)
-
-  )
+  do.call(new_fmt, c(fmt_data_wn(x), fmt_attrs_of(to)))
 
 # DESIGN: numeric <-> fmt cast contract (matters for arithmetic, sorting and export):
 #   double  -> fmt : a WEIGHTED-COUNT cell (display="wn", wn=x, n=NA)
@@ -5586,22 +5674,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 #' @export
 #' @keywords internal
 vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
-  fmt(n = NA_integer_            ,
-      display   = "wn", wn = x     ,
-      type      = get_type    (to),
-      comp_all  = get_comp_all(to, replace_na = FALSE),
-      ref = get_ref_type(to),
-      ci_type   = get_ci_type (to),
-      col_var   = get_col_var (to),
-      totcol    = is_totcol   (to),
-      refcol    = is_refcol   (to),
-      color     = fmt_color_attr(to),
-      color_signif = get_color_signif(to),
-      model_family = get_model_family(to),
-      role         = get_role(to),
-      conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to),
-
-  )
+  do.call(fmt, c(list(n = NA_integer_, display = "wn", wn = x), fmt_attrs_of(to)))
 #' Convert fmt into double
 #' @param x A fmt vector
 #' @param to A double vector
@@ -5620,21 +5693,7 @@ vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) |> as.double() 
 #' @export
 #' @keywords internal
 vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
-  fmt(n        = x               ,
-      type     = get_type    (to),
-      comp_all = get_comp_all(to, replace_na = FALSE),
-      ref = get_ref_type(to),
-      ci_type  = get_ci_type (to),
-      col_var  = get_col_var (to),
-      totcol   = is_totcol   (to),
-      refcol    = is_refcol   (to),
-      color    = fmt_color_attr(to),
-      color_signif = get_color_signif(to),
-      model_family = get_model_family(to),
-      role         = get_role(to),
-      conf_level   = fmt_conf_level_attr(to), degf = fmt_degf_attr(to), basis = get_basis(to)
-
-  ) #new_fmt(pct = as.double(x))
+  do.call(fmt, c(list(n = x), fmt_attrs_of(to)))    #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
 #' @param x A integer vector
 #' @param to A fmt vector
@@ -5719,35 +5778,40 @@ vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
 #' @method vec_arith.tabxplor_fmt tabxplor_fmt
 #' @export
 vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
-  type_x       <- get_type(x)
-  same_type    <- type_x == get_type(y)
-  comp_x       <- get_comp_all(x, replace_na = FALSE)
-  comp_y       <- get_comp_all(y, replace_na = FALSE)
-  same_comp    <- comp_x == comp_y | (is.na(comp_x) & is.na(comp_y))
-  diff_type_x  <- get_ref_type(x)
-  same_diff_type <- diff_type_x == get_ref_type(y)
-  ci_type_x    <- get_ci_type(x)
-  same_ci_type <- ci_type_x == get_ci_type(y)
-  col_var_x    <- get_col_var(x)
-  same_col_var <- col_var_x == get_col_var(y)
+  # Phase 19a / E1: the per-column attributes are reconciled ONCE, by the declared `fmt_attr_rules`
+  # (`arith` column), and spliced into both arms -- which used to carry two byte-identical
+  # 14-attribute blocks. `[[` not `$`: a list `$` PARTIAL-matches, and `comp` -> `comp_all` is
+  # exactly the mistake the carrier warns about at R/tab.R:3521-3523.
+  ax    <- fmt_attrs_of(x)
+  ay    <- fmt_attrs_of(y)
+  attrs <- fmt_attrs_arith(ax, ay)
+  type_x       <- ax[["type"]]
+  col_var_x    <- ax[["col_var"]]
+  same_type    <- type_x    == ay[["type"]]
+  same_col_var <- col_var_x == ay[["col_var"]]
+  same_comp    <- ax[["comp_all"]] == ay[["comp_all"]] |
+    (is.na(ax[["comp_all"]]) & is.na(ay[["comp_all"]]))
   l            <- length(x)
   rep_NA_real  <- rep(NA_real_, l)
 
   if (!same_type) warning("operation ", op,
                           " over columns with different pct types, ",
                           "or mixing pct and means (",
-                          type_x, "/", get_type(y), ")")
-  if (!same_comp) warning("operation ", op,
+                          type_x, "/", ay[["type"]], ")")
+  # isFALSE, not `!`: `same_comp` is THREE-valued (comp_all is NA on a count column, so a count + a
+  # pct gives NA) and a bare `if (!NA)` ERRORS -- adding a count column to a percentage one aborted
+  # instead of warning. The reconcile itself has always been NA-safe (rule "comp3").
+  if (isFALSE(same_comp)) warning("operation ", op,
                           " may mix calculations made on tabs and calculations ",
                           "made on all tabs (different 'comp_all')")
   if (!same_col_var) warning("operation ", op,
                              " over columns belonging to different variables(",
-                             col_var_x , "/", get_col_var(y), ")")
+                             col_var_x , "/", ay[["col_var"]], ")")
 
   switch(
     op,
     "+" = ,
-    "-" = new_fmt(
+    "-" = do.call(new_fmt, c(list(
       display = get_display(x),      #dplyr::if_else(get_display(x) == get_display(x)), true = get_display(x), false = "n),
       n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #|> positive_integer(),
       wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #|> positive_double(),
@@ -5776,23 +5840,10 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       # arguably it should follow x alone (x - a non-total y should probably stay total).
       in_totrow = is_totrow(x) & is_totrow(y),
       in_refrow = is_refrow(x) & is_refrow(y),
-      in_tottab = is_tottab(x) & is_tottab(y),
-
-      type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
-      comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
-      ref= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
-      ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
-      col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
-      totcol   = FALSE                                                  ,
-      refcol   = FALSE                                                  ,
-      color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x),
-      model_family = get_model_family(x),
-      role         = get_role(x),
-      conf_level   = fmt_conf_level_attr(x), degf = fmt_degf_attr(x), basis = get_basis(x)
-    ),
+      in_tottab = is_tottab(x) & is_tottab(y)
+    ), attrs)),
     "/" = ,
-    "*" = new_fmt(
+    "*" = do.call(new_fmt, c(list(
       display   = get_display(x),
       n      = get_n(x)   ,
       wn     = get_wn(x)  ,
@@ -5817,21 +5868,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
-      in_tottab = is_tottab(x),
-
-      type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
-      comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
-      ref= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
-      ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
-      col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
-      totcol   = FALSE                                                  ,
-      refcol   = FALSE                                                  ,
-      color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x),
-      model_family = get_model_family(x),
-      role         = get_role(x),
-      conf_level   = fmt_conf_level_attr(x), degf = fmt_degf_attr(x), basis = get_basis(x)
-    ),
+      in_tottab = is_tottab(x)
+    ), attrs)),
     vctrs::stop_incompatible_op(op, x, y)
   )
 }
@@ -5876,17 +5914,22 @@ vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - opera
 #' @export
 #' @keywords internal
 vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
-  if (!is.na(get_type(.x) ) & get_type(.x) == "mixed") warning(
+  # Phase 19a / E1: ONE vector in, one out -- so there is nothing to reconcile and every per-column
+  # attribute is carried whole from `.x`, spliced by name into both arms (they used to repeat the
+  # 14-attribute list). `type` is read off the same list, not through a second getter call.
+  am   <- fmt_attrs_of(.x)
+  type <- am[["type"]]
+  if (!is.na(type) && type == "mixed") warning(
     "operation ", .fn,
     " within a variable mixing different types of percentages"
   )
 
   switch(.fn,
-         "sum" = new_fmt(display   = get_display(.x)[1],
+         "sum" = do.call(new_fmt, c(list(display   = get_display(.x)[1],
                          digits = min(get_digits(.x)),
                          n      = vctrs::vec_math_base(.fn, get_n(.x)  , ...),
                          wn     = vctrs::vec_math_base(.fn, get_wn(.x) , ...),
-                         pct    = ifelse(! get_type(.x) %in% c("row", "col"),
+                         pct    = ifelse(! type %in% c("row", "col"),
                                          yes = vctrs::vec_math_base(.fn, get_pct(.x), ...),
                                          no  = NA_real_) |>
                            tidyr::replace_na(NA_real_),
@@ -5907,22 +5950,9 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
-                         in_tottab = all(is_tottab(.x)), #any ?
-
-                         type      = get_type    (.x),
-                         comp_all  = get_comp_all(.x, replace_na = FALSE),
-                         ref = get_ref_type(.x),
-                         ci_type   = get_ci_type (.x),
-                         col_var   = get_col_var (.x),
-                         totcol    = is_totcol   (.x),
-                         refcol    = is_refcol   (.x),
-                         color        = fmt_color_attr   (.x),
-                         color_signif = get_color_signif (.x),
-                         model_family = get_model_family (.x),
-                         role         = get_role         (.x),
-                         conf_level   = fmt_conf_level_attr(.x), degf = fmt_degf_attr(.x), basis = get_basis(.x)
-         ),
-         "mean" = new_fmt(display = get_display(.x)[1],
+                         in_tottab = all(is_tottab(.x)) #any ?
+         ), am)),
+         "mean" = do.call(new_fmt, c(list(display = get_display(.x)[1],
                           digits  = max(get_digits(.x)),
                           n       = vctrs::vec_math_base("sum", get_n(.x)  , ...),
                           wn      = vctrs::vec_math_base("sum", get_wn(.x) , ...),
@@ -5945,21 +5975,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,
-                          in_tottab = all(is_tottab(.x)), #any ?
-
-                          type      = get_type    (.x),
-                          comp_all  = get_comp_all(.x, replace_na = FALSE),
-                          ref = get_ref_type(.x),
-                          ci_type   = get_ci_type (.x),
-                          col_var   = get_col_var (.x),
-                          totcol    = is_totcol   (.x),
-                          refcol    = is_refcol   (.x),
-                          color        = fmt_color_attr   (.x),
-                          color_signif = get_color_signif (.x),
-                          model_family = get_model_family (.x),
-                          role         = get_role         (.x),
-                          conf_level   = fmt_conf_level_attr(.x), degf = fmt_degf_attr(.x), basis = get_basis(.x)
-         ),
+                          in_tottab = all(is_tottab(.x)) #any ?
+         ), am)),
          vctrs::vec_math_base(.fn, get_num(.x), ...) )
 }
 

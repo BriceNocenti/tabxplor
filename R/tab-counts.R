@@ -255,7 +255,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        OR = "no", test = FALSE,
                        na = "keep", cleannames = NULL,
                        ref = "auto", ref2 = "first", comp = "tab",
-                       ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95),
+                       ci = "no", conf_level = conf_level_default(),
                        stars = NULL, ci_method = NULL,
                        totaltab = "line", totaltab_name = "Ensemble",
                        tot = c("row", "col"), total_names = "Total",
@@ -301,7 +301,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
   total_names <- vctrs::vec_recycle(total_names, 2)
-  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames") else cleannames
+  cleannames <- resolve_cleannames(cleannames)
 
   # Phase 5: parse `color` (+ `color_signif`) once, exactly as tab()/tab_many() do: the engine runs
   # on the legacy string ($legacy) + the significance policy ($signif) + the ratio-CI flag, then

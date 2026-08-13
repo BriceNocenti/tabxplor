@@ -25,7 +25,7 @@ tab(
   ref2 = "first",
   comp = "tab",
   ci = "no",
-  conf_level = getOption("tabxplor.conf_level", 0.95),
+  conf_level = conf_level_default(),
   stars = NULL,
   ci_method = NULL,
   design_effect = NULL,
@@ -253,6 +253,9 @@ used for \code{diff} ; cell ratio from the first line (or col) is use for \code{
 \item \code{"tot"}: totals are always used.
 \item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
+\item \code{"last"}: the mirror of \code{"first"} — the \strong{last level} of the row (or column)
+variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
+Resolved inside each subtable when there are \code{tab_vars}.
 \item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
 \item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
 to match with the names of the rows (or columns). Be precise enough to match only one

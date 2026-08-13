@@ -49,9 +49,11 @@ Re-grep exact line numbers before editing; the anchors below drift.
    reset to `NA`, or recomputed, for both `+/-` and `*//`; also `fmt.numeric` / `numeric.fmt`. Rule of
    thumb: raw data (`n`, `wn`) is carried; computed metadata (`diff`, `ci`, `ctr`, `var`, `n_eff`,
    `obs`, `gap_se`) is reset to `NA`; `pct`/`mean` recomputed when meaningful.
-8. **Casting** — `vec_cast.tabxplor_fmt.tabxplor_fmt()` (3 arms), `vec_ptype2.*`, and the `vec_math`
-   sum/mean arms: copy X from `x`. `vec_proxy_equal()` / `vec_proxy_compare()` only if X affects
-   equality/ordering.
+8. **Casting** — the fmt→fmt cast and `vec_ptype2` need **NO edit** since Phase 19a: the cast takes
+   every field from `fmt_data_wn(x)` and every attribute from `fmt_attrs_of(to)`, and the ptype has
+   no fields at all. Only the two `vec_math` sum/mean arms still list fields by hand — decide there
+   whether X aggregates or resets to `NA`. `vec_proxy_equal()` / `vec_proxy_compare()` only if X
+   affects equality/ordering.
 9. **Populate X where it is computed.** The live producers are `plain_core()` / `num_core()` /
    `leaf_wide_pct()` / `tab_ci()` / `tab_chi2()` / `tab_apply_reference()` in `R/tab.R`, and
    `reg_column()` / `reg_marginal_column()` / `reg_empirical_columns()` in `R/tab_reg.R`.
@@ -72,8 +74,24 @@ Re-grep exact line numbers before editing; the anchors below drift.
 
 ## For a per-column ATTRIBUTE instead of a field
 
-Add it to `new_fmt()`'s signature (after the fields) — `fmt_col_attrs` picks it up automatically.
-Then: reconcile it in `vec_ptype2.tabxplor_fmt.tabxplor_fmt()`, in the `vec_arith` attribute-merge
-block and in the `vec_math` sum/mean arms; add a getter/setter (pattern near `get_type()`/`set_type()`).
+**Two lines, since Phase 19a.** All four reconstructor families are driven by one declared table.
+
+1. **`new_fmt()`** (~L1600, after the fields): add the formal, with a length-1 constant default.
+   `fmt_col_attrs` derives from the signature, so every carry site picks it up automatically.
+2. **`fmt_attr_rules`** (~L1745, right below `fmt_col_attrs`): add ONE row —
+   `list(neutral = , merge = , arith = , scalar = )`. The block comment there is the vocabulary
+   (`merge`: `same` / `comp3` / `elementwise` / `min` / `weakest`; `arith`: `merge` / `neutral` / `x`).
+   A build-time `stopifnot()` refuses to install the package if you skip this, and the E1 fixture in
+   `test-fmt_class.R` covers the new row automatically — it loops over the rule table itself.
+
+Optionally add a getter/setter (pattern near `get_type()`/`set_type()`, or the
+`fmt_conf_level_attr()` / `get_conf_level()` pair when the RAW read the reconcilers need must differ
+from the resolved one the engines want). **Do NOT hand-edit `vec_ptype2` / `vec_cast` / `vec_arith` /
+`vec_math`** — the seven literal attribute lists that used to live there are exactly what E1 deleted;
+re-introducing one is the regression the rule table exists to prevent.
+
 An attribute must be present on a STANDALONE extracted column — `format()` and colour have to work on
-`tab$col` outside its table.
+`tab$col` outside its table. Regenerate the goldens and prove the delta with
+`dev/verify_golden_field_delta.R` (declare it in `ADDED_ATTRS` + `EXPECTED_ATTR`, and **reset that
+file's four declarations first**: one left behind from the previous phase reports its own
+already-landed change as a problem).

@@ -747,3 +747,45 @@ test_that("mean-table ref matches an exact label with regex metacharacters (Defe
   expect_identical(as.character(tt$rincome)[ref_idx], "$25000 or more")
   expect_equal(get_diff(tt$tvhours)[ref_idx], 0)                   # a row compared to itself
 })
+
+
+# ---- Phase 19a (D27): ref / ref2 = "last" ----
+
+test_that('ref2 = "last" resolves to the last LEVEL, never the total column (D27)', {
+  # Before 19a "last" was not a sentinel: it fell through to the regex matcher, matched nothing,
+  # and first(integer(0)) -> replace_na(0) gave index 0 -> the "no columns were found as reference
+  # for comparison" warning and an ALL-NA `or` field. It becomes blocking in 19d, where the odds
+  # ratio is computed unconditionally and ref2 is therefore always in force.
+  d <- forcats::gss_cat
+  expect_silent(a <- tab(d, marital, race, pct = "row", OR = "OR", ref2 = "last"))
+  b <- tab(d, marital, race, pct = "row", OR = "OR", ref2 = 3L)   # race: Other | Black | White
+  expect_identical(a, b)
+  expect_false(all(is.na(get_or(a[[2]]))))                        # non-vacuous: a real `or`
+  expect_true(all(get_or(a[[4]]) == 1))                           # White references itself
+
+  # ... and it is NOT the total column: that would make the OR an odds against a total.
+  expect_false(identical(a, tab(d, marital, race, pct = "row", OR = "OR", ref2 = 4L)))
+})
+
+test_that('ref = "last" picks the last level on both axes, and is not "tot" (D27)', {
+  d <- forcats::gss_cat
+  # the stored `ref` ATTRIBUTE records the spec the user typed ("last" vs "6"), so compare the
+  # per-cell data, which is what "the same reference" means.
+  same_cells <- function(x, y) expect_identical(
+    lapply(x[-1], vctrs::vec_data), lapply(y[-1], vctrs::vec_data))
+
+  # ROW axis (pct = "row"): the last LEVEL ("Married"), not the Total row that follows it
+  r <- tab(d, marital, race, pct = "row", ref = "last")
+  expect_identical(as.character(r[[1]])[is_refrow(r[[2]])], "Married")
+  same_cells(r, tab(d, marital, race, pct = "row", ref = 6L))
+  expect_false(identical(get_diff(r[[2]]), get_diff(tab(d, marital, race,
+                                                        pct = "row", ref = "tot")[[2]])))
+  # per SUBTABLE when there are tab_vars, like every other ref value
+  g <- tab(d, marital, race, year, pct = "row", ref = "last", totaltab = "no")
+  expect_identical(unique(as.character(g[[2]])[is_refrow(g[[3]])]), "Married")
+
+  # COLUMN axis (pct = "col"): the last non-total column
+  cl <- tab(d, marital, race, pct = "col", ref = "last")
+  same_cells(cl, tab(d, marital, race, pct = "col", ref = 3L))
+  expect_true(all(get_diff(cl[["White"]]) == 0, na.rm = TRUE))    # White references itself
+})

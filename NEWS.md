@@ -239,6 +239,15 @@
 
 ## Bug fixes
 
+* **`dplyr::bind_rows()` on two subtabled (grouped) tables no longer loses everything below the
+  table**: the weight footnote, the colour legend, the confidence-interval note, the test summary and
+  a stored caption all survive now. Plain tables were already fine.
+* **`ref` / `ref2` accept `"last"`**, the mirror of `"first"`: the last *level* of the row or column
+  variable (a total row/column is never selected — that is `"tot"`). It used to be silently treated
+  as a regular expression, so it matched nothing and produced an empty comparison plus a confusing
+  warning.
+* Adding a **count column to a percentage column** (`tab$n + tab$pct`) warned about the mismatch and
+  then aborted; it now just warns.
 * A factor carrying **`NA` as a real level** (`factor(..., exclude = NULL)`, common in imported data) no
   longer crashes `print()` / `format()` / any export.
 * `ci_method = c(cell = "beta")` under a `survey` design now applies Korn & Graubard's

@@ -115,6 +115,31 @@ test_that("every table rebuild carries an UNKNOWN meta sub-field (no re-enumerat
   expect_identical(kept(tab_spread(ts, relig)), list(kept = TRUE))
 })
 
+test_that("bind_rows() on two GROUPED tabs keeps subtext / test / meta (Phase 19a, D16)", {
+  # THE FIFTH instance of "a rebuild site drops table-level facts", and the one that took the
+  # 15-verb carrier score from 14/15 to 15/15. dplyr's dplyr_reconstruct generic runs `data` through
+  # dplyr_new_data_frame() BEFORE dispatch, so the method received a payload with no attributes at
+  # all; restoring from it gave back a correctly-classed grouped tab carrying NOTHING -- no weight
+  # footer, no CI legend, no inference basis, no test summary. Fixed by restoring from `template`.
+  # It is ALSO the only carrier on that path: dplyr's own vec_ptype2.grouped_df.grouped_df wins over
+  # vec_ptype2.tabxplor_grouped_tab.tabxplor_grouped_tab, which a bind therefore never reaches.
+  g <- tab(forcats::gss_cat, marital, race, relig, pct = "row", test = TRUE)
+  expect_s3_class(g, "tabxplor_grouped_tab")                       # non-vacuous: really grouped
+  expect_false(is.null(attr(g, "subtext", exact = TRUE)))          # ... and really populated
+  expect_false(is.null(tabxplor:::get_test(g)))
+  expect_false(is.null(tabxplor:::get_meta(g)))
+
+  b <- dplyr::bind_rows(g, g)
+  expect_s3_class(b, "tabxplor_grouped_tab")
+  expect_identical(attr(b, "subtext", exact = TRUE), attr(g, "subtext", exact = TRUE))
+  expect_identical(tabxplor:::get_test(b), tabxplor:::get_test(g))
+  expect_identical(tabxplor:::get_vars_attr(b), tabxplor:::get_vars_attr(g))
+
+  # and the field-AGNOSTIC probe, so a future `meta` sub-field is covered without an edit here
+  p <- tabxplor:::set_meta_field(g, "zz_probe", list(kept = TRUE))
+  expect_identical(tabxplor:::get_meta(dplyr::bind_rows(p, p))[["zz_probe"]], list(kept = TRUE))
+})
+
 test_that("tab_spread() keeps the weight footer, and narrows only tab_vars", {
   skip_if_no_gettext()
   d <- forcats::gss_cat[!is.na(forcats::gss_cat$tvhours) & forcats::gss_cat$tvhours > 0, ]

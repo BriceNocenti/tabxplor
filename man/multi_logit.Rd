@@ -14,7 +14,7 @@ multi_logit(
   multiplier = "sd",
   empirical = FALSE,
   add_n = TRUE,
-  conf_level = getOption("tabxplor.conf_level", 0.95),
+  conf_level = conf_level_default(),
   method = c("wald", "profile"),
   stats = NULL,
   compare = c("none", "baseline", "sequential"),

@@ -8,7 +8,7 @@ tab_ci(
   tabs,
   ci = "auto",
   comp = NULL,
-  conf_level = getOption("tabxplor.conf_level", 0.95),
+  conf_level = conf_level_default(),
   color = "no",
   visible = FALSE,
   stars = NULL,

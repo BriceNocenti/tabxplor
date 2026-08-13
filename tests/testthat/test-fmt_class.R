@@ -249,3 +249,75 @@ test_that("vec_math sum/mean keep both colour channels + signif + model_family (
     expect_identical(get_model_family(s), "binomial")
   }
 })
+
+
+# ---- Phase 19a / E1: the DECLARED attribute rules drive the four reconstructors ----
+
+test_that("every fmt column attribute is DECLARED, and a bind yields its neutral (E1)", {
+  # WHY THIS IS THE E1 FIXTURE. Before 19a the 14 attributes were enumerated by hand in SEVEN
+  # reconstructor blocks, so a 15th one meant eight edits and the 10th (model_family) was silently
+  # dropped for two phases. The loop below is driven by `fmt_attr_rules` itself, so a new attribute
+  # is covered the day its row is added -- there is nothing to remember.
+  R <- tabxplor:::fmt_attr_rules
+
+  # 1. completeness + ORDER. Mirrors the build-time stopifnot in fmt_class.R, which a cached binary
+  #    install would not re-run.
+  expect_identical(names(R), fmt_col_attrs)
+  # 2. the reader's default IS new_fmt()'s own formal default -- derived, so the two cannot drift.
+  expect_identical(tabxplor:::fmt_attr_default,
+                   lapply(formals(tabxplor:::new_fmt)[fmt_col_attrs], eval, envir = baseenv()))
+  # 3. the shared zero-length ptype is never mutated by the splice (it is a namespace binding).
+  expect_identical(attributes(tabxplor:::fmt_ptype_empty)[fmt_col_attrs],
+                   attributes(tabxplor:::new_fmt())[fmt_col_attrs])
+
+  a <- fmt(1:2, "row", pct = c(.1, .2), ref = "tot",   ci_type = "cell", col_var = "v1",
+           totcol = TRUE,  refcol = TRUE,  color = c("diff", "ratio"),
+           color_signif = "grey_non_signif", model_family = "binomial", role = "model",
+           conf_level = 0.99, degf = 30, basis = "design", comp_all = TRUE)
+  b <- fmt(1:2, "col", pct = c(.3, .4), ref = "first", ci_type = "diff", col_var = "v2",
+           totcol = FALSE, refcol = FALSE, color = c("contrib", "OR"),
+           color_signif = "ignore", model_family = "poisson", role = "emp",
+           conf_level = 0.90, degf = 12, basis = "weights", comp_all = FALSE)
+  # NON-VACUOUS: all 14 must really differ, else every assertion below proves nothing.
+  expect_true(all(!mapply(identical, tabxplor:::fmt_attrs_of(a), tabxplor:::fmt_attrs_of(b))))
+
+  got <- tabxplor:::fmt_attrs_of(suppressWarnings(vctrs::vec_c(a, b)))
+  for (nm in fmt_col_attrs) {
+    rule <- R[[nm]]
+    expected <- switch(
+      rule$merge,
+      same = , comp3 = , elementwise = rule$neutral,
+      min     = 12,                       # the widest critical value wins -> the smallest degf
+      weakest = "weights",                # a merge claims only what its weakest part carried
+      stop("unhandled merge rule: ", rule$merge))
+    expect_identical(got[[nm]][[1]], expected, label = paste0("neutral of `", nm, "`"))
+  }
+})
+
+test_that("fmt arithmetic reconciles the INFERENCE claim instead of taking x's (E1)", {
+  # THE one deliberate behaviour change of E1. vec_ptype2 has applied the weakest-claim rule since
+  # z16-iiiii, but vec_arith took x's conf_level/degf/basis blindly -- so `x - y` kept x's account
+  # of how ITS interval was computed and stapled it onto a number that is half y's.
+  mk <- function(cl, dg, bs) tabxplor:::set_basis(
+    tabxplor:::set_degf(tabxplor:::set_conf_level(fmt(1:2, "row", pct = c(.1, .2)), cl), dg), bs)
+  a <- mk(0.99, 30, "design")
+  b <- mk(0.90, 12, "weights")
+
+  ab <- suppressWarnings(a + b)
+  expect_identical(tabxplor:::get_basis(ab), "weights")     # weakest claim
+  expect_identical(tabxplor:::fmt_degf_attr(ab), 12)        # widest critical value
+  expect_true(is.na(tabxplor:::fmt_conf_level_attr(ab)))    # two levels -> "unknown", not x's
+  # ... and the arith policies that did NOT change: display facts follow x, position is destroyed
+  a2 <- set_color_signif(as_totcol(a, TRUE), "grey_non_signif")
+  b2 <- set_color_signif(as_totcol(b, TRUE), "ignore")
+  ab2 <- suppressWarnings(a2 * b2)
+  expect_identical(get_color_signif(ab2), "grey_non_signif")
+  expect_false(is_totcol(ab2))
+})
+
+test_that("adding a count column to a percentage one WARNS instead of erroring (E1)", {
+  # `comp_all` is NA on a count column, so `same_comp` is three-valued and the guard `if (!same_comp)`
+  # aborted with "missing value where TRUE/FALSE needed". The reconcile itself was always NA-safe.
+  expect_warning(out <- fmt(5L) + fmt(5L, "row", pct = .5, comp_all = FALSE))
+  expect_true(is.na(get_comp_all(out, replace_na = FALSE)))   # NA-vs-set stays NA (rule "comp3")
+})

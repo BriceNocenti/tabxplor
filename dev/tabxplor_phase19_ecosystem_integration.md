@@ -68,7 +68,7 @@ Phase 19 is **not a feature phase**. It exists to make the package's own model e
    kind of delta).
 9. **End-of-phase documentation discipline** (CLAUDE.md § The last step of every implementation):
    file-header docstrings, `# DESIGN:` / `# WARNING:` tags, the CLAUDE.md phase "DONE" summary,
-   `dev/tabxplor_architecture.md` when structure changes only.
+   `dev/tabxplor_architecture.md` when structure changes *only*.
 
 ### What must survive, unchanged in spirit
 
@@ -146,7 +146,7 @@ plan was written (marked ★).
 | ★ **`spread`**                                                                 | one implementation, `tab_spread()` keeps its name and absorbs `reg_spread_models()`; **one argument name on both producers**                   |
 | ★ **KEY 5**                                                                    | **in Phase 19**, sequenced late, after KEY 1, gated on the jamovi cold+warm+reref lock                                                         |
 | ★ **release**                                                                  | **all of Phase 19 lands before the 2.0.0 CRAN release** — one set of shims, introduced once                                                    |
-| KEY 7 entry points                                                             | (b): `tab_many()` becomes a one-line deprecated shim; `tab_plain`/`tab_num` get a superseded badge and stop mirroring `tab()`'s formals        |
+| KEY 7 entry points                                                             | (b): `tab_many()` becomes a one-line deprecated shim;        |
 | `.fit_cache` / reref                                                           | (a) keep as is — 450 lines and the 11-conjunct predicate stay; do not "improve" it in this phase                                               |
 | jamovi boundary                                                                | (b) a shared resolver both boundaries call + a **generated** table for the JS eligibility rules                                                |
 | `exponentiate`                                                                 | **deleted** → `measure = "log"`, old name kept as a documented synonym                                                                         |
@@ -759,8 +759,7 @@ export stack's integration onto the shared render model.
 - **One documented crosstab entry point.** `tab()` for everything; `tab_many()` becomes a one-line
   deprecated shim (it is already soft-deprecated yet still carries the **old** vocabulary — `chi2`,
   `totrow`, `totcol` — so four public functions document four spellings of one table);
-  `tab_plain()`/`tab_num()` get a superseded badge and **stop mirroring `tab()`'s formals** (they have
-  literally been wrappers over the cores since 17f). `tab_counts()` stays public — its *inputs*
+  `tab_plain()`/`tab_num()` stays public. `tab_counts()` stays public — its *inputs*
   genuinely differ. That removes ~68 formals of drifting mirror surface.
 - **A predictable return.** After 19f, `tab_vars` × several `row_vars` compose, so the list fallback
   disappears; `output_list` becomes the **only** thing that changes the shape, and

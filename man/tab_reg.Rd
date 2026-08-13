@@ -20,7 +20,7 @@ tab_reg(
   color = TRUE,
   color_signif = NULL,
   stars = TRUE,
-  conf_level = getOption("tabxplor.conf_level", 0.95),
+  conf_level = conf_level_default(),
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,

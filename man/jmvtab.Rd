@@ -16,7 +16,7 @@ jmvtab(
   color_signif = "ignore",
   chi2 = FALSE,
   anova = "welch",
-  test_robust = "classic",
+  design_effect = FALSE,
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
@@ -32,7 +32,6 @@ jmvtab(
   stars = FALSE,
   method_cell = "wilson",
   method_diff = "newcombe",
-  method_ratio = "katz",
   method_mean_diff = "welch",
   method_mean_ratio = "robust",
   totaltab = "line",
@@ -114,9 +113,11 @@ their contribution to variance.}
 the test is on: Welch's F (default, does not assume equal variances) or the
 classic pooled F.}
 
-\item{test_robust}{For a weighted table, a more robust p-value: "classic"
-(unweighted chi2 / Welch F); "kish" (first-order Rao-Scott rescale to the
-effective sample size).}
+\item{design_effect}{For a WEIGHTED table, make the confidence intervals,
+the significance stars, the colour thresholds AND the p-values account for
+the unequal weighting (the exact flat survey-design variance) instead of
+using the raw number of respondents. Sets options(tabxplor.design_effect).
+Off by default; it moves every interval in the table, not only the p-value.}
 
 \item{na}{The policy to adopt with missing values. It must be a single
 string.  \itemize{    \item \code{na = "keep"}: by default, prints
@@ -200,10 +201,6 @@ bracket always agree.}
 \item{method_diff}{The proportion confidence-interval method for \code{ci =
 "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
 score test, so the interval and the significance stars always agree.}
-
-\item{method_ratio}{The confidence-interval method for a ratio of
-proportions or rates (\code{ci = "ratio"} on percentages): Katz's log-ratio
-interval.}
 
 \item{method_mean_diff}{The confidence-interval method for the difference
 of numeric means (means with \code{ci = "diff"}): Welch (default) or

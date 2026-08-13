@@ -165,6 +165,28 @@ reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
 # (log_odds_scale) rather than the SD-standardized mean_diff scale. gaussian is the only family out.
 reg_fam_logscale <- function(f)
   f %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial", "rr")
+
+# Phase 19a: five more, absorbing 21 hard-coded whitelists across tab_reg.R and reg-assumptions.R --
+# the census that Phase 19e needs done before it can move the estimand surface. Same rule as above:
+# ask the question once, here, not at each call site. Each names a FACT about the family, so the
+# reason two call sites agree is stated rather than coincidental.
+#
+# fitted by stats::glm -- i.e. NOT one of the 3+-level machines (nnet::multinom / MASS::polr /
+# survey::svyolr / svyVGAM), which have no glm-shaped coefficient table, no anova() and no AIC path.
+reg_fam_glm <- function(f) f %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")
+# the count model can be over-dispersed, so a Pearson dispersion (phi) is worth reporting and the
+# nominal variance cannot be trusted. `grouped` = a grouped-binomial (successes/trials) fit, which is
+# over-dispersible for the same reason a Poisson is.
+reg_fam_overdispersed <- function(f, grouped = FALSE) f == "poisson" || isTRUE(grouped)
+# the dispersion is FIXED BY THE FAMILY (1), so the Wald critical value refers to z, not t.
+reg_fam_disp_known <- function(f) f %in% c("binomial", "poisson")
+# the dispersion is ESTIMATED from the residuals, so a term test refers to F rather than chi2.
+reg_fam_disp_estimated <- function(f) f %in% c("gaussian", "quasipoisson")
+# the fit is produced by survey::svyglm -- ONE fact with two consequences, which is why the same
+# expression used to appear under two different names (`use_svy`, picking the fitter, and `use_wald`,
+# picking Wald over LR). An svyglm has no ordinary likelihood, so there is no LR test to run. "rr"
+# (modified Poisson with robust SE on a binary outcome) goes through svyglm even unweighted.
+reg_fam_svy_fitted <- function(f, weighted = FALSE) isTRUE(weighted) || f == "rr"
 # Phase 18z8-B (SS4.2, maintainer ruling Q1(b)): is the DISPLAYED estimand COLLAPSIBLE -- i.e. does a
 # zero model-vs-observed gap mean "no confounding"? Everything tabxplor shows is, EXCEPT a CONDITIONAL
 # ODDS RATIO: the coefficient of a probability-scale model (the binomial logit; the multinomial /
@@ -1281,7 +1303,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   # jamovi reref byte-identity contract needs no special case. `weighted` stays FALSE for an unweighted
   # "rr": it is a whole-call scalar that a mixed table shares, so it must keep meaning "the USER gave a
   # design". The "rr" branches in reg_glance / reg_footer_stats / reg_compare_rows key on the family.
-  use_svy <- weighted || family == "rr"
+  use_svy <- reg_fam_svy_fitted(family, weighted)
   fit <- if (family == "gaussian" && !weighted) {
     stats::lm(fml, data = mdata)
   } else if (!use_svy) {
@@ -1320,7 +1342,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   # stars match a quasi-Poisson / quasi-binomial fit, while the MLE fit keeps its likelihood for the
   # AIC / McFadden / LR / BIC footer. Auto-degrades to naive when phi ~= 1. Bernoulli-binary dispersion
   # is not identifiable (reg_dispersion -> NA) and gaussian has no dispersion, so both are untouched.
-  over_disp <- !weighted && (family == "poisson" || grouped)
+  over_disp <- !weighted && reg_fam_overdispersed(family, grouped)
   phi       <- if (over_disp) reg_dispersion(fit) else NA_real_
   scaled    <- over_disp && !is.na(phi) && phi > 0
   if (scaled) {
@@ -1336,7 +1358,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   # "rr" is excluded by construction (the test names binomial/poisson, never the "rr" key) -- but say so,
   # rather than silently downgrading: a profile likelihood on a deliberately misspecified quasi-likelihood
   # is not a meaningful interval, and the robust Wald IS the method the modified Poisson is defined with.
-  use_profile <- method == "profile" && !weighted && family %in% c("binomial", "poisson")
+  use_profile <- method == "profile" && !weighted && reg_fam_disp_known(family)
   if (method == "profile" && weighted) {
     cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for survey-weighted ",
                                    "models; using Wald.")))
@@ -1359,7 +1381,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     # z for fixed-dispersion glm (binomial/poisson, unweighted); else t on df.residual (lm, quasi*,
     # weighted svyglm, OR a 14v-ii phi-scaled poisson/grouped-binomial -- an estimated dispersion moves
     # the reference off z onto t, matching a quasi fit).
-    disp_known <- !weighted && family %in% c("binomial", "poisson") && !scaled
+    disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
     crit <- reg_wald_crit(disp_known, stats::df.residual(fit), conf_level)   # shared with reg_reref (15b)
     lo <- td$estimate - crit * td$std.error
     hi <- td$estimate + crit * td$std.error
@@ -2838,7 +2860,8 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
 # ll_0 = ll_full - LR/2 where LR = null.deviance - deviance); multinom/polr refit the intercept-only
 # model on the stored model frame. Returns NULL when the null can't be recovered.
 reg_null_loglik <- function(fit, family) {
-  if (family %in% c("binomial", "poisson") &&
+  # the deviance-based LR null needs a KNOWN dispersion (the deviance is then the likelihood).
+  if (reg_fam_disp_known(family) &&
       !is.null(fit$null.deviance) && !is.null(fit$deviance)) {
     ll_f <- tryCatch(as.numeric(stats::logLik(fit)), error = function(e) NA_real_)
     lr   <- fit$null.deviance - fit$deviance
@@ -2966,7 +2989,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   bic <- tryCatch(as.numeric(stats::BIC(fit)), error = function(e) NA_real_)
   if (!is.na(aic)) out <- dplyr::bind_rows(out, row("aic", statistic = aic))
   if (!is.na(bic)) out <- dplyr::bind_rows(out, row("bic", statistic = bic))
-  if (family == "poisson" || grouped) {
+  if (reg_fam_overdispersed(family, grouped)) {
     phi <- reg_dispersion(fit)
     if (!is.na(phi)) out <- dplyr::bind_rows(out, row("phi", statistic = phi))
   }
@@ -2988,7 +3011,7 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
            # Phase 18z15: `phi` is the EXACT Pearson dispersion this row has always held; the key
            # `dispersion` now names the CHECK (max robust/model SE), which every family gets below.
-           if (family == "poisson" || grouped) s <- c(s, "phi"); s }
+           if (reg_fam_overdispersed(family, grouped)) s <- c(s, "phi"); s }
   # Phase 18z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
   # at all?" is the question a multi-level factor block leaves unanswered, and it costs no extra fit.
   # Phase 18z15: so are the five model CHECKS (ruling R7 -- always, no opt-in gate). They need no new
@@ -3094,11 +3117,11 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
                                    "or several dependents); ignored.")))
     return(reg_gof)
   }
-  use_f  <- family %in% c("gaussian", "quasipoisson")
+  use_f  <- reg_fam_disp_estimated(family)
   # Phase 18z3: an "rr" fit is an svyglm (see reg_fit), so its comparison takes the DESIGN-BASED Wald
   # branch below whether or not the user gave a design -- a likelihood-ratio test between two
   # quasi-likelihood fits would be a false LR.
-  use_wald <- weighted || family == "rr"
+  use_wald <- reg_fam_svy_fitted(family, weighted)
   base_i <- if (compare == "baseline") {
     if (is.null(baseline))          1L
     else if (is.numeric(baseline))  as.integer(baseline)
@@ -3156,7 +3179,10 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
       "i" = paste0(
         "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
         "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test."),
-      "i" = 'A different N is usually the per-model missing-value drop; set {.code na = "drop_all_models"} to fit every model on the same complete cases so the likelihood-ratio test can run.'))
+      # Phase 19a (D5): the advice named `na = "drop_all_models"`, a value REMOVED in z13 -- so a user
+      # following it hit match.arg()'s "should be one of" error. The `na` family is
+      # drop_by_outcome / drop_by_model / drop_all.
+      "i" = 'A different N is usually the per-model missing-value drop; set {.code na = "drop_all"} to fit every model on the same complete cases so the likelihood-ratio test can run.'))
     row(paste0("compare_", tag, "_aic"), col, statistic = daic, nobs = fits[[i]]$nobs)
   })
   rows <- purrr::compact(rows)
@@ -3203,7 +3229,7 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
     # No pooled interaction for the engines that are not a single glm/svyglm equation (multinomial /
     # ordinal have their own fitters), nor for the compound-formula escape hatch (the interaction of an
     # arbitrary formula is ill-defined). Degrade to no row, never to a wrong one.
-    if (sp$family %in% c("multinomial", "ordinal") || isTRUE(sp$compound)) return(NULL)
+    if (!reg_fam_glm(sp$family) || isTRUE(sp$compound)) return(NULL)
     preds <- sp$predictors
     if (length(preds) == 0L) return(NULL)
     f <- tryCatch(reg_fit(data, sp$dependent, preds, sp$family, shared$design_spec, sp$do_exp,
@@ -3213,8 +3239,8 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
                   error = function(e) NULL)
     if (is.null(f) || is.null(f$fit)) return(NULL)
     fit      <- f$fit
-    use_f    <- sp$family %in% c("gaussian", "quasipoisson")
-    use_wald <- weighted || sp$family == "rr"
+    use_f    <- reg_fam_disp_estimated(sp$family)
+    use_wald <- reg_fam_svy_fitted(sp$family, weighted)
     # WARNING: take the interaction terms from the FIT's own term.labels, verbatim -- never rebuild
     # them. terms() orders the parts of an interaction by the variable's position in the formula, so a
     # hand-built "age:party3" comes back as "party3:age" and drop1() then rejects the scope. Both
@@ -3309,7 +3335,7 @@ reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
 
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
-    if (sp$family %in% c("multinomial", "ordinal") || isTRUE(sp$compound)) return(NULL)
+    if (!reg_fam_glm(sp$family) || isTRUE(sp$compound)) return(NULL)
     f <- fits[[i]]
     if (is.null(f) || is.null(f$fit)) return(NULL)            # the jamovi digest path keeps no fit
     fit  <- f$fit
@@ -3324,8 +3350,8 @@ reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
     terms_i <- have[keep]
     if (length(terms_i) == 0L) return(NULL)
     reg_term_tests(fit, terms_i, terms_i,
-                   use_f = sp$family %in% c("gaussian", "quasipoisson"),
-                   use_wald = weighted || sp$family == "rr",
+                   use_f = reg_fam_disp_estimated(sp$family),
+                   use_wald = reg_fam_svy_fitted(sp$family, weighted),
                    types = c(wald = "global_wald", f = "global_f", lr = "global_lr"),
                    col_var = fit_first_col[[i]], nobs = f$nobs, row = row)
   })
@@ -3369,10 +3395,10 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, inverse_two_
   dn <- stringi::stri_replace_all_regex(rownames(V), "`", "")
   dimnames(V) <- list(dn, dn)
   grouped    <- family == "binomial" && !is.null(sp$trials) && is.null(sp$formula)
-  over_disp  <- !weighted && (family == "poisson" || grouped)
+  over_disp  <- !weighted && reg_fam_overdispersed(family, grouped)
   phi        <- if (over_disp) reg_dispersion(fit) else NA_real_
   scaled     <- over_disp && !is.na(phi) && phi > 0
-  disp_known <- !weighted && family %in% c("binomial", "poisson") && !scaled
+  disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
   list(coef = coef_v, vcov = V, df_residual = stats::df.residual(fit),
        phi = phi, scaled = scaled, disp_known = disp_known, do_exp = do_exp,
        var_y = f$var_y, positive_level = f$positive_level, nobs = f$nobs,
@@ -4922,7 +4948,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     exponentiate = TRUE, 
                     trials = NULL, empirical = FALSE, add_n = TRUE,
                     color = TRUE, color_signif = NULL, stars = TRUE, 
-                    conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
+                    conf_level = conf_level_default(), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, multiplier = "sd",
                     shape = NULL,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
@@ -4942,7 +4968,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   na      <- match.arg(na)
   # Fallback FALSE matches .onLoad's default and tab()'s read sites (the option is always set to FALSE
   # on load, so this only bites if someone unsets it; TRUE here was an inconsistency, not an intent).
-  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", FALSE) else cleannames
+  cleannames <- resolve_cleannames(cleannames)
 
 
   # Phase 14u (K): a LIST of models AND SEVERAL dependents -> one model-comparison table per dependent,
@@ -5365,7 +5391,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # is in dev/model_vs_observed_gap_test.md SS6 if the option ever becomes a list.
   reref <- !is.null(.fit_cache) && effect == "coefficient" && !mnl_vsrest &&
     estimate_display %in% c("value", "ci") && method == "wald" &&
-    all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")) &&
+    all(reg_fam_glm(families_vec)) &&
     !formula_mode && is.null(split_var) && is.null(trials) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
     # Phase 18z15: a `shape` is a DIFFERENT MODEL, not a reparametrization of the canonical one, so
@@ -5524,8 +5550,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # colour break and reads as "no effect" beside the factor contrasts next to it; per 1 SD it lands on
   # the same visual scale. `multiplier = 1` restores the per-unit reading.
   mult_scalar_default <- "sd"
-  mult_res <- if (formula_mode || !any(families_vec %in% c("gaussian", "binomial", "poisson",
-                                                           "quasipoisson", "rr"))) {
+  mult_res <- if (formula_mode || !any(reg_fam_glm(families_vec))) {
     list(k = NULL, label = NULL)
   } else {
     num_preds_all <- reg_numeric_preds(data, all_predictors)
@@ -5639,16 +5664,17 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     na_shared_vars = na_shared_vars, shape_terms = shape_terms,
                     multiplier = multiplier, effect = effect, wt = wt_disp,
                     design_vars = reg_design_vars(design_spec)),
-    shape = if (length(reg_shapes))
-      vapply(reg_shapes, function(s) if (is.na(s$k)) s$kind else paste0(s$k, " groups"),
-             character(1)) else NULL,
+    # Phase 19a: `shape` and `model_labels` are DELETED -- write-only across the whole repo (verified:
+    # the seven readers of reg_meta take family / fit_spec / split_var / wt / dependent, and every
+    # other `$shape` hit in R/ is the effect-emission spec, a different object). `conf_level` stays
+    # for now: study §5 rules it "use it to unlock further simplification", which is 19g's item.
     # Phase 18z10: which observed counterpart each outcome has (NA = none). Stored, so the footer can
     # word the in-cell "{or} ({obs})" bracket and ?tab_reg can state the scope honestly.
     crude_keys = if (isTRUE(empirical))
       stats::setNames(purrr::map_chr(specs, ~ .$crude_key), purrr::map_chr(specs, "dependent"))
       else stats::setNames(rep(NA_character_, length(specs)), purrr::map_chr(specs, "dependent")),
     split_var = split_var, comparison = is_comparison, wt = wt_disp,
-    model_labels = if (is_comparison) labels else NULL, conf_level = conf_level
+    conf_level = conf_level
   )
   set_reg_meta(res, reg_meta)
 }
@@ -5682,7 +5708,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 tab_logit <- function(data, dependent, predictors, wt = NULL,
                       inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
                       shape = NULL, empirical = FALSE, add_n = TRUE,
-                      conf_level = getOption("tabxplor.conf_level", 0.95),
+                      conf_level = conf_level_default(),
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
@@ -5737,7 +5763,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 multi_logit <- function(data, dependent, models, wt = NULL,
                         inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
                         empirical = FALSE, add_n = TRUE,
-                        conf_level = getOption("tabxplor.conf_level", 0.95),
+                        conf_level = conf_level_default(),
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         estimate_display = c("value", "ci", "prob", "ame"),

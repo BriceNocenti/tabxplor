@@ -2887,7 +2887,20 @@ lv1_group_vars <- function(tabs) {
 # DESIGN: dplyr_row_slice + dplyr_col_modify + dplyr_reconstruct form the core trio.
 #   Each: (1) calls NextMethod() for the actual operation, (2) checks lv1_group_vars()
 #   to decide if result has enough groups to stay grouped_tab or must downgrade to tab,
-#   (3) re-attaches subtext and chi2 attributes from the original data.
+#   (3) re-attaches subtext / test / meta via tab_restore().
+# WARNING: they do NOT all read the attributes off the same argument, and the difference is
+#   load-bearing. dplyr_row_slice and dplyr_col_modify dispatch on `data`, so `data` IS the rich
+#   object. dplyr_reconstruct dispatches on `template`, and its generic runs `data` through
+#   dplyr_new_data_frame() BEFORE dispatch -- so by the time the method is reached, `data` carries
+#   only names/row.names/class. Restoring from `data` there (which is what it did until Phase 19a)
+#   silently returned a correctly-CLASSED table with no subtext, no test and no meta at all: no
+#   weight footer, no CI legend, no inference basis, no test summary, no caption. It survived the
+#   in-place verbs only because they hand the reconstruct a modified copy that still carries the
+#   attributes, and failed the moment a verb built a fresh frame -- bind_rows() on two GROUPED tabs
+#   (§11 D16). This method is the ONLY carrier on that path: dplyr registers its own
+#   vec_ptype2.grouped_df.grouped_df into vctrs' table and it wins unconditionally once `grouped_df`
+#   is in the class vector, so vec_ptype2/vec_cast.tabxplor_grouped_tab.* are never reached by a bind
+#   (verified) and no extra vctrs registration can change that.
 # WARNING: every dplyr verb a user might call needs its own S3 method following this same
 #   pattern (see the group_by/select/rename/relocate/summarise/[/[<- clones below and in
 #   NAMESPACE). A missing method silently downgrades the table to a plain tbl_df, losing the
@@ -2932,7 +2945,9 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 #' @keywords internal
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
-  tab_restore(out, data)
+  # Phase 19a (D16): the attributes come from `template`, per dplyr's contract -- `data` is stripped
+  # before dispatch (see the WARNING above). `out` still decides the grouped/plain downgrade.
+  tab_restore(out, template)
 }
 # dplyr:::dplyr_reconstruct.grouped_df
 

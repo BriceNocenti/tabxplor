@@ -11,7 +11,12 @@
 ```
 R/
 ├── fmt_class.R     (~4400 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
-│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (12 attrs;
+│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (14 attrs)
+│                              + 19a's **fmt_attr_rules** = HOW each attribute is carried (neutral/merge/arith/scalar,
+│                              one row each, meta_bind_rules-shaped) driving all 4 reconstructors through
+│                              fmt_attrs_of/_merge/_arith + fmt_ptype_attrs -- the 7 hand-written 14-attribute
+│                              lists are GONE, adding an attribute is 2 lines, a build-time stopifnot enforces it,
+│                              and vec_ptype2 got ~2x faster; +fmt_base (the n_eff->tot_n->n coalesce, 5 sites);
 │                              z13 +conf_level = the level THIS column was built at, so the engine's four
 │                              thresholds stop reading the global option -- TWO accessors, and the split is
 │                              load-bearing: fmt_conf_level_attr (RAW, the 6 reconcilers, so a bind carries
@@ -498,6 +503,11 @@ R/
 │                              (factor/character/LOGICAL) = the ONE predictor-kind predicate replacing
 │                              5 disagreeing sites (fixes a logical predictor rendering blank);
 │                              reg_meta gains predictor_types + the resolved multiplier
+│                              19a: the family PREDICATE table gains 5 rows beside z3's three --
+│                              reg_fam_glm / _overdispersed / _disp_known / _disp_estimated /
+│                              _svy_fitted (the last = "this fit comes from svyglm", the ONE fact behind
+│                              both `use_svy` and `use_wald`: an svyglm has no ordinary likelihood).
+│                              21 hard-coded whitelists absorbed, incl. 2 in reg-assumptions.R.
 │                              z13: `na` is a THREE-value family (drop_by_outcome default / drop_by_model /
 │                              drop_all) implemented through reg_fit(drop_extra=) -- no pre-pass on `data`
 │                              (which breaks a PREBUILT design's keep_mask), so the "ignored for a survey
@@ -1045,6 +1055,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 - `dev/benchmarks/tab_many_performance_profile.md` — the full 2026-07 profile. Read before optimizing `tab_many` / `tab_chi2` / `tab_num`.
 
 
+
 #### Verification (every phase)
 
 - **Byte-identity**: `devtools::test("~/github/tabxplor")` after each phase; `test-golden.R` + `test-export-parity.R` + `test-fmt-contract.R` + `test-fuse-parity.R` stay green. Intentional output changes → rerun `dev/make_golden.R`, review the `_golden/`/`_snaps/` diff consciously, `testthat::snapshot_accept()`.
@@ -1204,6 +1215,88 @@ structural, so do not "improve" a statistic while passing through.
 
 ---
 
+#### Phase 19a — The floor: enabling moves, dead weight, and the cheap defects
+
+**DONE (2026-08-13).** Targeted suite green: **FAIL 0, WARN 0, SKIP 1, PASS 4091** across every file
+the phase touches. **Zero golden churn** (`dev/verify_golden_field_delta.R`: 1787 cells, 36 cases, no
+delta) and zero snapshot churn — the only behaviour that moved is the four defect fixtures.
+
+**E1 — the enabling move.** The four reconstructor families enumerated the 14 per-column attributes by
+hand in **seven** blocks, so a 15th attribute meant eight edits (and `model_family` was silently
+dropped for two phases because one list was forgotten). They are driven by **`fmt_attr_rules`** now —
+one row per attribute, four declared columns (`neutral` / `merge` / `arith` / `scalar`), in the shape
+`meta_bind_rules` + `tab_meta_bind()` already used for the table-level `meta`. The reader's default is
+DERIVED from `new_fmt()`'s own formals, so "the reader's default is the constructor's default" is true
+by construction; a build-time `stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs))` makes the
+table exhaustive (it must be build-time — the index vectors derive at the same moment, and a missing
+row would make the loops silently *skip* an attribute). **~210 lines → 1 table + 4 helpers**
+(`fmt_attrs_of` / `fmt_attrs_merge` / `fmt_attrs_arith` / `fmt_ptype_attrs`), and adding an attribute
+is genuinely two lines — which is what 19b, 19c and 19g were waiting for.
+
+- **It got faster, not slower.** The 14-attribute enumeration was never the cost: 28 getter calls (12
+  of them `UseMethod`) plus a full 21-field `new_fmt()` were. `vec_ptype2` **234 µs → 125 µs**,
+  `vec_ptype_common` (the compact merge's reduce, the hottest fmt path) **717 µs → 378 µs**,
+  `c()` 577 → 417 µs, `vec_cast` 139 → 113 µs. The end-to-end merge guard shows no regression.
+  `dev/benchmarks/e1_fmt_ptype2.R` + `results_2.0.0/e1_{before,after}.txt`.
+- **One deliberate behaviour change** (maintainer-approved): `vec_arith` reconciles
+  `conf_level`/`degf`/`basis` with the weakest-claim rule `vec_ptype2` has applied since z16-iiiii.
+  It took `x`'s blindly, so `design_col + n_col` claimed `"design"` — x's account of how ITS interval
+  was computed, stapled onto a number that is half y's.
+- **Found while implementing**: `vec_arith`'s `if (!same_comp)` was evaluated on a THREE-valued
+  `same_comp`, so `count_column + pct_column` **errored** ("missing value where TRUE/FALSE needed")
+  where a warning was intended. One token (`isFALSE`), kept out of E1 so the refactor stayed
+  behaviour-free.
+
+**D16** — `bind_rows()` on two *grouped* tabs dropped `subtext`, `test` and the whole `meta`. Root
+cause: dplyr's generic runs `data` through `dplyr_new_data_frame()` **before** dispatch, so
+`dplyr_reconstruct.tabxplor_grouped_tab` restored from a payload with no attributes at all; it now
+restores from `template`, per dplyr's contract. Verified that this method is the **only** carrier on
+that path — dplyr registers its own `vec_ptype2.grouped_df.grouped_df` into vctrs' table and it wins
+unconditionally, so `vec_ptype2/vec_cast.tabxplor_grouped_tab.*` are dead code for a bind and no extra
+registration could reach them. Fifth instance of "a rebuild site drops table-level facts"; takes the
+carrier score from 14/15 to 15/15.
+
+**D27** — `ref`/`ref2 = "last"` did not resolve (it fell through to the regex matcher → index 0 → a
+"no columns were found as reference" warning and an all-NA `or`). **Prerequisite for 19d**, where the
+odds ratio becomes unconditional and `ref2` is therefore always in force. `"last"` is now a sentinel
+with **one meaning on both axes — the last LEVEL** (a total is not a level; `"tot"` names it), even
+though the two axes express it differently: the column axis excludes the total column and returns a
+real index, the row axis returns `-1L`, which revives a previously *dead* branch in
+`calculate_refrows()` as "the last non-total row of each sub-table". Documented in all four mirrored
+`?ref` blocks.
+
+**The rest**: D7 (`pct_vect`/`ref_vect` declared in `new_ctx()` — their guards could not fire, they
+*errored*) · §7.10 (`settings$cols$lvs` refreshed when `tab_prepare_pop()` resolves `"auto"`, and
+`lv1` stored beside it — dormant, but it is the stale copy shipped to every parallel worker) ·
+`tab_assemble()`, `set_tot_n`, `set_n_eff`, `reg_meta$shape`, `reg_meta$model_labels` deleted ·
+`resolve_cleannames()` (5 sites, one of which had drifted to a different fallback),
+`conf_level_default()` (10 formal defaults), `fmt_base()` (the `n_eff → tot_n → n` coalesce, 5 sites),
+`inference` made a **required** argument on `plain_core`/`num_core`/`tab_apply_tests` (a lazy default
+could only fire on a caller that forgot, and would then silently re-read the global option), and
+`tab_ci()`/`tab_chi2()`'s tails replaced by `tab_restore()` — they were literally its body, minus
+`meta`, which the exported step path therefore dropped · five family predicates
+(`reg_fam_glm` / `_overdispersed` / `_disp_known` / `_disp_estimated` / `_svy_fitted`) absorbing **21**
+hard-coded whitelists, extending the three z18z3 already had. The fifth is the one worth its name: the
+same expression appeared as `use_svy` and as `use_wald` because **an `svyglm` has no ordinary
+likelihood** — one fact, now stated · D5, D15, D18 and the `tot`-block's wrong orientation word.
+
+**Four of the study's "cut" verdicts were wrong and were NOT applied** — reported so the ledger stops
+carrying them: `complete_partial_totals` and `set_ci_type` each have one live caller (the latter dies
+with `ci_type` in 19b); `set_model_family` is exported with test callers; `get_ref_means`/`get_ref_pct`
+are read by `plots.R`; **D14 was already fixed**. Two more scope corrections: `plain_resolve`'s `tot`
+forcing block is **not** dead — it is unreachable from `tab()`/`tab_counts()` but live through the
+exported `tab_plain(tot =)`, so it is tagged and handed to 19h (its wrong message word fixed in
+passing); and `ctx$levels_order` **stays in the ctx** — its one reader is `jmv_cache_aggregate(ctx)`,
+reached through a hook that passes nothing but the ctx, so there is no "directly" to pass it (19k).
+
+⚠ `dev/verify_golden_field_delta.R` gained a **reset warning at the top**: its four declarations
+describe the CURRENT phase's intended delta, and z16-iiiii's leftover `ci_settings` reshape rule was
+reporting its own already-landed change as a PROBLEM on four cases.
+
+No `.a.yaml`/`.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still owns that.
+
+---
+
 
 
 
@@ -1303,10 +1396,9 @@ The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the 
 After verification passes, always :
 
 1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
-2. Keep the tabxplor version 2.0.0 roadmap in CLAUDE.md and `dev/tabxplor_2.0.0_decisions.md` up-to-date as you build it or implement it.
-3. Update `dev/tabxplor_architecture.md` whenever you modify the package structure for real (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
-4. For package structure and architecture, also add the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt, since the details are already in `dev/tabxplor_architecture.md`. When there is nothing to change, skip it. Maintainer will move done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
-5. `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary.
-6. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)
+2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure for real (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
+3. For package structure and architecture, also add the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt, since the details are already in `dev/tabxplor_architecture.md`. When there is nothing to change, skip it. Maintainer will move done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
+4. `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary (most of the time, it’s not necessary).
+5. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)
 
 

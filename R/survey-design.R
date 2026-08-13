@@ -171,7 +171,7 @@ svy_weighted <- function(x = NULL, wt = x$wt)
 #   of them. It is a BUILD-TIME object: what survives the build is the per-column `conf_level` / `degf`
 #   / `basis` attributes tab_stamp_inference() projects from it.
 new_inference <- function(wt = character(), design_spec = NULL,
-                          conf_level = getOption("tabxplor.conf_level", 0.95),
+                          conf_level = conf_level_default(),
                           method = default_ci_method(), agg_only = FALSE, force = FALSE,
                           design_effect = NULL) {
   list(wt         = if (length(wt)) as.character(wt) else character(),
