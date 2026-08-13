@@ -8,7 +8,7 @@
 # KEY CONSTRAINTS:
 #   - Off-option output is byte-identical (n_eff is NA -> tab_ci coalesces to the raw base).
 #   - The DISPLAYED `n` (raw count) never changes; only the CI base does.
-#   - Last Phase z16-ii renamed the option (was tabxplor.kish_neff) AND the mathematics: the base is
+#   - Phase 18z16-ii renamed the option (was tabxplor.kish_neff) AND the mathematics: the base is
 #     now p(1-p)/Var_design at ids = ~1, computed in closed form from the per-cell Sum(w^2), of which
 #     Kish's (Sum w)^2/Sum(w^2) is the degenerate limit. The parity against `survey` itself lives in
 #     test-flat-design-parity.R; this file locks the USER-VISIBLE behaviour.

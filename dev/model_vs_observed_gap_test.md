@@ -1,7 +1,7 @@
 # A significance test for the model-vs-observed gap — design study
 
 Date: 2026-08-05. Status: **FULLY IMPLEMENTED** (Phase A 2026-08-06, Phase B 2026-08-06)
-— **plus §13, added 2026-08-06, which is RESEARCH ONLY** (Last Phase z10: `adjustment` for ordinal,
+— **plus §13, added 2026-08-06, which is RESEARCH ONLY** (Phase 18z10: `adjustment` for ordinal,
 multinomial and summed-score binomials; no R code written, decisions recorded in §13.10).
 Phase A landed the `between_groups` half of §11 -- the 21st field `gap_se`, the `MEASURES` `bounds`
 closure, the three policies, the `residual` -> `zscore` rename (Q4), the `at = "reference"` fix (Q8),
@@ -382,7 +382,7 @@ indistinguishable from exact. The naive column is 2–4× too large everywhere.
 
 ### 3.8 Where it stops holding
 
-> **Superseded in part by §13 (Last Phase z10).** The first three "no" rows below are about a missing
+> **Superseded in part by §13 (Phase 18z10).** The first three "no" rows below are about a missing
 > *crude counterpart*, not about the variance method. §13 measures all three, gives each one, and shows
 > that the gap **test** stays correctly blocked for their coefficient paths by the §4.2(b)
 > collapsibility gate — so what z10 adds is `obs`, plus the test on their marginal (`ame`/`ame_ratio`)
@@ -655,7 +655,7 @@ policy needs:
 **Field-count check against z6.** `dev/empty_vctrs_fields_sparse_record.md` set the re-open threshold at
 "~30 fields"; this is the 21st, and it explicitly named the gap SE as the expected next one. The cost
 is the known `/vctrs-field` pass plus one conscious golden regeneration — the same session shape as
-`n_eff` (Last Phase s) and `obs` (z5), both of which landed with a script proving the only delta was an
+`n_eff` (Phase 18s) and `obs` (z5), both of which landed with a script proving the only delta was an
 all-NA column.
 
 ### 7.2 `sig_source` does NOT gain a third value — `MEASURES` gains a `bounds` closure
@@ -731,7 +731,7 @@ force_policy = function(x) if (reg_scale_noncollapsible(x)) "ignore" else NULL
 ```
 
 which is one signature change to `measure_policy(measure, policy, x)` and reuses the
-`reg_fam_logscale()` / `reg_fam_prob()` predicate family that Last Phase z3 introduced for exactly this
+`reg_fam_logscale()` / `reg_fam_prob()` predicate family that Phase 18z3 introduced for exactly this
 kind of question. That is the integrated shape; it is not an extra layer.
 
 ### 7.4 The three policies, stated
@@ -906,9 +906,9 @@ regretted quietly for years.
   **Maintainer’s decision: fix it**
 ---
 
-## 13. Last Phase z10 — `adjustment` for ordinal, multinomial and summed-score binomials
+## 13. Phase 18z10 — `adjustment` for ordinal, multinomial and summed-score binomials
 
-Added 2026-08-06. **Status: FULLY IMPLEMENTED (Last Phase z10, 2026-08-07).** Every ruling in §13.10
+Added 2026-08-06. **Status: FULLY IMPLEMENTED (Phase 18z10, 2026-08-07).** Every ruling in §13.10
 landed; the implementation findings are recorded at the end of this section. Original research below. Scope: the three families §3.8 listed
 as having no crude counterpart at all. Every number below was measured on this box today, on
 `gss_simple` (`gss_cat_data_formatting()`, complete cases as stated) or on the stated simulation.
@@ -1419,7 +1419,7 @@ Open for the implementation session:
 `dev/empty_vctrs_fields_sparse_record.md` (z6 — the field-count threshold this phase tests).
 
 
-### 13.11 Implementation findings (Last Phase z10, 2026-08-07)
+### 13.11 Implementation findings (Phase 18z10, 2026-08-07)
 
 Everything §13 forecast held, with five corrections and two defects found by building it.
 

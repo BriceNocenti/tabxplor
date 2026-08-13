@@ -1,4 +1,4 @@
-# R/reg-influence.R -- Last Phase z8-B: influence functions, and the standard error of the GAP between
+# R/reg-influence.R -- Phase 18z8-B: influence functions, and the standard error of the GAP between
 # two estimators fitted on the SAME rows.
 #
 # WHY THIS EXISTS. `color = "adjustment"` scores how far a model effect sits from its observed (crude)
@@ -23,7 +23,7 @@
 #   reg_ame_if_maker(...)       effect = "ame" / "ame_ratio" (the two-term marginal influence function)
 #   reg_if_se(d, design)        design-based when a design exists, IID otherwise
 #
-# Last Phase z9 -- TWO crude paths, by predictor kind. A factor's crude effect is a saturated one-factor
+# Phase 18z9 -- TWO crude paths, by predictor kind. A factor's crude effect is a saturated one-factor
 # GLM, hence the closed form above; a CONTINUOUS predictor has no cells, so its crude leg is
 # reg_coef_if_maker() on the row's own univariable fit (built in R/tab_reg.R). Both legs are then the
 # same machinery over two fits solved on the same rows. reg_ame_if_maker()'s counterfactual therefore
@@ -85,7 +85,7 @@ reg_if_from_parts <- function(X, W, r) {
 # coefficients are dropped: no displayed contrast can load a column the fit could not estimate.
 #' @keywords internal
 reg_coef_if_maker <- function(fit) {
-  # Last Phase z10: a 3+ level fit has no working residuals / IRLS weights, so it goes through the
+  # Phase 18z10: a 3+ level fit has no working residuals / IRLS weights, so it goes through the
   # score core instead. Same contract, different algebra (see reg_if_from_score's WARNING).
   if (inherits(fit, "multinom") || inherits(fit, "polr")) {
     sc <- if (inherits(fit, "multinom")) reg_score_multinom(fit) else reg_score_polr(fit)
@@ -118,7 +118,7 @@ reg_coef_if_maker <- function(fit) {
 # risk ratio under "ame_ratio". That is exactly why it is a fact of the REG_EMPIRICAL SHAPE row.
 # The frame must be the model's own complete cases, in its order (the caller proves that).
 #
-# Last Phase z10: the outcome + weights come from reg_crude_yw(), the ONE description of "what the crude
+# Phase 18z10: the outcome + weights come from reg_crude_yw(), the ONE description of "what the crude
 # estimator averages, and with what weights" -- so the influence function cannot be built around a
 # different `y` than the estimate it is the standard error OF (the invariant reg_crude_y() was extracted
 # for in z8-B, now covering two more shapes):
@@ -186,12 +186,12 @@ reg_crude_if_maker <- function(data, dependent, crude_key, positive_level, wt, l
 # CONTRACT of the returned closure `(var, level, ref)`:
 #   * `var` is a FACTOR  -- `level` / `ref` are level LABELS, and the counterfactual sets the whole
 #     column to that level (the classic "everyone at level j vs everyone at the reference").
-#   * `var` is NUMERIC   -- Last Phase z9: `level` / `ref` are SHIFTS added to the observed x, so the
+#   * `var` is NUMERIC   -- Phase 18z9: `level` / `ref` are SHIFTS added to the observed x, so the
 #     caller passes (k, 0) for a k-unit contrast. That is marginaleffects' own forward difference
 #     `variables = list(v = k)`, which is what the numeric AME column shows. The old code path assigned
 #     `as.character(lv)` unconditionally, turning a numeric column into character -- model.matrix() then
 
-# === 3+ LEVEL OUTCOMES (Last Phase z10) ============================================================
+# === 3+ LEVEL OUTCOMES (Phase 18z10) ============================================================
 #
 # reg_coef_if_maker() above reaches lm / glm / svyglm through model.matrix() + residuals(type =
 # "working") + fit$weights, none of which nnet::multinom or MASS::polr provides -- so both correctly
@@ -457,7 +457,7 @@ reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
   }
 }
 
-# reg_if_align() -- Last Phase z14-iii: put an influence vector built on a FRAME into the row space
+# reg_if_align() -- Phase 18z14-iii: put an influence vector built on a FRAME into the row space
 # the DESIGN uses, which is also the fit's. `[` does not drop rows on a CALIBRATED or PPS design --
 # survey keeps all n and sets prob = Inf -- so svy_domain_design() pads the fit's design back to full
 # length and svyglm keeps those zero-weight rows in model.matrix(). A leg built on the complete-case
@@ -479,7 +479,7 @@ reg_if_align <- function(v, n, des_rows) {
 # its OWN variances, so strata, clusters and finite-population corrections come along for free
 # (measured: it reproduces SE(svyglm) exactly, ratio 1.0000, while the IID version is 6 % too small on a
 # mild stratified/clustered design). Without one it is the plain sum of squares.
-# Last Phase z16-iiiii (defect 5): the svyrecvar call goes through svy_var_recvar(), the ONE place the
+# Phase 18z16-iiiii (defect 5): the svyrecvar call goes through svy_var_recvar(), the ONE place the
 # package answers the lonely-PSU question. It was inlined here WITHOUT that policy, so survey's default
 # ("fail") made svyrecvar error on a design with a single-PSU stratum -- the tryCatch then returned NA
 # and the gap test silently vanished, while tab()'s cell variances and the omnibus test, which both

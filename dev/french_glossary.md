@@ -1,7 +1,7 @@
 # tabxplor — French terminology glossary
 
 The canonical French term for each recurring tabxplor concept, so the `.po` catalogue, the French
-vignettes and the pkgdown site stay consistent. `.Rbuildignore`'d. Written for Last Phase w.
+vignettes and the pkgdown site stay consistent. `.Rbuildignore`'d. Written for Phase 18w.
 
 **Phase w-ii** translated the three vignettes into French, as web-only articles in
 `vignettes/articles/*-fr.Rmd` (they render French legends via `options(tabxplor.lang = "fr")`). They
@@ -53,7 +53,7 @@ spots below are runtime-string issues (not vignette prose) and still await maint
 
 ## Weights and survey-design terms
 
-Settled in Last Phase z16-iiiiii, when the Weights section of both intro vignettes was rewritten.
+Settled in Phase 18z16-iiiiii, when the Weights section of both intro vignettes was rewritten.
 The three earlier renderings of *effective sample size* (`taille d'échantillon efficace`,
 `n effectif`, none at all) are now one.
 

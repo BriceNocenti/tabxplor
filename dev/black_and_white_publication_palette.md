@@ -1,6 +1,6 @@
 # A black-and-white "publication ready" palette — design study
 
-Date: 2026-08-05. Status: **IMPLEMENTED** (Last Phase z11, 2026-08-10). The maintainer's rulings on
+Date: 2026-08-05. Status: **IMPLEMENTED** (Phase 18z11, 2026-08-10). The maintainer's rulings on
 §10's open questions and the findings that changed the design during implementation are in **§12**,
 at the end of this file — read it before trusting §5-§9, which is the pre-implementation study.
 
@@ -505,7 +505,7 @@ same problem), `dev/design_new_colors_UI_decision_process.md`, `R/tab-css.R` (th
 
 ---
 
-## 12. Rulings and implementation findings (Last Phase z11, 2026-08-10)
+## 12. Rulings and implementation findings (Phase 18z11, 2026-08-10)
 
 ### 12.1 The maintainer's rulings on §10
 

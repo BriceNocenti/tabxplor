@@ -3,7 +3,7 @@
 Scope, evidence and limits of tabxplor's **flat (`ids = ~1`) inference basis**
 
 Date: 2026-08-12. Status: **STUDY ONLY — no R file was modified** (a parallel session holds the tree).
-Working tree at `8b59c1f` (Last Phase z16-iiii), R 4.6.1, `survey` 4.5.
+Working tree at `8b59c1f` (Phase 18z16-iiii), R 4.6.1, `survey` 4.5.
 
 Companion documents: `dev/weights_framework_redesign.md` (the z16 design — §1 derives the closed form),
 `dev/weights_framework_stress_test.md` (W1–W13), `dev/weights_framework_stress_test_2_post_z16.md`
@@ -1091,7 +1091,7 @@ Weights section.
 
 ---
 
-## 11. Implementation record — Last Phase z16-iiiiii (2026-08-12)
+## 11. Implementation record — Phase 18z16-iiiiii (2026-08-12)
 
 Every §8.2 item with a maintainer ruling landed. Status of the study: **CLOSED**.
 

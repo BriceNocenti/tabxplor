@@ -2,11 +2,11 @@
 #          serialization stability, so any change to the record shape fails loudly.
 # ROLE: Retro-compatibility guardrail for the 2.0.0 internal refactors. Locks the Phase 1a
 #       18-field baseline (was 15: +pvalue +tot_n +ci_inf +ci_sup, rr->ratio, dropped ci);
-#       Last Phase s added `n_eff` (-> 19): the effective sample size used for a cell's CI
+#       Phase 18s added `n_eff` (-> 19): the effective sample size used for a cell's CI
 #       (Kish n_eff when opted in, else NA -> the CI falls back to the raw unweighted base);
-#       Last Phase z5 added `obs` (-> 20): the value a tab_reg cell's estimate is COMPARED TO by
+#       Phase 18z5 added `obs` (-> 20): the value a tab_reg cell's estimate is COMPARED TO by
 #       `color = "adjustment"` / "between_groups" (the observed effect, or the reference group's);
-#       Last Phase z8 added `gap_se` (-> 21): the standard error of that gap, which is what lets the
+#       Phase 18z8 added `gap_se` (-> 21): the standard error of that gap, which is what lets the
 #       `color_signif` policies apply to `between_groups`.
 # KEY CONSTRAINTS:
 #   - This test is DELIBERATELY BRITTLE. Update it ONLY when intentionally adding, removing,
@@ -46,10 +46,10 @@ fmt_contract_attr_defaults <- list(
   type = "n", comp_all = NA, ref = "", ci_type = "",
   col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
   model_family = "", role = "",
-  # Last Phase z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
+  # Phase 18z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
   # colour engine falls back to options(tabxplor.conf_level), i.e. the pre-z13 behaviour.
   conf_level = NA_real_,
-  # Last Phase z16-iiiii: the 13th and 14th -- HOW this column's interval was computed. They were
+  # Phase 18z16-iiiii: the 13th and 14th -- HOW this column's interval was computed. They were
   # meta$inference, a TABLE attribute, until two rebuild sites were found dropping the whole of `meta`.
   # NA / "n" = an unweighted or weights-only table: refer to z, claim no design effect.
   degf = NA_real_, basis = "n"

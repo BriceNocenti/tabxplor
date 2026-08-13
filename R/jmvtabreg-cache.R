@@ -158,7 +158,7 @@ jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 # Fold the per-numeric-predictor scaling picker (the jamovi `multiplicator` Array of Group{var, k})
 # into tab_reg()'s `multiplier`. Blank entries dropped; NULL when nothing set -> tab_reg's own default
 # ("sd") applies. Mirrors jmvtab_reg_ref_vector().
-# Last Phase z9: the keywords "sd" / "2sd" pass THROUGH as text (they used to be coerced with
+# Phase 18z9: the keywords "sd" / "2sd" pass THROUGH as text (they used to be coerced with
 # as.numeric() and silently dropped), so the picker can offer the per-SD scaling the R default uses.
 # A character vector is returned as soon as one entry is a keyword -- tab_reg() parses both.
 #' @keywords internal

@@ -31,7 +31,7 @@ The subsystem audits converge on five patterns. Every concrete proposition in §
 - A p-value cell encodes its role in the `display` token plus a **magic `diff = -0.5`** whose only purpose is to trip the strongest under-colour slot (`tab-test-display.R:103`); it also writes `col_var = "chi2_cols"` which nothing ever reads.
 - `tab_collapse_total_rows` compares **rendered `format()` strings** to decide structural equality (`tab_classes.R:1360-1362`).
 
-This is the pattern that will collide head-on with **Last Phase h (French translation)**: anything that renders-then-matches-by-English breaks the day the labels are French. §4 makes fixing this the keystone.
+This is the pattern that will collide head-on with **Phase 18h (French translation)**: anything that renders-then-matches-by-English breaks the day the labels are French. §4 makes fixing this the keystone.
 
 ### 2.2 One-model subsystems that stop halfway
 
@@ -93,7 +93,7 @@ Every row/column created by a materializer (`tab_add_n_pct`, `tab_append_footer`
 
 ### 4.2 A cell role instead of the `-0.5` hack
 
-P-value/GOF cells currently store their p in *three* fields (`pct`, `var`, plus a fake `diff = -0.5` steering the colour engine) while the real `pvalue` field goes unused for them. Give these cells their p in `pvalue`, colour them via one explicit rule in the colour plan (`sig_source = "pvalue"` — the same mechanism contrib already uses since Last Phase a), and delete the dead `pillar_shaft.tab_chi2_fmt` and the write-only `col_var = "chi2_cols"` marker. This also fixes defect 5 by construction.
+P-value/GOF cells currently store their p in *three* fields (`pct`, `var`, plus a fake `diff = -0.5` steering the colour engine) while the real `pvalue` field goes unused for them. Give these cells their p in `pvalue`, colour them via one explicit rule in the colour plan (`sig_source = "pvalue"` — the same mechanism contrib already uses since Phase 18a), and delete the dead `pillar_shaft.tab_chi2_fmt` and the write-only `col_var = "chi2_cols"` marker. This also fixes defect 5 by construction.
 
 ### 4.3 A reg column role attribute
 
@@ -234,7 +234,7 @@ The other half of the white-elephant story is the **cold-but-good** list (§1): 
 
 ### 1.5 — structural (each one phase, each with the §Verification protocol)
 
-The role model (§4) **before Last Phase h** if at all possible — it is the French phase's enabling move; then the axis settings frame; the reference plan; the leaf wrapper/core split; the staged materializer + transpose `roles_from`; `COLOR_MEASURES`; the empirical fact table + spec-as-truth `reg_build`; Step 4d with a jamovi schema bump; the superseded-trio quarantine; the kableExtra quarantine→kill.
+The role model (§4) **before Phase 18h** if at all possible — it is the French phase's enabling move; then the axis settings frame; the reference plan; the leaf wrapper/core split; the staged materializer + transpose `roles_from`; `COLOR_MEASURES`; the empirical fact table + spec-as-truth `reg_build`; Step 4d with a jamovi schema bump; the superseded-trio quarantine; the kableExtra quarantine→kill.
 
 ### Maintainer choices
 

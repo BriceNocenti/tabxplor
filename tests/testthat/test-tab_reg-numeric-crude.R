@@ -1,4 +1,4 @@
-# Last Phase z9: crude (`Obs_*`) counterparts for NUMERIC predictors.
+# Phase 18z9: crude (`Obs_*`) counterparts for NUMERIC predictors.
 #
 # The governing claim is the same one the factor arm rests on: the crude effect IS the univariable
 # model's effect. For a factor that model is saturated (hence tabxplor's closed-form cell sums); for a
@@ -8,7 +8,7 @@
 # Also here: the predictor-kind unification (`reg_is_factor_var`) and the two incidental defects the
 # audit found (dev/numeric_predictors_crude_counterparts.md SS11).
 
-# NOTE: `multiplier = 1` in every PARITY fixture below. Since Last Phase z9 the default is "sd", so a
+# NOTE: `multiplier = 1` in every PARITY fixture below. Since Phase 18z9 the default is "sd", so a
 # numeric row is per-1-SD; these tests assert equality with a hand-fitted coef(), which is per 1 unit --
 # the scaling is the subject of its own section (5) instead.
 
@@ -292,7 +292,7 @@ test_that("the numeric row's label names its unit", {
   t10 <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = c(age = 10),
                  cleannames = FALSE)
   expect_match(as.character(t10$levels)[as.character(t10$var) == "age"], "^age \\(per 10 units\\)")
-  # Last Phase z15: the label now ends with the OBSERVED-shape sparkline. options(tabxplor.spark =
+  # Phase 18z15: the label now ends with the OBSERVED-shape sparkline. options(tabxplor.spark =
   # FALSE) restores it byte-for-byte -- the fixture that keeps the option honest.
   withr::with_options(list(tabxplor.spark = FALSE), {
     t0 <- tab_reg(d, "married", c("age", "race"), family = "binomial",

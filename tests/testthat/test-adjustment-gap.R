@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z8-B -- the significance test of the `color = "adjustment"` gap: the model effect
+# PURPOSE: Phase 18z8-B -- the significance test of the `color = "adjustment"` gap: the model effect
 #          against its OBSERVED (crude) counterpart, both fitted on the SAME rows, so the standard
 #          error of their difference needs the difference of their INFLUENCE FUNCTIONS
 #          (R/reg-influence.R). This is what unpins `color_signif` from `ignore`.
@@ -183,7 +183,7 @@ test_that("no gap_se where the gap has no honest test", {
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
 })
 
-# Last Phase z17 (ruling D2). The gap SE used to be gated on `color = "adjustment"` -- a fact withheld
+# Phase 18z17 (ruling D2). The gap SE used to be gated on `color = "adjustment"` -- a fact withheld
 # because nobody had asked to COLOUR it, which held only while the colour engine was its one reader.
 # forest_plot() is the second, so the premise is now validity alone: `empirical = TRUE` + the five
 # correctness clauses. Nothing RENDERS differently (a gap measure is still the only consumer of the
@@ -201,7 +201,7 @@ test_that("z17 D2: gap_se is written without asking for the colour", {
   testthat::expect_identical(format(gapb_model_col(plain)), format(gapb_model_col(asked)))
 })
 
-# Last Phase z13 (D1). Before it, the crude block was built on the UNION of predictors while each model
+# Phase 18z13 (D1). Before it, the crude block was built on the UNION of predictors while each model
 # dropped its own NA rows, so a smaller model was fitted on MORE people. The framework detected that
 # (it withheld the gap SE) and coloured the gap anyway -- so `m1 = race`, which IS the crude model and
 # whose true adjustment gap is exactly zero, rendered a coloured cell claiming a 16 % move. Two halves:
@@ -393,7 +393,7 @@ test_that("every exporter renders an adjustment-tested table without error", {
   testthat::expect_no_error(utils::capture.output(print(t)))
 })
 
-# --- Last Phase z13 (D3): the gap interval follows the table's conf_level -----------------------------
+# --- Phase 18z13 (D3): the gap interval follows the table's conf_level -----------------------------
 
 test_that("D3: conf_level reaches the gap interval, not only the printed one", {
   skip_if_not_installed("broom")

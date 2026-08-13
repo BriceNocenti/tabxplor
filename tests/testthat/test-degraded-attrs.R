@@ -131,7 +131,7 @@ test_that("binding tables tolerates a missing `test` attribute", {
 })
 
 test_that("a table stripped of `meta` still refers its intervals to the design df", {
-  # Last Phase z16-iiiii: THE reason `degf` and `basis` left meta$inference for the fmt columns.
+  # Phase 18z16-iiiii: THE reason `degf` and `basis` left meta$inference for the fmt columns.
   # A number must not depend on a table attribute: `meta` is dropped by any rebuild that does not
   # carry it (two such sites were found in this very phase) and by plenty of ordinary data-frame
   # handling, and tab_ci() then silently fell back to z -- measured 9 % too narrow at 13 PSUs.

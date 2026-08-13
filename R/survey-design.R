@@ -2,7 +2,7 @@
 #   microdata every tabxplor engine already knows how to read -- plus the design constructors and the
 #   ROBUST omnibus tests for tab() crosstabs/means.
 # ROLE: Three things live here:
-#   1. The BOUNDARY (Last Phase z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test().
+#   1. The BOUNDARY (Phase 18z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test().
 #      Every public entry point that accepts a survey design (tab, tab_many, tab_plain, tab_num,
 #      tab_reg) calls the same two lines; tab_counts() calls svy_is_design() to REFUSE one. Before
 #      z14-i the detection was written twice, and the two copies disagreed: tab() materialised the
@@ -12,9 +12,9 @@
 #   2. The design constructors (svy_*), shared by tab_reg's weighted models.
 #   3. tab_robust_overlay(): recompute each whole-table omnibus p-value ON A DESIGN -- the user's own,
 #      or the flat one a weight column defines -- and overlay it on the classic `test` attribute
-#      (Last Phase j; z16-iii made the two bases run the SAME survey estimator). survey::svychisq
+#      (Phase 18j; z16-iii made the two bases run the SAME survey estimator). survey::svychisq
 #      (Rao-Scott 2nd-order F) for factors, svyglm + regTermTest's Wald F for means.
-# DESIGN (Last Phase z16-i): the INFERENCE BASIS is derived, never asked for, and now STORED
+# DESIGN (Phase 18z16-i): the INFERENCE BASIS is derived, never asked for, and now STORED
 #   (meta$inference). `test` says only WHETHER to test; what the user already passed says HOW.
 #   `wt` says how the ESTIMATE is computed; the basis says how the INTERVAL is computed -- two
 #   orthogonal facts, which is why the framework kept needing four encodings of one thing.
@@ -35,7 +35,7 @@
 #   - Fisher rows are dropped in robust mode (the robust p is the answer there).
 #   - This is the ONE architectural exception to "the test comes from the aggregate": a design-based
 #     omnibus needs the observations. It runs only when the basis is not "n" -- i.e. opt-in.
-# See: dev/full_survey_design_scope.md (z14-i); dev/tabxplor_2.0.0_decisions.md S51; CLAUDE.md Last Phase j.
+# See: dev/full_survey_design_scope.md (z14-i); dev/tabxplor_2.0.0_decisions.md S51; CLAUDE.md Phase 18j.
 
 # === SECTION: the design boundary ===================================================================
 
@@ -80,7 +80,7 @@ svy_unwrap_data <- function(data, fn = "tab") {
   frame[[svy_wt_col]]  <- as.double(stats::weights(data, type = "sampling"))
   frame[[svy_row_col]] <- seq_len(nrow(frame))
   cli::cli_inform(c("i" = "Survey design detected: estimates and tests use the design."))
-  # Last Phase z16-i (W7): the design's DEGREES OF FREEDOM, captured once at the boundary. survey
+  # Phase 18z16-i (W7): the design's DEGREES OF FREEDOM, captured once at the boundary. survey
   # refers every interval to t(degf) where degf = #PSU - #strata; tabxplor referred proportions to z
   # and means to t(n_eff - 1), which is anti-conservative by up to 15 % below 30 PSUs. It rides the
   # spec to the leaves and then meta$inference, so the exported step path gets it too.
@@ -88,7 +88,7 @@ svy_unwrap_data <- function(data, fn = "tab") {
                                  degf = svy_degf(data)))
 }
 
-# Last Phase z16-i (W10): `wt` beside a design is a contradiction, not a preference -- the design
+# Phase 18z16-i (W10): `wt` beside a design is a contradiction, not a preference -- the design
 # carries its own weights and the `wt` column was silently thrown away. Every other collision in the
 # package aborts (a weight that is also a row_var, a row_var that is also a tab_var); this one now
 # does too, from the ONE place both are visible. `wt_given` is TRUE when the user actually passed one.
@@ -128,17 +128,17 @@ svy_check_test <- function(test, arg = "test") {
 # the design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to
 # drift (only tab() had the rule, so tab_many() was silently always classic).
 # It governs the CELL INTERVALS, the whole-table test and the contrib residual alike -- one basis, one
-# resolution, every inference in the table -- and Last Phase z16-i STORES it (meta$inference), so the
+# resolution, every inference in the table -- and Phase 18z16-i STORES it (meta$inference), so the
 # footer, the exporters and jamovi can name it instead of re-deriving it from a weight-column name.
 # `force` is how tab_reg() states its own rule (ruling 1): its crude Obs_* columns are ALWAYS on the
 # weighted basis when weighted, so they always match the Model_* column beside them; the option is
 # tab()-scoped and tab_reg() never reads it.
-# `can_serve` (Last Phase z16-iiiii) is the INPUT's half of the answer: the weighted basis needs a
+# `can_serve` (Phase 18z16-iiiii) is the INPUT's half of the answer: the weighted basis needs a
 # per-observation Sum(w^2), which pre-aggregated counts do not carry. Declared once in the ctx
 # (`agg_only`) and folded in HERE, so the basis a table reports is already the one it can honour --
 # the same fact used to be re-derived three incompatible ways downstream (`has_w2` in one leaf,
 # `num_served` in the other, `is.null(fine_fused) || by_table` in the omnibus gate).
-# `design_effect` (Last Phase z16-iiiii) is the per-call argument of tab() / tab_many() / tab_num() /
+# `design_effect` (Phase 18z16-iiiii) is the per-call argument of tab() / tab_many() / tab_num() /
 # tab_plain() / tab_counts(): NULL means "the global option", which keeps this the ONE reader of it.
 svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE,
                                 design_effect = NULL) {
@@ -156,7 +156,7 @@ svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE
 svy_weighted <- function(x = NULL, wt = x$wt)
   !is.null(x$design) || length(wt) > 0L
 
-# THE inference object (Last Phase z16-iiiii) -- "how is every interval, star and colour threshold in
+# THE inference object (Phase 18z16-iiiii) -- "how is every interval, star and colour threshold in
 # this table computed". Resolved ONCE, in tab_setup(), and carried whole from there:
 #   wt          the weight column NAME (character(0) unweighted) -- how the ESTIMATE is computed
 #   design      the survey design object, or NULL
@@ -247,7 +247,7 @@ svy_domain_design <- function(design, rows, frame) {
 # with the test discriminator + (statistic, df1, df2, pvalue, n, deff); an all-NA row on any failure
 # (never crashes tab()).
 #
-# DESIGN (Last Phase z16-iii, ruling 7): ONE estimator, two ways in. A weight column IS a survey
+# DESIGN (Phase 18z16-iii, ruling 7): ONE estimator, two ways in. A weight column IS a survey
 # design -- the flat one -- so the "weights" basis SYNTHESISES `svydesign(ids = ~1, weights = ~w)` and
 # runs exactly the same survey estimator the "design" basis runs: survey::svychisq's Rao-Scott
 # second-order F for factors, svyglm + regTermTest's Wald F for means. That is why there are two
@@ -260,7 +260,7 @@ svy_domain_design <- function(design, rows, frame) {
 # algebra", R/survey-variance.R): the closed form in survey-variance.R exists because the CELL
 # variance is needed per cell in an O(cells) leaf, which is not the shape of a whole-table test.
 #
-# Last Phase z16-i (W8): `n` is ALWAYS the raw count -- at the old rung 2 it silently became the
+# Phase 18z16-i (W8): `n` is ALWAYS the raw count -- at the old rung 2 it silently became the
 # effective sample size, so one column meant two things depending on a global option. The effective
 # information moved to `deff`, the mean design effect this test corrected by, at its own grain.
 svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
@@ -314,7 +314,7 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
 
 # svy_omnibus_grid() -- THE PRODUCER: one robust omnibus per (subtable x col_var), straight from the
 # microdata, as a raw tibble carrying `deff`. Returns NULL when there is nothing to compute.
-# DESIGN (Last Phase z16-iv, W-B): this used to be the head of tab_robust_overlay(), which runs in
+# DESIGN (Phase 18z16-iv, W-B): this used to be the head of tab_robust_overlay(), which runs in
 #   tab_assemble_tables(). It is split out because TWO consumers need the same numbers at two
 #   different times: the `color = "contrib"` residual's base, DURING tab_transform() (the residual is
 #   written by chi2_write_contrib(), inside tab_chi2()), and the `test` overlay, AFTER the numeric

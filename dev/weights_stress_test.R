@@ -1,5 +1,5 @@
 # PURPOSE: reproduce every measurement in dev/weights_framework_stress_test_2_post_z16.md
-#   (round 2 of the weights audit, run against Last Phase z16). Round 1 -- the PRE-z16 audit that
+#   (round 2 of the weights audit, run against Phase 18z16). Round 1 -- the PRE-z16 audit that
 #   produced findings W1-W13 and led to the redesign -- is dev/weights_framework_stress_test.md,
 #   whose own reproducer is inlined in its Appendix A.
 # ROLE: an audit script, not a test file -- it PRINTS, it does not assert. The assertions that must
@@ -7,7 +7,7 @@
 #   test-design-effect.R for the option's behaviour, test-survey-*.R for the design paths).
 # USAGE:  OMP_NUM_THREADS=1 Rscript dev/weights_stress_test.R
 # Blocks are labelled with the finding they supported (W-A .. W-G) or "OK" where they record a
-# verified-sound property. SINCE Last Phase z16-iiii EVERY W-* FINDING IS FIXED: the blocks are kept as
+# verified-sound property. SINCE Phase 18z16-iiii EVERY W-* FINDING IS FIXED: the blocks are kept as
 # the REGRESSION probe for each one, and each now prints the corrected behaviour (see S9 of the
 # companion .md for what each fix turned out to be).
 # Companion documents: dev/weights_framework_redesign.md (the z16 design),
@@ -19,7 +19,7 @@ options(tabxplor.lang = "en")
 stopifnot(requireNamespace("survey", quietly = TRUE))
 
 ON <- function(e) withr::with_options(list(tabxplor.design_effect = TRUE), e)
-# Last Phase z16-iiiii: there is nothing left to reset -- a degrade is a LOCAL of the build that fell
+# Phase 18z16-iiiii: there is nothing left to reset -- a degrade is a LOCAL of the build that fell
 # back (svy_var_out()'s `reason`, carried to leaf_inference()), never process-global state. `R()` is
 # kept as a no-op so the block numbering below still matches the report.
 R  <- function() invisible(NULL)

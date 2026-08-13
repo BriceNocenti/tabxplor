@@ -94,7 +94,7 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
     agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols, keyby = by]
   }
   if (length(drop_keys) > 0)    roll[, (drop_keys) := "Total"]
-  # Last Phase z10: one SHARED ptype per tab_var, taken from the source aggregate. vctrs refuses to
+  # Phase 18z10: one SHARED ptype per tab_var, taken from the source aggregate. vctrs refuses to
   # combine two ORDERED factors with different level sets, so the map_dfr over the grouping sets
   # (R/tab.R, num_core) died on an ordered tab_var: the sets that keep it carry levels(src), the sets
   # that collapse it to "Total" carried only "Total". Byte-identical unordered -- the first grouping
@@ -118,12 +118,12 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
 # sums keyed by `tab_row_names`:
 #   v_n  = sum(!is.na(x))                          v_s1 = sum([w *] x)      v_s2 = sum([w *] x^2)
 #   v_wn = sum([w *] !is.na(x))  (weighted only)   v_w2 = sum(w^2 * !is.na(x))  (weighted only)
-#   v_w2s1 = sum(w^2 x)  v_w2s2 = sum(w^2 x^2)      (weighted only, Last Phase z16-ii)
+#   v_w2s1 = sum(w^2 x)  v_w2s2 = sum(w^2 x^2)      (weighted only, Phase 18z16-ii)
 # `wt` is the weight SYMBOL (character(0) when unweighted); `eval(wt)` looks the column up inside j.
 # WARNING: byte-identity-critical -- the as.double() coercions (32-bit overflow guard on Sigma x^2),
 # the weight lookup, the (no) .SDcols on the weighted branch, and the column construction order (all
 # _n, then _wn, _s1, _s2, _w2) must match num_derive_stats()'s expectations EXACTLY.
-# WARNING (Last Phase a bug-fix): the weight is referenced by the plain string `wt_name` (captured
+# WARNING (Phase 18a bug-fix): the weight is referenced by the plain string `wt_name` (captured
 # OUTSIDE the data.table `[...]` call, where the `wt` argument is un-shadowed) and read with
 # get(wt_name) -- never the bare symbol `wt` inside `j`. data.table exposes every column as a `j`
 # variable, so a column literally named "wt" (the weight OR a col_var) used to SHADOW the `wt`
@@ -173,7 +173,7 @@ num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
                                           .else = ~ NA_real_),
                             paste0(c(col_vars, wt_name), "_s2")),
 
-           # G1 (Phase 3a) + Last Phase z16-ii: the THREE extra sufficient statistics the flat-design
+           # G1 (Phase 3a) + Phase 18z16-ii: the THREE extra sufficient statistics the flat-design
            # variance of a mean needs -- Sigma w^2, Sigma w^2 x, Sigma w^2 x^2 (Kish only ever used
            # the first, which is that formula with the outcome discarded). Accumulated whenever the
            # table is WEIGHTED, never on an option (ruling 8): the aggregate then has ONE shape, so
@@ -286,7 +286,7 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 # Validated against DescTools/prop.test/t.test in dev/verify_ci_inclusion.R.
 # See: CLAUDE.md > 2.0.0 roadmap > Phase 3a; dev/tabxplor_2.0.0_decisions.md §20.
 
-# THE critical value of every interval in the package (Last Phase z16-i, W7): the two-sided Student
+# THE critical value of every interval in the package (Phase 18z16-i, W7): the two-sided Student
 # quantile at `df` degrees of freedom, which at `df = Inf` IS the normal quantile -- `qt(p, Inf)` is
 # bit-identical to `qnorm(p)`, so the default is byte-identical to the z the engines used before.
 # WHY one function: `survey` refers every interval to `t(degf)` where `degf = #PSU - #strata`;
@@ -325,7 +325,7 @@ zscore_formula <- function(conf_level) conf_level_to_crit(conf_level, Inf)
 #   diff        a proportion minus its reference     (ci = "diff")     ci_prop_diff
 #   mean_diff   a numeric mean minus its reference                     ci_mean_diff2
 #   mean_ratio  a numeric mean over its reference    (color = "ratio") ci_mean_ratio
-# Last Phase z16-iiiii: this table IS the public grammar. One named vector,
+# Phase 18z16-iiiii: this table IS the public grammar. One named vector,
 # `ci_method = c(cell = , diff = , mean_diff = , mean_ratio = )`, partial (an unnamed slot keeps its
 # default), replaced five parallel `method_*` arguments that had to be listed, validated, threaded,
 # cache-keyed and stored one by one across six files. There is no `ratio` slot: a proportion ratio has
@@ -447,14 +447,14 @@ ci_wald <- function(p, n, conf_level = 0.95, df = Inf) {
   ci_pivot(p, sqrt(p * (1 - p) / n), df = df, conf_level = conf_level, want_p = FALSE)
 }
 
-# KORN-GRAUBARD shape, single proportion (Last Phase z16-iii, ruling 4): a Clopper-Pearson interval
+# KORN-GRAUBARD shape, single proportion (Phase 18z16-iii, ruling 4): a Clopper-Pearson interval
 # on the EFFECTIVE sample size -- literally `survey::svyciprop(method = "beta")`, which is defined as
 # binom.test "with an effective sample size based on the estimated variance of the proportion". It is
 # the textbook design-based cell interval, and it needs nothing new here: `n` is already the base this
 # framework computes (n_eff = p(1-p)/Var_design). Opt-in via `method_cell = "beta"`, NOT a default --
 # one interval SHAPE at every position keeps the legend, the goldens and cross-table comparability one
 # story, and beta is deliberately conservative near 0 and 1 where Wilson is not.
-# The SECOND half of Korn-Graubard, and the reason this takes two sample sizes (Last Phase z16-iiiii):
+# The SECOND half of Korn-Graubard, and the reason this takes two sample sizes (Phase 18z16-iiiii):
 # beta quantiles have no degrees of freedom of their own, so survey carries the design's in by shrinking
 # the effective n FIRST -- `n.eff * (qt(a, nrow - 1) / qt(a, degf))^2`, the ratio of the SRS critical
 # value to the design's. `n_raw` is that `nrow`: the cell's own unweighted base, which the caller already
@@ -599,7 +599,7 @@ ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
   ci_pivot(m1 - m2, se, df = df_or_design(df, df_design), conf_level = conf_level, want_p = want_p)
 }
 
-# Last Phase z16-i (W7): a DESIGN's degrees of freedom REPLACE the sample-based ones -- `survey`
+# Phase 18z16-i (W7): a DESIGN's degrees of freedom REPLACE the sample-based ones -- `survey`
 # refers every interval, mean included, to t(degf) = t(#PSU - #strata), which no n_eff can stand in
 # for. `df_design` is NA / Inf everywhere else, so the sample-based df is kept unchanged.
 df_or_design <- function(df, df_design) {
@@ -784,7 +784,7 @@ agg_anova <- function(table_id, group_id, n, mean, var) {
 # agg_fisher() -- Fisher's exact test for the SMALL factor tables where the chi2 is unreliable
 # (smallest expected count < 5, the standard validity threshold that already drives the "!" weak flag).
 # Same long (table_id, row_id, col_id, o = UNWEIGHTED count) inputs as agg_chi2(); `which_ids` bounds the
-# work to the flagged tables (Last Phase j -- a per-table loop, so only ever a handful). Each table is
+# work to the flagged tables (Phase 18j -- a per-table loop, so only ever a handful). Each table is
 # reshaped to its integer count matrix, empty rows/cols dropped (matching agg_chi2's `ok`), and tested.
 # SIZE GUARD: an exact test is meaningful (and feasible) only for a SMALL sample -- a large table with
 # one rare category has a low expected count but a fine chi2, and the exact test would blow up FEXACT's

@@ -549,7 +549,7 @@ testthat::test_that("cell CI for proportions matches DescTools::BinomCI wilson",
   }
 })
 
-testthat::test_that("option tabxplor.conf_level is the interval default; per-call arg overrides it (Last Phase c)", {
+testthat::test_that("option tabxplor.conf_level is the interval default; per-call arg overrides it (Phase 18c)", {
   ci_width <- function() {
     col <- tab(gss, race, marital, pct = "row", ci = "cell")[["Divorced"]]
     mean(get_ci_sup(col) - get_ci_inf(col), na.rm = TRUE)
@@ -595,7 +595,7 @@ testthat::test_that("cell CI ci_method = c(cell = 'wald') matches p +- z*sqrt(p(
 })
 
 testthat::test_that("the released method_cell / method_diff are soft-deprecated aliases of ci_method", {
-  # Last Phase z16-iiiii: five `method_*` arguments folded into ONE named vector. `method_cell` and
+  # Phase 18z16-iiiii: five `method_*` arguments folded into ONE named vector. `method_cell` and
   # `method_diff` are CRAN-released (1.2.0), so they keep working with one nudge; `method_ratio` /
   # `method_mean_diff` / `method_mean_ratio` were 2.0.0-new and are simply gone.
   withr::local_options(lifecycle_verbosity = "warning")

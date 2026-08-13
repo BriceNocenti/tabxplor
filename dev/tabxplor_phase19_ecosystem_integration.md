@@ -315,7 +315,7 @@ Restated from the study §7, all still binding:
 8. **i18n rides every legend change.** `po/R-fr.po` + the `.mo` recompile, and the
    `if (FALSE) gettext(...)` extraction anchor is itself a hand-maintained duplicate — KEY 4 should
    **generate** it from the measure table rather than shadow it.
-9. **The locale trap in the doc build** (recorded at Last Phase z2): `tabxplor.lang` defaults to the
+9. **The locale trap in the doc build** (recorded at Phase 18z2): `tabxplor.lang` defaults to the
    ambient locale, so knitting English documents on this `fr_FR.UTF-8` box silently produces French
    legends unless both `options(tabxplor.lang=)` and `LANGUAGE` are pinned. Every document already
    carries its pin — do not remove them.

@@ -1,7 +1,7 @@
 # tabxplor 2.0.0 — stress-test report
 
 Date: 2026-07-22
-Tested commit: `033f94e` ("Last Phase k — last new features 2, labelled-data"), clean worktree.
+Tested commit: `033f94e` ("Phase 18k — last new features 2, labelled-data"), clean worktree.
 Method: adversarial, script-driven testing against the live source (`devtools::load_all`) across six
 areas — core `tab()`/`tab_many()`, leaves/references/counts, the `tabxplor_fmt` type system + dplyr,
 the colour engine + legend, the export stack, `tab_reg()`, and the statistical aggregate core. Roughly

@@ -26,28 +26,28 @@
 devtools::load_all("~/github/tabxplor", quiet = TRUE)
 source("tests/testthat/helper-golden.R")
 
-# Last Phase z16-iiiii: `degf` + `basis` -- the two per-column attributes that took over from the
+# Phase 18z16-iiiii: `degf` + `basis` -- the two per-column attributes that took over from the
 # table-level meta$inference. Every golden case is UNWEIGHTED, so the honest values are "no design df"
 # and "no claim": NA and "n", i.e. exactly the constructor defaults, which is why the rendering does
 # not move either.
 ADDED_ATTRS   <- c("degf", "basis")
 EXPECTED_ATTR <- list(degf = NA_real_, basis = "n")
 
-# Last Phase z16-i: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
+# Phase 18z16-i: no fmt member at all -- the addition is a COLUMN on the table-level `test` tibble
 # (`deff` = the design effect the row's test corrected by). A classic-basis table never fills it, so on
 # these goldens it must be present and all-NA.
 ADDED_TEST_COLS <- character(0)
 
-# Last Phase z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
+# Phase 18z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
 # basis). Unlike a field or a test column it has a definite VALUE, and it is stored only on the
 # WEIGHTED cases -- an unweighted golden must keep exactly the metadata it had. Declare it here and
 # the check prints what it actually found, per case.
-# Last Phase z16-iiiii REMOVES one instead: `inference` left `meta` for the two column attributes
+# Phase 18z16-iiiii REMOVES one instead: `inference` left `meta` for the two column attributes
 # above. No golden case is weighted, so none of them stored it -- declare nothing.
 ADDED_META_FIELDS   <- character(0)
 REMOVED_META_FIELDS <- character(0)
 
-# A phase can also RESHAPE a `meta` sub-field without changing what it says. Last Phase z16-iiiii folds
+# A phase can also RESHAPE a `meta` sub-field without changing what it says. Phase 18z16-iiiii folds
 # `ci_settings`' five `method_*` scalars into ONE named vector, and drops `method_ratio` (a one-value
 # argument). Declare the field with a predicate proving old and new carry the SAME information; the
 # script then treats that sub-field as accounted for and still demands bit-identity of everything else.

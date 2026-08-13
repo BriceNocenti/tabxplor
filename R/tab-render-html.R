@@ -132,7 +132,7 @@ html_escape_br <- function(x) {
   gsub("&lt;br&gt;", "<br>", htmltools::htmlEscape(x), fixed = TRUE)
 }
 
-# Last Phase z15 -- upgrade a block-glyph sparkline to an inline <svg> polyline (121 bytes against
+# Phase 18z15 -- upgrade a block-glyph sparkline to an inline <svg> polyline (121 bytes against
 # 1084 for svglite and 843 for a base64 PNG). ONE place decides what markup of ours survives escaping,
 # which is why it lives inside html_escape_br() rather than beside the label builder.
 #
@@ -178,7 +178,7 @@ html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
   out
 }
 
-# Wrap a cell's html in the palette's TYPOGRAPHY as real MARKUP, Last Phase z11.
+# Wrap a cell's html in the palette's TYPOGRAPHY as real MARKUP, Phase 18z11.
 # WHY, when the stylesheet already says the same thing: the two destinations that matter for a
 # publication table carry tags and nothing else. GitHub's markdown sanitizer strips `class` AND `style`
 # from raw html (which is why README tables are colourless there), and an HTML -> Word paste keeps
@@ -457,7 +457,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
-    # Last Phase z15: THE one place a row sparkline becomes an inline <svg>. It sits here, at the
+    # Phase 18z15: THE one place a row sparkline becomes an inline <svg>. It sits here, at the
     # emission of an ordinary text cell, because that is the only kind of cell a glyph run can be in
     # (a reg table's `levels` column) -- an fmt cell never carries one, and a rowspanned label cell
     # (path c2) goes through html_escape_br(), which would escape the markup back into text.
@@ -493,7 +493,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     if (is.null(run) || is.na(j)) next
     vert <- cl %in% names(roles$var_name_col) & run$span > 1L
     cls  <- paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""))
-    # Last Phase r: a rowspanned label cell is anchored in its block's FIRST row, so the per-row
+    # Phase 18r: a rowspanned label cell is anchored in its block's FIRST row, so the per-row
     # `tr.tx-bb>*` bottom rule never reaches the one covering the table's LAST row -> open bottom-left
     # corner. Tag that single cell `tx-bb` (the cell-scoped 1px rule in R/tab-css.R) to close it.
     if (any(run$show)) {

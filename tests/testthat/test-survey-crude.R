@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z14-iii -- the crude (`Obs_*`) columns under a survey design.
+# PURPOSE: Phase 18z14-iii -- the crude (`Obs_*`) columns under a survey design.
 # ROLE: Locks (a) the design-based effective n `reg_empirical()` now writes into `emp_n_ci` /
 #   `emp_n_draw`, and hence every crude interval; (b) the two device identities that make the Woolf
 #   and Katz brackets EXACT design variances on that base; (c) the row-space prerequisites -- the
@@ -134,7 +134,7 @@ test_that("Obs_OR's bracket IS the design variance of the log odds-ratio, and be
   ci  <- suppressMessages(stats::confint(fit))
   tw  <- unname(ci[2:3, 2] - ci[2:3, 1])
   expect_true(all(abs(unname(lw[k]) / tw - 1) < 0.10))
-  # Last Phase z16-i (W1/W2): the WEIGHTS-only table is no longer on the raw n -- tab_reg() forces the
+  # Phase 18z16-i (W1/W2): the WEIGHTS-only table is no longer on the raw n -- tab_reg() forces the
   # weighted basis -- so it now tracks the FLAT univariable model instead of missing it by ~17 %.
   flat <- survey::svydesign(ids = ~1, weights = ~w, data = d)
   ffit <- suppressWarnings(survey::svyglm(I(y == "yes") ~ x, design = flat,
@@ -306,7 +306,7 @@ test_that("a degrade cannot escape the build it happened in (W-C)", {
 })
 
 test_that("the crude bracket is referred to the SAME degrees of freedom as the model (D4)", {
-  # Last Phase z16-iiiii. An svyglm's df.residual IS the design df, so the Model_* columns were
+  # Phase 18z16-iiiii. An svyglm's df.residual IS the design df, so the Model_* columns were
   # already on t(degf) while every crude Obs_* interval beside them was on z -- at a small degf the
   # crude bracket printed NARROWER than the model bracket it exists to be compared with, in a table
   # whose whole premise is that the two are comparable.

@@ -346,7 +346,7 @@ behind this cell*, not *how much information*.
 
 ### 2.7 `contrib`, resolved by that split (W3)
 
-The colour measure has two readings (Last Phase z4) and the split cuts exactly between them:
+The colour measure has two readings (Phase 18z4) and the split cuts exactly between them:
 
 * `ignore` / `grey_non_signif` colour the **relative contribution** — an estimate. Unchanged at every
   position, by construction, so the CA reading is safe.
@@ -885,7 +885,7 @@ Line references are anchors from the 2026-08-11 audit; **re-grep before editing*
 
 ---
 
-## Appendix D — implementation record (Last Phase z16, 2026-08-12)
+## Appendix D — implementation record (Phase 18z16, 2026-08-12)
 
 Status: **FULLY IMPLEMENTED**, all three subphases, one session. Suite green in both locales
 (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 5356 + the new parity file; CI-equivalent

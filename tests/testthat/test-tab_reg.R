@@ -30,7 +30,7 @@ test_that("family='auto' detects binary -> binomial, and an integer outcome -> g
   skip_if_not_installed("broom")
   d <- reg_data()
   expect_message(tab_reg(d, "married", "race", cleannames = FALSE), "binary")
-  # Last Phase z13 (D10): an integer-valued numeric used to abort as "ambiguous", which caught every
+  # Phase 18z13 (D10): an integer-valued numeric used to abort as "ambiguous", which caught every
   # integer-STORED continuous outcome -- age in years, a Likert sum, income in whole units. It now
   # reads as gaussian (which always fits) and the message names poisson for a genuine count. The R side
   # and the jamovi family selector agree on that rule.
@@ -51,7 +51,7 @@ test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
 test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the additive coef shape", {
   skip_if_not_installed("broom")
   d   <- reg_data()
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
                  cleannames = FALSE)
@@ -103,7 +103,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   d   <- reg_data()
   # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   cleannames = FALSE))
@@ -208,7 +208,7 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
   mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
                                   family = c("binomial", "poisson"), cleannames = FALSE))
   meta <- get_reg_meta(mix)
-  # Last Phase z13: reg_fmt_cols() skips the per-level `n` columns, which also carry a "[dep]" bracket.
+  # Phase 18z13: reg_fmt_cols() skips the per-level `n` columns, which also carry a "[dep]" bracket.
   mixc    <- reg_fmt_cols(mix)
   or_col  <- mix[[grep("married", mixc, value = TRUE)[1]]]
   irr_col <- mix[[grep("tvhours", mixc, value = TRUE)[1]]]
@@ -294,7 +294,7 @@ test_that("family accepts a named vector; auto-detection is per dependent (ambig
                  family = c(tvhours = "gaussian", married = "binomial"), cleannames = FALSE)
   expect_identical(get_model_family(mix[["Model_OR [married]"]]),   "binomial")
   expect_identical(get_model_family(mix[["Model_\u03b2 [tvhours]"]]), "gaussian")
-  # Last Phase z13 (D10): auto-detection resolves each outcome on its own -- binary -> binomial,
+  # Phase 18z13 (D10): auto-detection resolves each outcome on its own -- binary -> binomial,
   # integer-valued numeric -> gaussian -- so a mixed pair needs no explicit `family` at all.
   auto <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race", cleannames = FALSE))
   expect_identical(get_model_family(auto[["Model_OR [married]"]]), "binomial")
@@ -391,7 +391,7 @@ test_that("trials errors outside the binomial family; ordinary >2-level binomial
   expect_error(tab_reg(d, "score", "race", family = "binomial"), "binary|trials")  # no trials -> abort
 })
 
-test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Last Phase z16-iv)", {
+test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Phase 18z16-iv)", {
   skip_if_not_installed("broom")
   d <- gb_data()
   d$q <- 10L                                    # a per-row item-count column, the natural mistake
@@ -629,7 +629,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame", multiplier = 1,
                  cleannames = FALSE)
@@ -678,7 +678,7 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame", multiplier = 1,
                  cleannames = FALSE)[["Model_AME"]]
@@ -701,7 +701,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   d   <- reg_data()
   # suppressWarnings: over-dispersed poisson fixture -> the dispersion flag (asserted in
   # test-tab_reg-footer.R). This test is about the AME scale and its marginaleffects parity.
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   effect = "ame", cleannames = FALSE))[["Model_AME"]]
@@ -969,7 +969,7 @@ test_that("Phase h: a predictor dropped from one comparison model keeps its refe
   expect_true(all(which(race_ref) %in% bold))
 })
 
-# ---- Last Phase z13 (SS7.1): the N behind each predictor level -------------------------------------
+# ---- Phase 18z13 (SS7.1): the N behind each predictor level -------------------------------------
 
 test_that("add_n gives every predictor level its unadjusted N, on the model's own frame", {
   skip_if_not_installed("broom")
@@ -1002,7 +1002,7 @@ test_that("add_n does not disturb the reference-row bold", {
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE))
   # tab_bold_rows() ANDs in_refrow across every DISCRIMINATING column, so a column that omitted the
-  # flag would silently un-bold every reference row -- the defect Last Phase h fixed for the crude
+  # flag would silently un-bold every reference row -- the defect Phase 18h fixed for the crude
   # companions. Check the flag, and the rendering it drives.
   expect_true(any(is_refrow(t[["n"]])))
   expect_identical(is_refrow(t[["n"]]), is_refrow(t[["Model_OR"]]))

@@ -38,7 +38,7 @@ tx_palette_theme <- function(theme) {
   if (identical(theme[1], "auto")) "light" else theme[1]
 }
 
-# The theme VALUE vocabulary and its one alias, Last Phase z11. tx_getOption() resolves option NAME
+# The theme VALUE vocabulary and its one alias, Phase 18z11. tx_getOption() resolves option NAME
 # synonyms; a VALUE alias needs this. "print" says WHY (the destination medium) and leaves room for the
 # palette to change; "bw" says HOW and is the obvious guess -- accepted silently and canonicalised here,
 # so exactly ONE spelling ever reaches the palette keys. Two callers: resolve_export_opts() (so
@@ -150,7 +150,7 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 tx_dark_hooks  <- c("body.quarto-dark",  "[data-bs-theme=dark]",  "[data-theme=dark]", "html.dark")
 tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=light]")
 
-# The typographic declarations one theme's face adds ON TOP of the CSS baseline, Last Phase z11.
+# The typographic declarations one theme's face adds ON TOP of the CSS baseline, Phase 18z11.
 # DESIGN: tx_css_render()'s static `.p1,...,.m4{font-weight:bold;}` rule IS the light palette's face
 # expressed as CSS, so it is THE BASELINE and a theme states a face property only where it DIVERGES
 # from it. Two consequences fall out with no branching: light/dark emit "" everywhere (their face IS
@@ -351,7 +351,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     paste0(".tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,",
            ".tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{",
            "border-left-style:solid;border-left-width:1px;}"),
-    # Last Phase m: the whole-table TOP and BOTTOM edges, md-only BY SELECTOR (they need a `table`
+    # Phase 18m: the whole-table TOP and BOTTOM edges, md-only BY SELECTOR (they need a `table`
     # DESCENDANT of `.tabxplor-tab` -- the pandoc div>table; the html engine's `.tabxplor-tab` IS the
     # table with no nested one -> its edges come from `> thead`/`tr.tx-bb` instead). Longhands only (the
     # no-shorthand border-colour contract). (0,2,3) beats `thead th`'s border-top-width:0 (0,1,2).
@@ -359,7 +359,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab table > tbody > tr:last-child > *{",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
-    # Last Phase m: the right edge of the table (the grand Total / last numeric column) -- md has no
+    # Phase 18m: the right edge of the table (the grand Total / last numeric column) -- md has no
     # column-AFTER-the-last to make a spacer of, so a border-right on each content row's last cell draws
     # it. `:has(td:not(:empty))` skips the blank separator rows (no stray right tick). Matches the html
     # engine's tx-br on the final column. The interior verticals (levels|numbers, numbers|Total, col_var
@@ -367,7 +367,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,",
            ".tabxplor-tab table > thead > tr > *:last-child{",
            "border-right-style:solid;border-right-width:1px;}"),
-    # Last Phase r: the LEFT edge, symmetric to the right edge above. Before Phase m the leftmost
+    # Phase 18r: the LEFT edge, symmetric to the right edge above. Before Phase m the leftmost
     # column's cells were `:empty` and caught the border-LEFT spacer rule -- an ACCIDENTAL left edge.
     # Phase m's U+00A0 fill made them non-empty (killing the "ragged" edge), which also removed the
     # only thing drawing the table's left side -> the first column had no left border at all. Draw it
@@ -389,7 +389,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # DIRECT child of `.tabxplor-tab` (true only when `.tabxplor-tab` IS the <table>; in md it wraps a
     # nested <table>, so this never matches there and md keeps its own chrome). (0,2,2) out-specifies the
     # `thead th` border-top-width:0 (0,1,2). Longhands only -- the border-colour contract (no shorthand).
-    # Last Phase r: the col_var spanning-NAME row (all cells `.tx-span`) must FLOAT above the grid --
+    # Phase 18r: the col_var spanning-NAME row (all cells `.tx-span`) must FLOAT above the grid --
     # no top border boxing the variable names, closed only by the `.tx-span` border-BOTTOM below them.
     # `*:not(.tx-span)` draws the top edge ONLY when the first thead row is a level-header row (no span
     # present, e.g. a single col_var / span-dropped table); a names row gets none. This deliberately
@@ -440,7 +440,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # WARNING: `tx-bb` (1px) and `tx-bb2` (2px) have IDENTICAL specificity (0,3,1), so a row carrying
     # both -- the last row of a row_var block -- is decided by SOURCE ORDER here: tx-bb2 comes second
     # and wins, which is the intended thicker rule. Do not reorder this pair.
-    # Last Phase r: `td.tx-bb` is the CELL-scoped twin of the row rule. A rowspanned label cell (a
+    # Phase 18r: `td.tx-bb` is the CELL-scoped twin of the row rule. A rowspanned label cell (a
     # merged table's vertical row-var name) is anchored in its block's FIRST row, so `tr.tx-bb>*`
     # (last-row direct children) never reaches the one that covers the table bottom -> the bottom-left
     # corner was left open. render_kable_html() tags that single cell `tx-bb` to close it at 1px (the
@@ -496,7 +496,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
   paste0(c(static, body, tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
 }
 
-# The black-and-white publication palette as an AT-RULE, Last Phase z11: a page rendered in colour
+# The black-and-white publication palette as an AT-RULE, Phase 18z11: a page rendered in colour
 # PRINTS (or saves to PDF) publication-ready, with no argument and no user awareness. Emitted last, so
 # at equal specificity it wins on source order.
 # WARNING 1: under theme = "auto" the un-hooked layer is NOT enough. Cascade layers 3/4 are

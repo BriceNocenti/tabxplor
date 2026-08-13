@@ -3,7 +3,7 @@
 #   drawn). Plus the ONE model they and every future chart read: tab_estimates().
 #   (tab_plot(), in R/tab_classes.R, is not a chart -- it renders the TABLE as an image.)
 #
-# THE MODEL (Last Phase z17). tab_estimates() is one long tibble: one row per (table row x plotted
+# THE MODEL (Phase 18z17). tab_estimates() is one long tibble: one row per (table row x plotted
 #   column), carrying the estimate, its interval, its p, its scale (fmt_scale_of), its colour slot and
 #   hex (the same accessors the printed table used), and its observed counterpart with the gap's
 #   interval. It computes NOTHING -- so a chart over it agrees with the table by construction, and it
@@ -483,7 +483,7 @@ reg_panel_linearity <- function(ctxs, cols, opts) {
     ly <- rd_link_y(cx$data[[cx$dependent]], cx$family, cx$trials, cx$positive_level)
     w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else NULL
     purrr::list_rbind(purrr::map(num, function(v) {
-      # Last Phase z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
+      # Phase 18z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
       # svydesign to reg_check_plots(), the exact flat closed form on a plain weight column, and is
       # unchanged (n) unweighted.
       b <- rd_bin(cx$data[[v]], ly$y, w, opts$nbins, ly$link,

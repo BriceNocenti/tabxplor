@@ -1,4 +1,4 @@
-# Last Phase w -- French runtime-string translation. These fixtures FAIL without the filled po/R-fr.po
+# Phase 18w -- French runtime-string translation. These fixtures FAIL without the filled po/R-fr.po
 # (compiled to inst/po/fr/LC_MESSAGES/R-tabxplor.mo) AND the gettext-wrapping of the reg / test / measure
 # labels. gettext resolves against the installed .mo via bindtextdomain (.onLoad); the render helpers
 # set LANGUAGE through with_legend_lang().
@@ -90,7 +90,7 @@ test_that("summary / GOF row labels + measure words translate", {
   })
 })
 
-# Last Phase z14-ii replaced z14-i's "Weighted by the survey design." by ruling Q7's sentence, now
+# Phase 18z14-ii replaced z14-i's "Weighted by the survey design." by ruling Q7's sentence, now
 # that Route A makes the intervals design-based as well as the tests.
 svy_footer_en <- paste("Design-based (survey): weighted estimates, intervals and tests",
                        "account for the sample design.")
@@ -109,7 +109,7 @@ test_that("the survey-design weight line translates", {
   })
 })
 
-# Last Phase z16-i: ONE sentence per inference basis, so the DEFAULT weighted position stops being
+# Phase 18z16-i: ONE sentence per inference basis, so the DEFAULT weighted position stops being
 # silent. All three must translate -- the second is the one every weighted table prints.
 z16_footers <- c(
   n       = "Weighted by %s; confidence intervals and tests use the unweighted sample size.",
@@ -124,7 +124,7 @@ test_that("the per-basis weight lines stay English under the ambient en locale",
 
 test_that("the per-basis weight lines translate", {
   skip_if_no_gettext()
-  # Last Phase z16-iiiii: the degrade REASON left the footer -- it is a build event, named in
+  # Phase 18z16-iiiii: the degrade REASON left the footer -- it is a build event, named in
   # svy_var_degraded()'s console message where it is actionable, so there is no reason msgid to
   # translate any more. The CLAIM ("design_partial") rides the columns, and its sentence is here.
   with_legend_lang("fr", function(lg) {
@@ -136,7 +136,7 @@ test_that("the per-basis weight lines translate", {
   })
 })
 
-# Last Phase z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They
+# Phase 18z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They
 # go through the same with_legend_lang() seam as the legend, so `lang =` reaches them -- unlike the
 # footer nouns, which resolve on the ambient locale (the glibc catalogue-caching limit z2 recorded).
 z17_plot_msgids <- c("Odds ratio", "Ratio", "Rate ratio", "Percentage points", "Percentage",

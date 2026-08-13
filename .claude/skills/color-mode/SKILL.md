@@ -42,11 +42,11 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `scale = c(std=, pct=)` keys, `std_when`, `sig_source ∈ {bounds,pvalue}`, `gate_row ∈
   {refrow,totrow}`). `fmt_color_plan()` reads them; the only per-measure code left there is policy
   (the diff↔ratio bound rescale + the `guaranteed_effect` floor).
-- **Never read `MEASURES[[m]]` directly** (Last Phase z4) — go through **`measure_facts(m, policy)`**,
+- **Never read `MEASURES[[m]]` directly** (Phase 18z4) — go through **`measure_facts(m, policy)`**,
   which folds in a row's optional `guar` list under `guaranteed_effect`. It is the only reason the
   colour plan and the legend describing it cannot diverge; both call it (1 site in `fmt_color_plan`,
   5 in the legend, each passing `plan$policy` / `spec$policy`).
-- **A measure whose baseline is ANOTHER COLUMN** (Last Phase z5: `adjustment` = vs the observed/crude
+- **A measure whose baseline is ANOTHER COLUMN** (Phase 18z5: `adjustment` = vs the observed/crude
   effect, `between_groups` = vs the first `split_var` group) cannot use the row-reference machinery at
   all -- `fmt_broadcast_last()` groups by runs of `in_refrow` and crosses a split boundary. Its
   counterpart is written into the per-cell **`obs` field at BUILD time** (`reg_build` /
@@ -111,7 +111,7 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `get_color_style(mode, type, theme)` returns an 8-element slot vector (4 over + 4 under) — crayon
   functions for the console (24-bit, or the curated 8-bit `palette_8bit` in the RStudio console),
   hex for exports. NO `html_24_bit` / green_red/blue_red variants / `custom_palette` anymore.
-- **A palette is hex AND face** (Last Phase z11). `mode = "face"` returns `tx_palette_faces()`'s row for
+- **A palette is hex AND face** (Phase 18z11). `mode = "face"` returns `tx_palette_faces()`'s row for
   that (family, theme): `list(bold, italic, underline, semantic)`, 8 logicals each. The colour palettes
   answer bold-on-all-8-text-slots / nothing-on-bg — today's rendering, as data — which is what makes
   `tx_css_render()`'s static `.p1..m4{font-weight:bold}` rule THE CSS baseline that `tx_face_decls()`

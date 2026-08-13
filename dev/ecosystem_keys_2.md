@@ -1,6 +1,6 @@
 # tabxplor — the remaining keys
 
-**An ecosystem integration study, post `Last Phase z16-iiiii` (2026-08-13)**
+**An ecosystem integration study, post `Phase 18z16-iiiii` (2026-08-13)**
 
 This is the second end-of-cycle design review. The first
 (`dev/tabxplor_ecosystem_simplification.md`, 2026-07-20) produced Phase 17, and most of its

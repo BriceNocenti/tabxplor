@@ -1,5 +1,5 @@
 # =====================================================================================
-# PERSONAL manual-review script -- Last Phase s (Kish n_eff on ALL weighted descriptive CIs).
+# PERSONAL manual-review script -- Phase 18s (Kish n_eff on ALL weighted descriptive CIs).
 # CONFIDENTIAL DATA (pc18): NOT a package/testthat test. Lives in dev/review_manual/ (.Rbuildignore'd).
 #
 # Goal: on data you know, compare the WEIGHTED confidence intervals with

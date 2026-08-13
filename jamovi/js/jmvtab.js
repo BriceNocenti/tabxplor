@@ -81,7 +81,7 @@ var renderSubtext = function(ui) {
 // persistent <style> because jamovi re-renders controls and drops INLINE styles (the reason the old
 // per-onUpdate inline widening never stuck). Only the two export boxes use `width: largest`, so the
 // selector is effectively scoped to them.
-// Last Phase r: a blank line at the bottom INSIDE each EXPANDED collapse box (compact when collapsed).
+// Phase 18r: a blank line at the bottom INSIDE each EXPANDED collapse box (compact when collapsed).
 // The live jamovi box is `.jmv-collapse-view`, collapsed state `.view-colapsed` (jamovi's spelling) --
 // confirmed against dev/jamovi/dev_console_live_capture/.../analysisui-*.css. The former guessed classes
 // (.silky-options-collapse-box*, .jmv-options-collapsebox*, .silky-layout-content) matched NOTHING, which

@@ -65,7 +65,7 @@ test_fmt_num <- function(v, digits = 0L) {
 test_is_nonsig <- function(p) !is.na(p) & p >= 0.05
 
 # The short symbol for each effect-size measure (ASCII, so every backend renders it): Cramer's V,
-# phi (2x2), eta^2 (numeric / ANOVA). Last Phase j.
+# phi (2x2), eta^2 (numeric / ANOVA). Phase 18j.
 test_es_symbol <- function(es_type)
   switch(es_type %||% "", "cramer_v" = "V", "phi" = "phi", "eta2" = "eta2", NA_character_)
 
@@ -101,12 +101,12 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 
 # Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
 # col_vars the option-selected ANOVA F (Welch by default). Both F rows are stored; this chooses one.
-# Last Phase j: a weak chi2 (min_e < 5) carries a `pvalue_exact` column = the Fisher-exact p on that
+# Phase 18j: a weak chi2 (min_e < 5) carries a `pvalue_exact` column = the Fisher-exact p on that
 # same row; the p-value cell shows that reliable exact p (labelled "Fisher") instead of the flagged
 # chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
 test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
   keep_f <- paste0("F_", anova)
-  # Last Phase j: a design-based table carries chi2_design (factor) or F_design (numeric) INSTEAD of
+  # Phase 18j: a design-based table carries chi2_design (factor) or F_design (numeric) INSTEAD of
   # the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.
   # (z16-iii: four discriminators became two, because the flat and the full design run the SAME
   # survey estimator; which one a table used is meta$inference$basis, not a second encoding here.)
@@ -130,23 +130,23 @@ pvalue_line_fmt <- function(p, label = NA_character_) {
 }
 
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
-# Last Phase j / z16-iii: the design-based variant names its method (Rao-Scott / svyglm Wald F).
+# Phase 18j / z16-iii: the design-based variant names its method (Rao-Scott / svyglm Wald F).
 test_cell_label <- function(test) {
-  # Last Phase w: mostly notation + proper names (Welch/Rao-Scott), kept; "survey" translates.
+  # Phase 18w: mostly notation + proper names (Welch/Rao-Scott), kept; "survey" translates.
   switch(test,
          "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F",
          "chi2_design" = "Chi2, Rao-Scott", "F_design" = gettext("F, survey"),
          NA_character_)
 }
 
-# Last Phase m: the p-value ROW NAME (was an in-cell suffix -- moved out of the cell so a
+# Phase 18m: the p-value ROW NAME (was an in-cell suffix -- moved out of the cell so a
 # mixed factor/numeric row no longer wastes width, and the table-level test type is stated ONCE). Names
 # the test(s) used across the group's columns: factor side "Chi2" (or "Fisher" when the exact test ran),
 # numeric side "Welch F" / "ANOVA F"; a single robust suffix "; survey-design" (Rao-Scott / svyglm --
 # the same estimator whether the design came from a weight column or from svydesign(), z16-iii).
 # Examples: "pvalue (Chi2)", "pvalue (Chi2, Welch F)", "pvalue (ANOVA F)",
 # "pvalue (Chi2, Welch F; survey-design)".
-# Last Phase w: the prose is translatable (gettext, ambient locale). Notation ("Chi2", "F") is kept;
+# Phase 18w: the prose is translatable (gettext, ambient locale). Notation ("Chi2", "F") is kept;
 # proper names ("Welch", "Fisher", "Rao-Scott") stay as-is. English is byte-identical.
 test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
   tests <- unique(tests[!is.na(tests)])
@@ -161,12 +161,12 @@ test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
   enc2utf8(gettextf("pvalue (%s%s)", paste(parts, collapse = ", "), robust))
 }
 
-# Last Phase m: the effect-size ROW NAME = the measure(s) present, so no separate "effect size" text is
+# Phase 18m: the effect-size ROW NAME = the measure(s) present, so no separate "effect size" text is
 # needed. Cramer's V (larger factor tables) / phi (2x2) / eta^2 (numeric ANOVA); mixed -> "Cramer's V, eta2".
 test_es_measure <- function(es_types) {
   es_types <- unique(es_types[!is.na(es_types)])
   if (!length(es_types)) return(gettext("effect size"))
-  # Last Phase w: "Cramer's V" translates ("V de Cramer"); phi/eta2 are notation, kept.
+  # Phase 18w: "Cramer's V" translates ("V de Cramer"); phi/eta2 are notation, kept.
   lbl <- vapply(es_types, function(t)
     switch(t, "cramer_v" = gettext("Cram\u00e9r's V"), "phi" = "phi", "eta2" = "eta2", t), character(1))
   enc2utf8(paste(unique(lbl), collapse = ", "))
@@ -178,11 +178,11 @@ test_es_measure <- function(es_types) {
 # same `test` attribute drives both. One entry per footer stat: its row label + how the cell renders.
 # kind "gof" -> a plain number (the "gof" display token reading `statistic`); kind "pvalue" -> a p-value
 # cell. `digits` applies to gof cells. Order here = the display / fallback order.
-# Last Phase w: GOF row labels are translatable (gettext, ambient locale). Notation (N/F/R2/AIC/BIC and
+# Phase 18w: GOF row labels are translatable (gettext, ambient locale). Notation (N/F/R2/AIC/BIC and
 # the named pseudo-R2s) stays; the "vs null/baseline/previous" prose + "Adjusted R2"/"Residual SD"
 # translate. English is byte-identical (gettext returns the msgid).
 #
-# Last Phase z15 -- the list is now the FIXED entries plus two GENERATED blocks, so no label is written
+# Phase 18z15 -- the list is now the FIXED entries plus two GENERATED blocks, so no label is written
 # twice. The `global` per-predictor test moved from a footer LINE to footer ROWS (measured: in a
 # 3-model comparison its line rendered as three unlabelled sentences, and on a split table it printed
 # the split level, repeated, instead of the predictors); the five model CHECKS come from REG_CHECKS
@@ -201,7 +201,7 @@ reg_footer_spec <- function() c(list(
   sigma                = list(label = gettext("Residual SD"),           kind = "gof",   digits = 2L),
   aic                  = list(label = gettext("AIC"),                   kind = "gof",   digits = 0L),
   bic                  = list(label = gettext("BIC"),                   kind = "gof",   digits = 0L),
-  # Last Phase z15: `dispersion` now names the CHECK (max robust/model SE, every family, from
+  # Phase 18z15: `dispersion` now names the CHECK (max robust/model SE, every family, from
   # REG_CHECKS below); the exact Pearson dispersion this row used to hold keeps its own key `phi`.
   phi                  = list(label = reg_check_label("Pearson dispersion", "phi"),
                                                                         kind = "gof",   digits = 2L),
@@ -226,7 +226,7 @@ reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, chara
 # The discriminators whose row is about ONE PREDICTOR (`term`) rather than the whole model, so
 # reg_footer_plan() renders them "<label>: <term>" and emits one row per predictor present.
 reg_footer_per_term <- function() c(reg_global_types(), reg_check_types())
-# Last Phase z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
+# Phase 18z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
 # table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
 # (stats = FALSE) is still a reg table, so the arm detection must know them.
 is_reg_footer <- function(test_tbl)
@@ -252,7 +252,7 @@ test_term_col <- function(tt) {
 # constant across groups -- tab_append_footer() requires that, and a group missing one predictor must
 # show a blank cell, not a shorter block.
 #
-# `term` is the per-predictor key (Last Phase z15). It could not be `row_var`, which on a reg footer
+# `term` is the per-predictor key (Phase 18z15). It could not be `row_var`, which on a reg footer
 # row already means the SPLIT-GROUP LEVEL in this renderer, in reg_footer_lines() and in
 # reg_spread_models() -- a predictor name there flipped a plain table into "split" mode and was
 # silently dropped on a spread one.
@@ -364,7 +364,7 @@ test_grid_crosstab <- function(x, test_tbl) {
     pcell <- ifelse(is.na(pval), "", pval)
     nonsig <- test_is_nonsig(p_show)
 
-    # Last Phase m: no "statistic" row (ambiguous once effect size shares the block); order = p-value then
+    # Phase 18m: no "statistic" row (ambiguous once effect size shares the block); order = p-value then
     # effect size; the test type moves into the p-value row NAME, the measure into the effect-size row NAME.
     weak   <- any(!is.na(sub$min_e[idx]) & sub$min_e[idx] < test_weak_min_e & is.na(p_exact))
     p_lab  <- test_pvalue_descriptor(sub$test[idx[!is.na(idx)]], any(!is.na(p_exact)), weak)

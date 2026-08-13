@@ -1,4 +1,4 @@
-# Shared selectors for REGRESSION tables (Last Phase z13).
+# Shared selectors for REGRESSION tables (Phase 18z13).
 #
 # `tab_reg(add_n = TRUE)` -- the default since z13 -- puts a per-predictor-level `n` column right after
 # the labels, where STROBE reads it and where gtsummary / finalfit put theirs. It is a row descriptor,

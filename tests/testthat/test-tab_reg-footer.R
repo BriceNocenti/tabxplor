@@ -147,7 +147,7 @@ test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-
 test_that("compare falls back to Delta-AIC (with a message) when N differs across models", {
   skip_if_not_installed("broom")
   d <- reg_data()                                        # tvhours has NAs -> different N than race-only
-  # Last Phase z13 (D1): the DEFAULT `na = "drop_by_outcome"` now puts both models on one population, so
+  # Phase 18z13 (D1): the DEFAULT `na = "drop_by_outcome"` now puts both models on one population, so
   # the likelihood-ratio test fires -- which is the point of that default. The AIC fallback is what the
   # opt-in per-model drop still needs, so that is what this test exercises.
   expect_message(
@@ -205,7 +205,7 @@ test_that("a crosstab p-value cell embeds its test label ('(Chi2)')", {
   expect_true(any(grepl("\\(Chi2", md)))                 # "(Chi2)" or "(Chi2 !)" (Phase 16a weak flag)
 })
 
-test_that("a mixed factor/mean table names both tests in the p-value row (Last Phase m)", {
+test_that("a mixed factor/mean table names both tests in the p-value row (Phase 18m)", {
   ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", test = TRUE)
   # a styled md (the non-significant p-value cell is coloured) uses U+00A0 in labels -> normalise.
   md <- gsub(intToUtf8(160L), " ", tab_md(ct, print = FALSE), fixed = TRUE)
@@ -266,7 +266,7 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   expect_false(all(ann_e$keep_black[data_rows]))
 })
 
-# ---- Last Phase z13 (SS7.2): the per-predictor global test ------------------------------------------
+# ---- Phase 18z13 (SS7.2): the per-predictor global test ------------------------------------------
 
 test_that("stats='global' IS drop1() on the fit already in hand, as per-predictor footer rows", {
   skip_if_not_installed("broom")
@@ -317,7 +317,7 @@ test_that("the global test skips 1-df terms, unsupported engines and stats = FAL
   expect_false(any(tabxplor:::reg_global_types() %in% get_test(tm)$test))
 })
 
-# ---- Last Phase z15: the `term` retrofit fixes a live split-table defect ----------------------------
+# ---- Phase 18z15: the `term` retrofit fixes a live split-table defect ----------------------------
 
 test_that("on a split table the per-predictor rows name the predictors, not the split level", {
   skip_if_not_installed("broom")

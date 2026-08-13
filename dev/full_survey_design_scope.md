@@ -2,7 +2,7 @@
 
 Date: 2026-08-11. Status: **RESEARCH ONLY** — no R code written. Every number below is produced by
 **`dev/survey_design_measurements.R`** (run it with `OMP_NUM_THREADS=1 Rscript
-dev/survey_design_measurements.R`, ~1 minute), against the working tree at `ae49614` (Last Phase z13),
+dev/survey_design_measurements.R`, ~1 minute), against the working tree at `ae49614` (Phase 18z13),
 with `survey` 4.5, `marginaleffects` 0.32.0, R 4.6.1. Block numbers in that script are cited as
 *(block N)*.
 
@@ -25,7 +25,7 @@ useful?*
    not a rounding issue; it is the difference between a finding and no finding, in a package whose
    entire proposition is colour-coded significance.
 
-2. **The statistical work is genuinely small**, because Last Phase s already built the seam without
+2. **The statistical work is genuinely small**, because Phase 18s already built the seam without
    meaning to. **Every per-cell inference in `tab()` — factor CIs, mean CIs, the `color = "OR"`
    interval, the `contrib` residual, and every star — already reads one field, `n_eff`, as "the
    effective base for this cell's interval"** (§4.1). Replacing the Kish value in that field by a
@@ -117,7 +117,7 @@ design-based**. Three different inferential regimes in three adjacent columns of
 
 ### 2.1 `tab()`
 
-A `survey.design` passed as `data` (Last Phase j) does three things: it extracts `$variables`,
+A `survey.design` passed as `data` (Phase 18j) does three things: it extracts `$variables`,
 materialises `weights(design)` into `.svy_weights` and uses that as `wt`, and keeps the design for the
 whole-table p-value. Verified end-to-end *(blocks 7–8)*:
 
@@ -286,7 +286,7 @@ sociological surveys. Nothing in the current output distinguishes the two situat
 
 ### 4.1 Every per-cell inference in `tab()` already routes through one field
 
-This is the finding that decides the whole question. `n_eff` (the 19th fmt field, Last Phase s) is
+This is the finding that decides the whole question. `n_eff` (the 19th fmt field, Phase 18s) is
 documented as *"the effective sample size used for this cell's confidence interval"*. Grep says it is
 read by:
 
@@ -618,7 +618,7 @@ design object as `data`; otherwise use `wt`, and at best `options(tabxplor.kish_
 ### 7.3 What happens to `tabxplor.kish_neff`
 
 It stays, and it becomes clearly the **middle rung of a three-rung ladder** the vignette already
-teaches (Last Phase s):
+teaches (Phase 18s):
 
 | rung | input | what the intervals carry | available in |
 |---|---|---|---|
@@ -792,7 +792,7 @@ also the reason no existing package can be copied.
 
 ---
 
-## 10. Implementation roadmap — Last Phase z14, three subphases
+## 10. Implementation roadmap — Phase 18z14, three subphases
 
 One roadmap entry, **z14**, because it is one feature. Its subphases follow the repo's convention
 (`-i`, `-ii`, `-iii`, and `-iiii` if a fourth is ever needed — cf. Phase `e-iiii`, `17f-i`/`17f-ii`):

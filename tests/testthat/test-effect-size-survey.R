@@ -1,4 +1,4 @@
-# Last Phase j: the whole-table effect sizes (Cramer's V / phi / eta^2), auto Fisher's exact on small
+# Phase 18j: the whole-table effect sizes (Cramer's V / phi / eta^2), auto Fisher's exact on small
 # weak tables, and the opt-in robust omnibus tests (Kish n_eff first-order Rao-Scott; survey-design
 # svychisq / svyglm F). Parity is checked against the reference implementations; every test asserts a
 # non-vacuous result (a real statistic, not just "no error").
@@ -75,7 +75,7 @@ test_that("Kish factor chi2 rescales the weighted chi2 to n_eff", {
   te <- get_test(tab(apistrat, stype, awards, wt = pw, test = TRUE))
   expect_equal(te$test[1], "chi2_design")
   expect_true(is.finite(te$pvalue) && te$pvalue > 0)
-  # Last Phase z16-i (W8): `n` is ALWAYS the raw count -- it used to become the effective n here, so
+  # Phase 18z16-i (W8): `n` is ALWAYS the raw count -- it used to become the effective n here, so
   # one column meant two things depending on a global option. The correction now lives in `deff`.
   expect_equal(te$n[1], nrow(apistrat))
   # `deff` is Rao-Scott's mean generalized design effect: >1 when the weighting costs information,
@@ -110,7 +110,7 @@ test_that("survey numeric F matches svyglm + regTermTest", {
 test_that("the test RUNG is derived from the input, and `test` is TRUE/FALSE only", {
   skip_if_not_installed("survey")
   suppressWarnings(utils::data("api", package = "survey"))
-  # Last Phase z14-i: ids/strata/fpc/nest are gone -- a design is expressed by BUILDING one. The rung
+  # Phase 18z14-i: ids/strata/fpc/nest are gone -- a design is expressed by BUILDING one. The rung
   # follows what was passed, so there is no `test = "survey"` to ask for and not get.
   des <- survey::svydesign(id = ~1, strata = ~stype, weights = ~pw, data = apistrat, fpc = ~fpc)
   te  <- suppressMessages(get_test(tab(des, sch.wide, awards, test = TRUE)))
@@ -133,7 +133,7 @@ test_that("the classic default path is unaffected (no robust columns, effect siz
   expect_true(is.finite(te$effect_size[te$test == "chi2"]))
 })
 
-# === Last Phase z16-iv: the robust omnibus GRID (producer / joiner split) =========================
+# === Phase 18z16-iv: the robust omnibus GRID (producer / joiner split) =========================
 
 test_that("a design table with tab_vars keeps its TOTAL-TABLE test row", {
   skip_if_not_installed("survey")

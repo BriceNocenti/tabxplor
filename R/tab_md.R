@@ -331,7 +331,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # `styled` (computed here, ahead of the label blanking that needs it): a coloured table, or the caller
   # asked for the stylesheet. In a styled table (rendered to html) a blanked continuation LABEL cell must
   # be a non-breaking space, NOT "" -- an :empty <td> makes the CSS col_var-separator rule misfire (the
-  # "ragged" leftmost border that appears only on continuation rows; Last Phase m). Plain tables keep "".
+  # "ragged" leftmost border that appears only on continuation rows; Phase 18m). Plain tables keep "".
   do_color <- md_has_color(rd, color)
   styled   <- do_color || isTRUE(css)
   blank_lbl <- if (styled) "\u00a0" else ""
@@ -348,7 +348,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   is_right <- fmt_mask  # named logical: TRUE for fmt (right-aligned) columns
 
-  # Last Phase m: the spacer-column set. Plain / unstyled tables keep ONLY the col_var-group spacers
+  # Phase 18m: the spacer-column set. Plain / unstyled tables keep ONLY the col_var-group spacers
   # (new_col_var). A STYLED table adds thin spacer columns at the interior boundaries the other exports
   # draw as vertical rules -- between the levels column and the first number, between the last number and
   # the grand Total column, and to the right of the Total column -- reusing the same :empty spacer ->
@@ -516,7 +516,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     # column (a pipe row must keep the table's cell count or pandoc shifts the data). A long name simply
     # overflows its own cell: the row is deliberately not pipe-ALIGNED, because padding to it would
     # widen every column below it.
-    # Last Phase m: build the span row as a PER-COLUMN cell vector (the name in the first cell of its
+    # Phase 18m: build the span row as a PER-COLUMN cell vector (the name in the first cell of its
     # run, nbsp-padded blanks elsewhere), then route it through md_insert_col_sep(sep_after) exactly like
     # the body -- so the spacer columns (col_var groups + the interior levels/Total boundaries) line up
     # across every row. (Was a hand-assembled line that only knew the col_var-group spacers.)
@@ -664,7 +664,7 @@ md_blank_row <- function(col_width, new_col_var, n_cols, has_multi_col_vars) {
   md_insert_col_sep(strrep(" ", col_width), new_col_var, n_cols, has_multi_col_vars)
 }
 
-# Last Phase m: a width-padded blank cell that is NOT :empty (a leading non-breaking space) for STYLED
+# Phase 18m: a width-padded blank cell that is NOT :empty (a leading non-breaking space) for STYLED
 # tables, so the CSS col_var-separator rule fires only on the true ASCII spacer columns -- used for the
 # nearly-blank col_var-name span row. Plain tables keep ASCII spaces (byte-clean GFM). Vectorised.
 md_pad_blank <- function(widths, styled) {

@@ -1,7 +1,7 @@
 # The weights framework, stress-tested — where the three rungs stop, and what to do about it
 
 Date: 2026-08-11. Status: **RESEARCH ONLY** — no R code was modified. Working tree at `2cdfc60`
-(Last Phase z14-iii), `survey` 4.5, R 4.6.1. Every number below is produced by the reproducer in
+(Phase 18z14-iii), `survey` 4.5, R 4.6.1. Every number below is produced by the reproducer in
 **Appendix A** (run it as `OMP_NUM_THREADS=1 Rscript <file>`, ~4 minutes); block letters in that
 appendix are cited as *(block X)*.
 
@@ -53,7 +53,7 @@ leaves**. Thirteen findings, five of them severe:
 | **W11** | jamovi: Regressions has **no** rung control at all; Crosstables' control is labelled "Type of p-value" but also moves every confidence interval | minor |
 | **W12** | four small white elephants left by z14 (a redundant conjunction, a stray `getOption()`, three `weighted` predicates, one dead branch) | cosmetic |
 
-**The one-sentence diagnosis.** Last Phase z14 built the rung ladder for `tab()`'s main pipeline and
+**The one-sentence diagnosis.** Phase 18z14 built the rung ladder for `tab()`'s main pipeline and
 did it well; it did **not** extend it to `tab_reg()` — where the model column had always been at a
 *higher* rung than the ladder describes — nor to the exported step path, and it left the rung as a
 build-time local instead of a stored fact, so nothing downstream (footer, legend, exporter, jamovi)
@@ -430,7 +430,7 @@ row_var, a row_var that is also a tab_var) aborts with a message.
 
 * `jmvtab` (Crosstables) has `test_robust` = `classic` / `kish`, titled **"Type of p-value"** with
   the description *"For a weighted table, a more robust p-value"* (jamovi/jmvtab.a.yaml:205-217). It
-  sets `options(tabxplor.kish_neff)` around the build (R/jmvtab.b.R:40-42), which since Last Phase s
+  sets `options(tabxplor.kish_neff)` around the build (R/jmvtab.b.R:40-42), which since Phase 18s
   moves **every confidence interval, star and colour threshold in the table**, not only the p-value.
   The control does more than its label admits.
 * `jmvtabreg` (Regressions) has **no rung control whatsoever** — grep finds no `kish` in

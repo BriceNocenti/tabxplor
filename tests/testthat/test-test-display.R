@@ -29,7 +29,7 @@ test_that("crosstab grid: col_vars are columns, row_vars are groups, N/pvalue/ef
   expect_setequal(g$value_headers, c("party3", "tvhours"))
   expect_length(g$groups, 2L)                              # race, relig
   expect_equal(g$groups[[1]]$label_lines[[1]], "race")
-  # Last Phase m: no statistic row; order = N, p-value, effect size; the test type / measure name the rows
+  # Phase 18m: no statistic row; order = N, p-value, effect size; the test type / measure name the rows
   labs <- vapply(g$groups[[1]]$rows, `[[`, character(1), "label")
   expect_equal(labs[[1]], "N")
   expect_match(labs[[2]], "^pvalue \\(Chi2, Welch F")      # both factor + numeric col_vars
@@ -90,14 +90,14 @@ test_that("console renderer colours a non-significant p-value red (cli)", {
   # if the F test is non-significant, the p-value cell carries an ANSI red escape
   g <- test_summary_grid(t)
   nonsig <- any(vapply(g$groups, function(gr)
-    any(gr$rows[[2]]$nonsig), logical(1)))                # rows[[2]] = the p-value row (Last Phase m order)
+    any(gr$rows[[2]]$nonsig), logical(1)))                # rows[[2]] = the p-value row (Phase 18m order)
   if (nonsig) expect_match(out, "\033\\[")               # an ANSI escape is present
 })
 
 # === exports: default unchanged, test_lines='stat' adds a statistic row =============================
 
 test_that("export default = summary (p-value + effect size, no statistic); test_lines toggles", {
-  # Last Phase m: the export default "summary" = p-value + effect size (the statistic row is gone); the
+  # Phase 18m: the export default "summary" = p-value + effect size (the statistic row is gone); the
   # test type names the p-value row ("pvalue (Chi2)") and the measure names the effect-size row.
   # The styled md renders the label's inner space as U+00A0 (no wrap), so normalise it (as elsewhere).
   nb <- function(x) gsub(intToUtf8(160L), " ", paste(x, collapse = "\n"), fixed = TRUE)

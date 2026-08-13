@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
 "POT-Creation-Date: 2026-08-13 00:40+0200\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
-"Last-Translator: tabxplor (Last Phase w draft)\n"
+"Last-Translator: tabxplor (Phase 18w draft)\n"
 "Language-Team: none\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
@@ -364,7 +364,7 @@ msgstr "%s : au seuil de %s %%"
 msgid "no star: not significant"
 msgstr "aucune étoile : non significatif"
 
-# Last Phase z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
+# Phase 18z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
 #: fmt_class.R:5230
 msgid ""
@@ -383,7 +383,7 @@ msgstr ""
 "n'a pas pu être calculée pour ce tableau : les intervalles ne tiennent "
 "compte que de la pondération."
 
-# Last Phase z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
+# Phase 18z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
 #: fmt_class.R:5238
 #, c-format

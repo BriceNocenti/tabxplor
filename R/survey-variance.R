@@ -1,4 +1,4 @@
-# PURPOSE: the DESIGN-BASED variance of a tab() table's cells -- the one quantity Last Phase z14-ii
+# PURPOSE: the DESIGN-BASED variance of a tab() table's cells -- the one quantity Phase 18z14-ii
 #   needs, and the only new statistics in the whole of z14.
 # ROLE: producers for the two leaves. plain_core() asks for Var(p_hat) per (row, column level),
 #   num_core() for Var(x_bar) per (row, numeric variable); each divides its own displayed estimate by
@@ -11,7 +11,7 @@
 #   binom.test "with an effective sample size based on the estimated variance of the proportion" -- and
 #   it is why this module changes NOTHING downstream: tab_ci(), the nine ci_* engines, the colour
 #   engine, the fmt record and the four exporters already read `n_eff` as "the base for this cell's
-#   interval" (Last Phase s). No new fmt field, no new column attribute. See dev/full_survey_design_scope.md S4.
+#   interval" (Phase 18s). No new fmt field, no new column attribute. See dev/full_survey_design_scope.md S4.
 # DESIGN: ONE influence function, four domain pairs -- not four influence functions. Every quantity
 #   here is a ratio of two weighted sums, p = A/B with A = sum(u*w) and B = sum(v*w), whose linearized
 #   influence contribution is
@@ -68,7 +68,7 @@ svy_var_prep <- function(design, des_rows) {
   list(dd = dd, at = at, n = n_dd, w = w)
 }
 
-# THE row-space rule, extracted in Last Phase z14-iii so it is stated once: where does the i-th row of
+# THE row-space rule, extracted in Phase 18z14-iii so it is stated once: where does the i-th row of
 # a frame sit in a design of `n_design` rows, given `des_rows` (its `.svy_row` positions)?
 #   the design SHRANK   -> it holds exactly these rows, in order      -> i
 #   it did NOT shrink   -> it kept all n and set prob = Inf outside   -> des_rows[i]
@@ -107,7 +107,7 @@ svy_var_block <- function(Zf, prep) {
   v
 }
 
-# THE producers' return type (Last Phase z16-iiiii). They answer with a VALUE or with a REASON, never
+# THE producers' return type (Phase 18z16-iiiii). They answer with a VALUE or with a REASON, never
 # with a bare NULL the caller has to interpret: `list(v = <matrix>, reason = NULL)` on success,
 # `list(v = NULL, reason = "size" | NULL)` when there is no answer.
 # DESIGN: this return type is what let the process-global degrade environment go. The reason now
@@ -132,7 +132,7 @@ svy_var_setup <- function(prep, keys, n_tab, mkeys, nfr, K) {
   list(gm = gm, R = R, K = K, nfr = nfr)
 }
 
-# THE degrade message (Last Phase z16-i, W4). A console message is not a property of the table:
+# THE degrade message (Phase 18z16-i, W4). A console message is not a property of the table:
 # suppressMessages(), an Rmd chunk, tab_export(), jamovi's backend all drop it, and what survived was
 # a table whose footer asserted, permanently and in every export, something untrue of its numbers. So
 # the fall-back also records itself -- as a LOCAL of the build that fell back (z16-iiiii), which the
@@ -141,7 +141,7 @@ svy_var_setup <- function(prep, keys, n_tab, mkeys, nfr, K) {
 # actionable ("too large" says to reduce the table, which an exported footer read months later could
 # not act on anyway).
 # Returns TRUE, so a caller writes `degraded <- svy_var_degraded(res$reason)`.
-# Not throttled, like every other tabxplor per-render notice (CLAUDE.md Last Phase k2: a
+# Not throttled, like every other tabxplor per-render notice (CLAUDE.md Phase 18k2: a
 # once-per-session throttle was tried and reverted).
 svy_var_degraded <- function(reason = NULL) {
   cli::cli_inform(c(
@@ -154,7 +154,7 @@ svy_var_degraded <- function(reason = NULL) {
 
 # === SECTION: the flat closed form (ids = ~1) =======================================================
 #
-# Last Phase z16-ii. A WEIGHT COLUMN IS A SURVEY DESIGN -- the flat one -- and at `ids = ~1`, with no
+# Phase 18z16-ii. A WEIGHT COLUMN IS A SURVEY DESIGN -- the flat one -- and at `ids = ~1`, with no
 # strata, no fpc and no calibration, svyrecvar reduces to a plain sum of squares of `w_k z_k` with
 # survey's finite-sample factor n/(n-1). Because Sum(w_k z_k) = (A - p B)/B is EXACTLY zero for every
 # base, onestrat()'s centering is a no-op, so the whole variance collapses to per-cell sums the
@@ -363,7 +363,7 @@ svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_la
 # list of numeric microdata columns), or NULL. Same influence function with (u, v) = (x, 1) over the
 # row's domain, restricted per variable to its own non-missing rows -- which is the n the leaf's own
 # per-cell variance is computed on.
-# Last Phase z14-iii: `wmult` is a per-row multiplier on the design weight, so the SAME producer also
+# Phase 18z14-iii: `wmult` is a per-row multiplier on the design weight, so the SAME producer also
 # serves tab_reg()'s crude grid, where a grouped-binomial row is a cluster of `trials` Bernoulli draws
 # (p = Sum(w*succ) / Sum(w*trials)). With wmult = trials and x = succ/trials the expression below is
 # (u - p*v)/B for (u, v) = (succ, trials) -- the general ratio form, not a second formula.

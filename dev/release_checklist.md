@@ -1,6 +1,6 @@
 # Release checklist — the release-branch pattern
 
-The permanent branches (since 2.0.0, Last Phase z):
+The permanent branches (since 2.0.0, Phase 18z):
 
 - **`dev`** — the everything-branch: full history + `dev/`, `CLAUDE.md`, `.claude/`, editor config. All development and future bug fixes happen here (the branch used in Positron).
 - **`master`** — strictly user-facing: what a visitor or CRAN sees. Never commit to it directly; it only moves by merging release branches.

@@ -239,7 +239,7 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
   d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
   tl <- tab_logit(d, "married", c("race", "relig"))
   tmp <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp, open = FALSE, replace = TRUE)
-  # Last Phase z13: column 2 is the per-level `n` (add_n = TRUE by default); the OR column follows it.
+  # Phase 18z13: column 2 is the per-level `n` (add_n = TRUE by default); the OR column follows it.
   xl_col <- function(f) {
     df <- openxlsx2::wb_to_df(openxlsx2::wb_load(f), col_names = FALSE)
     df[[ncol(df)]]
@@ -296,7 +296,7 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
   # scaffolding column) because the prep dropped `vars$row_vars`.
   # Phase 14l: and the DEPENDENT axis leads -- this is pct="row", so the col_var comes first.
   testthat::expect_equal(as.character(d[1, 1]), "relig by race, marital")
-  # one merge per block, in column A. Last Phase m: common_totrow defaults FALSE, so each block keeps its
+  # one merge per block, in column A. Phase 18m: common_totrow defaults FALSE, so each block keeps its
   # OWN Total row -> race spans A4:A7 (3 data + Total) and marital spans A8:A14 (6 data + Total).
   merges <- paste(wb$worksheets[[1]]$mergeCells, collapse = " ")
   testthat::expect_match(merges, 'ref="A4:A7"', fixed = TRUE)

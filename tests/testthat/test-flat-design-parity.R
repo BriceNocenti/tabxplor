@@ -1,4 +1,4 @@
-# PURPOSE: THE parity contract of Last Phase z16 (dev/weights_framework_redesign.md S7). The flat
+# PURPOSE: THE parity contract of Phase 18z16 (dev/weights_framework_redesign.md S7). The flat
 #   closed form is a SECOND implementation of something `survey` already computes; that is only safe
 #   if the identity is tested, permanently, rather than asserted in a comment.
 # ROLE: every assertion here is "equals survey on the same design", never a hard-coded number -- so

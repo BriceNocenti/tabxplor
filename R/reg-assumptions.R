@@ -1,4 +1,4 @@
-# Last Phase z15 -- THE model checks of a `tab_reg()` table, their CURE (`shape =`) and the
+# Phase 18z15 -- THE model checks of a `tab_reg()` table, their CURE (`shape =`) and the
 # primitives its plots are drawn from.
 #
 # ROLE: one fact table (REG_CHECKS), one selection rule (reg_checks_for), one producer
@@ -42,7 +42,7 @@ REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson", "rr",
 # ONE row per check.
 #   noun          the assumption, as a word the reader already knows (a msgid)
 #   types         discriminator -> INSTRUMENT (a msgid). The label is "<noun> (<instrument>)", the
-#                 convention Last Phase m set for the crosstab summary ("pvalue (Chi2, Welch F)").
+#                 convention Phase 18m set for the crosstab summary ("pvalue (Chi2, Welch F)").
 #                 A term test carries three discriminators because exactly one of LR / F / Wald fires,
 #                 and which one is a fact about the model the reader should see.
 #                 EMPTY = the check is TAUGHT but never SCORED: it contributes a panel and no footer
@@ -436,7 +436,7 @@ reg_shape_k <- function(value) {
     k else NA_integer_
 }
 
-# Last Phase z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
+# Phase 18z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
 # and scale frozen as LITERALS in the formula string. Frozen for the reason z9 freezes the multiplier's
 # SD: `scale()` inside a formula re-scales on new data, so predict(newdata =) would silently disagree
 # with the fit. Returns NULL (never a broken term) when the column cannot supply a finite scale.
@@ -646,7 +646,7 @@ rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
 # `arm::binnedplot`'s empirical 2*sd(y)/sqrt(n), which its own book does not describe: measured, they
 # agree on average (ratio 0.997) but differ +/-30 % per bin, and the empirical one ignores weights.
 # Zero cells use Haldane-Anscombe (k + 0.5)/(n + 1) -- symmetric, never infinite, no arbitrary floor.
-# Last Phase z16-iv (W-G.4): the bin's EFFECTIVE base is the package's one device, not a hand-rolled
+# Phase 18z16-iv (W-G.4): the bin's EFFECTIVE base is the package's one device, not a hand-rolled
 # Kish -- `ne = num / Var(mean of y in the bin)`, where `num` is what that variance would be times n
 # under simple random sampling (p(1-p) for a share, the mean for a count, the within-bin variance for
 # a mean). Three inputs, one formula:
@@ -859,7 +859,7 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
   ly <- rd_link_y(data[[deps]], sp$family, sp$trials, positive_level)
   w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
           data[[wt]] else NULL
-  # Last Phase z16-iv (W-G.4): under a survey design the bands take the DESIGN variance, reached
+  # Phase 18z16-iv (W-G.4): under a survey design the bands take the DESIGN variance, reached
   # through `.svy_row` -- the position each prepared row holds in the original design -- exactly as
   # every other design quantity in the package is.
   dr <- if (!is.null(design)) data[[svy_row_col]] else NULL

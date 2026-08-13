@@ -138,7 +138,7 @@ testthat::test_that("list_method keeps a non-mergeable list as N tables; else it
 # === SECTION: tab_bold_rows edge (md vs kable style) =========================
 
 testthat::test_that("tab_bold_rows: no discriminating column -> integer(0) (no anchor rows)", {
-  # Last Phase m: the anchor signal is `ref_alltot | is_refrow`; zero discriminating columns -> NO anchor
+  # Phase 18m: the anchor signal is `ref_alltot | is_refrow`; zero discriminating columns -> NO anchor
   # rows (universally, was: md integer(0) but kable ALL rows -- the binomial exp=FALSE all-bold bug).
   none <- list(c(FALSE, FALSE, FALSE), c(FALSE, FALSE, FALSE))
   testthat::expect_identical(tabxplor:::tab_bold_rows(none), integer(0))

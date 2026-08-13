@@ -32,7 +32,7 @@ Re-grep exact line numbers before editing; the anchors below drift.
 1. **`fmt_field_names`** (~L1524): add `"X"`. This is what keeps `fmt_col_attrs` correct.
 2. **`new_fmt()`** (~L1387): add the parameter (default `NULL`) and `X = X,` to the `new_rcrd()` field
    list. Defaults are filled in the body from the shared `nas`/`fls` vectors — follow that pattern, do
-   not add a per-field `case_when` (Last Phase z6 removed one that cost half the constructor).
+   not add a per-field `case_when` (Phase 18z6 removed one that cost half the constructor).
 3. **`fmt()`** public constructor (~L304): add the parameter, a `vec_cast` + `vec_recycle` line, and
    pass `X = X` to `new_fmt()`.
 4. **Getter/setter** via the factories: `get_X <- fmt_field_factory("X")` and

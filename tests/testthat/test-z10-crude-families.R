@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z10 -- the observed (crude) counterpart of the three families that had none:
+# PURPOSE: Phase 18z10 -- the observed (crude) counterpart of the three families that had none:
 #          grouped binomial (`trials =`), multinomial and ordinal; and the model-vs-observed gap TEST
 #          on their marginal paths.
 # ROLE: the behavioural lock. The governing claim is ONE rule, not three features: "the observed effect

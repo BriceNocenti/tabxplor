@@ -111,7 +111,7 @@ color_golden_cases <- function() {
       tab(gss, marital, race, tab_vars = year, pct = "row", color = "contrib", comp = "all"))),
     c_contrib_all_notab = function() color_golden_capture_tab(suppressWarnings(
       tab(gss, marital, race, pct = "row", color = "contrib", comp = "all"))),
-    # Last Phase z4: the two SIGNIFICANCE-GATED contrib readings, previously uncovered here (all three
+    # Phase 18z4: the two SIGNIFICANCE-GATED contrib readings, previously uncovered here (all three
     # cases above use the default color_signif = "ignore", which is why they stayed byte-identical
     # through z4). `grey_non_signif` keeps the relative-contribution scale and gates on the adjusted
     # standardized residual; `guaranteed_effect` colours that residual itself, on the absolute
@@ -120,7 +120,7 @@ color_golden_cases <- function() {
       tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "grey_non_signif")),
     c_contrib_guar   = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "guaranteed_effect")),
-    # Last Phase z16-iv (W-B): the WEIGHTED gated contrib, previously UNCOVERED here -- there was no
+    # Phase 18z16-iv (W-B): the WEIGHTED gated contrib, previously UNCOVERED here -- there was no
     # weighted colour fixture at all, which is exactly why the residual could ignore the sample design
     # for a whole release. `tvhours` is gss_cat's own numeric column, so the case stays deterministic
     # with no synthetic weight; the option makes the residual take the n/delta-bar base.

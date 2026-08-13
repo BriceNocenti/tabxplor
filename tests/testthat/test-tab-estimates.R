@@ -1,4 +1,4 @@
-# Last Phase z17-i -- the estimate model behind forest_plot().
+# Phase 18z17-i -- the estimate model behind forest_plot().
 #
 # Everything here runs on a TIBBLE, with no graphics device: that is the point of splitting the model
 # out of the renderer (a ggplot has no golden lock; a tibble has). The load-bearing assertions are the

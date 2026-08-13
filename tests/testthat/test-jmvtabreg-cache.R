@@ -120,7 +120,7 @@ test_that("digest reref == refit-at-new-reference (display + fields)", {
     list(dep = "tvhours", preds = c("race", "relig"), fam = "poisson",  ref = c(relig = "8-None")),
     list(dep = "married", preds = c("race", "relig", "age"), fam = "binomial",
          ref = c(race = "Black", relig = "8-None")),
-    # Last Phase z9: `multiplier` left the reref gate (the digest is native-scale, so it is
+    # Phase 18z9: `multiplier` left the reref gate (the digest is native-scale, so it is
     # multiplier-independent). reg_reref_fit_res() must therefore reproduce reg_fit()'s own
     # `est * k, se * |k|` -- applied in reg_fit's order, before the phi scaling and the Wald finalize.
     list(dep = "married", preds = c("race", "age"), fam = "binomial",
@@ -331,7 +331,7 @@ test_that("Phase h: jmvtab_reg_compare_sig() changes with the options, is stable
 })
 
 
-# --- 8. the scaling picker passes the "sd" keywords through (Last Phase z9) ---------------
+# --- 8. the scaling picker passes the "sd" keywords through (Phase 18z9) ---------------
 test_that("jmvtab_reg_mult_vector() keeps sd / 2sd as text and numbers as numbers", {
   mk <- function(...) list(...)
   expect_null(jmvtab_reg_mult_vector(list()))

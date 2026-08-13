@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z14-ii -- Route A, design-based intervals in tab().
+# PURPOSE: Phase 18z14-ii -- Route A, design-based intervals in tab().
 # ROLE: Locks (a) R/survey-variance.R against survey itself, on a stratified, a clustered, a
 #   stratified+clustered and a CALIBRATED design, for proportions and for means; (b) the four
 #   consumers of the `n_eff` field end to end (cell CI, cell-vs-reference difference, the
@@ -119,7 +119,7 @@ test_that("a cell interval under a design is survey's, and is NOT the single-sta
   expect_true(all(is.finite(get_n_eff(cl))))
 })
 
-# Last Phase z16-iiiii (S8.2 item 8). FEW PSUs is the whole point: beta quantiles carry no degrees of
+# Phase 18z16-iiiii (S8.2 item 8). FEW PSUs is the whole point: beta quantiles carry no degrees of
 # freedom of their own, so Korn-Graubard rescales the effective base by (qt(a, n-1) / qt(a, degf))^2 --
 # worth exactly 1 at the flat basis (which is why test-flat-design-parity.R #13 could never see it)
 # and 0.645 here, i.e. an interval that was 25 % too short.
@@ -194,7 +194,7 @@ test_that("contrib's residual is design-corrected, and identical at every table 
   cl  <- dsg[["yes"]]; rl <- raw[["yes"]]
   expect_true(all(is.finite(get_n_eff(cl))))
   expect_true(all(is.na(get_n_eff(rl))))
-  # Last Phase z16-iv (W-B): z_design = z_classic / sqrt(delta-bar) -- the standard FIRST-ORDER
+  # Phase 18z16-iv (W-B): z_design = z_classic / sqrt(delta-bar) -- the standard FIRST-ORDER
   # correction, on Rao-Scott's mean generalized design effect of the table's OWN omnibus test. Before,
   # the base was the grand cell's `n_eff`, which is degenerate there (its proportion is 1, so its
   # design variance is 0) and always collapsed to the weights-only B^2/S -- so this ratio was blind to
@@ -345,7 +345,7 @@ test_that("the footer says design-based, in English and in French", {
   tt <- suppressMessages(tab(des, g, col, pct = "row"))
   expect_equal(tabxplor:::tab_weight_line(tt, lang = "en"),
                "Design-based (survey): weighted estimates, intervals and tests account for the sample design.")
-  # Last Phase z16-i: the DEFAULT weighted position now says what it does (S8.2 -- load-bearing).
+  # Phase 18z16-i: the DEFAULT weighted position now says what it does (S8.2 -- load-bearing).
   expect_equal(tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en"),
                "Weighted by w; confidence intervals and tests use the unweighted sample size.")
   expect_equal(

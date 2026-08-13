@@ -1,12 +1,12 @@
 # The weights framework, stress-tested (round 2, post-z16) — three positions, one field, six leaks
 
-**Date** 2026-08-12 · **Against** `dev` at `9588a12` (Last Phase z16 complete) · **Oracle**
+**Date** 2026-08-12 · **Against** `dev` at `9588a12` (Phase 18z16 complete) · **Oracle**
 `survey 4.5` · **Reproducer** `dev/weights_stress_test.R`, which produces every number below
 (`OMP_NUM_THREADS=1 Rscript dev/weights_stress_test.R`, ~1 min)
 
 **Relation to round 1.** `dev/weights_framework_stress_test.md` (2026-08-11, at `2cdfc60`) audited
 the framework *before* the redesign and produced findings W1–W13; `dev/weights_framework_redesign.md`
-is the design that answered them, implemented as Last Phase z16. **This document is round 2: the
+is the design that answered them, implemented as Phase 18z16. **This document is round 2: the
 same audit re-run against the result.** Twelve of round 1's thirteen findings are closed on the
 paths it measured — verified here, not assumed. The thirteenth, **W11** (jamovi), is not testable
 from R: `jmvtab.a.yaml` now carries the honest `design_effect` checkbox but the generated
@@ -525,7 +525,7 @@ the boundary. Unrelated to weights; noted so it is not lost.
 
 ---
 
-## 9. Implemented — Last Phase z16-iiii (2026-08-12)
+## 9. Implemented — Phase 18z16-iiii (2026-08-12)
 
 Every finding above is closed. Suite green (FAIL 0, WARN 0, SKIP 4, PASS 5423); **zero golden or
 snapshot churn** — the only fixture added is a new one, `_color_golden/c_contrib_wt_grey.rds`. Two

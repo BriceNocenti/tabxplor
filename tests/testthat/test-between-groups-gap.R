@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z8 -- the significance test of the `between_groups` gap. Two halves:
+# PURPOSE: Phase 18z8 -- the significance test of the `between_groups` gap. Two halves:
 #   A. the per-cell test: the 21st fmt field `gap_se`, the MEASURES `bounds` closure it feeds, and the
 #      three `color_signif` policies it unlocks for `color = "between_groups"`.
 #   B. the AGGREGATED companion: one pooled `predictor x split_var` interaction test per predictor,
@@ -152,7 +152,7 @@ test_that("the legend names the gap's own test, per channel", {
   l   <- leg(gap_tab(d, "guaranteed_effect"))
   testthat::expect_true(any(grepl("reference group's effect", l, fixed = TRUE)))
   testthat::expect_true(any(grepl("two independent estimates", l, fixed = TRUE)))
-  # the background's own tail must NOT borrow the model's interval name. Last Phase z13 (D7): pick the
+  # the background's own tail must NOT borrow the model's interval name. Phase 18z13 (D7): pick the
   # line that HAS a background -- the reference group's own column now says "reference group" instead of
   # printing a ladder no cell of it can reach, and forms its own legend line.
   with_bg <- grep("the reference group's effect", l, fixed = TRUE, value = TRUE)
@@ -284,7 +284,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
   testthat::expect_true("Obs_%" %in% names(t))          # the crude columns are still shown
 })
 
-# --- Last Phase z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------
+# --- Phase 18z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------
 
 test_that("D7: `reference` picks the split_var baseline instead of the first level", {
   skip_if_not_installed("broom")

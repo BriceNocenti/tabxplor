@@ -1,4 +1,4 @@
-# Last Phase z10, Steps 1-2: `ordered` factors survive the whole pipeline, and `OR = "cumOR"` prints
+# Phase 18z10, Steps 1-2: `ordered` factors survive the whole pipeline, and `OR = "cumOR"` prints
 # the per-cut-point cumulative odds ratio of an ordered col_var (the descriptive analogue of a
 # proportional-odds model's cumulative OR -- one number per cut, no PO assumption).
 

@@ -257,7 +257,7 @@ Significance source per measure:
 - **`or`** uses its own odds-ratio CI (log-OR Wald; the `tab_logit` model CI later). This is why OR
   gets all three policies (the maintainer's correction to an earlier claim).
 - **`contrib`** uses the **ADJUSTED standardized residual** (Haberman) — `|z| > z(conf_level)`, via
-  `zscore_formula()`, never a hardcoded 1.96. **UPDATED Last Phase z4:** this said "Pearson residual"
+  `zscore_formula()`, never a hardcoded 1.96. **UPDATED Phase 18z4:** this said "Pearson residual"
   and the code implemented it, which was wrong: `(o-e)/sqrt(e)` has variance `(1-p_i)(1-p_j) < 1`, so
   testing it at 1.96 under-rejects (measured 1.10-3.09x too strict). Only the adjusted residual is
   ~N(0,1). It is also computed on the package's inference base (unweighted `n`, or Kish `n_eff`), not

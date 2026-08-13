@@ -1,4 +1,4 @@
-# Last Phase z3: the two RISK-RATIO routes.
+# Phase 18z3: the two RISK-RATIO routes.
 #   (1) family = "poisson" on a BINARY outcome  -> modified Poisson (Zou 2004), a CONDITIONAL risk ratio
 #       with a robust sandwich variance (internal family key "rr").
 #   (2) effect = "ame_ratio"                    -> marginal standardization / g-computation on the

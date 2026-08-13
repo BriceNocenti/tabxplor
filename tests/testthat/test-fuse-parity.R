@@ -27,7 +27,7 @@ build_fine <- function(data, keycols, wtname = NULL) {
   if (is.null(wtname)) {
     dt[, list(n = .N), keyby = keycols]
   } else {
-    # Last Phase z16-iiiii: Sigma w^2 alongside Sigma w, exactly as jmv_cache_aggregate() now emits it
+    # Phase 18z16-iiiii: Sigma w^2 alongside Sigma w, exactly as jmv_cache_aggregate() now emits it
     # -- it is what lets a pre-aggregate serve the WEIGHTED inference basis (see the test below).
     dt[, list(n = .N, wn = sum(as.numeric(get(wtname)), na.rm = TRUE),
               w2 = sum(as.numeric(get(wtname))^2, na.rm = TRUE)), keyby = keycols]
@@ -82,7 +82,7 @@ testthat::test_that("tab_build factor path: default (no fusion) == .by_table (ra
 })
 
 testthat::test_that("a `.fine` carrying Sigma w^2 serves the weighted basis, exactly as a raw scan", {
-  # Last Phase z16-iiiii, the FACTOR twin of test-num-fuse-parity.R's `_w2` round-trip. Until this
+  # Phase 18z16-iiiii, the FACTOR twin of test-num-fuse-parity.R's `_w2` round-trip. Until this
   # phase jmv_cache_aggregate() emitted only (n, wn), so `has_w2` was FALSE on the cache path: in
   # jamovi, ticking `design_effect` widened the MEAN cell intervals and left the PERCENTAGES alone,
   # while the footer denied the one correction that had happened. Failing-first: without the `w2`

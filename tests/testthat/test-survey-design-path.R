@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z14-i -- the survey-design path made honest.
+# PURPOSE: Phase 18z14-i -- the survey-design path made honest.
 # ROLE: Locks the defects documented in dev/full_survey_design_scope.md S2.3 (D1-D10), the removal of
 #   the ids/strata/fpc/nest arguments (ruling Q4) and the DERIVED test rung (ruling Q2).
 # DESIGN: `survey` is the oracle throughout -- every assertion is "equals svychisq / svyglm /

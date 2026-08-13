@@ -1,8 +1,8 @@
 # Standardised χ² cell residuals in tabxplor — design study
 
 Date: 2026-08-05 (rev. 3 — maintainer's framing + the three decisions of §9 taken). Status:
-**IMPLEMENTED** (Last Phase z4). One naming drift since: the break scale this report calls `residual`
-shipped under that name and was renamed **`zscore`** in Last Phase z8 (it is a z scale, and a second
+**IMPLEMENTED** (Phase 18z4). One naming drift since: the break scale this report calls `residual`
+shipped under that name and was renamed **`zscore`** in Phase 18z8 (it is a z scale, and a second
 measure could want it). Read every `residual` scale key below as `zscore`; the statistic itself is
 still the adjusted standardized residual.
 
@@ -264,7 +264,7 @@ get over-flagged" problem. Note the risk already exists today in a worse form: t
 `r²`-based, so a sparse cell's inflated residual is *squared* into a large share.
 
 tabxplor already computes `min_e` per table (`agg_chi2()`, in the `test` tibble), already uses a
-`test_weak_min_e` threshold to trigger Fisher's exact (Last Phase j), and already has `n_min`. The
+`test_weak_min_e` threshold to trigger Fisher's exact (Phase 18j), and already has `n_min`. The
 guard exists; it only needs wiring — see §5.5.
 
 ---
@@ -345,7 +345,7 @@ measure name — without a second measure or a second argument value.
 ### 4.4 Weights: how to get both a meaningful contribution and a meaningful p-value?
 
 Your 1.3.1 philosophy generalises cleanly, and the answer is **exactly the package's existing rule**
-(`?tab`, Last Phase s) — nothing new to invent:
+(`?tab`, Phase 18s) — nothing new to invent:
 
 > **weighted estimate + unweighted (or Kish-effective) base**
 
@@ -358,7 +358,7 @@ Applied here:
   This is the same ladder as every CI in the package, so the legend already has vocabulary for it and
   the doc needs no new concept.
 
-**Verified feasible with zero new plumbing:** the `n_eff` field (19th, Last Phase s) is already
+**Verified feasible with zero new plumbing:** the `n_eff` field (19th, Phase 18s) is already
 populated on the grand-total cell of the total column — measured `n_eff = 10 613` vs raw `n = 13 015`
 on a `runif(.3,3)`-weighted table (deff = 1.23 → residuals shrink by 1.11×), and `NA` when the option
 is off, giving a natural fallback to `n`.
@@ -373,7 +373,7 @@ Remaining caveats, all documentable in one paragraph:
   identity survives only for unweighted tables. Harmless — nothing in the code depends on it — but it
   means the residual must be computed from its own formula rather than derived from `var`. It already
   is.
-- **`test = "survey"`** (Last Phase j) makes the *omnibus* p design-based but leaves cells at best
+- **`test = "survey"`** (Phase 18j) makes the *omnibus* p design-based but leaves cells at best
   Kish-corrected. The affordable extra step is a first-order Rao-Scott rescale (divide residuals by
   `√(mean deff)`, which the overlay already computes); anything better needs `svyby` per cell and
   violates the "test from the aggregate" architecture. Recommend: document the limit; add the
@@ -510,7 +510,7 @@ French: *"résidu standardisé ajusté"* — one `po/R-fr.po` entry.
 Recommendation (cheap, no new argument): leave cells whose **own expected count is `< 1`** ungated —
 i.e. treat them as non-significant — so an `e = 0.2` cell cannot be flagged at `|z| = 6.08`. Reuses
 the quantities already in the loop; `min_e` already flags the table in the p-value row descriptor
-(Last Phase j's `!` marker), so the table-level signal already exists. `n_min` remains the user-facing
+(Phase 18j's `!` marker), so the table-level signal already exists. `n_min` remains the user-facing
 lever for hiding small bases entirely. Alternative: do nothing and document — but then the package
 ships a known false-positive generator on sparse tables.
 

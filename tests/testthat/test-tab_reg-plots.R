@@ -1,4 +1,4 @@
-# Phase 12h / Last Phase z15: the regression model CHECKS, drawn -- reg_check_plots(). Smoke tests:
+# Phase 12h / Phase 18z15: the regression model CHECKS, drawn -- reg_check_plots(). Smoke tests:
 # each builds a gtable without error on a null device (visual correctness is checked manually).
 # Guarded by the plotting Suggests (ggplot2 / gridExtra). The results plot is test-forest-plot.R.
 #
@@ -91,13 +91,13 @@ test_that("reg_check_plots() panel set follows REG_CHECKS, family by family", {
 })
 
 
-# Last Phase z17: `or_plot()` is GONE (ruling D1 -- never released, and superseded in full by
+# Phase 18z17: `or_plot()` is GONE (ruling D1 -- never released, and superseded in full by
 # forest_plot(), which reads the same table, obeys set_color_breaks() and returns a modifiable ggplot).
 # Its tests moved to test-forest-plot.R, except this one, which was never about the drawing: telling a
 # MODEL column from its observed twin by ROLE and not by a name prefix is the rule the whole plot
 # system rests on, and it is worth a fixture of its own.
 
-test_that("Last Phase z13: a model column is told from its observed twin by ROLE", {
+test_that("Phase 18z13: a model column is told from its observed twin by ROLE", {
   skip_if_not_installed("broom")
   d <- reg_plot_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))

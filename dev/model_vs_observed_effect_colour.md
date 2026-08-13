@@ -1,6 +1,6 @@
 # Colouring the gap between the modelled effect and the observed effect — design study
 
-Date: 2026-08-05. Status: **REPORT ONLY** (Last Phase z5, step 1). No code written; the plan and the
+Date: 2026-08-05. Status: **REPORT ONLY** (Phase 18z5, step 1). No code written; the plan and the
 implementation are a separate step.
 
 Scope: a `tab_reg()`-only colour measure that scores **how far each model estimate sits from its
@@ -123,7 +123,7 @@ Three properties make this feature cheap:
   predictors) are `NA` on the crude side and would simply be uncoloured.
 - **The population already matches.** Since Phase 17h, both sides use `reg_complete_frame()`
   (`:789`), so the crude reference level, the complete-case rows and the n are the model's.
-- **The scale already matches.** The whole point of the `rr` arm added in Last Phase z3 is that the
+- **The scale already matches.** The whole point of the `rr` arm added in Phase 18z3 is that the
   crude companion is on the *same* scale as the model column (Katz RR beside a modified-Poisson RR,
   never a Woolf OR). So `Model / Obs` is always a like-for-like contrast — by construction, not by
   luck.
@@ -241,7 +241,7 @@ average of the stratum-specific effects — so they move only when there is real
 | `multinomial`                         | (no Obs column)      | —                   | **not available**                                 |
 | `ordinal`                             | (no Obs column)      | —                   | **not available**                                 |
 
-**This is a strong argument for the feature, not against it.** Last Phase z3 added `family = "poisson"`
+**This is a strong argument for the feature, not against it.** Phase 18z3 added `family = "poisson"`
 on a binary outcome precisely so a user could get a collapsible RR; and `effect = "ame"` /
 `"ame_ratio"` give collapsible marginal quantities. The measure works cleanly on every one of them.
 The recommendation is therefore:
@@ -908,7 +908,7 @@ about the jamovi digest path (§4.4).
 ### Already implemented in tabxplor
 
 - Zou G. (2004) "A modified Poisson regression approach to prospective studies with binary data",
-  *American Journal of Epidemiology* 159(7), 702-706. — Last Phase z3, `family = "poisson"` on a
+  *American Journal of Epidemiology* 159(7), 702-706. — Phase 18z3, `family = "poisson"` on a
   binary outcome; §3.3 is why it matters here.
 
 **In-repo companions:** `dev/new_colors_UI.md` (the colour framework brief),

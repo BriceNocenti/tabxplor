@@ -203,7 +203,7 @@ testthat::test_that("guaranteed_effect offsets the RATIO (multiplicative) scale 
   testthat::expect_true(fmt_color_slots(col, plan)[1] >= 1L)   # significant -> coloured
 })
 
-# Last Phase a: contrib gains a significance gate via the stored standardized-residual p-value.
+# Phase 18a: contrib gains a significance gate via the stored standardized-residual p-value.
 # Previously color="contrib" under a significance policy coloured NOTHING (no CI to gate on).
 testthat::test_that("engine: contrib + significance policy gates on the residual p-value", {
   gss <- forcats::gss_cat

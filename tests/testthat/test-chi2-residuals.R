@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z4 -- the adjusted standardised (Haberman) residual behind `color = "contrib"`.
+# PURPOSE: Phase 18z4 -- the adjusted standardised (Haberman) residual behind `color = "contrib"`.
 #
 # What it locks, and why each test exists (every one FAILS on the pre-z4 code):
 #   1. The residual IS chisq.test()$stdres. The old gate used the PEARSON residual (o-e)/sqrt(e),
@@ -8,14 +8,14 @@
 #      weight by a constant (population weights) drove every cell p-value to 0.
 #   3. `options(tabxplor.design_effect = TRUE)` shrinks it by exactly 1/sqrt(delta-bar) -- Rao-Scott's
 #      mean generalized design effect of the table's OWN omnibus test, so the colours and the p of one
-#      table describe one design effect (Last Phase z16-iv, W-B).
+#      table describe one design effect (Phase 18z16-iv, W-B).
 #   4. The three `color_signif` policies each read a DIFFERENT, documented quantity:
 #      ignore / grey_non_signif = the relative contribution (the CA reading, byte-identical to
 #      pre-z4); guaranteed_effect = the absolute residual on the `zscore` break scale.
 #   5. The `resid` display token + tooltip expose the number, derived from the stored p-value
 #      (no fmt field of its own) -- including inside a `{}` composite, whose non-primary tokens
 #      have their p-value blanked (which would have rendered NA before the resid exception).
-# See: dev/chi2_cell_residuals_and_contributions.md ; CLAUDE.md > Last Phase z4.
+# See: dev/chi2_cell_residuals_and_contributions.md ; CLAUDE.md > Phase 18z4.
 
 # The recoded income used by the vignettes: 4 ordered brackets, so the table matches the worked
 # example in dev/chi2_cell_residuals_and_contributions.md (raw gss_cat's rincome keeps its
@@ -103,7 +103,7 @@ testthat::test_that("design_effect shrinks the residual by exactly 1 / sqrt(delt
   raw <- z_of(FALSE)
   eff <- z_of(TRUE)
   n_tot <- get_n(eff$tot)[length(eff$tot)]
-  # Last Phase z16-iv (W-B): the base of an ASSOCIATION residual is the raw n over Rao-Scott's mean
+  # Phase 18z16-iv (W-B): the base of an ASSOCIATION residual is the raw n over Rao-Scott's mean
   # generalized design effect of THIS table's own omnibus test -- the `deff` the test row reports.
   # Not the grand cell's `n_eff`: that cell's proportion is 1, so its design variance is 0 and it
   # always fell back to the weights-only B^2/S, at EVERY basis (which is why a stratified design and

@@ -1,4 +1,4 @@
-# Last Phase z6 — should `tabxplor_fmt` stop creating its all-`NA` fields?
+# Phase 18z6 — should `tabxplor_fmt` stop creating its all-`NA` fields?
 
 **Status**: study + measurements, no code changed. Decisions for the maintainer are in §9.
 **Date**: 2026-08-05. **Baseline**: `dev` @ z5 (20 fields, 11 column attributes).

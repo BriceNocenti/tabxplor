@@ -84,24 +84,24 @@
 #                      of this is materialised byte-identically at EXPORT (proven: build+materialize
 #                      == the pre-Increment-2 built table), so tab_xl / export-parity are unchanged.
 #
-# Last Phase s (Kish n_eff -> all descriptive CIs): adds a 19th per-cell field `n_eff` (the
+# Phase 18s (Kish n_eff -> all descriptive CIs): adds a 19th per-cell field `n_eff` (the
 #   effective sample size used for a cell's CI). This changes the vctrs RECORD SHAPE, so ALL
 #   *.rds are regenerated once + the fmt-contract snapshot; the ONLY per-cell delta is the added
 #   all-NA `n_eff` column (kish is OFF by default, so the field is NA and tab_ci coalesces to the
 #   raw base -> CI bounds byte-identical). The DISPLAY _snaps are UNTOUCHED (n_eff is non-displayed).
-# Last Phase z5 (the `adjustment` colour measure): adds a 20th per-cell field `obs` -- the value a
+# Phase 18z5 (the `adjustment` colour measure): adds a 20th per-cell field `obs` -- the value a
 #   tab_reg cell's estimate is COMPARED TO (its observed/crude counterpart, or a reference group's).
 #   Same shape of change as n_eff above: the RECORD moves, so all *.rds are regenerated once + the
 #   fmt-contract snapshot, and a script proved the only delta is the added all-NA column (a
 #   cross-table never fills `obs`). The DISPLAY _snaps are UNTOUCHED -- `obs` renders only through
 #   an explicit `display = "{obs}"` and a tooltip fragment gated on a non-NA value.
-# Last Phase z8 (the gap's significance test): adds a 21st per-cell field `gap_se` -- the standard
+# Phase 18z8 (the gap's significance test): adds a 21st per-cell field `gap_se` -- the standard
 #   error of the estimate-vs-`obs` gap. Same shape again: all *.rds regenerated once + the
 #   fmt-contract snapshot, with dev/verify_golden_field_delta.R (now committed, instead of rewritten
 #   each phase) proving over 1787 cells that the added all-NA column is the only delta. The DISPLAY
 #   _snaps are UNTOUCHED: `gap_se` is non-displayed (no token), and it can only be non-NA on a
 #   tab_reg split table, which no golden case builds.
-# Last Phase z13 (D3): adds a 12th per-column ATTRIBUTE `conf_level` -- the level a column's interval
+# Phase 18z13 (D3): adds a 12th per-column ATTRIBUTE `conf_level` -- the level a column's interval
 #   and its significance thresholds were computed at, so the per-column colour engine stops falling
 #   back to the global option. Not a field, so the record SHAPE is unchanged; but the attribute rides
 #   every column, so all *.rds are regenerated once + the fmt-contract snapshot.

@@ -119,7 +119,7 @@ testthat::test_that("pct = 'col' add_n: one n row per sub-table, collapsed to on
   testthat::expect_equal(sum(row_labels(tab(g, race, marital, pct = "col")) == "n"), 1L)
   testthat::expect_equal(sum(row_labels(tab(g, race, c(marital, relig), pct = "col")) == "n"), 1L)
   # 2+ row_vars: the Phase 14a regression lost the row entirely (0). Under na = "keep" the sub-tables
-  # share one base, so the Phase 14n collapse (Last Phase m: opt-in via common_totrow = TRUE) leaves a
+  # share one base, so the Phase 14n collapse (Phase 18m: opt-in via common_totrow = TRUE) leaves a
   # SINGLE n row (still catches the 0-row regression).
   testthat::expect_equal(
     sum(row_labels(tab(g, c(race, marital), relig, pct = "col", common_totrow = TRUE)) == "n"), 1L)
@@ -127,7 +127,7 @@ testthat::test_that("pct = 'col' add_n: one n row per sub-table, collapsed to on
     sum(row_labels(tab(g, c(race, marital), c(relig, partyid), pct = "col", common_totrow = TRUE)) == "n"), 1L)
   testthat::expect_equal(
     sum(row_labels(tab(g, c(race, marital, partyid), relig, pct = "col", common_totrow = TRUE)) == "n"), 1L)
-  # Last Phase m: the DEFAULT (common_totrow = FALSE) keeps one n row PER row_var.
+  # Phase 18m: the DEFAULT (common_totrow = FALSE) keeps one n row PER row_var.
   testthat::expect_equal(sum(row_labels(tab(g, c(race, marital), relig, pct = "col")) == "n"), 2L)
   # DIFFERENT bases (na = "drop" on an uneven fixture) do NOT collapse -> one n row per sub-table.
   gu <- gss_uneven()
@@ -180,7 +180,7 @@ testthat::test_that("compacted several-row_vars table collapses its identical To
   # ... the displayed table shows exactly one, and the core nrow is unchanged
   testthat::expect_equal(n_totrows(t), 1L)
   testthat::expect_equal(nrow(t), 11L)
-  # Last Phase m: the kept shared Total sits in its OWN group (a blank row_var, not the last block's)
+  # Phase 18m: the kept shared Total sits in its OWN group (a blank row_var, not the last block's)
   m  <- suppressMessages(tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE))
   rv <- tab_get_vars(m)$row_var
   testthat::expect_equal(as.character(m$row_var)[tabxplor:::is_totrow(m)], "")
@@ -203,7 +203,7 @@ testthat::test_that("pct = 'col' collapse drops each redundant Total AND its bas
   lv <- as.character(m$levels)
   testthat::expect_equal(sum(lv == "Total"), 1L)            # one Total block, not two
   testthat::expect_equal(sum(lv == "n"), 1L)
-  # the survivors keep the Total | n order, in their own (blank row_var) group (Last Phase m)
+  # the survivors keep the Total | n order, in their own (blank row_var) group (Phase 18m)
   i <- which(lv == "Total")
   testthat::expect_equal(lv[i:(i + 1L)], c("Total", "n"))
   testthat::expect_equal(as.character(m$row_var)[i], "")
@@ -250,7 +250,7 @@ testthat::test_that("Phase 14n Part B: compacted table gets one p-value row PER 
   testthat::expect_no_warning(
     m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE))
   lv <- as.character(m[[tab_get_vars(m)$row_var]])
-  # Last Phase m: the p-value row label now states the test ("pvalue (Chi2)"); match its prefix.
+  # Phase 18m: the p-value row label now states the test ("pvalue (Chi2)"); match its prefix.
   is_pv <- grepl("^pvalue", lv)
   testthat::expect_equal(sum(is_pv), 2L)                                # one per block
   # each p-value row carries its own block's row_var, and sits after that block's rows
@@ -264,7 +264,7 @@ testthat::test_that("Phase 14n Part B: tab_vars and plain p-value placement unch
   m_tv <- tabxplor:::tab_materialize_extras(
     tab(g, marital, relig, year, pct = "row", test = TRUE), backend = "text", pvalue = TRUE)
   lv_tv <- as.character(m_tv[[tab_get_vars(m_tv)$row_var]])
-  # Last Phase m: the p-value row label now states the test ("pvalue (Chi2)"); match its prefix.
+  # Phase 18m: the p-value row label now states the test ("pvalue (Chi2)"); match its prefix.
   testthat::expect_equal(sum(grepl("^pvalue", lv_tv)), dplyr::n_distinct(forcats::gss_cat$year))  # one per year
   m_pl <- tabxplor:::tab_materialize_extras(
     tab(g, marital, relig, pct = "row", test = TRUE), backend = "text", pvalue = TRUE)
@@ -329,7 +329,7 @@ testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext 
     tab(forcats::gss_cat, race, relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
     backend = "text", pvalue = TRUE)
   rvc <- tabxplor:::tab_render_vars(m)$row_var
-  # simulate a translated UI: rename the n / row_pct / pvalue labels away from English. Last Phase m: the
+  # simulate a translated UI: rename the n / row_pct / pvalue labels away from English. Phase 18m: the
   # p-value label now states the test ("pvalue (Chi2)"), so find each synthetic row's actual label by role.
   lv  <- levels(m[[rvc]])
   rr0 <- tabxplor:::tab_row_roles(m)

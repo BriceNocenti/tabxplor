@@ -1,4 +1,4 @@
-# Last Phase z15-ii / z15-iii -- `shape =` (the cure for a non-linearity), the observed curves and the
+# Phase 18z15-ii / z15-iii -- `shape =` (the cure for a non-linearity), the observed curves and the
 # row sparkline (R/reg-assumptions.R + the wiring in R/tab_reg.R).
 #
 # The fixtures are the ones that would fail if a decision were quietly reverted, per the design's SS20:
@@ -173,7 +173,7 @@ test_that("rd_bin() is stats::weighted.mean() per bin, and its band is the theor
   expect_equal(b$n[[1]], sum(w[g == 1]), tolerance = 1e-10)
   # the logit link uses the theoretical sqrt(1/(n p (1-p))), not arm's empirical sd(y)/sqrt(n)
   bl <- tabxplor:::rd_bin(x, y, w, 5L, "logit")
-  # Last Phase z16-iv (W-G.4): the bin's effective base is the package's EXACT flat closed form on
+  # Phase 18z16-iv (W-G.4): the bin's effective base is the package's EXACT flat closed form on
   # the weights (svy_flat_neff_rows), not the hand-rolled Kish that stood here -- the last surviving
   # use of the formula z16 retired. Same device as every cell base: ne = p(1-p) / Var_flat(mean).
   k  <- g == 1

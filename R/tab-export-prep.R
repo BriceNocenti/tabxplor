@@ -110,7 +110,7 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     text_slot  = text_slot,
     bg_slot    = bg_slot,
     keep_black = keep_black,
-    # Last Phase z11: the palette's own TYPOGRAPHY for this cell's text slot, kept FLAT (three vectors,
+    # Phase 18z11: the palette's own TYPOGRAPHY for this cell's text slot, kept FLAT (three vectors,
     # not a nested list) because tx_transpose_render() flips per-cell logicals with a flat helper.
     # These are the MEASURE's face only -- `keep_black` (the structural reference/total bold) is folded
     # into `bold` below and deliberately not into these, since tab_plot's structural bolding is a
@@ -146,7 +146,7 @@ ann_ref <- function(a) {
 # (fmt_col_ann) -- the SAME signal the per-cell keep_black uses -- so a totals-free regression table
 # (whose ref_alltot is empty but whose reference CATEGORIES carry in_refrow) still bolds its reference
 # rows. For crosstabs is_refrow is a subset of ref_alltot, so this is byte-identical there.
-# WARNING (Last Phase m): when NO column discriminates the result is integer(0) (no anchor rows) --
+# WARNING (Phase 18m): when NO column discriminates the result is integer(0) (no anchor rows) --
 # universally, not just for md. The old `rowSums == ncol` edge flagged EVERY row when 0 columns
 # survived; that bolted the whole table on a binomial exponentiate=FALSE + empirical reg (all columns
 # non-discriminating on ref_alltot). Reference rows now stay bold via the in_refrow signal instead.
@@ -490,7 +490,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     names(which(purrr::map_lgl(ref_alltot_list, all)))
   } else character(0)
 
-  # Last Phase m: the pct = "col" "n" (count) ROW is minted from the sub-table Total row, so its cell in
+  # Phase 18m: the pct = "col" "n" (count) ROW is minted from the sub-table Total row, so its cell in
   # the total COLUMN (a column ATTRIBUTE, not clearable per cell) falls into the all_totals anchor and
   # renders bold. It is a base-count row, not a reading anchor -> force plain weight, keyed on the stored
   # `n` role (17c), in both the whole-row set and the per-cell ann the html/md engines read.
@@ -640,7 +640,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # span row already names the outcome, so the exported level header strips it. Role-driven (17c): only
   # "model"/"emp" columns are touched, never a crosstab level that happens to hold brackets.
   for (j in which(is_level)) {
-    # Last Phase z13: "n" too -- the per-level count column is disambiguated across dependents by the
+    # Phase 18z13: "n" too -- the per-level count column is disambiguated across dependents by the
     # same bracket, for the same reason (the console needs to tell two outcomes' counts apart).
     if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp", "n"))
       clean[j] <- sub(" \\[[^]]*\\]$", "", clean[j])
@@ -734,7 +734,7 @@ roles_totblock_edges <- function(in_block) {
 # WARNING (Phase 14l): `color_type` is GONE. It was the 2nd positional arg, so every call site was
 # converted to NAMED arguments in the same change -- do NOT reintroduce a positional call, it would
 # shift every later toggle silently (color -> color_type, color_legend -> color, ...).
-# NOTE (Last Phase z11): the allow_auto gate below tests "auto" SPECIFICALLY, so the new "print" theme
+# NOTE (Phase 18z11): the allow_auto gate below tests "auto" SPECIFICALLY, so the new "print" theme
 # reaches every backend including the static ones (tab_xl, tab_plot) -- which is right: "print" is a
 # palette, not a render intent, and Excel is exactly where a publication table is wanted.
 #' @keywords internal
@@ -828,7 +828,7 @@ tab_export_prep <- function(tabs,
                          meta = list(theme_cols = theme_cols))
   }
 
-  # Last Phase a bug-fix: decide the graceful-degrade NOTICE once for the whole render batch. A degraded
+  # Phase 18a bug-fix: decide the graceful-degrade NOTICE once for the whole render batch. A degraded
   # (non-tabxplor) sub-table is only worth flagging when the batch holds NO real fmt table -- otherwise
   # the "no tabxplor_fmt columns" message is MISLEADING (a formatted table IS shown alongside it). And
   # then flag it only ONCE, not per degraded table. Each backend gates its tab_degrade_inform() on

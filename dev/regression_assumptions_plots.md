@@ -1,7 +1,7 @@
 # Model checks for `tab_reg()` — design
 
 Date: 2026-08-10, reorganised 2026-08-11 after two research rounds. Status: **DESIGN COMPLETE, no R
-code written.** Answers Last Phase z12; records twelve maintainer rulings (§3).
+code written.** Answers Phase 18z12; records twelve maintainer rulings (§3).
 
 **Read Part I alone if you want the framework.** Part II specifies each check and the API, Part III is
 the implementation, Part IV is the evidence, the refusals and the rejected alternatives. Numbers marked
@@ -87,7 +87,7 @@ The order is the order they print, and it is the order of what each one threaten
 what the estimate means (2), its interval (3), whether it is real at all (4), why it is wide (5).**
 
 **Every noun is a word the reader already knows, and the parenthesis names the instrument** — the
-convention Last Phase m set for the crosstab summary (`"pvalue (Chi2, Welch F; Kish)"`). Nothing here
+convention Phase 18m set for the crosstab summary (`"pvalue (Chi2, Welch F; Kish)"`). Nothing here
 is a coined term: *dispersion* is what a Poisson user says, *dfbetas* is Belsley–Kuh–Welsch and lives
 in base R as `stats::dfbetas()`, *VIF* needs no gloss.
 

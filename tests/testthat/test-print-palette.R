@@ -1,4 +1,4 @@
-# PURPOSE: lock the black-and-white publication palette (`theme = "print"`, Last Phase z11) -- the
+# PURPOSE: lock the black-and-white publication palette (`theme = "print"`, Phase 18z11) -- the
 # palette itself, its PERCEPTUAL measurements, the engine's theme-blindness, the CSS it generates, and
 # the four backends' renderings.
 # WHY the perceptual block exists: this palette is not a taste choice, it is the answer to a

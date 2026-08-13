@@ -378,7 +378,7 @@ exactly the architectural direction CLAUDE.md mandates ("one resolver, one model
 | vignette `tabxplor-reg.Rmd`                                         | a short "Odds ratio or risk ratio?" section                                                                                                                                                                                                                                                               |
 
 **Colour.** No new machinery: RR is multiplicative, so `color = "OR"` on the existing ratio breaks is
-already correct, and `log_odds_scale()` (Last Phase g) already handles the non-exponentiated log-RR case.
+already correct, and `log_odds_scale()` (Phase 18g) already handles the non-exponentiated log-RR case.
 One caveat: its `is_logcoef` gate is an **explicit family whitelist**
 (`c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial")`) and it is written **twice** —
 `fmt_class.R:2752` (the colour plan) and `fmt_class.R:3654` (the legend mirror, which the comment at
@@ -476,7 +476,7 @@ more **recognisable** to anyone who has met the epidemiological literature.
   external check — to `sandwich::vcovHC(type = "HC0")` up to n/(n−1) (test skipped if `sandwich` absent;
   it is not a dependency).
 - **Weighted parity:** against `svyglm` on a real weighted design; plus the Kish `n_eff` interaction on
-  the `Obs_` companion (Last Phase s).
+  the `Obs_` companion (Phase 18s).
 - **Estimand:** on a common outcome, `RR < OR` when OR > 1 and `RR > OR` when OR < 1 (the "always away
   from 1" property) — a cheap, strong invariant.
 - **Empirical companion:** `Obs_RR` equals a hand-computed crude risk ratio with a `ci_katz_rr` interval.
@@ -648,7 +648,7 @@ The five effect sizes look interchangeable; the test says the association is *no
 exactly the kind of thing a colour-coded table cannot show and a user will get wrong by eye. It is
 **one `stats::loglin()` call on counts tabxplor already has** — no new dependency (base `stats`),
 measured at **0.15 ms per fit**, and it lands naturally as one more row in the existing `test` attribute
-alongside `chi2`/`F`/Cramér's V, rendered by the machinery Last Phase j already built.
+alongside `chi2`/`F`/Cramér's V, rendered by the machinery Phase 18j already built.
 
 **But two honest caveats decide how to present it:**
 
@@ -657,7 +657,7 @@ alongside `chi2`/`F`/Cramér's V, rendered by the machinery Last Phase j already
    the eyeball. It must ship **with an effect size** — the natural one being the spread of the layer
    parameters, or simply presenting it beside the per-layer Cramér's V it is testing.
 2. **Weighted data needs a Rao–Scott correction**, or the test is anti-conservative. The `test = "survey"`
-   / `kish_neff` ladder from Last Phase j is the place this belongs, not a naive weighted-count fit.
+   / `kish_neff` ladder from Phase 18j is the place this belongs, not a naive weighted-count fit.
 
 So: worth doing, as a **small extension of the existing `test` attribute** (a "homogeneity of association"
 row, gated on `tab_vars` being present), not as a log-linear modelling subsystem. Everything beyond it —

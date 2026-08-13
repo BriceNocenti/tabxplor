@@ -1,7 +1,7 @@
 # PURPOSE: significance stars are OPT-IN (default off), storage-driven, and right-padded.
 # ROLE: locks the bug-fix that made stars opt-in in format()/tab() (default FALSE), kept them the
 #        default for tab_reg(), removed the tooltip leakage, and right-pads them so numbers align.
-# See: CLAUDE.md > Last Phase a (Bug corrections).
+# See: CLAUDE.md > Phase 18a (Bug corrections).
 
 gss <- forcats::gss_cat
 

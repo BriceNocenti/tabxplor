@@ -95,7 +95,7 @@ test_that("cold build == tab(cleannames = FALSE); warm == cold", {
 })
 
 test_that("the weighted basis reaches the cached FACTOR aggregate too (design_effect)", {
-  # Last Phase z16-iiiii. jmv_cache_aggregate()'s factor tier-1 emitted only (n, wn), while its
+  # Phase 18z16-iiiii. jmv_cache_aggregate()'s factor tier-1 emitted only (n, wn), while its
   # numeric twin emitted the moment triples -- so in jamovi, ticking `design_effect` corrected the
   # MEAN cell intervals, left the PERCENTAGES on the raw n, corrected NEITHER p-value (the omnibus
   # gate skipped the whole grid whenever a cached `.fine` was present, so a mixed table lost its

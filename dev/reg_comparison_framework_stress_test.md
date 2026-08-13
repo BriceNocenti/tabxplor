@@ -1,8 +1,8 @@
 # Stress test of the regression comparison framework — findings
 
-Date: 2026-08-10. **Status: FULLY IMPLEMENTED (Last Phase z13, 2026-08-11) — see §11.**
+Date: 2026-08-10. **Status: FULLY IMPLEMENTED (Phase 18z13, 2026-08-11) — see §11.**
 Originally: research only, no R source modified. Every number below was
-measured on this box today with `devtools::load_all()` at HEAD (`b6efb08`, Last Phase z10), on
+measured on this box today with `devtools::load_all()` at HEAD (`b6efb08`, Phase 18z10), on
 `gss_cat_data_formatting()` (a `set.seed(1)` sample of 4 000 or 6 000 rows, stated per probe).
 Scratch scripts were one-off and are not kept; each finding carries the code that reproduces it.
 
@@ -345,7 +345,7 @@ tab_reg(ds, c("married","black"), "relig", split_var = "race", color = "between_
 Both are real data problems (a predictor, or a dependent, that is constant inside a split group), and
 splitting by a coarsening of a predictor is a *common* first attempt. The inner message is
 informative in the second case and cryptic in the first; both arrive wrapped in `purrr` index noise.
-The pattern `tab()` already uses for its own degenerate cases (Last Phase p) applies directly: check
+The pattern `tab()` already uses for its own degenerate cases (Phase 18p) applies directly: check
 before fitting, name the group and the variable.
 
 ### D10 — `family = "auto"` aborts on an integer-valued numeric outcome (moderate)
@@ -359,7 +359,7 @@ tab_reg(ds, "tvhours", c("race","relig"))   # Error: Cannot auto-detect the mode
 continuous variable** — age in years, years of education, income in whole currency units, a Likert
 sum — falls through to the abort. Two consequences: an all-in-one package errors on one of the two
 most common outcome types, and **the R side disagrees with the jamovi side**, whose family selector
-was explicitly told (Last Phase h) to auto-select `poisson` for integers.
+was explicitly told (Phase 18h) to auto-select `poisson` for integers.
 
 The jamovi ruling is the natural resolution: integer → `poisson` with a message naming `gaussian`;
 non-integer numeric → `gaussian`. Whatever is chosen, R and jamovi should choose the same thing.
@@ -664,7 +664,7 @@ Ordered by value per line of code. All of them ride machinery that already exist
 
 ---
 
-## 11. Implementation (Last Phase z13, 2026-08-11)
+## 11. Implementation (Phase 18z13, 2026-08-11)
 
 All eleven defects closed, plus the two §7 items the maintainer opted into. Suite green in both
 locales (`fr_FR.UTF-8`: FAIL 0, WARN 0, SKIP 4, PASS 4979; CI-equivalent `LC_ALL=C.UTF-8 LANGUAGE=en`:

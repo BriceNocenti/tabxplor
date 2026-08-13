@@ -375,8 +375,8 @@ fmt <- function(n         = integer(),
                 color_signif = "ignore",
                 model_family = ""   ,   # Phase 15e: per-column regression family ("" on crosstabs)
                 role         = ""   ,   # Phase 17c: per-column role -- "model"/"emp" on reg columns
-                conf_level   = NA_real_, # Last Phase z13: the level this column's interval was built at
-                degf         = NA_real_, # Last Phase z16-iiiii: the design df its critical value uses
+                conf_level   = NA_real_, # Phase 18z13: the level this column's interval was built at
+                degf         = NA_real_, # Phase 18z16-iiiii: the design df its critical value uses
                 basis        = "n"     ) { # ... and HOW its interval was computed (see new_fmt())
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
@@ -401,15 +401,15 @@ fmt <- function(n         = integer(),
   pvalue  <- vctrs::vec_recycle(vctrs::vec_cast(pvalue , double())   , size = max_size)
   or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
   tot_n   <- vctrs::vec_recycle(vctrs::vec_cast(tot_n  , double())   , size = max_size)
-  # Last Phase s: the effective sample size this cell's CI was computed on (the design variance or
+  # Phase 18s: the effective sample size this cell's CI was computed on (the design variance or
   # the exact flat closed form; NA on basis "n" -> tab_ci/num_core fall back to the raw unweighted
   # base). Non-displayed, CI-only.
   n_eff   <- vctrs::vec_recycle(vctrs::vec_cast(n_eff  , double())   , size = max_size)
-  # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` /
+  # Phase 18z5: the value this cell is COMPARED TO by `color = "adjustment"` /
   # "between_groups" (the crude effect, or the reference group's estimate), on the cell's own
   # scale. NA everywhere else -> those measures score NA -> uncoloured.
   obs     <- vctrs::vec_recycle(vctrs::vec_cast(obs    , double())   , size = max_size)
-  # Last Phase z8: the SE of the GAP between the estimate and `obs`, on the estimate's own test
+  # Phase 18z8: the SE of the GAP between the estimate and `obs`, on the estimate's own test
   # scale (log-ratio for or/ratio, plain difference for diff). Written only where the two are
   # independent (split_var groups); NA elsewhere -> the gap has no interval -> the significance
   # policies stay inert on those cells. Non-displayed.
@@ -513,7 +513,7 @@ get_num <- function(x) {
   out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # Phase 12f: model-fit stat (N/R2/AIC/...) -> diff field
   out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
-  # Last Phase z4: DERIVED (no field of its own) -- the adjusted standardized residual behind
+  # Phase 18z4: DERIVED (no field of its own) -- the adjusted standardized residual behind
   # `color = "contrib"`'s significance. Read-only: set_num() has no matching arm.
   out[!nas & display == "resid"  ] <- fmt_resid(x)[!nas & display == "resid"  ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
@@ -522,11 +522,11 @@ get_num <- function(x) {
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
   out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
-  # Last Phase z9: BOTH spellings, as format() has always matched (`c("or_pct", "OR_pct")`). "OR_pct"
+  # Phase 18z9: BOTH spellings, as format() has always matched (`c("or_pct", "OR_pct")`). "OR_pct"
   # is written verbatim by the jamovi display ComboBox, and the missing arm made such a cell fall
   # through to the raw count.
   out[!nas & display %in% c("or_pct", "OR_pct")] <- get_or(x)[!nas & display %in% c("or_pct", "OR_pct")]
-  # Last Phase z5: the value this cell is COMPARED TO (the observed/crude effect, or the reference
+  # Phase 18z5: the value this cell is COMPARED TO (the observed/crude effect, or the reference
   # group's estimate). A real stored field, so -- unlike the derived `resid` -- it round-trips:
   # set_num() has a matching arm.
   out[!nas & display == "obs"    ] <- get_obs (x)[!nas & display == "obs"    ]
@@ -566,12 +566,12 @@ set_num <- function(x, value) {
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
-  # Last Phase z9: ONE mask for target and value. The value side read only "or", so a column displaying
+  # Phase 18z9: ONE mask for target and value. The value side read only "or", so a column displaying
   # "OR" fed a length-0 value into a non-empty target. Same pass adds the or_pct/OR_pct arms get_num()
   # and format() already had -- the three maps are meant to stay in sync (see the /vctrs-field skill).
   or_m <- !nas & display %in% c("or", "OR", "or_pct", "OR_pct")
   out[or_m] <- set_or(x[or_m], value[or_m])
-  out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])  # Last Phase z5
+  out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])  # Phase 18z5
   # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
   est_ci_m <- !nas & display == "est_ci"
   if (any(est_ci_m)) {
@@ -1106,7 +1106,7 @@ get_role <- function(x, ...) {
   if (is.null(r)) "" else r
 }
 
-# Last Phase z13 (D3): the per-column `conf_level` attribute -- the level this column's stored interval
+# Phase 18z13 (D3): the per-column `conf_level` attribute -- the level this column's stored interval
 # and its significance thresholds were computed at.
 #
 # TWO accessors on purpose, and the split is load-bearing. The RAW one is for the reconcilers: binding
@@ -1136,7 +1136,7 @@ set_conf_level <- function(x, conf_level) {
   `attr<-`(x, "conf_level", conf_level)
 }
 
-# Last Phase z16-iiiii: `degf` and `basis`, the twins of conf_level -- the level an interval was built
+# Phase 18z16-iiiii: `degf` and `basis`, the twins of conf_level -- the level an interval was built
 # AT, the degrees of freedom it is referred to, and HOW it was computed. Same two-accessor split for
 # `degf` (RAW for the reconcilers, resolved to Inf = refer to z for the engines); `basis` needs only
 # one, its own default "n" already being the honest unknown.
@@ -1177,7 +1177,7 @@ basis_rank <- function(b) {
 #' @noRd
 basis_weakest <- function(a, b) if (basis_rank(a) <= basis_rank(b)) a else b
 
-# THE inference facts of a whole TABLE, DERIVED from its fmt columns (Last Phase z16-iiiii). They used
+# THE inference facts of a whole TABLE, DERIVED from its fmt columns (Phase 18z16-iiiii). They used
 # to be a stored table attribute, `meta$inference`; deriving them means a table cannot lose them while
 # keeping its columns, which is what two rebuild sites and every raw `data.frame()` round-trip used to
 # do. The table-level answer is the weakest basis and the smallest degrees of freedom its columns
@@ -1217,7 +1217,7 @@ set_basis <- function(x, basis) {
 # Project the table's inference facts onto every fmt column, at each build tail -- the ONE point where
 # the call's settings and the finished columns are both in scope. Doing it per fmt() call site would
 # mean a dozen-plus builders, each of which the next new builder would have to find again.
-# Last Phase z16-iiiii: was tab_stamp_conf_level(); one sweep now carries all three, because they are
+# Phase 18z16-iiiii: was tab_stamp_conf_level(); one sweep now carries all three, because they are
 # one fact ("how was this column's interval computed") and were drifting apart across two carriers.
 # Each argument is skipped when absent, so a caller that knows only the level still behaves as before.
 #' @keywords internal
@@ -1353,7 +1353,7 @@ resolve_color_channels <- function(color) {
     if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m,
     character(1)))
   if (length(color) > 2L) cli::cli_abort("{.arg color} accepts at most two values (text, background).")
-  # Last Phase z5: `adjustment` / `between_groups` are tab_reg-only measures (they score the `obs`
+  # Phase 18z5: `adjustment` / `between_groups` are tab_reg-only measures (they score the `obs`
   # field, which only a regression table fills), but they are ordinary measures at the STORAGE
   # boundary -- and unlike contrib / OR they ARE allowed on the background, which is the whole point of
   # the headline reading `color = c("OR", "adjustment")`: effect size in the text, what adjustment did
@@ -1415,10 +1415,10 @@ set_color_signif <- function(x, color_signif) {
 # must be per-cell, not a column attribute).
 
 # Field names accepted inside {}; mapped to the internal get_num() display token by the alias table.
-# Last Phase z4: `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back
+# Phase 18z4: `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back
 # from the stored p-value + the contribution's sign), exactly as `ci` is derived from its bounds. It is
 # read-only -- get_num() has an arm, set_num() deliberately does not.
-# Last Phase z5: `obs` is a real stored FIELD (the value a reg cell is compared to), so unlike `resid`
+# Phase 18z5: `obs` is a real stored FIELD (the value a reg cell is compared to), so unlike `resid`
 # it is fully round-trippable -- get_num() reads it and set_num() writes it.
 tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var",
                               "resid", "obs")
@@ -1447,7 +1447,7 @@ display_primary <- function(display) {
 
 # fmt_display_shows() -- does a cell's display ALREADY show this field, anywhere in its template?
 #
-# Last Phase z10: the html tooltip suppressed a line by testing display_primary(), i.e. the FIRST token
+# Phase 18z10: the html tooltip suppressed a line by testing display_primary(), i.e. the FIRST token
 # only -- so every composite cell repeated its own bracket on hover. It shipped that way: an AME column
 # reading "{diff} ({pct})" printed the adjusted percentage in the cell AND again in the tooltip, and the
 # reg_marginal_column WARNING about the "prob_ratio" reference template was that same bug patched at one
@@ -1608,13 +1608,13 @@ new_fmt <- function(n         = integer(),
                     color_signif = "ignore",
                     model_family = ""   ,   # Phase 15e: regression model family per column ("" on crosstabs)
                     role      = ""   ,   # Phase 17c: column role -- "model"/"emp" on reg columns, "" on crosstabs
-                    # Last Phase z13 (D3): the confidence level THIS column's stored interval and its
+                    # Phase 18z13 (D3): the confidence level THIS column's stored interval and its
                     # significance thresholds were computed at. NA = unknown -> get_conf_level() falls
                     # back to options(tabxplor.conf_level). It is a per-COLUMN fact because colours are
                     # resolved per column at print time and cannot see the table's `conf_level`
                     # argument -- without it a table built at 99 % was greyed at 95 %.
                     conf_level = NA_real_,
-                    # Last Phase z16-iiiii: the two facts that say HOW this column's interval was
+                    # Phase 18z16-iiiii: the two facts that say HOW this column's interval was
                     # computed, beside the level it was computed AT. They are per-COLUMN for the same
                     # reason `conf_level` is, and for one more: a table ATTRIBUTE is the fragile
                     # carrier -- `meta$inference` held them until now, and two rebuild sites
@@ -1645,7 +1645,7 @@ new_fmt <- function(n         = integer(),
   #   purrr::map(length) |> print()
   # cat("\n")
 
-  # Last Phase z6: the 18 unset fields share ONE `NA` vector instead of allocating one each.
+  # Phase 18z6: the 18 unset fields share ONE `NA` vector instead of allocating one each.
   #   R's copy-on-write makes this invisible -- any `field<-` / vec_slice / arithmetic duplicates
   #   the touched field alone -- but a freshly built record costs 1 allocation, not 17 (measured
   #   at 1e6 cells: 9.9 MB instead of 129.7 MB; about half the sharing survives the pipeline).
@@ -1835,7 +1835,7 @@ get_ci_sup <- fmt_field_factory("ci_sup")
 # conservative larger arm for the +/- moe display (Wilson/Newcombe bounds are asymmetric).
 # Phase 3a: ci_inf/ci_sup now hold real asymmetric ABSOLUTE bounds. See §1, §20.
 #' @keywords internal
-# Last Phase z17: the field choice is fmt_center_field() -- the ONE rule, shared with fmt_scale_of()
+# Phase 18z17: the field choice is fmt_center_field() -- the ONE rule, shared with fmt_scale_of()
 # (which needs the same answer to say what the column estimates) and delegating its effect half to
 # fmt_est_field(), the gap system's own rule. Phase 12a: an OR CI is centred on the odds ratio;
 # Phase 14b: a Katz RR CI on the ratio.
@@ -1852,7 +1852,7 @@ get_ci_moe <- function(x) {
   pmax(ctr - get_ci_inf(x), get_ci_sup(x) - ctr)
 }
 # stars_from_pvalue(): the star LADDER alone -- p-values to glyphs, per the two options. Split out
-# (Last Phase z8) so a p-value with no fmt cell behind it (the aggregated interaction test's footer
+# (Phase 18z8) so a p-value with no fmt cell behind it (the aggregated interaction test's footer
 # line) reads the same ladder as every cell instead of a second copy of the thresholds.
 #' @keywords internal
 stars_from_pvalue <- function(p) {
@@ -1903,13 +1903,13 @@ get_tot_n  <- fmt_field_factory("tot_n")
 # @export
 get_n_eff  <- fmt_field_factory("n_eff")
 
-# @describeIn fmt get the "obs" field (Last Phase z5: the value this cell's estimate is COMPARED TO
+# @describeIn fmt get the "obs" field (Phase 18z5: the value this cell's estimate is COMPARED TO
 # by the tab_reg colour measures -- the observed/crude effect, or the reference group's estimate)
 #' @keywords internal
 # @export
 get_obs    <- fmt_field_factory("obs")
 
-# @describeIn fmt get the "gap_se" field (Last Phase z8: the standard error of the gap between this
+# @describeIn fmt get the "gap_se" field (Phase 18z8: the standard error of the gap between this
 # cell's estimate and `obs`, on the estimate's own test scale -- NA wherever the gap has no test)
 #' @keywords internal
 # @export
@@ -1966,7 +1966,7 @@ get_mean_contrib <- function(x) {
 
 # fmt_resid() -- the ADJUSTED STANDARDIZED (Haberman) residual of each cell, DERIVED from the two
 # fields that already store it: the two-sided p-value written by chi2_write_contrib() (magnitude) and
-# the signed contribution (direction). Last Phase z4 chose this over a 20th fmt field because the
+# the signed contribution (direction). Phase 18z4 chose this over a 20th fmt field because the
 # p-value determines |z| exactly -- they are the same number in two coordinates -- and because it
 # makes it impossible for the colour gate and the displayed residual to disagree.
 # WARNING: it MUST be -qnorm(p/2), never qnorm(1 - p/2): `1 - p/2` is exactly 1 in double precision
@@ -1979,7 +1979,7 @@ fmt_resid <- function(x) {
   sign(get_ctr(x)) * -stats::qnorm(get_pvalue(x) / 2)
 }
 
-# fmt_adjustment_score() -- Last Phase z5: how far a model estimate sits from the value it is COMPARED
+# fmt_adjustment_score() -- Phase 18z5: how far a model estimate sits from the value it is COMPARED
 # TO (the `obs` field: the observed/crude effect, or a reference group's estimate). ONE helper behind
 # both `color = "adjustment"` and `color = "between_groups"`; they differ only in what `obs` holds.
 #
@@ -1996,7 +1996,7 @@ fmt_resid <- function(x) {
 # always "it ATTENUATED it" (the covariates explained part of the raw association), for protective and
 # risky effects alike, and it stays correct through the null (crude 0.90 -> adjusted 1.20 reads as
 # strengthened). The magnitude fed to findInterval is direction-free; only the sign carries the reading.
-# fmt_gap_parts() -- Last Phase z8: the ONE decomposition of the estimate-vs-`obs` comparison, read
+# fmt_gap_parts() -- Phase 18z8: the ONE decomposition of the estimate-vs-`obs` comparison, read
 # once per column from `ci_type` and shared by the score, its interval and its p-value, so those three
 # can never describe different quantities. Returns:
 #   mult  the estimate is multiplicative (or / ratio) -> neutral 1, else additive -> neutral 0;
@@ -2004,7 +2004,7 @@ fmt_resid <- function(x) {
 #   sign  the NULL DIRECTION: +1 when the estimate is FURTHER from the null than `obs` (the model
 #         strengthened the effect), -1 when nearer (it attenuated it), 0 when equal.
 
-# fmt_est_field() / fmt_est_of() -- Last Phase z9: WHICH field holds a column's point estimate, keyed on
+# fmt_est_field() / fmt_est_of() -- Phase 18z9: WHICH field holds a column's point estimate, keyed on
 # its declared `ci_type`. ONE rule: an "or" column keeps its estimate in `or`, a "ratio" column in
 # `ratio` (an Obs_rate column is ci_type "ratio"), everything else -- a beta, an AME, a risk difference,
 # a logged OR/RR/IRR -- in `diff`. It was written out three times (here, reg_write_group_gap()'s local
@@ -2034,7 +2034,7 @@ fmt_gap_parts <- function(x) {
   list(mult = mult, est = est, obs = obs, ok = ok, sign = s)
 }
 
-# fmt_adjustment_score() -- Last Phase z5: how far a model estimate sits from the value it is COMPARED
+# fmt_adjustment_score() -- Phase 18z5: how far a model estimate sits from the value it is COMPARED
 # TO (the `obs` field: the observed/crude effect, or a reference group's estimate). ONE helper behind
 # both `color = "adjustment"` and `color = "between_groups"`; they differ only in what `obs` holds.
 #
@@ -2063,7 +2063,7 @@ fmt_adjustment_score <- function(x) {
   }
 }
 
-# fmt_gap_raw() -- Last Phase z8: the SIGNED gap on the estimate's own TEST scale (the log-ratio when
+# fmt_gap_raw() -- Phase 18z8: the SIGNED gap on the estimate's own TEST scale (the log-ratio when
 # multiplicative, the plain difference when additive). This -- not the score -- is what `gap_se` is the
 # standard error OF, so the two must be read from the same decomposition.
 #' @keywords internal
@@ -2073,7 +2073,7 @@ fmt_gap_raw <- function(x) {
   else        ifelse(p$ok, p$est - p$obs           , NA_real_)
 }
 
-# fmt_gap_bounds() -- Last Phase z8: the confidence interval OF THE SCORE, so every existing branch of
+# fmt_gap_bounds() -- Phase 18z8: the confidence interval OF THE SCORE, so every existing branch of
 # fmt_color_plan() works on it unchanged (it is the `bounds` fact of the two gap measures; every other
 # measure keeps the stored ci_inf/ci_sup).
 #
@@ -2087,7 +2087,7 @@ fmt_gap_raw <- function(x) {
 #     direction as the colour;
 #   * one covering 0 pins the near bound exactly at the neutral                 -> not significant;
 #   * the bound nearest the neutral IS the guaranteed gap ("moved by at least x1.1"), already signed.
-# Last Phase z13 (D3): the level comes from the COLUMN (get_conf_level), not from the option. It used
+# Phase 18z13 (D3): the level comes from the COLUMN (get_conf_level), not from the option. It used
 # to read the option like every other threshold in the engine, which bit hardest here -- for this
 # measure the whole interval is manufactured at print time, so nothing 99 %-wide was stored to fall
 # back on, and a table built at conf_level = 0.99 printed 99 % intervals and stars while its gap
@@ -2115,7 +2115,7 @@ fmt_gap_p <- function(x) {
   ifelse(is.finite(g) & is.finite(se) & se > 0, 2 * stats::pnorm(-abs(g / se)), NA_real_)
 }
 
-# fmt_gap_force_policy() -- Last Phase z8-B: the `force_policy` of BOTH gap measures (see MEASURES), as
+# fmt_gap_force_policy() -- Phase 18z8-B: the `force_policy` of BOTH gap measures (see MEASURES), as
 # a PREDICATE ON THE COLUMN rather than a constant. A gap measure has a test exactly where tab_reg
 # could write a `gap_se` for it, so "is there a test in this column?" is ONE read of the field the test
 # itself produced -- no measure has to be told twice which paths are honest, and no engine has to guess
@@ -2491,7 +2491,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   digits[!nas & display == "n"] <- 0
   digits[!nas & display %in% c("or", "or_pct", "OR", "OR_pct", "est_ci") & # no "var" (used in chi2_table)
            digits < 2L] <- 2L
-  # Last Phase z4: a standardized residual on a pct column would inherit digits = 0 and print "+4"
+  # Phase 18z4: a standardized residual on a pct column would inherit digits = 0 and print "+4"
   # for a 3.89; one decimal is the SPSS convention and enough to read the +/-2 / +/-3 rule.
   digits[!nas & display == "resid" & digits < 1L] <- 1L
 
@@ -2517,7 +2517,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   ci_mult   <- ci_type %in% c("or", "ratio")
   ci_bare   <- (type == "mean") | ci_mult
 
-  # Last Phase z5: `obs` prints exactly like the estimate it is compared to -- a crude OR reads like
+  # Phase 18z5: `obs` prints exactly like the estimate it is compared to -- a crude OR reads like
   # the Model_OR beside it, a crude risk difference like its AME, a crude log(OR) like the raw
   # coefficient. The scale is a per-COLUMN fact (`ci_type` / `type` are scalar attributes), so this is
   # ONE branch per column, never a per-cell test: the same shape as get_num()'s est_ci arm.
@@ -2539,20 +2539,20 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
-  pct_no_ci     <- pct_no_ci | obs_as_pct                     # Last Phase z5
+  pct_no_ci     <- pct_no_ci | obs_as_pct                     # Phase 18z5
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
-  # Last Phase z4: `resid` joins the signed mask -- the direction (over- / under-represented) is half
+  # Phase 18z4: `resid` joins the signed mask -- the direction (over- / under-represented) is half
   # of what a standardized residual says, so it must never print bare.
-  diff_signed   <- (ok & display %in% c("diff", "resid")) | obs_as_pct   # Last Phase z5
+  diff_signed   <- (ok & display %in% c("diff", "resid")) | obs_as_pct   # Phase 18z5
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
                                         "OR", "OR_pct", "gof", "resid") |    # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
-  n_wn          <- n_wn | (obs_m & obs_mult)                  # Last Phase z5
+  n_wn          <- n_wn | (obs_m & obs_mult)                  # Phase 18z5
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
 
-  pct_or_ci <- pct_or_ci | obs_as_pct                          # Last Phase z5 (x100 + "%")
+  pct_or_ci <- pct_or_ci | obs_as_pct                          # Phase 18z5 (x100 + "%")
   out[pct_or_ci] <- out[pct_or_ci] * 100
   digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
 
@@ -2948,7 +2948,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       xc    <- x[cells]
       toks  <- lapply(seq_along(seg$fields), function(i) {
         # Stars ride the primary token, so the others have their p-value blanked. EXCEPT `resid`
-        # (Last Phase z4), which is DERIVED from the p-value -- blanking it would render NA and drop
+        # (Phase 18z4), which is DERIVED from the p-value -- blanking it would render NA and drop
         # the whole composite. It cannot draw a star anyway: format() gates stars on the `stars` flag
         # (primary-only, below) and on fmt_stars_applicable(), which excludes contrib columns.
         xi <- if (i == 1L || identical(seg$fields[i], "resid")) xc else set_pvalue(xc, NA_real_)
@@ -3219,7 +3219,7 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 color_scales <- function(x) {
   sc <- getOption("tabxplor.color_breaks")
   if (is.null(sc) || is.null(sc$pct_diff)) return(default_color_scales())
-  # Last Phase z13: fill in scales a STALE option list predates. The option is a snapshot -- a session
+  # Phase 18z13: fill in scales a STALE option list predates. The option is a snapshot -- a session
   # that saved it (or an .Rprofile that sets it) before a scale existed would otherwise hand the engine
   # a NULL scale, i.e. a silently uncoloured column. Byte-identical when the list is complete, since
   # set_color_breaks() always starts from default_color_scales().
@@ -3233,7 +3233,7 @@ color_scales <- function(x) {
 # for this column type) -> unchanged.
 #   additive       c(0.05, 0.10, 0.20, 0.30) -> c(0, 0.05, 0.15, 0.25)
 #   multiplicative c(1.15, 1.5,  2,    4   ) -> c(1, 1.30, 1.74, 3.48)
-# Last Phase z4: `origin` re-anchors an ADDITIVE offset scale somewhere other than 0. The default
+# Phase 18z4: `origin` re-anchors an ADDITIVE offset scale somewhere other than 0. The default
 # (NULL = 0) is the CI-floor reading above. `color = "contrib"` passes the significance threshold
 # z(conf_level): its guaranteed reading scores the ABSOLUTE standardized residual, so the first colour
 # step must sit at the threshold itself and the breaks stay real |z| values a reader can name
@@ -3260,18 +3260,18 @@ log_odds_scale <- function(or_scale) {
        over = log_side(or_scale$over), under = log_side(or_scale$under))
 }
 
-# Last Phase z13 (D2): WHICH break scale a gap measure (`adjustment` / `between_groups`) reads. z5 chose
+# Phase 18z13 (D2): WHICH break scale a gap measure (`adjustment` / `between_groups`) reads. z5 chose
 # between two scales on `ci_type` alone, so a beta on an outcome recorded in hours, minutes or days read
 # three different ways -- in minutes every cell saturated at the deepest break, in days the feature was
 # entirely dark. The gap of an effect belongs on the same KIND of ladder as the effect itself.
-# Last Phase z17: that IS the estimate's own scale, so this is now one lookup on EST_SCALES rather than
+# Phase 18z17: that IS the estimate's own scale, so this is now one lookup on EST_SCALES rather than
 # a second copy of the dispatch (which had to carry its own "the order is the contract" warning). The
 # order, and why it must be that order, is stated once, at fmt_scale_key() below.
 #' @keywords internal
 fmt_gap_scale_key <- function(x) EST_SCALES[[fmt_scale_key(x)]]$gap_key
 
 
-# === SECTION: the ESTIMATE's scale (Last Phase z17) =================================================
+# === SECTION: the ESTIMATE's scale (Phase 18z17) =================================================
 #
 # `MEASURES` above says what a COLOUR MEASURE is; this says what a COLUMN ESTIMATES. Different
 # question, but the SAME dispatch fmt_gap_scale_key() performs just above, which is why this is one
@@ -3479,10 +3479,11 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # synonym. A non-measure token (e.g. a hand-built column) -> uncoloured.
   measure <- if (color[1] %in% c("or", "OR")) "or" else color[1]
   if (!measure %in% names(MEASURES)) return(NULL)
-  # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute. Last Phase
-  # z5: measure_policy() then applies a measure's `force_policy` (a measure with no significance test of
-  # its own always reads under `ignore`); the legend resolves the policy through the same accessor.
-  # Last Phase z8-B: `force_policy` may be a predicate on the COLUMN (a gap measure has a test exactly
+  # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute.
+  # Phase 18z5: measure_policy() then applies a measure's `force_policy` (a measure with no
+  # significance test of its own always reads under `ignore`); the legend resolves the policy
+  # through the same accessor.
+  # Phase 18z8-B: `force_policy` may be a predicate on the COLUMN (a gap measure has a test exactly
   # where a `gap_se` was written), so the column is passed in. The legend reads `plan$policy` off the
   # plan this returns, so it inherits the resolution rather than repeating it.
   policy  <- measure_policy(measure, if (!is.null(signif)) signif else get_color_signif(x), x)
@@ -3499,25 +3500,25 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # odds_ratio scale (center 0, no SD-division), so a coefficient of log(2) reads the same intensity as
   # an OR of 2 -- the exponentiate=TRUE twin. Derived from odds_ratio so the two always agree. A
   # gaussian beta keeps its own SD-standardized mean_diff scale (var(Y) is meaningful there).
-  # Last Phase z3: the family list is reg_fam_logscale() (R/tab_reg.R) -- ONE predicate shared with the
+  # Phase 18z3: the family list is reg_fam_logscale() (R/tab_reg.R) -- ONE predicate shared with the
   # legend's twin gate below, which used to repeat this vector verbatim and be kept in sync by comment.
   is_logcoef <- type == "coef" && reg_fam_logscale(get_model_family(x))
   # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
   # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
   # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
-  # Last Phase z4: read through measure_facts(), which folds in a measure's per-policy override (only
+  # Phase 18z4: read through measure_facts(), which folds in a measure's per-policy override (only
   # contrib has one: `guaranteed_effect` swaps the relative contribution for the absolute residual).
   md      <- measure_facts(measure, policy)
   # the stored interval's SCALE (a scalar column attribute); also the significance neutral below.
   cit     <- get_ci_type(x)
   ci_mult <- cit %in% c("or", "ratio")
-  # Last Phase z5: "additive" keys the scale on the ESTIMATE's own scale rather than on the column kind
+  # Phase 18z5: "additive" keys the scale on the ESTIMATE's own scale rather than on the column kind
   # -- Model_OR and Model_AME are both type "row", so only ci_type separates a multiplicative effect
   # from an additive one.
   use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "additive" = !ci_mult,
                     "na" = TRUE)
   sc      <- color_scales(x)
-  # Last Phase z13: the selected scale as a KEY, kept on the plan -- the legend then takes its glyphs
+  # Phase 18z13: the selected scale as a KEY, kept on the plan -- the legend then takes its glyphs
   # and its unit from the scale actually used (D4) instead of from a static measure field. The two gap
   # measures dispatch on the ESTIMATE's own scale (D2, fmt_gap_scale_key); `diff` keeps its one runtime
   # swap (a log-scale coefficient reads the logged OR ladder, so it matches its exponentiated twin).
@@ -3557,7 +3558,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the old mismatch: measure "or" + a difference ci_type tested the diff bounds against the OR's
   # neutral 1, so nothing was ever significant. All three scales test the same null (p1 = p2), so
   # whichever interval is stored answers it.
-  # Last Phase z8: WHICH interval is a declared measure fact (`bounds`, defaulted by measure_facts to
+  # Phase 18z8: WHICH interval is a declared measure fact (`bounds`, defaulted by measure_facts to
   # the stored ci_inf/ci_sup). The gap measures derive theirs from `gap_se`, already folded onto the
   # score's own scale and sign -- so this block, the floor block below and the direction match in
   # `grey_non_signif` all keep working with no measure-specific branch.
@@ -3569,7 +3570,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 
-  # Last Phase a bug-fix: `contrib` carries NO confidence interval (ci_type == ""), so its significance
+  # Phase 18a bug-fix: `contrib` carries NO confidence interval (ci_type == ""), so its significance
   # is read from the stored standardized-residual p-value (written by chi2_write_contrib) rather than
   # the bounds; direction from the sign of the signed contribution `raw` (ctr/mean_contrib). Previously
   # both signif policies gated on the absent bounds and coloured NOTHING. (The residual p-value is the
@@ -3584,7 +3585,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
 
   if (policy == "guaranteed_effect") {
     if (md$sig_source == "pvalue") {
-      # Last Phase z4: no interval to take a CI-floor of, so this policy carries contrib's OTHER
+      # Phase 18z4: no interval to take a CI-floor of, so this policy carries contrib's OTHER
       # reading instead -- the ADJUSTED STANDARDIZED RESIDUAL on the absolute `zscore` scale (the
       # scale swap is the MEASURES `guar` override, applied by measure_facts() above). The score is the
       # residual itself, in real |z| units, and the break scale is re-anchored to the significance
@@ -3662,7 +3663,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # independent and may be asymmetric (Phase 13a). The user cannot express this (0 / 1 are rejected
   # as breaks), so it must be internal. `legend_specs()` reads this same plan, so the legend follows.
   if (identical(policy, "guaranteed_effect")) {
-    # Last Phase z4: `break_origin` is a declared measure fact (only contrib's `guar` sets it) --
+    # Phase 18z4: `break_origin` is a declared measure fact (only contrib's `guar` sets it) --
     # "threshold" re-anchors the offset at z(conf_level) instead of 0, because that reading scores an
     # absolute standardized residual rather than a CI floor. See offset_guaranteed_breaks().
     org <- if (identical(md$break_origin, "threshold")) {
@@ -3769,7 +3770,7 @@ fmt_color_channels <- function(x) {
 
 # The single slot -> APPEARANCE mapping shared by the exporters (tab_kable / tab_plot / tab_xl).
 # Returns the per-cell rendering of BOTH channels: the colour code (NA where uncoloured on that
-# channel), the raw slot vectors (for gate decisions), and -- Last Phase z11 -- the per-cell FACE
+# channel), the raw slot vectors (for gate decisions), and -- Phase 18z11 -- the per-cell FACE
 # (bold / italic / underline). The text channel uses the "text" palette, the background channel the
 # "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console and exports
 # render identical colours. (fmt_get_color_code stays single-channel for the golden.)
@@ -3866,22 +3867,22 @@ fmt_face_semantic <- function(theme = "light") {
 #                      pct otherwise) | "mean" (is_mean) | "na" (both keys equal -> selector inert).
 #   sig_source         where significance comes from: "bounds" (an interval, read through `bounds`) |
 #                      "pvalue" (contrib -- no interval, reads the stored standardized-residual p-value).
-#   bounds             (optional, Last Phase z8) closure(x) -> list(lo, hi), THE interval the two
+#   bounds             (optional, Phase 18z8) closure(x) -> list(lo, hi), THE interval the two
 #                      significance policies read. Absent = the stored ci_inf/ci_sup (every measure whose
 #                      interval the table carries); the gap measures derive theirs from `gap_se`.
 #                      measure_facts() fills the default, so a new row needs this only when it differs.
 #   gate_row           which structural row this measure never colours: "refrow" (a reference level /
 #                      regression intercept is a baseline) | "totrow" (contrib is undefined on a total).
-#   force_policy       (optional, Last Phase z5) the measure has no significance test of its own, so it
+#   force_policy       (optional, Phase 18z5) the measure has no significance test of its own, so it
 #                      ALWAYS reads under this policy whatever the column's color_signif says -- applied
 #                      by measure_policy(), which the plan and the legend both call.
-#   by_scale           (optional, Last Phase z13) presentation facts that belong to a SCALE rather than
+#   by_scale           (optional, Phase 18z13) presentation facts that belong to a SCALE rather than
 #                      to the measure, for the measures whose scale is chosen at runtime. Folded in by
 #                      measure_facts() from the plan's `scale_key`, the same mechanism as `guar` folds a
 #                      per-POLICY override -- so the legend cannot describe one branch while the cells
 #                      colour the other. A measure with no entry resolves exactly as before.
 
-# The presentation of a gap measure's ADDITIVE scales (Last Phase z13). Shared by both gap measures
+# The presentation of a gap measure's ADDITIVE scales (Phase 18z13). Shared by both gap measures
 # because both dispatch through fmt_gap_scale_key(): a "+"/"-" ladder around 0, and the unit the legend
 # names -- percentage points on a probability-scale marginal effect, SD on a standardized one, nothing
 # on a log coefficient. `break_scale = TRUE` renders the probability ladder x100 (2 rather than 0.02),
@@ -3918,33 +3919,33 @@ MEASURES <- list(
                  raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
                  scale = c(std = "contrib", pct = "contrib"),
                  std_when = "na",       sig_source = "pvalue", gate_row = "totrow",
-                 # Last Phase z4: contrib is the ONE measure whose reading changes with the significance
+                 # Phase 18z4: contrib is the ONE measure whose reading changes with the significance
                  # policy, so the divergence is a FIELD (an override applied by measure_facts()), never a
                  # switch arm. `ignore` / `grey_non_signif` colour the RELATIVE contribution (a share of
                  # this table's chi2 -- the correspondence-analysis reading, which necessarily floats with
                  # the table); `guaranteed_effect` colours the ADJUSTED STANDARDIZED RESIDUAL on the
                  # absolute `zscore` scale, whose thresholds mean the same thing in every table (the
                  # SPSS reading). Both readings share ONE significance source: the residual p-value.
-                 # Last Phase z13: `guar` keeps only what depends on the POLICY. The glyphs and the
+                 # Phase 18z13: `guar` keeps only what depends on the POLICY. The glyphs and the
                  # threshold form it used to repeat by hand follow from the scale it swaps to, and now
                  # come from `by_scale$zscore` -- one override mechanism, keyed on the scale.
                  guar = list(word = "standardized residual", break_origin = "threshold",
                              scale = c(std = "zscore", pct = "zscore")),
                  by_scale = list(zscore = list(break_over = "+", break_under = "-",
                                                threshold_mult = FALSE, unit_kind = "none"))),
-  # Last Phase z5 -- the two tab_reg-only measures. They score the SAME quantity through the SAME
+  # Phase 18z5 -- the two tab_reg-only measures. They score the SAME quantity through the SAME
   # helper (how far the model estimate sits from the value stored in `obs`) and differ ONLY in what
   # that value is, hence in the reference the legend names. `std_when = "additive"` selects the scale
   # from the estimate's own scale rather than from the column kind: an OR / RR / IRR is folded around
   # 1 on `adj_ratio`, a beta / AME / risk-difference around 0 on `adj_diff`.
-  # Both derive their interval from the stored `gap_se` (Last Phase z8), so both read `color_signif`
+  # Both derive their interval from the stored `gap_se` (Phase 18z8), so both read `color_signif`
   # normally -- WHERE tab_reg could write one. Where it could not, `force_policy` (now a predicate on
   # the column, fmt_gap_force_policy) makes the measure read under `ignore`, i.e. descriptively. The
   # two SEs come from different mathematics: `between_groups` compares DISJOINT split groups, so
   # quadrature on the printed intervals is exact; `adjustment` compares two estimates fitted on the
   # SAME rows, so its SE needs the difference of their influence functions (R/reg-influence.R,
   # dev/model_vs_observed_gap_test.md SS3).
-  # Last Phase z13 (D4): the static presentation fields above describe `adj_ratio`, the multiplicative
+  # Phase 18z13 (D4): the static presentation fields above describe `adj_ratio`, the multiplicative
   # branch; `by_scale` overrides them on each ADDITIVE one. Before it they were fixed per measure while
   # the scale was chosen at runtime, so an AME gap of two percentage points printed as "x0.02".
   adjustment     = list(word = "adjustment",    word_i18n = TRUE, break_over = .lg_times, break_under = .lg_div,
@@ -3977,7 +3978,7 @@ measure_facts <- function(measure, policy = "ignore", scale_key = NULL) {
   md <- MEASURES[[measure]]
   if (is.null(md)) return(md)
   if (!is.null(md$guar) && identical(policy, "guaranteed_effect")) md <- utils::modifyList(md, md$guar)
-  # Last Phase z13: the SELECTED scale's presentation override, applied AFTER `guar` (which may SWAP the
+  # Phase 18z13: the SELECTED scale's presentation override, applied AFTER `guar` (which may SWAP the
   # scale). A measure with no `by_scale`, or a scale with no entry, is untouched -- so every pre-z13
   # measure resolves identically whatever `scale_key` is passed, and a caller that reads only
   # scale-independent facts may omit it.
@@ -3988,10 +3989,10 @@ measure_facts <- function(measure, policy = "ignore", scale_key = NULL) {
 }
 
 # The policy a measure ACTUALLY reads under: the column's `color_signif`, unless the measure declares a
-# `force_policy` (a measure with no significance test of its own). Last Phase z5: the twin of
+# `force_policy` (a measure with no significance test of its own). Phase 18z5: the twin of
 # measure_facts() -- the plan and the legend both resolve the policy here, so a neutralised measure
 # cannot be coloured under one policy while the legend describes another.
-# Last Phase z5: does this measure's baseline live in ANOTHER COLUMN (the observed effect, a reference
+# Phase 18z5: does this measure's baseline live in ANOTHER COLUMN (the observed effect, a reference
 # group) rather than in a row of its own? Two consequences, both of which would otherwise be
 # hand-repeated: such a measure NAMES ITSELF in the legend (the column's effect word -- "OR", "AME" --
 # is the thing being compared, not what the colour measures), and it resolves its own reference phrase
@@ -3999,7 +4000,7 @@ measure_facts <- function(measure, policy = "ignore", scale_key = NULL) {
 #' @keywords internal
 measure_own_ref <- function(measure) isTRUE(MEASURES[[measure]]$ref_kind %in% c("observed", "group"))
 
-# Last Phase z13 (D7): is THIS column the baseline of its own gap measure? A measure whose baseline is
+# Phase 18z13 (D7): is THIS column the baseline of its own gap measure? A measure whose baseline is
 # another column leaves `obs` empty on the column that IS that baseline -- the reference `split_var`
 # group, or a model with no observed counterpart -- so not one cell can ever be coloured and every break
 # in the ladder is unreachable. Printing the scale there describes a colouring that does not exist, and
@@ -4021,7 +4022,7 @@ legend_gap_baseline_word <- function(plan) {
 measure_policy <- function(measure, policy = "ignore", x = NULL) {
   fp <- MEASURES[[measure]]$force_policy
   if (is.null(fp)) return(policy)
-  # Last Phase z8-B: a `force_policy` may be a PREDICATE ON THE COLUMN rather than a constant (see
+  # Phase 18z8-B: a `force_policy` may be a PREDICATE ON THE COLUMN rather than a constant (see
   # fmt_gap_force_policy). With no column to ask, the caller's policy stands.
   if (is.function(fp)) fp <- if (is.null(x)) NULL else fp(x)
   if (is.null(fp)) policy else fp
@@ -4073,7 +4074,7 @@ legend_num <- function(v, lang) {
 }
 
 # a compact reference word for the terse (console) form.
-# Last Phase z4: the reference-free ("indep") baseline word is a per-channel FACT (ref_word, resolved in
+# Phase 18z4: the reference-free ("indep") baseline word is a per-channel FACT (ref_word, resolved in
 # legend_resolve_spec from the policy-aware MEASURES row), because contrib's two readings name it
 # differently: the CONTRIBUTION is a multiple of the mean cell contribution, the RESIDUAL is a distance
 # from independence itself. Fallback keeps the pre-z4 wording for a spec built without the fact.
@@ -4105,7 +4106,7 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
 legend_break_tokens <- function(plan, is_pct, is_mean, channel, lang, theme = "light") {
   if (is.null(plan)) return(list(over = list(), under = list()))
   measure <- plan$measure
-  # Last Phase z11: the legend must not promise a distinction the cells do not make. Typography
+  # Phase 18z11: the legend must not promise a distinction the cells do not make. Typography
   # honestly supports 2 levels per side, so the print palette gives slots 1&2 (and 3&4) the SAME
   # rendering; a token whose full rendering repeats the previous one is dropped, and the survivor is
   # the LOWER threshold -- "bold = at least +5 points", which is what the appearance means. Byte-
@@ -4147,7 +4148,7 @@ legend_threshold_phrase <- function(plan, is_pct, is_std, lang) {
   if (isTRUE(md$threshold_mult)) {                         # ratio / OR / contrib
     paste0(.lg_times, legend_num(abs(brk), lang))
   } else {                                                 # diff: symmetric +/- <v> [unit]
-    # Last Phase z13: the x100 rule is the one legend_break_label() uses, so the grey-note threshold
+    # Phase 18z13: the x100 rule is the one legend_break_label() uses, so the grey-note threshold
     # and the break ladder it describes cannot disagree (this read `is_pct` alone).
     sc100 <- isTRUE(md$break_scale) && isTRUE(is_pct)
     val   <- legend_num(abs(brk) * if (sc100) 100 else 1, lang)
@@ -4157,7 +4158,7 @@ legend_threshold_phrase <- function(plan, is_pct, is_std, lang) {
 }
 
 # The prose unit suffix of ONE measure-at-scale, as a bare word (each caller adds its own spacing).
-# Last Phase z13: shared by legend_resolve_spec()'s chan() and legend_threshold_phrase(), which held the
+# Phase 18z13: shared by legend_resolve_spec()'s chan() and legend_threshold_phrase(), which held the
 # same switch twice. `"diff"` consults the column kind (a factor percentage vs a standardized numeric
 # difference); the gap scales DECLARE their unit, which keeps them clear of `is_std` -- that flag reads
 # whether the `mean_diff` scale happens to be standardized, so a user's set_color_breaks(mean_diff =)
@@ -4181,7 +4182,7 @@ legend_join <- function(toks, sep) {
 # default palette -> baked shade names; a custom palette (set_color_palette) -> NA (generic, the
 # coloured break-words carry the meaning). The over side of the default palette is teal->blue, the
 # under side gold->red, in both light and dark, so those names are hue-descriptive and theme-free.
-# Last Phase z11: returns one pair PER CHANNEL, because the print palette names two different things --
+# Phase 18z11: returns one pair PER CHANNEL, because the print palette names two different things --
 # its text side is a TYPOGRAPHY ("Bold" / "Italic") and its background side a grey fill. The split is
 # not cosmetic: legend_tokens_prose()'s one_side() passes no_shade = FALSE for a BACKGROUND-ONLY
 # coloured column, so a single pair would have made such a table announce "Bold:" about grey fills.
@@ -4215,7 +4216,7 @@ legend_reg_eff_word <- function(col, meta) {
   # beta scale (AME is handled by the effect branch above), so no scalar `do_exp` check is needed -- that
   # scalar would mislabel a gaussian column in a binomial-first mixed table.
   fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
-  # Last Phase z3: two ways a multiplicative column can be a RISK ratio rather than an odds ratio.
+  # Phase 18z3: two ways a multiplicative column can be a RISK ratio rather than an odds ratio.
   # (a) effect = "ame_ratio" -- the ESTIMAND is a ratio of adjusted probabilities, whatever family was
   #     fitted (a logistic fit still yields a marginal RR), so it wins over the family switch; it also
   #     covers the crude Obs_RR companion, which carries the model's family attribute.
@@ -4265,7 +4266,7 @@ legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_re
   base_kind <- measure_facts(measure, policy)$ref_kind  # Phase 16e: the measure's baseline concept, one field
   if (identical(base_kind, "indep"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
-  # Last Phase z5: these two baselines are NEITHER a total nor a predictor's reference category -- they
+  # Phase 18z5: these two baselines are NEITHER a total nor a predictor's reference category -- they
   # are another COLUMN's estimate (the observed effect, or the reference group's). They must be
   # resolved BEFORE the is_reg branch below, which would otherwise claim "the reference category" for
   # every reg column and describe the wrong comparison.
@@ -4288,7 +4289,7 @@ legend_ref_phrase <- function(spec, lang) {
   lab <- ref$label
   if (identical(ref$kind, "indep")) return(gettext("independence"))
   if (identical(ref$kind, "observed")) return(gettext("the observed (crude) effect"))
-  # Last Phase z8: "...'s effect", not just "the reference group" -- with the significance policies live
+  # Phase 18z8: "...'s effect", not just "the reference group" -- with the significance policies live
   # the note reads "significantly different from ...", and what differs is the EFFECT, not the group.
   if (identical(ref$kind, "group"))    return(gettext("the reference group's effect"))
   if (identical(ref$kind, "category")) {
@@ -4300,12 +4301,12 @@ legend_ref_phrase <- function(spec, lang) {
   gettextf("the %s %s", lab, base)                 # EN "the Total row"; FR "la %2$s %1$s" -> "la ligne Total"
 }
 
-# the CI-method name (NA when there is none, e.g. contrib). Last Phase z8: `measure` defaults to the
+# the CI-method name (NA when there is none, e.g. contrib). Phase 18z8: `measure` defaults to the
 # text channel's but is passed explicitly per channel by legend_resolve_spec -- a gap measure on the
 # background names ITS OWN test, not the text channel's model interval.
 legend_method_name <- function(spec, measure = spec$measure_text) {
   cis <- spec$ci_settings
-  # Last Phase z5 / z8: these measures score a GAP between two estimates, so the model's own Wald
+  # Phase 18z5 / z8: these measures score a GAP between two estimates, so the model's own Wald
   # interval (which the is_reg branch below would claim) is never the right name -- each has a test of
   # its own, and they are DIFFERENT tests. `between_groups` compares two DISJOINT subpopulations, so
   # the two estimates are independent and quadrature is exact; `adjustment` compares two estimates
@@ -4376,7 +4377,7 @@ legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignor
   if (is.null(m)) return(measure)
   if (isTRUE(m$word_i18n)) gettext(m$word) else m$word
 }
-# Last Phase w: potools extracts translatable strings by STATIC analysis, so the dynamic gettext(m$word)
+# Phase 18w: potools extracts translatable strings by STATIC analysis, so the dynamic gettext(m$word)
 # above is invisible to it. This dead-code anchor lists the MEASURES$word literals (word_i18n = TRUE) so
 # they land in the .pot and are compiled into the .mo -- runtime lookup then matches. Keep in sync with
 # MEASURES; it is never executed.
@@ -4396,7 +4397,7 @@ legend_ucfirst <- function(s) {
 # call at the (few) use sites -- it is a MEASURES lookup, not a switch, and the text vs background channels
 # feed it different eff_word, matching the historical wording exactly.
 legend_resolve_spec <- function(spec, lang) {
-  # Last Phase z8-B: each channel resolves its facts under ITS OWN policy. `spec$policy` is the text
+  # Phase 18z8-B: each channel resolves its facts under ITS OWN policy. `spec$policy` is the text
   # channel's, and since a gap measure's force_policy became a per-column predicate the two channels
   # can genuinely differ (an OR text channel greying by its Wald interval, an `adjustment` background
   # with no test in this column reading descriptively). Resolved once here, per channel, as everything
@@ -4409,7 +4410,7 @@ legend_resolve_spec <- function(spec, lang) {
             else if (identical(measure, "or")) "OR" else gettext("cells")
     u    <- legend_unit_word(md, spec$is_pct, spec$is_std)
     unit <- if (nzchar(u)) paste0(" ", u) else ""
-    # Last Phase z5: `adjustment` / `between_groups` are the only measures whose baseline is ANOTHER
+    # Phase 18z5: `adjustment` / `between_groups` are the only measures whose baseline is ANOTHER
     # COLUMN's estimate rather than a row of this one, so the reference is a per-CHANNEL fact -- the
     # scalar spec$ref_phrase (resolved for the text measure) would describe the wrong comparison when
     # one of them rides the background. It also has to survive the is_reg strip just below, which
@@ -4421,7 +4422,7 @@ legend_resolve_spec <- function(spec, lang) {
            else NA_character_,
          has_ref_lead = own_ref ||
            (isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)),
-         # Last Phase z4: under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds on
+         # Phase 18z4: under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds on
          # the quantity itself (contrib's standardized residual), not a CI floor -- so the sentence
          # must not say "after subtracting the margin of error". One declared fact, two wordings.
          guar_abs     = identical(md$break_origin, "threshold"),
@@ -4429,7 +4430,7 @@ legend_resolve_spec <- function(spec, lang) {
          # contribution, a distance from independence for the residual.
          ref_word     = if (identical(md$unit_kind, "contrib")) gettext("vs the mean")
                         else gettext("vs independence"),
-         # Last Phase z8: the interval NAME is per channel for the same reason the reference is -- a
+         # Phase 18z8: the interval NAME is per channel for the same reason the reference is -- a
          # gap measure on the background runs its own test, so the "after subtracting the margin of
          # error (...)" tail must not borrow the text channel's model interval.
          method_phrase = legend_method_phrase(spec, lang, measure),
@@ -4474,13 +4475,13 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   # the tag no longer implies the false converse (grey == not significant). A grey cell is EITHER not
   # significant OR below that threshold; the guarantee is only coloured => significant.
   thr <- spec$threshold_phrase
-  # Last Phase z13 (D8): "or not tested" only where some rows genuinely carry no test (partial_test).
+  # Phase 18z13 (D8): "or not tested" only where some rows genuinely carry no test (partial_test).
   untested <- if (isTRUE(spec$partial_test)) paste0(", ", gettext("or not tested")) else ""
   pn <- switch(spec$policy,
                "grey_non_signif"   = if (!is.na(thr))
                                        paste0(gettextf("grey: non-significant or under %s", thr), untested)
                                      else paste0(gettext("grey: non-significant or small"), untested),
-               # Last Phase z4: "error-adjusted" describes a CI floor; the absolute-threshold reading
+               # Phase 18z4: "error-adjusted" describes a CI floor; the absolute-threshold reading
                # (contrib's standardized residual) subtracts nothing -- the breaks ARE the quantity.
                "guaranteed_effect" = if (isTRUE(spec$txt$guar_abs))
                                        gettext("all that is significant is colored")
@@ -4519,7 +4520,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     cmp   <- if (dir > 0) .lg_ge else .lg_le
     sh    <- spec$shades[[if (is_bg) "bg" else "text"]]
     shade <- if (no_shade) NA_character_ else if (dir > 0) sh[["over"]] else sh[["under"]]
-    rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # Last Phase z5: per channel
+    rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # Phase 18z5: per channel
     lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
              else                 gettextf("%s %s", cf$subject, cmp)
     head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
@@ -4537,7 +4538,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang), " \u2014 "),
                                  bold = TRUE)))
 
-  # Last Phase z5: `adjustment` on an ODDS RATIO needs one sentence of honesty. The odds ratio is
+  # Phase 18z5: `adjustment` on an ODDS RATIO needs one sentence of honesty. The odds ratio is
   # NON-COLLAPSIBLE: adjusting for a covariate that predicts the outcome moves it away from 1 even with
   # zero confounding (measured +7.9 % on a simulation where the covariate is independent of the
   # exposure, against +0.26 % for the risk ratio -- dev/model_vs_observed_effect_colour.md SS3). That is
@@ -4548,7 +4549,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # `is_coef` covers exponentiate = FALSE (a raw logit coefficient is the same non-collapsible
   # quantity, logged) -- it must not be read off eff_word there, because legend_reg_adapter()
   # deliberately neutralises a model column's effect word when a crude sibling shares its measure.
-  # Last Phase z8-B: `reg_fam_prob()` (R/tab_reg.R), not the family list written out -- it WAS the exact
+  # Phase 18z8-B: `reg_fam_prob()` (R/tab_reg.R), not the family list written out -- it WAS the exact
   # body of that predicate, i.e. the third copy the z3 predicate block exists to prevent. The legend
   # cannot see `effect`, so it reads the same rule off COLUMN facts: a probability-scale family whose
   # column is a coefficient (is_coef covers exponentiate = FALSE; eff_word the exponentiated twin). Keep
@@ -4594,7 +4595,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     else
       gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
                spec$ref_phrase, spec$method_phrase)
-    # Last Phase z13 (D8): where only SOME rows carry a test, grey means a third thing as well -- say so
+    # Phase 18z13 (D8): where only SOME rows carry a test, grey means a third thing as well -- say so
     # rather than let the reader take an untested cell for a tested-and-null one (the html tooltip shows
     # which is which: an untested cell has no "gap:" line).
     if (isTRUE(spec$partial_test))
@@ -4602,16 +4603,16 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     toks <- c(toks, list(.lg_tok(paste0(" ", note))))
   }
   else if (identical(spec$policy, "guaranteed_effect"))
-    # Last Phase z4: the absolute-threshold reading (contrib's standardized residual) grades the
+    # Phase 18z4: the absolute-threshold reading (contrib's standardized residual) grades the
     # quantity itself, so its note names the significance threshold rather than a subtracted margin.
     toks <- c(toks, list(.lg_tok(paste0(" ", if (isTRUE(spec$txt$guar_abs)) gettextf(
       "Grey: below the significance threshold (%s). The thresholds above are comparable between tables.",
       spec$method_phrase) else gettextf(
       "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
-  # Last Phase z8: the note above states ONE comparison (the text channel's). A gap measure on the
+  # Phase 18z8: the note above states ONE comparison (the text channel's). A gap measure on the
   # background compares something else, by a test of its own, so it needs one clause of its own --
   # otherwise the note silently claims the model's interval greyed the fill.
-  # Last Phase z8-B: the gate reads the BACKGROUND's own resolved policy, not `spec$policy` (which is
+  # Phase 18z8-B: the gate reads the BACKGROUND's own resolved policy, not `spec$policy` (which is
   # the TEXT channel's). They differ exactly when the background is a gap measure with no test in this
   # column -- and there the clause was claiming a greying rule that was never applied (a false sentence
   # shipping since z5, when `adjustment` was pinned to `ignore` while the text channel was not).
@@ -4650,7 +4651,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
   slot_hex <- function(slot, ch)
     toupper(unname(get_color_style("color_code", type = fam(ch), theme = pal)[slot]))
   is_colored_tok <- function(tk) isTRUE(colored) && !is.na(tk$c) && tk$c > 0L
-  # Last Phase z11: the break-word wears the SAME face as the cells it describes -- read from the
+  # Phase 18z11: the break-word wears the SAME face as the cells it describes -- read from the
   # palette, not inferred. `(coloured & ch != "bg")` was a sixth hex/slot->bold heuristic, and here it
   # was not merely cosmetic: the html branch writes `font-weight:bold` INLINE, which beats the
   # stylesheet, so under `print` every under-representation break-word would have rendered bold while
@@ -4683,7 +4684,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # standalone file never re-parse, so they were unaffected). `&#42;` renders as `*` in every
       # browser but is never an emphasis delimiter to pandoc (it round-trips it as an escaped literal,
       # the same path that keeps the in-cell stars alive).
-      # Last Phase z8: the html arm also entity-encodes `&` and `<` -- the interaction line carries
+      # Phase 18z8: the html arm also entity-encodes `&` and `<` -- the interaction line carries
       # p-values like "<0.01%", and a bare `<` in a raw-html footer is at the mercy of whatever parser
       # or sanitizer sees it next. `&` FIRST, or it would double-escape the `&#42;` written just after.
       txt <- tk$t
@@ -4814,7 +4815,7 @@ legend_specs <- function(x, theme = "light") {
     is_pct   <- !is_num
     # Phase g: a NON-gaussian coefficient (exponentiate = FALSE) colours on the LOGGED odds_ratio scale
     # (log_odds_scale), NOT the SD-standardized mean_diff -- so its legend must NOT say "SD" (the breaks
-    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Last Phase z3:
+    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Phase 18z3:
     # this and fmt_color_plan's gate now SHARE reg_fam_logscale() -- they cannot drift apart any more.
     is_logcoef <- is_coef && reg_fam_logscale(get_model_family(col))
     is_std   <- is_num && mean_diff_std && !is_logcoef
@@ -4829,13 +4830,13 @@ legend_specs <- function(x, theme = "light") {
     ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg,
                                 policy = policy)
     ci_type  <- get_ci_type(col)
-    # Last Phase z13 (D8): does this column carry a test on SOME rows only? A gap measure's SE is
+    # Phase 18z13 (D8): does this column carry a test on SOME rows only? A gap measure's SE is
     # missing wherever it could not be computed -- a group with an empty cell yields an infinite log
     # interval, a profile bracket is not est +/- crit*se -- and those rows then render exactly like a
     # tested-and-non-significant one. The colours are right (the policy promises "coloured => shown
     # significant", which an untested cell is not), but the grey NOTE must not claim they were all
     # tested. A per-column fact, so a fully-tested column's legend is byte-unchanged.
-    # Last Phase z13 (D7): this column has no baseline to be compared to -- so it IS the baseline.
+    # Phase 18z13 (D7): this column has no baseline to be compared to -- so it IS the baseline.
     no_obs      <- all(is.na(get_obs(col)))
     gse         <- get_gap_se(col)
     partial_test <- !identical(policy, "ignore") &&
@@ -4848,7 +4849,7 @@ legend_specs <- function(x, theme = "light") {
          policy = policy, orientation = orient, ci_type = ci_type,
          is_reg = is_reg, eff_word = eff_word, role = role, ci_settings = cis, shades = shades,
          theme = theme,
-         model_family = get_model_family(col),        # Last Phase z5: the collapsibility caveat below
+         model_family = get_model_family(col),        # Phase 18z5: the collapsibility caveat below
          ref = ref)
   })
   specs <- purrr::compact(specs)
@@ -4945,7 +4946,7 @@ legend_streams <- function(x, style, lang, theme = "light") {
       show_this   <- show_global || mixed
       name_by_col <- mixed || any(cv_lines[cvs] > 1)
       spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
-      # Last Phase m: a multi-dependent regression column carries a trailing " [dep]" disambiguation
+      # Phase 18m: a multi-dependent regression column carries a trailing " [dep]" disambiguation
       # bracket in its NAME ("Model_OR [married]") for console clash-avoidance. The col_var span row
       # already names the outcome, so the legend strips the bracket (same regex as the header strip,
       # tab-export-prep.R). Gated to reg groups (columns carry a role) so a level label that happens to
@@ -4958,7 +4959,7 @@ legend_streams <- function(x, style, lang, theme = "light") {
   })
 }
 
-# fmt_point_palette() -- Last Phase z17: the 8 slot colours to paint a MARK with (a plotted point, a
+# fmt_point_palette() -- Phase 18z17: the 8 slot colours to paint a MARK with (a plotted point, a
 # row band), as opposed to a glyph of text. One deviation from the table palettes, and it is forced:
 # `theme = "print"` gives every TEXT slot pure black and separates the two directions by bold vs
 # italic, which a point cannot be. A mark therefore borrows the print palette's own dark grey ramp
@@ -4974,7 +4975,7 @@ fmt_point_palette <- function(theme = "light", channel = c("text", "bg")) {
   get_color_style("color_code", type = fam, theme = theme)
 }
 
-# legend_guide_spec() -- Last Phase z17 (ruling D6): the colour legend as a real GGPLOT GUIDE instead of
+# legend_guide_spec() -- Phase 18z17 (ruling D6): the colour legend as a real GGPLOT GUIDE instead of
 # a sentence. Same producers, a different medium: legend_specs() -> legend_resolve_spec() ->
 # legend_break_tokens() (which already returns each break's label AND its palette slot, and already
 # drops a break that RENDERS identically to the previous one -- so under `theme = "print"`, whose two
@@ -5130,12 +5131,12 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   push <- function(tokens, role) if (length(tokens))
     streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
-  for (rl in reg_model_lines(x, lg)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")  # Last Phase w: translated per family
-  # Last Phase z8: the aggregated effect-modification test (predictor x split_var) -- table-wide, so it
+  for (rl in reg_model_lines(x, lg)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")  # Phase 18w: translated per family
+  # Phase 18z8: the aggregated effect-modification test (predictor x split_var) -- table-wide, so it
   # rides the stream footer like the weight / Model: lines rather than the per-column footer rows.
   # `esc = TRUE`: the p-values carry significance stars, which pandoc would read as emphasis.
   for (il in reg_interaction_lines(x, lg)) if (nzchar(il)) push(list(.lg_tok(il, esc = TRUE)), "reg")
-  # (Last Phase z15: the per-predictor global test used to push a line here too. It is footer ROWS now
+  # (Phase 18z15: the per-predictor global test used to push a line here too. It is footer ROWS now
   # -- see reg_footer_plan() -- because it belongs to one model column and a line could not say which.)
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg, theme)) push(toks, "legend")
   # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
@@ -5177,7 +5178,7 @@ tab_stars_legend <- function(x, lang = NULL) {
     lab  <- lab[order(nchar(lab), decreasing = TRUE)]                          # most stars first
     conf <- (1 - lev) * 100                                                    # aligned: *** <-> 99%
     semi <- if (identical(lg, "fr")) " ; " else "; "
-    # Last Phase z13 (D11): a REGRESSION table's stars do not all test "vs the reference category" --
+    # Phase 18z13 (D11): a REGRESSION table's stars do not all test "vs the reference category" --
     # the `Constant` row has no reference category, and its star tests the baseline value itself (odds
     # of 1, a beta of 0). One wording that is true of every starred row, keyed on the stored reg
     # metadata rather than on a row label.
@@ -5200,7 +5201,7 @@ tab_stars_legend <- function(x, lang = NULL) {
 # The weight column NAME is persisted on the table (the `vars` attribute for a crosstab, `reg_meta` for
 # a regression); NULL when unweighted. Returns one plain string.
 #
-# Last Phase z16-i: ONE sentence per INFERENCE BASIS, generated from the stored `meta$inference` --
+# Phase 18z16-i: ONE sentence per INFERENCE BASIS, generated from the stored `meta$inference` --
 # so the claim cannot outlive the computation (W4), and the package's least defensible position (a
 # weighted estimate on a raw-n interval, which is the DEFAULT) stops being silent (W6, S8.2: this
 # sentence is load-bearing, not decoration). It also retires the last role-guessed-from-a-name in the
@@ -5212,10 +5213,10 @@ tab_weight_line <- function(x, lang = NULL) {
     wt <- tryCatch(get_reg_meta(x)$wt, error = function(e) NULL)
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
   wt    <- as.character(wt)[1]
-  # Last Phase z16-iv (W-A): the basis is a STORED fact, read through its one resolver. The
+  # Phase 18z16-iv (W-A): the basis is a STORED fact, read through its one resolver. The
   # `.svy_weights`-column NAME-SNIFF that stood here (`%||% if (identical(wt, svy_wt_col)) "design"`)
   # is gone: it was W5 all over again.
-  # Last Phase z16-iiiii: it is stored on the COLUMNS and derived here, so the sentence survives every
+  # Phase 18z16-iiiii: it is stored on the COLUMNS and derived here, so the sentence survives every
   # rebuild that keeps them -- tab_spread() and reg_build()'s split branch each used to drop the table
   # attribute it was read from, and print the sentence of an unweighted table over design-based numbers.
   basis <- tryCatch(tab_inference_basis(x), error = function(e) "n")
@@ -5228,7 +5229,7 @@ tab_weight_line <- function(x, lang = NULL) {
     basis,
     "design" = gettext(
       "Design-based (survey): weighted estimates, intervals and tests account for the sample design."),
-    # Last Phase z16-iiiii: the CLAIM is a property of the numbers and is carried on the columns; the
+    # Phase 18z16-iiiii: the CLAIM is a property of the numbers and is carried on the columns; the
     # REASON is a build event, and it is now named where it is actionable and where the user is when
     # it happens -- svy_var_degraded()'s message. Keeping it here would have cost a third column
     # attribute (or a six-valued enum) to say something no exported table can act on.
@@ -5450,13 +5451,13 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_mf      <- mf_x == get_model_family(y)
   role_x       <- get_role(x)
   same_role    <- role_x == get_role(y)
-  # Last Phase z13: the RAW attribute, so binding two columns that never recorded a level keeps
+  # Phase 18z13: the RAW attribute, so binding two columns that never recorded a level keeps
   # "unknown" instead of freezing today's option into the result. Two NAs compare NA, which a bare
   # `if ()` would ERROR on -- the `same_comp` trap two lines below, in its second instance.
   cl_x         <- fmt_conf_level_attr(x)
   cl_y         <- fmt_conf_level_attr(y)
   same_cl      <- (is.na(cl_x) && is.na(cl_y)) || isTRUE(cl_x == cl_y)
-  # Last Phase z16-iiiii: binding two columns binds two CLAIMS about how their numbers were computed,
+  # Phase 18z16-iiiii: binding two columns binds two CLAIMS about how their numbers were computed,
   # and the honest merged claim is the WEAKEST -- one row_var's variance degrading to the weighting
   # does not make the other's design-based. The widest critical value wins for the same reason, so
   # `degf` takes the MINIMUM of the non-NA ones. This is exactly tab_inference_bind()'s algebra, which

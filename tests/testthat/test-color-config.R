@@ -87,7 +87,7 @@ testthat::test_that("get_color_breaks(type = 'all') gives the signed / reciproca
   testthat::expect_equal(get_color_breaks("mean_ratio", "all"),
                          c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4))
   testthat::expect_equal(get_color_breaks("contrib", "all"), c(-10, -5, -2, -1, 1, 2, 5, 10))
-  # Last Phase z4: the absolute standardized-residual scale (color = "contrib" +
+  # Phase 18z4: the absolute standardized-residual scale (color = "contrib" +
   # color_signif = "guaranteed_effect"), written in confidence levels but STORED as plain z.
   testthat::expect_equal(get_color_breaks("zscore", "all"),
                          c(-6, -3.89, -2.58, -1.96, 1.96, 2.58, 3.89, 6))
@@ -102,7 +102,7 @@ testthat::test_that("get_color_breaks returns a readable form and round-trips", 
   withr::defer(reset_breaks())
   reset_breaks()
   gb <- get_color_breaks()
-  # Last Phase z5 added adj_ratio / adj_diff (the `adjustment` / `between_groups` measures); z13 added
+  # Phase 18z5 added adj_ratio / adj_diff (the `adjustment` / `between_groups` measures); z13 added
   # adj_diff_std, the SD-standardized additive one (an arbitrary-unit outcome).
   testthat::expect_named(gb, c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio",
                                "contrib", "zscore", "adj_ratio", "adj_diff", "adj_diff_std"))

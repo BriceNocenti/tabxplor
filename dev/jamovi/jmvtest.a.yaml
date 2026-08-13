@@ -5,7 +5,7 @@ menuGroup: tabxplor
 version: '1.0.0'
 jas: '1.2'
 weightsSupport: 'none'
-# A THROWAWAY diagnostic (Last Phase o): probe many ways to find the real Documents folder and write a
+# A THROWAWAY diagnostic (Phase 18o): probe many ways to find the real Documents folder and write a
 # plain .md test file to each, so the maintainer can report from real Windows / WSL / macOS machines
 # which method lands where. Removed once the winning method is folded into export_documents_dir().
 

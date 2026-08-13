@@ -42,7 +42,7 @@ testthat::test_that("resolveExportPath(dir, filename, ext): folder + bare name +
   testthat::expect_match(basename(p7), "^Name\\.xlsx$")
 })
 
-# --- Export-folder detection & the Documents resolver (Last Phase o) -----------------------
+# --- Export-folder detection & the Documents resolver (Phase 18o) -----------------------
 # export_documents_dir() is a robust per-OS known-folder resolver backed by the doc_* detectors (the
 # rest of the jmvtest diagnostic toolkit is archived in dev/jamovi/jmvtest.b.R). Detectors must NEVER
 # error on any OS (off-platform methods return NA); the resolver must always return one usable dir.
@@ -116,7 +116,7 @@ testthat::test_that("tab_html_string produces self-contained HTML (table + inlin
 })
 
 testthat::test_that("jamovi html carries hover tooltips by default, and tooltips = FALSE overrides", {
-  # Last Phase (pre-release): the two hard-coded tooltips = FALSE were removed -- both jamovi html
+  # Phase 18 (pre-release): the two hard-coded tooltips = FALSE were removed -- both jamovi html
   # paths now follow the option default (tabxplor.tab_kable_tooltips, seeded TRUE). The non-popover
   # attrs ride the native `title=` attribute, so they work with no bootstrap JS in the webview.
   h <- tab_html_string(tabs)

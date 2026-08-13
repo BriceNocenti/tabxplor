@@ -1,4 +1,4 @@
-# PURPOSE: Last Phase z5 -- the `obs` fmt field and the two tab_reg colour measures that read it,
+# PURPOSE: Phase 18z5 -- the `obs` fmt field and the two tab_reg colour measures that read it,
 #          `color = "adjustment"` (a model effect vs its OBSERVED/crude counterpart) and
 #          `color = "between_groups"` (a split_var group's effect vs the reference group's).
 # ROLE: the behavioural lock. The governing claim is that NOTHING is recomputed: `obs` holds exactly
@@ -6,14 +6,14 @@
 #       column's scale -- so these tests compare the two fields directly rather than re-deriving.
 # KEY CONSTRAINTS:
 #   - `obs` is NA wherever there is no counterpart -> those cells must stay UNCOLOURED, never coloured
-#     on a stale value. Last Phase z9 gave numeric predictors one (their univariable fit) and z10 gave
+#     on a stale value. Phase 18z9 gave numeric predictors one (their univariable fit) and z10 gave
 #     the last three families one, so what is left is the Constant, the compound-formula escape hatch,
 #     and cross-tables.
 #   - The colour SIGN is "away from vs toward the null", not raw up/down: a protective effect
 #     (OR < 1) attenuated toward 1 must land on the SAME pole as a risky effect attenuated toward 1.
 #     That is the whole reason the score is not est/obs.
 #   - `color_signif` applies only where a `gap_se` exists (MEASURES$force_policy, a predicate on the
-#     column since Last Phase z8-B). On a conditional odds ratio it never does -- see below and
+#     column since Phase 18z8-B). On a conditional odds ratio it never does -- see below and
 #     test-adjustment-gap.R, which owns the significance half.
 # See: dev/model_vs_observed_effect_colour.md (SS3 collapsibility, SS4 significance, SS7 the engine).
 
@@ -65,7 +65,7 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
 
 test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   d <- adj_data()
-  # The Constant has no crude counterpart. (Last Phase z9: a NUMERIC predictor now HAS one -- its
+  # The Constant has no crude counterpart. (Phase 18z9: a NUMERIC predictor now HAS one -- its
   # univariable fit -- so it is no longer part of this list; see the next test.)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
                empirical = TRUE, color = c("OR", "adjustment"))
@@ -82,7 +82,7 @@ test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   testthat::expect_true(all(is.na(get_obs(tab(d, race, party3, color = TRUE)[[2]]))))
 })
 
-test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Last Phase z10)", {
+test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Phase 18z10)", {
   # z10 inverted this test's premise: the univariable multinomial IS saturated, so its crude OR is the
   # {category j, reference category} x {level, reference level} Woolf ratio -- which is exactly what
   # tab(pct = "row", OR = "OR") prints. Each model column carries its own category's `obs`.
@@ -110,7 +110,7 @@ test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Last Phase z10
 })
 
 test_that("a NUMERIC predictor gets an obs, and `adjustment` colours it", {
-  # Last Phase z9 inverted this test's premise: the univariable fit IS the numeric row's crude twin.
+  # Phase 18z9 inverted this test's premise: the univariable fit IS the numeric row's crude twin.
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
                empirical = TRUE, color = c("OR", "adjustment"))
@@ -190,7 +190,7 @@ test_that("several dependents: each fit takes its OWN crude block", {
 
 # --- between_groups ----------------------------------------------------------------------------------
 
-# Last Phase z8 pinned `color_signif = "ignore"` here: it is the DESCRIPTIVE reading this file locks
+# Phase 18z8 pinned `color_signif = "ignore"` here: it is the DESCRIPTIVE reading this file locks
 # (z5's), and it is now one policy among three -- tab_reg()'s default became grey_non_signif, which
 # greys a gap the new test finds non-significant. The policies themselves are tested in
 # test-between-groups-gap.R.
@@ -242,7 +242,7 @@ test_that("color = 'adjustment' turns empirical on, and the two measures are exc
   testthat::expect_error(tab(d, race, party3, color = "adjustment"), "tab_reg")
 })
 
-# Last Phase z8-B: `force_policy` is a PREDICATE ON THE COLUMN for both gap measures -- a gap measure
+# Phase 18z8-B: `force_policy` is a PREDICATE ON THE COLUMN for both gap measures -- a gap measure
 # reads under `ignore` exactly where no `gap_se` was written. On a CONDITIONAL ODDS RATIO that is by
 # design (maintainer ruling Q1(b): the gap is part non-collapsibility, so the test would read
 # "significant" everywhere); on a collapsible estimand the policy applies normally -- see
@@ -371,7 +371,7 @@ test_that("every exporter renders an adjustment-coloured table without error", {
   testthat::expect_no_error(tab_xl(t, path = withr::local_tempfile(fileext = ".xlsx"), open = FALSE))
 })
 
-# --- Last Phase z13 (D2 / D4): the gap ladder reads the ESTIMATE's own scale -------------------------
+# --- Phase 18z13 (D2 / D4): the gap ladder reads the ESTIMATE's own scale -------------------------
 
 test_that("D2: the additive gap is unit-invariant (hours / minutes / days colour identically)", {
   skip_if_not_installed("broom")

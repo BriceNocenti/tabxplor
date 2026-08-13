@@ -25,7 +25,7 @@ or_col <- function(tab) {
 }
 
 test_that("a clustered, stratified design matches a hand svyglm", {
-  # Last Phase z14-i: clustering / stratification are expressed by BUILDING the design and passing it
+  # Phase 18z14-i: clustering / stratification are expressed by BUILDING the design and passing it
   # as `data` -- the ids/strata/fpc/nest arguments are gone (they reached only the omnibus p-value,
   # and svydesign() says all four better).
   d   <- reg_survey_data()
@@ -35,7 +35,7 @@ test_that("a clustered, stratified design matches a hand svyglm", {
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des2, family = quasibinomial())
 
   des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
-  # Last Phase z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
+  # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", which would compare a per-SD OR to a per-unit coefficient).
   tab <- suppressMessages(tab_logit(des, "y", c("x1", "x2"), multiplier = 1))
   tv  <- or_col(tab)
@@ -55,7 +55,7 @@ test_that("a prebuilt survey design passed as `data` equals the hand svyglm", {
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
 })
 
-test_that("passing wt alongside a design object ABORTS (Last Phase z16-i, W10)", {
+test_that("passing wt alongside a design object ABORTS (Phase 18z16-i, W10)", {
   d   <- reg_survey_data()
   d01 <- dplyr::mutate(d, y01 = as.integer(y == 1))
   des <- survey::svydesign(ids = ~psu, weights = ~w, data = d01)

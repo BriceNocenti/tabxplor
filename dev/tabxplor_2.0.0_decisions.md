@@ -949,7 +949,7 @@ boundary cases only), so nothing is lost by not computing a separate score test.
   G1's `Σw²` accumulator is added to the weighted numeric scan **only when opted in** (byte-identical
   + zero-cost default), rolled up additively, and `n_eff = wn²/w2` replaces n in the mean CI.
   ~~**Factor-side Kish is deferred** (no per-cell `Σw²` on the count path — open item).~~
-  **DONE — Last Phase s:** the factor-side open item is closed. A `w2` dcast on the microdata
+  **DONE — Phase 18s:** the factor-side open item is closed. A `w2` dcast on the microdata
   `plain_core` scan (opt-in only) + `leaf_wide_pct` broadcasting `(Σw_base)²/(Σw²_base)` feeds a new
   **19th fmt field `n_eff`**, which `tab_ci` consumes as `coalesce(get_n_eff, tot_n/n)` for the cell,
   diff and `color = "OR"` intervals (byte-identical off-kish). `num_core` surfaces its `_en` into the
@@ -4748,7 +4748,7 @@ p-value red (B), the relabelled-table role-wins-over-label (A), the mixed-family
 
 ---
 
-## 51. Last Phase j — effect sizes + opt-in survey-robust omnibus tests (2026-07-21)
+## 51. Phase 18j — effect sizes + opt-in survey-robust omnibus tests (2026-07-21)
 
 Adds three things to `tab(test = TRUE)`, all riding the ONE tidy `test` table attribute (§16/§24/§37-D7,
 "the test vocabulary grows"): whole-table **effect sizes**, an auto **Fisher** exact on small weak
@@ -4828,7 +4828,7 @@ Design-based CIs / per-cell survey stars stay §14 (weighted point + n/n_eff); o
 design-based. jamovi surfaces a `test_robust` selector (classic/kish/survey) + strata/ids — inert until
 the maintainer's `prepare()`.
 
-## 53. Last Phase z5 — colouring the model-vs-observed gap (IMPLEMENTED 2026-08-05)
+## 53. Phase 18z5 — colouring the model-vs-observed gap (IMPLEMENTED 2026-08-05)
 
 Full study, measurements and rejected alternatives: `dev/model_vs_observed_effect_colour.md`. The
 maintainer's eight rulings are its §13. Recorded here: what the decisions imply for the architecture.
@@ -4865,7 +4865,7 @@ duplicated per measure.
 and answer "is this effect real?", not "is the gap real?". Gating on them would look like a test and be
 one about something else. A `force_policy` fact + `measure_policy()` (the twin of `measure_facts()`)
 pins both measures to `ignore`, and the legend resolves the policy through the same accessor, so the
-neutralisation cannot drift. The real test is Last Phase z6 — §4 of the study measured the
+neutralisation cannot drift. The real test is Phase 18z6 — §4 of the study measured the
 influence-function route (SE ratio 1.02 vs an 800-replicate bootstrap, 187× faster, exact against
 `svyglm`), and §4.4 records why it needs its own phase (a second stored quantity + the jamovi digest
 cache does not keep the model frame).
@@ -4875,4 +4875,4 @@ the size of the first colour step — so the gap on an odds ratio is partly arit
 measure to collapsible estimands would break the single most common table for a caveat that a sentence
 can carry, so the legend states it on that path only (gated on family + `is_coef`, so
 `exponentiate = FALSE` is covered while AME / RR / IRR / β are not), and the docs name the collapsible
-alternatives — which are exactly the estimands Last Phase z3 added.
+alternatives — which are exactly the estimands Phase 18z3 added.

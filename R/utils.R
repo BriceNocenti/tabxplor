@@ -16,7 +16,7 @@ NULL
 
 
 # Internal stringi-based replacements for the two stringr functions with no direct stringi
-# equivalent (Last Phase b-ii: stringr dropped as a dependency). Signatures mirror the stringr
+# equivalent (Phase 18b-ii: stringr dropped as a dependency). Signatures mirror the stringr
 # originals (arg names + order), so every call site is a plain name swap.
 
 # str_wrap(): wrap each element to `width`; stri_wrap returns a list of lines, join with "\n".
@@ -116,16 +116,16 @@ tx_getOption <- function(names, default = NULL) {
   # Weighted inference (§14): by default a weighted tab() estimates the population but bases every
   # interval and test on the RAW number of respondents -- so it carries no design effect, and the
   # footer says so. Opt in and the same intervals account for the unequal weighting exactly (the
-  # closed-form flat ids = ~1 design variance, Last Phase z16-ii). It needs the microdata weights
+  # closed-form flat ids = ~1 design variance, Phase 18z16-ii). It needs the microdata weights
   # (tab_counts on pre-aggregated counts cannot apply it) and it is blind to clustering and to
   # calibration; for those, pass a survey::svydesign as `data` and the option is not consulted.
   # SCOPE: tab() and its leaves only (ruling 1). tab_reg()'s crude Obs_* columns are ALWAYS on the
   # weighted basis, so they always match the Model_* column beside them.
-  # Renamed in Last Phase z16-i (was tabxplor.kish_neff -- never public, and Kish is now only the
+  # Renamed in Phase 18z16-i (was tabxplor.kish_neff -- never public, and Kish is now only the
   # degenerate limit of the exact formula, not a rung).
   options("tabxplor.design_effect" = FALSE)
 
-  # Last Phase z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10
+  # Phase 18z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10
   # block glyphs showing the OBSERVED shape of its effect, the eye-half of the Linearity check.
   # TRUE (default) = the block glyphs U+2581..U+2588; "ascii" = a plain-text ladder, for a console or
   # a LaTeX font without them; FALSE = no sparkline (the label is then exactly what it was before).
@@ -136,7 +136,7 @@ tx_getOption <- function(names, default = NULL) {
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
   options("tabxplor.anova"         = "welch")
 
-  # Phase 16a / Last Phase j: how many crosstab test rows the EXPORTERS append (md/html/Excel).
+  # Phase 16a / Phase 18j: how many crosstab test rows the EXPORTERS append (md/html/Excel).
   # "summary" (the new default) = statistic + effect size + p-value (the console's full block, minus N,
   # already shown by add_n); "stat" = statistic + p-value; "pvalue" = the single p-value row; "all" =
   # summary. Console always shows the full N/statistic/effect-size/p-value block, so this is export-only.
@@ -148,7 +148,7 @@ tx_getOption <- function(names, default = NULL) {
 
   # Default confidence level for the intervals and significance tests. The per-call `conf_level`
   # argument of tab() / tab_num() / tab_ci() / tab_reg() (and its wrappers) overrides it; it is also
-  # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Last Phase c).
+  # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Phase 18c).
   options("tabxplor.conf_level"    = 0.95)
 
   # Phase 6: the `tabxplor.compact` option is dropped, superseded by the `output_list`
@@ -192,7 +192,7 @@ tx_getOption <- function(names, default = NULL) {
   # resolved in R rather than by the browser: only R can see the editor around the pane.
   options("tabxplor.theme" = "light")
 
-  # Last Phase z11: also emit the black-and-white publication palette inside an `@media print` block,
+  # Phase 18z11: also emit the black-and-white publication palette inside an `@media print` block,
   # so a page rendered in colour PRINTS (or saves to PDF) publication-ready with no user action. On by
   # default because the alternative is worse than it looks: converted to CIE lightness, the colour
   # palette's two background directions are the SAME grey ramp, so a greyscale print silently loses the
@@ -391,7 +391,7 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
 
   # Variable labels as titles: the `label` attribute (e.g. from haven / labelled-imported data).
   # get_variable_labels() returned exactly this per-column named list, so read it with base attr()
-  # and drop the `labelled` dependency (Last Phase b-ii).
+  # and drop the `labelled` dependency (Phase 18b-ii).
   var_labs <- purrr::map(data, \(col) attr(col, "label", exact = TRUE))
   var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
   with_variable_label_as_title <- length(var_labs) > 0

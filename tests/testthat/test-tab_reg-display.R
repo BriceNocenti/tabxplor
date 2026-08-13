@@ -7,7 +7,7 @@ reg_data <- function() {
   forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
 }
-# Last Phase z13: skip the per-level `n` column (add_n = TRUE by default) -- see helper-reg.R.
+# Phase 18z13: skip the per-level `n` column (add_n = TRUE by default) -- see helper-reg.R.
 first_fmt <- function(t) reg_first_fmt(t)
 
 # ---- estimate_display = "ci" : visible confidence-interval bracket ---------------------------
@@ -69,7 +69,7 @@ test_that("estimate_display prob/ame degrade to 'ci' for non-binomial (message)"
 
 # ---- Excel in-cell test label ----------------------------------------------------------------
 
-test_that("Excel names the test in the p-value row label, not the numFmt (Last Phase m)", {
+test_that("Excel names the test in the p-value row label, not the numFmt (Phase 18m)", {
   skip_if_not_installed("openxlsx2")
   d  <- reg_data()
   ct <- suppressWarnings(tab(d, race, marital, pct = "row", test = TRUE))

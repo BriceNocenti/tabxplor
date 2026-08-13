@@ -67,7 +67,7 @@
 #     tab_spread(split_var) pivots groups to columns (no tab_spread change: split_var placed first so
 #     `levels` stays the row_var; console footer is group-aware, export footer skipped for splits).
 #     `multiplier` scales a continuous predictor's native coef by k before CI/exp (OR^k), p unchanged.
-#   - Last Phase z9: `multiplier` is the UNIT such a predictor's effect is reported per, and its DEFAULT
+#   - Phase 18z9: `multiplier` is the UNIT such a predictor's effect is reported per, and its DEFAULT
 #     is "sd" (per one standard deviation) -- per 1 unit the row sits inside the first colour break and
 #     reads as "no effect". A scalar ("sd"/"2sd"/a number) applies to all, a named vector overrides per
 #     variable, 1 = per unit. Resolved ONCE in tab_reg() on the PREDICTOR complete-case frame, so one
@@ -75,7 +75,7 @@
 #     `empirical = TRUE` fills a continuous predictor's crude EFFECT column from its univariable
 #     reg_fit() (base cell stays empty, distribution -> tooltip), and reg_gap_se_columns() tests that
 #     gap like any other. reg_is_factor_var() is the ONE predictor-kind predicate.
-# See: CLAUDE.md Phase 12c-12g + Last Phase z9 ; dev/tabxplor_2.0.0_decisions.md S37 ;
+# See: CLAUDE.md Phase 12c-12g + Phase 18z9 ; dev/tabxplor_2.0.0_decisions.md S37 ;
 #      dev/numeric_predictors_crude_counterparts.md.
 
 # === Internal engine ================================================================
@@ -149,7 +149,7 @@ reg_parse_formula <- function(formula, data) {
        formula = formula, lhs_is_name = lhs_is_name, simple = simple)
 }
 
-# DESIGN (Last Phase z3): the family PREDICATES. Every "which families behave like X" question is asked
+# DESIGN (Phase 18z3): the family PREDICATES. Every "which families behave like X" question is asked
 # here ONCE instead of by a hand-written whitelist at each call site (there were 11 bare `== "binomial"`
 # tests, 4 probability-scale lists, and the log-scale list written TWICE verbatim in fmt_class.R). The
 # internal family key "rr" (modified Poisson on a binary outcome, see the families_vec resolver in
@@ -165,7 +165,7 @@ reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
 # (log_odds_scale) rather than the SD-standardized mean_diff scale. gaussian is the only family out.
 reg_fam_logscale <- function(f)
   f %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial", "rr")
-# Last Phase z8-B (SS4.2, maintainer ruling Q1(b)): is the DISPLAYED estimand COLLAPSIBLE -- i.e. does a
+# Phase 18z8-B (SS4.2, maintainer ruling Q1(b)): is the DISPLAYED estimand COLLAPSIBLE -- i.e. does a
 # zero model-vs-observed gap mean "no confounding"? Everything tabxplor shows is, EXCEPT a CONDITIONAL
 # ODDS RATIO: the coefficient of a probability-scale model (the binomial logit; the multinomial /
 # ordinal cumulative logits, which have no crude twin anyway). `exponentiate` is irrelevant -- a raw
@@ -178,7 +178,7 @@ reg_fam_logscale <- function(f)
 reg_estimand_collapsible <- function(family, effect)
   !(identical(effect, "coefficient") && reg_fam_prob(family))
 
-# Last Phase z13 (D6): THE producer of "the colour you asked for cannot be computed here". Before it,
+# Phase 18z13 (D6): THE producer of "the colour you asked for cannot be computed here". Before it,
 # four refusals said so in four hand-written blocks in tab_reg()'s body and two said nothing at all --
 # a table that looked as if `color =` had simply been ignored. The rule is now uniform and testable in
 # isolation: a requested colour measure that cannot be scored, or cannot be TESTED, names its reason
@@ -234,7 +234,7 @@ reg_color_notes <- function(color, color_signif, effect, at, split_var, na, na_e
           "non-collapsibility, not confounding. Use {.code effect = \"ame\"} or {.code \"ame_ratio\"}, ",
           "or {.code family = \"poisson\"} (risk ratios), for a gap the test can read.")
     }
-    # Last Phase z13 (D1): only on an explicit choice -- the default already shares the population.
+    # Phase 18z13 (D1): only on an explicit choice -- the default already shares the population.
     if (na_explicit && identical(na, "drop_by_model")) {
       add("{.code na = \"drop_by_model\"} lets each model use its own complete cases, so a model ",
           "fitted on rows the observed columns do not cover gets no observed effect at all (no ",
@@ -244,7 +244,7 @@ reg_color_notes <- function(color, color_signif, effect, at, split_var, na, na_e
   notes
 }
 
-# Last Phase z10: `crude_key` -- THE stored fact "which observed counterpart does this model have?".
+# Phase 18z10: `crude_key` -- THE stored fact "which observed counterpart does this model have?".
 # It is the REG_EMPIRICAL key, or NA when there is none. Before z10 the same question was asked by
 # inference in six places, in three different shapes: a missing REG_EMPIRICAL key, a hand-written
 # `quasipoisson -> poisson` alias, two duplicated family whitelists, and -- worst -- `positive_level`
@@ -262,7 +262,7 @@ reg_crude_key <- function(family, trials = NULL, compound = FALSE) {
   family
 }
 
-# Last Phase z9: is a PREDICTOR a factor (contrasts vs a reference level) or a numeric (one slope per
+# Phase 18z9: is a PREDICTOR a factor (contrasts vs a reference level) or a numeric (one slope per
 # unit)? ONE definition, replacing five sites that disagreed -- `is.factor || is.character` at
 # reg_fit()'s de-ordering and at tab_reg()'s multiplier check, `!is.numeric` at the empirical-columns
 # and empirical-tips gates. They diverged for exactly two column kinds, both measured:
@@ -300,7 +300,7 @@ reg_numeric_preds <- function(data, predictors)
   predictors[!purrr::map_lgl(predictors, ~ reg_is_factor_var(data[[.x]]))]
 
 
-# === `multiplier`: the per-unit scaling of a continuous predictor's effect (Last Phase z9) ===========
+# === `multiplier`: the per-unit scaling of a continuous predictor's effect (Phase 18z9) ===========
 #
 # GRAMMAR. A SCALAR ("sd", "2sd" or a number) applies to every numeric predictor; a NAMED vector
 # overrides per variable and any predictor it does not name keeps the scalar default. Values may mix
@@ -393,9 +393,9 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
 # (S37 D2): 0/1 or any 2-level outcome -> binomial; an ORDERED factor with 3+ levels -> ordinal
 # (proportional-odds); an UNORDERED factor / character with 3+ levels -> multinomial; a numeric ->
 # gaussian. A binary outcome is ALWAYS binomial here: the modified Poisson (risk-ratio) path is opt-in
-# via an explicit family = "poisson" (Last Phase z3).
+# via an explicit family = "poisson" (Phase 18z3).
 #
-# Last Phase z13 (D10): the gaussian branch used to require a NON-INTEGER numeric, so every
+# Phase 18z13 (D10): the gaussian branch used to require a NON-INTEGER numeric, so every
 # integer-stored continuous outcome -- age in years, years of schooling, income in whole units, a
 # Likert sum -- fell through to the abort. That is one of the two commonest outcome kinds, and it made
 # the R side disagree with the jamovi selector, which had to pick something. Both now answer gaussian
@@ -456,7 +456,7 @@ reg_effect_word <- function(family, do_exp, effect = "coefficient", at = "averag
 
 # Phase 14w: the human name of the model family, shared by the reg title/caption and the "Model:" footer
 # line (reg_model_line). do_exp/effect do not change the NAME (the estimand phrase carries that detail).
-# Last Phase w: translatable (gettext). Every caller runs it inside a with_legend_lang() context
+# Phase 18w: translatable (gettext). Every caller runs it inside a with_legend_lang() context
 # (reg_model_lines / reg_title), so the LANGUAGE env is already set when these gettext() lookups fire.
 reg_family_display_name <- function(family) {
   switch(family,
@@ -486,17 +486,17 @@ reg_family_short <- function(family) {
 # The ESTIMAND phrase (lower-case fragment, never NULL) -- WHAT the numbers are. Composed into the
 # "Model: <family>. <estimand>." footer line by reg_model_line(). effect="ame" and the multinomial
 # "at reference" profile get their own phrasing; otherwise it is the coefficient/exp scale per family.
-# Last Phase w: translatable (gettext); runs inside a with_legend_lang() context (see reg_model_lines /
+# Phase 18w: translatable (gettext); runs inside a with_legend_lang() context (see reg_model_lines /
 # reg_title). Notation (OR/IRR/beta) lives in reg_effect_word, kept English; only this prose translates.
 reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average",
                            obs_in_cell = FALSE) {
-  # Last Phase z10: where the crude effect has no column of its own it is FOLDED into the model cell as
+  # Phase 18z10: where the crude effect has no column of its own it is FOLDED into the model cell as
   # "{or} ({obs})" / "{diff} ({obs})" -- so the bracket the footer names is the OBSERVED effect, not the
   # adjusted probability. One stored fact (reg_crude_in_cell), one wording swap.
   paren <- if (obs_in_cell)
     gettext("; each cell shows the modelled effect vs the reference level and, in parentheses, the observed (crude) one")
     else NULL
-  # Last Phase z3: the ratio twin of the AME phrase. Guarded to prob-scale families upstream, so the
+  # Phase 18z3: the ratio twin of the AME phrase. Guarded to prob-scale families upstream, so the
   # "adjusted predicted probability" wording always applies. Name the quantity a RATIO OF PROBABILITIES,
   # never a "log-linear model" -- in sociology that phrase means Goodman's contingency-table models.
   if (effect == "ame_ratio") {
@@ -543,7 +543,7 @@ reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average
 # so it can be ordered BEFORE the colour legend (item 2). For a model comparison the caption is not shown
 # in the console, so the dependent + (binomial) reference level are named here too (item 4). NULL when the
 # table is not a regression (get_reg_meta -> NULL).
-# Last Phase w: the prose is translatable (gettext); called only from reg_model_lines(), which sets the
+# Phase 18w: the prose is translatable (gettext); called only from reg_model_lines(), which sets the
 # LANGUAGE env via with_legend_lang(). enc2utf8 for the French accents (matches tab_weight_line et al.).
 # Does ANY of these outcomes fold its observed effect into the model cell? Reads the STORED crude keys.
 #' @keywords internal
@@ -578,7 +578,7 @@ reg_model_line <- function(meta) {
 # identical). A mixed-family table returns ONE line per distinct outcome family present, each prefixed by
 # the outcomes it covers (legend_name_list), so every estimand is described without inventing a single
 # false family for the whole table. `x` is the table (reads its `reg_meta`). Returns a character vector.
-# Last Phase w: `lang` selects the footer language (NULL -> options(tabxplor.lang)/locale). The whole
+# Phase 18w: `lang` selects the footer language (NULL -> options(tabxplor.lang)/locale). The whole
 # composition runs under with_legend_lang() so every nested gettext() (family name, estimand, "Model:")
 # resolves to that language; English is byte-identical (gettext returns the msgid under the en locale).
 reg_model_lines <- function(x, lang = NULL) {
@@ -601,7 +601,7 @@ reg_model_lines <- function(x, lang = NULL) {
   })
 }
 
-# Last Phase z8: the AGGREGATED effect-modification test, as one footer line per model -- the
+# Phase 18z8: the AGGREGATED effect-modification test, as one footer line per model -- the
 # table-wide companion of the per-cell `between_groups` colour ("does this predictor act differently
 # between groups?", once per predictor, for all its levels together, with no per-cell multiplicity).
 # It is a LINE, not footer rows: a pooled test belongs to no single model column, which is the only
@@ -613,7 +613,7 @@ reg_model_lines <- function(x, lang = NULL) {
 # colours score the difference in marginal effects -- related, but not the same null. On a coefficient
 # table the words would be noise.
 #' @keywords internal
-# Last Phase z15: the per-predictor GLOBAL test (z13) is no longer a footer LINE -- it became footer
+# Phase 18z15: the per-predictor GLOBAL test (z13) is no longer a footer LINE -- it became footer
 # ROWS, one per (model column x predictor), so reg_global_lines() and the shared reg_term_test_line()
 # it was extracted for are gone. Measured on the vignette's own data: in a 3-model comparison the line
 # rendered as three sentences with nothing naming which model each described, and on a split table it
@@ -647,7 +647,7 @@ reg_interaction_lines <- function(x, lang = NULL) {
 # Phase 14w: the reg table's TITLE / caption (Excel title + sheet, md/kable caption). Single model:
 # "<Family>: <dep> by <p1>, <p2> +N more". Comparison: "<Family>s (models comparison): <dep>, '<ref>'
 # (<effect>)" -- the reference level + effect that would otherwise be written nowhere (item 4).
-# Last Phase w: the caption prose is translatable (gettext), resolved under with_legend_lang(). `lang`
+# Phase 18w: the caption prose is translatable (gettext), resolved under with_legend_lang(). `lang`
 # NULL follows options(tabxplor.lang)/locale (so a French-locale user gets a French caption with no arg
 # threading through the export prep); English is byte-identical. The comparison "s ..." plural suffix is
 # gettext'd as a whole fragment so English keeps its exact "regressions" wording -- French refines it in
@@ -785,7 +785,7 @@ reg_apply_references <- function(data, reference, predictors) {
 # reference, no model term -- or a single row for a numeric predictor. `term` matches lm/glm/svyglm
 # coefficient names so a fit aligns to the skeleton by term.
 #
-# Last Phase z15: `shape_terms` (named by variable) adds the CURVATURE row of a `shape = "quadratic"`
+# Phase 18z15: `shape_terms` (named by variable) adds the CURVATURE row of a `shape = "quadratic"`
 # predictor -- two coefficient rows for one predictor, which is exactly what R8 asks for. The 1-to-1
 # it breaks is stated as a rule, not patched with an `if`: the skeleton emits ONE ROW PER MODEL TERM on
 # the coefficient path and ONE ROW PER PREDICTOR on the marginal path (an AME already integrates the
@@ -1114,7 +1114,7 @@ reg_complete_frame <- function(data, vars)
 reg_resolve_design <- function(design_spec, mdata, data, drop_vars) {
   if (!is.null(design_spec$design)) {
     keep <- which(stats::complete.cases(data[, drop_vars, drop = FALSE]))
-    # Last Phase z14-iii: index the ORIGINAL design, always. Under split_var `data` holds one group's
+    # Phase 18z14-iii: index the ORIGINAL design, always. Under split_var `data` holds one group's
     # rows, so its own positions are group-local; `.svy_row` (written at the boundary, R/survey-design.R)
     # is the position in the design the user passed. At top level .svy_row == seq_len(n), so `rows` is
     # `keep` and this is byte-identical. Without it a CALIBRATED design -- which `[` does not shrink --
@@ -1156,20 +1156,20 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                     inverse_two_level_factors, conf_level, method,
                     trials = NULL, formula = NULL, multiplier = NULL, cross = NULL,
                     drop_extra = NULL, add_terms = NULL) {
-  # Last Phase z15: `add_terms` is the third sibling of `cross` / `drop_extra` -- extra RHS terms,
+  # Phase 18z15: `add_terms` is the third sibling of `cross` / `drop_extra` -- extra RHS terms,
   # verbatim, appended to the formula and to nothing else (they name no new VARIABLE, so they never
   # join drop_vars: `I(((age - 44.2)/13.5)^2)` is complete exactly where `age` is). It is how the
   # Linearity check refits "the model plus this predictor's centred squared term" through the very
   # fitter the table came from, inheriting the binary prep, the grouped-binomial cbind, the "rr" route
   # and the design resolution -- which the `formula =` escape hatch would not.
   #
-  # Last Phase z8: `cross` (a split_var) makes the POOLED interaction fit `y ~ (x1 + x2) * g`, used
+  # Phase 18z8: `cross` (a split_var) makes the POOLED interaction fit `y ~ (x1 + x2) * g`, used
   # only by reg_interaction_rows(). It goes through this whole function rather than the `formula =`
   # escape hatch precisely so it inherits the binary prep, the grouped-binomial cbind, the family
   # objects, the "rr" -> svyglm route and the design resolution; `formula =` deliberately disables the
   # first two. `cross` joins drop_vars so the pooled complete-case frame matches the per-group ones.
   #
-  # Last Phase z9: `drop_extra` joins drop_vars but NOT the formula -- variables the fit must be
+  # Phase 18z9: `drop_extra` joins drop_vars but NOT the formula -- variables the fit must be
   # COMPLETE ON without modelling. The crude univariable fit behind a numeric predictor's `Obs_*` column
   # uses it to land on exactly the model's population (`empirical`'s documented contract, and the row
   # identity the gap test's influence functions need). Passing the pre-filtered frame as `data` instead
@@ -1239,7 +1239,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     },
     "poisson" = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
     "quasipoisson" = stats::quasipoisson("log"),
-    # Last Phase z3 -- modified Poisson on a binary outcome (Zou 2004). Same binary prep as the logistic
+    # Phase 18z3 -- modified Poisson on a binary outcome (Zou 2004). Same binary prep as the logistic
     # arm (so `inverse_two_level_factors` and the positive-level label behave identically), then the
     # factor is coerced to the 0/1 NUMERIC a log-link Poisson needs: glm(poisson) / svyglm both error on
     # a factor response. quasipoisson (not poisson) in BOTH the weighted and unweighted case -- the fit
@@ -1272,7 +1272,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     stats::as.formula(paste0(resp, " ~ ", rhs))
   }
 
-  # Last Phase z3: "rr" ALWAYS fits through svyglm, weighted or not. A Poisson likelihood on a 0/1
+  # Phase 18z3: "rr" ALWAYS fits through svyglm, weighted or not. A Poisson likelihood on a 0/1
   # outcome is deliberately misspecified (Var = mu, truth = mu(1-mu)), so the naive SEs are too large
   # and must be replaced by the Huber-White SANDWICH. svyglm's design-based variance IS that sandwich
   # (measured: exactly HC0 * sqrt(n/(n-1)) on a constant-weight ids=~1 design, coefficients identical to
@@ -1475,7 +1475,7 @@ reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, desig
 #   poisson  : emp_base = weighted mean(count | level) (crude rate), emp_ratio = crude rate-ratio.
 # emp_diff is always emp_base - ref emp_base (risk- or mean-difference). Returns a tibble keyed by
 # (var, level): emp_base, emp_diff, emp_ratio, emp_var, emp_n (unweighted cell count).
-# reg_crude_y() -- Last Phase z8-B: the outcome ON THE SCALE THE CRUDE ESTIMATOR AVERAGES. For a binary
+# reg_crude_y() -- Phase 18z8-B: the outcome ON THE SCALE THE CRUDE ESTIMATOR AVERAGES. For a binary
 # outcome that is the 0/1 indicator of the positive level, which needs reg_prep_binary()'s own recode
 # mirrored (the model frame has been through it; the raw `data` the crude block reads has not, so
 # as.character(0/1) would never match the label and the crude base would silently be 0 -- the pre-14v-ii
@@ -1491,7 +1491,7 @@ reg_crude_y <- function(data, dependent, family, positive_level) {
   as.numeric(as.character(yv) == positive_level)
 }
 
-# reg_crude_yw() -- Last Phase z10: reg_crude_y()'s generalisation, the ONE description of "what the
+# reg_crude_yw() -- Phase 18z10: reg_crude_y()'s generalisation, the ONE description of "what the
 # crude estimator averages, and with what weights", for every outcome kind. It returns the pieces the
 # crude GRID and the crude INFLUENCE FUNCTION both read, so the two can never be built around different
 # data (the invariant reg_crude_y() was extracted for in z8-B).
@@ -1543,7 +1543,7 @@ reg_crude_yw <- function(data, dependent, crude_key, positive_level = NULL, wt =
        draws = rep(1, nrow(data)), num = yn, num_w = w)
 }
 
-# reg_level_counts() -- Last Phase z13 (SS7.1): the N behind each predictor level, on the model's own
+# reg_level_counts() -- Phase 18z13 (SS7.1): the N behind each predictor level, on the model's own
 # complete-case frame, aligned to the skeleton. STROBE asks for the unadjusted numbers behind an
 # association and both comparable packages always print them; tabxplor already HAD the number (it is
 # `emp_n` in reg_empirical()'s grid) but only under `empirical = TRUE`, only for families with a crude
@@ -1578,7 +1578,7 @@ reg_level_counts <- function(frame, skeleton, wt = NULL) {
 }
 
 # The zero-row shape of reg_empirical()'s long tibble -- ONE definition, so the empty case cannot drift
-# from the populated one (Last Phase z9).
+# from the populated one (Phase 18z9).
 #' @keywords internal
 reg_empirical_empty <- function()
   tibble::tibble(
@@ -1594,7 +1594,7 @@ reg_empirical_empty <- function()
     emp_ref_n = integer(0), emp_ref_n_ci = numeric(0)
   )
 
-# reg_empirical() -- Last Phase z10: THE crude grid, keyed (var, level, category).
+# reg_empirical() -- Phase 18z10: THE crude grid, keyed (var, level, category).
 #
 # DESIGN -- this ONE producer replaces reg_empirical() + reg_empirical_tips(), which were the same
 # computation at two key widths (measured line by line: the tips' `sum(w[m & y == cat]) / sum(w[m])`
@@ -1602,7 +1602,7 @@ reg_empirical_empty <- function()
 # general K-category form; the old binary one was its K = 2, positive-level-only slice. Merging them is
 # what lets multinomial and ordinal have a crude counterpart at all, at the cost of one extra key column.
 #
-# Two PARTS, because a family may need either or both (Last Phase z10 ruling: a grouped binomial shows a
+# Two PARTS, because a family may need either or both (Phase 18z10 ruling: a grouped binomial shows a
 # mean SCORE beside a summed-count OR, so it needs both at once -- which no single `emp_base` column
 # could carry):
 #   CATEGORICAL, per (var, level, category): the weighted share `emp_prop` (+ its Wilson interval), its
@@ -1619,7 +1619,7 @@ reg_empirical_empty <- function()
 # tab(pct = "row", OR = "OR") prints.
 #
 # Weighted rule (SS14): weighted proportions/means, unweighted `n`, and a SEPARATE effective n
-# (`n_ci` / `n_draw`) for the intervals. Last Phase z14-iii makes that base come from the SAME
+# (`n_ci` / `n_draw`) for the intervals. Phase 18z14-iii makes that base come from the SAME
 # producers tab()'s cells use (svy_inference_basis): a survey DESIGN passed as `data` ->
 # Korn-Graubard's device on the design variance; else the EXACT flat closed form on the weights
 # (svy_flat_neff_rows); else the raw count. The basis is FORCED weighted here (ruling 1) -- it is not
@@ -1631,19 +1631,19 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   yw   <- reg_crude_yw(data, dependent, crude_key, positive_level, wt, trials, ref_category)
   cats <- yw$cats
   # The basis comes from the ONE resolver, not a local option read (the drift z14-ii closed for
-  # tab()). Last Phase z16-i, ruling 1: tab_reg() FORCES the weighted basis -- its crude Obs_* columns
+  # tab()). Phase 18z16-i, ruling 1: tab_reg() FORCES the weighted basis -- its crude Obs_* columns
   # must be comparable with the Model_* column beside them, which is always design/weight-based
   # (a weighted fit goes through svyglm, i.e. the Binder linearization). The tab()-scoped
   # tabxplor.design_effect option is therefore never read here.
   basis <- svy_inference_basis(design_spec, wt, force = TRUE)
-  # Last Phase z16-ii: the WEIGHTED base is the flat design's own, in closed form -- the same
+  # Phase 18z16-ii: the WEIGHTED base is the flat design's own, in closed form -- the same
   # p(1-p)/Var_design device tab()'s cells use, evaluated at ids = ~1 (svy_flat_neff_rows). It replaces
   # Kish, which is that formula with the cell's own Sum(w^2) discarded (measured up to 17 % wrong in
   # either direction, and unable to move with the outcome at all). Unweighted -> the raw count,
   # byte-identical. `n_obs` is the crude frame's row count = survey's nPSU for its flat design.
   weighted <- identical(basis, "weights") || identical(basis, "design")
   n_obs    <- nrow(data)
-  # Last Phase z16-iiiii (D4): a design's DEGREES OF FREEDOM. survey refers every interval to t(degf),
+  # Phase 18z16-iiiii (D4): a design's DEGREES OF FREEDOM. survey refers every interval to t(degf),
   # and the model columns of a design-weighted tab_reg() already are (an svyglm's df.residual IS the
   # design df) -- while the crude companions beside them were referred to z, so at degf = 8 the crude
   # bracket printed 15 % narrower than the model bracket it exists to be compared with. `Inf` (no
@@ -1660,17 +1660,17 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   has_num <- !is.null(yw$num)
   has_cat <- !identical(yw$kind, "numeric")
   share   <- identical(yw$kind, "share")
-  # Last Phase z16-iv (W-E): the difference-CI method is the FAMILY's declared one (REG_EMPIRICAL is
+  # Phase 18z16-iv (W-E): the difference-CI method is the FAMILY's declared one (REG_EMPIRICAL is
   # the single source), never a literal written here. "wald" is the fallback for a key that declares
   # none -- it is what tab_reg() uses throughout.
   emp_method_diff <- REG_EMPIRICAL[[crude_key]]$method_diff %||% "wald"
   # variance only where a mean column is actually built (gaussian / poisson / the grouped mean score)
   want_var <- has_num
-  # Last Phase z9: a TYPED zero-row return. purrr::map_dfr over character(0) yields a 0x0 tibble, whose
+  # Phase 18z9: a TYPED zero-row return. purrr::map_dfr over character(0) yields a 0x0 tibble, whose
   # columns are NULL -- reg_empirical_columns() then errors ("Can't recycle input of size 0").
   if (length(fac_preds) == 0L) return(reg_empirical_empty())
 
-  # --- Last Phase z14-iii: the DESIGN-based effective n --------------------------------------------
+  # --- Phase 18z14-iii: the DESIGN-based effective n --------------------------------------------
   # A crude cell IS a weighted mean over a domain (the predictor level), so its design variance is the
   # producer R/survey-variance.R already owns -- the same influence vector reg_crude_if_maker() builds
   # for the gap test (its identity-link leg w(y-mu)/Sum(w) IS svy_var_mean()'s wf*d*(x-M)/B), but
@@ -1678,7 +1678,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   # a CALIBRATED design needs. Every crude interval then follows for free: they all consume `n_ci` or
   # `n_draw`, and on an effective base the Woolf and Katz brackets ARE Var_design(logit p) and
   # Var_design(log p) by construction.
-  # Last Phase z16-iiiii: a LOCAL latch, and the reason travels OUT on the returned grid
+  # Phase 18z16-iiiii: a LOCAL latch, and the reason travels OUT on the returned grid
   # (attr "degrade"), which reg_build() harvests into the basis it stamps -- the process-global
   # degrade environment is gone, so one degraded table can no longer mislabel every later one.
   said <- FALSE
@@ -1807,7 +1807,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
     } else meanv / rmean
     pw <- if (has_cat) ci_wilson(prop, n_draw, conf_level = conf_level, df = degf) else
       list(inf = rep(NA_real_, nl * nc), sup = rep(NA_real_, nl * nc))
-    # Last Phase z16-iv (W-E): the family's DECLARED difference method, not a second hard-coded one.
+    # Phase 18z16-iv (W-E): the family's DECLARED difference method, not a second hard-coded one.
     # This interval's only consumer is the multinomial html tooltip, which was Newcombe while the
     # Obs_% column of the same table was Wald -- one quantity, two methods, inside one table. The
     # cross-table difference from tab(ci = "diff")'s Newcombe is deliberate (Phase 16d: the crude
@@ -1834,7 +1834,7 @@ reg_empirical <- function(data, fac_preds, dependent, crude_key, positive_level,
   structure(out, degrade = said)
 }
 
-# reg_empirical_fit() -- Last Phase z9 (numeric predictors) / z10 (ordinal outcomes): the crude
+# reg_empirical_fit() -- Phase 18z9 (numeric predictors) / z10 (ordinal outcomes): the crude
 # companion of every predictor whose UNIVARIABLE model is NOT saturated, so no closed form exists.
 #
 # DESIGN -- the rule is the one the factor arm already applies, not a new one. "The observed effect is
@@ -1882,7 +1882,7 @@ reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inver
   fits   <- list()
   for (v in preds) {
     f <- tryCatch(
-      # Last Phase z15: the crude fit takes the SAME shape as the model's (`add_terms`), so a curved
+      # Phase 18z15: the crude fit takes the SAME shape as the model's (`add_terms`), so a curved
       # predictor's two rows both get an observed twin and its term names are IDENTICAL to the model's
       # -- which is the whole reason the alignment below needs no shape-aware branch.
       suppressMessages(reg_fit(data, dependent, v, family, design_spec, do_exp = FALSE,
@@ -1932,7 +1932,7 @@ reg_empirical_fit <- function(data, preds, dependent, family, design_spec, inver
 }
 
 
-# reg_fit_overlay() -- Last Phase z9 (as reg_num_overlay) / z10: write fit-derived crude rows into a
+# reg_fit_overlay() -- Phase 18z9 (as reg_num_overlay) / z10: write fit-derived crude rows into a
 # finished crude EFFECT column and into the crude effect VECTOR, at the ONE point both are in hand.
 #
 # DESIGN -- why here and not before emp_col(). On the binomial `ame` branch the base column and the
@@ -1981,7 +1981,7 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 # (`or_log` / `irr_log`) used when the model is NOT exponentiated -- a coef-shaped column carrying
 # log(OR) / log(IRR) with a logged CI, so the crude companion matches the raw model coefficient (same
 # link scale, same log_odds_scale colour). reg_empirical_columns picks the twin by `do_exp`.
-# Last Phase z8-B: each EFFECT row also carries the `link` of the crude estimator it describes -- the
+# Phase 18z8-B: each EFFECT row also carries the `link` of the crude estimator it describes -- the
 # one fact reg_crude_if_maker() needs to write its closed-form influence function (g'(mu) = 1/(mu(1-mu))
 # logit | 1/mu log | 1 identity). It sits on the SHAPE row, not on the family, because the crude link
 # follows the chosen ESTIMAND: a binomial model shows a logit-scale OR by default, an IDENTITY-link risk
@@ -1995,7 +1995,7 @@ REG_EMPIRICAL <- list(
     ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff", link = "identity"),
     or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR",   link = "logit"),
     or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff", link = "logit")),
-  # Last Phase z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
+  # Phase 18z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
   # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
   # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
   # of the whole feature: the observed companion must be on the same scale as the model column.
@@ -2014,7 +2014,7 @@ REG_EMPIRICAL <- list(
     base    = list(nm = "Obs_rate",     type = "mean", display = "mean", digits = 2L, ref = "1",           ci_type = "ratio", color = "ratio", link = NA_character_),
     irr     = list(nm = "Obs_IRR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR",    link = "log"),
     irr_log = list(nm = "Obs_log(IRR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff",  link = "log")),
-  # Last Phase z10 -- the three families that had no crude twin at all.
+  # Phase 18z10 -- the three families that had no crude twin at all.
   #
   # grouped_binomial (`trials =`): the univariable model is STILL saturated for a factor predictor, so
   # the crude OR is the existing Woolf 2x2 on the SUMMED counts (measured identical to a univariable glm
@@ -2106,7 +2106,7 @@ cat_get <- function(l, key) {
 # The Constant -> empty cells; reference levels -> neutral + in_refrow, no CI. want_p is TRUE (the pvalue
 # is stored; stars are stripped post-build when stars = FALSE, like the model columns).
 #
-# Last Phase z10 -- three structural changes, all driven by shape FACTS rather than by family names:
+# Phase 18z10 -- three structural changes, all driven by shape FACTS rather than by family names:
 #   * emit() replaces two(): a shape set may draw TWO columns (base + effect, every pre-z10 family), ONE
 #     (ordinal: a cumulative OR has no base -- there is no single share to show beside it), or ZERO
 #     (multinomial: the crude number rides in-cell via `obs`). The old two() could only ever do two.
@@ -2123,13 +2123,13 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   if (is.null(fam)) return(list(cols = list(), effect = NULL, shape = NULL))
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
   # uncoloured too (else the table shows coloured empirical columns beside plain model columns).
-  # `color[1]`: the measure may be a length-2 (text, background) vector since Last Phase z5's
+  # `color[1]`: the measure may be a length-2 (text, background) vector since Phase 18z5's
   # `color = c("OR", "adjustment")` -- `color %in% ...` would then return length 2 and the `if` below
   # would error. Only the text channel decides whether the crude companions are drawn at all.
   emp_off <- !is.null(color) && color[1] %in% c("no", "")
   n_rows  <- nrow(skeleton)
   is_fac  <- skeleton$var %in% fac_preds
-  # Last Phase z9 (dev/numeric_predictors_crude_counterparts.md SS11.1): the Constant is a reference row
+  # Phase 18z9 (dev/numeric_predictors_crude_counterparts.md SS11.1): the Constant is a reference row
   # HERE TOO. reg_column() flags it (`... | var == "Constant"`) and tab_bold_rows() ANDs the flag across
   # every discriminating column, so leaving it out of the crude column silently un-bolded the Constant of
   # every `empirical = TRUE` table. Blanking its CI is a no-op: the Constant has no crude counterpart, so
@@ -2150,7 +2150,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     if (!is.na(shape$ref)) args$ref <- shape$ref
     do.call(fmt, args)
   }
-  # Last Phase z16-iv (W-D): the effective base a crude interval was ACTUALLY computed on, stored in
+  # Phase 18z16-iv (W-D): the effective base a crude interval was ACTUALLY computed on, stored in
   # the `n_eff` field. reg_empirical() computes it (identically to tab()'s own cell base, to 9 s.f.),
   # feeds it to ci_wilson / ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio -- and then
   # threw it away, so ?fmt's "the effective sample size used for this cell's CI" was false on every
@@ -2160,15 +2160,15 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   # proportion / odds / risk ratio, `nv_ci` for a mean, a rate and their ratios) -- it cannot be read
   # off `shape$type` (a poisson IRR is type "row" and takes `nv_ci`).
   neff_of <- function(v) if (isTRUE(weighted)) as.double(v) else rep(NA_real_, n_rows)
-  # Last Phase z5: besides the columns, return the crude EFFECT vector -- the very value the effect
+  # Phase 18z5: besides the columns, return the crude EFFECT vector -- the very value the effect
   # column stores in its own estimate field, so it is already on the model column's scale (an OR beside
   # an OR, log(OR) beside a raw coefficient, a risk difference beside an AME). reg_build writes it into
   # the model columns' `obs` field, which backs `color = "adjustment"` and the `{obs}` display token.
   # Taken from the local the shape was built from -- never re-read out of the fmt column by name.
-  # Last Phase z8-B: the effect SHAPE ROW travels with it, giving the gap test both facts it needs --
+  # Phase 18z8-B: the effect SHAPE ROW travels with it, giving the gap test both facts it needs --
   # `link` (the crude estimator's link) and `ci_type` (proof that the crude and model columns are the
   # SAME estimand) -- and any future shape fact for free, with no new element to thread.
-  # Last Phase z9/z10: the fit-derived rows are spliced HERE -- the one place the effect shape is known,
+  # Phase 18z9/z10: the fit-derived rows are spliced HERE -- the one place the effect shape is known,
   # so no return arm changes and the base column (which on the binomial `ame` branch shares its field
   # list with the effect column) cannot be touched. See reg_fit_overlay().
   # `cat` = which outcome category's grid rows / fit estimates feed this call. The returned effect list
@@ -2238,7 +2238,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   prop <- g$emp_prop; diffv <- g$emp_diff; ratio <- g$emp_ratio
   meanv <- g$emp_mean; varv <- g$emp_var; nv <- g$emp_n
   rprop <- g$emp_ref_prop; rmean <- g$emp_ref_mean; rv <- g$emp_ref_var; rn <- g$emp_ref_n
-  # Last Phase s: the CI base is the effective n -- the exact flat closed form on the weights, or the
+  # Phase 18s: the CI base is the effective n -- the exact flat closed form on the weights, or the
   # design variance; unweighted it equals the raw count, so those intervals are byte-identical. The
   # displayed n/tot_n fields always keep the raw count `nv`.
   nv_ci <- g$emp_n_ci; rn_ci <- g$emp_ref_n_ci
@@ -2247,8 +2247,8 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   nv_dr <- g$emp_n_draw; rn_dr <- g$emp_ref_n_draw
 
   # binomial + "rr" (modified Poisson) share every BASE fact -- a crude risk and its Wald risk-difference
-  # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Last Phase z3).
-  # Last Phase z10: grouped_binomial shares the EFFECT facts (a Woolf OR on the summed 2x2 legs) but not
+  # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Phase 18z3).
+  # Phase 18z10: grouped_binomial shares the EFFECT facts (a Woolf OR on the summed 2x2 legs) but not
   # the base -- its base column is the mean SCORE, built below like the gaussian one.
   binary_like <- reg_fam_binary(crude_key) || identical(crude_key, "grouped_binomial")
   if (binary_like) {
@@ -2271,7 +2271,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
       return(emit(base, list(col = emp_col(sh, rd_fields, n_eff = neff_of(nv_dr)),
                              vec = diffv, shape = sh), cat1))
     }
-    # Last Phase z3: a marginal RATIO's crude twin is the crude RISK ratio with the Katz log-RR interval
+    # Phase 18z3: a marginal RATIO's crude twin is the crude RISK ratio with the Katz log-RR interval
     # -- on the binomial model path as well as the "rr" one, since the estimand is what must match, not
     # the fitted family. Always exponentiated: `exponentiate` is ignored for marginal effects. The Obs_RR
     # shape is defined once, in REG_EMPIRICAL$rr, and reused here rather than duplicated per family.
@@ -2287,7 +2287,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     # binomial / grouped -> the crude ODDS ratio (the 2x2 legs vs the reference level's) with the Woolf
     # log-OR interval. "rr" -> the crude RISK ratio (prop/rprop) with the Katz log-RR interval. WARNING:
     # `ratio` (emp_ratio) is an ODDS ratio -- feeding it to an Obs_RR column would print an OR under an
-    # RR header. Last Phase z10: the 2x2 legs come from the grid (emp_wpos / emp_wneg) instead of being
+    # RR header. Phase 18z10: the 2x2 legs come from the grid (emp_wpos / emp_wneg) instead of being
     # rebuilt as prop * n -- for a grouped binomial the base is Sum(w * trials), not the respondent
     # count, and only the legs know that.
     is_rr  <- identical(crude_key, "rr")
@@ -2359,7 +2359,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   list(cols = list(), effect = NULL, shape = NULL)
 }
 
-# === the model-vs-observed GAP standard error (Last Phase z8-B) =====================================
+# === the model-vs-observed GAP standard error (Phase 18z8-B) =====================================
 
 # reg_same_estimand() -- do the crude companion and the model column measure the SAME thing? Both
 # declare their scale as a `ci_type` (the shape row's, the column attribute's), so this is one fact
@@ -2378,7 +2378,7 @@ reg_same_estimand <- function(shape, col)
 # is a SUBSET of the second, so equal row counts PROVE row identity -- both come from
 # reg_complete_frame()'s drop_na, which preserves order.
 #
-# Last Phase z13 (D1): the TWIN of reg_same_estimand, and it gates the same two things. It used to be an
+# Phase 18z13 (D1): the TWIN of reg_same_estimand, and it gates the same two things. It used to be an
 # inline clause in reg_gap_se_columns only, so a model fitted on more rows than the observed block got no
 # TEST but kept its descriptive COLOUR -- the code knew the two numbers were not comparable and coloured
 # their difference anyway. Under the default `na = "drop_by_outcome"` it is true by construction; it
@@ -2404,7 +2404,7 @@ reg_same_frame <- function(mdata, f) {
 # rather than a partial column: a gap SE without an honest premise is worse than none, because MEASURES'
 # force_policy closure reads an all-NA `gap_se` as "no test here" and falls back to the descriptive
 # reading.
-# Last Phase z17 (ruling D2): the SIXTH clause -- `"adjustment" %in% sp$color` -- is GONE. It gated a
+# Phase 18z17 (ruling D2): the SIXTH clause -- `"adjustment" %in% sp$color` -- is GONE. It gated a
 # fact on who asked to COLOUR it rather than on whether it is valid, which held while the colour engine
 # was the only reader; forest_plot() is the second, and a user who built a table without
 # `color = "adjustment"` then asked for the gap band got no band and no explanation. So `gap_se` is now
@@ -2444,7 +2444,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   coef_if <- reg_coef_if_maker(f$fit)
   if (is.null(coef_if)) return(NULL)
   marginal <- effect %in% c("ame", "ame_ratio")
-  # Last Phase z10: a 3+ level outcome shows ONE COLUMN PER CATEGORY, so its marginal influence function
+  # Phase 18z10: a 3+ level outcome shows ONE COLUMN PER CATEGORY, so its marginal influence function
   # is per category too (reg_ame_if_cat_maker); the single-equation one reads family()$mu.eta, which
   # multinom / polr do not have.
   per_cat  <- inherits(f$fit, "multinom") || inherits(f$fit, "polr")
@@ -2454,7 +2454,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   else if (marginal)
     reg_ame_if_maker(f$fit, f$data, wt, ratio = identical(effect, "ame_ratio"), coef_if = coef_if)
   else coef_if
-  # Last Phase z10: `category` is the outcome category THIS column shows (a multinomial / ordinal-marginal
+  # Phase 18z10: `category` is the outcome category THIS column shows (a multinomial / ordinal-marginal
   # fit owns one per category; "" elsewhere). The crude leg must be built around the SAME indicator the
   # crude estimate was -- reg_crude_yw() is the one description of that, so the closed form takes the
   # category rather than re-deriving a positive level.
@@ -2490,7 +2490,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
     out[k] <- reg_if_se(im - ic, des)
   }
 
-  # Last Phase z9 -- the NUMERIC arm. Same two legs, different crude side: a numeric predictor has no
+  # Phase 18z9 -- the NUMERIC arm. Same two legs, different crude side: a numeric predictor has no
   # cells, so reg_crude_if_maker()'s indicator arithmetic cannot serve it and the crude influence
   # function comes from its own univariable FIT (`num[[v]]$fit`, kept only when a spec asked for
   # `color = "adjustment"`). Both legs are then the SAME machinery -- reg_coef_if_maker() on two fits
@@ -2511,7 +2511,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       if (!is.finite(kk) || kk == 0) next
       cif_v <- reg_coef_if_maker(nv$fit)
       if (is.null(cif_v)) next
-      # Last Phase z10: the fit arm now covers FACTOR predictors too (every predictor under an ordinal
+      # Phase 18z10: the fit arm now covers FACTOR predictors too (every predictor under an ordinal
       # outcome). A factor's contrast is (level, reference level), a numeric's a k-unit forward
       # difference -- the same two shapes reg_ame_if_maker()'s own contract states.
       is_fac_k <- v %in% fac_preds
@@ -2544,7 +2544,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   if (all(is.na(out))) NULL else out
 }
 
-# Last Phase z10: reg_empirical_tips() is DELETED. It was reg_empirical() at a three-part key --
+# Phase 18z10: reg_empirical_tips() is DELETED. It was reg_empirical() at a three-part key --
 # measured bit-identical on the shared quantity -- so the merged (var, level, category) grid is now the
 # single producer, read directly by reg_build's tooltip block.
 # === effect = "ame" + the `at` profile axis: marginal effects + adjusted predictions (Phase 12e) ==
@@ -2576,12 +2576,12 @@ reg_reference_grid_values <- function(data, predictors) {
 #   at = "reference" -> comparisons/predictions at the reference profile (a single datagrid row, so no
 #                       averaging / no weights). `comparison = "lnor"` (MNL "j vs rest" OR at the
 #                       profile) returns log-odds-ratios, exp()'d here into odds ratios.
-# Last Phase z3: `comparison = "lnratioavg"` is the RATIO twin of the default additive contrast -- the
+# Phase 18z3: `comparison = "lnratioavg"` is the RATIO twin of the default additive contrast -- the
 # log of the ratio of adjusted predicted probabilities (marginal standardization / g-computation), exp()'d
 # here into a risk ratio. It shares the whole multiplicative path with "lnor": same double-paren label
 # shape, same exp() of the estimate and BOTH bounds (so the interval stays a Wald interval on the log
 # scale, asymmetric and strictly positive once exponentiated).
-# Last Phase z15 (SS12.6 defect 2) -- the ONE place a marginal effect can be silently WRONG.
+# Phase 18z15 (SS12.6 defect 2) -- the ONE place a marginal effect can be silently WRONG.
 # `marginaleffects` re-evaluates a poly() / ns() / bs() basis on the perturbed data, and an orthogonal
 # basis absorbs a location shift exactly, so it returns AME = 0.000000 with no warning. Whether it
 # happens depends on whether `insight` can recover the data, i.e. it is a coin flip, not a property of
@@ -2626,7 +2626,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
   # which would make every `if (do_exp)` below error with "argument is of length zero".
   do_exp  <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
 
-  # Last Phase z9: `multiplier` reaches the MARGINAL path too. Before, a scaled numeric predictor kept a
+  # Phase 18z9: `multiplier` reaches the MARGINAL path too. Before, a scaled numeric predictor kept a
   # per-1-unit AME while its row label already read "(per 10)" -- a live mislabel, and one that a
   # non-unit default would make universal. `variables = list(v = k)` is a k-unit FORWARD DIFFERENCE, not
   # k x the 1-unit AME (measured: 0.020322 vs 0.020297 for a 10-year contrast) -- the honest quantity for
@@ -2753,7 +2753,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else if (shape == "prob_ratio") {
-    # Last Phase z3: the RATIO twin of "prob" -- a marginal RISK RATIO with the adjusted predicted
+    # Phase 18z3: the RATIO twin of "prob" -- a marginal RISK RATIO with the adjusted predicted
     # probability in parentheses. The composite is coherent BY CONSTRUCTION: marginal standardization
     # gives adjusted%(ref) * RR(level) == adjusted%(level) exactly, the multiplicative mirror of the
     # additive identity "prob" relies on. WARNING: the reference cell keeps the FULL "{or} ({pct})"
@@ -2866,7 +2866,7 @@ reg_null_loglik <- function(fit, family) {
 # where the SEs are now actually scaled by sqrt(phi) -- so it is emitted ONCE per fit (this helper is
 # also called by reg_glance for the footer, which must stay silent).
 #
-# WARNING (Last Phase z15): the denominator is n - rank, computed here, NEVER stats::df.residual(fit).
+# WARNING (Phase 18z15): the denominator is n - rank, computed here, NEVER stats::df.residual(fit).
 # For an svyglm df.residual() is the DESIGN degrees of freedom (PSUs - strata), so the footer row read
 # ~22 instead of ~1 on a weighted Poisson -- the reason the design doc believed phi could not be
 # computed honestly under a design. It can; it was reading the wrong denominator. The SE-scaling caller
@@ -2899,7 +2899,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     tibble::tibble(test = test, statistic = statistic, df1 = df1, df2 = df2, pvalue = pvalue)
   out <- row("n", statistic = as.numeric(nobs))
 
-  # Last Phase z3: a modified-Poisson ("rr") fit is a QUASI-likelihood on a deliberately misspecified
+  # Phase 18z3: a modified-Poisson ("rr") fit is a QUASI-likelihood on a deliberately misspecified
   # variance, so AIC / BIC / McFadden are not defined, and the Pearson dispersion of a 0/1 outcome is
   # just mean(1-mu) -- a constant of the fitted values, never a diagnostic. Report the honest pair:
   # n + the design-based Wald-vs-null. Placed FIRST so it holds weighted or not (the fit is an svyglm
@@ -2980,24 +2980,24 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
 # sigma; weighted -> n/wald_null/nagelkerke_r2/aic. A character vector overrides (keeping its order,
 # valid names only); FALSE / "none" suppresses the footer; NULL / "all" / TRUE = the default set.
 reg_footer_stats <- function(family, weighted, grouped, stats) {
-  # Last Phase z3: "rr" FIRST -- a quasi-likelihood has no AIC/BIC/McFadden, and binary-outcome Pearson
+  # Phase 18z3: "rr" FIRST -- a quasi-likelihood has no AIC/BIC/McFadden, and binary-outcome Pearson
   # dispersion is meaningless (see reg_glance). Matches the pair reg_glance actually emits.
   default <- if (family == "rr") c("n", "wald_null")
     else if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
     else if (family == "gaussian") c("n", "r2", "r2_adj", "f_model", "sigma")
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
-           # Last Phase z15: `phi` is the EXACT Pearson dispersion this row has always held; the key
+           # Phase 18z15: `phi` is the EXACT Pearson dispersion this row has always held; the key
            # `dispersion` now names the CHECK (max robust/model SE), which every family gets below.
            if (family == "poisson" || grouped) s <- c(s, "phi"); s }
-  # Last Phase z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
+  # Phase 18z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
   # at all?" is the question a multi-level factor block leaves unanswered, and it costs no extra fit.
-  # Last Phase z15: so are the five model CHECKS (ruling R7 -- always, no opt-in gate). They need no new
+  # Phase 18z15: so are the five model CHECKS (ruling R7 -- always, no opt-in gate). They need no new
   # argument: `stats` already IS the footer vocabulary, so each is individually removable and
   # `stats = FALSE` still hides everything. The applicable set is REG_CHECKS' own rule.
   default <- c(default, "global", reg_checks_for(family, weighted, grouped))
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
-  # "interaction" (Last Phase z8) is not produced by reg_glance -- it is read straight off `stats` by
+  # "interaction" (Phase 18z8) is not produced by reg_glance -- it is read straight off `stats` by
   # reg_build's split block -- but it belongs to this vocabulary so a user vector does not drop it.
   valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
              "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "phi",
@@ -3095,7 +3095,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     return(reg_gof)
   }
   use_f  <- family %in% c("gaussian", "quasipoisson")
-  # Last Phase z3: an "rr" fit is an svyglm (see reg_fit), so its comparison takes the DESIGN-BASED Wald
+  # Phase 18z3: an "rr" fit is an svyglm (see reg_fit), so its comparison takes the DESIGN-BASED Wald
   # branch below whether or not the user gave a design -- a likelihood-ratio test between two
   # quasi-likelihood fits would be a false LR.
   use_wald <- weighted || family == "rr"
@@ -3165,7 +3165,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 }
 
 
-# --- Last Phase z8: the aggregated effect-modification test (predictor x split_var) -----------------
+# --- Phase 18z8: the aggregated effect-modification test (predictor x split_var) -----------------
 # The per-cell `between_groups` colour says how big each group difference is, one cell at a time; this
 # says ONCE per predictor whether its effect differs between groups at all -- the textbook test, and
 # aggregated, so it carries no multiplicity inflation. ONE extra pooled fit `y ~ (predictors) * g`
@@ -3183,7 +3183,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # weight / "Model:" lines), and both row consumers, which filter on names(reg_footer_spec()), ignore
 # them -- the existing GOF footer is untouched. `col_var` is the fit's first column, so several models
 # each get their own line.
-# Last Phase z15: the predictor rides `term`, NOT `row_var`. It used to ride `row_var`, which on a
+# Phase 18z15: the predictor rides `term`, NOT `row_var`. It used to ride `row_var`, which on a
 # split table is overwritten wholesale with the group level (reg_build's split branch tags every row of
 # the group's test tibble) -- so the line printed the split level, repeated, instead of the predictors.
 # `row_var` now means one thing everywhere: the split-group level.
@@ -3238,7 +3238,7 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
   dplyr::bind_rows(reg_gof, dplyr::bind_rows(rows))
 }
 
-# THE per-predictor term test (Last Phase z13). Two callers ask different QUESTIONS of the same
+# THE per-predictor term test (Phase 18z13). Two callers ask different QUESTIONS of the same
 # computation, so it lives once: the aggregated interaction test (predictor x split_var, on a pooled
 # fit) and the per-predictor global test (the predictor's own term, on the model's own fit). They
 # differ only in which fit and which terms are dropped -- everything below (the Wald / F / LR ladder,
@@ -3287,7 +3287,7 @@ reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, n
   })
 }
 
-# Last Phase z13 (SS7.2): the per-predictor GLOBAL test -- "is this variable associated with the
+# Phase 18z13 (SS7.2): the per-predictor GLOBAL test -- "is this variable associated with the
 # outcome at all?", the one answer a block of 7 stars against a reference category cannot give, and
 # the item a gtsummary user reaches for first (`add_global_p`). tabxplor's audience is almost entirely
 # multi-level categorical predictors, so it is in the DEFAULT stats set.
@@ -3418,7 +3418,7 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level, multi
     est[i] <- sum(L * coef_v)
     se[i]  <- sqrt(as.numeric(t(L) %*% V %*% L))
   }
-  # Last Phase z9: the multiplier, applied with reg_fit()'s OWN two expressions in reg_fit()'s OWN order
+  # Phase 18z9: the multiplier, applied with reg_fit()'s OWN two expressions in reg_fit()'s OWN order
   # (scale, then phi, then the Wald finalize) -- so the reref stays byte-identical to a real refit by
   # construction, not merely to a rounding. Folding k into the contrast (L[t] <- k) would compute
   # sqrt(k^2 V) where reg_fit computes |k| sqrt(V): equal in exact arithmetic, not in IEEE754.
@@ -3452,7 +3452,7 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level, multi
 # empirical/model columns -> "{col_level}_{level}"); the base col_var (the shared outcome) is read off
 # the pivoted column and prefixed. Console tells the models apart by that name suffix (col_var is not
 # shown there); html / Excel get the two-line span + borders.
-# reg_gap_se_of() -- Last Phase z8: recover a column's per-cell standard error, on the estimate's own
+# reg_gap_se_of() -- Phase 18z8: recover a column's per-cell standard error, on the estimate's own
 # TEST scale, from the Wald interval it already stores. `reg_wald_finalize()` exponentiates before
 # storing, so a multiplicative interval must be logged back first -- the SE of an OR / RR / IRR lives on
 # the log scale, which is also the scale the gap and `gap_se` are measured on.
@@ -3476,7 +3476,7 @@ reg_gap_se_of <- function(col, crit) {
 }
 
 #' @keywords internal
-# Last Phase z5: fill each group's `obs` field with the REFERENCE GROUP's estimate for the same row, so
+# Phase 18z5: fill each group's `obs` field with the REFERENCE GROUP's estimate for the same row, so
 # `color = "between_groups"` reads the per-row effect-modification contrast. `parts` is the list of
 # per-group tibbles built by reg_build()'s split recursion, all sharing ONE skeleton (skeleton_data =
 # the full data), hence the same rows in the same order.
@@ -3487,7 +3487,7 @@ reg_gap_se_of <- function(col, crit) {
 # silently pairing the wrong rows. The reference group's own cells get NA: a group is not compared to
 # itself. Non-fmt columns and groups with no counterpart are left untouched.
 #
-# Last Phase z8: the same pass writes `gap_se`, so `color_signif` applies. The two groups are DISJOINT
+# Phase 18z8: the same pass writes `gap_se`, so `color_signif` applies. The two groups are DISJOINT
 # samples, so the gap's variance is the plain sum -- sqrt(SE_i^2 + SE_ref^2), the standard test for a
 # difference between two independent estimates (Altman & Bland 2003). Both SEs come from the intervals
 # the table already prints, which is what makes the test and the printed intervals impossible to
@@ -3509,7 +3509,7 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
     m <- if (i == 1L) rep(NA_integer_, nrow(d)) else match(key_of(d), ref_k)
     for (nm in intersect(fmt_nm, names(d))) {
       if (!is_fmt(d[[nm]])) next
-      # Last Phase z13 (D11): only where a gap measure can READ them. This wrote `obs`/`gap_se` on every
+      # Phase 18z13 (D11): only where a gap measure can READ them. This wrote `obs`/`gap_se` on every
       # fmt column, including the `Obs_*` companions, which colour on their own `diff`/`or` measure and
       # never consult either -- a stored value with no consumer (and an "obs:" tooltip line on a column
       # whose whole point is that it IS the observed effect).
@@ -3538,18 +3538,18 @@ reg_spread_models <- function(t, split_var, sl) {
     if (!length(matches)) next
     g <- matches[which.max(nchar(matches))]            # longest match disambiguates nested levels
     s[[nm]] <- set_col_var(s[[nm]], paste0(g, "<br>", get_col_var(s[[nm]])))
-    # Last Phase z13: the `n` column comes FIRST, so "first spread fmt column" would key every group's
+    # Phase 18z13: the `n` column comes FIRST, so "first spread fmt column" would key every group's
     # GOF block under its counts. It is a row descriptor, never a model column -- its stored role says
     # so (SS7.1), which is exactly why the role is stored.
     if (identical(get_role(s[[nm]]), "n")) next
     if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
   }
-  # Last Phase m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
+  # Phase 18m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
   # column via `row_var = level`); tab_spread pivots only the data, so the footer materialisers saw
   # is_split = TRUE (tripled) and matched cells by a col_var that no longer exists (empty). Re-key each
   # group's GOF rows onto that group's spread column NAME and clear `row_var` -> ONE block, each cell
   # placed under its subpopulation's column (like the single-column non-split footer).
-  # Last Phase z8: re-key ONLY the per-group GOF block. The interaction rows (row_var = a PREDICTOR,
+  # Phase 18z8: re-key ONLY the per-group GOF block. The interaction rows (row_var = a PREDICTOR,
   # not a split level) are a pooled, table-wide test read by reg_interaction_line() -- keying them to a
   # group's column would be wrong, and the `col_of_group[row_var]` lookup would silently drop them.
   if (!is.null(test) && nrow(test) > 0 && !is.null(test$row_var) && any(nzchar(test$row_var))) {
@@ -3571,7 +3571,7 @@ reg_spread_models <- function(t, split_var, sl) {
 # skeleton is read from its fitted terms (reg_skeleton_from_fit). Fit-all first so the skeleton can
 # come from the fit before the columns are aligned. A multinomial fit contributes SEVERAL columns
 # (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
-# Last Phase z16-i: the inference basis of a regression table. Ruling 1 -- a weighted tab_reg() is
+# Phase 18z16-i: the inference basis of a regression table. Ruling 1 -- a weighted tab_reg() is
 # ALWAYS on the weighted basis (its models fit through svyglm, i.e. the Binder linearization, and
 # since z16-ii its crude Obs_* companions use the same closed form), so the tab()-scoped
 # tabxplor.design_effect option is never read. Feeds the footer sentence, nothing else.
@@ -3586,7 +3586,7 @@ reg_inference <- function(shared, degraded = FALSE) {
 # 14v-ii / 17h: the numeric/ratio methods are read STRAIGHT from the REG_EMPIRICAL fact table (Student
 # mean-diff = OLS, quasi-Poisson rate-ratio = the phi-scaled model), so the legend names exactly what
 # the crude CI used.
-# Last Phase z16-iiiii: extracted because reg_build() wrote it TWICE and the two copies had drifted --
+# Phase 18z16-iiiii: extracted because reg_build() wrote it TWICE and the two copies had drifted --
 # the split_var branch listed only conf_level / the cell + diff methods, so a split gaussian or
 # poisson table's legend lost the name of the very interval its Obs_* columns print.
 #' @keywords internal
@@ -3609,7 +3609,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # estimate_display, spread_models, var_labels. (`split_var` stays a formal -- it flips to NULL in the
   # recursion, and a NULL value cannot live in a modifyList()-mergeable list.)
   list2env(shared, environment())
-  # Last Phase z15: the quadratic `shape` terms, named by variable. Read explicitly (not only through
+  # Phase 18z15: the quadratic `shape` terms, named by variable. Read explicitly (not only through
   # list2env) so a direct reg_build caller that predates the key gets NULL rather than an error --
   # `shape_terms` is consumed by three call sites below and NULL means "every predictor is a line".
   shape_terms  <- shared$shape_terms
@@ -3631,7 +3631,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     parts <- purrr::map(sl, function(g) {
       gmask <- !is.na(data[[split_var]]) & data[[split_var]] == g
       sub   <- data[gmask, , drop = FALSE]
-      # Last Phase z14-iii: the design is NOT subset here, and `shared` rides through untouched. `sub`
+      # Phase 18z14-iii: the design is NOT subset here, and `shared` rides through untouched. `sub`
       # keeps its `.svy_row`, and reg_resolve_design() subsets the ORIGINAL design by those positions
       # -- ONE subset into ONE row space, R/survey-design.R's own discipline. Two measured defects go
       # with the two deleted lines:
@@ -3650,7 +3650,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                      "{split_var}" := factor(g, levels = sl), .before = 1L),
            test = tst)
     })
-    # Last Phase z5: `color = "between_groups"` scores each group's estimate against the REFERENCE
+    # Phase 18z5: `color = "between_groups"` scores each group's estimate against the REFERENCE
     # GROUP's on the same row. THIS is the only point where the groups exist as parallel, separately
     # addressable tibbles: one line later vec_rbind() stacks them into rows, and after
     # reg_spread_models() each is a column whose group could only be recovered from a name suffix.
@@ -3659,14 +3659,14 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     # It cannot be done with the existing reference machinery: fmt_broadcast_last() groups by runs of
     # in_refrow, which cross the split boundary (measured: north's rows get south's intercept).
     # the measure lives on the SPECS (Phase 17h: specs are the truth), not on a scalar formal.
-    # Last Phase z8: the same pass writes `gap_se` (the groups are disjoint -> quadrature is exact),
+    # Phase 18z8: the same pass writes `gap_se` (the groups are disjoint -> quadrature is exact),
     # which is what lets `color_signif` apply to the gap.
     color_ms <- unique(unlist(purrr::map(specs, "color")))
     parts <- reg_write_group_gap(parts, color_ms, conf_level = conf_level, method = method)
     combined <- vctrs::vec_rbind(!!!purrr::map(parts, "data"))
     tests    <- purrr::list_rbind(purrr::compact(purrr::map(parts, "test")))
     if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
-    # Last Phase z8: the AGGREGATED companion of the per-cell gap colour -- one pooled interaction test
+    # Phase 18z8: the AGGREGATED companion of the per-cell gap colour -- one pooled interaction test
     # per predictor. Opt-in via stats = c(..., "interaction"), and automatic under
     # `color = "between_groups"` (the same "state an intent, the pipeline computes what it needs" rule
     # that makes `color = "adjustment"` turn on `empirical`). Costs one extra fit per spec, which is why
@@ -3678,13 +3678,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
     }
     grouped <- combined |>
-      # Last Phase z13 (D3): the per-column confidence level. z16-iiiii: the LEVEL only -- each group
+      # Phase 18z13 (D3): the per-column confidence level. z16-iiiii: the LEVEL only -- each group
       # was built by the recursion above, which stamped its OWN design df and basis on its own
       # columns, and vec_rbind()'s fmt reconcile already took the weakest of them. Re-stamping one
       # table-wide basis here would overwrite a group whose design variance succeeded with the verdict
       # of a group that had to fall back.
       tab_stamp_inference(conf_level) |>
-      # Last Phase z16-iiiii (defect 2): the ci_settings literal that stood here was a THREE-key
+      # Phase 18z16-iiiii (defect 2): the ci_settings literal that stood here was a THREE-key
       # reduction of the non-split branch's six, so a split table's legend could not name its own
       # interval method -- reg_ci_settings() is now the one source.
       # NOT carried from the groups, deliberately: `empirical_tips` and `assumptions` are per-GROUP
@@ -3767,7 +3767,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # multi-dependent table shares one outcome col_var per model column + its empirical companions.
   n_dep         <- length(unique(purrr::map_chr(specs, "dependent")))
   is_comparison <- length(specs) > 1L && n_dep == 1L
-  # Last Phase z9: ONE predictor-kind split for the whole builder (reg_is_factor_var) -- the AME
+  # Phase 18z9: ONE predictor-kind split for the whole builder (reg_is_factor_var) -- the AME
   # column's numeric cells, the crude companions and the crude tips all read the same two vectors.
   numeric_preds <- reg_numeric_preds(skeleton_data, union_predictors)
   factor_preds  <- reg_factor_preds(skeleton_data, union_predictors)
@@ -3784,7 +3784,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       sp_col       <- sp$color
       prob_scale   <- reg_fam_prob(sp_fam)
       per_category <- sp_fam %in% c("multinomial", "ordinal")
-      # Last Phase z3: effect = "ame_ratio" swaps the ADDITIVE contrast for the log-ratio one, i.e. the
+      # Phase 18z3: effect = "ame_ratio" swaps the ADDITIVE contrast for the log-ratio one, i.e. the
       # ratio of adjusted predicted probabilities (a marginal risk ratio). Guarded to prob-scale families
       # at the tab_reg() boundary, so `shape` can only become "prob_ratio" where a probability exists.
       ratio_ame    <- effect == "ame_ratio"
@@ -3900,7 +3900,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   reg_gof <- reg_compare_rows(reg_gof, fits, specs, family, weighted = weighted,
                               fit_first_col = fit_first_col, compare = compare, baseline = baseline,
                               conf_level = conf_level)
-  # Last Phase z13 (SS7.2): the per-predictor global test, from the fits already in hand. In the
+  # Phase 18z13 (SS7.2): the per-predictor global test, from the fits already in hand. In the
   # default stats set (reg_footer_stats), so a table of multi-level factor predictors answers "is this
   # variable associated at all?" without being asked. Rows, then a footer LINE (reg_global_lines).
   # In the DEFAULT set, so NULL / "all" / TRUE ask for it; FALSE / "none" and an explicit vector that
@@ -3911,7 +3911,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     reg_gof <- reg_global_rows(reg_gof, fits, specs,
                                list(weighted = weighted, design_spec = design_spec),
                                fit_first_col)
-  # Last Phase z15: the five model checks. A sibling of reg_compare_rows / reg_global_rows and placed
+  # Phase 18z15: the five model checks. A sibling of reg_compare_rows / reg_global_rows and placed
   # with them because it needs `data` (the Linearity refit) and `specs`, which reg_gof_tibble() has
   # neither of. Its own per-fit gate is reg_footer_stats(), so `stats` governs it like every other
   # footer row and no second sentinel logic exists.
@@ -3922,7 +3922,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                             stats, fit_first_col, grouped_by_fit)
 
   disp_levels <- reg_cleanup(skeleton$level, cleannames)
-  # Last Phase z15: a `shape = "log"` / `"sqrt"` predictor was RECODED, so its row must say which
+  # Phase 18z15: a `shape = "log"` / `"sqrt"` predictor was RECODED, so its row must say which
   # column was fitted ("log(age)"). The variable NAME is unchanged everywhere else (select(), the
   # references, the crude twin), exactly as the multiplier relabel below leaves it -- only the display
   # level moves. A quantile-cut predictor needs nothing: its levels ARE the groups.
@@ -3934,11 +3934,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   }
   # multiplier (Phase 12g / 15d): relabel the display level of each scaled numeric predictor so the row
   # reads "<var> (per <unit>)" -- KEEP the predictor name (dropping it left a bare "per 2" the user could
-  # not read). Last Phase z9: the unit text comes from `multiplier_label` ("1 SD (13.5)" / "10 units"),
+  # not read). Phase 18z9: the unit text comes from `multiplier_label` ("1 SD (13.5)" / "10 units"),
   # resolved with the number itself so the two can never disagree, and the row is found through the
   # STORED predictor kind rather than the `level == var` convention (which `cleannames` and this very
   # relabel already break -- Phase 17 rule 2).
-  # Last Phase z15: keyed on the LINEAR term (`term == var`), so a curved predictor's `age²` row does
+  # Phase 18z15: keyed on the LINEAR term (`term == var`), so a curved predictor's `age²` row does
   # not claim a per-SD unit it does not carry -- reg_fit()'s multiplier matches `td$term == v` and
   # leaves the squared term alone (it is already per 1 SD², by construction of reg_shape_term()).
   if (length(multiplier_label)) {
@@ -3952,7 +3952,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     }
   }
 
-  # Last Phase z15 -- the OBSERVED shape of each continuous predictor, and its miniature in the row's
+  # Phase 18z15 -- the OBSERVED shape of each continuous predictor, and its miniature in the row's
   # own label. It is the `Obs_*` half of the Linearity check (SS7.1): the sparkline is what the data
   # does, the footer p is whether the model's straight line was good enough. So it is fit-free, and
   # deliberately drawn on `skeleton_data`, not `data` -- under `split_var` the groups share one
@@ -3977,7 +3977,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
-  # Last Phase z13 (SS7.1): the N behind each predictor level, right after the labels -- where STROBE
+  # Phase 18z13 (SS7.1): the N behind each predictor level, right after the labels -- where STROBE
   # reads it and where the comparable packages put it. It is a BUILT column, not a `render_extras`
   # display intent like tab()'s own `add_n`: the count needs the model's complete-case frame, which
   # exists only here, and tab_add_n_pct() folds into a Total cell that a reg table does not have.
@@ -4019,7 +4019,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # comparing; in comparison mode it is the shared population. Recomputed from `data` (fits[[i]]$data is
   # NULL on the reref/digest path). On this listwise-complete frame reg_empirical()'s per-predictor NA
   # filter is a no-op, so the crude reference level / n exactly match the model.
-  # Last Phase z13 (D1): `na_shared_vars` is the same extra-completeness set reg_fit() receives above,
+  # Phase 18z13 (D1): `na_shared_vars` is the same extra-completeness set reg_fit() receives above,
   # so under the default this frame IS the model's own frame -- crude and adjusted on the same rows by
   # construction, not by coincidence. Under `na = "drop_by_model"` it is empty and the crude block keeps
   # its union population, which is why `obs` is then gated (reg_same_frame).
@@ -4028,13 +4028,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                reg_design_vars(design_spec)))
   if (isTRUE(empirical)) {
     fac_preds_e <- factor_preds
-    # Last Phase z9: numeric predictors get a crude column too, from the univariable fit. Excluded in
+    # Phase 18z9: numeric predictors get a crude column too, from the univariable fit. Excluded in
     # compound-formula mode: there `var` is a bare RHS name whose model term may be an interaction or a
     # basis expansion (`age*race`, `poly(age, 2)`), so a univariable slope is not that row's estimand.
     num_preds_e <- if (any(purrr::map_lgl(specs, ~ isTRUE(.$compound)))) character(0) else numeric_preds
     if (length(fac_preds_e) > 0L || length(num_preds_e) > 0L) {
       for (i in seq_along(specs)) {
-        # Last Phase z10: ONE stored fact decides eligibility -- reg_crude_key(), computed once at spec
+        # Phase 18z10: ONE stored fact decides eligibility -- reg_crude_key(), computed once at spec
         # construction. It replaced a duplicated family whitelist here, a `quasipoisson -> poisson` alias
         # in reg_empirical_columns(), a lookup-miss return, and (worst) `positive_level`-is-NULL as a
         # proxy for "grouped binomial or compound formula" -- which was a SIDE EFFECT of reg_fit()
@@ -4091,7 +4091,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
           scv    <- reg_shared_col_var(fam_i, dep_i, pos_i, cleannames)
           cols_i$cols <- purrr::map(cols_i$cols, ~ set_col_var(.x, scv))
         }
-        # Last Phase z8-B: the crude block also carries what the GAP TEST needs -- the frame it was
+        # Phase 18z8-B: the crude block also carries what the GAP TEST needs -- the frame it was
         # computed on and the factor predictors it covers. Both are locals here and nowhere else, and
         # the test is per (model column, crude block): in comparison mode ONE observed block serves
         # several models, each with its own fit, so the covariance differs per model though `obs` does
@@ -4099,7 +4099,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         cols_i$frame     <- mdata_i
         cols_i$fac_preds <- fac_preds_e
         cols_i$crude_key <- key_i
-        # Last Phase z9/z10: the fit-derived crude legs travel too. A row with no closed form has no
+        # Phase 18z9/z10: the fit-derived crude legs travel too. A row with no closed form has no
         # closed-form crude influence function either (reg_crude_if_maker() is cell-indicator
         # arithmetic), so it comes from this fit -- the second IF path SS13 forecast. They are
         # build-time locals and never reach the jamovi .fit_cache, whose persisted raw fits were
@@ -4111,14 +4111,14 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       }
     }
   }
-  # Last Phase z5: the crude EFFECT vector, per fit, on the model column's own scale -- written into
+  # Phase 18z5: the crude EFFECT vector, per fit, on the model column's own scale -- written into
   # each model column's `obs` field below. It is what `color = "adjustment"` scores and what the
   # `{obs}` display token / the html tooltip print. NULL for a fit with no crude companion
   # (multinomial, ordinal, grouped-binomial) -> `obs` stays NA -> those cells stay uncoloured.
-  # Last Phase z8-B: the whole crude RECORD travels (effect + shape + frame), because its gap SE needs
+  # Phase 18z8-B: the whole crude RECORD travels (effect + shape + frame), because its gap SE needs
   # the last two; `obs` and `gap_se` are then written together or not at all.
   emp_of <- function(fi) if (is.na(fi) || is.null(emp_by_fit[[fi]])) NULL else emp_by_fit[[fi]]
-  # Last Phase z8 (a z5 defect): `at = "reference"` makes the model cell a marginal effect AT THE
+  # Phase 18z8 (a z5 defect): `at = "reference"` makes the model cell a marginal effect AT THE
   # REFERENCE PROFILE, while the crude companion stays a MARGINAL effect over the whole sample -- two
   # different estimands, so their difference is not "what adjustment did". The stratum-restricted crude
   # effect would match the estimand but answers a different question (model FIT at one profile, not
@@ -4126,7 +4126,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # uncoloured, `{obs}` blanks, and tab_reg() says why once.
   at_profile <- identical(at, "reference")
   # `fi` = the fit this COLUMN came from (not the crude block's -- they differ in comparison mode).
-  # Last Phase z10: `key` = the column's OWN outcome category, stored on it at build time as `emp_key`
+  # Phase 18z10: `key` = the column's OWN outcome category, stored on it at build time as `emp_key`
   # (reg_columns_multinom / the per-category AME loop already stamp it). A multinomial or ordinal-marginal
   # fit owns one column per category and each needs its OWN crude counterpart, so the crude record's
   # `effect` is a list keyed the same way; "" is the key of a single-column fit. A missing key means no
@@ -4135,7 +4135,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     col <- bi$col
     if (is.null(e) || at_profile) return(col)
     if (!reg_same_estimand(e$shape, col)) return(col)     # z5 defect: same scale, or nothing
-    # Last Phase z13 (D1): ...and the same PEOPLE, or nothing. A model fitted on rows the crude block
+    # Phase 18z13 (D1): ...and the same PEOPLE, or nothing. A model fitted on rows the crude block
     # does not cover has a "gap" that is listwise deletion, not adjustment -- the same predicate that
     # withholds its test therefore withholds the value the colour would score.
     if (!reg_same_frame(e$frame, fits[[fi]])) return(col)
@@ -4143,7 +4143,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     ev  <- cat_get(e$effect, key)
     if (is.null(ev)) return(col)
     col <- set_obs(col, ev)
-    # Last Phase z10 (maintainer's ruling Q4): when the crude effect draws NO column of its own, fold it
+    # Phase 18z10 (maintainer's ruling Q4): when the crude effect draws NO column of its own, fold it
     # into the model cell -- "{or} ({obs})" / "{diff} ({obs})" -- so it is visible at all. Driven by the
     # shape's `visible` fact, never by `family == "multinomial"`. Three reasons this is the right shape:
     # `obs` is defined ON THE CELL'S OWN SCALE, so the bracket is the same kind of quantity as the
@@ -4214,7 +4214,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         cols_idx <- cols_idx[!purrr::map_lgl(built[cols_idx], ~ is.null(.$emp_key))]
         if (length(cols_idx) == 0L) return(list())
         # Change B: multinomial crude tooltips on the model's complete-case frame (shared with the model).
-        # Last Phase z10: read straight off the MERGED crude grid -- reg_empirical_tips() is gone, it was
+        # Phase 18z10: read straight off the MERGED crude grid -- reg_empirical_tips() is gone, it was
         # reg_empirical() at a three-part key (measured bit-identical), and keeping two producers of one
         # quantity is exactly the sync-by-comment pair Phase 17 rule 5 forbids. Reuse the block already
         # built for this fit when there is one; otherwise build the grid here.
@@ -4247,7 +4247,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       if (length(tip_rows)) empirical_tips <- purrr::list_rbind(tip_rows)
     }
   }
-  # Last Phase z9: a numeric predictor's DESCRIPTIVE goes in the tooltip, because nothing can honestly
+  # Phase 18z9: a numeric predictor's DESCRIPTIVE goes in the tooltip, because nothing can honestly
   # go in its base cell -- measured (SS4.1), the univariable fit's only base-scale output is
   # P(Y | X = mean X), which is the MARGINAL rate for every numeric predictor (0.4738 for both `age` and
   # `tvhours` against an overall 0.4744), i.e. a cell that looks per-predictor and is not. What IS well
@@ -4293,7 +4293,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   reg_inf <- reg_inference(shared, emp_degraded)
   tab |>
-    # Last Phase z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
+    # Phase 18z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
     # df it is referred to and the basis it was computed on, all on each fmt column -- the colour
     # engine is per column and cannot read meta$ci_settings. It is what makes the gap interval
     # (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`; and it is where the
@@ -4302,7 +4302,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     tab_stamp_inference(conf_level, reg_inf$degf, reg_inf$basis) |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
-                        # Last Phase z15: the observed curves the sparklines were drawn from, and the
+                        # Phase 18z15: the observed curves the sparklines were drawn from, and the
                         # only thing reg_check_plots() needs that a refit cannot give back.
                         assumptions = assumptions,
                         # Phase k: variable labels for the opt-in name display-swap (absent when none).
@@ -4935,7 +4935,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   at      <- match.arg(at)
   compare <- match.arg(compare)
   estimate_display <- match.arg(estimate_display)
-  # Last Phase z13: the un-supplied default is the whole vector, so its length IS "the user did not
+  # Phase 18z13: the un-supplied default is the whole vector, so its length IS "the user did not
   # choose" -- read before match.arg collapses it. The `na` advice messages fire on a CHOICE, never on
   # the default (which is the very thing they would advise).
   na_explicit <- length(na) == 1L
@@ -4976,7 +4976,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     return(new_tabxplor_tabs(tabs))
   }
 
-  # Phase 12g / Last Phase z14-i: `data` may be a PREBUILT survey design, gtsummary-style. THE shared
+  # Phase 12g / Phase 18z14-i: `data` may be a PREBUILT survey design, gtsummary-style. THE shared
   # boundary (R/survey-design.R) extracts its model frame for family-detect / reference / skeleton and
   # materialises the design's own weights as a column; the design itself still drives every fit.
   # WARNING: `wt` MUST become that column, not NULL. It used to be nulled here, and since ~11 sites
@@ -4988,7 +4988,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   svy <- svy_unwrap_data(data, "tab_reg")
   design_obj <- svy$spec$design
   if (!is.null(svy)) {
-    # Last Phase z16-i (W10): one rule across the package -- `wt` beside a design ABORTS (it used to
+    # Phase 18z16-i (W10): one rule across the package -- `wt` beside a design ABORTS (it used to
     # be silently ignored here with a note nothing downstream could see).
     svy_abort_wt_design(!is.null(wt), "tab_reg")
     data <- svy$data
@@ -5048,7 +5048,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   data           <- tab_apply_val_labels(data, reg_lbl_vars)
   if (!is.null(design_obj)) design_obj$variables <- data
 
-  # Last Phase z15 -- `shape`: fit a continuous predictor as something other than a line. THE boundary,
+  # Phase 18z15 -- `shape`: fit a continuous predictor as something other than a line. THE boundary,
   # and there is only one: a shape either RECODES the column here (log / sqrt / quantile groups) or
   # emits ONE extra model term (quadratic). Placed before family detection, the reference relevel, the
   # frozen multiplier SD and the skeleton, so every one of them sees the predictor AS FITTED -- a
@@ -5085,7 +5085,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
       cli::cli_abort(c("{.arg family} for {.val {d}} must be one of {.or {.val {valid_families}}}.",
                        "x" = "Got {.val {f}}."))
     }
-    # DESIGN (Last Phase z3): THE resolution site for the modified-Poisson path. An explicit
+    # DESIGN (Phase 18z3): THE resolution site for the modified-Poisson path. An explicit
     # poisson/quasipoisson on a BINARY outcome is not a count model -- it is Zou (2004)'s modified
     # Poisson, whose exp(coef) is a RISK RATIO, not an incidence-rate ratio. Resolving it to the
     # internal family key "rr" here (before `specs` are built) means the split_var recursion, the
@@ -5128,7 +5128,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     ))
   }
 
-  # Last Phase z3: a marginal RATIO needs a probability to take a ratio OF -- so it is defined only for
+  # Phase 18z3: a marginal RATIO needs a probability to take a ratio OF -- so it is defined only for
   # probability-scale outcomes. A ratio of adjusted MEANS (gaussian) or of predicted COUNTS (poisson) is
   # unstable near zero and the "{or} ({pct})" cell would have no percentage to show. Abort naming the
   # offending outcome(s) rather than silently degrading.
@@ -5205,7 +5205,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   trials_for <- function(d) NULL
   if (isFALSE(trials)) trials <- NULL            # the natural off switch, symmetric with TRUE
   if (!is.null(trials)) {
-    # Last Phase z16-iv (S6): validate HERE. A column name -- the shape a reader naturally reaches for,
+    # Phase 18z16-iv (S6): validate HERE. A column name -- the shape a reader naturally reaches for,
     # since a respondent may have answered a different number of items -- used to reach
     # as.numeric("q_count") -> NA -> `cbind(score, NA - score)`, and died deep inside glm() with
     # "contrasts can be applied only to factors with 2 or more levels", naming neither the argument
@@ -5260,18 +5260,18 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   else if (isFALSE(color))             color <- "no"
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null()/is.na().
   # effect="ame" always colours the marginal effect as a difference (neutral 0), never as a ratio.
-  # `color[1]`: since Last Phase z5 the measure may be a length-2 (text, background) vector, e.g. the
+  # `color[1]`: since Phase 18z5 the measure may be a length-2 (text, background) vector, e.g. the
   # headline `color = c("OR", "adjustment")`. Only the text channel carries the auto sentinel.
   color_auto <- is.na(color[1])                                 # Phase 15e: remember the auto sentinel
 
-  # Last Phase z5: VALIDATE the measure(s) through the storage boundary itself rather than repeating
+  # Phase 18z5: VALIDATE the measure(s) through the storage boundary itself rather than repeating
   # its rules here -- fmt() casts `color` without validating, so tab_reg would otherwise accept an
   # unknown measure, a whole-cell measure on the background, or the two mutually exclusive `obs`
   # measures together, and only fail (or silently mis-colour) much later. The result is discarded: the
   # canonical form is applied per column by fmt()/set_color as before.
   if (!color_auto) invisible(resolve_color_channels(color))
 
-  # Last Phase z5: `adjustment` scores the model effect against its OBSERVED counterpart, which lives in
+  # Phase 18z5: `adjustment` scores the model effect against its OBSERVED counterpart, which lives in
   # the `obs` field only when the crude companion was computed -- so asking for the colour asks for
   # `empirical`. Same shape as color = "contrib" forcing chi2 + totrow in the resolve cascade
   # (R/tab-resolve.R): the user states an intent, the pipeline computes what it needs.
@@ -5280,12 +5280,12 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
-  # Last Phase z8: `between_groups` now HAS a test of its own (the two split groups are disjoint, so the
+  # Phase 18z8: `between_groups` now HAS a test of its own (the two split groups are disjoint, so the
   # gap SE is exact by quadrature -- reg_write_group_gap), and reads `color_signif` normally.
   # `adjustment` compares two estimates fitted on the SAME rows, whose joint variance needs influence
   # functions (dev/model_vs_observed_gap_test.md SS3): still neutralised by MEASURES$force_policy, and
   # said once rather than letting a `color_signif` look effective.
-  # Last Phase z8: `between_groups` also gets the AGGREGATED companion of its per-cell colours -- one
+  # Phase 18z8: `between_groups` also gets the AGGREGATED companion of its per-cell colours -- one
   # pooled interaction test per predictor, in the footer. Automatic here for discoverability (and
   # because the two readings belong together); `stats = c(..., "interaction")` asks for it without the
   # colours. It costs one extra model fit per model, so say so.
@@ -5295,7 +5295,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                                    "interaction test to the footer (one extra model fit). Ask for it ",
                                    "without the colours with {.code stats = c(..., \"interaction\")}.")))
   }
-  # Last Phase z13 (D6): every "the colour you asked for cannot be computed / cannot be tested here"
+  # Phase 18z13 (D6): every "the colour you asked for cannot be computed / cannot be tested here"
   # comes from ONE producer, so the rule is uniform -- before it, four cases said so in four blocks here
   # and two said nothing at all. `crude_keys` is the stored per-outcome fact z10 introduced.
   for (note in reg_color_notes(
@@ -5308,7 +5308,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     # would glue it a second time, and one of these notes legitimately prints a literal "{obs}".
     cli::cli_inform(c("i" = "{note}"))
   }
-  # Last Phase z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
+  # Phase 18z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
   # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`
   # alone would colour an ame_ratio column on the 0-centred difference scale under exponentiate = FALSE.
   color_auto_measure <- function(shape) if (effect == "ame") "diff"
@@ -5323,7 +5323,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
 
-  # Last Phase z13 (D1): WHICH ROWS every model of the call is fitted on -- resolved ONCE here into the
+  # Phase 18z13 (D1): WHICH ROWS every model of the call is fitted on -- resolved ONCE here into the
   # extra variables each fit must be complete on, and consumed by reg_build through reg_fit(drop_extra=).
   # That mechanism (Phase z9) exists for exactly this: variables joining the complete-case drop without
   # joining the formula, and it is the ONLY sound route -- pre-filtering `data` instead breaks a PREBUILT
@@ -5350,14 +5350,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # On that path the body does NOT relevel; reg_build fits the canonical digest + reparametrizes to
   # `reference`. Everything the reparametrization can't handle (ame / profile / mnl-vs-rest / compound /
   # multinomial / ordinal / split / trials / model comparison) keeps the refit path.
-  # Last Phase z9: `multiplier` LEFT that list. The digest is fitted natively (reg_build_digest passes
+  # Phase 18z9: `multiplier` LEFT that list. The digest is fitted natively (reg_build_digest passes
   # multiplier = NULL), so it is multiplier-independent just as it is reference-independent, and
   # reg_reref_fit_res() applies the scaling itself -- a scaling change is now a cache HIT. Keeping the
   # clause would silently kill the fast path for every table with a numeric predictor once "sd" becomes
   # the default, which is the regression Phase 15b exists to prevent.
   # Phase 15e: an all-glm mixed table keeps the digest fast-path (each spec caches its own family's
   # digest); any multinomial/ordinal outcome degrades the whole table to the cached raw-fit path.
-  # Last Phase z8-B: `color = "adjustment"`'s gap test needs the FITTED object (influence functions),
+  # Phase 18z8-B: `color = "adjustment"`'s gap test needs the FITTED object (influence functions),
   # which the digest deliberately discards -- so asking for it takes the refit path rather than getting
   # a silently untested colour. One clause, not a rebuild-from-coef arm: jamovi's reg `color` is a
   # checkbox (jamovi/jmvtabreg.a.yaml), so no live-UI call can reach here with the measure today, and
@@ -5368,7 +5368,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     all(families_vec %in% c("gaussian", "binomial", "poisson", "quasipoisson", "rr")) &&
     !formula_mode && is.null(split_var) && is.null(trials) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
-    # Last Phase z15: a `shape` is a DIFFERENT MODEL, not a reparametrization of the canonical one, so
+    # Phase 18z15: a `shape` is a DIFFERENT MODEL, not a reparametrization of the canonical one, so
     # the digest cannot serve it (unlike `reference` / `multiplier`, which are exact transforms of it).
     # `shape` is not reachable from the jamovi UI, so this closes the path rather than narrowing it.
     length(reg_shapes) == 0L
@@ -5378,7 +5378,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
     # keep its order -> never releveled; predictor contrasts are releveled for every family. Phase 15e:
     # relevel every predictor + the MULTINOMIAL outcomes (per-dependent family).
-    # Last Phase z13 (D7): and the SPLIT variable. `color = "between_groups"` compares every effect to
+    # Phase 18z13 (D7): and the SPLIT variable. `color = "between_groups"` compares every effect to
     # the FIRST split level's, so which level that is is a reference choice like any other -- but
     # `reference = c(race = "Black")` was silently dropped for it (split_var is not a predictor), and
     # the only way to move the baseline was to relevel the data upstream. One name in this union.
@@ -5450,7 +5450,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     if (!is.factor(data[[split_var]]) && !is.character(data[[split_var]])) {
       cli::cli_abort("{.arg split_var} {.val {split_var}} must be a factor or character column.")
     }
-    # Last Phase z13 (D9): a group in which the outcome or a predictor has ONE value cannot be fitted --
+    # Phase 18z13 (D9): a group in which the outcome or a predictor has ONE value cannot be fitted --
     # `contrasts can only be applied to factors with 2 or more levels`, or "the dependent must be
     # binary", both wrapped in purrr's `In index: 1.` noise, naming neither the group nor the variable.
     # Splitting by a coarsening of a predictor (race / black) is a common first attempt, so check it
@@ -5483,7 +5483,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     }
   }
 
-  # multiplier (Phase 12g; grammar + resolution Last Phase z9): scale a CONTINUOUS predictor's effect to
+  # multiplier (Phase 12g; grammar + resolution Phase 18z9): scale a CONTINUOUS predictor's effect to
   # per-k units (OR^k / beta*k). A SCALAR ("sd" / "2sd" / a number) applies to every numeric predictor; a
   # NAMED vector overrides per variable and the rest keep the scalar default. Resolved ONCE here, into
   # frozen numbers -- see reg_resolve_multiplier() for why the frame excludes the dependent.
@@ -5520,7 +5520,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # predictor keeps one unit across outcomes, compared models and split groups. Never applied in
   # compound-formula mode, where a bare RHS name may carry an interaction or a basis expansion and
   # reg_fit()'s `td$term == v` match would scale the main effect while leaving `age:raceWhite` alone.
-  # Last Phase z9: "sd" is the DEFAULT scalar. Per 1 unit a numeric predictor sits inside the first
+  # Phase 18z9: "sd" is the DEFAULT scalar. Per 1 unit a numeric predictor sits inside the first
   # colour break and reads as "no effect" beside the factor contrasts next to it; per 1 SD it lands on
   # the same visual scale. `multiplier = 1` restores the per-unit reading.
   mult_scalar_default <- "sd"
@@ -5536,7 +5536,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   multiplier       <- mult_res$k
   multiplier_label <- mult_res$label
 
-  # Last Phase z15: the quadratic terms, built on the SAME frozen frame as the multiplier's SD -- so
+  # Phase 18z15: the quadratic terms, built on the SAME frozen frame as the multiplier's SD -- so
   # the centre and the unit of a curved predictor's two rows come from one measurement of one column,
   # and a split group / compared model cannot re-centre it. Empty unless a shape asked for one.
   shape_terms <- if (length(reg_shapes) > 0L)
@@ -5551,12 +5551,12 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # crude analogue -> a message, not an error, and `empirical` is dropped for this call.
   # Phase 15e: kept ON whenever ANY outcome supports a crude companion (the per-fit loop skips the
   # ineligible outcomes -- ordinal -- individually). Only dropped when NO outcome is eligible.
-  # Last Phase z10: one stored fact, not a third hand-written family list. What is left with no crude
+  # Phase 18z10: one stored fact, not a third hand-written family list. What is left with no crude
   # counterpart at all is the compound-formula escape hatch (no predictor structure to be crude about).
   if (isTRUE(empirical) &&
       !any(purrr::map_lgl(dependent, ~ !is.na(reg_crude_key(family_for(.x), trials_for(.x),
                                                             formula_mode))))) {
-    # Last Phase z15 (SS12.6 defect 1): name the REAL cause. A compound formula has no predictor
+    # Phase 18z15 (SS12.6 defect 1): name the REAL cause. A compound formula has no predictor
     # structure to be crude about, whatever the family -- the old message blamed the outcome family and
     # so told a binomial user their binomial outcome was unsupported.
     cli::cli_inform(if (formula_mode) c("i" = paste0(
@@ -5569,7 +5569,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     empirical <- FALSE
   }
 
-  # Last Phase z16-iiiii (defect 3): `degf` (#PSU - #strata) is captured ONCE at the boundary
+  # Phase 18z16-iiiii (defect 3): `degf` (#PSU - #strata) is captured ONCE at the boundary
   # (svy_unwrap_data -> svy$spec$degf) and this literal used to drop it, so tab_reg() was the only
   # consumer of a design that never saw its degrees of freedom. The model columns were on t(degf)
   # regardless -- stats::df.residual() of an svyglm IS the design df (see reg_glance()) -- while the
@@ -5625,12 +5625,12 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     family = family, families = families_vec, exponentiate = exp_on,
     effect = effect, at = at, do_exp = do_exp, eff_word = eff_word,
     dependent = dependent, positive_level = positive_levels, predictors = union_predictors,
-    # Last Phase z9: the predictor-kind map is STORED, not re-derived from the rendered table. Nothing
+    # Phase 18z9: the predictor-kind map is STORED, not re-derived from the rendered table. Nothing
     # recorded it before, and the only implicit marker (a numeric row's `level == var`) is already
     # broken by `cleannames` and by the multiplier relabel. `multiplier` records the RESOLVED per-unit
     # scaling actually used (the frozen SDs included), so the footer/legend can name the unit.
     predictor_types = reg_predictor_types(data, union_predictors), multiplier = multiplier,
-    # Last Phase z15: THE recipe reg_check_plots() refits from -- the specs plus the handful of scalars
+    # Phase 18z15: THE recipe reg_check_plots() refits from -- the specs plus the handful of scalars
     # reg_fit() takes, ~4 KB of strings. Deliberately NOT the fits themselves: ~10 MB each was the
     # measured cause of the Phase-o jamovi freeze, and a 60 ms refit through the very fitter the table
     # came from is both cheaper and impossible to drift from.
@@ -5642,7 +5642,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     shape = if (length(reg_shapes))
       vapply(reg_shapes, function(s) if (is.na(s$k)) s$kind else paste0(s$k, " groups"),
              character(1)) else NULL,
-    # Last Phase z10: which observed counterpart each outcome has (NA = none). Stored, so the footer can
+    # Phase 18z10: which observed counterpart each outcome has (NA = none). Stored, so the footer can
     # word the in-cell "{or} ({obs})" bracket and ?tab_reg can state the scope honestly.
     crude_keys = if (isTRUE(empirical))
       stats::setNames(purrr::map_chr(specs, ~ .$crude_key), purrr::map_chr(specs, "dependent"))

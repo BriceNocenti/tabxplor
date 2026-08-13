@@ -91,7 +91,7 @@ test_that("get_chi2 / get_test back-compat still read the top-level test attr", 
   expect_s3_class(get_test(t), "tbl_df")
 })
 
-# === SECTION: meta must SURVIVE every table rebuild (Last Phase z16-iv, W-A) ======================
+# === SECTION: meta must SURVIVE every table rebuild (Phase 18z16-iv, W-A) ======================
 # THE guard is field-AGNOSTIC on purpose: it stamps a sub-field that no constructor, no getter and no
 # bind rule knows about. Any re-enumeration of `meta` (a fresh `meta = list(a, b, c)` literal in a
 # rebuilder) drops it and fails here -- which is exactly how meta$inference was lost in tab_compact(),
@@ -108,7 +108,7 @@ test_that("every table rebuild carries an UNKNOWN meta sub-field (no re-enumerat
   expect_identical(kept(dplyr::bind_rows(tl[[1]], tl[[1]])), list(kept = TRUE))  # the vctrs reconcile
   expect_identical(kept(tab_transpose(tl[[1]])),             list(kept = TRUE))  # rewrites vars only
   expect_identical(kept(dplyr::filter(tl[[1]], TRUE)),       list(kept = TRUE))  # a dplyr verb
-  # Last Phase z16-iiiii (defect 1): tab_spread() -- exported, AND what tab(spread_vars =) calls --
+  # Phase 18z16-iiiii (defect 1): tab_spread() -- exported, AND what tab(spread_vars =) calls --
   # ended in a bare new_tab(tabs, subtext =, test =) literal, so EVERY spread table silently lost its
   # whole meta. It was the SECOND rebuild-from-a-literal site, which z16-iv's record said did not exist.
   ts <- probe(tab(forcats::gss_cat, marital, race, relig, pct = "row"))
@@ -151,7 +151,7 @@ test_that("an UNWEIGHTED merge still carries no inference (absent-when-unset)", 
 })
 
 test_that("the weakest-claim rule lives on the COLUMN reconcile now", {
-  # Last Phase z16-iiiii: `inference` left `meta` for two per-column attributes, so the bind algebra
+  # Phase 18z16-iiiii: `inference` left `meta` for two per-column attributes, so the bind algebra
   # left tab_inference_bind() for vec_ptype2.tabxplor_fmt.tabxplor_fmt() -- where it fires on every
   # c() / bind / group without anyone having to call it.
   mk <- function(b, d = NA_real_) tabxplor:::set_degf(tabxplor:::set_basis(fmt(1:2), b), d)
@@ -184,7 +184,7 @@ test_that("tab_weight_line() reads the STORED basis, never the .svy_weights colu
   expect_null(tab_weight_line(t2))
 })
 
-# === SECTION: the regression rebuild sites (Last Phase z16-iiiii) =================================
+# === SECTION: the regression rebuild sites (Phase 18z16-iiiii) =================================
 
 test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked", {
   skip_if_no_gettext()

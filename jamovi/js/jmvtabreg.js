@@ -75,7 +75,7 @@ var applyWtEnables = function(ui) {
 // dropped on jamovi re-renders). Folder keeps a 260px minimum so it stays the wider box (tune to taste);
 // the file name (width: large) collapses fully. Only the two export boxes use these width classes.
 // Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
-// box. Last Phase r: the empty line at the BOTTOM of each collapse box (blank only while EXPANDED, so a
+// box. Phase 18r: the empty line at the BOTTOM of each collapse box (blank only while EXPANDED, so a
 // collapsed pane stays compact and reads clearly apart from the next). The live jamovi collapse box is
 // `.jmv-collapse-view` and its collapsed state is `.view-colapsed` (jamovi's spelling) -- confirmed
 // against dev/jamovi/dev_console_live_capture/.../analysisui-*.css. The former guessed classes
@@ -112,7 +112,7 @@ var styleExportSep = function(ui) {
     }
 };
 
-// Last Phase r: the "Run comparison" action matches the Export button -- jamovi's DEFAULT ActionButton
+// Phase 18r: the "Run comparison" action matches the Export button -- jamovi's DEFAULT ActionButton
 // look (theme-correct blue background, white bold text), so we DON'T recolour it (the Phase-o material
 // grey is dropped). Only keep the blank line below it (the empty line the maintainer asked for at the
 // bottom of the box). Re-applied each onUpdate because jamovi re-renders drop inline styles.
@@ -150,7 +150,7 @@ var onUpdate = function(ui) {
     renderExt(ui);
     styleResetBtn(ui);
     styleExportSep(ui);                      // Phase o: thin rule above the (out-of-hierarchy) Export block
-    styleRunCompareBtn(ui);                  // Last Phase r: default (Export-look) button + blank line
+    styleRunCompareBtn(ui);                  // Phase 18r: default (Export-look) button + blank line
     bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
@@ -319,7 +319,7 @@ var renderRefVarCard = function(ui, frag, v) {
         row.appendChild(b1);
         var wrap = document.createElement("span"); wrap.style.cssText = TABX.multWrap;
         var pre = document.createElement("span"); pre.textContent = "× ";
-        // Last Phase z9: a TEXT input, because the scaling accepts the same three things tab_reg()'s
+        // Phase 18z9: a TEXT input, because the scaling accepts the same three things tab_reg()'s
         // `multiplier` does -- "sd" (the default), "2sd", or a number of units. A number input could
         // not express the keywords, and the per-1-unit effect of a continuous predictor is usually
         // too small to colour at all.
@@ -380,7 +380,7 @@ var FAMILY_LABEL = {
     gaussian: "gaussian (linear)", binomial: "binomial (logistic)", poisson: "poisson (counts)",
     multinomial: "multinomial (nominal)", ordinal: "ordinal (ordered)"
 };
-// Last Phase z3: on a BINARY outcome, family = "poisson" is not a count model -- R resolves it to the
+// Phase 18z3: on a BINARY outcome, family = "poisson" is not a count model -- R resolves it to the
 // modified Poisson (Zou 2004), whose exp(coef) is a RISK ratio. Same stored value ("poisson"), different
 // label, so the dropdown never says "counts" next to a yes/no variable.
 var FAMILY_LABEL_BINARY = {
@@ -394,7 +394,7 @@ var familyLabelsFor = function(c) {
 // count -> poisson that the R side leaves to an explicit pick). Stored explicitly so the backend never
 // re-detects (and never aborts on an integer count).
 var detectFamily = function(c) {
-    // Last Phase z13 (D10): ANY numeric detects as gaussian, integer-valued included -- age in years, a
+    // Phase 18z13 (D10): ANY numeric detects as gaussian, integer-valued included -- age in years, a
     // summed score and income in whole units are all integers, and a linear model always fits. Matches
     // reg_detect_family() on the R side exactly; poisson stays one click away in familyOptionsFor().
     if (!c || c.levels === null) return "gaussian";
@@ -414,7 +414,7 @@ var afterFetchMT = function(ui) {
 };
 
 // families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). Concrete only.
-// Last Phase z3: a 2-level factor now offers poisson too -- the OPT-IN modified Poisson / risk-ratio
+// Phase 18z3: a 2-level factor now offers poisson too -- the OPT-IN modified Poisson / risk-ratio
 // path. binomial stays first, so it remains the detected default (detectFamily is unchanged).
 var familyOptionsFor = function(c) {
     if (!c || c.levels === null) return ["gaussian", "binomial", "poisson"];
@@ -571,7 +571,7 @@ var anyNonGaussian = function(ui) {
     }
     return false;
 };
-// Last Phase z3: `ame_ratio` (a marginal RISK RATIO) needs a PROBABILITY to take a ratio of, so it is
+// Phase 18z3: `ame_ratio` (a marginal RISK RATIO) needs a PROBABILITY to take a ratio of, so it is
 // defined only for binomial / multinomial / ordinal outcomes -- the R side aborts otherwise. Grey it on
 // the same imperative pass rather than letting the user pick a combination that cannot run.
 var anyProbScale = function(ui) {

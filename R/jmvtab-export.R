@@ -2,7 +2,7 @@
 #          to Excel / HTML / Markdown, and resolve a user-typed FOLDER + FILENAME robustly inside
 #          Jamovi's Electron-locked engine. Phase 17i also parks here the SHARED R6 backend helpers
 #          (jmv_backend_*) that both module orchestrators (jmvtab.b.R / jmvtabreg.b.R) delegate to.
-#          Last Phase o: export_documents_dir() is now a robust per-OS known-folder resolver (registry
+#          Phase 18o: export_documents_dir() is now a robust per-OS known-folder resolver (registry
 #          on Windows, xdg-or-$HOME/Documents on Linux, $HOME/Documents on macOS), backed by the doc_*
 #          detectors below, and the "~/Documents"/"~"/"auto" default routes THROUGH it. The wider
 #          jmvtest diagnostic toolkit that drove the experiment is archived in dev/jamovi/jmvtest.b.R.
@@ -178,7 +178,7 @@ export_status_html <- function(text, ok = TRUE) {
 }
 
 
-# === Documents-folder detectors (support export_documents_dir(); Last Phase o) =============
+# === Documents-folder detectors (support export_documents_dir(); Phase 18o) =============
 # The per-OS known-folder detectors export_documents_dir() composes, chosen from the live jmvtest
 # experiment (see dev/tabxplor_2.0.0_jamovi_dev.md § Phase o). jamovi never resolves paths in R -- its
 # native `Dirs` does (SHGetKnownFolderPath on Windows, xdg-user-dir DOCUMENTS on Linux) -- and tabxplor

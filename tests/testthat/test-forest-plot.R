@@ -1,4 +1,4 @@
-# Last Phase z17-ii/iii -- forest_plot().
+# Phase 18z17-ii/iii -- forest_plot().
 #
 # The bulk of the contract is asserted on the MODEL (test-tab-estimates.R), which needs no device.
 # What is left here is what only a built plot can show: that the gridlines are the colour ladder, that

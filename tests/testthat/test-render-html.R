@@ -55,7 +55,7 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
     testthat::expect_length(body, 1L)
     testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
   }
-  # Last Phase m: the default "summary" test rows are p-value + effect size (2 extra; the statistic row
+  # Phase 18m: the default "summary" test rows are p-value + effect size (2 extra; the statistic row
   # was dropped).
   bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "kableExtra"))))
   testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 2L)
@@ -558,7 +558,7 @@ testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cel
 testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
   h <- rh_strip_style(as.character(
     tab_kable(tab(gss, c(race, marital), relig, pct = "row"), engine = "html", css = FALSE)))
-  # one cell per block, spanning it -- not one per row. Last Phase m: common_totrow defaults FALSE, so
+  # one cell per block, spanning it -- not one per row. Phase 18m: common_totrow defaults FALSE, so
   # each block keeps its OWN Total row -> race spans 4 (3 data + Total), marital spans 7 (6 data + Total).
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
@@ -763,7 +763,7 @@ testthat::test_that("Phase 17g: tabxplor_kable print degrades when kableExtra is
 })
 
 # === SECTION: options(tabxplor.print) html routing + tooltips option =====================
-# The taught value is "html" (tab_kable was renamed tab_html in Last Phase g); "kable" stays a
+# The taught value is "html" (tab_kable was renamed tab_html in Phase 18g); "kable" stays a
 # working synonym. knit_print methods make a bare `tab(...)` chunk render as a real html table in
 # Rmd/Quarto instead of knitr's default text capture.
 

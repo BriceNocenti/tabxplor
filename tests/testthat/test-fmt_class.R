@@ -222,8 +222,8 @@ test_that("model_family is carried through the fmt carrier round-trip (Defect 1,
   # Pre-17a fmt_col_attrs was hand-written with 9 names and omitted model_family.
   expect_true("model_family" %in% fmt_col_attrs)
   expect_true("role" %in% fmt_col_attrs)                   # Phase 17c: the 11th column attribute
-  expect_true("conf_level" %in% fmt_col_attrs)             # Last Phase z13: the 12th
-  expect_true("degf"  %in% fmt_col_attrs)                  # Last Phase z16-iiiii: the 13th
+  expect_true("conf_level" %in% fmt_col_attrs)             # Phase 18z13: the 12th
+  expect_true("degf"  %in% fmt_col_attrs)                  # Phase 18z16-iiiii: the 13th
   expect_true("basis" %in% fmt_col_attrs)                  #                       and the 14th
   expect_length(fmt_col_attrs, 14L)
 

@@ -35,8 +35,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       options("tabxplor.anova" = if (identical(self$options$anova, "classic")) "classic" else "welch")
       on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
 
-      # Last Phase z16-iii (W11): ONE honest checkbox. It was labelled "Type of p-value" but has moved
-      # every confidence interval, star and colour threshold in the table since Last Phase s.
+      # Phase 18z16-iii (W11): ONE honest checkbox. It was labelled "Type of p-value" but has moved
+      # every confidence interval, star and colour threshold in the table since Phase 18s.
       # z16-iiiii: it rides `opts$design_effect` into tab()'s own argument -- no global option, no
       # on.exit dance (it is in the tier-3 base key, so a toggle rebuilds with it).
 
@@ -88,7 +88,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # line at build time, so it must sit in the tier-3 base-key (not `reapplied`) -> a toggle
         # rebuilds. The global option is set from it around the build in .run().
         anova        = self$options$anova,
-        # Last Phase j / z16-iii: the inference basis checkbox. It lands in the tier-3 base key
+        # Phase 18j / z16-iii: the inference basis checkbox. It lands in the tier-3 base key
         # (structural, not `reapplied`) -> a toggle rebuilds; the robust overlay recomputes the
         # omnibus p on the flat design, and every cell interval moves with it.
         design_effect = isTRUE(self$options$design_effect),

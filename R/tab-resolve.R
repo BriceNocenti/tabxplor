@@ -71,7 +71,7 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   ci_ratio_req <- ci == "ratio"
   if (any(ci_ratio_req)) ci[ci_ratio_req] <- "diff"
 
-  # Last Phase z10: `OR` arrives EITHER as a per-row_var atomic vector (tab_counts, the deprecated
+  # Phase 18z10: `OR` arrives EITHER as a per-row_var atomic vector (tab_counts, the deprecated
   # step path, the tests) OR, from tab_setup(), as a per-row_var LIST of per-col_var vectors -- the
   # grain `OR = "cumOR"` needs, since eligibility is a property of the col_var (an `ordered` factor).
   # Normalise to the list form ONCE here so every predicate below is written at a single grain.

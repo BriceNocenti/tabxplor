@@ -332,7 +332,7 @@ test_that("multinomial empirical: tooltip-only via the empirical_tips attribute;
 })
 
 test_that("ordinal empirical is the UNIVARIABLE proportional-odds fit (Obs_cumOR)", {
-  # Last Phase z10 inverted this test's premise. Proportional odds is a CONSTRAINT, so the univariable
+  # Phase 18z10 inverted this test's premise. Proportional odds is a CONSTRAINT, so the univariable
   # ordinal model is not saturated and has no closed form -- but it is still "the model's own effect
   # fitted with one predictor", which is the rule every other family follows. The closed-form
   # substitutes were measured to drift 2.4-5.4 % (the PO violation itself), which is why a fit is the

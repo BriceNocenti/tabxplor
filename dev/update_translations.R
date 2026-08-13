@@ -1,4 +1,4 @@
-# dev/update_translations.R -- the sanctioned tabxplor R-message translation workflow (Last Phase w).
+# dev/update_translations.R -- the sanctioned tabxplor R-message translation workflow (Phase 18w).
 # .Rbuildignore'd. Run from the package root after adding/changing any gettext()/gettextf() string.
 #
 #   Rscript dev/update_translations.R          # extract -> normalise -> merge -> compile

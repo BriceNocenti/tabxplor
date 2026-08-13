@@ -400,7 +400,7 @@ testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)
   }
 })
 
-# === SECTION: Last Phase a bug-fixes ========================================
+# === SECTION: Phase 18a bug-fixes ========================================
 
 # Fix 1: data.table input (was: "Selections can't have missing values" via the numeric col_var path).
 testthat::test_that("tab() accepts a data.table input, byte-identical to a data.frame", {
@@ -453,7 +453,7 @@ testthat::test_that("a weight used as a table variable errors clearly", {
   testthat::expect_error(tab(d, wt, val, wt = wt),      "also used as a row, column or tab variable")
 })
 
-# === SECTION: Last Phase p -- bug corrections ================================
+# === SECTION: Phase 18p -- bug corrections ================================
 
 # Fix 1: a bad NAMED ref surfaces a clean warning naming the unknown variable(s),
 # not the raw cli "Multiple quantities for pluralization" internal error.

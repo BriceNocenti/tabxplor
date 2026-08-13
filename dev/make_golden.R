@@ -10,16 +10,16 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
-#   Last Phase z8: ALL 36 regenerated -- the record gained a 21st per-cell field `gap_se` (the SE of
+#   Phase 18z8: ALL 36 regenerated -- the record gained a 21st per-cell field `gap_se` (the SE of
 #     the gap between a cell's estimate and `obs`). dev/verify_golden_field_delta.R -- the proving
 #     script, now COMMITTED rather than rewritten each time -- checked 1787 cells and reported the
 #     added, entirely all-NA column as the only delta, with every shared field, every column attribute
 #     and every table attribute bit-identical. No display / colour snapshot moved.
-#   Last Phase z5: ALL 36 regenerated -- the record gained a 20th per-cell field `obs` (the value a
+#   Phase 18z5: ALL 36 regenerated -- the record gained a 20th per-cell field `obs` (the value a
 #     tab_reg cell's estimate is compared to). A script proved the ONLY delta is that added, entirely
 #     all-NA column (1787 cells checked): a cross-table never fills it, so every displayed value, CI
 #     bound and table attribute is byte-identical and NO display / colour snapshot moved.
-#   Last Phase z4: f_color_contrib REGENERATED, and it alone -- verified field by field across all 36
+#   Phase 18z4: f_color_contrib REGENERATED, and it alone -- verified field by field across all 36
 #     cases that the ONLY delta is its `pvalue` field, moving from the Pearson residual to the
 #     adjusted standardized (Haberman) one. Its RENDERED output is byte-identical (that case uses the
 #     default color_signif = "ignore", where the p-value drives nothing), which is why no display

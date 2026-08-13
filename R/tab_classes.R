@@ -238,7 +238,7 @@ set_row_roles <- function(x, roles) {
 }
 get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 
-# Last Phase z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
+# Phase 18z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
 # computed" is now two per-COLUMN attributes, `basis` and `degf` (R/fmt_class.R), read back through the
 # DERIVED tab_inference_basis() / tab_inference_degf(). A table attribute is the fragile carrier: two
 # rebuild sites dropped the whole of `meta` (tab_spread(), reg_build()'s split branch), so a
@@ -250,7 +250,7 @@ get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
 
-# Last Phase z15: `assumptions` -- the observed curve of each continuous predictor (see new_tab()),
+# Phase 18z15: `assumptions` -- the observed curve of each continuous predictor (see new_tab()),
 # the data behind the row sparklines and behind reg_check_plots()' linearity panel.
 get_assumptions <- function(x) get_meta(x)[["assumptions"]]
 set_assumptions <- function(x, assumptions) set_meta_field(x, "assumptions", assumptions)
@@ -349,7 +349,7 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
 # THE per-sub-field merge rules of `meta`. Any field NOT listed takes the default "first non-NULL, x
 # wins" -- right for a display-only fact, wrong for an inferential one. Declaring them makes the loop
 # exhaustive by construction: the `color_breaks` special case used to sit OUTSIDE it, which is the
-# shape of mistake that lost meta$inference in tab_compact() (Last Phase z16-iv, W-A).
+# shape of mistake that lost meta$inference in tab_compact() (Phase 18z16-iv, W-A).
 #' @keywords internal
 #' @noRd
 meta_bind_rules <- list(
@@ -485,11 +485,11 @@ pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 
 # The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
 # test type = adding rows (never a schema change); tab_var columns are added when populated.
-# Last Phase j: two COMPANION columns `effect_size` (double) + `es_type` (character, e.g. "cramer_v"/
+# Phase 18j: two COMPANION columns `effect_size` (double) + `es_type` (character, e.g. "cramer_v"/
 # "phi"/"eta2") ride each omnibus row -- an effect size belongs ON its test's row, so it is a column,
 # not a separate row. Reg-footer / older rows carry NA/"" there (vec_rbind fills, but the uniform
 # schema keeps binds clean).
-# Last Phase z15: the 13th column `term` -- WHICH PREDICTOR a reg-footer row is about ("" = the whole
+# Phase 18z15: the 13th column `term` -- WHICH PREDICTOR a reg-footer row is about ("" = the whole
 # model). It is a new DIMENSION, not a new test type, and it could not ride `row_var`: on a reg footer
 # row `row_var` already means the SPLIT-GROUP LEVEL, in reg_footer_lines() (the `is_split` switch + the
 # cell key), in test_grid_reg() (the group key) and in reg_spread_models() (which re-keys by it and
@@ -512,7 +512,7 @@ new_test_tibble <- local({
                                 n         = double()   , min_e       = double()   ,
                                 effect_size = double() , es_type     = character(),
                                 pvalue_exact = double(),
-                                # Last Phase z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
+                                # Phase 18z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
                                 # mean design effect this row's test corrected by (NA on basis "n").
                                 deff       = double())
     }
@@ -528,7 +528,7 @@ new_test_tibble <- local({
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
 # Why this exists: THE one predicate for "does options(tabxplor.print) ask for an html render?".
-# "html" is the taught value (the engine has been html-first since Last Phase g renamed tab_kable ->
+# "html" is the taught value (the engine has been html-first since Phase 18g renamed tab_kable ->
 # tab_html); "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
 tx_print_html <- function() {
   getOption("tabxplor.print") %in% c("html", "kable")
@@ -1215,7 +1215,7 @@ tab_stack_tables <- function(tables) {
         lapply(fmt_col_attrs, function(a) attr(common, a, exact = TRUE)), fmt_col_attrs)
       fmt_stack_frames(frames, meta)
     } else {
-      # Last Phase z10: stacking several row_vars puts DIFFERENT variables' levels in one display
+      # Phase 18z10: stacking several row_vars puts DIFFERENT variables' levels in one display
       # column, so an `ordered` class on it would claim an order across variables that does not exist
       # -- and vctrs rightly refuses to combine two ordered factors with different level sets (or an
       # ordered one with a plain factor). Drop the class here, at the one place the axes are merged;
@@ -1275,7 +1275,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   subtext <- get_subtext(tabs[[1]])
-  # Last Phase z16-iv (W-A): captured HERE, while `tabs` is still the LIST -- tab_stack_tables() below
+  # Phase 18z16-iv (W-A): captured HERE, while `tabs` is still the LIST -- tab_stack_tables() below
   # rebinds it to a plain tibble carrying no table attributes at all, which is why this merge was the
   # one place in the package that could lose a `meta` sub-field.
   metas_in <- purrr::map(tabs, get_meta)
@@ -1342,12 +1342,12 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
       dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
   }
 
-  # Last Phase z16-iv (W-A): CARRY the merged tables' whole `meta` (tab_meta_merge = reduce through
+  # Phase 18z16-iv (W-A): CARRY the merged tables' whole `meta` (tab_meta_merge = reduce through
   # tab_meta_bind) and overwrite only what this merge genuinely recomputes. The fresh
   # `meta = list(...)` literal that stood here dropped every sub-field it did not name -- so a
   # >=2 row_var table lost `inference`, printed the OPPOSITE footer sentence, and lost `degf` on the
   # exported tab_ci() step path (measured: intervals 9 % too narrow at 13 PSUs).
-  # Last Phase z16-iiiii: `vars` is the ONLY genuine recompute. The explicit
+  # Phase 18z16-iiiii: `vars` is the ONLY genuine recompute. The explicit
   # `render_extras = <tabs[[1]]'s>` / `ci_settings = <tabs[[1]]'s>` overwrites that stood beside it
   # were the left fold's own output written out by hand -- except when tabs[[1]] alone lacked the
   # field, where the overwrite DELETED what a later table carried. Reachable only through the
@@ -1445,7 +1445,7 @@ materialize_specs <- function() list(
          if (is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
          tab
        }),
-  # Phase 14n / Last Phase m: collapse the redundant per-block Total rows of a compacted several-row_vars
+  # Phase 14n / Phase 18m: collapse the redundant per-block Total rows of a compacted several-row_vars
   # table into ONE shared Total, shown in its OWN group (a display slice needing the "as displayed"
   # equality). OPT-IN via `common_totrow` (default FALSE = one Total per row_var, no collapse). Run LAST,
   # so every role recomputes on the collapsed table; the core tab() object keeps every total row.
@@ -1561,7 +1561,7 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   rr   <- get_row_roles_raw(tab)                            # slice the row-role vector with the rows
   if (!is.null(rr) && length(rr) == n_row) out <- set_row_roles(out, rr[keep])
 
-  # Last Phase m: the shared Total gets its OWN group (a blank row_var, its level stays "Total") after a
+  # Phase 18m: the shared Total gets its OWN group (a blank row_var, its level stays "Total") after a
   # blank-line separator -- not tucked under the last row_var. Reassign the surviving total block (Total
   # row + its trailing n/row_pct rows) to a distinct blank sentinel in the grouping column and regroup, so
   # the render-time separator (group_indices) sees it. When the total is a reference for some row_var
@@ -1627,7 +1627,7 @@ tab_pvalue_lines <- function(tabs) {
   if (nrow(disp) == 0) return(tabs)
 
   # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
-  # GOF footer). Last Phase m: rows in display ORDER = p-value, then effect size; the STATISTIC row is
+  # GOF footer). Phase 18m: rows in display ORDER = p-value, then effect size; the STATISTIC row is
   # gone from the default (ambiguous once effect size shares the block) -- it returns only under
   # `tabxplor.test_lines = "stat"`/"all". The test TYPE ("Chi2, Welch F; survey-design") and the effect-size
   # MEASURE ("Cramér's V, eta2") move into the row NAMES (per group, via the descriptors), so the p-value
@@ -1645,7 +1645,7 @@ tab_pvalue_lines <- function(tabs) {
     else rep("", nrow(df))
   grp_of      <- gid(tabs)
   disp$.grp   <- gid(disp)
-  # a weak chi2 with a Fisher-exact companion (Last Phase j): show the exact p (labelled "Fisher" in the
+  # a weak chi2 with a Fisher-exact companion (Phase 18j): show the exact p (labelled "Fisher" in the
   # row-name descriptor now, not the cell).
   has_exact   <- if (!is.null(disp[["pvalue_exact"]])) !is.na(disp$pvalue_exact) else rep(FALSE, nrow(disp))
   disp$.pshow <- if (any(has_exact)) ifelse(has_exact, disp$pvalue_exact, disp$pvalue) else disp$pvalue
@@ -1683,7 +1683,7 @@ tab_pvalue_lines <- function(tabs) {
   }
   fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_keys, one_cell, nm = nm, g = g))
   nonfmt_val <- function(nm, g) {
-    # the row-label column: the per-group test-type / effect-size descriptors (Last Phase m)
+    # the row-label column: the per-group test-type / effect-size descriptors (Phase 18m)
     if (nm == row_var) return(vapply(row_keys, row_label_for, character(1), g = g))
     i <- match(nm, disc)                                  # a grouping column: its group level
     if (!is.na(i)) return(rep(strsplit(g, "\r", fixed = TRUE)[[1]][i], K))
@@ -1719,7 +1719,7 @@ reg_footer_lines <- function(tabs) {
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
 
-  # Last Phase z15: one row per (stat, TERM) -- a check / overall-association row is about one
+  # Phase 18z15: one row per (stat, TERM) -- a check / overall-association row is about one
   # predictor, so the plan is the shared reg_footer_plan(), not a bare list of discriminators.
   plan <- reg_footer_plan(reg)
   K    <- if (is.null(plan)) 0L else nrow(plan)
@@ -1753,7 +1753,7 @@ reg_footer_lines <- function(tabs) {
   # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
   # vars / empirical_tips / ci_settings / reg_meta named one by one; is_reg detection must not depend on
   # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
-  # Last Phase z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
+  # Phase 18z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
   # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
   # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these
   # rows left, `reg` above is empty and this function returns early.
@@ -1929,7 +1929,7 @@ tab_plot <- function(tabs,
     bg_selection    <- bg_selection    |> dplyr::bind_cols()
   }
 
-  # Last Phase z11: the face comes from the PALETTE, not from guessing at the hex. The old test was
+  # Phase 18z11: the face comes from the PALETTE, not from guessing at the hex. The old test was
   # `!font %in% c(text_color, grey_color, grey_color2)` -- true exactly where text_hex is non-NA, which
   # is exactly `ann$face_bold` under every colour palette (a palette hex can never equal a chrome hex:
   # fmt_channel_codes upper-cases, tx_chrome_hex is lower-case), so this is byte-identical there. It is
@@ -1962,7 +1962,7 @@ tab_plot <- function(tabs,
     tabs[[cl]] <- as.character(tabs[[cl]])
     tabs[[cl]][!show] <- ""
   }
-  # Last Phase z15: a graphics device has no block glyphs, so a reg row's sparkline would be one
+  # Phase 18z15: a graphics device has no block glyphs, so a reg row's sparkline would be one
   # "conversion failure in mbcsToSbcs" per label and a row of garbage. THE plot medium's answer, once,
   # over every text column (the html engine's is the <svg>; every other medium keeps the glyphs).
   for (cl in other_cols) if (cl %in% names(tabs))
@@ -2232,7 +2232,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # Phase 10i-A: a composite cell ("{pct} (n={n})") suppresses the tooltip line for its PRIMARY
   # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
   disp    <- display_primary(get_display(x))
-  # Last Phase z10: `shows(field)` = "the cell ALREADY prints this field", tested over the WHOLE
+  # Phase 18z10: `shows(field)` = "the cell ALREADY prints this field", tested over the WHOLE
   # template rather than its first token -- so a composite ("{diff} ({pct})", "{or} ({obs})") no longer
   # repeats its own bracket on hover. `disp` stays for the tokens that are not fmt FIELDS (pct_ci,
   # mean_ci, gof, blank), which a template can never contain.
@@ -2351,7 +2351,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    "")
   } else blank
 
-  # Last Phase z4: the adjusted standardized residual beside the contribution it gates. Derived from
+  # Phase 18z4: the adjusted standardized residual beside the contribution it gates. Derived from
   # the stored p-value (fmt_resid), so it exists exactly where a chi2 contribution was computed --
   # the same cells as `out_ctr`, minus the total rows (a margin has no residual, hence the NA p).
   cond_resid <- is.finite(fmt_resid(x)) & comparable & !shows("resid")
@@ -2360,9 +2360,9 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    paste0(gettext("std. residual"), ": ", tip_num(set_display(x, "resid"))), "")
   } else blank
 
-  # Last Phase z5: the value this cell is COMPARED TO by `color = "adjustment"` / "between_groups".
+  # Phase 18z5: the value this cell is COMPARED TO by `color = "adjustment"` / "between_groups".
   # A stored field, so it exists exactly where tab_reg wrote a counterpart -- NA on every cross-table
-  # and on a Constant / compound-formula cell. Last Phase z10: a MULTINOMIAL cell now has one, printed
+  # and on a Constant / compound-formula cell. Phase 18z10: a MULTINOMIAL cell now has one, printed
   # IN-CELL as "{or} ({obs})", so `shows("obs")` suppresses this line there and the `empirical_tips`
   # fragment appended downstream (the crude PERCENTAGE) stays the only extra hover text.
   # The LABEL is read off the column's own stored measure, never guessed from a name.
@@ -2373,7 +2373,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_obs, paste0(lbl, ": ", tip_num(set_display(x, "obs"))), "")
   } else blank
 
-  # Last Phase z8: the GAP itself -- its size, its confidence interval and its p-value -- wherever
+  # Phase 18z8: the GAP itself -- its size, its confidence interval and its p-value -- wherever
   # tab_reg wrote a `gap_se`. This is where the interval belongs: three numbers are too much for a
   # cell, and the colour IS the display (no `{}` token was added). Read through the very helpers the
   # colour engine reads, so the hover and the fill can never disagree.
@@ -2414,7 +2414,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # Phase 14r (L6): the GOF / blank footer cells carry model-fit numbers in fields never meant to be
   # compared (e.g. AIC 63 785 lives in `diff` -> a nonsense "diff: +6378526%"). No tooltip for them.
   out[disp %in% c("gof", "blank")] <- ""
-  # Last Phase w: the field-name labels (ref/diff/ci/OR/n/sd/...) are gettext'd. This builder runs at
+  # Phase 18w: the field-name labels (ref/diff/ci/OR/n/sd/...) are gettext'd. This builder runs at
   # HTML render, NOT under with_legend_lang(), so they follow the AMBIENT locale (a French-locale user
   # gets French tooltips automatically; the per-call lang= override reaches the footer, not tooltips).
   # enc2utf8 keeps the French accents (e.g. "réf.") well-formed. English is byte-identical.
@@ -3495,7 +3495,7 @@ default_dark_background_colors_neg <- c(
 #' @keywords internal
 tabxplor_palette_env <- new.env(parent = emptyenv())
 
-# Last Phase z11 -- THE black-and-white publication palette (`theme = "print"`).
+# Phase 18z11 -- THE black-and-white publication palette (`theme = "print"`).
 # WHY it cannot be derived from the colour palettes: converted to CIE L*, the shipped light background
 # ramps are 97/93/90/82 (over) and 97/93/89/82 (under) -- THE SAME GREYSCALE RAMP -- and on the text
 # channel over-1 and under-2 are both L* 62. Desaturating is exactly that conversion, so it destroys the
@@ -3529,7 +3529,7 @@ default_print_palette <- function() {
 }
 
 # THE face fact table: the 8 slot renderings of each (family, theme) in the TYPOGRAPHIC vocabulary,
-# beside the 8 hex codes. Last Phase z11.
+# beside the 8 hex codes. Phase 18z11.
 # WHY it exists: five places used to derive "this cell is bold" from "this cell has a colour hex"
 # (tx_css_render's static bold_slots rule, fmt_col_ann's `bold`, tab_xl's hard-wired bold = TRUE,
 # tab_plot's hex-membership test, legend_render_line's is_bold_tok). In a palette whose every text hex
@@ -3599,7 +3599,7 @@ build_palettes <- function() {
     # dark fills already read there.
     bg_legend_light = c(b$bg_legend_colors,        b$bg_legend_colors_neg),
     bg_legend_dark  = c(b$dark_background_colors,  b$dark_background_colors_neg),
-    # Last Phase z11: the print palette reads from its OWN literal, never from `b` -- that is the
+    # Phase 18z11: the print palette reads from its OWN literal, never from `b` -- that is the
     # byte-property making set_color_palette() unable to touch print output.
     text_print      = c(p$text_colors,       p$text_colors_neg),
     bg_print        = c(p$background_colors, p$background_colors_neg),
@@ -3882,7 +3882,7 @@ mk_color_scale <- function(name, values) {
   strict <- name != "contrib"
   # Which scales express their breaks in SD units. `mean_diff` is standardized only on its NULL-default
   # arm -- supplying data-unit values there is how a user asks for absolute colouring. `adj_diff_std`
-  # (Last Phase z13) is standardized BY DEFINITION: it exists so an additive gap on an arbitrary-unit
+  # (Phase 18z13) is standardized BY DEFINITION: it exists so an additive gap on an arbitrary-unit
   # outcome has a ladder meaning the same thing in every table, which raw units cannot express.
   std <- identical(name, "adj_diff_std")
 
@@ -3956,13 +3956,13 @@ default_color_scales <- function() {
     mean_diff  = mk_color_scale("mean_diff",  NULL),
     mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
     contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10)),
-    # Last Phase z4: the ABSOLUTE z scale, read by color = "contrib" under
+    # Phase 18z4: the ABSOLUTE z scale, read by color = "contrib" under
     # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the
     # ladder documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6.
     # Unlike `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every
     # table, which is the whole point of the scale.
     zscore     = mk_color_scale("zscore",     conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
-    # Last Phase z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
+    # Phase 18z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
     # estimate sits from the value it is compared to. SHARED by both measures because they score the
     # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
     # adjustment gaps at x1.03-x1.12, so one ladder reads both. The multiplicative anchor is the
@@ -3972,7 +3972,7 @@ default_color_scales <- function() {
     adj_ratio  = mk_color_scale("adj_ratio",  list(over  = c(1.10, 1.25, 1.50, 2.00),
                                                    under = c(1.10, 1.25, 1.50, 2.00))),
     adj_diff   = mk_color_scale("adj_diff",   c(0.02, 0.05, 0.10, 0.20)),
-    # Last Phase z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
+    # Phase 18z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
     # a count AME. `adj_diff`'s absolute ladder is calibrated on a PROBABILITY (2/5/10/20 points) and
     # applying it verbatim to a beta made the reading depend on the unit: measured on the same model,
     # tvhours in minutes saturated every cell at the deepest break while the same variable in days left

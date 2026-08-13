@@ -1,8 +1,8 @@
 # Crude (`Obs_*`) counterparts for numeric predictors — design study
 
-Round 1: 2026-08-05 (Last Phase z7, item 2). **Round 2: 2026-08-06** — a second research pass driven by
+Round 1: 2026-08-05 (Phase 18z7, item 2). **Round 2: 2026-08-06** — a second research pass driven by
 the maintainer's answers to round 1's open questions, plus the two follow-up questions raised while
-reviewing this file (§0.2). Status: **FULLY IMPLEMENTED** (Last Phase z9, 2026-08-06).
+reviewing this file (§0.2). Status: **FULLY IMPLEMENTED** (Phase 18z9, 2026-08-06).
 
 **Implementation corrections to this report** (measured while building it):
 
@@ -571,7 +571,7 @@ shorter. It also matches the two packages users compare tabxplor with: **finalfi
 "OR (univariable)", **gtsummary**'s `tbl_uvregression()` calls it *unadjusted*; both apply it to
 continuous and categorical predictors without distinction, and have for years.
 
-Renaming the prefix `Obs_` → `Unadj_` is **not** recommended: it shipped in Last Phase g, it is right
+Renaming the prefix `Obs_` → `Unadj_` is **not** recommended: it shipped in Phase 18g, it is right
 for the 95 % case, and it is shorter in every column header.
 
 ---
