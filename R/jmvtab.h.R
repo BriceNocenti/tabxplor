@@ -16,7 +16,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             color_signif = "ignore",
             chi2 = FALSE,
             anova = "welch",
-            test_robust = "classic",
+            design_effect = FALSE,
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
@@ -32,7 +32,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             stars = FALSE,
             method_cell = "wilson",
             method_diff = "newcombe",
-            method_ratio = "katz",
             method_mean_diff = "welch",
             method_mean_ratio = "robust",
             totaltab = "line",
@@ -143,13 +142,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "welch",
                     "classic"),
                 default="welch")
-            private$..test_robust <- jmvcore::OptionList$new(
-                "test_robust",
-                test_robust,
-                options=list(
-                    "classic",
-                    "kish"),
-                default="classic")
+            private$..design_effect <- jmvcore::OptionBool$new(
+                "design_effect",
+                design_effect,
+                default=FALSE)
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -267,12 +263,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "ac",
                     "wald"),
                 default="newcombe")
-            private$..method_ratio <- jmvcore::OptionList$new(
-                "method_ratio",
-                method_ratio,
-                options=list(
-                    "katz"),
-                default="katz")
             private$..method_mean_diff <- jmvcore::OptionList$new(
                 "method_mean_diff",
                 method_mean_diff,
@@ -391,7 +381,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..color_signif)
             self$.addOption(private$..chi2)
             self$.addOption(private$..anova)
-            self$.addOption(private$..test_robust)
+            self$.addOption(private$..design_effect)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
@@ -407,7 +397,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..stars)
             self$.addOption(private$..method_cell)
             self$.addOption(private$..method_diff)
-            self$.addOption(private$..method_ratio)
             self$.addOption(private$..method_mean_diff)
             self$.addOption(private$..method_mean_ratio)
             self$.addOption(private$..totaltab)
@@ -437,7 +426,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         color_signif = function() private$..color_signif$value,
         chi2 = function() private$..chi2$value,
         anova = function() private$..anova$value,
-        test_robust = function() private$..test_robust$value,
+        design_effect = function() private$..design_effect$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
@@ -453,7 +442,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         stars = function() private$..stars$value,
         method_cell = function() private$..method_cell$value,
         method_diff = function() private$..method_diff$value,
-        method_ratio = function() private$..method_ratio$value,
         method_mean_diff = function() private$..method_mean_diff$value,
         method_mean_ratio = function() private$..method_mean_ratio$value,
         totaltab = function() private$..totaltab$value,
@@ -482,7 +470,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..color_signif = NA,
         ..chi2 = NA,
         ..anova = NA,
-        ..test_robust = NA,
+        ..design_effect = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
@@ -498,7 +486,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..stars = NA,
         ..method_cell = NA,
         ..method_diff = NA,
-        ..method_ratio = NA,
         ..method_mean_diff = NA,
         ..method_mean_ratio = NA,
         ..totaltab = NA,
@@ -617,9 +604,11 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param anova Which F statistic to display for numeric column variables when
 #'   the test is on: Welch's F (default, does not assume equal variances) or the
 #'   classic pooled F.
-#' @param test_robust For a weighted table, a more robust p-value: "classic"
-#'   (unweighted chi2 / Welch F); "kish" (first-order Rao-Scott rescale to the
-#'   effective sample size).
+#' @param design_effect For a WEIGHTED table, make the confidence intervals,
+#'   the significance stars, the colour thresholds AND the p-values account for
+#'   the unequal weighting (the exact flat survey-design variance) instead of
+#'   using the raw number of respondents. Sets options(tabxplor.design_effect).
+#'   Off by default; it moves every interval in the table, not only the p-value.
 #' @param na The policy to adopt with missing values. It must be a single
 #'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
 #'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
@@ -686,9 +675,6 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param method_diff The proportion confidence-interval method for \code{ci =
 #'   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
 #'   score test, so the interval and the significance stars always agree.
-#' @param method_ratio The confidence-interval method for a ratio of
-#'   proportions or rates (\code{ci = "ratio"} on percentages): Katz's log-ratio
-#'   interval.
 #' @param method_mean_diff The confidence-interval method for the difference
 #'   of numeric means (means with \code{ci = "diff"}): Welch (default) or
 #'   Student (pooled variance).
@@ -753,7 +739,7 @@ jmvtab <- function(
     color_signif = "ignore",
     chi2 = FALSE,
     anova = "welch",
-    test_robust = "classic",
+    design_effect = FALSE,
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
@@ -769,7 +755,6 @@ jmvtab <- function(
     stars = FALSE,
     method_cell = "wilson",
     method_diff = "newcombe",
-    method_ratio = "katz",
     method_mean_diff = "welch",
     method_mean_ratio = "robust",
     totaltab = "line",
@@ -816,7 +801,7 @@ jmvtab <- function(
         color_signif = color_signif,
         chi2 = chi2,
         anova = anova,
-        test_robust = test_robust,
+        design_effect = design_effect,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,
@@ -832,7 +817,6 @@ jmvtab <- function(
         stars = stars,
         method_cell = method_cell,
         method_diff = method_diff,
-        method_ratio = method_ratio,
         method_mean_diff = method_mean_diff,
         method_mean_ratio = method_mean_ratio,
         totaltab = totaltab,

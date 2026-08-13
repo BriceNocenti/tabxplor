@@ -20,7 +20,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             models = NULL,
             baseline = 1,
             compare = "none",
-            na = "drop_by_model",
+            na = "drop_by_outcome",
             run_compare = FALSE,
             refLevels = NULL,
             multiplicator = NULL,
@@ -34,10 +34,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             subtext = "",
             wrap_rows = 35,
             wrap_cols = 15,
-            ids = NULL,
-            strata = NULL,
-            fpc = NULL,
-            nest = FALSE,
             export_format = "excel",
             exportExcel = FALSE,
             export_dir = "~/Documents",
@@ -136,7 +132,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 effect,
                 options=list(
                     "coefficient",
-                    "ame"),
+                    "ame",
+                    "ame_ratio"),
                 default="coefficient")
             private$..at <- jmvcore::OptionList$new(
                 "at",
@@ -185,9 +182,10 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "na",
                 na,
                 options=list(
+                    "drop_by_outcome",
                     "drop_by_model",
-                    "drop_all_models"),
-                default="drop_by_model")
+                    "drop_all"),
+                default="drop_by_outcome")
             private$..run_compare <- jmvcore::OptionAction$new(
                 "run_compare",
                 run_compare)
@@ -278,22 +276,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 wrap_cols,
                 min=0,
                 default=15)
-            private$..ids <- jmvcore::OptionVariables$new(
-                "ids",
-                ids,
-                default=NULL)
-            private$..strata <- jmvcore::OptionVariables$new(
-                "strata",
-                strata,
-                default=NULL)
-            private$..fpc <- jmvcore::OptionVariable$new(
-                "fpc",
-                fpc,
-                default=NULL)
-            private$..nest <- jmvcore::OptionBool$new(
-                "nest",
-                nest,
-                default=FALSE)
             private$..export_format <- jmvcore::OptionList$new(
                 "export_format",
                 export_format,
@@ -349,10 +331,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..subtext)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
-            self$.addOption(private$..ids)
-            self$.addOption(private$..strata)
-            self$.addOption(private$..fpc)
-            self$.addOption(private$..nest)
             self$.addOption(private$..export_format)
             self$.addOption(private$..exportExcel)
             self$.addOption(private$..export_dir)
@@ -389,10 +367,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         subtext = function() private$..subtext$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
-        ids = function() private$..ids$value,
-        strata = function() private$..strata$value,
-        fpc = function() private$..fpc$value,
-        nest = function() private$..nest$value,
         export_format = function() private$..export_format$value,
         exportExcel = function() private$..exportExcel$value,
         export_dir = function() private$..export_dir$value,
@@ -428,10 +402,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..subtext = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
-        ..ids = NA,
-        ..strata = NA,
-        ..fpc = NA,
-        ..nest = NA,
         ..export_format = NA,
         ..exportExcel = NA,
         ..export_dir = NA,
@@ -517,8 +487,11 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   coefficients on their raw scale. Uncheck to keep every coefficient on the
 #'   coefficient (log / linear) scale.
 #' @param effect "coefficient" is the native per-family effect (beta / OR /
-#'   IRR). "AME" is the average marginal effect on the response scale (needs the
-#'   marginaleffects package).
+#'   IRR). "AME" is the average marginal effect on the response scale, a
+#'   difference in percentage points. "RR" is the same quantity as a RATIO --
+#'   the marginal risk ratio (the ratio of adjusted predicted probabilities),
+#'   for binomial / multinomial / ordinal outcomes only. Both need the
+#'   marginaleffects package.
 #' @param at Where marginal effects are evaluated: averaged over the sample,
 #'   or at the reference profile (other predictors at their reference level /
 #'   mean).
@@ -532,10 +505,12 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
 #'   each model against the chosen baseline model, "sequential" against the
 #'   previous one (an AIC difference when not nested).
-#' @param na "drop by model" fits each model / outcome on its own complete
-#'   cases; "drop all models" uses one shared complete-case population across
-#'   all predictors (equal N; changes the estimates), which a valid
-#'   likelihood-ratio comparison test needs.
+#' @param na "drop_by_outcome" (default) fits every model OF ONE OUTCOME on
+#'   the same complete cases, which is what makes the observed columns
+#'   comparable to the model beside them and lets the likelihood-ratio
+#'   comparison run; "drop_by_model" gives each model its own complete cases (a
+#'   model on a different population then gets no observed effect); "drop_all"
+#'   shares one population across every outcome as well.
 #' @param run_compare .
 #' @param refLevels .
 #' @param multiplicator .
@@ -559,13 +534,6 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param subtext A free note printed below the table.
 #' @param wrap_rows .
 #' @param wrap_cols .
-#' @param ids Cluster identifiers (survey design), largest to smallest stage.
-#'   Only used with a weight; leave empty for no clustering.
-#' @param strata Stratification variables (survey design). Only used with a
-#'   weight.
-#' @param fpc Finite-population correction (survey design). Only used with a
-#'   weight.
-#' @param nest Set when cluster ids are reused across strata (survey design).
 #' @param export_format .
 #' @param exportExcel Press to export the table to the chosen format (the
 #'   button label follows the format).
@@ -602,7 +570,7 @@ jmvtabreg <- function(
     models = NULL,
     baseline = 1,
     compare = "none",
-    na = "drop_by_model",
+    na = "drop_by_outcome",
     run_compare = FALSE,
     refLevels = NULL,
     multiplicator = NULL,
@@ -616,10 +584,6 @@ jmvtabreg <- function(
     subtext = "",
     wrap_rows = 35,
     wrap_cols = 15,
-    ids = NULL,
-    strata = NULL,
-    fpc = NULL,
-    nest = FALSE,
     export_format = "excel",
     exportExcel = FALSE,
     export_dir = "~/Documents",
@@ -634,19 +598,13 @@ jmvtabreg <- function(
     if ( ! missing(predictors)) predictors <- jmvcore::resolveQuo(jmvcore::enquo(predictors))
     if ( ! missing(split_var)) split_var <- jmvcore::resolveQuo(jmvcore::enquo(split_var))
     if ( ! missing(wt)) wt <- jmvcore::resolveQuo(jmvcore::enquo(wt))
-    if ( ! missing(ids)) ids <- jmvcore::resolveQuo(jmvcore::enquo(ids))
-    if ( ! missing(strata)) strata <- jmvcore::resolveQuo(jmvcore::enquo(strata))
-    if ( ! missing(fpc)) fpc <- jmvcore::resolveQuo(jmvcore::enquo(fpc))
     if (missing(data))
         data <- jmvcore::marshalData(
             parent.frame(),
             `if`( ! missing(dependent), dependent, NULL),
             `if`( ! missing(predictors), predictors, NULL),
             `if`( ! missing(split_var), split_var, NULL),
-            `if`( ! missing(wt), wt, NULL),
-            `if`( ! missing(ids), ids, NULL),
-            `if`( ! missing(strata), strata, NULL),
-            `if`( ! missing(fpc), fpc, NULL))
+            `if`( ! missing(wt), wt, NULL))
 
     for (v in split_var) if (v %in% names(data)) data[[v]] <- as.factor(data[[v]])
 
@@ -679,10 +637,6 @@ jmvtabreg <- function(
         subtext = subtext,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
-        ids = ids,
-        strata = strata,
-        fpc = fpc,
-        nest = nest,
         export_format = export_format,
         exportExcel = exportExcel,
         export_dir = export_dir,

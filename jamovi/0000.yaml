@@ -10,12 +10,13 @@ date: '2026-07-23'
 type: R
 description: >-
   Make it easy to deal with multiple cross-tables in data exploration, by
-  creating them, manipulating them, and adding color helpers to highlight deviations 
-  (differences from totals, comparisons between lines or columns, contributions to 
-  variance, odds ratios, etc.) and significance (confidence intervals, stars, etc.).
-  Create the same kind of tables for regression models, with a framework to compare
-  modelised quantities with their observed/empirical counterpart systematically.
-  Tables can be exported to 'Excel', plot and html with formats and colors.
+  creating them, manipulating them, and adding color helpers to highlight
+  deviations  (differences from totals, comparisons between lines or columns,
+  contributions to  variance, odds ratios, etc.) and significance (confidence
+  intervals, stars, etc.). Create the same kind of tables for regression models,
+  with a framework to compare modelised quantities with their observed/empirical
+  counterpart systematically. Tables can be exported to 'Excel', plot and html
+  with formats and colors.
 analyses:
   - title: Crosstables
     name: jmvtab
@@ -25,11 +26,11 @@ analyses:
     category: analyses
     usesNative: true
     minApp: 1.0.8
-  - title: Regression models
+  - title: Regressions
     name: jmvtabreg
     ns: tabxplor
     menuGroup: tabxplor
-    menuTitle: Regression models
+    menuTitle: Regressions
     category: analyses
     usesNative: true
     minApp: 1.0.8

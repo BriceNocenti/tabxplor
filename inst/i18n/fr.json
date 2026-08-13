@@ -7,47 +7,110 @@
                 "lang": "fr",
                 "plural_forms": "nplurals=2; plural=(n != 1);"
             },
+            "<b>Advanced — survey design (used with a weight)</b>": [
+                "<b>Avancé — plan de sondage (avec pondération)</b>"
+            ],
+            "<b>cleannames =</b>": [
+                "<b>cleannames = <i>(nettoyer noms)</i></b>"
+            ],
             "<b>col_vars = <i>(column variables)</i></b>": [
                 "<b>col_vars = <i>(variables de colonne)</i></b>"
             ],
             "<b>Confidence intervals</b>": [
-                "<b>Intervalles de confiance</b>"
+                "<b>Intervalles de confiance (IC)</b>"
             ],
-            "<b>File name:</b>": [
-                "Nom du fichier:"
+            "<b>Confidence-interval methods (advanced)</b>": [
+                "<b>Méthodes d'IC (avancé)</b>"
             ],
-            "<b>Folder:</b>": [
-                "Chemin du dossier:"
+            "<b>dependent = <i>(outcome variable[s])</i></b>": [
+                "<b>dependent = <i>(variable[s] à expliquer)</i></b>"
+            ],
+            "<b>Display</b>": [
+                "<b>Affichage</b>"
+            ],
+            "<b>fpc = <i>(finite population)</i></b>": [
+                "<b>fpc = <i>(population finie)</i></b>"
+            ],
+            "<b>ids = <i>(cluster ids)</i></b>": [
+                "<b>ids = <i>(id. de grappes)</i></b>"
             ],
             "<b>Levels and missing values</b>": [
                 "<b>Valeurs manquantes et modalités</b>"
             ],
+            "<b>Model comparison (+ predictor subsets)</b>": [
+                "<b>Comparaison de modèles</b>"
+            ],
+            "<b>Model</b>": [
+                "<b>Modèle</b>"
+            ],
+            "<b>n_min = <i>(hide rows/cols with small n)</i></b>": [
+                "<b>n_min = <i>(masquer lignes/col. à petit n)</i></b>"
+            ],
             "<b>Other formatting</b>": [
                 "<b>Autres mises en forme</b>"
             ],
-            "<b>Percentages, colors and Chi2 test </b>": [
-                "<b>Pourcentages, couleurs et test du Chi2</b>"
+            "<b>other_if_less_than = <i>(\"Other\" level)</i></b>": [
+                "<b>other_if_less_than = <i>(modalité « Autres »)</i></b>"
+            ],
+            "<b>Percentages, colors and tests</b>": [
+                "<b>Pourcentages, couleurs et tests</b>"
+            ],
+            "<b>predictors = <i>(explanatory variables)</i></b>": [
+                "<b>predictors = <i>(variables explicatives)</i></b>"
             ],
             "<b>References (points of comparison)</b>": [
                 "<b>Références (points de comparaison)</b>"
             ],
+            "<b>References and predictor scaling</b>": [
+                "<b>Références et échelle des prédicteurs</b>"
+            ],
+            "<b>Reorder levels</b> <i>(click on a level, then move it up/down)</i>": [
+                "<b>Réordonner les modalités</b> <i>(cliquer, puis monter/descendre)</i>"
+            ],
             "<b>row_vars = <i>(row variables)</i></b>": [
                 "<b>row_vars = <i>(variables de ligne)</i></b>"
+            ],
+            "<b>Show:</b>": [
+                "<b>Afficher :</b>"
+            ],
+            "<b>Significance</b>": [
+                "<b>Significativité</b>"
+            ],
+            "<b>split_var = <i>(fit within each group)</i></b>": [
+                "<b>split_var = <i>(un modèle par groupe)</i></b>"
+            ],
+            "<b>strata = <i>(strata)</i></b>": [
+                "<b>strata = <i>(strates)</i></b>"
             ],
             "<b>tab_vars = <i>(subtables variables)</i></b>": [
                 "<b>tab_vars = <i>(variables de sous-tableaux)</i></b>"
             ],
+            "<b>Table layout</b>": [
+                "<b>Disposition du tableau</b>"
+            ],
+            "<b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for numeric)</i></b>": [
+                "<b>test = <i>(Chi2 et V de Cramér si catégorielle ; ANOVA F et eta2 si numérique)</i></b>"
+            ],
+            "<b>wt = <i>(survey weights)</i></b>": [
+                "<b>wt = <i>(poids de sondage)</i></b>"
+            ],
             "<b>wt = <i>(weights)</i></b>": [
                 "<b>wt = <i>(poids)</i></b>"
+            ],
+            "~/Documents": [
+                "~/Documents"
+            ],
+            "ac <i>(Agresti-Caffo)</i>": [
+                "ac <i>(Agresti-Caffo)</i>"
+            ],
+            "Add statistical test/effect size": [
+                "Ajouter test / taille d'effet"
             ],
             "add_n = <i>(see unweighted counts)</i>": [
                 "add_n = <i>(voir effectifs non pondérés)</i>"
             ],
             "add_pct = <i>(see frequencies of 100% total)</i>": [
                 "add_pct = <i>(voir freq. des totaux à 100%)</i>"
-            ],
-            "after_ci <i>(diff, after substracting margin of error)</i>": [
-                "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
             ],
             "all": [
                 "all"
@@ -58,17 +121,53 @@
             "all_tabs": [
                 "all_tabs"
             ],
+            "AME (average marginal effect)": [
+                "AME (effet marginal moyen)"
+            ],
+            "ANOVA F": [
+                "ANOVA F"
+            ],
+            "ANOVA F (numeric)": [
+                "ANOVA F (numérique)"
+            ],
+            "at": [
+                "at"
+            ],
+            "at = <i>(profile, marginal effects)</i>": [
+                "at = <i>(profil, effets marginaux)</i>"
+            ],
+            "at the reference profile": [
+                "au profil de référence"
+            ],
             "auto": [
                 "auto"
+            ],
+            "auto <i>(first level if binary)</i>": [
+                "auto <i>(1re modalité si binaire)</i>"
+            ],
+            "auto <i>(smart default: difference + ratio)</i>": [
+                "auto <i>(défaut : différence + ratio)</i>"
             ],
             "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>": [
                 "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
             ],
+            "average (over the sample)": [
+                "moyen (sur l'échantillon)"
+            ],
+            "Baseline model position": [
+                "Position du modèle de base"
+            ],
+            "Binomial modelled level (per dependent)": [
+                "Modalité modélisée (binomial, par var.)"
+            ],
+            "Binomial trials (per dependent)": [
+                "Nombre de questions (par variable)"
+            ],
             "cell <i>(ci for each cell)</i>": [
                 "cell <i>(IC pour chaque case)</i>"
             ],
-            "chi2 = <i>(Chi2 test)</i>": [
-                "chi2 = <i>(test du Chi2)</i>"
+            "ci": [
+                "ci"
             ],
             "ci <i>(confidence intervals)</i>": [
                 "ci <i>(IC, intervalles de confiance)</i>"
@@ -79,17 +178,41 @@
             "ci = <i>(confidence intervals)</i>": [
                 "ci = <i>(intervalles de confiance, IC)</i>"
             ],
-            "cleannames =": [
-                "cleannames = <i>(nettoyer noms)</i>"
+            "classic <i>(equal variances)</i>": [
+                "classique <i>(variances égales)</i>"
+            ],
+            "cleannames": [
+                "cleannames"
+            ],
+            "cleannames = <i>(tidy level names)</i>": [
+                "cleannames = <i>(noms de modalités nettoyés)</i>"
+            ],
+            "cluster ids nested within strata": [
+                "grappes emboîtées dans les strates"
+            ],
+            "coefficient (per-family effect)": [
+                "coefficient (effet propre à la famille)"
             ],
             "col (column)": [
                 "col (colonne)"
             ],
-            "color = (Color)": [
-                "color = (Couleur)"
+            "color": [
+                "color"
             ],
-            "color = <i>(what to use for color helpers)</i>": [
-                "color = <i>(aides à l'interprétation)</i>"
+            "color = <i>(colour helpers)</i>": [
+                "color = <i>(aides couleurs)</i>"
+            ],
+            "color = <i>(what to measure for colors)</i>": [
+                "color = <i>(que mesurer pour les couleurs)</i>"
+            ],
+            "color_signif": [
+                "color_signif"
+            ],
+            "color_signif = <i>(significance policy)</i>": [
+                "color_signif = <i>(gestion de la significativité)</i>"
+            ],
+            "common_base <i>(complete cases of 1st col_var)</i>": [
+                "common_base <i>(cas complets du 1er col_var)</i>"
             ],
             "comp": [
                 "comp"
@@ -97,11 +220,23 @@
             "comp = <i>(reference table with tab_vars)</i>": [
                 "comp = <i>(tableau de référence, avec tab_vars)</i>"
             ],
+            "compare": [
+                "compare"
+            ],
+            "compare = <i>(nested-model LR/F test)</i>": [
+                "compare = <i>(test LR/F entre modèles)</i>"
+            ],
+            "conf_level =": [
+                "conf_level ="
+            ],
             "conf_level = <i>(confidence level)</i>": [
                 "conf_level = <i>(seuil de confiance)</i>"
             ],
-            "contrib <i>(relative contribution to variance)</i>": [
-                "contrib <i>(contribution relative à la variance)</i>"
+            "Confidence level": [
+                "Seuil de confiance"
+            ],
+            "contrib <i>(contribution to variance)</i>": [
+                "contrib <i>(contribution à la variance)</i>"
             ],
             "Crosstables": [
                 "Tableaux croisés"
@@ -109,14 +244,20 @@
             "ctr <i>(relative contributions to variance)</i>": [
                 "ctr <i>(contribution relative à la variance)</i>"
             ],
+            "design_effect": [
+                "design_effect"
+            ],
+            "design_effect = <i>(design effect of the weights)</i>": [
+                "design_effect = <i>(effet de plan des pondérations)</i>"
+            ],
             "diff <i>(ci on the difference with reference)</i>": [
                 "diff <i>(IC sur la différence avec la référence)</i>"
             ],
+            "diff <i>(difference from total, or reference cell)</i>": [
+                "diff <i>(écart au total, ou à la case de référence)</i>"
+            ],
             "diff <i>(differences from total, or reference cell)</i>": [
                 "diff <i>(différences par rapport au total/référence)</i>"
-            ],
-            "diff_ci <i>(differences, only if significant)</i>": [
-                "diff_ci <i>(différences, seulement si significatives)</i>"
             ],
             "digits = <i>(number of digits)</i>": [
                 "digits = <i>(nombre de chiffres après la virgule)</i>"
@@ -124,32 +265,95 @@
             "display = <i>(which information to display in the table ?)</i>": [
                 "display = <i>(quelle information afficher dans le tableau ?)</i>"
             ],
-            "drop <i>(for each col_var)</i>": [
-                "drop <i>(enlever, par col_var)</i>"
+            "drop <i>(each col_var drops its own NA)</i>": [
+                "drop <i>(chaque col_var retire ses NA)</i>"
             ],
-            "drop_all <i>(for all col_vars)</i>": [
-                "drop_all <i>(pour toutes)</i>"
+            "drop all models (one shared population)": [
+                "tous modèles (population commune)"
             ],
-            "Export Table to Excel": [
-                "Exporter tableau vers Excel"
+            "drop by model (per-model complete cases)": [
+                "par modèle (cas complets par modèle)"
             ],
-            "Export to Excel": [
-                "Export Excel"
+            "drop_all <i>(complete cases in all col_vars)</i>": [
+                "drop_all <i>(cas complets sur tous les col_vars)</i>"
+            ],
+            "effect": [
+                "effect"
+            ],
+            "effect = <i>(estimand)</i>": [
+                "effect = <i>(estimande)</i>"
+            ],
+            "empirical": [
+                "empirical"
+            ],
+            "empirical = <i>(compare model estimates with observed values)</i>": [
+                "empirical = <i>(comparer estimations et valeurs observées)</i>"
+            ],
+            "estimate_display": [
+                "estimate_display"
+            ],
+            "estimate_display = <i>(cell layout)</i>": [
+                "estimate_display = <i>(disposition de la case)</i>"
+            ],
+            "Excel": [
+                "Excel"
+            ],
+            "exponentiate": [
+                "exponentiate"
+            ],
+            "exponentiate = <i>(odds / rate ratios when it makes sense)</i>": [
+                "exponentiate = <i>(odds/rate ratios quand pertinent)</i>"
+            ],
+            "Export": [
+                "Exporter"
+            ],
+            "Family (per dependent)": [
+                "Famille (par variable)"
             ],
             "first": [
                 "first"
             ],
+            "first <i>(first level of each col_var)</i>": [
+                "first <i>(1re modalité de chaque col_var)</i>"
+            ],
             "first/tot/<i>{col_number}</i>": [
                 "first/tot/<i>{num_colonne}</i>"
             ],
-            "keep": [
-                "keep (conserver NAs)"
+            "Format": [
+                "Format"
+            ],
+            "grey_non_signif <i>(color effect size + uncolor non-significant)</i>": [
+                "grey_non_signif <i>(taille d'effet + griser non signif.)</i>"
+            ],
+            "grey_non_signif <i>(same + uncolor non-significant)</i>": [
+                "grey_non_signif <i>(idem + griser non signif.)</i>"
+            ],
+            "guaranteed_effect <i>(color all CI-floor, ideal for small sample)</i>": [
+                "guaranteed_effect <i>(effet garanti par l'IC, idéal petit échant.)</i>"
+            ],
+            "guaranteed_effect <i>(color all CI-floor/small sample)</i>": [
+                "guaranteed_effect <i>(effet garanti par l'IC/petit échant.)</i>"
+            ],
+            "HTML": [
+                "HTML"
+            ],
+            "ignore <i>(color deviations by observed size)</i>": [
+                "ignore <i>(colorer selon la taille observée)</i>"
+            ],
+            "ignore <i>(color effect size only, ignore significance)</i>": [
+                "ignore <i>(taille d'effet seule, ignorer signif.)</i>"
+            ],
+            "keep <i>(NA as a normal level)</i>": [
+                "keep <i>(NA comme modalité)</i>"
+            ],
+            "Level order (per variable)": [
+                "Ordre des modalités (par variable)"
             ],
             "levels": [
                 "levels"
             ],
-            "levels = <i>(which lvs to keep)</i>": [
-                "levels = <i>(modalités)</i>"
+            "levels = <i>(which col_var levels to keep)</i>": [
+                "levels = <i>(modalités des col_var à garder)</i>"
             ],
             "line": [
                 "line (seulement une ligne)"
@@ -157,11 +361,44 @@
             "Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight important informations (differences from totals, comparisons between lines or columns, contributions to variance, confidence intervals, odds ratios, etc.). All functions are pipe-friendly and render data frames which can be easily manipulated. In the same time, time-taking operations are done with 'data.table' to go faster with big dataframes. Tables can be exported to 'Excel', plot and html with formats and colors.": [
                 "Tableaux croisés multiples faciles à manipuler en exploration de données, avec aides à l'interprétation pour colorer les informations importantes (différences par rapport au total, comparaison entre lignes, contributions à la variance, intervalles de confiance, rapports de chances, etc.) Toutes les fonctions sont adaptées au pipe (|> ou %>%) et retournent des data.frames aisément manipulables. Les opérations les plus lourdes sont réalisées en `data.table` pour gagner du temps avec les grandes bases de données. Les tableaux peuvent être exportés en format `Excel`, graphique ou html avec la mise en forme et les couleurs."
             ],
+            "Markdown": [
+                "Markdown"
+            ],
             "mean <i>(mean, for numeric variables)</i>": [
                 "mean <i>(moyenne, pour les variables numériques)</i>"
             ],
             "mean_ci <i>(means with visible conf. intervals)</i>": [
                 "mean_ci <i>(moyennes avec IC visibles)</i>"
+            ],
+            "method": [
+                "method"
+            ],
+            "method = <i>(conf. interval)</i>": [
+                "method = <i>(intervalle de confiance)</i>"
+            ],
+            "method_cell": [
+                "method_cell"
+            ],
+            "method_cell = <i>(cell proportion)</i>": [
+                "method_cell = <i>(proportion de la case)</i>"
+            ],
+            "method_diff": [
+                "method_diff"
+            ],
+            "method_diff = <i>(difference in proportion)</i>": [
+                "method_diff = <i>(différence de proportion)</i>"
+            ],
+            "method_mean_diff": [
+                "method_mean_diff"
+            ],
+            "method_mean_diff = <i>(mean difference)</i>": [
+                "method_mean_diff = <i>(différence de moyennes)</i>"
+            ],
+            "method_mean_ratio": [
+                "method_mean_ratio"
+            ],
+            "method_mean_ratio = <i>(mean ratio)</i>": [
+                "method_mean_ratio = <i>(ratio de moyennes)</i>"
             ],
             "moe <i>(display: pct±margin of error)</i>": [
                 "moe <i>(format: pct±marge d'ereur)</i>"
@@ -169,14 +406,29 @@
             "n <i>(unweighted counts)</i>": [
                 "n <i>(effectifs non pondérés)</i>"
             ],
+            "na": [
+                "na"
+            ],
             "na = <i>(missing values)</i>": [
                 "na = <i>(valeurs manquantes)</i>"
+            ],
+            "newcombe <i>(hybrid score)</i>": [
+                "newcombe <i>(score hybride)</i>"
             ],
             "no": [
                 "no"
             ],
             "no (counts)": [
                 "no (effectifs)"
+            ],
+            "no <i>(no colors)</i>": [
+                "no <i>(pas de couleurs)</i>"
+            ],
+            "none": [
+                "aucune"
+            ],
+            "Note below the table": [
+                "Note sous le tableau"
             ],
             "options('tabxplor.ci_print' = ...)": [
                 "options('tabxplor.ci_print' = ...)"
@@ -187,6 +439,9 @@
             "OR <i>(odds ratios or relative risks ratios)</i>": [
                 "OR <i>(odds ratios, rapports de chance)</i>"
             ],
+            "OR <i>(odds ratios)</i>": [
+                "OR <i>(rapports de chances)</i>"
+            ],
             "OR = <i>(Odds Ratio)</i>": [
                 "OR = <i>(Odds Ratio, rapports de chance)</i>"
             ],
@@ -196,14 +451,14 @@
             "OR_pct <i>(odds ratios with visible percentages)</i>": [
                 "OR_pct  <i>(odds ratios avec pourcentages visibles)</i>"
             ],
-            "other_if_less_than =": [
-                "other_if_less_than = <br> <i>(regrouper modalités rares)</i>"
+            "Path:": [
+                "Chemin :"
+            ],
+            "pct": [
+                "pct"
             ],
             "pct <i>(percentages)</i>": [
                 "pct <i>(pourcentages)</i>"
-            ],
-            "pct = (Percentages)": [
-                "pct = (Pourcentages)"
             ],
             "pct = <i>(type of percentages)</i>": [
                 "pct = <i>(type de pourcentages)</i>"
@@ -211,17 +466,74 @@
             "pct_ci <i>(percentages with visible conf. intervals)</i>": [
                 "pct_ci <i>(pourcentages avec IC visibles)</i>"
             ],
-            "ref = <i>(reference row/col for diff/OR)</i>": [
-                "ref = <i>(ligne/col de référence pour diff/OR)</i>"
+            "poisson <i>(naive counts)</i>": [
+                "poisson <i>(effectifs bruts)</i>"
             ],
-            "ref2 = <i>(2nd reference col/row for OR)</i>": [
-                "ref2 = <i>(2e col/ligne de référence pour OR)</i>"
+            "Predictor scaling (per k units)": [
+                "Échelle des prédicteurs (par k unités)"
+            ],
+            "Predictor subsets (model comparison)": [
+                "Sous-ensembles de prédicteurs (comparaison)"
+            ],
+            "profile-likelihood": [
+                "profil de vraisemblance"
+            ],
+            "quasipoisson <i>(dispersion-scaled)</i>": [
+                "quasipoisson <i>(ajusté à la dispersion)</i>"
+            ],
+            "ratio <i>(ci on the ratio with reference)</i>": [
+                "ratio <i>(IC sur le ratio avec la référence)</i>"
+            ],
+            "ratio <i>(relative risk, or mean ratio)</i>": [
+                "ratio <i>(risque relatif, ou ratio de moyennes)</i>"
+            ],
+            "Reference levels (per predictor)": [
+                "Modalités de référence (par prédicteur)"
+            ],
+            "Reference levels (per variable)": [
+                "Modalités de référence (par variable)"
+            ],
+            "Reg_model": [
+                "Reg_model"
+            ],
+            "Regression models": [
+                "Modèles de régression"
+            ],
+            "Regressions": [
+                "Régressions"
+            ],
+            "Replace existing file": [
+                "Remplacer le fichier existant"
+            ],
+            "Reset default path": [
+                "Réinitialiser le chemin"
+            ],
+            "Reset to defaults": [
+                "Réinitialiser"
+            ],
+            "robust <i>(each group's variance, default)</i>": [
+                "robust <i>(variance par groupe, défaut)</i>"
             ],
             "row": [
                 "row (ligne)"
             ],
-            "S:/Documents": [
-                "S:/Documents"
+            "Run comparison": [
+                "Lancer la comparaison"
+            ],
+            "sequential (vs prev.)": [
+                "séquentielle (vs préc.)"
+            ],
+            "stars": [
+                "stars"
+            ],
+            "stars = <i>(significance stars)</i>": [
+                "stars = <i>(étoiles de significativité)</i>"
+            ],
+            "student <i>(pooled variance)</i>": [
+                "student <i>(variance commune)</i>"
+            ],
+            "subtext = <i>(note below the table)</i>": [
+                "subtext = <i>(note sous le tableau)</i>"
             ],
             "subtext = <i>(text to print below the table)</i>": [
                 "subtext = <i>(texte en dessous du tableau)</i>"
@@ -235,17 +547,11 @@
             "Table": [
                 "Tableau"
             ],
-            "Table1.xlsx": [
-                "Table1.xlsx"
-            ],
             "tabxplor": [
                 "tabxplor"
             ],
-            "Total": [
-                "Total"
-            ],
-            "totaltab = <i>(add a total table)</i>": [
-                "totaltab = <i>(ajouter un tableau Total général)</i>"
+            "totaltab": [
+                "totaltab"
             ],
             "totaltab = <i>(with tab_vars, add a total table)</i>": [
                 "totaltab = <i>(avec tab_vars, ajouter un tableau Total général)</i>"
@@ -253,14 +559,59 @@
             "User-Friendly Tables with Color Helpers for Data Exploration": [
                 "Tableaux avec aides à l'interprétation pour l'exploration de données"
             ],
+            "value (plain estimate)": [
+                "value (estimation simple)"
+            ],
             "var <i>(variance)</i>": [
                 "var <i>(variance)</i>"
+            ],
+            "vs a baseline model": [
+                "vs un modèle de base"
+            ],
+            "wald": [
+                "wald"
+            ],
+            "Wald": [
+                "Wald"
+            ],
+            "wald <i>(normal approx.)</i>": [
+                "wald <i>(approx. normale)</i>"
+            ],
+            "welch <i>(unequal variances, default)</i>": [
+                "welch <i>(variances inégales, défaut)</i>"
+            ],
+            "Welch <i>(unequal variances)</i>": [
+                "Welch <i>(variances inégales)</i>"
+            ],
+            "wilson <i>(score, default)</i>": [
+                "wilson <i>(score, défaut)</i>"
+            ],
+            "with confidence interval": [
+                "avec intervalle de confiance"
+            ],
+            "with marginal effect": [
+                "avec effet marginal"
+            ],
+            "with predicted probability": [
+                "avec probabilité prédite"
             ],
             "wn <i>(weighted counts)</i>": [
                 "wn <i>(effectifs pondérés)</i>"
             ],
+            "Wrap column headers at": [
+                "Couper en-têtes de colonne à"
+            ],
+            "Wrap row labels at": [
+                "Couper libellés de ligne à"
+            ],
+            "wrap_cols =": [
+                "wrap_cols ="
+            ],
             "wrap_cols = <i>(nb chars for line break)</i>": [
                 "wrap_cols = <i>(nb lettres avant saut de ligne)</i>"
+            ],
+            "wrap_rows =": [
+                "wrap_rows ="
             ],
             "wrap_rows = <i>(nb chars for line break)</i>": [
                 "wrap_rows = <i>(nb lettres avant saut de ligne)</i>"

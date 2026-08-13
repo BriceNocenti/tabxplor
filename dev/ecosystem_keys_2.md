@@ -36,6 +36,25 @@ two studied options each**, with the facts needed to choose between them; §10 Q
 choice as still open. Four defects surfaced during that pass (§11 D16–D19), one of them
 user-visible.
 
+**Third pass (2026-08-13).** §KEY 8 was re-opened from scratch — *"restate the whole problem and find
+the real key; I would rather have a well-argued demolition than a polished defence."* It is a
+demolition: the pass-2 `compare` argument is withdrawn on three measured grounds (the name is already
+a `tab_reg()` formal; on `tab()` the comparison geometry is **not an input**; and the D20/D21 defect
+class is reachable with no `OR`/`ci` conflict at all). **§KEY 8 is rewritten** around the replacement —
+one vocabulary, two hosts, and a *principled divergence* between the two producers.
+
+A **follow-up round** the same day settled the two questions the rewrite left open, both by
+measurement: the odds ratio becomes **unconditional** (measured free — 300 ms against the difference
+path's 340 ms), which is what makes `tab(OR =)` deletable; and `ci` is **not** a logical (the first
+draft's proposal, withdrawn on the maintainer's objection) but keeps its *anchor* question,
+`c("auto", "no", "cell", "comparison")`, with `"cell"` unchanged. `color` alone must **not** trigger
+the comparison interval — measured **+38 %** on a build.
+
+**Six defects surfaced** across the third pass (§11 D22, D23, D25, D26, D27, D28), three of them
+user-visible; D24 was checked and **not** confirmed — `OR = "cumOR"` messages correctly, and its
+message is the model this study recommends elsewhere. Corrections propagated to §KEY 2's naming
+sub-question, §KEY 3's derived-arguments table, §KEY 3a's Shape 1, §5, §9 and §10 Q7.
+
 ⚠ `R/tab.R`, `R/tab_reg.R` and `R/tab-agg.R` were under concurrent edit during this audit; line
 numbers may drift by ±20, structure does not. **Re-grep before acting.**
 
@@ -470,13 +489,13 @@ attr(col, "var")   the variable its labels belong to     # NA on a merged `level
 
 **Measured on a prototype** (same 15 verbs, plus base and forcats interop):
 
-| fact                                        | measured                                                                                                                                                                                                                              |
-|---------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `is.factor()`                               | **TRUE** — it *is* a factor. So the 39 `is.factor` sites, `levels()`, `as.character()`, `arrange()`'s factor order, `filter(levels == "Total")`, `group_by()` and printing all keep working **with no method written at all**       |
-| survival with **zero** methods defined      | `[`, `filter`, `arrange`, `mutate`, `as.data.frame` **and** forcats' `fct_drop` / `fct_rev` / `fct_relevel` all keep the class *and* the attributes                                                                                |
+| fact                                        | measured                                                                                                                                                                                                                                                    |
+|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `is.factor()`                               | **TRUE** — it *is* a factor. So the 39 `is.factor` sites, `levels()`, `as.character()`, `arrange()`'s factor order, `filter(levels == "Total")`, `group_by()` and printing all keep working **with no method written at all**                               |
+| survival with **zero** methods defined      | `[`, `filter`, `arrange`, `mutate`, `as.data.frame` **and** forcats' `fct_drop` / `fct_rev` / `fct_relevel` all keep the class *and* the attributes                                                                                                         |
 | what actually needs a method                | only `bind_rows` / `vec_c` (→ `vec_ptype2` + `vec_cast`, two short methods), and `droplevels()` / a `factor()` round-trip (one method). Verified: the package's own `droplevels`/`fct_drop` calls are all on **source data**, never on a built label column |
-| total                                       | **15/15 with ~4 short methods**, against Option B's ~8 (three proxies, `$`, `pillar_shaft`, format, as.character, ptype2/cast)                                                                                                     |
-| the same attribute with **no class at all** | **13/15** — everything except `bind_rows`. So the class buys exactly one verb, and it is the same verb D16 already breaks for the table attributes                                                                                 |
+| total                                       | **15/15 with ~4 short methods**, against Option B's ~8 (three proxies, `$`, `pillar_shaft`, format, as.character, ptype2/cast)                                                                                                                              |
+| the same attribute with **no class at all** | **13/15** — everything except `bind_rows`. So the class buys exactly one verb, and it is the same verb D16 already breaks for the table attributes                                                                                                          |
 
 **What it unlocks — everything Option A unlocks, plus most of B:**
 
@@ -522,10 +541,10 @@ re-derived by heuristics.
 
 #### The naming sub-question (independent of the carrier; A alone is coupled to it)
 
-| option                                  | what it buys                                                                                                                                   | what it costs                                                                                                                                                                                                                                        |
-|-----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| option                                  | what it buys                                                                                                                                                                                                                   | what it costs                                                                                                                                                                                                                                        |
+|-----------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **1. always `row_var` \| `levels`**     | the spec becomes **re-derivable** from the data, so Option A finally inherits dplyr's property; one shape for every producer; the reg pun dies. Available under all three, and still worth having under C for the single shape | `filter(t, marital == "Married")` stops working on a single-row_var table. **Measured: no vignette, README or test does this** — the only `filter()`s in the docs are on the source data before `tab()`. So the breakage is in unseen user code only |
-| **2. one typed column** (Option B only) | `row_var` stops existing as a stored column and becomes `levels$var` — nothing to keep in sync, and the grouping slot is freed (above)         | furthest from today's user code; `group_by(row_var)` needs either a derived column or (better) the render-time block derivation                                                                                                                      |
+| **2. one typed column** (Option B only) | `row_var` stops existing as a stored column and becomes `levels$var` — nothing to keep in sync, and the grouping slot is freed (above)                                                                                         | furthest from today's user code; `group_by(row_var)` needs either a derived column or (better) the render-time block derivation                                                                                                                      |
 
 Note the coupling: **naming 1 is what makes Option A robust** (it is what lets the spec be rebuilt
 from the data rather than merely stored), and naming 2 is only available under Option B. **Option C
@@ -537,24 +556,24 @@ that keeps every documented example working *and* keeps the fragility the mainta
 
 #### The three options side by side
 
-| criterion |**A** — declared spec in a table attribute|**C** — typed label column, attributes only|**B** — typed row-index column with fields|
-|---|---|---|---|
-| where the **declaration** lives      | a 4th table attribute            | column attributes                  | column attributes + per-element fields |
-| measured robustness of that carrier  | 13/15 (15/15 only after D16)     | **15/15** (~4 short methods)       | **15/15**                           |
-| row **kind** carrier                 | `row_kind` field (forced by R3)  | `row_kind` field                   | `row_kind` field (+ a display copy) |
-| per-row **variable identity**        | the `row_var` column's values    | the `row_var` column's values      | a field of the label column         |
-| `is.factor` migration                | none                             | **none** (it *is* a factor)        | ~10 sites, forced                   |
-| new S3 methods                       | 0                                | ~4                                 | ~8                                  |
-| kills the positional role vector     | yes                              | yes                                | yes                                 |
-| kills the last-factor / label guessing | yes                            | yes                                | yes                                 |
-| `meta$vars` becomes derived          | partly (the spec is still stored)| **yes**                            | **yes**                             |
-| `tab_vars` survives `ungroup()`      | yes (named in the spec)          | **yes** (declared on the column)   | only if the tab_var columns are typed too |
-| unlocks `tab_vars` × several `row_vars` | yes, via two grouping columns  | yes, blocks derived from the data  | yes, blocks derived from the data   |
-| four label shapes become             | one (with naming 1) / four declared (friendly names) | **two declared**       | **one**                             |
-| friendly `tab$marital` can stay      | only at the cost of robustness   | **yes, no cost**                   | no (naming 2)                       |
-| fixes the merged-table `ordered` strip | no                             | no                                 | **yes**                             |
-| `$` row surface (`tab$levels$var`)   | no                               | no                                 | **yes**                             |
-| estimated cost                       | ~1 session + D16                 | **~1.5 sessions**                  | 2–3 sessions                        |
+| criterion                               | **A** — declared spec in a table attribute           | **C** — typed label column, attributes only | **B** — typed row-index column with fields |
+|-----------------------------------------|------------------------------------------------------|---------------------------------------------|--------------------------------------------|
+| where the **declaration** lives         | a 4th table attribute                                | column attributes                           | column attributes + per-element fields     |
+| measured robustness of that carrier     | 13/15 (15/15 only after D16)                         | **15/15** (~4 short methods)                | **15/15**                                  |
+| row **kind** carrier                    | `row_kind` field (forced by R3)                      | `row_kind` field                            | `row_kind` field (+ a display copy)        |
+| per-row **variable identity**           | the `row_var` column's values                        | the `row_var` column's values               | a field of the label column                |
+| `is.factor` migration                   | none                                                 | **none** (it *is* a factor)                 | ~10 sites, forced                          |
+| new S3 methods                          | 0                                                    | ~4                                          | ~8                                         |
+| kills the positional role vector        | yes                                                  | yes                                         | yes                                        |
+| kills the last-factor / label guessing  | yes                                                  | yes                                         | yes                                        |
+| `meta$vars` becomes derived             | partly (the spec is still stored)                    | **yes**                                     | **yes**                                    |
+| `tab_vars` survives `ungroup()`         | yes (named in the spec)                              | **yes** (declared on the column)            | only if the tab_var columns are typed too  |
+| unlocks `tab_vars` × several `row_vars` | yes, via two grouping columns                        | yes, blocks derived from the data           | yes, blocks derived from the data          |
+| four label shapes become                | one (with naming 1) / four declared (friendly names) | **two declared**                            | **one**                                    |
+| friendly `tab$marital` can stay         | only at the cost of robustness                       | **yes, no cost**                            | no (naming 2)                              |
+| fixes the merged-table `ordered` strip  | no                                                   | no                                          | **yes**                                    |
+| `$` row surface (`tab$levels$var`)      | no                                                   | no                                          | **yes**                                    |
+| estimated cost                          | ~1 session + D16                                     | **~1.5 sessions**                           | 2–3 sessions                               |
 
 ---
 
@@ -667,12 +686,12 @@ key therefore needed two attributes. **That claim is withdrawn**; it was tested 
 does not survive. The interval is always on the estimate's own scale, and each apparent
 counter-example turns out to be something else:
 
-| apparent counter-example                              | what it actually is                                                                                                                                                                                                                                                              |
-|-------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| the **reference** column of an OR table (`ci_type = ""` while its siblings say `"or"`) | not a scale difference at all: the column's bounds are NA, so what varies is *whether an interval exists here*, not what scale it is on. Measured: `fmt_scale_key()` already answers `"or"` for all four columns                                                              |
-| a **two-channel** column ("only one interval is stored, the second channel derives from it", `fmt_class.R:3597-3601`) | a *measure*-vs-bounds difference, not an estimate-vs-bounds one. Measured on `color = c("diff","ratio")` + `ci = "diff"`: `ci_type = "diff"`, scale `points` — the stored interval **is** on the column's own scale, and the second channel's rescale is MEASURES' job, already handled |
-| z17 calling one dispatch **with and without `display`** | that branch is gated on `!nzchar(ci_type)` (`fmt_class.R:3381`), so it only fires when **no interval is stored** — i.e. it is the first row of this table again, not a second fact                                                                                          |
-| **`OR = "OR"` + `ci = "diff"`**                       | the one real divergence — and it is a **defect**, not a design fact (§11 D21): the column prints odds ratios (`1.00`, `2.06`, `1.78`) while storing a percentage-**point** interval, so `ci_center()` returns the difference and `fmt_scale_of()` would give a forest plot a `pct_diff` axis for an odds-ratio column |
+| apparent counter-example                                                                                              | what it actually is                                                                                                                                                                                                                                                                                                   |
+|-----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| the **reference** column of an OR table (`ci_type = ""` while its siblings say `"or"`)                                | not a scale difference at all: the column's bounds are NA, so what varies is *whether an interval exists here*, not what scale it is on. Measured: `fmt_scale_key()` already answers `"or"` for all four columns                                                                                                      |
+| a **two-channel** column ("only one interval is stored, the second channel derives from it", `fmt_class.R:3597-3601`) | a *measure*-vs-bounds difference, not an estimate-vs-bounds one. Measured on `color = c("diff","ratio")` + `ci = "diff"`: `ci_type = "diff"`, scale `points` — the stored interval **is** on the column's own scale, and the second channel's rescale is MEASURES' job, already handled                               |
+| z17 calling one dispatch **with and without `display`**                                                               | that branch is gated on `!nzchar(ci_type)` (`fmt_class.R:3381`), so it only fires when **no interval is stored** — i.e. it is the first row of this table again, not a second fact                                                                                                                                    |
+| **`OR = "OR"` + `ci = "diff"`**                                                                                       | the one real divergence — and it is a **defect**, not a design fact (§11 D21): the column prints odds ratios (`1.00`, `2.06`, `1.78`) while storing a percentage-**point** interval, so `ci_center()` returns the difference and `fmt_scale_of()` would give a forest plot a `pct_diff` axis for an odds-ratio column |
 
 So the maintainer's reading is the correct one, and it is a bigger simplification than the draft
 proposed: **one attribute, and `ci_type` is deleted rather than renamed.** It reproduces every value
@@ -729,18 +748,18 @@ SCALES[["odds_ratio"]] = list(field = "or", geometry = "ratio", null = 1, is_pct
 **The library in plain words — and the fact that it is already shared.** Every row was measured on a
 real column of both producers; the "produced by" column is what makes the point:
 
-| row              | what it is, in plain words                                                                          | geometry   | produced by — **measured**                                                                                |
-|------------------|-----------------------------------------------------------------------------------------------------|------------|-------------------------------------------------------------------------------------------------------------|
+| row              | what it is, in plain words                                                                                                                                                                                                                                                                                                                                                                               | geometry   | produced by — **measured**                                                                                 |
+|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------|------------------------------------------------------------------------------------------------------------|
 | `odds_ratio`     | a **multiplicative model effect**: how many times more likely / more frequent. ⚠ Its name is a misnomer — measured, an OR, an **RR** and an **IRR** are all this one row, with the *same* `model_family`, told apart only by the table-level `meta$effect` (`legend_reg_eff_word`, `fmt_class.R:4223-4225`). A neutral row name (`ratio_effect`) would be honest; the estimand's *word* is a legend fact | ratio      | `tab(OR = "OR")` · `Model_OR` · `Model_IRR` · `Model_RR` (both `family = "rr"` and `effect = "ame_ratio"`) |
-| `pct_ratio`      | the ratio of two **proportions** (the "×2 rule" comparison a crosstab colours by)                    | ratio      | crosstab `color = "ratio"`                                                                                     |
-| `mean_ratio`     | the ratio of two **means** (a rate ratio)                                                            | ratio      | `tab_num(ci_scale = "ratio")` · the poisson crude twin                                                        |
-| `points`         | a difference between two **percentages**, in percentage **points** (+5 pts, not "5 % more")          | difference | `tab(pct = "row", ci = "diff")` · `Model_AME` on a binomial                                                    |
-| **`raw_diff`**   | a difference in the **outcome's own units** — hours, dollars, counts. "raw" = not converted to points or to a ratio. Coloured on the SD-standardised ladder, the SD coming from the column's stored `var(Y)` | difference | gaussian **β** · a poisson **count AME**                                                                       |
-| **`mean_diff`**  | the crosstab twin of `raw_diff`: the same difference-in-units on the same ladder, but standardised by the **reference cell's** variance, because a crosstab stores no `var(Y)` | difference | `tab(marital, tvhours, ci = "diff")`                                                                           |
-| `log_coef`       | the raw **link-scale** coefficient (`exponentiate = FALSE`): a log-odds or log-rate                  | log        | `tab_reg(exponentiate = FALSE)` → `Model_β` on a non-gaussian family                                          |
-| **`level_pct`**  | **not a comparison at all** — the column holds a *level*: a percentage. There is no null to draw and no ladder (a level column's colour grades its *difference*; putting a ladder on the level axis would be a lie) | level      | `tab(pct = "row")` · `tab(pct = "row", ci = "cell")` · every crude `Obs_%`                                     |
-| **`level_mean`** | the same, for a **mean**                                                                             | level      | `tab(marital, tvhours)` · every crude `Obs_mean`                                                               |
-| `level_n`        | the same, for a **count** — the row the library is missing today (`type = "n"` currently borrows `level_pct`, whose `est_field` is `pct`; `fmt_class.R:3304` documents the fudge) | level      | `tab(pct = "no")`                                                                                              |
+| `pct_ratio`      | the ratio of two **proportions** (the "×2 rule" comparison a crosstab colours by)                                                                                                                                                                                                                                                                                                                        | ratio      | crosstab `color = "ratio"`                                                                                 |
+| `mean_ratio`     | the ratio of two **means** (a rate ratio)                                                                                                                                                                                                                                                                                                                                                                | ratio      | `tab_num(ci_scale = "ratio")` · the poisson crude twin                                                     |
+| `points`         | a difference between two **percentages**, in percentage **points** (+5 pts, not "5 % more")                                                                                                                                                                                                                                                                                                              | difference | `tab(pct = "row", ci = "diff")` · `Model_AME` on a binomial                                                |
+| **`raw_diff`**   | a difference in the **outcome's own units** — hours, dollars, counts. "raw" = not converted to points or to a ratio. Coloured on the SD-standardised ladder, the SD coming from the column's stored `var(Y)`                                                                                                                                                                                             | difference | gaussian **β** · a poisson **count AME**                                                                   |
+| **`mean_diff`**  | the crosstab twin of `raw_diff`: the same difference-in-units on the same ladder, but standardised by the **reference cell's** variance, because a crosstab stores no `var(Y)`                                                                                                                                                                                                                           | difference | `tab(marital, tvhours, ci = "diff")`                                                                       |
+| `log_coef`       | the raw **link-scale** coefficient (`exponentiate = FALSE`): a log-odds or log-rate                                                                                                                                                                                                                                                                                                                      | log        | `tab_reg(exponentiate = FALSE)` → `Model_β` on a non-gaussian family                                       |
+| **`level_pct`**  | **not a comparison at all** — the column holds a *level*: a percentage. There is no null to draw and no ladder (a level column's colour grades its *difference*; putting a ladder on the level axis would be a lie)                                                                                                                                                                                      | level      | `tab(pct = "row")` · `tab(pct = "row", ci = "cell")` · every crude `Obs_%`                                 |
+| **`level_mean`** | the same, for a **mean**                                                                                                                                                                                                                                                                                                                                                                                 | level      | `tab(marital, tvhours)` · every crude `Obs_mean`                                                           |
+| `level_n`        | the same, for a **count** — the row the library is missing today (`type = "n"` currently borrows `level_pct`, whose `est_field` is `pct`; `fmt_class.R:3304` documents the fudge)                                                                                                                                                                                                                        | level      | `tab(pct = "no")`                                                                                          |
 
 Two things fall out of that table. First, **the library is already the shared vocabulary between
 `tab()` and `tab_reg()`** — `odds_ratio`, `points`, `raw_diff` and `mean_diff` each serve a crosstab
@@ -787,11 +806,11 @@ And the symmetric trap: assigning `type` to the *base* half instead is no safer 
 tested at ~15 internal sites and would break the same way. **Whichever half keeps the name, the
 released meaning changes.** So there are three options, and the third dissolves the problem:
 
-| option                                                     | attributes                                        | back-compat                                                                                                            |
-|------------------------------------------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
-| **1. `type` = the scale** (maintainer's proposal)          | `type` + `pct_base`, `ci_type` deleted → **14**   | `get_type()` silently returns new values; `get_ci_type()` (also exported) has to be derived or deprecated              |
-| **2. `type` = the base**, new name for the scale           | `type` + `scale`, `ci_type` deleted → **14**      | `get_type()` silently returns new values (`"mean"`/`"n"`/`"coef"` are not bases and must go somewhere)                 |
-| **3. two honest names; `type` becomes a derived accessor** | `scale` + `pct_base`, `ci_type` deleted → **14**  | **exact**: `get_type()` and `get_ci_type()` are both *computed* and return all their old values unchanged, soft-deprecated |
+| option                                                     | attributes                                       | back-compat                                                                                                                |
+|------------------------------------------------------------|--------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| **1. `type` = the scale** (maintainer's proposal)          | `type` + `pct_base`, `ci_type` deleted → **14**  | `get_type()` silently returns new values; `get_ci_type()` (also exported) has to be derived or deprecated                  |
+| **2. `type` = the base**, new name for the scale           | `type` + `scale`, `ci_type` deleted → **14**     | `get_type()` silently returns new values (`"mean"`/`"n"`/`"coef"` are not bases and must go somewhere)                     |
+| **3. two honest names; `type` becomes a derived accessor** | `scale` + `pct_base`, `ci_type` deleted → **14** | **exact**: `get_type()` and `get_ci_type()` are both *computed* and return all their old values unchanged, soft-deprecated |
 
 Note the count: because (b) deletes `ci_type`, **all three options land on 14 attributes — the same
 number as today** (`type` splits in two, `ci_type` goes), before `ci_method` takes it to 15 below.
@@ -811,16 +830,23 @@ On the name itself, if 3 is chosen: **`ci_scale` is already the package's own wo
 scales (`color_scales()`, `set_color_breaks()`). `quantity` and `metric` avoid the collision at the
 price of that continuity.
 
-#### The link with KEY 3a — the argument asks a **geometry**, the attribute stores a **row**
+#### The link with KEY 3a / KEY 8 — the argument asks a **geometry**, the attribute stores a **row**
 
-KEY 3a proposes `tab_reg(scale = c("ratio", "difference", "log"))`; KEY 2 stores one of ten row names.
-Three values against ten looks like two vocabularies, and the natural worry is that they will need a
-lookup table kept in sync. They do not, because they are **the same vocabulary at two granularities**:
+KEY 8 (third pass) proposes `tab_reg(measure = c("odds_ratio", "ratio", "difference", "log"))`, and
+`tab(color = <the same words>)`; KEY 2 stores one of ten row names. Four values against ten looks like
+two vocabularies, and the natural worry is that they will need a lookup table kept in sync. They do
+not, because they are **the same vocabulary at two granularities**:
 
 > the argument names the **`geometry` column** of the library; the attribute names the **row**.
 
+⚠ **This is also why KEY 2's attribute must NOT be called `measure`, and KEY 8's argument must not be
+called `scale`.** One word at two grains is exactly the `type` / `ci_type` collision this key exists to
+end. Pass 3 settles it: the attribute is **`scale`** (the row), the argument is **`measure`** (the
+geometry) — and `measure` is already the package's own internal word for that vocabulary (`MEASURES`,
+`measure_facts()`), which is what lets `tab()`'s `color` and `tab_reg()`'s `measure` share it.
+
 `geometry` is already a column of the record (see the code block above), it already takes exactly the
-values KEY 3a's argument would take — `ratio` · `difference` · `log`, plus `level` for the three
+values the argument would take — `ratio` · `difference` · `log`, plus `level` for the three
 level rows — and the resolution is a lookup on **two columns the library already carries**:
 
 ```
@@ -831,14 +857,14 @@ row  =  the SCALES row whose  geometry == <what the user asked>
 Measured end to end, on real columns of both producers — and note the last row, which is where the
 first draft of this section was wrong:
 
-| the user asks                     | outcome is measured in | resolved row     | column built today                    |
-|-----------------------------------|-------------------------|------------------|---------------------------------------|
-| `ratio`                           | a probability           | `odds_ratio`     | `Model_OR`, and `Model_RR` under `effect = "ame_ratio"` |
-| `ratio`                           | counts                  | `odds_ratio`     | `Model_IRR`                           |
-| `difference`                      | a probability           | `points`         | `Model_AME` (binomial)                |
-| `difference`                      | counts / outcome units  | `raw_diff`       | `Model_AME` (poisson), gaussian **β** |
-| `log`                             | the link scale          | `log_coef`       | `exponentiate = FALSE`                |
-| `ratio`                           | outcome units (a mean)  | `mean_ratio`     | **nothing** — refused today (`effect = "ame_ratio"` aborts: *"needs a probability-scale outcome"*), although the row, the ladder and three CI engines all exist. A **gap, not an impossibility** — see KEY 8 |
+| the user asks | outcome is measured in | resolved row | column built today                                                                                                                                                                                           |
+|---------------|------------------------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ratio`       | a probability          | `odds_ratio` | `Model_OR`, and `Model_RR` under `effect = "ame_ratio"`                                                                                                                                                      |
+| `ratio`       | counts                 | `odds_ratio` | `Model_IRR`                                                                                                                                                                                                  |
+| `difference`  | a probability          | `points`     | `Model_AME` (binomial)                                                                                                                                                                                       |
+| `difference`  | counts / outcome units | `raw_diff`   | `Model_AME` (poisson), gaussian **β**                                                                                                                                                                        |
+| `log`         | the link scale         | `log_coef`   | `exponentiate = FALSE`                                                                                                                                                                                       |
+| `ratio`       | outcome units (a mean) | `mean_ratio` | **nothing** — refused today (`effect = "ame_ratio"` aborts: *"needs a probability-scale outcome"*), although the row, the ladder and three CI engines all exist. A **gap, not an impossibility** — see KEY 8 |
 
 Three consequences, in increasing order of value:
 
@@ -892,7 +918,7 @@ test: *does this name a fact no other attribute can derive, and does a reader ex
 |---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `scale` (the estimate)                | **yes** — the whole key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `pct_base`                            | **yes** — a `points` difference can be a row% or a col% difference; `tab_ci()` picks the diff orientation from it (`tab.R:6025-6029`), and the contribution base reads it                                                                                                                                                                                                                                                                                                                                                                                   |
-| `ci_type` / `ci_scale`                | **no — deleted.** (b) tested it column by column: the stored interval is always on the estimate's own scale, and "is there an interval here" is a data fact (all-NA bounds), not a vocabulary. `get_ci_type()` survives as a derived accessor                                                                                                                                                                                                                                                                                                            |
+| `ci_type` / `ci_scale`                | **no — deleted.** (b) tested it column by column: the stored interval is always on the estimate's own scale, and "is there an interval here" is a data fact (all-NA bounds), not a vocabulary. `get_ci_type()` survives as a derived accessor                                                                                                                                                                                                                                                                                                               |
 | `model_family`                        | **yes, already stored** — OR / IRR / RR share one scale and differ only by family, so the legend cannot derive its word from the scale                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `role` (`model`/`emp`)                | **yes, already stored**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **`ci_method`** (new)                 | **yes, and it pays for itself twice**: the CI method is a per-column fact (a cell interval used `method_cell`, a diff column `method_diff`, a mean diff `method_mean_diff`), yet it is stored table-wide in `meta$ci_settings` and picked back by *measure* in `legend_method_name()` — whose silent fall-through can print a method the bounds were never built with (§11 D8). Storing it per column makes D8 impossible **and empties `meta$ci_settings`**, since `conf_level` is already a column attribute. One attribute in, one `meta` sub-field out. |
@@ -953,23 +979,23 @@ plus `tab_setup()` is the same shape.
 Almost none of that is validation. It is **derivation**: computing an argument the user did not set,
 from arguments they did, and telling them about it. The graph, gathered from both boundaries:
 
-| derived                          | from                                                                                                          | site                                                     |
-|----------------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
-| `exponentiate`'s **default**     | `family != "gaussian"`, 8 code sites. ⚠ Corrected by KEY 8: only the *default* is derived — the **value** is a real choice (a user may want log-odds), so this row belongs here but the argument does **not** belong on the cut list | `tab_reg.R:5145`                                         |
-| `at = "reference"`               | degraded to `"average"` in **three** separate blocks                                                          | `tab_reg.R:5091, 5126, 5127`                             |
-| `estimate_display ∈ {prob, ame}` | degraded away when `effect ∈ {ame, ame_ratio}`                                                                | `tab_reg.R:5169-5178`                                    |
-| `empirical`                      | forced `TRUE` by `color = "adjustment"`                                                                       | `tab_reg.R:5261`                                         |
-| `trials`                         | *is* a family variant (`crude_key = "grouped_binomial"`)                                                      | `tab_reg.R:257-262`                                      |
-| `ci = "diff"`                    | forced by `color_signif ≠ ignore`, by `stars = TRUE`, by `color ∈ diff-family`, and again at the numeric leaf | `tab-resolve.R:118-127, 165, 177-182`; `tab.R:5163-5171` |
-| `totrow`, `chi2`                 | forced `TRUE` by `color = "contrib"` (with a `warning()`)                                                     | `tab-resolve.R:146-154`                                  |
-| `ref`                            | *required* by a difference colour (abort); and `ci = "diff"` forces `ref = "tot"`                             | `tab-resolve.R:159-165`; `tab.R:5173-5176`               |
-| `ref` **meaning**                | reinterpreted by `pct`: a reference **row** under `"row"`, a reference **column** under `"col"`               | `tab.R:1910-1932`                                        |
-| `totaltab`                       | forced by `comp = "all"`, in **both** leaves, with warnings                                                   | `tab.R:3919-3927`, `5206-5213`                           |
-| `tot_cols_type`                  | forced to `"no_delete"` by `pct`/`ci`/`chi2`/`OR`                                                             | `tab.R:1975-1988`                                        |
-| `color`                          | `TRUE` → per-column-type measures; `"auto"` → OR / after_ci / diff / contrib                                  | `tab.R:1050-1073`; `tab-resolve.R:129-141`               |
-| `basis`                          | `wt` × design × `design_effect`                                                                               | `survey-design.R:143-151`                                |
-| `comp`                           | `"all"` collapses to `"tab"` without `tab_vars`                                                               | `tab.R:1522`                                             |
-| `na = "common_base"`             | desugared into `na_drop_all = c(row_var, col_var[1], tab_vars)` + `na = "keep"`                               | `tab.R:738-743`                                          |
+| derived                          | from                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | site                                                     |
+|----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
+| `exponentiate`                   | `family != "gaussian"`, 8 code sites. ⚠ **Twice corrected.** Pass 2 removed this argument from the cut list ("presentation only, a genuine choice"); pass 3 puts it back and the maintainer has **ruled delete** — measured, it is a silent no-op on the whole marginal path, is set in 0 of 49 taught calls, and its `FALSE` value *is* a measure (the model line calls it "log-odds coefficients"). It becomes `measure = "log"`, with `exponentiate = FALSE` kept as a documented synonym (§KEY 8.10) | `tab_reg.R:5145`                                         |
+| `at = "reference"`               | degraded to `"average"` in **three** separate blocks                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `tab_reg.R:5091, 5126, 5127`                             |
+| `estimate_display ∈ {prob, ame}` | degraded away when `effect ∈ {ame, ame_ratio}`                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `tab_reg.R:5169-5178`                                    |
+| `empirical`                      | forced `TRUE` by `color = "adjustment"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `tab_reg.R:5261`                                         |
+| `trials`                         | *is* a family variant (`crude_key = "grouped_binomial"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `tab_reg.R:257-262`                                      |
+| `ci = "diff"`                    | forced by `color_signif ≠ ignore`, by `stars = TRUE`, by `color ∈ diff-family`, and again at the numeric leaf                                                                                                                                                                                                                                                                                                                                                                                            | `tab-resolve.R:118-127, 165, 177-182`; `tab.R:5163-5171` |
+| `totrow`, `chi2`                 | forced `TRUE` by `color = "contrib"` (with a `warning()`)                                                                                                                                                                                                                                                                                                                                                                                                                                                | `tab-resolve.R:146-154`                                  |
+| `ref`                            | *required* by a difference colour (abort); and `ci = "diff"` forces `ref = "tot"`                                                                                                                                                                                                                                                                                                                                                                                                                        | `tab-resolve.R:159-165`; `tab.R:5173-5176`               |
+| `ref` **meaning**                | reinterpreted by `pct`: a reference **row** under `"row"`, a reference **column** under `"col"`                                                                                                                                                                                                                                                                                                                                                                                                          | `tab.R:1910-1932`                                        |
+| `totaltab`                       | forced by `comp = "all"`, in **both** leaves, with warnings                                                                                                                                                                                                                                                                                                                                                                                                                                              | `tab.R:3919-3927`, `5206-5213`                           |
+| `tot_cols_type`                  | forced to `"no_delete"` by `pct`/`ci`/`chi2`/`OR`                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `tab.R:1975-1988`                                        |
+| `color`                          | `TRUE` → per-column-type measures; `"auto"` → OR / after_ci / diff / contrib                                                                                                                                                                                                                                                                                                                                                                                                                             | `tab.R:1050-1073`; `tab-resolve.R:129-141`               |
+| `basis`                          | `wt` × design × `design_effect`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `survey-design.R:143-151`                                |
+| `comp`                           | `"all"` collapses to `"tab"` without `tab_vars`                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `tab.R:1522`                                             |
+| `na = "common_base"`             | desugared into `na_drop_all = c(row_var, col_var[1], tab_vars)` + `na = "keep"`                                                                                                                                                                                                                                                                                                                                                                                                                          | `tab.R:738-743`                                          |
 
 **Three consequences of leaving the graph implicit.**
 
@@ -1014,12 +1040,18 @@ Today question 2 is asked **twice, in two different languages**: `exponentiate =
 coefficient path, and `effect = "ame_ratio"` on the marginal path. That is one concept with two
 spellings — the disease, in the argument surface.
 
-**Shape 1 — two arguments, one shared vocabulary.**
+**Shape 1 — two arguments, one shared vocabulary.** ⚠ **Pass 3 chose this shape and named it**; the
+second argument is `measure`, not `scale` (which KEY 2's attribute takes), and it gains an
+`odds_ratio` value distinct from `ratio` — because on a binary outcome an OR and an RR are two
+different statistics that users routinely conflate (§KEY 8.9). Read the block below as the sketch that
+§KEY 8.9 finishes.
 
 ```r
-effect = c("coefficient", "marginal", "at_reference")   # WHICH contrast   (absorbs `at`)
-scale  = c("ratio", "difference", "log")                # ON WHICH scale   (absorbs `exponentiate`,
-                                                        #                   deletes `ame_ratio`)
+effect  = c("coefficient", "marginal", "at_reference")            # WHICH contrast  (absorbs `at`)
+measure = c("odds_ratio", "ratio", "difference", "log")           # WHICH effect measure
+                                                                  #   (absorbs `exponentiate`,
+                                                                  #    deletes `ame_ratio`,
+                                                                  #    front-doors `family = "rr"`)
 ```
 
 | combination              | today                  |
@@ -1332,300 +1364,635 @@ accept the value its own documentation names (`tab-export.R:26` still says `"kab
 
 ---
 
-### KEY 8 — The comparison is asked for four times, and never stated once
+### KEY 8 — A table makes one comparison; only `tab_reg()` has to be told which
 
-**The fact that is missing:** *what this table compares, and how the comparison is expressed* — as
-**one** argument, on both producers.
+**Third pass (2026-08-13), re-opened from scratch at the maintainer's request** — *"restate the whole
+problem and find the real key; I would rather have a well-argued demolition than a polished defence."*
+It is a demolition, and it produced a replacement that is **smaller** than what it replaces.
 
-This key was found by pulling on KEY 2's thread (the maintainer's question: *"is there another missing
-key here, and would it make the arguments choices rather than consequences?"*). The answer is yes, and
-it is the argument-side twin of KEY 2: KEY 2 says the *column* must state what it holds; KEY 8 says
-the *user* should state it once instead of four times.
+**The fact that is missing:** not a name for the comparison — *a rule about where the comparison is
+named.* And the rule is different on the two producers, for a reason that is mechanical, not
+stylistic:
 
-#### The evidence: one question, four spellings, on each side
+> On a **crosstab**, every comparison geometry is a function of the *same* sufficient statistics the
+> aggregate already holds. Asking for one is a **selection**, and the package already has three
+> selectors for it.
+> On a **regression**, a geometry is a *different fit or a different estimator*. Asking for one is a
+> **modelling decision**, and it has nowhere to live but an argument.
+>
+> KEY 8 as written in passes 1–2 gave both producers the same argument. That is the over-collapse.
 
-**On `tab()`** the geometry of a comparison is currently spelled by four different arguments:
+---
 
-| the user writes        | what they are really saying              | evidence                              |
-|------------------------|-------------------------------------------|---------------------------------------|
-| `OR = "OR"`            | "express it as a ratio **of odds**"      | + it also picks a *dichotomisation*   |
-| `ci = "diff"`          | "express it as a **difference**" (and: put the interval on the comparison) | `tab.R:6025-6029`  |
-| `ci = "cell"`          | "no comparison — interval on the **level**" | measured: it silently overrides `OR`  |
-| `ci_scale = "ratio"`   | "express it as a **ratio**" (means only) | `tab.R:5752`                          |
-| `color = "ratio"`/`"diff"`/`"OR"` | the same words again, for the *colour* channel | MEASURES                   |
+#### 8.1 Three claims from the first two passes, withdrawn
 
-Nothing reconciles them, so **when two disagree one silently wins** — which is precisely D20
-(`OR` + `ci = "cell"` drops the odds ratios) and D21 (`OR` + `ci = "diff"` prints odds ratios over a
-percentage-point interval). Those are not two unrelated bugs; they are one missing argument.
+| claim (passes 1–2)                                                                                | status after re-measurement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|---------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *"D20 and D21 are not two unrelated bugs; they are one missing argument."*                        | **Withdrawn.** Measured: the same incoherence is reachable with **no `OR` and no `ci` conflict at all** — `tab(…, ci = "diff", display = "{ratio} ({ci})")` prints `×1.8 ([2;4]%)`, a ratio over a percentage-**point** interval (§11 D23). The class is *display-geometry ≠ interval-geometry*, and `display` must stay free (differentiator #1), so **no argument can close it**. It is closed by KEY 2 + one rule (§8.6).                                                                                           |
+| *"`compare` is a clean −2 formals on `tab()`, where it displaces four tabxplor-only spellings."*  | **Withdrawn.** Three of the four "spellings" are not spellings of one question: `display`, `color` and `ci` select *what is printed*, *what is coloured* and *what is tested* — three genuinely independent questions over the same cell, which is the whole point of the record. A fourth argument over the same facts is the disease, not the cure.                                                                                                                                                                  |
+| *"`compare` … on both producers"* (and the whole §"the asymmetry" attempt to rescue the reg half) | **Withdrawn on the name, and the name matters:** `compare` is **already a `tab_reg()` formal** — `compare = c("none", "baseline", "sequential")`, the model-comparison footer (`tab_reg.R:4928`, `man/tab_reg.Rd:30,429`). Two passes proposed an argument name that collides head-on with a live documented one. That is not a coincidence: in a regression table "compare" means *compare the models*, and in a crosstab it means *compare to the reference*. The word cannot carry the estimand on either producer. |
 
-**On `tab_reg()`** the same question is spread over `exponentiate`, `effect`'s `ame`/`ame_ratio`
-split, `at`, **and `family`** — because `family` is itself doing two jobs. Measured:
+---
 
-- `valid_families = c("gaussian", "binomial", "poisson", "quasipoisson", "multinomial", "ordinal")`
-  (`tab_reg.R`) mixes an **outcome kind** (gaussian / binomial / poisson / multinomial / ordinal)
-  with a **variance choice** (`quasipoisson`) and, through the back door, a **scale choice**.
-- `family = "rr"` — the modified Poisson that reports a **risk ratio** — is **refused when asked for
-  directly** (measured: *"`family` must be one of gaussian, binomial, poisson…"*). The only way a user
-  gets a risk ratio from a coefficient is to type `family = "poisson"` on a binary outcome. The z3
-  notes call that deliberate; from the outside it is a scale question answered by naming the wrong
-  distribution.
+#### 8.2 The measurement that decides the crosstab half
 
-#### The key
-
-State the comparison once, with the same words on both sides:
+On `tab()`, **the comparison geometry is not an input.** Measured on `gss_simple`, one plain call with
+no `ci`, no `OR`, no `color`:
 
 ```r
-tab(     …, compare = c("no", "difference", "ratio", "odds_ratio"),   # HOW vs `ref`
-            ci      = c("no", "cell", "comparison"))                  # WHERE the interval sits
-tab_reg( …, family  = <what the OUTCOME is>,          # binary / count / continuous / ordered / categorical
-            effect  = c("coefficient", "marginal", "at_reference"),   # WHICH contrast
-            compare = c("difference", "ratio", "odds_ratio"),         # WHICH comparison
-            exponentiate = TRUE)   # KEPT: presentation only -- see "the asymmetry" below
+tab(d, race, marital, pct = "row")        # column "Separated"
+    pct     0.0267   0.0626   0.0562   0.0346
+    diff   -0.0079   0.0281   0.0216   0.0000     <- the difference, computed
+    ratio   0.7707   1.8112   1.6235   1.0000     <- the ratio, computed
 ```
 
-`compare`'s value plus the outcome kind resolves to exactly one KEY 2 row, so the argument, the stored
-attribute, the legend and the plot axis are one vocabulary — and the *user* never has to know the row
-names:
+Both geometries are in **every cell of every percentage table, unconditionally**, and the user selects
+between them afterwards — measured, all three selectors work today and are independent:
 
-| `compare`    | binary outcome              | count            | continuous            |
-|--------------|-----------------------------|------------------|-----------------------|
-| `difference` | risk difference → `points`  | `raw_diff`       | `raw_diff`/`mean_diff` |
-| `ratio`      | **risk** ratio              | rate ratio (IRR) | ratio of means (the gap above) |
-| `odds_ratio` | odds ratio                  | —                | —                     |
-| `log`        | log-odds / log-rate → `log_coef` | `log_coef`  | —                     |
+| selector  | how the geometry is named       | measured output                         |
+|-----------|---------------------------------|-----------------------------------------|
+| `display` | `"{diff}"` / `"{ratio}"`        | `-1% +3% +2%` · `÷1.3 ×1.8 ×1.6`        |
+| `color`   | `"diff"` / `"ratio"`            | display unchanged (`pct`) — colour only |
+| `ci`      | `"diff"` / `"ratio"` / `"cell"` | `ci_type` `diff` / `ratio` / `cell`     |
 
-Note this **also fixes the OR/RR ambiguity** KEY 2 exposed: `ratio` and `odds_ratio` become two
-distinct user-facing values, instead of one library row whose meaning is recovered from
-`meta$effect`.
+The odds ratio is the one geometry that is **not** free — it needs a *dichotomisation* (which 2×2),
+which is what `ref2` supplies. That is a genuine build input. It is also the only one.
 
-#### What it deletes
+**This is not an accident of implementation; it is differentiator #1.** "A cell carries everything, so
+display is switchable losslessly" *means* the geometries are all present. An argument that made the
+user choose one at build time would delete the differentiator.
 
-| deleted                          | becomes                                                       |
-|----------------------------------|---------------------------------------------------------------|
-| `tab(OR =)`                      | `compare = "odds_ratio"` (`"cumOR"` stays — a *dichotomisation*, not a geometry) |
-| `tab_num(ci_scale =)`            | `compare = "ratio"`                                           |
-| `ci`'s geometry half             | `ci` keeps only *where* the interval sits                     |
-| ~~`tab_reg(exponentiate =)`~~    | **kept** — presentation only, and the ecosystem's word (see "the asymmetry") |
-| `tab_reg(at =)`                  | `effect = "at_reference"`                                     |
-| `effect = "ame_ratio"`           | `effect = "marginal", compare = "ratio"`                      |
-| `family = "rr"` (the back door)  | `family = <binary>, compare = "ratio"` — a front door         |
-| `family = "quasipoisson"`        | nothing: it is a variance rule, already applied automatically  |
-| `color = TRUE`'s two-stage resolve-and-discard (KEY 4) | "colour by the comparison I asked for"  |
+---
 
-**≈3 formals and 3 enum values gone across the two functions** (−2 on `tab()`, −1 on `tab_reg()`;
-the first draft said 4, before `exponentiate` was found to be a genuine choice — see "the asymmetry"
-below), and — the point of KEY 3's title — what remains are choices: *what is in the cell* (`pct`),
-*compared to what* (`ref`, `comp`), *how the comparison is expressed* (`compare`), *where the interval
-sits* (`ci`), *how it is coloured* (`color`). `OR`, `at`, `ci_scale` and `ame_ratio` were consequences
-of those; `exponentiate` is not.
+#### 8.3 `color` already asks the question — and already answers it correctly
 
-#### Readability — is a three-way cross teachable, and is any of it standard?
+The maintainer's reading (*"maybe it's a `color` + `display` thing that does not need `OR` and `ci`"*)
+is right, and the redundancy is **larger than either earlier pass claimed**. Four measurements:
 
-The fair objection (maintainer, on reading the above): *`family` × `effect` × `compare` is a cross of
-three arguments — would a user understand what is being computed? Is a well-explained table enough,
-given that not everyone reads vignettes? And can a newcomer be taught this without learning something
-so tabxplor-specific that it does not transfer?* Each part was checked rather than assumed.
+| measured                                                                                                                                                                     | consequence                                                                                                                       |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `tab(…, color = "OR")` **with no `OR =` argument** → the `or` field is computed (`1.00 4.29 2.25 1.40`)                                                                      | `color` **already** forces the odds-ratio computation. The `requires` mechanism KEY 4 proposes is, for this measure, already live |
+| `color = "diff"` + `color_signif` → `ci_type = "diff"`; `color = "ratio"` → `ci_type = "ratio"`; `color = "OR"` → `ci_type = "or"` (a real Woolf interval, `3.58 1.80 1.24`) | `color` **already** selects the correct interval geometry, for all three geometries, with no `ci` argument                        |
+| `stars = TRUE`, `color = "no"` → `ci_type = "diff"`                                                                                                                          | `stars` declares its own requirement too                                                                                          |
+| `color = "diff"` + `color_signif` + `ci = "cell"` → **a clean abort**                                                                                                        | the incoherent combination is *already* refused in one place (17d). The rule exists; it is just not general                       |
 
-**(1) The two decisions are not tabxplor's — they are every framework's.** What is unusual today is
-that tabxplor spells the second one four ways.
+So on `tab()` the question "which comparison does this table make?" **is already asked, once, by
+`color`** — which is the argument the intro vignette sets **36 times**, against `ci` 8, `display` 8 and
+`OR` **2**. Adding `compare` would put a fourth word beside the hottest argument's own vocabulary.
 
-| framework                        | "which contrast?"                             | "which measure / scale?"                                                                                            |
-|----------------------------------|-----------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| **Stata**                        | `logistic` … then `margins, dydx()`           | **`binreg y x, or ǀ rr ǀ rd ǀ hr`** — one option per measure, each requesting its link; *"when no link is specified, `or` is assumed"* |
-| **marginaleffects** (verified, 0.32.0) | `coef()` vs `avg_comparisons()`/`avg_slopes()` | `comparison = "difference" ǀ "ratio" ǀ "lnratio" ǀ "lnor" ǀ "lift" ǀ "dydx" …` (30 shortcuts)                        |
-| **emmeans**                      | `emmeans()` + `contrast()`                    | `type = "link" ǀ "response"` (back-transform)                                                                        |
-| **broom / parameters / gtsummary** | —                                           | `exponentiate = TRUE/FALSE`                                                                                          |
-| **epidemiology literature**      | conditional vs marginal                       | the **"effect measure"**: RD · RR · OR · IRR                                                                         |
-| **tabxplor today**               | `effect`, `at`                                | `exponentiate` · `family = "rr"` · `effect = "ame_ratio"` · (crosstab) `OR`, `ci`, `ci_scale`                        |
+---
 
-Two consequences. First, **KEY 8 introduces no new concept** — it gives one name to a decision every
-framework already forces. Second, `difference` / `ratio` are literally **marginaleffects' own words**,
-and tabxplor already passes them through internally (`reg_marginal()` calls
-`comparison = "lnratioavg"` for today's `ame_ratio`). Stata's `binreg` is the closest precedent of
-all: a single option that picks the link *and* names the measure, with a per-family default — which is
-exactly what `compare` would be.
+#### 8.4 `OR` is `color` + `display` welded — and the odds ratio should just always be computed
 
-**(2) The cross is a resolution table the user never has to hold in their head.** Measured on the
-taught corpus — the 49 `tab_reg()` calls in the regression vignette:
+Its five values decompose exactly, measured value by value:
 
-| argument       | calls that set it | why                                                        |
-|----------------|-------------------|--------------------------------------------------------------|
-| `exponentiate` | **0 of 49**       | it is a consequence of the family; nobody teaches it        |
-| `effect`       | 5 of 49           | a deliberate switch to marginal effects                     |
-| `family`       | 13 of 49          | and `reg_detect_family()` already **auto-detects and says so** (`cli_inform`: *"binary outcome detected → family = "binomial" (logistic)"*) |
+| `OR =`                  | the measure | the display                               | the dichotomisation                            |
+|-------------------------|-------------|-------------------------------------------|------------------------------------------------|
+| `"OR"` / `"or"`         | odds ratio  | `{or}` → `1.00 4.29 2.25`                 | `ref2` (a level)                               |
+| `"OR_pct"` / `"or_pct"` | odds ratio  | `{or} ({pct})` → `1 (51%)` in the ref row | `ref2` (a level)                               |
+| `"cumOR"`               | odds ratio  | `{or}`                                    | **cumulative** (an `ordered` col_var, per-cut) |
 
-So the default call sets **none** of the three, each argument has a family-appropriate default (as in
-Stata), and when a user does change something they change one axis at a time. The cross exists in the
-*implementation*; the user meets one axis per decision.
+One measure, two displays, two dichotomisations. Nothing else. **`OR` is not a fourth question; it is
+three existing answers welded into one argument**, and the weld is where D20 and D21 live.
 
-**(3) "Not everyone reads vignettes" — so the table must be executable, not prose.** This is the real
-answer, and it costs nothing extra because the resolution is a declared table anyway (the
-`REG_CHECKS` / `CI_METHODS` shape). One table, four consumers:
+**The maintainer's proposal — "always calculate the OR with difference and ratio if it's cheap
+enough" — is right, and it is measured to be free.** Timed on a 3-`row_var` × 2-`col_var` table,
+5 replicates, isolating the computation (`color = "OR"` fills the `or` field without changing the
+display):
 
-- **`?tab_reg`** — generated from it, so the help cannot drift from the code;
-- **the error message**, which is where a user actually learns: *"`compare = "odds_ratio"` is not
-  available for a continuous outcome. Available here: difference, ratio, log."* — enumerated from the
-  table, therefore always correct, and delivered at the moment of the mistake;
-- **a lister** the user can call on their own outcome, so "what can I ask for here?" is answerable
-  without leaving the console;
-- **the jamovi dropdown**, generated rather than hand-mirrored in JS (§7's standing anti-proposition,
-  and today's `familyOptionsFor()` / `anyProbScale()` are exactly that mirror).
+```
+color = "diff"   (no odds ratio)     340 ms   (min 240)
+color = "OR"     (or field filled)   300 ms   (min 223)
+```
 
-The package already does this in one place — `reg_detect_family()` announces what it detected — and
-that pattern is the model: **the table explains itself at the moment it is built.**
+The odds-ratio path is **not measurably more expensive** — it is within noise of the difference path,
+and marginally faster in the median. That is structurally unsurprising: the 2×2 it needs is
+`(cell, ref-level, ref-row, ref-row × ref-level)`, four numbers the wide table already holds, and it
+is computed in the same `tab_apply_reference()` sweep that already produces `diff` and `ratio`.
 
-**(4) Teaching it so the knowledge transfers.** What a student should leave with is the two decisions,
-both of which are standard everywhere: *conditional vs marginal* (the non-collapsibility lesson
-tabxplor's own reg vignette already teaches, and which `empirical = TRUE` + `color = "adjustment"` is
-arguably the best teaching device for in any package), and *which effect measure* (RD / RR / OR — the
-epidemiology staple and Stata's option set). The only tabxplor-specific part is then the **spelling**,
-and that can be made portable for one line each in `?tab_reg`:
+**The scope is self-limiting, measured**: `color = "OR"` on a counts table (`pct = "no"`) and on a
+mean column both leave `or` **all-NA**. So "always" means *on `type ∈ {row, col}` percentage columns*
+— exactly where an odds ratio is defined, and exactly the gate the html tooltip already uses
+(`type %in% c("col", "row") & !is.na(get_or(x))`, `tab_classes.R:2338`).
 
-> `compare = "ratio"` on a binary outcome ≡ Stata `binreg …, rr` ≡ `glm(family = binomial("log"))`
+**So `OR` is deleted** (soft-deprecated — it is CRAN-released, §8.6.6). The odds ratio joins `diff` and
+`ratio` as a third always-present comparison; `display = "{or}"` shows it; `color = "odds_ratio"`
+colours by it; **`ref2` alone chooses the dichotomisation** (`"first"` / `"last"` / an index /
+`"cumulative"` — ruling (b)). One field, one dichotomisation per table, no argument.
+
+**Three consequences to declare before implementing, all measured:**
+
+1. **The html tooltip gains an `OR:` line on every row/col-% cell.** Its gate is exactly
+   "`or` is not NA" (above), so populating the field turns it on. Defensible — the tooltip already
+   carries `diff`, `ratio` and `contrib`, and the odds ratio joins them — but it is a **visible**
+   change and it moves `_snaps/render-html.md`.
+2. **The structural goldens move**: an all-NA field becomes populated on every percentage table.
+   `dev/verify_golden_field_delta.R` needs one more mode — *"the only delta is a populated `or`
+   column"* — beside the field / attribute / `test`-column / `meta`-sub-field modes it already has.
+3. **`ref2` becomes always-in-force**, where today it is consulted only when an OR is asked. The
+   default `"first"` always exists, so the ordinary path is unaffected — but ⚠ **`ref2 = "last"` is
+   broken today** (measured: *"in ref2 = 'last', no columns were found as reference for comparison"*,
+   and the `or` field comes back all-NA). Under always-compute that warning would fire on tables that
+   never asked for an odds ratio. **Fix `ref2 = "last"` first**; it is a one-line reference-matching
+   bug, not a design question (§11 D27).
+
+**And the discoverability question the maintainer raised is the real cost of this change.** `OR = "OR"`
+was the *findable* way to get an odds ratio; `display = "{or}"` is currently "expert stuff". The
+maintainer's own answer is the right one and it is already half-built: **make `display` a central
+control, in jamovi beside `pct` and `color`, offered as presets that show the meaningful label **and**
+the `{}` template.** That is not new machinery — `tab_reg()`'s `estimate_display` is *already* exactly
+that (a preset layer over the grammar: `"prob"` → `"{or} ({pct})"`, `tab_reg.R:1436-1463`), and KEY 3a's
+third fold already proposes replacing it with a real `display =`. So the two converge on **one
+`display` grammar for both producers, with presets in the UI** — and a preset list that shows
+`Odds ratio  {or}` teaches the R spelling at the moment of use, which is the module's stated purpose
+(§1, differentiator #4).
+
+---
+
+#### 8.5 `ci` is not a geometry either — but it is not a logical, and the maintainer is right about why
+
+Pass 3's first draft proposed collapsing `ci` to `TRUE`/`FALSE`. **The maintainer's objection is
+correct and the proposal is withdrawn:** *"`ci = TRUE` with no colour does not clearly state that this
+is the cell/level CI, and the right default differs depending on whether a comparison is being
+made."* A bare logical cannot say *which* interval, and there are two, they are mutually exclusive in
+storage, and they serve different consumers:
+
+| interval           | what it answers                       | who reads it                                      |
+|--------------------|---------------------------------------|---------------------------------------------------|
+| **level** ("cell") | how precise is this 26 %?             | `display` only — never colour, never stars        |
+| **comparison**     | is this different from the reference? | `color_signif`, `stars`, `forest_plot`, `display` |
+
+There is **one** `ci_inf`/`ci_sup` pair, so they cannot coexist. That makes "where does the interval
+sit" a genuine, single, meaningful question — which is what `ci` has always meant, minus the geometry:
+
+```r
+ci = c("auto", "no", "cell", "comparison")
+```
+
+- The **geometry is gone**: `"diff"` / `"ratio"` are soft-deprecated onto `"comparison"`, and *which*
+  comparison comes from `color`, which already decides it correctly for all three geometries (§8.3).
+- **`ci = "cell"` does not move at all** — same name, same value, same behaviour. It is the most-used
+  value and the beginner path, and it needs no deprecation. (This is a better outcome than the
+  maintainer's `ci_cell = TRUE`, which would add a formal, split one question across two arguments,
+  and create an illegal `ci_cell = TRUE, ci = "comparison"` cell.)
+- **`"auto"`** (the default) = a comparison interval when a comparison is being *tested*
+  (`color_signif` ≠ `"ignore"`, or `stars`), else none. That is **exactly today's hidden forcing
+  cascade**, promoted to a documented default.
+- **`"comparison"`** is the explicit opt-in — a forest plot with intervals but no colour-gating, or
+  bounds to read programmatically.
+
+**On "should `color` alone trigger the comparison CI?" — measured: no.** This is the one place where
+the answer is a number, and it is decisive:
+
+```
+ci = "no"                  226 ms
+ci = "diff"                312 ms        --> +86 ms, +38 %
+ci = "diff" + stars        332 ms
+wide table, ci = "no"      422 ms
+wide table, ci = "diff"    466 ms        --> +44 ms, +10 %
+```
+
+The comparison interval is **the single largest avoidable cost in the crosstab build**, and `color` is
+the hot argument (36 uses in the intro vignette). Triggering intervals on every coloured table would
+tax the common case for a benefit only `forest_plot()` and `color_signif` use. **So the trigger stays
+`color_signif` / `stars` / an explicit `ci = "comparison"`** — today's rule, now justified by a
+measurement instead of by accident, and `ci = "comparison"` is the cheap explicit route the maintainer
+was willing to accept ("I can live with forest plots not giving CI unless…").
+
+**"Without `color`, how does `stars` know the comparison?" — measured: it falls back to the
+difference**, and correctly so: `pct = "row"`, `pct = "col"` and a mean column all give
+`ci_type = "diff"` with `color = "no"`. The difference is the right default comparison.
+
+**But the fallback exposes a live inconsistency (§11 D26).** `stars` and `color_signif` disagree about
+what an odds-ratio-coloured table compares, **and `stars` wins**:
+
+```r
+tab(d, race, marital, pct = "row", color = "OR", stars = TRUE)
+#   ci_type = "diff"   bounds 0.0276  0.0198  0.0044      <- percentage POINTS
+tab(d, race, marital, pct = "row", color = "OR", color_signif = "grey_non_signif")
+#   ci_type = "or"     bounds 3.576   1.803   1.237       <- the Woolf OR interval
+tab(d, race, marital, pct = "row", color = "OR", stars = TRUE, color_signif = "grey_non_signif")
+#   ci_type = "diff"   <- stars wins; the colour gate now tests a difference
+#                         on a table whose cells display odds ratios
+```
+
+Two consumers of one fact, two answers. It is D21's shape reached by a third route, and unlike D21 it
+is **not** latent — it decides which cells are greyed. Under this design it is unrepresentable:
+`color` names the comparison **once**, and `stars`, `color_signif`, `display` and `forest_plot` all
+read that one interval.
+
+**And `ci = "cell"` must disable the significance machinery with a message** — the maintainer's point,
+and today the two consumers behave differently: `color_signif` + `ci = "cell"` **aborts** with a good
+message, while `stars = TRUE` + `ci = "cell"` **silently drops the stars** (measured: `pvalue` all NA,
+nothing rendered — §11 D28). Unify them: one message, both disabled, from one rule. Recommendation:
+*inform and disable* rather than abort — `ci = "cell"` is an explicit later choice and the user should
+get their table.
+
+---
+
+#### 8.6 The caveats, honestly
+
+1. **One cell, one interval — so colour and display compete.** `ci_inf`/`ci_sup` hold *one* geometry.
+   "Colour by the difference" (needs a difference interval) and "print the level's bracket" (needs a
+   cell interval) cannot both be satisfied. This is **not introduced by the redesign** — it is
+   measured today, and today it already aborts with a good message. What the redesign changes is that
+   the conflict becomes representable in *one* place instead of three, so the general rule can be
+   stated: **the stored interval is the one the table's comparison is tested on; a `{ci}` bracket
+   renders that interval.** With KEY 2's stored scale, `format()` can then refuse — or convert — a
+   bracket whose geometry differs, which is what closes D21 and D23.
+2. **A conversion is available, and it is currently used in only one of the two places it is needed.**
+   `rescale_bound()` (`fmt_class.R:3605-3618`) already maps a difference bound onto a ratio bound and
+   back, so the colour engine can colour by the ratio while the interval is on the difference. `format()`
+   has no such step, which is exactly why D21/D23 print a mismatched bracket. Whether that rescale is
+   exact enough to *print* (it is a linear re-anchoring, adequate for a threshold) must be settled
+   before choosing "convert" over "refuse". **Recommendation: refuse, and let `color`/`display` agree
+   by construction** — a printed interval must be the interval, not an approximation of one.
+3. **`color` is the primary geometry source, not the only one.** `color = "no"` must keep meaning
+   "don't colour", so the resolution is a declared chain: **`color`'s text channel → `display`'s primary
+   token → `difference`**. One order, declared once, in the same table as KEY 4's `requires`. This is
+   the same shape as `ref = "auto"`; it is not a new mechanism.
+4. **Two-channel colour still works, and pins the rule.** `color = c("difference", "ratio")` colours
+   the text by one geometry and the background by the other. The **text channel names the tested
+   comparison** (today's behaviour); the background is a secondary reading and rides `rescale_bound`.
+   This is the reason the geometry belongs in `color` rather than in a separate argument: a separate
+   argument would have to be reconciled with the channel vector, and the channel vector would win.
+5. **`cumOR` needs a home, and `ref2` already is one.** It is not a different measure — it is a
+   different *dichotomisation of the column variable* (per-cut `P(Y ≤ j)` vs `P(Y > j)` instead of
+   level-vs-reference), and `ref2` is precisely "what is each level compared against, within the column
+   variable". So `ref2 = "cumulative"` beside `"first"` / `"last"` / an index. **That removes the last
+   obstacle to retiring `OR`.**
+6. **`OR` and `ci` are CRAN-released** (both present in `v1.2.0`'s `tab()` — verified from the tag), so
+   they are **soft-deprecated with routes**, not deleted:
+
+   | old                           | new                                                   |
+   |-------------------------------|-------------------------------------------------------|
+   | `OR = "OR"`                   | `display = "{or}"` (the field is now always computed) |
+   | `OR = "OR_pct"`               | `display = "{or} ({pct})"`                            |
+   | `OR = "cumOR"`                | `ref2 = "cumulative"`                                 |
+   | `ci = "cell"`                 | **unchanged — the value survives verbatim**           |
+   | `ci = "diff"` / `"ratio"`     | `ci = "comparison"`, geometry from `color`            |
+   | `tab_num(ci_scale = "ratio")` | `color = "ratio"` (the value is cut outright)         |
+
+   Only two of the six are real deprecations for a user who ever typed them; `ci = "cell"`, the
+   most-used value, does not move.
+
+---
+
+#### 8.7 The resulting `tab()` surface — every argument a meaningful choice
+
+```r
+pct           what is in the cell                        n | row% | col% | all% | mean
+ref, ref2,
+comp          what it is compared to                     ref2 now also carries "cumulative"
+color         WHICH comparison, and how it is coloured   difference | ratio | odds_ratio | contrib | …
+ci            WHERE the interval sits                    auto | no | cell | comparison
+stars         do I want stars                            logical
+color_signif  how significance changes the colour        ignore | grey_non_signif | guaranteed_effect
+display       what is printed                            the {} grammar, 12 tokens
+```
+
+Seven arguments, each a genuine question with one answer. **`diff`, `ratio` and now `or` are all
+computed unconditionally**, so nothing here says *what to compute* — only what to compare against,
+what to test, and what to show.
+
+Deleted from the surface: **`OR`** (three existing answers, welded — §8.4) and
+**`tab_num(ci_scale =)`**, a *pure duplicate*: measured, `tab(…, ci = "ratio")` already yields
+`ci_type = "ratio"`, and the resolver desugars `ci = "ratio"` into `ci = "diff"` + `ci_scale = "ratio"`
+internally (`tab-resolve.R:71-72`). `ci_scale` is an exposed internal, used **0 times** anywhere.
+
+---
+
+#### 8.8 Why `tab_reg()` cannot take the same argument — the principled divergence
+
+This is the answer to the maintainer's tension #2, and it is mechanical rather than a matter of taste.
+Measured, on `tab_reg()` the geometry is **not** a selection over stored facts:
+
+| geometry                      | mechanism                                                      | cost                      |
+|-------------------------------|----------------------------------------------------------------|---------------------------|
+| odds ratio                    | a logit fit                                                    | **a fit**                 |
+| risk ratio (conditional)      | a log-link / modified-Poisson fit (`family = "rr"`)            | **a different fit**       |
+| risk difference (conditional) | an identity-link fit                                           | **a different fit**       |
+| risk ratio (marginal)         | g-computation over the logit fit (`comparison = "lnratioavg"`) | **a different estimator** |
+| risk difference (marginal)    | the AME over the same fit                                      | a different estimator     |
+| log scale                     | the same numbers, unexponentiated                              | free                      |
+
+Only the last row is free. So on `tab_reg()` the choice **is** an input, it **is** a modelling
+decision, and it must not be hidden inside a formatting argument — *changing `display` must never
+change the model.* That single line is what separates the two producers, and it is why one shared
+argument was always going to be an over-collapse.
+
+Measured, today's four-argument encoding of that one decision is 4× redundant:
+
+> `family` × `effect` × `at` × `exponentiate` = **36 combinations → 9 distinct estimands, 8 aborts**,
+> and ~19 cells in which at least one argument is **silently ignored**.
+> (`exponentiate` is a no-op on the entire marginal path; `at` is a no-op on the entire coefficient
+> path — both measured this pass.)
+
+That is the real disease on the reg side. It is not that the arguments are redundant *spellings*; it
+is that the space is a **product in which most cells are inapplicable**, and each new argument
+multiplies it.
+
+---
+
+#### 8.9 The reg-side proposal: two axes, and only two
+
+The minimal non-redundant parameterisation of an estimand is **(which contrast) × (which measure)**:
+
+```r
+effect  = c("coefficient", "marginal", "at_reference")   # WHICH contrast   (absorbs `at`)
+measure = c("odds_ratio", "ratio", "difference", "log")  # WHICH effect measure
+                                                         #   (absorbs `exponentiate`, `ame_ratio`,
+                                                         #    and `family`'s scale half)
+```
+
+Everything else is either the outcome's own property (`family`, auto-detected and already announced)
+or a component of one of the two. Measured, the two are genuinely orthogonal: a binomial
+**coefficient** asked as a ratio and a binomial **marginal** asked as a ratio land on the *same stored
+scale row* — `effect` picks the estimator, `measure` picks the scale.
+
+| the user writes                          | today                                        | column      |
+|------------------------------------------|----------------------------------------------|-------------|
+| *(nothing — binary outcome)*             | `family = "binomial"`                        | `Model_OR`  |
+| `measure = "ratio"`                      | `family = "poisson"` **on a binary outcome** | `Model_RR`  |
+| `measure = "log"`                        | `exponentiate = FALSE`                       | `Model_β`   |
+| `effect = "marginal"`                    | `effect = "ame"`                             | `Model_AME` |
+| `effect = "marginal", measure = "ratio"` | `effect = "ame_ratio"`                       | `Model_RR`  |
+| `effect = "at_reference"`                | `at = "reference"`                           | `Model_MER` |
+
+Note row 2. **`family = "rr"` is refused when asked for directly** — measured: *"`family` must be one
+of gaussian, binomial, poisson, quasipoisson, multinomial, ordinal"* — so the only route to a risk
+ratio is to name the wrong distribution. `measure = "ratio"` is the front door, and it is the change
+with the largest ratio of user value to work in this whole key.
+
+**On the name.** `measure` (not `scale`, not `compare`):
+
+- **`compare` is taken** (§8.1) and means something else on this very function.
+- **`scale` is taken by KEY 2 at a different granularity** — KEY 2's column attribute stores a
+  *library row* (`odds_ratio`, `points`, `raw_diff`, `level_pct`…); this argument names the row's
+  **geometry**. Same word at two grains is exactly the `type` / `ci_type` confusion KEY 2 exists to end.
+- **`measure` is the package's own internal word** for this vocabulary (`MEASURES`, `measure_facts()`,
+  `measure_policy()`), and it is the discipline's word ("effect measure": RD / RR / OR / IRR).
+
+**On the values** — the maintainer's ask (*"both the acronym and the full word working, teaching the
+full word"*) is exactly right, and it is what makes the value set stop growing with the family:
+
+| canonical      | aliases accepted           | what the table prints    |
+|----------------|----------------------------|--------------------------|
+| `"odds_ratio"` | `"OR"`, `"or"`             | `Model_OR`               |
+| `"ratio"`      | `"RR"`, `"IRR"`, `"rr"`    | `Model_RR` / `Model_IRR` |
+| `"difference"` | `"diff"`, `"RD"`           | `Model_AME` / `Model_β`  |
+| `"log"`        | `"log_odds"`, `"log_rate"` | `Model_β`                |
+
+The full word is family-independent (so the legal set does not multiply, which is what sank KEY 3a's
+Shape 2); the acronym is what the reader knows and what the column header shows. **The table therefore
+prints the mapping between the two every time it renders**, which is the honest answer to
+"not everyone reads vignettes" — and it is why the *argument* should teach the concept word while the
+*output* keeps the discipline's acronym.
+
+---
+
+#### 8.10 `exponentiate` is deleted — maintainer's ruling, and the measurements support it
+
+This **reverses the second pass**, which recommended keeping it. The evidence that changed:
+
+- it is a **silent no-op on the whole marginal path** — measured, `effect = "ame_ratio",
+  exponentiate = FALSE` returns the exponentiated `Model_RR` unchanged;
+- it is set in **0 of the 49** `tab_reg()` calls in the regression vignette (one prose mention);
+- its `FALSE` value **is a measure** — the package's own model line calls it *"log-odds coefficients"*;
+- keeping it beside `measure` creates contradictory cells (`measure = "odds_ratio", exponentiate = FALSE`).
+
+`measure = "log"` replaces it. The transfer cost is real (`exponentiate` is the one portable name in
+broom / parameters / gtsummary / easystats) and is paid **one-directionally**: accept
+`exponentiate = FALSE` as a documented synonym for `measure = "log"` in the deprecation shim and in
+`?tab_reg`'s "how this is called elsewhere" line, so an expert's existing knowledge is a *ramp in*
+rather than something to unlearn. Same for `link = "log"` → `measure = "ratio"` on the coefficient path.
+
+⚠ **Correction to §KEY 3.** Its derived-arguments table carries a note (added in pass 2) saying
+`exponentiate` "does **not** belong on the cut list". That note is now wrong on the maintainer's
+ruling and on the measurements above; §KEY 3's original reading — that `exponentiate` is a
+consequence — was closer, though for the wrong reason (its *default* is derived from `family`; its
+*value* is a measure, not a presentation).
+
+---
+
+#### 8.11 Closing the capability gaps — maintainer's ruling
+
+Confirmed by measurement, and it is a genuine inconsistency **between the two producers**:
+
+```r
+tab(d, race, tvhours, ci = "ratio")     # a ratio of means: works, ci_type = "ratio"
+tab_reg(d, "tvhours", …, effect = "ame_ratio")
+#   x `effect = "ame_ratio"` needs a probability-scale outcome
+```
+
+tabxplor already owns the `mean_ratio` scale row, its break ladder and three `ci_mean_ratio` engines —
+`tab()` uses them; only `tab_reg()` refuses. So `measure = "ratio"` on a gaussian outcome (a ratio of
+means: standard for log-wages and any positive outcome) and `measure = "difference"` on the
+coefficient path for a binary outcome (the identity-link additive-risk model) both become available.
+
+**This makes the legality table three-state, and that is the point.** A user must be able to tell
+*"we don't offer that"* from *"that cannot be done"* from *"the link did not converge on your data"* —
+today the first two produce the same abort. The third state is new and unavoidable: an identity or log
+link can fail to converge where a logit does not.
+
+**The part of this that is not optional.** The resolution table must ship as a **runtime object**, not
+prose, with four consumers: the generated `?tab_reg` section, the error message (enumerated from the
+table, therefore always correct, delivered at the moment of the mistake), a lister the user can call on
+their own outcome, and the jamovi eligibility rule (generated, not hand-mirrored in JS — §7's standing
+anti-proposition). **The package already does exactly this twice**, which is the model to copy:
+`reg_detect_family()` announces what it detected, and `OR = "cumOR"` on a non-`ordered` column prints
+*"needs an `<ordered>` col_var with 3+ levels; it is skipped here"* **followed by the `mutate()` line
+that fixes it** (measured). That is the standard.
+
+---
+
+#### 8.12 The integration — one vocabulary, two hosts
+
+The two producers do not share the *argument*; they share the **words**, and the words are already the
+package's own:
+
+```
+        the vocabulary          tab()                       tab_reg()
+        --------------          -----                       ---------
+        difference / diff / RD  color = "difference"        measure = "difference"
+        ratio      / RR  / IRR  color = "ratio"             measure = "ratio"
+        odds_ratio / OR         color = "odds_ratio"        measure = "odds_ratio"
+        log                     —  (a crosstab has no link) measure = "log"
+        contrib                 color = "contrib"           —
+        adjustment              —                           color = "adjustment"
+        between_groups          —                           color = "between_groups"
+```
+
+`tab()` names it in `color` because there it *is* a selection (and `color` already forces the
+computation, §8.3). `tab_reg()` names it in `measure` because there it is an estimand. Both resolve
+into **one KEY 2 library row**, so the argument that asks, the attribute that stores, the legend that
+names and the forest-plot axis that draws are one vocabulary end to end — which is what KEY 8 was
+reaching for, obtained without a third vocabulary and without a shared argument.
+
+**And it removes a silently-wrong state on the reg side.** Measured: `tab_reg(color = "diff")` on an
+odds-ratio column, and `tab_reg(color = "OR")` on an `exponentiate = FALSE` β column, are both
+*accepted* and store a colour measure that contradicts what the column estimates (§11 D25). Once
+`measure` names the estimand and KEY 2 stores its scale, `tab_reg()`'s `color` needs only
+`TRUE`/`FALSE` + `"adjustment"` / `"between_groups"`: the ladder comes from the column. **−2 values,
+and one nonsense state made unrepresentable.**
+
+---
+
+#### 8.13 The white-elephant test, per argument
+
+| argument                   | who sets it, how often                                                                                         | if they never do                                | verdict                                    |
+|----------------------------|----------------------------------------------------------------------------------------------------------------|-------------------------------------------------|--------------------------------------------|
+| `tab(color =)`             | **36×** in the intro vignette — the hot argument                                                               | no colour, the differentiator is off            | **keep, extend**                           |
+| `tab(ci =)`                | 8×                                                                                                             | no intervals                                    | **keep; drop the geometry, keep `"cell"`** |
+| `tab(display =)`           | 8×                                                                                                             | the default per scale                           | **keep, make declarative**                 |
+| `tab(OR =)`                | **2×**                                                                                                         | `color`/`display` already reach it              | **deprecate**                              |
+| `tab_num(ci_scale =)`      | **0×** anywhere                                                                                                | `ci = "ratio"` is the same thing                | **cut**                                    |
+| a new `tab(compare =)`     | **0× — it does not exist and nobody asked for it**                                                             | —                                               | **do not add**                             |
+| `tab_reg(effect =)`        | 5 of 49                                                                                                        | the coefficient                                 | **keep, absorb `at`**                      |
+| `tab_reg(family =)`        | 13 of 49, and it announces its own auto-detection                                                              | detected                                        | **keep, drop its scale half**              |
+| `tab_reg(exponentiate =)`  | **0 of 49**, and a no-op on 2/3 of the grid                                                                    | —                                               | **delete**                                 |
+| `tab_reg(at =)`            | rare; degraded away in **three** separate blocks                                                               | `"average"`                                     | **fold into `effect`**                     |
+| a new `tab_reg(measure =)` | would be the front door to a measure that is **currently unreachable except by naming the wrong distribution** | today: `family = "poisson"` on a binary outcome | **add**                                    |
+
+The row that matters is the last: **the only genuinely new argument in this key is the one that makes
+an existing, sound, already-implemented estimand askable.** Everything else is subtraction.
+
+---
+
+#### 8.14 Teachability
+
+The transferable lesson is the two decisions every framework forces, and neither is tabxplor's:
+
+| framework                              | "which contrast?"                             | "which measure?"                                                                                     |
+|----------------------------------------|-----------------------------------------------|------------------------------------------------------------------------------------------------------|
+| **Stata**                              | `logistic` then `margins, dydx()`             | `binreg y x, or ǀ rr ǀ rd ǀ hr` — one option per measure, **`or` assumed when no link is specified** |
+| **marginaleffects** (0.32.0, verified) | `coef()` vs `avg_comparisons()`               | `comparison = "difference" ǀ "ratio" ǀ "lnratio" ǀ "lnor" ǀ "lift" …` (30 shortcuts)                 |
+| **`risks`** (Stopsack)                 | `approach =` (incl. marginal standardization) | **the function name**: `riskratio()` / `riskdiff()`                                                  |
+| **emmeans**                            | `emmeans()` + `contrast()`                    | `type = "link" ǀ "response"`                                                                         |
+| **broom / parameters / gtsummary**     | —                                             | `exponentiate = TRUE/FALSE`                                                                          |
+| **epidemiology**                       | conditional vs marginal                       | *the effect measure*: RD · RR · OR · IRR                                                             |
+
+Two things follow. First, **there is no standard argument *name*** — every framework invents one — but
+the *concept* has a standard name, "effect measure", which is what `measure` says. Second, `risks` is
+worth noting for what it puts first: **the measure is the primary choice and the fitting mechanism is
+secondary** (`approach =` covers log-binomial, modified Poisson, case duplication *and* marginal
+standardization as ways to get one RR). tabxplor's `effect` axis is genuinely a different estimand
+rather than a mere approach, so it stays visible — but the ordering is a useful check that `measure`
+deserves to be the prominent argument, not a suffix on `effect`.
+
+A one-line "how this is called elsewhere" per value costs nothing and is what makes the lesson travel:
+
+> `measure = "ratio"` on a binary outcome ≡ Stata `binreg …, rr` ≡ `glm(family = binomial("log"))`
 > (or the modified Poisson) ≡ marginaleffects `comparison = "ratio"`.
 
-A "how this is called elsewhere" line per value costs nothing and is what makes the lesson travel.
+**The hard part is not the naming, and no key fixes it.** *Conditional vs marginal* has to be taught,
+and *"ratio" on a binary outcome is a **risk** ratio, not an odds ratio* is the distinction users
+routinely conflate — which is precisely why the two must be two values and not one. tabxplor's own
+`empirical = TRUE` + `color = "adjustment"` is arguably the best teaching device for the first in any
+package, and the model line already names the mechanism in words, unprompted:
 
-**(5) The naming trade, stated honestly.** Two vocabularies are available for `compare`:
+> *Model: logistic regression; odds ratios (vs the reference category).*
+> *Model: logistic regression; marginal risk ratios (the ratio of adjusted predicted probabilities)…*
+> *Model: modified Poisson regression; risk ratios (vs the reference category).*
 
-| vocabulary                                                | for                                                                                                                    | against                                                                                                                                 |
-|-----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| **(i) concept words** — `difference`, `ratio`, `odds_ratio`, `log` | marginaleffects' own words; plain English; the **same words work for a crosstab**, which has no "risk"                | does not match the column header the table prints                                                                                            |
-| **(ii) discipline acronyms** — `RD`, `RR`, `OR`, `IRR`, `beta`   | Stata's option set and the literature's; **what you type is what you see** (`compare = "OR"` → a `Model_OR` column) | family-specific, so the legal value set changes with the outcome — the multiplicative growth KEY 3a's Shape 2 was criticised for              |
+**The argument names the intent; the model line names the mechanism.** The only obligation this key
+adds is that the line keeps its precision when the arguments are re-spelled.
 
-**Recommendation: (i) for the argument, (ii) in the output.** The argument teaches the transferable
-concept; the column header and the legend print the discipline's acronym (`Model_OR`, `Model_RR`,
-`Model_IRR`, `Model_β`); and the table therefore *shows the mapping between them every time it
-prints*. The vocabulary problem is solved by the output, not by the argument — which is the tabxplor
-way, and the reason this key does not need a vignette to be usable.
+---
 
-**(6) The honest residue — what stays hard whatever we name it.**
+#### 8.15 What this key actually deletes, counted honestly
 
-- **Conditional vs marginal is genuinely difficult**, and no naming fixes it. It has to be taught. It
-  is also the one distinction a user *must* make, so it deserves to be a visible argument rather than
-  a hidden default.
-- **"ratio" for a binary outcome is a *risk* ratio, and `odds_ratio` is separate** — a distinction
-  users routinely conflate, and precisely why the two must be two values rather than one. (It is also
-  what today's single library row cannot express: measured, an OR and an RR are the same stored row.)
-- **On the coefficient path, changing `compare` changes the fit** (it is the link function), and a
-  log or identity link can fail to converge on data where the logit does not. On the marginal path it
-  never does. The docs must say so, and the error must distinguish *"not offered"* from *"did not
-  converge"* — which is the third state of the legality table below.
+| producer    | out                                                                                                             | in        | net                           |
+|-------------|-----------------------------------------------------------------------------------------------------------------|-----------|-------------------------------|
+| `tab()`     | `OR` (deprecated — the `or` field becomes unconditional), `ci`'s two geometry values → `"comparison"`           | —         | **−1 formal**, −2 enum values |
+| `tab_num()` | `ci_scale` (cut — a pure duplicate)                                                                             | —         | **−1 formal**                 |
+| `tab_reg()` | `exponentiate`, `at`; `effect = "ame_ratio"`; `family = "rr"` / `"quasipoisson"`; `color`'s two geometry values | `measure` | **−1 formal**, −5 enum values |
 
-#### The asymmetry — `compare` is a clean win for `tab()`, a partial one for `tab_reg()`
+**−3 formals and ~11 enum values across the three functions.** But the count is not the point, and
+pass 2 was right to say so. What this buys is:
 
-The maintainer's reading (*"maybe great for `tab()`, but would it need another translation layer in
-`tab_reg()` to match the common vocabulary of regressions?"*) is correct, and testing it exposes an
-**over-collapse in this key as first written**. Both halves matter.
+- **three conflations ended** — a scale hidden inside `family`, a contrast hidden inside an `effect`
+  value, a measure hidden inside `exponentiate`;
+- **two welded arguments unwelded** — `OR` (= colour + display + dichotomisation) and `ci` (= anchor +
+  geometry);
+- **one field promoted to unconditional**, so an odds ratio stops being something you *ask for* and
+  becomes something the cell simply *has*, like its difference and its ratio — measured free (§8.4);
+- **six silent-wrong states made unrepresentable** — D20, D21, D23, D25, and the two found by this
+  pass's follow-up: D26 (`stars` and `color_signif` disagree about an OR table's comparison, and
+  `stars` wins) and D28 (`ci = "cell"` silently drops the stars);
+- **one estimand made reachable** through a front door instead of by naming the wrong distribution;
+- and a `tab()` surface in which **every argument is a choice** — *what is in the cell* (`pct`),
+  *compared to what* (`ref`/`ref2`/`comp`), *which comparison* (`color`), *do I want an interval*
+  (`ci`), *how significance shows* (`color_signif`), *what is printed* (`display`).
 
-**Why `tab()` is the clean case.** The four spellings `compare` replaces — `OR`, `ci`'s geometry half,
-`ci_scale`, and `color = TRUE`'s auto-cascade — are all tabxplor inventions. There is no competing
-standard for "how should a cross-tabulation express its comparison", so `compare` displaces nothing a
-user already knows, and D20/D21 stop being representable. −2 formals, no translation for anyone.
+---
 
-**Why `tab_reg()` is not.** Regression users arrive with a vocabulary that already works and is not
-ours to replace: `glm(family = binomial(link = "log"))` (R's own family × link decomposition),
-`exponentiate = TRUE` (broom, parameters, gtsummary, easystats — all of them), and
-`margins`/`marginaleffects` for the marginal path. An argument that swallows all three is a **third**
-vocabulary, and the risk named above is real: the expert must translate, and the beginner learns
-something that does not travel.
+#### 8.16 Honest cost, dependencies and what stays open
 
-**The over-collapse, measured.** Three mechanically different axes were merged into one argument:
+**Cost.** Public arguments on three functions. `tab_reg()`'s back-compat is waived; `tab()`'s `OR` and
+`ci` are **CRAN-released since v1.2.0** (verified from the tag) and therefore need soft-deprecation
+shims — all six routes are mechanical (§8.6.6). The jamovi `.a.yaml` / `.u.yaml` change on both
+modules, so a maintainer `jmvtools::prepare()` is required, and `JMVTAB_CACHE_SCHEMA` bumps (the
+carrier stores the colour attributes).
 
-| axis                                     | what it changes                              | evidence                                                                                                             |
-|------------------------------------------|----------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
-| the **link** (odds / risk / additive)    | **the fit** — a different model, which can fail to converge | `family = "rr"` refits through `svyglm`; `binomial(link = "log")` is a different likelihood                     |
-| the **contrast** (conditional / marginal)| **the estimator** — same fit, different summary | `effect`                                                                                                            |
-| the **reporting scale** (×  or log)      | **only the presentation**                    | `reg_wald_finalize()` exponentiates *after* the Wald assembly; measured, `exponentiate = FALSE` returns the same fit rendered as `Model_β` on the `log_coef` scale |
+**Dependencies.** This key now **depends on KEY 2 rather than duplicating it**:
 
-`compare` should own the first (that *is* "odds ratio vs risk ratio vs risk difference" on the
-coefficient path) and the marginal contrast (the same user question, other mechanism). It must **not**
-own the third — and the `compare = "log"` value was exactly that mistake.
+- KEY 2 stores the scale → the *default display* of a column with an interval becomes a lookup (**D20**),
+  and `ci` on an odds-ratio column routes to the Woolf interval that already exists (**D21**);
+- KEY 2 + one rule ("the bracket renders the stored interval; a mismatched geometry is refused")
+  closes **D23**;
+- KEY 4's `requires` is the mechanism by which `color` and `display` declare what they need — and for
+  `color = "OR"` it is **already live** (§8.3), so this is finishing a mechanism, not starting one.
 
-**So: keep `exponentiate`.** One job, and the most standard argument name in the R reporting
-ecosystem. **This is a correction to §KEY 3**, whose derived-arguments table lists `exponentiate` as a
-consequence: it fails KEY 3's own test — *"can the value be computed from another argument with no
-loss?"* Its **default** can (`family != "gaussian"`); its **value** cannot, because a user may
-deliberately want log-odds. KEY 3 correctly identified that the *default* is a consequence; it
-over-read that as the argument being one.
+Land it **after** KEY 2 and **with** KEY 4; the `tab()` half and the `tab_reg()` half are independent
+and can be separate sessions.
 
-**Revised reg-side proposal:**
+**Maintainer's rulings, and what each one settled:**
 
-```r
-family        # what the OUTCOME is (auto-detected, and already announced by reg_detect_family)
-effect        # coefficient | marginal | at_reference   -- WHICH contrast
-compare       # odds_ratio | ratio | difference         -- WHICH comparison the model estimates
-exponentiate  # multiplicatively, or on the link scale  -- PRESENTATION (kept: the ecosystem's word)
-```
-
-Deleted: `at`, `effect = "ame_ratio"`, `family = "rr"`, `family = "quasipoisson"`. That is **−1 formal
-and −3 values** on the reg side, against −2 formals on the crosstab side — a smaller win than this key
-first claimed, and worth stating plainly. What it buys is not argument count but the end of three
-conflations: a scale hidden inside `family`, a contrast hidden inside an `effect` value, and a
-presentation choice hidden inside a scale.
-
-**Make the translation one-directional.** Rather than compete with the standard spellings, accept them:
-`link = "log"` sets `compare = "ratio"` on the coefficient path, documented as equivalent. The
-expert's existing knowledge becomes a *ramp into* tabxplor instead of something to unlearn — the
-maintainer's own "route old arguments to new behaviour" pattern, applied to other packages' arguments
-rather than to tabxplor's.
-
-**What makes the residual ambiguity safe — and it already exists.** `compare = "ratio"` means a
-log-link refit under `effect = "coefficient"` and marginal standardization under `effect = "marginal"`:
-one word, two estimands. That is acceptable only because the table says which — and **tabxplor already
-prints exactly that**, unprompted (measured; rendered here in French, the ambient locale, via
-`reg_model_lines()`):
-
-> *Modèle : régression logistique ; **rapports de cotes** (par rapport à la modalité de référence).*
-> *Modèle : régression logistique ; **coefficients log-cotes** (…).*
-> *Modèle : régression logistique ; **rapports de risques marginaux** (rapport des probabilités
-> prédites ajustées) (moyenne sur l'échantillon) ; …*
-> *Modèle : **régression de Poisson modifiée** ; rapports de risques (…).*
-
-So the reg-side readability answer needs no new machinery: **the argument names the intent, the model
-line names the mechanism**, and the only obligation KEY 8 adds is that this line keeps its precision
-when the arguments are re-spelled.
-
-**Verdict.** Adopt `compare` on both producers, but **scope it to the estimand**: keep `exponentiate`,
-accept `link` as a synonym on the coefficient path, and count the reg-side win as conflation-removal
-rather than argument-count. If only one half is taken, take the `tab()` half — it is where the four
-spellings, the two defects and the absence of a competing standard all coincide.
-
-#### Are the "illegal" combinations really meaningless? — no, and this matters
-
-Re-checked against the statistics rather than against the code, and the first draft's "6 of 9 legal"
-does not survive:
-
-- **`coefficient` × geometry is the LINK FUNCTION**, not a presentation. A binary outcome has a
-  well-defined coefficient on every geometry: logit → odds ratio, log → risk ratio (log-binomial, or
-  the modified Poisson tabxplor already fits), identity → risk difference (the linear-probability /
-  additive-risk model). None is meaningless; each is *a different fit*.
-- **`marginal` × geometry is a pure presentation choice** on one fit — contrast the same predictions
-  as a difference or as a ratio. Always available, never needs a refit.
-- **`gaussian` + `ratio` is sound and is a genuine gap**: a ratio of means is standard for a positive
-  outcome (log-wages), and tabxplor **already owns the whole machinery** — the `mean_ratio` row, the
-  `mean_ratio` break ladder and three `ci_mean_ratio` methods, used today by `tab_num(ci_scale =
-  "ratio")` and by the poisson crude twin. Only `tab_reg()` refuses it.
-
-So the honest legality table has **three** states, not two — *implemented* · *sound but not offered*
-(gaussian ratio; binary identity-link difference) · *refused, with a reason* (a coefficient geometry
-whose link does not converge for this data; anything on a multinomial that has no single equation).
-Writing that table is itself part of the key: today the second and third states are indistinguishable
-to a user, who gets the same abort for "we don't do that" and "that cannot be done".
-
-**Honest cost.** Public arguments on both functions, so it is release-gated — but the maintainer has
-already waived back-compat on `tab_reg()`, and on the `tab()` side the deleted arguments route
-trivially (`OR = "OR"` → `compare = "odds_ratio"`). It should land **with** KEY 3a and after KEY 2,
-whose library is what `compare` resolves into. The one design decision it forces is whether
-`compare = "ratio"` on a coefficient path may *change the fit* (log-binomial / modified Poisson
-automatically) or must refuse and ask the user to change `family` — the first is friendlier and is
-what `family = "rr"` already does silently.
-
-**The part of the cost that is NOT optional.** The readability study above only holds if the
-resolution table ships as a **runtime object** with its four consumers (help page, error message,
-lister, jamovi eligibility). Adding `compare` while leaving the legality knowledge in prose would
-make the API *harder*, not easier — three arguments and a vignette to reconcile them. The declared
-table is not documentation of this key; it is half of it.
+- **(a) `display` does NOT become declarative** — *"display is the user's responsibility; if a column
+  is full of NA it is still displayed as void. Always calculate OR with difference and ratio if it's
+  cheap enough?"* **Accepted, and the second half is now measured and adopted (§8.4): the odds ratio
+  becomes unconditional, at no measurable cost.** That dissolves the `{or}` case entirely — the field
+  is never empty on a percentage column — and it is a better answer than the declarative rule, because
+  it makes the quantity *present* rather than making the formatter *demand* it.
+  ⚠ **One premise to flag, because it does not hold today.** "A full-NA column still displays as void"
+  is what a reader would expect, but it is **not** what happens: measured, `display = "{or}"` on a
+  table with no odds ratio prints the **percentage**, and the stored `display` attribute comes back
+  `pct` — a silent *substitution*, not a blank (§11 D22). Always-computing the OR removes the
+  motivating instance, but the class survives for every other token (`{ci}` with no interval silently
+  drops the bracket; `{obs}` and `{ctr}` on a plain crosstab). So D22 still needs a decision, and it is
+  now a **bug fix rather than a design change**, since today's behaviour matches neither of the two
+  defensible options. Recommendation: make it render void, which is exactly the maintainer's stated
+  expectation.
+- **(b) `cumOR` lives in `ref2`.** Settled — `ref2 = "cumulative"` beside `"first"` / `"last"` / an
+  index. With (a) this is what makes `OR` deletable: one field, one dichotomisation, named by `ref2`.
+- **(c) `color`'s canonical values migrate to the full words**, short ones kept as aliases both ways,
+  the full word taught. Settled — this is what makes `tab(color =)` and `tab_reg(measure =)` one
+  vocabulary (§8.12).
+- **(d) A mismatched bracket is refused**, not converted. Settled — a printed interval must be the
+  interval, not a re-anchoring of one.
+- **`OR` is deleted** and the odds ratio computed unconditionally on `type ∈ {row, col}` columns —
+  measured free (300 ms vs 340 ms against the difference path; counts and means keep an all-NA field).
+  Three consequences declared in §8.4: the html tooltip gains an `OR:` line, the structural goldens
+  move, and **`ref2 = "last"` must be fixed first** (it is broken today, §11 D27).
+- **`ci` is NOT a logical** — the maintainer's objection was right and pass 3's first draft is
+  withdrawn. It stays an argument with the *anchor* question and loses only its geometry:
+  `ci = c("auto", "no", "cell", "comparison")`. **`ci = "cell"` does not move at all.** This is
+  preferred over the proposed `ci_cell = TRUE`, which would add a formal and create an illegal
+  `ci_cell = TRUE, ci = "comparison"` cell.
+- **`color` alone must NOT trigger the comparison interval** — measured **+86 ms on a 226 ms build
+  (+38 %)**, the largest avoidable cost in the crosstab path, against `color`'s 36 uses in the intro
+  vignette. The trigger stays `color_signif` / `stars` / an explicit `ci = "comparison"` for `forest_plot` without `color`.
+- **`stars` without `color` falls back to the difference** — measured, on factors, on means and on
+  `pct = "col"`, and that default is right. But the fallback exposed **D26**: `stars` and
+  `color_signif` disagree about an odds-ratio table's comparison and **`stars` wins**, so the colour
+  gate ends up testing a difference on a table displaying odds ratios.
+- D22's shape: should a `display` token whose field is empty render **void** (the maintainer's
+  stated expectation) or **abort**? Today it silently substitutes another quantity, which is neither.
+  **Maintainer’s decision: void, plus a one-time note naming the argument that would fill it.**
+- `ci = "cell"` beside `stars` / `color_signif`: **inform and disable**, or **abort**? Today
+  the two disagree — `color_signif` aborts, `stars` is silently dropped (§11 D28).
+  **Maintainer’s decision: inform and disable, from one rule — `ci = "cell"` is an explicit later choice and the user should still get their table**
 
 ---
 
@@ -1732,35 +2099,51 @@ enforced by **argument omission plus one roxygen paragraph** — and a user pass
 
 ## 5. White elephants — the honest list
 
-"Cut" = free now (unreleased or internal). "Deprecate" = CRAN etiquette. "Keep" = suspicion checked and
-dismissed.
+"Cut" = free now (unreleased or internal). "Deprecate" = CRAN etiquette. "Keep" = suspicion checked and dismissed.
 
-| item                                                                           | evidence                                                                                                                                                                                                                                                                                                                                                                                                                                        | verdict                                                                                                             |
-|--------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| **`filter`**                                                                   | **0 uses in every corpus**; its documented use case is tested without it; and its cache key is hardcoded `NA_character_` (`tab.R:2066`), so a filter **never invalidates the jamovi cache**                                                                                                                                                                                                                                                     | **cut** (already doc-superseded) — or at minimum fix the cache key                                                  |
-| `names_prefix`, `names_sort`                                                   | 0 uses anywhere, on both `tab()` and `tab_counts()`                                                                                                                                                                                                                                                                                                                                                                                             | **cut**                                                                                                             |
-| `levels = "auto"`, per-col_var `levels`/`digits` vectors                       | 0 uses                                                                                                                                                                                                                                                                                                                                                                                                                                          | **cut the grammars**, keep the scalars                                                                              |
-| `tab_many()`'s 41 formals                                                      | soft-deprecated already, but the only place `chi2`/`totrow`/`totcol` survive; `na_drop_all`/`compact`/`totrow` have 0 uses                                                                                                                                                                                                                                                                                                                      | **finish it**: `function(...) tab(..., output_list = TRUE)` + the deprecation                                       |
-| `tab_plain()` / `tab_num()` as documented API                                  | 0 vignette uses; literally wrappers over the cores since 17f                                                                                                                                                                                                                                                                                                                                                                                    | **supersede** (keep exported, badge, stop mirroring `tab()`'s arguments)                                            |
-| `sup_cols`                                                                     | tests only (9 hits); mechanically identical to `col_vars` + `levels = "first"` + `pct = "row"`, and the code says so                                                                                                                                                                                                                                                                                                                            | keep the deprecation, stop mirroring it                                                                             |
-| `totcol = "each"` / `"all_col_vars"`                                           | tests only. Worse: the parser returns a **character** for `"last"` and a **list** for the others, so the `identical()` comparisons never fire for the default and **`tot_cols_type == "some"` is the default arm**; `"all_col_vars"` as an *input value* can never produce `tot_cols_type == "all_col_vars"`; and the string `"all_col_vars"` carries **two unrelated meanings** (the total-column tag and the add_n/add_pct helper-column tag) | **cut `"each"`** (≈4 lines) and the unreachable `"all_col_vars"` handler (10 lines); rename one of the two meanings |
-| `tab_totcol_range()` + `range_totcol`                                          | producer alive, consumer commented out, kept by its own unit test                                                                                                                                                                                                                                                                                                                                                                               | **cut both** (the option is DORMANT since x2)                                                                       |
-| `ctx$levels_order`                                                             | read by no stage in `tab.R` (only `jmvtab-cache.R:405`)                                                                                                                                                                                                                                                                                                                                                                                         | **cut from ctx**, pass directly                                                                                     |
-| `tab_assemble()`                                                               | no caller anywhere                                                                                                                                                                                                                                                                                                                                                                                                                              | **cut**                                                                                                             |
-| `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct`   | zero callers                                                                                                                                                                                                                                                                                                                                                                                                                                    | **cut**                                                                                                             |
-| `jmvtab_reg_staged()`                                                          | its own caller inlines the predicate instead                                                                                                                                                                                                                                                                                                                                                                                                    | **cut or adopt**                                                                                                    |
-| `complete_partial_totals`, `set_ci_type`, `tab_get_wrapped_dimensions`         | exported, zero use anywhere                                                                                                                                                                                                                                                                                                                                                                                                                     | maintainer call (personal tooling?)                                                                                 |
-| `reg_meta$shape`, `$model_labels`, `$conf_level`                               | no reader                                                                                                                                                                                                                                                                                                                                                                                                                                       | **cut**                                                                                                             |
-| `estimate_display = "prob"/"ame"`, `at`, `family = "rr"`/`"quasipoisson"`, `tab(OR =)`, `tab_num(ci_scale =)` | duplicate `effect`/`family`/`compare`; degraded away in 3 blocks; `family = "rr"` is a *scale* reachable only by naming the wrong distribution. **`exponentiate` is NOT on this list** — KEY 8 found it to be presentation-only and a genuine choice                                                                                                                                                                                                                                                                                                                                                                              | **fold** (KEY 3a + KEY 8)                                                                                                   |
-| `color = "ci"`                                                                 | a pure synonym of `"after_ci"`                                                                                                                                                                                                                                                                                                                                                                                                                  | **cut** (both already legacy-decoded)                                                                               |
-| `tabxplor_tabs`                                                                | one behavioural bit (`tab_xl.R:214`) + four print methods                                                                                                                                                                                                                                                                                                                                                                                       | keep, but do not grow it; the bit could key on `!is.null(names(x))`                                                 |
-| `spread_models`                                                                | 7 code sites, least-read public formal                                                                                                                                                                                                                                                                                                                                                                                                          | keep (the reg twin of `spread_vars`), re-key on KEY 1                                                               |
-| `tab_md_css()`                                                                 | one-line alias of `tab_css(chrome = FALSE)` whose `tabs` argument is documented as ignored                                                                                                                                                                                                                                                                                                                                                      | keep as alias, drop the argument                                                                                    |
-| `tab_kable()`                                                                  | pure alias of `tab_html()`                                                                                                                                                                                                                                                                                                                                                                                                                      | keep (maintainer's explicit z-g decision)                                                                           |
-| kableExtra engine                                                              | legacy — and the one that breaks under `theme = "print"`                                                                                                                                                                                                                                                                                                                                                                                        | keep + **fix D2**                                                                                                   |
-| `tabxplor.output_kable`                                                        | changes the **shape of the built object** from a display option                                                                                                                                                                                                                                                                                                                                                                                 | keep the option (maintainer ruling), **remove its build-shape power**                                               |
-| the 3 number-font options                                                      | one decision, three knobs                                                                                                                                                                                                                                                                                                                                                                                                                       | merge to one, alias the others                                                                                      |
-| `method = "profile"`, `quasipoisson`, the compound-formula hatch, `mnl_vsrest` | previously settled                                                                                                                                                                                                                                                                                                                                                                                                                              | keep                                                                                                                |
+| item                                                                                                       | evidence                                                                                                                   | verdict                                                                             |
+|------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------|
+| **`filter`**                                                                                               | **0 uses**; cache key is hardcoded `NA_character_` (`tab.R:2066`), **never invalidates jamovi cache**                      | **keep**, used with tribble with different args/pop for tab(); remove from jamovi UI|
+| `names_prefix`, `names_sort`                                                                               | 0 uses anywhere, on both `tab()` and `tab_counts()`                                                                        | **verify** : does it comes from tab_spead (then let it there, not in `tab()`) ?     |
+| `levels = "auto"`, per-col_var `levels`/`digits` vectors                                                   | 0 uses                                                                                                                     | **document** : one level for binaries, all levels when 3+ is the most useful default|
+| `tab_many()`'s 41 formals                                                                                  | soft-deprecated already, but the only place `chi2`/`totrow`/`totcol` survive; `na_drop_all`/`compact`/`totrow` have 0 uses | **finish it**: `function(...) tab(..., output_list = TRUE)` + the deprecation       |
+| `tab_plain()` / `tab_num()` as documented API                                                              | 0 vignette uses; literally wrappers over the cores since 17f                                                               | **keep**                                                                            |
+| `sup_cols`                                                                                                 | tests only (9 hits); mechanically identical to `col_vars` + `levels = "first"` + `pct = "row"`, and the code says so       | keep the deprecation, stop mirroring it                                             |
+| `totcol = "each"` / `"all_col_vars"`                                                                       | tests only (details below)                                                                                                 | **deprecate**, should not error but give the base behaviour (keep one total)        |
+| `tab_totcol_range()` + `range_totcol`                                                                      | producer alive, consumer commented out, kept by its own unit test                                                          | **keep** to maybe implement later (the option is DORMANT since x2)                  |
+| `ctx$levels_order`                                                                                         | read by no stage in `tab.R` (only `jmvtab-cache.R:405`)                                                                    | **cut from ctx**, pass directly                                                     |
+| `tab_assemble()`                                                                                           | no caller anywhere                                                                                                         | **cut**                                                                             |
+| `set_tot_n`, `set_n_eff`, `set_model_family`, `get_ref_means`, `get_ref_pct`                               | zero callers                                                                                                               | **cut**                                                                             |
+| `jmvtab_reg_staged()`                                                                                      | its own caller inlines the predicate instead                                                                               | **I don’t understand**                                                              |
+| `complete_partial_totals`, `set_ci_type`,                                                                  | exported, zero use anywhere                                                                                                | **cut**                                                                             |
+| `tab_get_wrapped_dimensions`                                                                               | exported, zero use anywhere                                                                                                | **keep** (personal tooling)                                                         |
+| `reg_meta$shape`, `$model_labels`,                                                                         | no reader                                                                                                                  | **cut**                                                                             |
+| `$conf_level`                                                                                              | no reader                                                                                                                  | **use it to unlock further simplication** (added as column attr for that, not implemented yet)|
+| `estimate_display = "prob"/"ame"`, `at`, **`exponentiate`**, `family = "rr"`/`"quasipoisson"`, `tab(OR =)` | duplicate `effect`/`family`/`measure` (details below)                                                                      | **fold** (KEY 3a + KEY 8)                                                           |
+| **`tab_num(ci_scale =)`**                                                                                  | **0 uses anywhere.** A *pure duplicate*: measured, `tab(…, ci = "ratio")` already gives `ci_type = "ratio"`                | **cut** (KEY 8.7)                                                                   |
+| `color = "ci"`                                                                                             | a pure synonym of `"after_ci"`                                                                                             | **cut** (both already legacy-decoded)                                               |
+| `tabxplor_tabs`                                                                                            | one behavioural bit (`tab_xl.R:214`) + four print methods                                                                  | keep, but do not grow it; the bit could key on `!is.null(names(x))`                 |
+| `spread_models`                                                                                            | 7 code sites, least-read public formal                                                                                     | **merge with `spread_vars`** ?, re-key on KEY 1                                     |
+| `tab_md_css()`                                                                                             | one-line alias of `tab_css(chrome = FALSE)` whose `tabs` argument is documented as ignored                                 | keep as alias, drop the argument                                                    |
+| `tab_kable()`                                                                                              | pure alias of `tab_html()`                                                                                                 | keep (maintainer's explicit z-g decision)                                           |
+| kableExtra engine                                                                                          | legacy — and the one that breaks under `theme = "print"`                                                                   | keep + **fix D2**                                                                   |
+| `tabxplor.output_kable`                                                                                    | changes the **shape of the built object** from a display option                                                            | keep the option ; **remove its build-shape power ?**                                |
+| the 3 number-font options                                                                                  | one decision, three knobs                                                                                                  | merge to one, alias the others                                                      |
+| `method = "profile"`, `quasipoisson`, the compound-formula hatch, `mnl_vsrest`                             | previously settled                                                                                                         | keep                                                                                |
+
+**`totcol = "each"` / `"all_col_vars"` — details.** Tests only. Worse: the parser returns a
+**character** for `"last"` and a **list** for the others, so the `identical()` comparisons never fire
+for the default and **`tot_cols_type == "some"` is the default arm**; `"all_col_vars"` as an *input
+value* can never produce `tot_cols_type == "all_col_vars"`; and the string `"all_col_vars"` carries
+**two unrelated meanings** (the total-column tag and the add_n/add_pct helper-column tag).
+
+**The `tab_reg()` / `tab(OR =)` fold — details.** They duplicate `effect` / `family` / `measure`;
+`at` is degraded away in 3 separate blocks; `family = "rr"` is a *measure* reachable only by naming
+the wrong distribution; and `tab(OR =)` is measured to be `color` + `display` + `ref2` welded
+(§KEY 8.4) — with the `or` field becoming unconditional at **no measurable cost**, which is what makes
+it deletable rather than merely re-spelled. ⚠ **`exponentiate` IS on this list**: pass 2 removed it,
+pass 3 measured it a no-op on the whole marginal path (and 0 of 49 taught calls), and the maintainer
+ruled delete.
 
 **And the converse — cold but good, do not cut:** `tab_counts()`, `tab_css()`, `transpose=`, `n_min=`,
 `split_var=`, `score_from_lv1()`, `common_totrow`, `tab_compact()`'s cross-call merge (which is the one
@@ -1785,7 +2168,7 @@ case `tab()` now does by default).
 | what                                        | to what                                                                                                                                     |
 |---------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | `type` (8 values, two jobs)                 | `pct_base` + `scale`; `get_type()` survives as a **derived, soft-deprecated accessor** returning the same 8 values (KEY 2, naming option 3) |
-| `ci_type`                                   | **deleted** — folded into `scale` (KEY 2 b); `get_ci_type()` becomes a derived, soft-deprecated accessor |
+| `ci_type`                                   | **deleted** — folded into `scale` (KEY 2 b); `get_ci_type()` becomes a derived, soft-deprecated accessor                                    |
 | field `in_totrow` (logical)                 | field `row_kind` (7 values) — **the record stays at 21 fields**, `is_totrow()` becomes a derived read (KEY 1, shared half)                  |
 | `meta` (crosstab) + `reg_meta` (regression) | one `meta$spec` with `kind` + a uniform `vars` (KEY 6)                                                                                      |
 
@@ -1875,10 +2258,20 @@ a declared fact.
 
 - **KEY 4** — MEASURES gains its vocabulary; the four allow-lists collapse to one; the
   `color_diff_OR`/`color_ctr`/`color_ci`/`color_num` fossil dies. BI target.
-- **KEY 3a + KEY 8** — the argument collapse on both producers (back-compat waived on `tab_reg()`,
-  trivially routed on `tab()`) + the three family predicates. Release-gated: they change public
-  arguments. KEY 8 needs KEY 2's library to resolve into, so it lands with or just after it.
 - **KEY 2** — `scale` + `pct_base` + `ci_method`, `ci_type` deleted, `get_type()`/`get_ci_type()` demoted to derived accessors. Needs E1.
+- **KEY 3a + KEY 8** — the argument collapse. ⚠ **Pass 3 split this into two independent sessions**,
+  and reordered it **after** KEY 2 (it now *depends on* KEY 2 rather than duplicating it — KEY 2's
+  stored scale is what closes D20/D21/D23, and KEY 4's `requires` is the mechanism `color` and
+  `display` declare through):
+  - **KEY 8a — `tab()`**: retire `OR` and compute the odds ratio unconditionally (measured free,
+    §KEY 8.4 — **fix `ref2 = "last"` first**, §11 D27); drop `ci`'s geometry values for
+    `ci = c("auto", "no", "cell", "comparison")`; cut `tab_num(ci_scale =)`; migrate `color`'s values
+    to the full words with aliases. **No new argument.** Soft-deprecation
+    shims required — `OR` and `ci` are CRAN-released since **v1.2.0** (verified from the tag), so this is
+    *not* free-because-unreleased; the six routes are mechanical.
+  - **KEY 8b — `tab_reg()`**: `measure` × `effect`; delete `exponentiate` and `at`; close the capability
+    gaps; ship the resolution table as a runtime object. Back-compat waived. Needs the three family
+    predicates (§4.4.2).
 - **KEY 6** — `meta$spec`. Needs E1; pairs naturally with KEY 3a (both touch `reg_meta`).
 
 **Structural, in this order:**
@@ -1890,8 +2283,11 @@ a declared fact.
 - **KEY 7** — mostly falls out of KEY 1 (the return shape); otherwise a doc + deprecation pass.
 
 **Relative to the release.** Everything that changes a *public argument* or a *return class* is free
-only until the 2.0.0 CRAN release: that is KEY 3a (regression — already waived), KEY 7's entry points,
-and the §5 argument cuts. Everything else is internal and can land after.
+only until the 2.0.0 CRAN release: that is KEY 8b (regression — already waived), KEY 7's entry points,
+and the §5 argument cuts. Everything else is internal and can land after. ⚠ **KEY 8a is the exception
+that is *not* free either way**: `tab(OR =)` and `tab(ci =)` shipped in v1.2.0, so they carry
+soft-deprecation whenever it lands — which is an argument for landing it *before* the release, so the
+shims are introduced once rather than on top of a second released spelling.
 
 ---
 
@@ -1995,56 +2391,58 @@ separate interval-scale attribute — on your follow-up question, one scale is e
 is deleted rather than renamed** (§KEY 2 b re-tested the claim that they were two facts, and
 withdrew it).
 
-**Q7 (new, from the second pass) — KEY 8: fold the geometry into one `compare` argument?**
-Asked by the maintainer while reviewing KEY 2 ("could `tab()`'s arguments be more readable and
-meaningful than `OR` and `ci`? is there another missing key? does it make arguments choices rather
-than consequences?"). The measured answer is in §KEY 8: the same question is asked four ways on each
-producer, D20/D21 are what happens when two of them disagree, and `family = "rr"` is a *scale* choice
-that can only be reached by naming the wrong distribution. Folding them removes ≈3 formals and 3 enum
-values (−2 on `tab()`, −1 on `tab_reg()`) and leaves five genuine choices. **Open:** (a) whether `tab()` takes the change at all, given
-it is a released surface (the routing is trivial, `OR = "OR"` → `compare = "odds_ratio"`); (b) whether
-`compare = "ratio"` on a coefficient path may *change the fit* (auto log-binomial / modified Poisson)
-or must refuse and ask for a different `family` — the first is friendlier and is what the current
-`family = "rr"` back door already does silently.
+**Q7 — KEY 8: fold the geometry into one argument?**
+*Asked in pass 2 while reviewing KEY 2; **re-opened from scratch in pass 3** at the maintainer's
+request — "restate the whole problem and find the real key; I would rather have a well-argued
+demolition than a polished defence." It is a demolition. §KEY 8 is rewritten around the result.*
 
-**Readability, checked rather than assumed** (maintainer's follow-up: *"is a three-way cross
-understandable, is a table enough when not everyone reads vignettes, and does any of it transfer?"*).
-§KEY 8's readability study answers with four measured facts: the two decisions are the ones **every**
-framework forces (Stata's `binreg …, or|rr|rd|hr` is the exact precedent, per-family default
-included; `difference`/`ratio` are marginaleffects' own words, which tabxplor already passes through);
-the taught corpus sets `exponentiate` in **0 of 49** `tab_reg()` calls, `effect` in 5 and `family` in
-13, and `family` announces its own auto-detection — so a user meets one axis at a time; the answer to
-"not everyone reads vignettes" is that the resolution table must ship as a **runtime object** feeding
-the help page, the error message, a lister and the jamovi dropdown, which is **half the key, not its
-documentation**; and the transferable lesson is protected by naming the argument with the concept
-words and printing the discipline's acronym in the column header, so the table shows the mapping every
-time. **Open:** (c) which vocabulary for `compare` — concept words or discipline acronyms (the
-recommendation is concept words in, acronyms out).
+**The pass-2 answer (`compare` on both producers) is withdrawn**, on three measured grounds:
+`compare` is **already a `tab_reg()` formal** (model comparison); on `tab()` the geometry is **not an
+input at all** (`diff` and `ratio` are computed in every cell unconditionally, and `display`/`color`/
+`ci` are three deliberately independent selectors over them — differentiator #1); and the D20/D21
+defect class is reachable with **no `OR` and no `ci` conflict** (§11 D23), so no argument closes it.
 
-**The asymmetry, and a correction to KEY 3** (maintainer's follow-up: *"maybe great for `tab()`, but
-would `tab_reg()` need another translation layer to match the common vocabulary of regressions?"* —
-yes, and testing it found a real over-collapse). `compare` is a clean −2 formals on `tab()`, where it
-displaces four tabxplor-only spellings and kills D20/D21; on `tab_reg()` it is −1 formal and −3
-values, because regression users already own a working vocabulary (`glm(family = binomial(link =
-"log"))`, `exponentiate`, `marginaleffects`). KEY 8 as first written merged **three** mechanically
-different axes — the link (changes the fit), the contrast (changes the estimator) and the reporting
-scale (changes only the presentation). The third must stay separate, which means **keeping
-`exponentiate`** — and that is a correction to §KEY 3, whose derived-arguments table listed it as a
-consequence: its *default* is derivable, its *value* is not. Mitigations recommended: accept
-`link = "log"` as a documented synonym for `compare = "ratio"` (a one-directional ramp, not a
-competing vocabulary), and rely on the model line, which **already** names the mechanism in words
-("logistic regression; odds ratios" / "marginal risk ratios (ratio of adjusted predicted
-probabilities)" / "modified Poisson regression; risk ratios"). **Open:** (d) whether to take the
-`tab_reg()` half at all — if only one half is taken, the `tab()` half is where the four spellings,
-the two defects and the absence of a competing standard coincide.
+**What replaced it.** The rule is different on the two producers, for a mechanical reason: on a
+crosstab every geometry is a function of the *same sufficient statistics*, so asking for one is a
+**selection**; on a regression it is a *different fit or estimator*, so it is a **modelling decision**
+— and *changing `display` must never change the model*. Hence:
 
-**And the correction that came with it:** this study's first draft called three of the nine
-`effect × scale` cells "illegal". Re-checked against the statistics, that is wrong — a gaussian
-`ratio` is a ratio of means (and tabxplor already owns the row, the ladder and three CI engines for
-it, used by `tab_num(ci_scale = "ratio")`), and a binary `coefficient + difference` is an
-identity-link risk-difference model. The honest legality table has three states — *implemented*,
-*sound but not offered*, *refused with a reason* — and today a user cannot tell the second from the
-third, because both produce the same abort.
+- **`tab()` gains nothing.** The geometry is already named by `color`, which — measured —
+  **already computes the odds ratio with no `OR =` argument** and **already selects the matching
+  interval for all three geometries**. `OR` is `color` + `display` + `ref2` welded (§KEY 8.4);
+  `ci` keeps its *anchor* question and loses only its geometry — `c("auto", "no", "cell", "comparison")`,
+  with `"cell"` unchanged (§KEY 8.5); `tab_num(ci_scale =)` is a pure duplicate of `ci = "ratio"`.
+  And the `or` field becomes **unconditional**, measured free, which is what makes `OR` deletable.
+- **`tab_reg()` gains `measure`**, the two-axis Shape 1 of KEY 3a, finished and named.
+
+**Maintainer's rulings, pass 3:** **`exponentiate` is deleted** (→ `measure = "log"`, with the old
+name kept as a documented synonym); **the capability gaps are closed** (gaussian ratio-of-means,
+identity-link risk difference), which makes the legality table three-state and requires the resolution
+table to ship as a **runtime object** (help + error + lister + jamovi), not prose.
+
+**Rulings (a)–(d), given 2026-08-13** and recorded in §KEY 8.16: **(a) no**, `display` stays the
+user's responsibility — *and instead the odds ratio becomes unconditional*, which the follow-up
+measured to be free and which dissolves the motivating case; **(b)** `cumOR` lives in
+`ref2 = "cumulative"`; **(c)** `color`'s canonical values migrate to the full words, short ones kept
+as aliases both ways; **(d)** a mismatched bracket is **refused**, not converted.
+
+**The follow-up settled two more things by measurement:** `OR` is deleted and the `or` field computed
+unconditionally on percentage columns (measured free — 300 ms vs 340 ms for the difference path); and
+`ci` is **not** a logical — pass 3's first draft is withdrawn on the maintainer's objection. It keeps
+its name and its *anchor* question, losing only the geometry:
+`ci = c("auto", "no", "cell", "comparison")`, with **`ci = "cell"` unchanged**. `color` alone must not
+trigger the interval — measured **+38 %** on a build, the largest avoidable cost in the crosstab path.
+
+**Still open:** (e) should a `display` token whose field is empty render **void** (the maintainer's own
+expectation — today it silently substitutes another quantity, §11 D22) or abort? (f) `ci = "cell"`
+beside `stars`/`color_signif`: inform-and-disable, or abort as `color_signif` already does (§11 D28)?
+
+**Two pass-2 claims corrected inside other sections.** §KEY 3's derived-arguments table said
+`exponentiate` does **not** belong on the cut list — reversed (it is a silent no-op on the whole
+marginal path, 0 of 49 taught calls, and its `FALSE` value *is* a measure). And the pass-1 claim that
+three of the nine `effect × measure` cells are "illegal" stays withdrawn: a gaussian `ratio` is a ratio
+of means — measured, `tab(race, tvhours, ci = "ratio")` gives one happily while `tab_reg()` refuses —
+and a binary coefficient `difference` is the identity-link additive-risk model.
 
 **Q6 — the jamovi boundary: consolidate or accept the mirror?**
 Seven rules are hand-mirrored (§4.5), three of them in JS. Options: (a) accept, document each mirror;
@@ -2058,29 +2456,35 @@ left in the layer.
 
 ## 11. Defects found in passing — fix regardless of any redesign
 
-| #       | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | site                                                       | severity                  |
-|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|---------------------------|
-| **D9**  | **the jamovi `design_effect` checkbox does nothing.** It is declared in `jmvtab.a.yaml:205` and rendered in `jmvtab.u.yaml:231`, but **absent from the stale generated `R/jmvtab.h.R`**, so `self$options$design_effect` is `NULL` and `isTRUE(NULL)` is `FALSE`. Every claim in the `.a.yaml` help and the `.b.R`/`jmvtab-cache.R` comments about it "moving every interval in the table" is currently untrue in the running module. Pending a maintainer `jmvtools::prepare()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `jmvtab.h.R` vs `jmvtab.a.yaml:205`                        | **user-visible**          |
-| D1      | transposed reg tables lose `ann$keep_black` → footer rows wrongly greyed in HTML; masked by a silent fallback, untested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `tab-transpose-render.R:212-223` → `tab-render-html.R:430` | user-visible              |
-| D2      | `theme = "print"` + `engine = "kableExtra"` renders `kable_material_dark`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `tab-render-html.R:294-309`                                | user-visible              |
-| D11     | jamovi `display` on a **mean** column with `ci = "cell"` sets `pct_ci`, which reads the `pct` field — `NA` on the numeric leaf → the cell renders **empty**. `tab_ci()` had already set `mean_ci` correctly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `jmvtab-cache.R:523-528` vs `tab.R:6181`                   | user-visible              |
-| **D16** | **`bind_rows()` on two GROUPED tabs silently drops every table attribute** — `subtext`, `test` and the whole `meta` (so: no weight footer, no inference basis, no CI legend, no test summary, no caption). Measured: `bind_rows(tp, tp)` on a plain tab keeps all four; on a grouped tab keeps none. `vec_rbind()` on two grouped tabs is worse — it returns a bare `grouped_df`, so `vec_ptype2.tabxplor_grouped_tab.tabxplor_grouped_tab` is not reached at all, while `vec_cast` is and works. At least a contributing cause is plainly wrong on its own terms: **`dplyr_reconstruct.tabxplor_grouped_tab` restores from `data`, not from `template`** (`tab_classes.R:2933-2936`: `tab_restore(out, data)`), contrary to dplyr's contract — it survives the in-place verbs only because they hand it a modified copy of the original that still carries the attributes, and fails the moment a verb builds a fresh frame. **This is the fifth instance of the "a rebuild site drops table-level facts" class** (after `tab_compact` z16-iv, `tab_spread` and `reg_build`'s split branch z16-iiiii) and it is the gap between 13/15 and 15/15 in §2.6 | `tab_classes.R:2933`, `:3120`                              | **user-visible**          |
-| **D20** | **`tab(OR = "OR", ci = "cell")` silently drops the odds ratios.** The `or` field is computed (measured: `1, 2.06, 1.78`) but the display reverts to `pct_ci`, so the table prints `[40;43]%` where the user asked for odds ratios, and no message is emitted. `ci = "diff"` keeps the OR display; only `"cell"` overrides it | measured; `tab.R:6180-6215` | **user-visible** |
-| D21     | **`tab(OR = "OR", ci = "diff")` puts a percentage-point interval on an odds-ratio column.** The cells print `1.00 / 2.06 / 1.78` while the stored bounds are differences (`0.067`, `-0.007`), so `ci_center()` returns the *difference* and `fmt_scale_of()` resolves the column to the `points` scale — which would hand `forest_plot()` a percentage-point axis with `pct_diff` gridlines for a column of odds ratios. The significance gate stays correct by luck (all three scales test the same null, `fmt_class.R:3552-3559`), so nothing visibly breaks in the *table* | measured; `fmt_class.R:3396`, `tab.R:6209` | latent (plot) |
-| D17     | **two estimate-field rules that disagree on 178 of 190 golden columns** — `fmt_est_field(ci_type)` answers `"diff"` where `fmt_center_field()` answers `"pct"`/`"mean"`. Both are right for their own caller ("the effect field" vs "the field the interval is centred on"), nothing states the difference, and only the caller's context keeps them apart. Fixed by construction under KEY 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `fmt_class.R:2014` vs `:3415`                              | latent                    |
-| D18     | `has_ci` tests two `ci_type` values that can never be stored (`"diff_row"`/`"diff_col"` are stripped at `tab.R:6209` before stamping) — dead arms in a live predicate, and the reader cannot tell whether `"cell"`'s absence is deliberate (it is)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `fmt_class.R:3565`                                         | doc / latent              |
-| D19     | `tab(pct = "col", OR = "OR", color_signif = …)` stamps `ci_type = "or"` on three columns and `""` on the **reference** column, because its own OR bounds are NA by construction — so the stored "what interval is this" attribute varies within one col_var for a reason unrelated to what the columns estimate. Harmless today (z17's `display` clause covers the colour path), but it is why the scale must be stored rather than sniffed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | measured, `tab.R:6215-6234`                                | latent                    |
-| D4      | background-channel allow-lists disagree: `c("OR","adjustment")` legal in `tab_reg()`, illegal in `tab()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `tab.R:944` vs `fmt_class.R:1367`                          | inconsistency             |
-| D5      | `tab_reg()`'s `na` message names `"drop_all_models"`, removed in z13                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `tab_reg.R:3152`                                           | message                   |
-| D6      | the multi-dependent × model-list recursion drops `spread_models` and `.fit_cache`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `tab_reg.R:4948-4956`                                      | silent                    |
-| D7      | the `ref_vect` NULL guard is unreachable (`ref_vect` is not a declared ctx field, so `is.null()` errors first)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `tab.R:2401` vs `new_ctx()` `:1469`                        | latent                    |
-| D8      | `legend_method_name()` falls through silently → can print a CI method the bounds were never built with                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `fmt_class.R:4179-4183`                                    | latent                    |
-| D10     | the stale generated `R/jmvtabreg.h.R` still declares the removed `na = "drop_all_models"` — the live UI can pass a value `tab_reg()` rejects; it also carries four dead options (`ids`/`strata`/`fpc`/`nest`) and `jmvtab.h.R` carries two (`test_robust`, `method_ratio`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtabreg.h.R:184-190, 431-434`                           | pending `prepare()`       |
-| D12     | `jmv_tab3_base_key()`'s `reapplied` list contains `"ci_method"`, which is **not a key of `opts`**; the four `method_*` keys therefore land in `structural` and force a full tier-3 rebuild, making the cheap re-ref path unreachable for CI-method toggles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtab-cache.R:666-668` vs `:712`                         | perf, no correctness risk |
-| D13     | `tab(filter =)`'s cache key is hardcoded `NA_character_`, so a filter change never invalidates the jamovi cache                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `tab.R:2066`                                               | latent (0 known users)    |
-| D14     | `@param other_if_less_than` documents an argument `tab_counts()` does not have                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `tab-counts.R:222`                                         | doc                       |
-| D15     | stale comment: `jmvtab-cache.R:858-861` says `design_effect` "rides the global option, set around the build" — `.b.R:38-41` says the opposite and passes it as an argument                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtab-cache.R:858-861`                                   | doc                       |
-| **D3**  | **claim withdrawn.** An earlier draft of this study asserted that `tab_ci()`/`tab_chi2()` **drop** `meta` on the exported step path. They pass no `meta` argument (`tab.R:6244, 6255, 6366, 6377`), but *verified by running it*, `meta` survives — `tibble::new_tibble()` preserves the incoming object's attributes, and `tab_plain() | > tab_chi2() | > tab_ci()` keeps `vars` and a `set_caption()`. It is **undesigned, not broken**; passing`meta` explicitly costs six lines and removes the hazard class                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `tab.R:6244` etc.                                          | none (latent)             |
+| #       | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | site                                                       | severity                                                                        |
+|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|---------------------------------------------------------------------------------|
+| **D9**  | **the jamovi `design_effect` checkbox does nothing.** It is declared in `jmvtab.a.yaml:205` and rendered in `jmvtab.u.yaml:231`, but **absent from the stale generated `R/jmvtab.h.R`**, so `self$options$design_effect` is `NULL` and `isTRUE(NULL)` is `FALSE`. Every claim in the `.a.yaml` help and the `.b.R`/`jmvtab-cache.R` comments about it "moving every interval in the table" is currently untrue in the running module. Pending a maintainer `jmvtools::prepare()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `jmvtab.h.R` vs `jmvtab.a.yaml:205`                        | **user-visible**                                                                |
+| D1      | transposed reg tables lose `ann$keep_black` → footer rows wrongly greyed in HTML; masked by a silent fallback, untested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `tab-transpose-render.R:212-223` → `tab-render-html.R:430` | user-visible                                                                    |
+| D2      | `theme = "print"` + `engine = "kableExtra"` renders `kable_material_dark`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `tab-render-html.R:294-309`                                | user-visible                                                                    |
+| D11     | jamovi `display` on a **mean** column with `ci = "cell"` sets `pct_ci`, which reads the `pct` field — `NA` on the numeric leaf → the cell renders **empty**. `tab_ci()` had already set `mean_ci` correctly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `jmvtab-cache.R:523-528` vs `tab.R:6181`                   | user-visible                                                                    |
+| **D16** | **`bind_rows()` on two GROUPED tabs silently drops every table attribute** — `subtext`, `test` and the whole `meta` (so: no weight footer, no inference basis, no CI legend, no test summary, no caption). Measured: `bind_rows(tp, tp)` on a plain tab keeps all four; on a grouped tab keeps none. `vec_rbind()` on two grouped tabs is worse — it returns a bare `grouped_df`, so `vec_ptype2.tabxplor_grouped_tab.tabxplor_grouped_tab` is not reached at all, while `vec_cast` is and works. At least a contributing cause is plainly wrong on its own terms: **`dplyr_reconstruct.tabxplor_grouped_tab` restores from `data`, not from `template`** (`tab_classes.R:2933-2936`: `tab_restore(out, data)`), contrary to dplyr's contract — it survives the in-place verbs only because they hand it a modified copy of the original that still carries the attributes, and fails the moment a verb builds a fresh frame. **This is the fifth instance of the "a rebuild site drops table-level facts" class** (after `tab_compact` z16-iv, `tab_spread` and `reg_build`'s split branch z16-iiiii) and it is the gap between 13/15 and 15/15 in §2.6 | `tab_classes.R:2933`, `:3120`                              | **user-visible**                                                                |
+| **D20** | **`tab(OR = "OR", ci = "cell")` silently drops the odds ratios.** The `or` field is computed (measured: `1, 2.06, 1.78`) but the display reverts to `pct_ci`, so the table prints `[40;43]%` where the user asked for odds ratios, and no message is emitted. `ci = "diff"` keeps the OR display; only `"cell"` overrides it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | measured; `tab.R:6180-6215`                                | **user-visible**                                                                |
+| D21     | **`tab(OR = "OR", ci = "diff")` puts a percentage-point interval on an odds-ratio column.** The cells print `1.00 / 2.06 / 1.78` while the stored bounds are differences (`0.067`, `-0.007`), so `ci_center()` returns the *difference* and `fmt_scale_of()` resolves the column to the `points` scale — which would hand `forest_plot()` a percentage-point axis with `pct_diff` gridlines for a column of odds ratios. The significance gate stays correct by luck (all three scales test the same null, `fmt_class.R:3552-3559`), so nothing visibly breaks in the *table*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | measured; `fmt_class.R:3396`, `tab.R:6209`                 | latent (plot)                                                                   |
+| **D22** | **`display = "{or}"` on a table with no odds ratio silently prints the percentage.** Measured: `tab(d, race, marital, pct = "row", display = "{or}")` renders `3% 6% 6%`, and the *stored* `display` attribute comes back `pct` — the template is accepted, the field is all-NA, and the column silently falls back. The user gets a plausible table that is not what they asked for. Same class: `display = "{pct} ({ci})"` without `ci =` silently drops the bracket. Both are fixed by the same rule — **a display template declares what the column must carry** (§KEY 8.16 a), the mechanism `color` already uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | measured; `tab.R:844-861`, `fmt_class.R:1488`              | **user-visible**                                                                |
+| **D23** | **the D21 incoherence is reachable with no `OR` and no `ci` conflict.** Measured: `tab(d, race, marital, pct = "row", ci = "diff", display = "{ratio} ({ci})")` prints `×1.8 ([2;4]%)` — a **ratio** over a percentage-**point** interval. So the defect class is *display-geometry ≠ interval-geometry*, not *`OR` vs `ci`*, and no argument can close it (`display` must stay free). It is closed by KEY 2's stored scale plus one rule: the bracket renders the stored interval, and a mismatched geometry is refused. Note the conversion already exists on the colour side only — `rescale_bound()` maps a diff bound to a ratio bound for `fmt_color_plan()`, and `format()` has no equivalent step                                                                                                                                                                                                                                                                                                                                                                                                                                                | measured; `fmt_class.R:3605-3618` vs `format.tabxplor_fmt` | **user-visible** (latent in pass 2, where it was mis-attributed to D21's cause) |
+| **D25** | **`tab_reg()`'s `color` accepts geometry values that contradict what the column estimates**, silently. Measured: `tab_reg(…, color = "diff")` on an odds-ratio column stores `color = diff`; `tab_reg(…, color = "OR", exponentiate = FALSE)` stores `color = OR` on a `Model_β` (`log_coef`) column. Neither is refused and neither is meaningful. Once `measure` names the estimand and KEY 2 stores its scale, a reg table's `color` needs only `TRUE`/`FALSE` + `"adjustment"`/`"between_groups"` — the ladder comes from the column (§KEY 8.12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | measured; `tab_reg.R` colour boundary                      | latent (silently wrong)                                                         |
+| **D26** | **`stars` and `color_signif` disagree about what an odds-ratio table compares — and `stars` wins.** Measured: `tab(…, color = "OR", stars = TRUE)` stores `ci_type = "diff"` with percentage-**point** bounds (`0.0276 0.0198 0.0044`); `tab(…, color = "OR", color_signif = "grey_non_signif")` stores `ci_type = "or"` with the Woolf bounds (`3.576 1.803 1.237`); **both together give `"diff"`**. So asking for stars on an OR-coloured table silently downgrades the interval and the colour gate then tests a *difference* on cells that display *odds ratios*. Unlike D21 this is **not latent** — it decides which cells are greyed (the two Wald tests share a null but not a p-value, so borderline cells can flip)                                                                                                                                                                                                                                                                                                                                                                                                                           | measured; `tab-resolve.R:167-182` vs `:94-127`             | **user-visible**                                                                |
+| **D28** | **`ci = "cell"` silently drops the stars.** Measured: `tab(…, ci = "cell", stars = TRUE)` returns `pvalue` all-NA and renders no stars. The *same* conflict with `color_signif` **aborts** with a good message (17d). Two consumers of one fact, two behaviours — one loud, one silent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | measured; `tab.R` ci/stars forcing                         | **user-visible**                                                                |
+| **D27** | **`ref2 = "last"` does not resolve.** Measured: `tab(…, OR = "OR", ref2 = "last")` warns *"no columns were found as reference for comparison"* and returns an all-NA `or` field, while `"first"` and an integer index both work. Latent today (few users set `ref2`), but it becomes a **prerequisite** if the odds ratio is computed unconditionally (§8.4), because the warning would then fire on tables that never asked for one                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | measured; `tab_apply_reference()`                          | latent → blocking for §8.4                                                      |
+| D17     | **two estimate-field rules that disagree on 178 of 190 golden columns** — `fmt_est_field(ci_type)` answers `"diff"` where `fmt_center_field()` answers `"pct"`/`"mean"`. Both are right for their own caller ("the effect field" vs "the field the interval is centred on"), nothing states the difference, and only the caller's context keeps them apart. Fixed by construction under KEY 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `fmt_class.R:2014` vs `:3415`                              | latent                                                                          |
+| D18     | `has_ci` tests two `ci_type` values that can never be stored (`"diff_row"`/`"diff_col"` are stripped at `tab.R:6209` before stamping) — dead arms in a live predicate, and the reader cannot tell whether `"cell"`'s absence is deliberate (it is)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `fmt_class.R:3565`                                         | doc / latent                                                                    |
+| D19     | `tab(pct = "col", OR = "OR", color_signif = …)` stamps `ci_type = "or"` on three columns and `""` on the **reference** column, because its own OR bounds are NA by construction — so the stored "what interval is this" attribute varies within one col_var for a reason unrelated to what the columns estimate. Harmless today (z17's `display` clause covers the colour path), but it is why the scale must be stored rather than sniffed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | measured, `tab.R:6215-6234`                                | latent                                                                          |
+| D4      | background-channel allow-lists disagree: `c("OR","adjustment")` legal in `tab_reg()`, illegal in `tab()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `tab.R:944` vs `fmt_class.R:1367`                          | inconsistency                                                                   |
+| D5      | `tab_reg()`'s `na` message names `"drop_all_models"`, removed in z13                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `tab_reg.R:3152`                                           | message                                                                         |
+| D6      | the multi-dependent × model-list recursion drops `spread_models` and `.fit_cache`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `tab_reg.R:4948-4956`                                      | silent                                                                          |
+| D7      | the `ref_vect` NULL guard is unreachable (`ref_vect` is not a declared ctx field, so `is.null()` errors first)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `tab.R:2401` vs `new_ctx()` `:1469`                        | latent                                                                          |
+| D8      | `legend_method_name()` falls through silently → can print a CI method the bounds were never built with                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `fmt_class.R:4179-4183`                                    | latent                                                                          |
+| D10     | the stale generated `R/jmvtabreg.h.R` still declares the removed `na = "drop_all_models"` — the live UI can pass a value `tab_reg()` rejects; it also carries four dead options (`ids`/`strata`/`fpc`/`nest`) and `jmvtab.h.R` carries two (`test_robust`, `method_ratio`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtabreg.h.R:184-190, 431-434`                           | pending `prepare()`                                                             |
+| D12     | `jmv_tab3_base_key()`'s `reapplied` list contains `"ci_method"`, which is **not a key of `opts`**; the four `method_*` keys therefore land in `structural` and force a full tier-3 rebuild, making the cheap re-ref path unreachable for CI-method toggles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtab-cache.R:666-668` vs `:712`                         | perf, no correctness risk                                                       |
+| D13     | `tab(filter =)`'s cache key is hardcoded `NA_character_`, so a filter change never invalidates the jamovi cache                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `tab.R:2066`                                               | latent (0 known users)                                                          |
+| D14     | `@param other_if_less_than` documents an argument `tab_counts()` does not have                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `tab-counts.R:222`                                         | doc                                                                             |
+| D15     | stale comment: `jmvtab-cache.R:858-861` says `design_effect` "rides the global option, set around the build" — `.b.R:38-41` says the opposite and passes it as an argument                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `jmvtab-cache.R:858-861`                                   | doc                                                                             |
+| **D3**  | **claim withdrawn.** An earlier draft of this study asserted that `tab_ci()`/`tab_chi2()` **drop** `meta` on the exported step path. They pass no `meta` argument (`tab.R:6244, 6255, 6366, 6377`), but *verified by running it*, `meta` survives — `tibble::new_tibble()` preserves the incoming object's attributes, and `tab_plain() | > tab_chi2() | > tab_ci()` keeps `vars` and a `set_caption()`. It is **undesigned, not broken**; passing`meta` explicitly costs six lines and removes the hazard class                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `tab.R:6244` etc.                                          | none (latent)                                                                   |
 
 ---
 
