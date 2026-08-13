@@ -839,7 +839,7 @@ testthat::test_that("variance contributions match (O-E)^2/E / total_chi2", {
 # === SECTION: Odds ratios =====================================================
 
 testthat::test_that("OR calculation produces finite numeric values", {
-  tabs <- tab(gss, race, marital, pct = "row", OR = "OR")
+  tabs <- tab(gss, race, marital, pct = "row", display = "{or}", ref = "first")
 
   # Check that OR values exist and are numeric for non-total cells
   race_levels <- as.character(unique(
@@ -857,7 +857,7 @@ testthat::test_that("OR calculation produces finite numeric values", {
 })
 
 testthat::test_that("OR ref column values are all 1", {
-  tabs <- tab(gss, race, marital, pct = "row", OR = "OR")
+  tabs <- tab(gss, race, marital, pct = "row", display = "{or}", ref = "first")
 
   # The ref column (first non-total column, default ref2="first") should have OR=1
   # because RR = cell_pct / ref_col_pct = itself / itself = 1 for the ref column

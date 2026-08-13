@@ -267,7 +267,7 @@ test_that("ame_ratio colours as a RATIO even with exponentiate = FALSE", {
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio",
                                 exponentiate = FALSE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
-  expect_equal(get_color(t[[nm]])[1], "OR")
+  expect_equal(get_color(t[[nm]])[1], "odds_ratio")
   expect_equal(get_scale(t[[nm]]), "odds_ratio")
 })
 
@@ -302,7 +302,7 @@ test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
   nm <- grep("^Model", names(t), value = TRUE)[1]
   # still an additive risk DIFFERENCE with its "{diff} ({pct})" cell and diff colour
   expect_equal(get_scale(t[[nm]]), "points")
-  expect_equal(get_color(t[[nm]])[1], "diff")
+  expect_equal(get_color(t[[nm]])[1], "difference")
   expect_true("Obs_diff" %in% names(t))
   expect_false("Obs_RR" %in% names(t))
 })

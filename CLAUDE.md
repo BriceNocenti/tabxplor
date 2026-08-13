@@ -1476,6 +1476,96 @@ with the cold+warm+reref lock. And applying `requires["ci"] == "gated"` on the D
 path would fix a real gap (a policy with no explicit `ci` greys every cell — 14a fixed that inside the
 resolver only), but it is a behaviour change on `ci`'s surface → **19d, as D29**.
 
+#### Phase 19d — KEY 8a: the `tab()` comparison surface
+
+**PHASE 19d: BLOCKED (partial).** The design landed in full and the package loads and builds correctly,
+but the session ran out of budget with **FAIL 48 / PASS 5773** — the remaining failures are the
+*mechanical* tail of the vocabulary migration (assertions and snapshots still spelling the old values,
+the `cumOR` fixtures, the jamovi tier-3 cache tuple), not a design problem. **Do not start 19e on this
+commit**: the tree is red. What follows is what is really in it.
+
+**What landed.**
+
+- **The odds ratio is unconditional** on `type in {row, col}` percentage columns — `tab_apply_reference()`
+  computes `or`/`rr` in the same sweep that produces `diff` and `ratio` (measured +16 ms on a 216 ms
+  3x2 build, ~7 %: more than the study's "free" but well inside the ruling). `ref2` alone picks the
+  2x2, and `ref2 = "cumulative"` replaces `OR = "cumOR"` (ruling b) — `or_resolve_cum()` became
+  `ref2_resolve_cum()`, `pairs$OR` became `pairs$ref2`, and `rows$OR` is gone from the settings spine.
+- **`OR` is retired**, soft-deprecated through ONE shim shared by all four entry points
+  (`tab_deprecate_or()`: `"OR"` -> `display = "{or}"`, `"OR_pct"` -> `"{or} ({pct})"`,
+  `"cumOR"` -> `ref2 = "cumulative"`, plus `ref = "first"` so the route is lossless). The jamovi
+  boundary routes the option **silently**, at `jmv_tab3_build_armed()`, so a UI toggle never emits a
+  lifecycle warning into the results panel.
+- **THE comparison is resolved once**, in `tab_resolve_settings()`, as a declared **chain**:
+  `color`'s text channel -> `display`'s primary token -> the difference (study §8.6 caveat 3;
+  `display_comparison()` / `tab_leaf_comparison()`). Everything that used to ask the question
+  separately reads that one answer, which is what makes **D26 unrepresentable** — `stars` and
+  `color_signif` are no longer asked, so they cannot disagree about what an odds-ratio table compares.
+  `odds_ratio` gained `requires = c(ref = "always", ci = "gated")`, which it could not have before
+  ("gated" used to mean *a difference interval*); the resolver now returns `or_ci` = "the LEAF owns
+  this table's interval (the Woolf log-OR one)" beside `ci`/`ci_scale`.
+- **`ci` is the anchor question and nothing else**: `c("auto", "no", "cell", "ref")`, `"auto"` the new
+  default (= today's hidden forcing cascade, promoted to a documented value). `"diff"`/`"ratio"`
+  soft-deprecate onto `"ref"` via `resolve_ci_value()`; `"ratio"` stays lossless (it still pins the
+  Katz scale) while the message teaches `color = "ratio"`. `tab_num(ci_scale =)` is **cut**.
+- **D28** — `ci = "cell"` beside `stars`/`color_signif`: **inform and disable**, from one rule, on
+  both paths (`resolve_ci_value` in the pipeline, `resolve_leaf_ci()` in the leaves). It used to
+  abort for one consumer and silently drop the stars for the other.
+- **D29** — `resolve_leaf_ci()` applies the gated forcing on the DIRECT `tab_num()`/`tab_plain()` path
+  too, so `tab_num(color = "diff", color_signif = "grey_non_signif")` stops greying every cell.
+- **D22** — a `display` token whose field is empty renders **void**, with a one-time note naming the
+  argument that would fill it (`DISPLAY_FIELD_SOURCE`). It used to silently substitute the column's
+  own primary field. **D23** — a `{ci}` bracket beside an estimate of another geometry is **refused**
+  (`display_refuse_mismatch()`, reading KEY 2's stored `scale` against `DISPLAY_TOKEN_GEOMETRY`).
+- **A one-field template is not a composite**: `tab_apply_display()` writes the BARE pipeline token
+  (`DISPLAY_BARE_TOKENS`), so `display = "{or}"` renders exactly as the retired `OR = "OR"` did
+  (1/x form, reference-cell annotation) instead of going through the composite renderer's
+  `special_formatting = FALSE` path.
+- **`color`'s canonical values are the full words** (ruling c): the MEASURES keys ARE `difference` /
+  `ratio` / `odds_ratio` / `contrib`, the acronyms are permanent (never-deprecated) `COLOR_ALIASES`
+  rows, and **`measure_stored()` is deleted** — the value typed, the value stored and the word the
+  legend names are one string.
+- **Two build-time OR special cases deleted**, both of which keyed on an ARGUMENT to decide a purely
+  DISPLAY question: `tot_cols_type <- "no_delete"` for a row-% OR table, and the col-% total-row drop.
+  The display-keyed rules that say the same thing already exist and already run
+  (`tab_fold_addn_incell` / `tab_or_total_col` on `tab_is_or_display()`). Visible consequence: an
+  odds-ratio table keeps its Total column, reading `n=<base>` — which is what `?tab` has always
+  promised and did not deliver.
+- The two BASELINE markers stay gated on the comparison (`refcols_vector` on the row path, `refrows`
+  on the col one): a marker means "this is the reference of the comparison in force", never "some
+  comparison could use it" — which is why the unconditional odds ratio does not dress the first level
+  of every ordinary difference table as a baseline.
+
+**HONEST CONCERNS.**
+
+- **The 48 failures.** Categories, all seen but unverified-after-fix: `test-cumor-ordered.R` (4),
+  `test-jmvtab-cache.R` (7 — the tier-3 tuple still keys on `opts$OR`, and the re-ref now has to
+  refresh `or`, which it does, but `jmv_tab3_rerefable` was not revisited), `test-color-config.R`,
+  `test-tooltips-14b.R` / `test-render-html.R` (the declared tooltip `OR:` line, snapshots not
+  regenerated), `test-tab_reg.R` / `test-forest-plot.R` / `test-tab-estimates.R` (the full-word
+  colour spelling), `test-golden.R` (2 remaining after the regen), `test-i18n-fr.R`.
+  **`_golden/` and `_color_golden/` WERE regenerated** (36 + 15 fixtures) but the diff was NOT
+  reviewed cell by cell, and `dev/verify_golden_field_delta.R` was NOT run — so the declared delta
+  (a populated `or`, the new `color` spellings, `ci = "auto"`) is asserted, not proved. That review is
+  the first thing the next session must do.
+- **`dev/verify_color_attrs.R` was not run** before/after. It is the characterisation net 19c built
+  for exactly this kind of migration, and skipping it is the biggest hole in this phase.
+- **The +7 % odds-ratio cost** is real (216 -> 232 ms on a 3 row_var x 2 col_var build), not the
+  "within noise" the study measured. It is a fair price for deleting an argument, but it should be
+  re-measured on a wide table before the release.
+- **Documentation is NOT done**: `?tab`'s `OR` / `ci` / `color` blocks still describe the old surface
+  (four mirrored copies), `NEWS.md` says nothing, and `dev/tabxplor_architecture.md` was not touched.
+- `tab_plain()` has no `display` formal, so its `OR` route reaches only `ref2`/`ref`; the odds ratio
+  is computed anyway, but the old display is not restored. Decide in 19h (the entry-point phase)
+  whether the superseded leaf gets a `display` or loses `OR` outright.
+- The jamovi `.a.yaml` was NOT touched, so no `jmvtools::prepare()` is needed; 19k still owns
+  carrying the new `color` / `ci` vocabulary into the UI.
+
+**FOLLOW-UPS.** Finish the test tail and the golden review (immediately); `?tab` + `NEWS.md` +
+the architecture guide (immediately, they belong to this phase); re-measure the odds-ratio cost on a
+wide table (19l); `jmv_tab3_rerefable`'s now-vestigial `color = "auto"` + `ci` exclusion (19k).
+
+
 ---
 
 

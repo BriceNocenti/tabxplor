@@ -1454,10 +1454,11 @@ resolve_color_channels <- function(color) {
             if ("bg" %in% nms) unname(color[["bg"]]) else NA_character_
     color <- if (is.na(bg)) text else c(text, bg)
   }
-  # the canonical STORED spelling of every token ("or" -> "OR", NA / "no" -> "")
+  # the canonical STORED spelling of every token (Phase 19d: the MEASURES key, i.e. the full word --
+  # "OR"/"or" -> "odds_ratio", "diff" -> "difference"; NA / "no" -> "")
   color <- unname(vapply(color, function(m) {
     k <- measure_key(m)
-    if (is.na(k)) as.character(m) else if (!nzchar(k)) "" else measure_stored(k)
+    if (is.na(k)) as.character(m) else if (!nzchar(k)) "" else k
   }, character(1)))
   if (length(color) > 2L) cli::cli_abort("{.arg color} accepts at most two values (text, background).")
   measure_validate(color)
@@ -3813,10 +3814,11 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
 
   # Phase 17d (Step 4d complete): the stored `color` attribute is now a CLEAN measure -- the legacy
   # combined strings (diff_ci/after_ci/ci) are decoded ONCE at the argument / storage boundary
-  # (color_decode_legacy, R/tab.R), so the engine never re-parses them. `or`/`OR` is the only surviving
-  # synonym. A non-measure token (e.g. a hand-built column) -> uncoloured.
-  measure <- if (color[1] %in% c("or", "OR")) "or" else color[1]
-  if (!measure %in% names(MEASURES)) return(NULL)
+  # (color_decode_legacy, R/tab.R), so the engine never re-parses them. Phase 19d: the acronym
+  # synonyms ("OR"/"or"/"diff"/...) resolve through the ONE declared table, so a hand-built column
+  # spelled the discipline's way still colours. A non-measure token -> uncoloured.
+  measure <- measure_key(color[1])
+  if (is.na(measure) || !nzchar(measure)) return(NULL)
   # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute.
   # Phase 18z5: measure_policy() then applies a measure's `force_policy` (a measure with no
   # significance test of its own always reads under `ignore`); the legend resolves the policy
@@ -3939,7 +3941,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     if (measure == "ratio" && !ci_is_ratio) {          # diff bound -> ratio bound
       floor_q <- rescale_bound(floor_q, get_diff(x),  0, get_ratio(x), 1)
       floor_q[!is.finite(floor_q)] <- NA_real_
-    } else if (measure == "diff" && ci_is_ratio) {     # ratio bound -> diff bound (the mirror)
+    } else if (measure == "difference" && ci_is_ratio) {  # ratio bound -> diff bound (the mirror)
       floor_q <- rescale_bound(floor_q, get_ratio(x), 1, get_diff(x),  0)
       floor_q[!is.finite(floor_q)] <- NA_real_
     }
@@ -4056,7 +4058,7 @@ fmt_color_slots <- function(x, plan) {
   # exactly as before on the common table, and stays uncoloured on non-diff measures (OR / ratio /
   # contrib), where it was uncoloured too.
   is_pv <- disp0 == "pvalue"
-  if (any(is_pv) && identical(plan$measure, "diff")) {
+  if (any(is_pv) && identical(plan$measure, "difference")) {
     alpha  <- 1 - get_conf_level(x)
     pv     <- get_pvalue(x)
     slot[is_pv] <- 0L                                    # significant -> uncoloured
@@ -4274,7 +4276,7 @@ GAP_ADDITIVE_FACTS <- list(
 )
 
 MEASURES <- list(
-  diff    = list(word = function() gettext("difference"),           break_over = "+",       break_under = "-",
+  difference = list(word = function() gettext("difference"),           break_over = "+",       break_under = "-",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = c("tab", "reg"),
@@ -4284,7 +4286,7 @@ MEASURES <- list(
                  raw = function(x) get_diff(x),
                  scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
                  sig_source = "bounds", gate_row = "refrow"),
-  ratio   = list(word = function() gettext("ratio"),                break_over = .lg_times, break_under = .lg_div,
+  ratio      = list(word = function() gettext("ratio"),                break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  # `ratio` shares `diff`'s build class: the leaf computes both fields in one pass, which
@@ -4296,23 +4298,27 @@ MEASURES <- list(
                  raw = function(x) get_ratio(x),
                  scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
                  sig_source = "bounds", gate_row = "refrow"),
-  or      = list(word = function() "OR",                            break_over = "",        break_under = "1/",
+  odds_ratio = list(word = function() "OR",                            break_over = "",        break_under = "1/",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = FALSE,
                  # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its
                  # baseline is the FIRST level rather than the total row -- the `ref = "auto"` rule the
                  # factor leaf used to spell as `color %in% c("or","OR")`.
-                 # NOTE it declares no `requires`: an odds ratio does need a reference, but that is
-                 # enforced by the LEAF as a warn-and-repair, not by the resolver as an abort (which is
-                 # what a difference colour gets). 19d unifies the two.
+                 # Phase 19d: it declares the SAME two requirements as `difference` now. It could not
+                 # before, because the resolver had one interval to give and `ci = "gated"` meant "a
+                 # DIFFERENCE interval" -- which on an odds-ratio table is tested against the wrong
+                 # neutral and greys everything. The geometry is resolved from the measure now, so
+                 # "gated" means "the interval of THIS comparison", i.e. the Woolf one; and the
+                 # reference abort replaces the leaf's warn-and-repair (D26).
                  channels = "text", producers = c("tab", "reg"),
                  applies_to = "pct", builds = "or", ref_auto = "first",
+                 requires = c(ref = "always", ci = "gated"),
                  auto_for = list(text = c("or_table", "reg_ratio")),
                  subject = "OR",
                  raw = function(x) get_or(x),
                  scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
                  sig_source = "bounds", gate_row = "refrow"),
-  contrib = list(word = function() gettext("contribution to Chi2"), break_over = .lg_times, break_under = .lg_times,
+  contrib    = list(word = function() gettext("contribution to Chi2"), break_over = .lg_times, break_under = .lg_times,
                  break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
                  has_ref_lead = FALSE,
                  # the ONE measure the test step computes and stamps: the signed chi2 residual needs
@@ -4361,7 +4367,7 @@ MEASURES <- list(
   # "this is a tab_reg measure" hint into a generated one, and what ends D4 (the two allow-lists
   # disagreed about whether they may ride the background: they may, and it is the headline reading
   # `color = c("OR", "adjustment")`). `requires` states what asking for one turns on.
-  adjustment     = list(word = function() gettext("adjustment"),    break_over = .lg_times, break_under = .lg_div,
+  adjustment = list(word = function() gettext("adjustment"),    break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = "reg",
@@ -4459,13 +4465,21 @@ measure_own_ref <- function(measure) isTRUE(MEASURES[[measure]]$ref_kind %in% c(
 # measure value -- 17d decoded them at the boundary, 19c states the decoding as data. `"ci"` is a
 # pure synonym of `"after_ci"` (the old single-shade rendering is retired), so it stops being a
 # third switch arm and becomes a third row. `policy = NULL` = "leave color_signif as it is".
+# Phase 19d (KEY 8, ruling c): the CANONICAL values are the full words -- the same words
+# `tab_reg(measure =)` uses -- so the argument that asks, the attribute that stores, the legend that
+# names and the plot axis that draws all speak one vocabulary. The acronyms stay as permanent
+# aliases (never deprecated: a discipline's own spelling is a ramp in, not a mistake), which is why
+# they carry `policy = NULL` and so never reach color_legacy_spellings().
 #' @keywords internal
 COLOR_ALIASES <- list(
-  or       = list(measure = "or",   policy = NULL),
-  OR       = list(measure = "or",   policy = NULL),
-  diff_ci  = list(measure = "diff", policy = "grey_non_signif"),
-  after_ci = list(measure = "diff", policy = "guaranteed_effect"),
-  ci       = list(measure = "diff", policy = "guaranteed_effect")
+  or         = list(measure = "odds_ratio", policy = NULL),
+  OR         = list(measure = "odds_ratio", policy = NULL),
+  diff       = list(measure = "difference", policy = NULL),
+  RD         = list(measure = "difference", policy = NULL),
+  RR         = list(measure = "ratio",      policy = NULL),
+  diff_ci    = list(measure = "difference", policy = "grey_non_signif"),
+  after_ci   = list(measure = "difference", policy = "guaranteed_effect"),
+  ci         = list(measure = "difference", policy = "guaranteed_effect")
 )
 # The legacy spellings that are soft-deprecated on the way in (an alias carrying a POLICY: the
 # policy is `color_signif`'s job now). Derived, so the deprecation list cannot drift from the table.
@@ -4487,11 +4501,9 @@ measure_key <- function(x) {
   if (x %in% names(MEASURES)) x else NA_character_
 }
 
-# The canonical STORED spelling of a measure key -- the value that goes into the `color` attribute.
-# It differs from the key for exactly one measure today (`or` is stored "OR"), and this one line is
-# where 19d switches the canonical values to the full words.
-#' @keywords internal
-measure_stored <- function(key) if (identical(key, "or")) "OR" else key
+# Phase 19d: `measure_stored()` is GONE. The MEASURES key IS the canonical stored spelling now (the
+# full word), so "the value the user types, the value the attribute holds and the word the legend
+# names" cannot drift into three. measure_key() is the only normaliser left.
 
 # Which per-cell fields the pipeline must COMPUTE for a measure: "diff" | "or" | "contrib", or
 # "off" for no colour. Two measures sharing a class are a pure re-paint of each other.
@@ -4516,7 +4528,7 @@ stopifnot(setequal(COLOR_BUILD_ORDER,
 #' @keywords internal
 measure_of_build <- function(build) {
   k <- names(MEASURES)[vapply(MEASURES, function(m) identical(m$builds, build), logical(1))]
-  if (!length(k)) "" else measure_stored(k[[1]])
+  if (!length(k)) "" else k[[1]]
 }
 
 # WHICH build step stamps the measure. Derived from `builds`, not declared: the contributions are
@@ -4601,7 +4613,7 @@ measure_validate <- function(color, producer = NULL, arg = "color", call = rlang
     ok_here <- if (is.null(producer)) names(MEASURES) else
       names(MEASURES)[vapply(MEASURES, function(m) producer %in% m$producers, logical(1))]
     cli::cli_abort(c("Unknown color measure {.val {bad}}.",
-                     "i" = "Valid measures: {.val {vapply(ok_here, measure_stored, character(1))}}."),
+                     "i" = "Valid measures: {.val {ok_here}}."),
                    call = call)
   }
   if (!is.null(producer)) {
@@ -4611,7 +4623,7 @@ measure_validate <- function(color, producer = NULL, arg = "color", call = rlang
       # Phase 18z5/19c: name WHERE the measure lives instead of a bare "unknown measure". The
       # sentence is the same for any future producer-scoped measure.
       cli::cli_abort(c(
-        "{.val {vapply(elsewhere, measure_stored, character(1))}} cannot be used in a {.fn tab} table.",
+        "{.val {elsewhere}} cannot be used in a {.fn tab} table.",
         "i" = "It is a {.fn tab_reg} measure: it compares a model effect to its observed one."),
         call = call)
     }
@@ -4626,7 +4638,7 @@ measure_validate <- function(color, producer = NULL, arg = "color", call = rlang
   own <- keys[nzchar(keys)]
   if (sum(vapply(own, measure_own_ref, logical(1))) > 1L) {
     cli::cli_abort(c(
-      "{.val {vapply(own[vapply(own, measure_own_ref, logical(1))], measure_stored, character(1))}} cannot be used together.",
+      "{.val {own[vapply(own, measure_own_ref, logical(1))]}} cannot be used together.",
       "i" = "Both score the same per-cell comparison value, so a cell can carry only one of them."),
       call = call)
   }
@@ -5932,7 +5944,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   # Phase 19c: measure_key() is THE spelling normaliser (the stored value is "OR", the table key
   # "or"); it replaces the five hand-written `%in% c("or","OR")` tests. Kept a plain lookup because
   # this is a hot path (format() calls it per column).
-  if (identical(measure_key(color), "or")) {
+  if (identical(measure_key(color), "odds_ratio")) {
     switch(m,
            "cells" = ,                                      # cells and lines identical for OR
            "lines" = if      (is_rm && comp_f) refrows

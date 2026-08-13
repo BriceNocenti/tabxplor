@@ -53,7 +53,7 @@ golden_cases <- function() {
     f_ci_diff        = function() tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE),   # Newcombe diff-interval + stars (stars opt-in since the bug-fix)
     f_chi2           = function() tab(gss, marital, race, pct = "row", test = TRUE),
     f_ref_first      = function() tab(gss, marital, race, pct = "row", ref = "first"),
-    f_or             = function() tab(gss, marital, race, pct = "col", OR = "OR"),     # empirical OR; Phase 1 (rr->ratio) / Phase 3 (Wald p, 1/OR)
+    f_or             = function() tab(gss, marital, race, pct = "col", display = "{or}", ref = "first"),     # empirical OR; Phase 1 (rr->ratio) / Phase 3 (Wald p, 1/OR)
     f_color_diff     = function() tab(gss, marital, race, pct = "row", color = "diff"),
     f_color_afterci  = function() suppressWarnings(tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci", stars = TRUE)),  # deprecated color string; stars opt-in
     f_color_contrib  = function() tab(gss, marital, race, pct = "row", color = "contrib"),
@@ -94,7 +94,7 @@ golden_cases <- function() {
                                        ref = c(race = "Black", relig = "None"), color = "diff"),
     f_col_ref_partial = function() tab(gss, marital, c(race, relig), pct = "col", ref = c(race = "Black")),   # unset relig -> auto (tot)
     f_col_ref_ci      = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), ci = "diff", stars = TRUE), # detect_refcol CI lock; stars opt-in
-    f_col_ref_or      = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), OR = "OR")    # per-col_var ref feeds the OR ref column; ref2 global
+    f_col_ref_or      = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), display = "{or}")    # per-col_var ref feeds the OR ref column; ref2 global
   )
 }
 

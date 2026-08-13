@@ -128,7 +128,7 @@ color_golden_cases <- function() {
       tab(gss[!is.na(gss$tvhours) & gss$tvhours > 0, ], marital, race, wt = tvhours,
           pct = "row", color = "contrib", color_signif = "grey_non_signif"))),
     c_or             = function() color_golden_capture_tab(
-      tab(gss, marital, race, pct = "col", OR = "OR", color = "OR")),
+      tab(gss, marital, race, pct = "col", display = "{or}", ref = "first", color = "OR")),
 
     # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta) ---
     c_mean_diff      = function() color_golden_capture_tab(

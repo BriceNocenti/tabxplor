@@ -88,7 +88,7 @@ test_that("the multinomial crude OR is the one tab(pct = 'row', OR = 'OR') print
   d <- z10_data()
   t  <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                  cleannames = FALSE))
-  ct <- tab(d, race, party3, pct = "row", OR = "OR", na = "drop", ref2 = 1)
+  ct <- tab(d, race, party3, pct = "row", display = "{or}", ref = "first", na = "drop", ref2 = 1)
   lv <- levels(d$race)
 
   seen <- 0L

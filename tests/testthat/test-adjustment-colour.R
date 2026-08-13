@@ -85,7 +85,7 @@ test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
 test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Phase 18z10)", {
   # z10 inverted this test's premise: the univariable multinomial IS saturated, so its crude OR is the
   # {category j, reference category} x {level, reference level} Woolf ratio -- which is exactly what
-  # tab(pct = "row", OR = "OR") prints. Each model column carries its own category's `obs`.
+  # tab(pct = "row", display = "{or}", ref = "first") prints. Each model column carries its own category's `obs`.
   skip_if_not_installed("nnet")
   d <- adj_data()
   t <- suppressMessages(tab_reg(d, dependent = "party3", predictors = "race",
@@ -98,7 +98,7 @@ test_that("a MULTINOMIAL model gets one obs PER OUTCOME CATEGORY (Phase 18z10)",
   testthat::expect_false(isTRUE(all.equal(obs[[1]], obs[[2]])))
 
   # ... and each equals the crude OR tab() shows for that category
-  ct <- tab(d, race, party3, pct = "row", OR = "OR", na = "drop", ref2 = 1)
+  ct <- tab(d, race, party3, pct = "row", display = "{or}", ref = "first", na = "drop", ref2 = 1)
   lv <- levels(forcats::fct_drop(stats::na.omit(d$race)))
   for (j in seq_along(mcols)) {
     cat_j <- sub(" vs .*$", "", mcols[[j]])

@@ -37,7 +37,12 @@
 #   fold the policy into `color` for an explicit "diff"/"ratio" measure -- `color = TRUE`/"auto"
 #   must stay "auto" for the per-type dispatch below -- so the policy arrives separately and the
 #   "a gated colour needs the difference CI" rule is applied here, on the RESOLVED colour.
-# @param OR,ci,chi2    Row-axis argument vectors (recycled over row_vars). `chi2` logical.
+# @param ci,chi2       Row-axis argument vectors (recycled over row_vars). `chi2` logical. `ci` is
+#   the PUBLIC anchor vocabulary ("auto"/"no"/"cell"/"ref", + the soft-deprecated "diff"/"ratio");
+#   what comes BACK is the step vocabulary tab_ci() speaks ("no"/"cell"/"diff").
+# @param display_measure Scalar: the comparison the `display` template's primary token names
+#   ("difference"/"ratio"/"odds_ratio"), or NA. The SECOND link of the comparison chain (see the
+#   body): `color` names it, else `display` does, else it is the difference.
 # @param ref           Per-row_var reference spec (from resolve_ref_vector()); only its
 #   symbolic emptiness ("no"/""/NA) is inspected here, never a literal/regex value.
 # @param pct_vect      List (one element per row_var) of the per-col_var `pct` vectors.
@@ -56,15 +61,18 @@
 # @param stars Scalar logical (Phase 16f): the resolved `stars` setting. When TRUE it forces ci = "diff"
 #   on the columns that can carry a difference CI (so the per-cell pvalue the stars are cut from exists),
 #   unless ci was set explicitly or it is an OR table (its own pvalue via the OR path).
-# @return list(color, chi2, ci, ci_scale, totrow, cache_keys). `color` is the RESOLVED measure over
-#   row_vars; every consumer derives its own need from it through the MEASURES accessors.
-#   `ci_scale` ("diff"/"ratio", over row_vars) = the scale the difference CI is
-#   expressed on. `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
+# @return list(color, chi2, ci, ci_scale, or_ci, comparison, color_signif, stars, totrow,
+#   cache_keys). `color` is the RESOLVED measure over row_vars; every consumer derives its own need
+#   from it through the MEASURES accessors. `comparison` is THE geometry this table compares on
+#   (Phase 19d), `or_ci` says the LEAF owns the interval (the Woolf log-OR one) rather than tab_ci(),
+#   `ci_scale` ("diff"/"ratio") the scale of tab_ci()'s own. `color_signif`/`stars` come back because
+#   `ci = "cell"` DISABLES them (D28), and that ruling has to reach the build. `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
 #   0-2 (dev/tabxplor_jmvtab_cache_design.md §3); the tier-2 shaped-aggregate hash + population
 #   hashes are added by the module (Phase 7e).
 # @keywords internal
 # @noRd
-tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_text,
+tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
+                                 display_measure = NA_character_,
                                  totrow = NULL, color_signif = "ignore",
                                  color_ratio_ci = FALSE, stars = FALSE,
                                  na = "keep", wt_name = character(),
@@ -72,69 +80,31 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                                  tab_vars = character(), row_vars = character(),
                                  col_vars = character(), filter_expr = NA_character_) {
 
-  # Phase 15c: `ci = "ratio"` is a clean, self-contained entry point for the ratio-scale (Katz)
-  # difference interval -- the SAME bounds a ratio-coloured table stores, but requested directly and
-  # INDEPENDENT of `color`. Normalise it to "diff" for the whole cascade below (which only knows
-  # auto/cell/diff/no), and remember the positions so the ci_scale pass tags them "ratio".
+  # Phase 19d: the PUBLIC `ci` vocabulary is the ANCHOR question and nothing else --
+  # "auto" / "no" / "cell" / "ref". `"diff"` / `"ratio"` were geometries, and the geometry is
+  # `color`'s to name (see `geom` below), so they are soft-deprecated onto "ref" here, at the one
+  # boundary both producers share. `ci = "ratio"` stays LOSSLESS on the way through (it also pins the
+  # ratio scale) so an existing call keeps its Katz bounds while the message teaches `color = "ratio"`.
   ci_ratio_req <- ci == "ratio"
-  if (any(ci_ratio_req)) ci[ci_ratio_req] <- "diff"
+  ci <- resolve_ci_value(ci)
 
-  # Phase 18z10: `OR` arrives EITHER as a per-row_var atomic vector (tab_counts, the deprecated
-  # step path, the tests) OR, from tab_setup(), as a per-row_var LIST of per-col_var vectors -- the
-  # grain `OR = "cumOR"` needs, since eligibility is a property of the col_var (an `ordered` factor).
-  # Normalise to the list form ONCE here so every predicate below is written at a single grain.
-  # This also FIXES a live bug: `auto_or` indexed the per-row_var SCALAR with `.y[col_vars_text]`, so
-  # with >= 2 factor col_vars it read `"OR"[c(TRUE, TRUE)]` == c("OR", NA) -> FALSE -> `color = "auto"`
-  # silently resolved an OR table to "diff".
-  if (!is.list(OR)) OR <- purrr::map(OR, ~ vctrs::vec_recycle(.x, length(col_vars_text)))
-  or_values <- c("OR", "OR_pct", "or", "or_pct", "cumOR")
-
-  # Hoisted out of the `color = "auto"` case_when below, because the Phase 14a `color_signif`
-  # forcing needs the SAME predicates and must run BEFORE it (see there).
+  # Hoisted out of the `color = "auto"` case_when below, because the `color_signif` forcing needs the
+  # SAME predicates and must run BEFORE it (see there).
   pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
-  auto_or    <- purrr::map2_lgl(
-    pct_vect, OR,
-    ~ all(.x[col_vars_text] %in% c("row", "col") &
-            .y[col_vars_text] %in% or_values)
-  )
   num_only   <- sum(col_vars_text) == 0
+  # Phase 19d: the odds ratio is computed on EVERY row/col-percentage table now, so "is this an OR
+  # table" stopped being an input. `color = "auto"` therefore never resolves to the odds ratio: the
+  # automatic reading of a percentage table is its difference, and an odds ratio is asked for by name.
+  auto_or    <- rep(FALSE, length(pct_vect))
 
-  # Phase 14a: a `color_signif` policy must force the difference CI it gates on -- BEFORE the
-  # `color = "auto"` resolution below, so that `tab(color = TRUE, color_signif = <policy>)` is
-  # identical to the explicit `tab(color = TRUE, ci = "diff", color_signif = <policy>)` the user
-  # has to write today. Why it belongs here and not in normalize_color_spec(): the parser folds the
-  # policy into the legacy string ("diff" -> "diff_ci"/"after_ci") only for an EXPLICIT diff/ratio
-  # measure; `color = TRUE`/"auto" must arrive as "auto" (it dispatches per column type just below),
-  # so the policy could not ride the string -- ci stayed "no", fmt_color_plan()'s gate saw NA bounds,
-  # and EVERY cell went grey on the DEFAULT color = TRUE.
-  # Gated == the colour will be diff-family: an explicit diff (legacy_union() never emits "ratio"),
-  # or an "auto" that resolves to row/col percentages here, or to the numeric arm (num_only -> "auto"
-  # survives and tab_num()/resolve_color_auto_num() turns it into a diff).
-  # NEVER forced for the other two measures, and both exclusions matter:
-  #   contrib -- has no difference CI at all (documented gap); pct_rowcol is FALSE for it anyway.
-  #   OR      -- carries its OWN ci_type = "or" bounds (centre 1). It IS pct = "row"/"col", so it
-  #              matches pct_rowcol; forcing ci = "diff" would overwrite those bounds with a
-  #              difference CI centred on 0, whose inf is then tested against the OR neutral 1 ->
-  #              never significant -> the policy would grey the WHOLE table. Hence `& !auto_or`.
-  # WARNING: `auto_or` / `pct_rowcol` are all() over the FACTOR col_vars, so on a numeric-only table
-  # they are all(logical(0)) == TRUE -- vacuously. Hence the num_only arm must be tested FIRST and on
-  # its own: an "auto" numeric-only table is never an OR table (a mean has no OR notion; the OR branch
-  # of the case_when below is itself guarded by `!num_only`), and its colour is resolved later by
-  # tab_num()/resolve_color_auto_num() into a diff -- so it IS gated.
-  # DESIGN: color = "auto" resolves from the pct/OR settings of the FACTOR col_vars ONLY, through the
-  # declared `auto_for` contexts: an OR-type table -> "or"; row/col percentages -> "diff";
-  # counts / all-% -> "contrib". A numeric-only table (no factor col_vars) keeps "auto" here and is
-  # resolved by tab_num() via resolve_color_auto_num() (a mean has no contrib / OR notion).
+  # DESIGN: color = "auto" resolves from the pct settings of the FACTOR col_vars ONLY, through the
+  # declared `auto_for` contexts: row/col percentages -> "difference"; counts / all-% -> "contrib".
+  # A numeric-only table (no factor col_vars) keeps "auto" here and is resolved by tab_num() via
+  # resolve_color_auto_num() (a mean has no contrib notion).
   # Phase 19c: WHICH measure answers a context is MEASURES' own `auto_for`, shared with the per-column
   # repaint (resolve_col_measures) and with tab_reg() -- one table for what used to be three cascades.
-  # The old case_when also had a `pct_rowcol & ci == "diff" -> "after_ci"` arm: it manufactured a
-  # LEGACY COMBINED string, one step after 17d had decoded such strings away at the boundary, purely
-  # so that the CI step rather than the leaf would stamp the colour. Its net effect was nil (the
-  # per-column repaint overwrites both), and it is what the 4-way split existed to route. Gone.
-  # Phase 19c (defect): the assignment is now SCOPED to the "auto" entries. `case_when` rebuilt the
-  # WHOLE vector whenever any entry was "auto", so a per-row_var vector mixing "auto" with an explicit
-  # measure re-derived the explicit one from its `pct`. Unreachable from any public entry point today
-  # (every caller hands tab_build() a scalar `color_spec$legacy`), but wrong on its own terms.
+  # Phase 19c (defect): the assignment is SCOPED to the "auto" entries, so a per-row_var vector mixing
+  # "auto" with an explicit measure no longer re-derives the explicit one from its `pct`.
   color_auto_text <- color == "auto" & ! num_only
   if (any(color_auto_text)) {
     context <- dplyr::case_when(
@@ -145,34 +115,64 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
     )
     resolved <- vapply(context, function(cx)
       if (is.na(cx)) "no" else {
-        m <- measure_auto(cx, "text"); if (nzchar(m)) measure_stored(m) else "no"
+        m <- measure_auto(cx, "text"); if (nzchar(m)) m else "no"
       }, character(1), USE.NAMES = FALSE)
     color[color_auto_text] <- resolved[color_auto_text]
+    # Phase 19d, the chain's SECOND link (study SS8.6 caveat 3): what the table SHOWS names the
+    # comparison when the colour does not. A user who asks to see odds ratios and leaves the colour
+    # automatic means "colour the odds ratios" -- and, below, gets odds-ratio stars and an odds-ratio
+    # interval, which is D26 stated positively.
+    if (!is.na(display_measure))
+      color[color_auto_text & pct_rowcol] <- display_measure
   }
 
-  # Phase 14a: a `color_signif` policy must force the difference CI it gates on, so that
-  # `tab(color = TRUE, color_signif = <policy>)` is identical to the explicit
-  # `tab(color = TRUE, ci = "diff", color_signif = <policy>)` the user had to write. WHICH measures
-  # need it is their declared `requires["ci"] == "gated"` -- "gated" meaning exactly "only when a
-  # policy is in force, since that is what reads the interval". contrib (no interval at all) and the
-  # odds ratio (its OWN ci_type = "or" bounds, centred on 1 -- a difference CI would be tested against
-  # that neutral and NEVER be significant, greying the whole table) declare no `ci` requirement, which
-  # is what the two hand-written exclusions used to say.
-  # WARNING: on a NUMERIC-ONLY table `color` is still the unresolved "auto"; its measure is the one
-  # tab_num()/resolve_color_auto_num() will pick, so the requirement is read off THAT. Without it the
-  # policy greys every cell of a numeric table (the 14a bug).
+  # Phase 19d (KEY 8a): THE comparison this table makes, resolved ONCE, as a declared chain --
+  # `color`'s text channel -> `display`'s primary token -> the difference. Everything that used to
+  # ask the question separately (the colour gate, the stars, the interval geometry, the leaf's
+  # odds-ratio branch) reads this one answer, which is what makes D26 unrepresentable: `stars` and
+  # `color_signif` cannot disagree about what an odds-ratio table compares, because neither is asked.
+  measure_of <- vapply(color, measure_key, character(1), USE.NAMES = FALSE)
+  measure_of[is.na(measure_of)] <- ""
+  if (!is.na(display_measure))
+    measure_of[!nzchar(measure_of) & pct_rowcol] <- display_measure
+  # `geom` = which of the three geometries owns the stored interval. "or" -> the Woolf log-OR bounds
+  # the LEAF computes (ci_type/scale `odds_ratio`); "ratio" -> Katz / ratio-of-means; "diff" -> the
+  # difference methods. `color_ratio_ci` says the two-channel spec put the ratio on the TEXT channel
+  # (the measure the reader sees owns the interval); a deprecated `ci = "ratio"` pins it directly.
+  geom <- ifelse(measure_of == "odds_ratio", "or",
+          ifelse(measure_of == "ratio" | isTRUE(color_ratio_ci) | ci_ratio_req, "ratio", "diff"))
+
+  # Phase 19d (D28): `ci = "cell"` and the significance machinery, from ONE rule. The cell interval
+  # answers "how precise is this 26 %", which no comparison can be tested against -- so `stars` and
+  # `color_signif` are INFORMED AND DISABLED (maintainer's ruling), where before `color_signif`
+  # aborted and `stars` was silently dropped: two consumers of one fact, two behaviours.
   signif_on <- !identical(color_signif, "ignore") && !is.na(color_signif[1])
-  if (signif_on) {
-    gate_measure <- dplyr::if_else(color == "auto", measure_auto("num", "text"), color)
-    gated <- vapply(gate_measure, measure_forces, logical(1), "ci", TRUE, USE.NAMES = FALSE)
-    if (any(gated & ci == "cell")) {
-      cli::cli_abort(c(
-        "{.arg color_signif} = {.val {color_signif}} gates the colour on the DIFFERENCE confidence interval, but {.arg ci} = {.val cell} asks for the cell one.",
-        "i" = "Use {.code ci = \"diff\"} (the default under a {.arg color_signif} policy), or {.code color_signif = \"ignore\"}."
-      ))
-    }
-    ci[gated & ci != "diff"] <- "diff"
+  if (any(ci == "cell") && (signif_on || isTRUE(stars))) {
+    cli::cli_inform(c(
+      "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
+                   "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
+      "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
+    ))
+    color_signif <- "ignore"; signif_on <- FALSE; stars <- FALSE
   }
+
+  # WHERE the interval sits. A measure declares `requires["ci"] == "gated"` = "only when a policy is
+  # in force, since that is what reads the interval"; `stars` reads the same interval's p-value; and
+  # `ci = "ref"` is the explicit opt-in (a forest plot with bounds but no colour gating). `ci = "auto"`
+  # -- the default -- is exactly that union, promoted from a hidden forcing cascade to a documented
+  # value. contrib declares no `ci` requirement (it has no interval at all).
+  # WARNING: on a NUMERIC-ONLY table `color` is still the unresolved "auto"; its measure is the one
+  # tab_num()/resolve_color_auto_num() will pick, so the requirement is read off THAT.
+  gate_measure <- dplyr::if_else(color == "auto", measure_auto("num", "text"), color)
+  gated <- signif_on &
+    vapply(gate_measure, measure_forces, logical(1), "ci", TRUE, USE.NAMES = FALSE)
+  # a comparison interval needs a comparison: a reference, and columns that can carry one.
+  can_compare <- (num_only | pct_rowcol) & !(ref %in% c("no", "") | is.na(ref))
+  want_ref    <- (gated | isTRUE(stars) | ci == "ref") & can_compare
+  ci[ci == "auto"] <- "no"
+  ci[want_ref & ci == "no"] <- "ref"
+  # nothing to anchor a reference interval to -> say so rather than silently computing nothing.
+  ci[ci == "ref" & !can_compare] <- "no"
 
   # WARNING: contrib colouring paints the signed chi2 residual, which needs (a) total rows to
   # store each cell's contribution to variance and (b) a chi2 pass -- its declared
@@ -190,47 +190,27 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   }
   chi2[needs_chi2 & chi2 == FALSE] <- TRUE
 
-  # DESIGN: a difference colour compares each cell to a reference row/column, so `ref` is mandatory --
-  # the measure's declared `requires["ref"] == "always"`.
+  # DESIGN: a comparison colour compares each cell to a reference row/column, so `ref` is mandatory --
+  # the measure's declared `requires["ref"] == "always"`. Phase 19d: the odds ratio declares it too,
+  # so its silent leaf warn-and-repair became this one abort.
   if (any(vapply(color, measure_forces, logical(1), "ref", USE.NAMES = FALSE) &
           (ref %in% c("no", "") | is.na(ref)))) {
     cli::cli_abort(c(
-      "With a difference {.arg color}, {.arg ref} must be provided.",
-      "i" = "{.code color = \"diff\"} / {.code \"ratio\"} compare each cell to a reference."
+      "With a comparison {.arg color}, {.arg ref} must be provided.",
+      "i" = "{.code color = \"difference\"} / {.code \"ratio\"} / {.code \"odds_ratio\"} compare each cell to a reference."
     ))
   }
 
-  # Phase 16f: significance stars are cut from a stored per-cell pvalue, which exists ONLY where a
-  # difference CI is computed (tab_ci / tab_num compute it under ci = "diff"; with ci = "no" the whole
-  # tab_ci step is skipped, so stars silently print nothing). `stars = TRUE` (with or without colours)
-  # therefore forces ci = "diff" on the columns that can carry one -- unless the user set ci explicitly
-  # (ci != "no"), or it is an OR table (which stores its OWN ci_type = "or" pvalue via the OR path).
-  # Runs AFTER the colour resolution above so it never flips a plain "diff" colour into the gated
-  # "after_ci": stars must not change the colour MEASURE, only surface the pvalue. Placed before the
-  # ci_scale pass so a ratio-coloured table's forced CI still rides the ratio (Katz) scale it displays.
-  # NB: `or_on` (not `auto_or`) -- OR reaches this pass as a LOGICAL (it is stringified only in the leaf,
-  # tab_plain), so `auto_or`'s string test is FALSE for it and cannot be reused to exclude OR here.
-  if (isTRUE(stars)) {
-    # z10: per-row_var, over that row_var's col_vars -- `any()`, because a single OR col_var already
-    # carries its own ci_type = "or" bounds and forcing "diff" would overwrite them.
-    or_on <- purrr::map_lgl(OR, ~ if (is.logical(.x)) any(.x) else any(.x %in% or_values))
-    ci[ci == "no" & !or_on & (num_only | pct_rowcol)] <- "diff"
-  }
-
-  # Phase 14b: which SCALE the cell-vs-reference interval is expressed on. The interval belongs to
-  # the measure the reader SEES (the text channel): when that is the ratio, the bounds are Katz
-  # log-RR ones on the ratio scale (ci_type = "ratio", neutral 1) and a background diff channel
-  # derives from them; otherwise they are the difference methods (neutral 0) and a ratio channel
-  # derives -- which is what happened for every ratio until now. `color_ratio_ci` already means
-  # "the PCT text channel is the ratio" (color_pct_text_is_ratio(), R/tab.R); it is scalar because
-  # the colour axis is globalised over row_vars (§5), and it says nothing about numeric columns --
-  # tab_ci() applies it only where a proportion CI is what is being computed.
-  # Only where a difference CI is computed at all: `ci = "cell"` is a one-proportion interval with
-  # no reference, so it has no ratio counterpart.
-  ci_scale <- rep("diff", length(ci))
-  if (isTRUE(color_ratio_ci)) ci_scale[ci == "diff"] <- "ratio"
-  # An explicit `ci = "ratio"` (Phase 15c) rides the ratio scale regardless of the colour measure.
-  ci_scale[ci_ratio_req] <- "ratio"
+  # Phase 19d: the resolved `ci` splits into what each producer must do. The LEAF computes the Woolf
+  # log-OR interval when the comparison is the odds ratio (`or_ci`); tab_ci() computes the cell or the
+  # difference/ratio one otherwise. They are mutually exclusive by construction -- one cell, one
+  # interval -- which is the whole reason the geometry had to be resolved before either was asked.
+  or_ci    <- geom == "or" & ci == "ref"
+  ci       <- dplyr::case_when(or_ci ~ "no", ci == "ref" ~ "diff", TRUE ~ ci)
+  # Which SCALE the cell-vs-reference interval is expressed on: Katz log-RR bounds (neutral 1) when
+  # the reader sees the ratio, the difference methods (neutral 0) otherwise. Only where a difference
+  # CI is computed at all -- `ci = "cell"` is a one-proportion interval with no reference.
+  ci_scale <- ifelse(geom == "ratio", "ratio", "diff")
 
   # Phase 7d-ii: DATA-FREE cache-key material for the persisted jmvtab cache tiers 0-2
   # (dev/tabxplor_jmvtab_cache_design.md §3). Symbolic only: the module (Phase 7e) turns the
@@ -243,8 +223,110 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                                tab_vars = tab_vars, row_vars = row_vars, col_vars = col_vars,
                                filter_expr = filter_expr)
 
-  list(color = color, chi2 = chi2, ci = ci, ci_scale = ci_scale, totrow = totrow,
+  list(color = color, chi2 = chi2, ci = ci, ci_scale = ci_scale, or_ci = or_ci,
+       comparison = measure_of, color_signif = color_signif, stars = stars, totrow = totrow,
        cache_keys = cache_keys)
+}
+
+# resolve_ci_value() -- Phase 19d (KEY 8a): THE `ci` argument vocabulary, in one place.
+#
+# `ci` asks WHERE the interval sits, and only that:
+#   "auto"  (the default) -- a reference interval when a comparison is being TESTED
+#                            (`color_signif`, `stars`) or explicitly asked for; else none.
+#   "no"    -- none.
+#   "cell"  -- each cell's OWN interval (how precise is this 26 %?). Unchanged since 1.x, and the
+#              one value that never moved.
+#   "ref"   -- the interval of the comparison this table makes. WHICH comparison is `color`'s to
+#              name (study SS8.3: it already decided it correctly for all three geometries).
+# `"diff"` / `"ratio"` were geometries wearing an anchor's name, and the second was a pure duplicate
+# of `color = "ratio"`. Both soft-deprecate onto "ref"; the caller keeps `ci == "ratio"` separately
+# so the deprecation stays LOSSLESS (it still pins the Katz scale) while the message teaches the
+# replacement.
+#' @keywords internal
+#' @noRd
+resolve_ci_value <- function(ci, user_env = rlang::caller_env(2)) {
+  ci <- as.character(ci)
+  ci[is.na(ci) | ci %in% c("", "FALSE")] <- "no"
+  old <- ci %in% c("diff", "ratio")
+  if (any(old)) {
+    lifecycle::deprecate_soft(
+      "2.0.0", I(paste0("tab(ci = \"", unique(ci[old])[1], "\")")),
+      with = I(if (any(ci == "ratio")) "tab(ci = \"ref\", color = \"ratio\")" else "tab(ci = \"ref\")"),
+      details = "`ci` says WHERE the interval sits; WHICH comparison it measures comes from `color`.",
+      user_env = user_env)
+    ci[old] <- "ref"
+  }
+  bad <- !ci %in% c("auto", "no", "cell", "ref")
+  if (any(bad)) {
+    cli::cli_abort(c("Unknown {.arg ci} value {.val {unique(ci[bad])}}.",
+                     "i" = 'Valid: {.val {c("auto", "no", "cell", "ref")}}.'))
+  }
+  ci
+}
+
+# display_comparison() -- Phase 19d: which comparison a `display` template NAMES, read from its
+# PRIMARY token. The second link of the comparison chain (`color` -> `display` -> the difference):
+# a user who asks to SEE odds ratios and leaves the colour automatic gets odds-ratio colours, stars
+# and interval. NA = the template names no comparison (or there is no template).
+# It is deliberately the PRIMARY token only: "{or} ({pct})" is an odds-ratio cell annotated with a
+# percentage, not a percentage cell.
+#' @keywords internal
+#' @noRd
+DISPLAY_COMPARISON <- c(or = "odds_ratio", ratio = "ratio", diff = "difference")
+
+#' @keywords internal
+#' @noRd
+display_comparison <- function(display) {
+  if (is.null(display) || length(display) == 0L) return(NA_character_)
+  d <- display[[1]]
+  if (is.na(d) || !nzchar(d) || identical(d, "no") || identical(d, "num_ci")) return(NA_character_)
+  tok <- tryCatch(parse_display_template(validate_display_template(d))$fields[1],
+                  error = function(e) NA_character_)
+  if (length(tok) == 0L || is.na(tok)) return(NA_character_)
+  unname(DISPLAY_COMPARISON[tok] %||% NA_character_)
+}
+
+
+# resolve_leaf_ci() -- Phase 19d: the SAME three rules the pipeline resolver applies (D28's
+# "ci = 'cell' informs and disables", the measure's `requires["ci"] == "gated"`, and "a reference
+# interval needs a reference"), for a leaf called DIRECTLY. This is what closes D29: 14a applied the
+# gated forcing inside tab_resolve_settings() only, so `tab_num(color = "diff", color_signif =
+# "grey_non_signif")` with no explicit `ci` computed no interval and the policy greyed every cell.
+# Returns the ANCHOR value ("no"/"cell"/"ref"); each leaf maps it to what it must compute.
+#' @keywords internal
+#' @noRd
+resolve_leaf_ci <- function(ci, color, color_signif = "ignore", stars = FALSE, ref = "tot") {
+  ci        <- resolve_ci_value(if (is.null(ci)) "auto" else ci)[1]
+  signif_on <- !identical(color_signif[1], "ignore") && !is.na(color_signif[1])
+  if (identical(ci, "cell") && (signif_on || isTRUE(stars))) {
+    cli::cli_inform(c(
+      "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
+                   "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
+      "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
+    ))
+    signif_on <- FALSE; stars <- FALSE
+  }
+  can_compare <- !(ref[1] %in% c("no", "")) && !is.na(ref[1])
+  gated <- signif_on && measure_forces(color, "ci", TRUE)
+  if (identical(ci, "auto")) ci <- if ((gated || isTRUE(stars)) && can_compare) "ref" else "no"
+  if (identical(ci, "ref") && !can_compare) ci <- "no"
+  list(ci = ci, stars = isTRUE(stars),
+       color_signif = if (signif_on) color_signif[1] else "ignore")
+}
+
+# tab_leaf_comparison() -- Phase 19d: the comparison chain, for a leaf called DIRECTLY (the
+# superseded tab_plain() / tab_num(), which have no settings spine to read it off). Same order as
+# the resolver's: `color`'s measure -> `display`'s primary token -> the difference. "" when the
+# column can carry no comparison at all.
+#' @keywords internal
+#' @noRd
+tab_leaf_comparison <- function(color, display, pct, ref) {
+  if (!pct[1] %in% c("row", "col") || ref[1] %in% c("no", "") || is.na(ref[1])) return("")
+  k <- measure_key(color[1])
+  if (!is.na(k) && nzchar(k) && k != "contrib") return(k)
+  d <- display_comparison(display)
+  if (!is.na(d)) return(d)
+  ""
 }
 
 # Build the symbolic (data-free) cache-key material for the persisted jmvtab cache tiers 0-2.

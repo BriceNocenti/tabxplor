@@ -47,7 +47,7 @@ testthat::test_that("population descriptor encodes each na mode (\u00a73.1)", {
 
 testthat::test_that("tab_resolve_settings returns cache_keys alongside the colour cascade", {
   out <- tabxplor:::tab_resolve_settings(
-    color = "diff", OR = "no", ci = "no", chi2 = FALSE, ref = "tot",
+    color = "diff", ci = "no", chi2 = FALSE, ref = "tot",
     pct_vect = list("row"), col_vars_text = TRUE, totrow = TRUE,
     na = "keep", wt_name = character(), other_if_less_than = 0, comp = "tab",
     tab_vars = character(), row_vars = "marital", col_vars = "race"

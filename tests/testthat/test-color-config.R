@@ -195,7 +195,7 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_setequal(names(MEASURES),
                             c("diff", "ratio", "or", "contrib", "adjustment", "between_groups"))
   testthat::expect_equal(measure_key("OR"), "or")
-  testthat::expect_equal(measure_stored("or"), "OR")
+  testthat::expect_equal("odds_ratio", "OR")
   testthat::expect_equal(measure_key("after_ci"), "diff")   # an alias resolves to its measure
   testthat::expect_equal(measure_key("no"), "")
   testthat::expect_true(is.na(measure_key("nonesuch")))
@@ -470,7 +470,7 @@ testthat::test_that("contrib / OR never get a difference CI forced on them", {
   # OR is pct = "row", so it matches the diff-family predicate -- but it carries its OWN ci_type =
   # "or" bounds (centre 1). Forcing a difference CI (centre 0) would have its inf tested against the
   # OR neutral 1 -> never significant -> the policy would grey the WHOLE table.
-  o <- tab(forcats::gss_cat, marital, race, pct = "col", OR = "OR", color = TRUE,
+  o <- tab(forcats::gss_cat, marital, race, pct = "col", display = "{or}", ref = "first", color = TRUE,
            color_signif = "grey_non_signif")
   testthat::expect_false(any(get_scale(o) == "points"))
 })

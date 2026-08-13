@@ -172,9 +172,9 @@ test_that("the cell-vs-reference difference and its stars use the design base", 
 
 test_that("the color = 'OR' interval rides the design base too", {
   d <- svv_fixture(); des <- svv_des(d)
-  o_d <- suppressMessages(tab(des, g, col, pct = "row", OR = "OR", ref = 1,
+  o_d <- suppressMessages(tab(des, g, col, pct = "row", display = "{or}", ref = 1,
                               color = "OR", color_signif = "grey_non_signif"))[["yes"]]
-  o_r <- tab(d, g, col, wt = w, pct = "row", OR = "OR", ref = 1,
+  o_r <- tab(d, g, col, wt = w, pct = "row", display = "{or}", ref = 1,
              color = "OR", color_signif = "grey_non_signif")[["yes"]]
   dw <- log(get_ci_sup(o_d)) - log(get_ci_inf(o_d))
   rw <- log(get_ci_sup(o_r)) - log(get_ci_inf(o_r))

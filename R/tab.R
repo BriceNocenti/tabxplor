@@ -582,7 +582,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
-                ci = "no", conf_level = conf_level_default(), stars = NULL,
+                ci = "auto", conf_level = conf_level_default(), stars = NULL,
                 ci_method = NULL, design_effect = NULL,
                 method_cell = NULL, method_diff = NULL,
                 totaltab = "line", totaltab_name = "Ensemble",
@@ -722,12 +722,17 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # Phase 7a: `levels` (per col_var) is honoured for the main col_vars (see the tab_build call).
   stopifnot(all(levels %in% c("all", "first", "auto")))
 
-  # Phase 6 (§5): the row_var axis is globalised -- OR/ci/chi2 (like comp/pct/ref/ref2) apply to
+  # Phase 6 (§5): the row_var axis is globalised -- ci/chi2 (like comp/pct/ref/ref2) apply to
   # ALL row_vars. For genuinely different settings per variable, build separate tab()s and list
   # them. (The col_var axis stays flexible: pct/levels/digits are still per col_var in tab_many.)
-  vctrs::vec_assert(OR  , size = 1)
   vctrs::vec_assert(ci  , size = 1)
   vctrs::vec_assert(test, size = 1)
+
+  # Phase 19d (KEY 8a): `OR` is retired. It was `color` + `display` + `ref2` welded into one
+  # argument, and the weld is where D20 and D21 lived. The odds ratio is computed on every row/col-%
+  # table now, so nothing is left to switch on -- only what to SHOW and which 2x2 to take.
+  or_route <- tab_deprecate_or(OR, display, ref2, ref)
+  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
 
   # Phase 6g (§4, S3) + Phase 7a: `na` population policy.
   # - "keep": NAs shown as an explicit level.
@@ -786,7 +791,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            conf_level = conf_level,
            stars = stars,
            ci_method = ci_method, design_effect = design_effect,
-           OR = OR,
            color = color,
            # Phase 14a: the NORMALIZED policy (post the "color_all_signif" COMPAT rename), so
            # tab_resolve_settings() can force the difference CI a gated colour needs.
@@ -794,6 +798,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            # Phase 14b: same reason -- the two-channel spec, not the legacy string, knows whether the
            # ratio is the measure the reader sees (and so owns the stored interval).
            color_ratio_ci = color_pct_text_is_ratio(color_spec),
+           # Phase 19d: the SECOND link of the comparison chain -- what the table shows names the
+           # comparison when the colour does not (study SS8.6 caveat 3).
+           display = display,
            add_n = add_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min, parallel = parallel,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
@@ -824,6 +831,52 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # Phase 13c-iv: a multi-table result becomes a tabxplor_tabs (still a list) so it auto-prints like a
   # single tab and routes to the Viewer under options("tabxplor.print" = "kable"). No-op on a single tab.
   as_tabxplor_tabs(result)
+}
+
+
+# tab_deprecate_or() -- Phase 19d (KEY 8a): THE `OR` retirement, in one place, for all four entry
+# points (tab / tab_many / tab_plain / tab_counts).
+#
+# `OR` was three existing answers welded into one argument -- a measure, a display and a
+# dichotomisation -- and the weld is where D20 (`ci = "cell"` silently dropped the odds ratios) and
+# D21 (a percentage-point interval on an odds-ratio column) lived. Since the odds ratio is computed
+# unconditionally on every row/col-percentage table, each value decomposes mechanically:
+#
+#   OR = "OR" / "or"           ->  display = "{or}"
+#   OR = "OR_pct" / "or_pct"   ->  display = "{or} ({pct})"
+#   OR = "cumOR"               ->  ref2 = "cumulative"   (+ display = "{or}")
+#
+# `ref` is carried too, and deliberately: `ref = "auto"` used to resolve to the FIRST row for an OR
+# table, and it now follows the colour measure like every other comparison. A shim must be lossless,
+# so it pins "first" itself -- which is also the sentence the message teaches.
+#' @keywords internal
+#' @noRd
+tab_deprecate_or <- function(OR, display, ref2, ref) {
+  out <- list(display = display, ref2 = ref2, ref = ref)
+  if (length(OR) == 0L) return(out)
+  if (is.logical(OR)) OR <- if (isTRUE(OR[1])) "OR" else "no"
+  OR <- as.character(OR)[1]
+  if (is.na(OR) || OR %in% c("no", "")) return(out)
+  ok <- c("OR", "or", "OR_pct", "or_pct", "cumOR")
+  if (!OR %in% ok)
+    cli::cli_abort(c("Unknown {.arg OR} value {.val {OR}}.", "i" = "Valid: {.val {ok}}."))
+  new_display <- if (OR %in% c("OR_pct", "or_pct")) "{or} ({pct})" else "{or}"
+  new_ref2    <- if (identical(OR, "cumOR")) "cumulative" else ref2
+  with_txt <- paste0('tab(display = "', new_display, '"',
+                     if (identical(OR, "cumOR")) ', ref2 = "cumulative"' else "", ')')
+  lifecycle::deprecate_soft("2.0.0", I(paste0('tab(OR = "', OR, '")')), with = I(with_txt),
+                            details = paste0(
+                              "The odds ratio is now computed on every row/col-percentage table: ",
+                              "`display` shows it, `color = \"odds_ratio\"` colours it and `ref2` ",
+                              "picks the 2x2. Its row reference follows `ref` like every other ",
+                              "comparison (this call keeps the old `ref = \"first\"`)."),
+                            user_env = rlang::caller_env(2))
+  # a user-set `display` wins -- it is the argument the deprecation points at.
+  if (is.null(display) || length(display) == 0L || is.na(display[[1]]) || !nzchar(display[[1]]))
+    out$display <- new_display
+  out$ref2 <- new_ref2
+  if (length(ref) == 1L && identical(as.character(ref)[1], "auto")) out$ref <- "first"
+  out
 }
 
 
@@ -863,20 +916,106 @@ tab_apply_display <- function(tabs, display) {
   }
   tmpl   <- validate_display_template(ds)
   fields <- parse_display_template(tmpl)$fields
+  # Phase 19d: a ONE-FIELD "composite" is not a composite -- it is that field's own display, and it
+  # must render exactly as the pipeline's own token does. Writing "{or}" as the bare `or` token is
+  # what makes `display = "{or}"` a faithful front door for the retired `OR = "OR"`: the composite
+  # renderer calls format(special_formatting = FALSE) on each token, which drops the odds ratio's
+  # 1/x form and its reference-cell annotation. One general rule, no curated recipe.
+  # Restricted to the tokens the pipeline itself writes as a bare display: `resid` is derived and
+  # `obs`/`var`/`ctr` have no simple-token renderer of their own.
+  bare   <- if (length(fields) == 1L && identical(tmpl, paste0("{", fields, "}")) &&
+                fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
+  missing_tok <- character()
   set_one <- function(tab) {
     dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), function(col) {
       d <- get_display(col)
-      # Only genuine value cells, AND only where EVERY template field renders (non-NA) -- so a
-      # count-only column (pct NA, e.g. the added-n column) or an empty cell keeps its own token
-      # and renders normally (byte-identical to the Phase-10c `both` guard).
+      # Only genuine value cells -- the p-value / blank / total-marker cells keep their own token.
       elig <- d %in% c("pct", "mean", "n", "wn")
-      for (f in fields) elig <- elig & !is.na(get_num(set_display(col, f)))
-      d[elig] <- tmpl
+      if (!any(elig)) return(col)
+      # Phase 19d (D23): the stored interval is the one this column's comparison is tested on, and a
+      # `{ci}` bracket renders THAT interval. A template that prints one geometry's estimate beside
+      # another's bracket is REFUSED (ruling d) rather than silently printed -- measured today as
+      # `x1.8 ([2;4]%)`, a ratio over a percentage-POINT interval.
+      display_refuse_mismatch(col, fields, tmpl)
+      # Phase 19d (D22): a token whose field is empty renders VOID, and the note names the argument
+      # that would fill it. It used to silently SUBSTITUTE the column's own primary field -- so
+      # `display = "{or}"` on a table with no odds ratio printed the percentage, and the stored
+      # `display` came back `pct`: a plausible table that is not the one asked for.
+      for (f in fields)
+        if (all(is.na(get_num(set_display(col, f))[elig]))) missing_tok <<- union(missing_tok, f)
+      d[elig] <- bare
       set_display(col, d)
     }))
   }
-  if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
+  out <- if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
+  if (length(missing_tok)) display_note_empty(missing_tok)
+  out
 }
+
+# The display tokens the PIPELINE itself writes as a bare value (so a one-field template collapses
+# onto them and inherits their rendering). `resid` is derived and `obs`/`var`/`ctr` have no
+# simple-token renderer, so they stay composites.
+#' @keywords internal
+#' @noRd
+DISPLAY_BARE_TOKENS <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or")
+
+# The argument that would fill each display field -- so D22's note can NAME it instead of leaving
+# the user with a blank column. One declared table, read only by display_note_empty().
+#' @keywords internal
+#' @noRd
+DISPLAY_FIELD_SOURCE <- c(
+  ci    = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
+  or    = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
+  diff  = 'a `ref` to compare to, and pct = "row" / "col"',
+  ratio = 'a `ref` to compare to, and pct = "row" / "col"',
+  ctr   = 'test = TRUE  (the contributions come from the chi-squared)',
+  resid = 'test = TRUE  (the residual comes from the chi-squared)',
+  obs   = 'tab_reg(empirical = TRUE)  (an observed effect to compare the model to)',
+  mean  = 'a numeric col_var',
+  var   = 'a numeric col_var'
+)
+
+#' @keywords internal
+#' @noRd
+display_note_empty <- function(fields) {
+  hints <- DISPLAY_FIELD_SOURCE[fields]
+  hints <- hints[!is.na(hints)]
+  cli::cli_inform(c(
+    "i" = paste0("{.arg display}: {cli::qty(length(fields))}{?field/fields} ",
+                 "{.val {fields}} {?is/are} empty in this table, so {?it renders/they render} void."),
+    stats::setNames(paste0("{.field ", names(hints), "} needs ", unname(hints), "."),
+                    rep("i", length(hints)))
+  ))
+}
+
+# Phase 19d (D23): refuse a `{ci}` bracket whose geometry differs from the estimate beside it. The
+# column's stored `scale` says which estimate its interval belongs to (KEY 2), and each display
+# token names a geometry, so this is a lookup, not a heuristic -- and it is the ONLY thing that can
+# close the class, because `display` must stay free (differentiator 1) and no argument can reach it.
+#' @keywords internal
+#' @noRd
+display_refuse_mismatch <- function(col, fields, tmpl) {
+  if (!"ci" %in% fields) return(invisible(NULL))
+  est <- intersect(fields, names(DISPLAY_TOKEN_GEOMETRY))
+  if (!length(est)) return(invisible(NULL))
+  have <- EST_SCALES[[get_scale(col)]]$geometry
+  if (is.null(have)) return(invisible(NULL))
+  want <- unname(DISPLAY_TOKEN_GEOMETRY[est[1]])
+  if (identical(have, want)) return(invisible(NULL))
+  cli::cli_abort(c(
+    "{.arg display} = {.val {tmpl}} prints a {.field {want}} beside a {.field {have}} interval.",
+    "x" = "A cell carries ONE interval, and this column's is on the {.field {have}} scale.",
+    "i" = paste0("Ask for the matching comparison ({.code color = \"", 
+                 c(level = "no", difference = "difference", ratio = "ratio",
+                   log = "log")[have] %||% "difference",
+                 "\"} / {.code ci = }), or drop the {.code {{ci}}} bracket.")
+  ))
+}
+
+#' @keywords internal
+#' @noRd
+DISPLAY_TOKEN_GEOMETRY <- c(pct = "level", mean = "level", n = "level", wn = "level",
+                            diff = "difference", ratio = "ratio", or = "ratio")
 
 
 # Phase 17d (Step 4d): decode a legacy COMBINED colour string into the clean (measure, policy) pair,
@@ -928,7 +1067,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   norm       <- function(m) {
     if (is.na(m) || identical(m, "no")) return("")
     if (identical(m, "auto")) return("auto")
-    k <- measure_key(m); if (is.na(k)) as.character(m) else if (!nzchar(k)) "" else measure_stored(k)
+    k <- measure_key(m); if (is.na(k)) as.character(m) else if (!nzchar(k)) "" else k
   }
 
   # WARNING: `deprecate = FALSE` is not a convenience -- it is required on the internal seam.
@@ -1099,11 +1238,11 @@ resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
   if (spec$mode == "auto") {                                # color = TRUE smart per-kind default
     # a whole-table measure: OR is re-stamped in its canonical spelling, contrib kept as built
     if (!measure_kind_keyed(built))
-      return(if (identical(measure_builds(built), "or")) measure_stored("or") else NULL)
+      return(if (identical(measure_builds(built), "or")) "odds_ratio" else NULL)
     if (is.na(kind)) return(NULL)
     m <- c(measure_auto(kind, "text"), measure_auto(kind, "bg"))
     m <- m[nzchar(m)]
-    return(if (length(m) == 0L) NULL else vapply(m, measure_stored, character(1), USE.NAMES = FALSE))
+    return(if (length(m) == 0L) NULL else unname(m))
   }
   if (spec$mode == "by_type") {
     if (!measure_kind_keyed(built)) return(NULL)            # keep what the pipeline built
@@ -1122,11 +1261,11 @@ resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
   text <- spec$text
   if (identical(text, "auto")) {
     if (is.na(kind)) return(NULL)
-    text <- measure_stored(measure_auto(kind, "text"))
+    text <- measure_auto(kind, "text")
     if (!nzchar(text)) return(NULL)
     if (is.na(spec$bg)) {
       bg <- measure_auto(kind, "bg")
-      return(if (nzchar(bg)) c(text, measure_stored(bg)) else text)
+      return(if (nzchar(bg)) c(text, bg) else text)
     }
   }
   if (text == "" && is.na(spec$bg)) return(NULL)
@@ -1408,14 +1547,14 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      cleannames = NULL, compact = NULL, #pvalue_line = NULL,
                      other_if_less_than = 0, other_level = "Others",
                      ref = "auto", ref2 = "first", comp = "tab",
-                     ci = "no", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
+                     ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
                      ci_method = NULL, design_effect = NULL,
                      method_cell = NULL, method_diff = NULL,
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
                      digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
-                     color_breaks = NULL,
+                     color_breaks = NULL, display = NULL,
                      parallel = NULL,
 
                      filter #, listed = FALSE,
@@ -1472,12 +1611,15 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   # color_signif. Plain scalar strings (incl. jmvtab's) pass through as the legacy color.
   color_spec <- normalize_color_spec(color, color_signif)
   ci_method  <- resolve_ci_method(ci_method, method_cell, method_diff, "tab_many")
+  # Phase 19d: the ONE `OR` retirement route, shared with tab() / tab_plain() / tab_counts().
+  or_route <- tab_deprecate_or(OR, display, ref2, ref)
+  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
   result <- tab_build(
     data = data,
     row_vars = {{ row_vars }}, col_vars = {{ col_vars }}, tab_vars = {{ tab_vars }},
     wt = !!wt_quo,
     pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
-    OR = OR, chi2 = chi2, design_spec = svy$spec, na = na, levels = levels,
+    display = display, chi2 = chi2, design_spec = svy$spec, na = na, levels = levels,
     na_drop_all = {{ na_drop_all }},
     cleannames = cleannames, other_if_less_than = other_if_less_than,
     other_level = other_level, ref = ref, ref2 = ref2, comp = comp, ci = ci,
@@ -1491,7 +1633,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
   )
-  result <- finalize_color_tail(result, color_spec, color_breaks)
+  result <- finalize_color_tail(result, color_spec, color_breaks, display)
   # Phase 13c-iv: wrap the multi-table list (tab_many keeps its list-default) so it auto-prints.
   as_tabxplor_tabs(result)
 }
@@ -1528,7 +1670,9 @@ new_ctx <- function(...) {
     wt_quo = NULL, na_drop_all_quo = NULL,
     # inputs (= each formal's current default)
     pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
-    OR = "no", chi2 = FALSE, design_spec = NULL,
+    # Phase 19d: `display` is a ctx INPUT now -- not to be applied in the build (it stays the tail's
+    # job) but because it is the SECOND link of the comparison chain, which tab_setup() resolves.
+    display = NULL, chi2 = FALSE, design_spec = NULL,
     # Phase 18z16-iiiii: "this call holds a pre-aggregate, not microdata" -- declared by
     # tab_counts(), read ONCE by tab_setup()'s svy_inference_basis(can_serve =). Such an input carries
     # no per-observation Sum(w^2), so it cannot serve the weighted basis and must not claim it.
@@ -1537,7 +1681,7 @@ new_ctx <- function(...) {
     cleannames = NULL, output = "single",
     other_if_less_than = 0, other_level = "Others",
     ref = "auto", ref2 = "first", comp = "tab",
-    ci = "no", conf_level = 0.95, stars = NULL,
+    ci = "auto", conf_level = 0.95, stars = NULL,
     # tab_setup INPUTS: `conf_level`, `ci_method`, `design_effect`, `design_spec` and `agg_only` are
     # read there and resolved into ONE `inference` object (new_inference()). Nothing downstream of
     # tab_setup() reads them -- the leaves, the tests and the assembler take `inference` whole.
@@ -1561,7 +1705,7 @@ new_ctx <- function(...) {
     # that existed to serve exactly that case could therefore never serve it. Declaring them here is
     # what makes it live; `pct_vect` additionally had NO guard at all and was kept quiet only by a
     # globalVariables() entry, which is now unnecessary.
-    cached_tests = NULL, pct_vect = NULL, ref_vect = NULL, OR_vect = NULL,
+    cached_tests = NULL, pct_vect = NULL, ref_vect = NULL, ref2_vect = NULL,
     # Phase 18z16-iv (W-B): the robust omnibus GRID, produced once in tab_transform() because two
     # consumers need it -- the contrib residual's base (there) and the `test` overlay (assemble).
     robust_tests = NULL,
@@ -1627,12 +1771,12 @@ conf_level_default <- function() getOption("tabxplor.conf_level", 0.95)
 tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       pct = "no", color = "no", color_signif = "ignore",
                       color_ratio_ci = FALSE,
-                      OR = "no", chi2 = FALSE, design_spec = NULL,
+                      display = NULL, chi2 = FALSE, design_spec = NULL,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
                       other_if_less_than = 0, other_level = "Others",
                       ref = "auto", ref2 = "first", comp = "tab",
-                      ci = "no", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
+                      ci = "auto", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
                       ci_method = default_ci_method(), design_effect = NULL,
                       totaltab = "line", totaltab_name = "Ensemble",
                       totrow = TRUE, totcol = "last", total_names = "Total",
@@ -1673,7 +1817,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     tab_vars_quo = rlang::enquo(tab_vars), wt_quo = rlang::enquo(wt),
     na_drop_all_quo = rlang::enquo(na_drop_all),
     pct = pct, color = color, color_signif = color_signif,
-    color_ratio_ci = color_ratio_ci, OR = OR, chi2 = chi2,
+    color_ratio_ci = color_ratio_ci, display = display, chi2 = chi2,
     design_spec = design_spec,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
@@ -1750,7 +1894,7 @@ tab_rowvar_ctxs <- function(ctx) {
   #  - the `rows` scalar columns (former atomic per_rv fields, still flat in ctx for the pre-slice
   #    stages / jmvtab), the per-pair pct_vect/ref_vect (now `pairs`), and na_text/na_num/fine_num.
   row_scalar <- setdiff(names(rows), "row_var")
-  per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect", "OR_vect",
+  per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect", "ref2_vect",
                   "na_text", "na_num", "fine_num", row_scalar)
   # Phase 18z14-i: the survey DESIGN is dropped here and SHIPPED once, like `data` -- a prebuilt
   # design carries its whole `$variables` frame, so riding in `shared` copied the entire dataset into
@@ -1772,7 +1916,7 @@ tab_rowvar_ctxs <- function(ctx) {
     u$settings      <- list(rows = rows[i, ], cols = ctx$settings$cols, pairs = pairs[keep, ])
     u$pct_vect      <- pairs$pct[keep]                             # this row_var's per-col_var vectors
     u$ref_vect      <- pairs$ref[keep]
-    u$OR_vect       <- pairs$OR[keep]                              # z10: resolved per pair (cumOR)
+    u$ref2_vect     <- pairs$ref2[keep]                            # z10/19d: resolved per pair (cumulative)
     u$na_text       <- ctx$na_text[[i]]
     u$na_num        <- ctx$na_num[[i]]
     u$fine_num      <- ctx$fine_num[[rv]]                          # by NAME (NULL when no numeric cols)
@@ -1781,36 +1925,41 @@ tab_rowvar_ctxs <- function(ctx) {
 }
 
 
-# or_cum_ok() / or_resolve_cum() -- Phase 18z10: THE `OR = "cumOR"` eligibility rule, in one place.
+# or_cum_ok() / ref2_resolve_cum() -- Phase 18z10, re-homed on `ref2` in 19d: THE
+# `ref2 = "cumulative"` eligibility rule, in one place.
 #
 # A cumulative odds ratio dichotomises a col_var at each cut point ("at or below level j"), which is
 # only meaningful on an ORDERED scale, and needs at least 3 levels to say anything a plain OR does not
 # (a 2-level factor has one cut, i.e. the ordinary OR). It also reads the ROW distribution, so it is a
-# `pct = "row"` quantity. An ineligible pair DEGRADES to "no" rather than aborting: a table can mix an
-# ordered and a nominal col_var, and only the ordered one has cut points. One message site, two
-# reasons -- the "make them ordered" hint the user needs, and the pct one.
+# `pct = "row"` quantity. An ineligible pair DEGRADES to the ordinary "first" dichotomisation rather
+# than aborting: a table can mix an ordered and a nominal col_var, and only the ordered one has cut
+# points. One message site, two reasons -- the "make them ordered" hint the user needs, and the pct one.
+#
+# Phase 19d: it lives on `ref2` because a cumulative odds ratio is not a different MEASURE, it is a
+# different dichotomisation of the column variable -- and `ref2` is precisely "what is each level
+# compared against, within the column variable" (ruling b). That is what made `OR` deletable.
 #' @keywords internal
 #' @noRd
 or_cum_ok <- function(x) is.ordered(x) && nlevels(x) >= 3L
 
 #' @keywords internal
 #' @noRd
-or_resolve_cum <- function(or, pct, col_vars_cumor, col_vars_text) {
-  v <- vctrs::vec_recycle(or, length(col_vars_cumor))
-  if (!any(v == "cumOR")) return(v)
-  want <- v == "cumOR"
+ref2_resolve_cum <- function(ref2, pct, col_vars_cumor, col_vars_text) {
+  v <- vctrs::vec_recycle(as.character(ref2), length(col_vars_cumor))
+  if (!any(v == "cumulative")) return(v)
+  want <- v == "cumulative"
   bad_class <- want & !col_vars_cumor
   bad_pct   <- want &  col_vars_cumor & pct != "row"
   if (any(bad_class)) cli::cli_inform(c(
-    "i" = paste0("{.code OR = \"cumOR\"} needs an {.cls ordered} col_var with 3+ levels; ",
+    "i" = paste0("{.code ref2 = \"cumulative\"} needs an {.cls ordered} col_var with 3+ levels; ",
                  "{cli::qty(sum(bad_class))} {?it is/they are} skipped here."),
     "i" = "{.code data |> dplyr::mutate(x = factor(x, levels = c(...), ordered = TRUE))}"
   ))
   if (any(bad_pct)) cli::cli_inform(c(
-    "i" = paste0("{.code OR = \"cumOR\"} cumulates each row's distribution, so it needs ",
+    "i" = paste0("{.code ref2 = \"cumulative\"} cumulates each row's distribution, so it needs ",
                  "{.code pct = \"row\"}; skipped here.")
   ))
-  v[bad_class | bad_pct] <- "no"
+  v[bad_class | bad_pct] <- "first"
   v
 }
 
@@ -2019,7 +2168,6 @@ tab_setup <- function(ctx) {
     ref <- vctrs::vec_recycle(ref[1], nrowvars)
   }
   ref2        <- vctrs::vec_recycle(ref2    , nrowvars)
-  OR          <- vctrs::vec_recycle(OR      , nrowvars)
   comp        <- vctrs::vec_recycle(comp    , nrowvars)
   color       <- vctrs::vec_recycle(color   , nrowvars)
   #ci_visible <- vctrs::vec_recycle(ci_visible, nrowvars)
@@ -2060,19 +2208,17 @@ tab_setup <- function(ctx) {
     identical(totcol, col_vars)                                ~ "each",
     identical(totcol, col_vars[ncolvars])                      ~ "all_col_vars",
     length(totcol) == 0 &
-      (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no") |
-         any(OR != "no") )                                     ~ "no_delete",
+      (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no"))~ "no_delete",
     length(totcol) == 0                                        ~ "no_no_create",
     TRUE                                                       ~ "some"
   )
 
-  # WARNING: `pct` is per-col_var (length ncolvars), `OR` is per-row_var (length nrowvars) -- a
-  # vectorised `pct == "row" & OR %in% ...` recycles and warns when the counts don't divide (e.g. 3x4).
-  # Two independent scalar reductions are byte-identical (all(A & B) == all(A) && all(B) for any lengths)
-  # without the recycle. Twin of the Phase 9a fix at tab_assemble_tables (~L1859).
-  if (all(pct == "row") && all(OR %in% c("OR", "or", "OR_pct", "or_pct", "cumOR"))) {
-    tot_cols_type <- "no_delete"
-  }
+  # Phase 19d: the build-time "an OR table has no meaningful 100 % total column, so delete it" rule is
+  # GONE. It keyed on `OR`, i.e. on an ARGUMENT, to decide something that is purely about what the
+  # table SHOWS -- and the display-keyed rules that say the same thing already exist and already run
+  # (tab_fold_addn_incell / tab_or_total_col, both on tab_is_or_display()). One rule, at the render
+  # end, where the display is finally known. The visible consequence is that an odds-ratio table keeps
+  # its Total column, now reading `n=<base>` -- which is what ?tab has always promised.
 
 
 
@@ -2117,13 +2263,13 @@ tab_setup <- function(ctx) {
       purrr::map(ref, ~ rep(.x, length(col_vars)))
     }
 
-  # Phase 18z10: OR_vect -- per row_var, a per-col_var OR vector, the OR analogue of ref_vect.
-  # DESIGN: `OR` is a per-ROW_VAR argument but `OR = "cumOR"` is only meaningful on an ORDERED
-  # col_var with 3+ levels under row percentages, so eligibility is a property of the PAIR. The
-  # settings spine is exactly where the two axes are allowed to meet (17e rule 4), so the resolved
-  # value lives on `pairs`; `rows$OR` keeps the REQUESTED value (the tot_cols_type reductions and
-  # the jamovi cache tuple read it). Every other OR value broadcasts unchanged -> byte-identical.
-  OR_vect <- purrr::map2(OR, pct_vect, ~ or_resolve_cum(.x, .y, col_vars_cumor, col_vars_text))
+  # Phase 18z10 / 19d: ref2_vect -- per row_var, a per-col_var ref2 vector, the ref2 analogue of
+  # ref_vect. DESIGN: `ref2` is a per-ROW_VAR argument but `ref2 = "cumulative"` is only meaningful
+  # on an ORDERED col_var with 3+ levels under row percentages, so eligibility is a property of the
+  # PAIR. The settings spine is exactly where the two axes are allowed to meet (17e rule 4), so the
+  # resolved value lives on `pairs`; `rows$ref2` keeps the REQUESTED value (the jamovi cache tuple
+  # reads it). Every other ref2 value broadcasts unchanged.
+  ref2_vect <- purrr::map2(ref2, pct_vect, ~ ref2_resolve_cum(.x, .y, col_vars_cumor, col_vars_text))
 
 
   #Unique arguments :
@@ -2141,8 +2287,9 @@ tab_setup <- function(ctx) {
   # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
   # the leaf tot/totaltab forcing) deliberately stays in the leaf builders below.
   # See dev/tabxplor_argument_computation_map.md.
-  .settings     <- tab_resolve_settings(color = color, OR = OR_vect, ci = ci, chi2 = chi2,
+  .settings     <- tab_resolve_settings(color = color, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
+                                         display_measure = display_comparison(display),
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
                                          color_ratio_ci = color_ratio_ci, stars = stars,
@@ -2156,6 +2303,13 @@ tab_setup <- function(ctx) {
   chi2          <- .settings$chi2
   ci            <- .settings$ci
   ci_scale      <- .settings$ci_scale     # Phase 14b: "diff" / "ratio" (the Katz interval)
+  # Phase 19d: THE comparison this table makes, and whether the LEAF owns its interval (the Woolf
+  # log-OR one) instead of tab_ci(). `color_signif`/`stars` come back because `ci = "cell"` disables
+  # them (D28) -- one rule, both consumers.
+  comparison    <- .settings$comparison
+  or_ci         <- .settings$or_ci
+  color_signif  <- .settings$color_signif
+  stars         <- .settings$stars
   totrow        <- .settings$totrow
   cache_keys    <- .settings$cache_keys
 
@@ -2173,7 +2327,8 @@ tab_setup <- function(ctx) {
   rv_chr <- as.character(row_vars) ; cv_chr <- as.character(col_vars)
   settings <- list(
     rows = tibble::tibble(
-      row_var = rv_chr, color = color, OR = OR, chi2 = chi2, ref = ref, ref2 = ref2,
+      row_var = rv_chr, color = color, comparison = comparison, or_ci = or_ci, chi2 = chi2,
+      ref = ref, ref2 = ref2,
       comp = comp, ci = ci, ci_scale = ci_scale, totaltab = totaltab, totrow = totrow
     ),
     cols = tibble::tibble(
@@ -2185,8 +2340,8 @@ tab_setup <- function(ctx) {
       col_var = rep(cv_chr, times = length(rv_chr)),
       is_text = rep(unname(col_vars_text), times = length(rv_chr)),
       pct     = unlist(pct_vect, use.names = FALSE),
-      ref     = unlist(ref_vect, use.names = FALSE),
-      OR      = unlist(OR_vect , use.names = FALSE)
+      ref     = unlist(ref_vect , use.names = FALSE),
+      ref2    = unlist(ref2_vect, use.names = FALSE)
     )
   )
 
@@ -2200,7 +2355,8 @@ tab_setup <- function(ctx) {
     tab_row_names = tab_row_names, na_drop_all = na_drop_all,
     cleannames = cleannames, stars = stars, lvs = lvs, color_signif = color_signif,
     totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
-    OR = OR, comp = comp, color = color, ci = ci, ci_scale = ci_scale, chi2 = chi2,
+    comp = comp, color = color, comparison = comparison, or_ci = or_ci,
+    ci = ci, ci_scale = ci_scale, chi2 = chi2,
     inference = inference,
     digits = digits, total_names = total_names, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
@@ -2489,14 +2645,14 @@ tab_transform <- function(ctx) {
   # jmv_cache_aggregate) -- kept whole in the shared ctx, this row_var's entry picked below. new_ctx()'s
   # NULL default carries on the tab()/tab_counts() path -> recompute in tab_apply_tests(). The method_*
   # CI-method fields are likewise always present (new_ctx defaults). Phase 17e: their former exists()
-  # guards are gone. pct_vect / ref_vect / OR_vect (tab_setup products, written per row_var by
+  # guards are gone. pct_vect / ref_vect / ref2_vect (tab_setup products, written per row_var by
   # tab_rowvar_ctxs) default to the scalar broadcast over col_vars only if a hand-built ctx reached
   # transform without them -- which Phase 19a's new_ctx() declarations are what make REACHABLE (D7:
-  # only OR_vect was declared, so the other two guards errored instead of firing).
-  if (is.null(pct_vect)) pct_vect <- rep(pct, length(col_vars))
-  if (is.null(ref_vect)) ref_vect <- rep(ref, length(col_vars))
-  # z10: same rule for OR_vect (the per-pair OR, "cumOR" already resolved against each col_var).
-  if (is.null(OR_vect))  OR_vect  <- rep(OR , length(col_vars))
+  # only the third was declared, so the other two guards errored instead of firing).
+  if (is.null(pct_vect))  pct_vect  <- rep(pct , length(col_vars))
+  if (is.null(ref_vect))  ref_vect  <- rep(ref , length(col_vars))
+  # z10/19d: same rule for ref2_vect (the per-pair ref2, "cumulative" already resolved per col_var).
+  if (is.null(ref2_vect)) ref2_vect <- rep(ref2, length(col_vars))
   cached_test <- if (is.null(cached_tests)) NULL else cached_tests[[row_var]]
 
   # Phase 18z16-iv (W-B): the robust omnibus GRID, produced ONCE here because two consumers need it
@@ -2575,21 +2731,23 @@ tab_transform <- function(ctx) {
   if (sum(col_vars_text) != 0) {
     text <- purrr::pmap(
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
-           pct_vect[col_vars_text], ref_vect[col_vars_text], OR_vect[col_vars_text]),
-      function(.col_var, .digits, .na, .pct, .ref, .OR) {
+           pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text]),
+      function(.col_var, .digits, .na, .pct, .ref, .ref2) {
         # Phase 19c: the LEAF is the stamping stage for every measure but contrib, whose per-cell
         # contributions only the test step can compute (measure_stage()). That single question
         # replaced the `color_diff_OR` recode; passing the measure straight through would make the
         # leaf stamp "diff" on a contrib table (its `color_1` fall-through).
         color_leaf <- if (identical(measure_stage(color), "chi2")) "no" else color
-        r_pl <- plain_resolve(.pct, .ref, ref2, .OR, .na, totaltab_name, total_names,
-                              c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms)
+        r_pl <- plain_resolve(.pct, .ref, .ref2, .na, totaltab_name, total_names,
+                              c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms,
+                              comparison = comparison)
         plain_core(
           data, rv, .col_var, tv_syms, wt_sym,
-          pct = r_pl$pct, color = color_leaf, OR = r_pl$OR, na = r_pl$na, ref = r_pl$ref,
+          pct = r_pl$pct, color = color_leaf, na = r_pl$na, ref = r_pl$ref,
           ref2 = r_pl$ref2, comp = r_pl$comp, totaltab = r_pl$totaltab, totaltab_name = totaltab_name,
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
+          comparison = comparison, or_ci = or_ci,
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
           .by_table = .by_table, inference = inference
         )
@@ -2728,11 +2886,10 @@ tab_assemble_tables <- function(ctx) {
     tab <- tabs_text
   }
 
-  #Remove the unwanted total row. Phase 9a: scalar; `any(pct == "col")` designs out a pct/OR
-  # length-mismatch (the numeric-only per-col_var-pct latent bug, analogous to tab.R's ex-L1252).
-  no_totrow <- (totrow == FALSE) ||
-    ((any(pct == "col") && OR %in% c("OR", "or", "OR_pct", "or_pct")) &&
-       tot_cols_type != "no_no_create")
+  # Remove the unwanted total row. Phase 19d: the second half -- "a col% odds-ratio table drops its
+  # total row" -- went with `OR`, for the same reason as its total-COLUMN twin in tab_setup(): it
+  # keyed on an argument to decide a purely DISPLAY question, and the display is not known here.
+  no_totrow <- (totrow == FALSE)
   if (no_totrow) {
     totrows     <- is_totrow(tab)
     tottab_rows <- is_tottab(tab)
@@ -3904,14 +4061,26 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # Phase 17f: resolve the leaf's validation + forcing cascade ONCE (shared with tab_transform),
   # then hand the resolved bundle to the compute core. tab_plain never finalises colour -- the outer
   # tab()/tab_many() wrapper is the sole finaliser -- so the core returns the built table directly.
-  r <- plain_resolve(pct, ref, ref2, OR, na, totaltab_name, total_names, tot, comp, color,
-                     digits, totaltab, tab_vars)
+  # Phase 19d: the ONE `OR` retirement route (tab_plain() has no `display` of its own -- it is a
+  # superseded leaf -- so the route only reaches `ref2`/`ref`; the odds ratio is computed anyway).
+  or_route <- tab_deprecate_or(OR, NULL, ref2, ref)
+  ref2 <- or_route$ref2 ; ref <- or_route$ref
+  comparison <- tab_leaf_comparison(color, or_route$display, pct, ref)
+  # tab_plain() computes no contrast interval of its own (that is tab_ci()'s step) EXCEPT the Woolf
+  # log-OR one, which is the odds ratio's -- so the leaf's whole `ci` question is this single
+  # predicate, resolved by the shared rule (D28/D29 included).
+  r_ci <- resolve_leaf_ci(NULL, color, color_signif, stars, ref)
+  stars <- r_ci$stars ; color_signif <- r_ci$color_signif
+  r <- plain_resolve(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
+                     digits, totaltab, tab_vars, comparison = comparison)
   plain_core(
     data, row_var, col_var, tab_vars, wt,
-    pct = r$pct, color = color, OR = r$OR, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
+    pct = r$pct, color = color, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
     totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
     subtext = subtext, digits = r$digits, num = num, df = df,
     stars = stars, color_signif = color_signif, .fine = .fine, .by_table = .by_table,
+    comparison = comparison,
+    or_ci = identical(comparison, "odds_ratio") && identical(r_ci$ci, "ref"),
     # Phase 18z14-ii: tab_plain(design, ...) gets the design-based intervals too -- through the
     # same inference object tab_setup() builds for the pipeline (no design -> "weights"/"n" from
     # `design_effect` or its option, byte-identical to the leaf's former inline read).
@@ -3920,21 +4089,20 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 }
 
 
-# plain_resolve() -- Phase 17f: the factor leaf's argument validator + forcing cascade (pct/OR ->
+# plain_resolve() -- Phase 17f: the factor leaf's argument validator + forcing cascade (pct ->
 # tot -> comp -> ref="auto" -> digits -> totaltab), shared by the public tab_plain() wrapper and
 # tab_transform() so the pipeline resolves the SAME way instead of the leaf re-deriving. ref = "auto"
-# is type-specific here (OR/OR-colour -> "first", else the total row -> "tot"), differing from the
+# is type-specific here (the measure's declared `ref_auto`, else the total row), differing from the
 # numeric leaf (num_resolve) for a mixed table. Returns the resolved bundle.
 #' @keywords internal
 #' @noRd
-plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, tot, comp, color,
-                          digits, totaltab, tab_vars) {
+plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
+                          digits, totaltab, tab_vars, comparison = NA_character_) {
   vctrs::vec_assert(pct, size = 1)
   vctrs::vec_assert(ref, size = 1)
   ref <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref, "\\s+", " "))
   vctrs::vec_assert(ref2, size = 1)
   ref2 <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref2, "\\s+", " "))
-  vctrs::vec_assert(OR, size = 1)
   vctrs::vec_assert(na, size = 1)
   stopifnot(na %in% c("keep", "drop"))
   vctrs::vec_assert(totaltab_name, size = 1)
@@ -3942,8 +4110,6 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
 
   #pct
   stopifnot(pct %in% c("no", "row", "col", "all", "all_tabs"))
-  if (is.logical(OR)) if(OR) OR <- "OR" else OR <- "no"
-  stopifnot(OR %in% c("no", "OR", "OR_pct", "or", "or_pct", "cumOR"))
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
   if (color != "no" & ref == "no") {
@@ -4014,10 +4180,12 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
   #ref
   # LEAF resolution (Phase 7b): ref = "auto" is type-specific and intentionally stays here, NOT
   # in tab_resolve_settings() -- for a mixed table it must differ between this factor leaf and the
-  # numeric leaf (tab_num). OR / empirical-OR colour compare to the first level -> "first";
-  # otherwise the total row -> "tot". See the map doc, § static-vs-data line.
+  # numeric leaf (tab_num). WHICH reference is the MEASURE's own declared `ref_auto` (Phase 19d: one
+  # lookup instead of the `OR != "no" | color %in% c("or","OR")` literal) -- the odds ratio compares
+  # to the first level; every other measure to the total row. See the map doc, § static-vs-data line.
   if (ref == "auto") {
-    ref <- if (OR != "no" | color %in% c("or", "OR")) {"first"} else {"tot"}
+    ra  <- measure_ref_auto(if (is.na(comparison) || !nzchar(comparison)) color else comparison)
+    ref <- if (!is.na(ra)) ra else "tot"
   }
 
   #digits
@@ -4038,7 +4206,7 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
     totaltab <- "table"
   }
 
-  list(pct = pct, ref = ref, ref2 = ref2, OR = OR, na = na, total_names = total_names,
+  list(pct = pct, ref = ref, ref2 = ref2, na = na, total_names = total_names,
        tot = tot, comp = comp, digits = digits, totaltab = totaltab)
 }
 
@@ -4049,9 +4217,17 @@ plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, to
 # (tab_plain never was) -- the outer tab()/tab_many() wrapper finalises once.
 #' @keywords internal
 #' @noRd
-plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na, ref, ref2, comp,
+plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref, ref2, comp,
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
-                       stars, color_signif, .fine, .by_table, inference) {
+                       stars, color_signif, .fine, .by_table, inference,
+                       comparison = NA_character_, or_ci = FALSE) {
+  # Phase 19d (KEY 8a): `OR` is gone from the leaf. The odds ratio is computed on EVERY row/col-%
+  # table (measured free: the 2x2 it needs is four numbers the wide table already holds, in the same
+  # tab_apply_reference() sweep that produces diff and ratio), so nothing here switches it on.
+  # What the two new arguments carry is the ONE fact the resolver settled: `comparison` = which
+  # geometry this table compares on, `or_ci` = whether the LEAF owns the interval (the Woolf log-OR
+  # one) rather than tab_ci(). `ref2` alone picks the 2x2 -- a level, or "cumulative".
+  or_compare <- identical(comparison, "odds_ratio")
   # Phase 19a: `inference` is REQUIRED (it was `= new_inference()`). A lazy default could only
   # fire on a caller that forgot to thread the build-time object, and would then silently
   # re-read the global option instead of failing -- the "re-derived downstream" bug the
@@ -4460,11 +4636,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
       # 14z: compute the OR interval only when a colour policy or stars needs it (else a NULL tabs_totn
       # skips it in tab_apply_reference -> no ci_type/bounds change, so existing ignore-OR tables stay
       # byte-identical). color_signif reads the bounds; stars read the (want_p-gated) pvalue.
-      or_want_ci <- (OR %in% c("OR", "OR_pct", "or", "or_pct", "cumOR") | color %in% c("or", "OR")) &&
-        (!identical(color_signif[1], "ignore") || isTRUE(stars))
+      # 19d: the interval is the leaf's only when the odds ratio IS the comparison; whether one is
+      # wanted at all was settled by the resolver (or_ci), so the leaf no longer re-reads the policy.
+      or_want_ci <- isTRUE(or_ci)
       ref_res <- tab_apply_reference(
-        tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp, OR = OR,
-        color = color, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
+        tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp,
+        or_compare = or_compare, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
         row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
         tabs_totn = if (or_want_ci) tabs_totn else NULL,
         # Phase 18s: the OR colour interval honours the effective base too, so color = "OR"
@@ -4522,9 +4699,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # recycles the scalar `display` to length(n) (fmt_class.R), so this is byte-identical to the
   # former per-column case_when/if_else/switch. NA_reals (built above at length nrow(tabs_n)) is
   # reused for every all-NA field (identical values, one allocation instead of ~6 per column).
+  # Phase 19d: the leaf builds the CELL, not a chosen geometry -- `display` is the tail's job now
+  # (tab_apply_display), and the `or`/`or_pct` arms went with the `OR` argument.
   display_1 <- dplyr::case_when(
-    pct %in% c("row", "col") & OR %in% c("OR", "or", "cumOR") ~ "or",
-    pct != "no" & OR %in% c("OR_pct", "or_pct")      ~ "or_pct",
     pct != "no"                                      ~ "pct",
     length(wt) != 0                                  ~ "wn" ,
     TRUE                                             ~ "n"
@@ -4532,13 +4709,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   color_1 <- dplyr::case_when(
     color %in% c("", "no")                            ~ "",
     row_var == "no_row_var" | col_var == "no_col_var" ~ "",
-
-    color %in% c("OR", "or") & pct %in% c("row", "col") &
-      # OR %in% c("OR", "or", "OR_pct", "or_pct") &
-      ref != "no" & ref2 != "no"
-    ~ "OR",
-
-    pct %in% c("row", "col") & ref != "no"            ~ "diff",
+    or_compare & pct %in% c("row", "col") & ref != "no" & ref2 != "no" ~ "odds_ratio",
+    pct %in% c("row", "col") & ref != "no"            ~ "difference",
     TRUE                                              ~ ""
   )
   # Phase 19b (KEY 2): the leaf STAMPS what its columns estimate. `pct_base` is the percentage's own
@@ -4546,12 +4718,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   # builds cells. tab_ci() upgrades it to `points` / `odds_ratio` / `pct_ratio` when it computes a
   # contrast interval, and tab_apply_reference() stamps `odds_ratio` where it builds the Woolf one.
   base_1   <- dplyr::if_else(pct != "no", pct, "none")
-  # An OR table's columns estimate an ODDS RATIO -- all of them, including the reference one, whose
-  # own OR bounds are NA by construction (D19: under the pre-19b `ci_type` it alone said "", i.e. it
-  # claimed to estimate something different from its siblings, and z17 had to patch that back by
-  # reading the rendered `display`). Everything else is a LEVEL here; tab_ci() upgrades it to
-  # `points` / `pct_ratio` when it computes a contrast interval.
-  scale_1  <- dplyr::case_when(display_1 %in% c("or", "or_pct") ~ "odds_ratio",
+  # An odds-ratio table's columns estimate an ODDS RATIO -- all of them, including the reference one,
+  # whose own OR bounds are NA by construction (D19). Phase 19d keys that on the COMPARISON, not on
+  # the rendered display: `scale` says which estimate the column's INTERVAL belongs to, and the
+  # display is free (a `{or}` template on a difference-tested table shows odds ratios over a
+  # difference interval -- which is exactly what the D23 bracket rule refuses to print together).
+  # Everything else is a LEVEL here; tab_ci() upgrades it to `points` / `pct_ratio`.
+  scale_1  <- dplyr::case_when(or_compare & pct %in% c("row", "col") & ref != "no" ~ "odds_ratio",
                                pct != "no"                      ~ "level_pct",
                                TRUE                             ~ "level_n")
   ref_1    <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
@@ -4796,11 +4969,16 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 # tab_plain()'s inline block so the FRESH build stays byte-identical AND the jmvtab tier-3 re-ref
 # (jmv_tab3_reref) can recompute exactly these ref-dependent fields from a cached table's ref-
 # INDEPENDENT pct base, without a new_fmt() rebuild -- one implementation, no forked math.
-# Returns a list; elements not computed for the given (pct, OR/color) are NULL, so the caller's
-# guards behave identically to the former inline locals.
+# Returns a list; elements not computed for the given `pct` are NULL, so the caller's guards behave
+# identically to the former inline locals. Phase 19d: the odds ratio is computed UNCONDITIONALLY on
+# a row/col-percentage table (measured free -- its 2x2 is four numbers this sweep already holds), so
+# `or` and `rr` are always produced. `or_compare` says whether the odds ratio is the comparison the
+# table is TESTED on, which is what still gates the two BASELINE markers (`refcols_vector` on the
+# row path, `refrows` on the col one) -- a marker means "this is the reference of the comparison in
+# force", never "some comparison could use it". `ref2` picks the 2x2: a level, or "cumulative".
 #' @keywords internal
 #' @noRd
-tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
+tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
                                 tabs_totn = NULL, tabs_neff = NULL, conf_level = 0.95, stars = FALSE,
                                 degf = Inf) {
@@ -4869,7 +5047,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     # measure. The spread across a row IS the proportional-odds diagnostic, visible and free.
     # WARNING: the `na = "keep"` column is excluded from the cumulation. It is appended AFTER the real
     # levels by fct_na_value_to_level(), and "at or below NA" is not a cut point.
-    if (OR == "cumOR") {
+    if (ref2 == "cumulative") {
       lv <- which(!nm %in% c("Total", "NA"))
       Pc <- matrix(NA_real_, n, k)
       if (length(lv) >= 2L) {
@@ -4888,7 +5066,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
         list(a = A, b = B, c = A[ra, , drop = FALSE], d = B[ra, , drop = FALSE])
       }
 
-    } else if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
+    } else {
 
       # Phase 16c: PER-COLUMN reference index. For a BINARY col_var (exactly 2 non-Total level columns)
       # each level's OR is computed against the OTHER level (the two columns are reciprocals, neither is
@@ -4921,8 +5099,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
         ref_col_idx <- rep(NA_integer_, k)
         RR <- matrix(NA_real_, n, k)
       }
-      # self-referencing columns show OR = 1 by construction: the ref2 column for 3+ levels, none for binary
-      refcols_vector <- !is.na(ref_col_idx) & ref_col_idx == seq_len(k)
+      # Self-referencing columns show OR = 1 by construction: the ref2 column for 3+ levels, none for
+      # binary. Phase 19d: the odds ratio is computed on every row-% table now, but `refcol` means
+      # "this column is THE reference of the comparison in force" -- which the ref2 column is only
+      # when the odds ratio IS that comparison. Marking it otherwise would tell every exporter to
+      # dress the first level as a baseline on an ordinary difference table.
+      refcols_vector <- or_compare & !is.na(ref_col_idx) & ref_col_idx == seq_len(k)
 
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
@@ -4956,11 +5138,15 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     }
 
 
-    # Odds ratio (when pct = "col")
-    if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
+    # Odds ratio (when pct = "col") -- Phase 19d: unconditional, like its pct = "row" twin.
+    {
 
-      # Relative risks : cell / reference ROW
-      refrows <- tabs |>
+      # Relative risks : cell / reference ROW. Phase 19d: the ref2 ROW is the odds ratio's own
+      # baseline, so it is exported as `refrows` (-> the `in_refrow` field) only when the odds ratio
+      # IS the comparison -- on a col% DIFFERENCE table the reference is a column, and marking a row
+      # as the baseline would dress the wrong cells as one. The local `or_refrows` still drives the
+      # arithmetic.
+      or_refrows <- tabs |>
         calculate_refrows(ref           = ref2,
                           comp          = comp,
                           tab_row_names = tab_row_names,
@@ -4970,7 +5156,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
                           totrow_vector = totrow_vector,
                           num_names     = names(cols)
         )
-      ra <- ref_abs(refrows)
+      if (or_compare) refrows <- or_refrows
+      ra <- ref_abs(or_refrows)
       RR <- P / P[ra, , drop = FALSE]
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
@@ -5007,7 +5194,10 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
   # empty, so the old gate silently skipped its intervals. ci_or() (R/tab-agg.R) is the shared engine and
   # gives the CI-inversion pvalue (want_p = stars) that duals with the bracket, like the modelled OR.
   or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
-  if (!is.null(tabs_totn) && !is.null(tabs_or) && !is.null(or_cells) && !is.null(refrows)) {
+  # Phase 19d: `or_refrows` is the odds ratio's OWN row baseline -- `refrows` on the pct = "row" path
+  # (the same row), the ref2 row on the pct = "col" one, where the exported `refrows` may be NULL.
+  or_refrows <- if (exists("or_refrows", inherits = FALSE)) or_refrows else refrows
+  if (!is.null(tabs_totn) && !is.null(tabs_or) && !is.null(or_cells) && !is.null(or_refrows)) {
     N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
     # Phase 18s: swap in the effective base (n_eff) where it is finite (opt-in); on basis "n"
     # tabs_neff is NULL -> N is the unweighted base, byte-identical.
@@ -5024,7 +5214,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     OINF <- matrix(oc$inf, n, k); OSUP <- matrix(oc$sup, n, k); OPV <- matrix(oc$pvalue, n, k)
     # No interval on a reference position (OR = 1 there by construction): the ref row and any
     # self-referencing column (the ref2/ref column; none for a binary col_var).
-    rrm <- !is.na(refrows) & refrows
+    rrm <- !is.na(or_refrows) & or_refrows
     OINF[rrm, ] <- NA_real_; OSUP[rrm, ] <- NA_real_; OPV[rrm, ] <- NA_real_
     if (!is.null(refcols_vector) && any(refcols_vector)) {
       OINF[, refcols_vector] <- NA_real_; OSUP[, refcols_vector] <- NA_real_; OPV[, refcols_vector] <- NA_real_
@@ -5180,8 +5370,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", color_signif = "ignore",
                     na = c("keep", "drop"),
                     ref = "tot", comp = c("tab", "all"),
-                    ci = NULL, conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
-                    ci_method = NULL, design_effect = NULL, ci_scale = "diff",
+                    ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
+                    ci_method = NULL, design_effect = NULL,
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE,
@@ -5256,6 +5446,16 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   # Phase 17f: resolve the leaf's forcing cascade ONCE (shared with tab_transform), then hand the
   # resolved bundle to the compute core. Colour is finalised ONCE, here, after the core returns.
+  # Phase 19d: `ci_scale` is CUT -- it was a pure duplicate of `color = "ratio"` (used 0 times
+  # anywhere), and which scale the interval rides is the resolved comparison's to say. D29: the
+  # gated forcing (a `color_signif` policy needs the interval it gates on) is applied HERE too, not
+  # only inside tab_resolve_settings() -- without it the policy greyed every cell of a directly-built
+  # numeric table. Same shared rule, so the two paths cannot drift again.
+  r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref)
+  stars <- r_ci$stars ; color_spec$signif <- r_ci$color_signif
+  ci    <- if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
+  ci_scale <- if (identical(measure_key(color_spec$text), "ratio") ||
+                  identical(measure_key(color), "ratio")) "ratio" else "diff"
   r <- num_resolve(color, ref, ci, tot, comp, totaltab, row_var, col_vars, tab_vars)
   result <- num_core(
     data, row_var, col_vars, tab_vars, wt,
@@ -6104,10 +6304,14 @@ tab_ci <- function(tabs,
   # table attribute -- that is what makes the exported step path, and a table a pipeline has stripped
   # of its metadata, still refer their intervals to t(degf) instead of silently falling back to z.
   if (is.null(degf)) degf <- tab_inference_degf(tabs)
-  stopifnot(all(ci %in% c("auto", "cell", "diff", "no", "ratio")), #"r_to_r", "c_to_c", "tab_to_tab",
+  stopifnot(all(ci %in% c("auto", "cell", "diff", "no", "ratio", "ref")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all"))
   )
+  # Phase 19d: this superseded STEP keeps the computational vocabulary ("no"/"cell"/"diff"), but it
+  # must also accept the public anchor one -- `ci = "ref"` means "the interval of the comparison",
+  # which for tab_ci() is exactly its difference branch (the odds-ratio one is the leaf's).
+  ci[ci == "ref"] <- "diff"
   # Phase 15c: a direct `ci = "ratio"` == a difference CI on the ratio (Katz) scale, independent of
   # colour. Fold it to ci = "diff" + ci_scale = "ratio" (the pipeline already does this via
   # tab_resolve_settings(); this makes tab_ci() a self-contained entry point too).

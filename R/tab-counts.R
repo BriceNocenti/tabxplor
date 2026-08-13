@@ -255,7 +255,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        OR = "no", test = FALSE,
                        na = "keep", cleannames = NULL,
                        ref = "auto", ref2 = "first", comp = "tab",
-                       ci = "no", conf_level = conf_level_default(),
+                       ci = "auto", conf_level = conf_level_default(),
                        stars = NULL, ci_method = NULL,
                        totaltab = "line", totaltab_name = "Ensemble",
                        tot = c("row", "col"), total_names = "Total",
@@ -270,6 +270,10 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     lifecycle::deprecate_soft("2.0.0", "tab_counts(chi2 = )", "tab_counts(test = )")
     test <- chi2
   }
+
+  # Phase 19d: the ONE `OR` retirement route, shared with tab() / tab_many() / tab_plain().
+  or_route <- tab_deprecate_or(OR, display, ref2, ref)
+  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
 
   # Phase 18z14-i: tab_counts() starts from pre-aggregated counts, so it is the ONE entry point
   # that REFUSES a survey design rather than unwrapping it -- a design's weights and structure are
@@ -366,7 +370,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     na_drop_all_quo = rlang::quo(NULL),
     pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
     color_ratio_ci = color_pct_text_is_ratio(color_spec),
-    OR = OR, chi2 = test,
+    display = display, chi2 = test,
     na = na, levels = "all",
     cleannames = cleannames, output = "single",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,

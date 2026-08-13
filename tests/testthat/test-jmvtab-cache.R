@@ -378,7 +378,7 @@ test_that("Phase 9b-7: non-rerefable ref changes rebuild but stay byte-identical
     list(a = mk(pct = "row", color = "diff", add_pct = TRUE),      b = mk(pct = "row", color = "diff", add_pct = TRUE, ref = "1")),
     list(a = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE),
          b = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE, ref = "1")),                          # auto + ci=diff
-    list(a = mk(pct = "row", OR = "OR", color = "OR"),             b = mk(pct = "row", OR = "OR", color = "OR", ref = "1")),
+    list(a = mk(pct = "row", display = "{or}", ref = "first", color = "OR"),             b = mk(pct = "row", display = "{or}", ref = "first", color = "OR", ref = "1")),
     list(a = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all"),
          b = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all", ref = "1"))
   )

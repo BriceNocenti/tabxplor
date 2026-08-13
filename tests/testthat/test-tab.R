@@ -79,7 +79,7 @@ testthat::test_that("tab_plain works with pct and diffs", {
 
 testthat::test_that("tab_plain works with OR", {
   tab_plain(data, sex, hair_color, pct = "row", OR = "OR")            |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, pct = "col", OR = "OR_pct")        |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "col", display = "{or} ({pct})", ref = "first")        |> testthat::expect_s3_class("tabxplor_tab")
 
   tab_plain(data, sex, hair_color, pct = "row", OR = "OR", ref = "^male")       |> testthat::expect_s3_class("tabxplor_tab")
   tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
@@ -757,14 +757,14 @@ test_that('ref2 = "last" resolves to the last LEVEL, never the total column (D27
   # for comparison" warning and an ALL-NA `or` field. It becomes blocking in 19d, where the odds
   # ratio is computed unconditionally and ref2 is therefore always in force.
   d <- forcats::gss_cat
-  expect_silent(a <- tab(d, marital, race, pct = "row", OR = "OR", ref2 = "last"))
-  b <- tab(d, marital, race, pct = "row", OR = "OR", ref2 = 3L)   # race: Other | Black | White
+  expect_silent(a <- tab(d, marital, race, pct = "row", display = "{or}", ref = "first", ref2 = "last"))
+  b <- tab(d, marital, race, pct = "row", display = "{or}", ref = "first", ref2 = 3L)   # race: Other | Black | White
   expect_identical(a, b)
   expect_false(all(is.na(get_or(a[[2]]))))                        # non-vacuous: a real `or`
   expect_true(all(get_or(a[[4]]) == 1))                           # White references itself
 
   # ... and it is NOT the total column: that would make the OR an odds against a total.
-  expect_false(identical(a, tab(d, marital, race, pct = "row", OR = "OR", ref2 = 4L)))
+  expect_false(identical(a, tab(d, marital, race, pct = "row", display = "{or}", ref = "first", ref2 = 4L)))
 })
 
 test_that('ref = "last" picks the last level on both axes, and is not "tot" (D27)', {

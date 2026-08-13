@@ -1,4 +1,4 @@
-# Phase 18z10, Steps 1-2: `ordered` factors survive the whole pipeline, and `OR = "cumOR"` prints
+# Phase 18z10, Steps 1-2: `ordered` factors survive the whole pipeline, and `ref2 = "cumulative", display = "{or}"` prints
 # the per-cut-point cumulative odds ratio of an ordered col_var (the descriptive analogue of a
 # proportional-odds model's cumulative OR -- one number per cut, no PO assumption).
 
@@ -67,10 +67,10 @@ test_that("stacking an ordered row_var with a plain one drops the incomparable o
 })
 
 
-# --- Step 2: OR = "cumOR" ----------------------------------------------------------------------
+# --- Step 2: ref2 = "cumulative", display = "{or}" ----------------------------------------------------------------------
 
 test_that("cumOR is the per-cut Woolf odds ratio of the cumulated counts", {
-  t <- tab(ord_data(), g, y, pct = "row", OR = "cumOR", na = "drop")
+  t <- tab(ord_data(), g, y, pct = "row", ref2 = "cumulative", display = "{or}", na = "drop")
   lv <- c("a", "b", "c", "d")
 
   cum_ref <- cumsum(c(40, 30, 20, 10))
@@ -88,19 +88,19 @@ test_that("cumOR is the per-cut Woolf odds ratio of the cumulated counts", {
 })
 
 test_that("the last cut is degenerate, so its column is empty and carries no reference '1'", {
-  t <- tab(ord_data(), g, y, pct = "row", OR = "cumOR", na = "drop")
+  t <- tab(ord_data(), g, y, pct = "row", ref2 = "cumulative", display = "{or}", na = "drop")
   expect_true(all(is.na(get_or(t[["d"]]))))
   # and it must not print the raw "NA" beside the reference percentage
   expect_false(any(grepl("NA", format(t[["d"]]), fixed = TRUE)))
 })
 
 test_that("cumOR has no reference COLUMN (every column is its own cut point)", {
-  t <- tab(ord_data(), g, y, pct = "row", OR = "cumOR", na = "drop")
+  t <- tab(ord_data(), g, y, pct = "row", ref2 = "cumulative", display = "{or}", na = "drop")
   expect_false(any(vapply(c("a", "b", "c", "d"), function(l) any(is_refcol(t[[l]])), logical(1))))
 })
 
 test_that("cumOR carries a Woolf interval and stars when a policy asks for one", {
-  t <- tab(ord_data(), g, y, pct = "row", OR = "cumOR", na = "drop", stars = TRUE)
+  t <- tab(ord_data(), g, y, pct = "row", ref2 = "cumulative", display = "{or}", na = "drop", stars = TRUE)
   cum_ref <- cumsum(c(40, 30, 20, 10)); cum_hi <- cumsum(c(10, 20, 30, 40))
   j  <- 1
   ex <- ci_or(cum_hi[j], 100 - cum_hi[j], cum_ref[j], 100 - cum_ref[j], want_p = TRUE)
@@ -114,7 +114,7 @@ test_that("cumOR carries a Woolf interval and stars when a policy asks for one",
 test_that("the `na = 'keep'` column never becomes a cut point", {
   d <- ord_data()
   d$y[1:10] <- NA
-  t <- tab(d, g, y, pct = "row", OR = "cumOR")            # na = "keep" -> an "NA" column
+  t <- tab(d, g, y, pct = "row", ref2 = "cumulative", display = "{or}")            # na = "keep" -> an "NA" column
   expect_true("NA" %in% names(t))
   expect_true(all(is.na(get_or(t[["NA"]]))))
   # the last REAL level is then the degenerate cut, not the NA column
@@ -126,7 +126,7 @@ test_that("an ineligible col_var degrades to no OR, with one message naming the 
   d <- ord_data()
   d$nominal <- factor(rep(c("p", "q", "r"), length.out = nrow(d)))
 
-  expect_message(t <- tab(d, g, c(y, nominal), pct = "row", OR = "cumOR", na = "drop"),
+  expect_message(t <- tab(d, g, c(y, nominal), pct = "row", ref2 = "cumulative", display = "{or}", na = "drop"),
                  "ordered")
   expect_false(all(is.na(get_or(t[["a"]]))))               # the ordered col_var still gets cumOR
   expect_true(is.na(get_or(t[["p"]])[[1]]))                # the nominal one falls back to plain %
@@ -134,7 +134,7 @@ test_that("an ineligible col_var degrades to no OR, with one message naming the 
 })
 
 test_that("cumOR needs row percentages, and says so instead of computing nonsense", {
-  expect_message(t <- tab(ord_data(), g, y, pct = "col", OR = "cumOR", na = "drop"),
+  expect_message(t <- tab(ord_data(), g, y, pct = "col", ref2 = "cumulative", display = "{or}", na = "drop"),
                  "pct")
   expect_true(all(is.na(get_or(t[["a"]]))))
 })
@@ -147,6 +147,6 @@ test_that("color = 'auto' resolves to the OR measure with several factor col_var
   d$y2 <- factor(rep(c("no", "yes"), length.out = nrow(d)), levels = c("no", "yes"))
   # `auto_or` used to index the per-row_var SCALAR OR with a logical over col_vars, so with >= 2
   # factor col_vars it read c("OR", NA) -> FALSE -> the table silently coloured on the difference.
-  t <- tab(d, g, c(y2, y), pct = "row", OR = "OR", color = TRUE, ref2 = 1, na = "drop")
+  t <- tab(d, g, c(y2, y), pct = "row", display = "{or}", ref = "first", color = TRUE, ref2 = 1, na = "drop")
   expect_identical(as.character(get_color(t[["yes"]])), "OR")
 })

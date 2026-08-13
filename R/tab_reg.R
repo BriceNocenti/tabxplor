@@ -5345,7 +5345,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     ctx <- if (effect == "ame") "reg_diff"
            else if (effect == "ame_ratio" || shape == "ratio") "reg_ratio"
            else "reg_diff"
-    measure_stored(measure_auto(ctx, "text"))
+    measure_auto(ctx, "text")
   }
   if (color_auto)            color        <- color_auto_measure(effect_shape)
   if (is.null(color_signif)) color_signif <- "grey_non_signif"

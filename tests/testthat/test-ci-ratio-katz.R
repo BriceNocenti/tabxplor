@@ -81,12 +81,12 @@ testthat::test_that("a MEAN now gets a ratio-of-means interval under a ratio col
 })
 
 testthat::test_that("tab_resolve_settings only asks for the ratio scale where a diff CI is built", {
-  s <- tab_resolve_settings(color = "diff", OR = "no", ci = c("diff", "cell", "no"),
+  s <- tab_resolve_settings(color = "diff", ci = c("diff", "cell", "no"),
                             chi2 = FALSE, ref = "tot",
                             pct_vect = list("row", "row", "row"), col_vars_text = TRUE,
                             color_ratio_ci = TRUE)
   testthat::expect_identical(s$ci_scale, c("ratio", "diff", "diff"))
-  s0 <- tab_resolve_settings(color = "diff", OR = "no", ci = "diff", chi2 = FALSE, ref = "tot",
+  s0 <- tab_resolve_settings(color = "diff", ci = "diff", chi2 = FALSE, ref = "tot",
                              pct_vect = list("row"), col_vars_text = TRUE)
   testthat::expect_identical(s0$ci_scale, "diff")     # the default is unchanged
 })
