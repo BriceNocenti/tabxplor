@@ -239,6 +239,11 @@
 
 ## Bug fixes
 
+* **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.
+  The combination used to abort with *"Unknown color measure"* — on cross-tables and on mean tables
+  alike.
+* **`tab_num(ci = "diff")` colours its cells.** With the default `color = "auto"` the table came out
+  entirely uncoloured.
 * **`dplyr::bind_rows()` on two subtabled (grouped) tables no longer loses everything below the
   table**: the weight footnote, the colour legend, the confidence-interval note, the test summary and
   a stored caption all survive now. Plain tables were already fine.

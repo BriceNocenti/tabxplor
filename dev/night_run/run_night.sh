@@ -22,10 +22,12 @@ REPO="/home/dev1/github/tabxplor"
 RUNDIR="$REPO/dev/night_run"
 LOGDIR="$RUNDIR/logs/$(date +%Y%m%d_%H%M%S)"
 STATE="$RUNDIR/.state"
-RULES="$RUNDIR/autonomy_rules.md"
+RULES="$RUNDIR/rules.md"
+PROMPTS="$RUNDIR/prompts"
 
-# Every phase in dependency order. 19a is already committed.
-ALL_PHASES=(19b 19c 19d 19e 19f 19g 19h 19i 19j 19k 19l 19m 19n)
+# Tonight's phases come from the manifest build_prompts.sh wrote beside the
+# prompts. Nothing about the run is hand-maintained in two places.
+ALL_PHASES=()
 
 # Per-phase spend ceiling in USD. A phase that blows through this is looping,
 # not working; the cap turns a runaway night into a bounded one.
@@ -51,6 +53,11 @@ die() { log "HALT: $*"; exit 1; }
 # --- preflight ------------------------------------------------------------
 command -v claude >/dev/null || die "claude CLI not on PATH"
 [ -f "$RULES" ]              || die "missing $RULES"
+[ -f "$PROMPTS/PHASES" ]     || die "no prompts built. Run build_prompts.sh first —
+       it writes prompts/<phase>.txt and the PHASES manifest this driver reads."
+
+mapfile -t ALL_PHASES < "$PROMPTS/PHASES"
+[ ${#ALL_PHASES[@]} -gt 0 ] || die "$PROMPTS/PHASES is empty"
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 [ "$branch" = "dev" ] || die "on branch '$branch'; phases must run on 'dev'"
@@ -82,48 +89,16 @@ log "budget/phase: \$$MAX_BUDGET_USD   timeout/phase: ${PHASE_TIMEOUT}s"
 log "head        : $(git log -1 --format='%h %s')"
 
 # --- the per-phase prompt -------------------------------------------------
-build_prompt() {
-  local phase="$1"
-  cat <<EOF
-Implement **Phase $phase** of the tabxplor 2.0.0 Phase 19 roadmap, start to finish,
-in this single session, unattended.
+# Prompts are FILES, written by build_prompts.sh, so the maintainer can read
+# exactly what each phase will be told before going to bed.
+build_prompt() { cat "$PROMPTS/$1.txt"; }
 
-Read first, in this order:
-1. \`dev/tabxplor_phase19_ecosystem_integration.md\` — the plan of plans. Read §1 (the
-   mission and the hard rules), §4 (settled decisions — do not re-open), §8
-   (verification discipline), and in full the entry \`#### Phase $phase\`.
-2. The Phase 19 section of \`CLAUDE.md\` — the big picture and the DONE summaries of the
-   phases already landed, so you build on what is actually there rather than on the
-   plan's expectation of it.
-3. \`dev/tabxplor_architecture.md\` — the section covering each file you are about to
-   touch.
-
-Then write your implementation plan as ordinary text — do NOT enter plan mode, there is
-nobody awake to approve it — and implement it.
-
-Phase 19's governing rules apply in full, and they override convenience:
-- **Simplify and integrate; never add another ad-hoc layer.** Delete the superseded
-  implementation in the same phase.
-- **Never guess what something is.** No behaviour may depend on a rendered English
-  label, a name prefix, a positional vector or a magic field value. If the fact is not
-  stored, storing it IS the task.
-- **One resolver, one model, taken to completion.** Re-deriving downstream is the disease.
-- **Facts live in ONE table.** Two encodings "kept in sync by comment" is forbidden.
-- **Never leave a representation half-migrated.** Split the session, never the migration.
-- \`tab_reg()\`'s back-compatibility is waived entirely, user API included. \`tab()\`'s
-  CRAN-released surface gets soft-deprecation shims, never silent breakage.
-- **A claimed fix ships with the fixture that fails without it.**
-
-Where you see a more integrated, consistent, future-proof way to reach the same end,
-and it is consistent with the phase's stated goal, take it — that is the point of this
-phase. Where you see a caveat, an inconsistency, or a white elephant in the plan, do not
-silently work around it: implement the best version you can and record it under OPEN
-QUESTIONS in your report.
-
-Finish by satisfying every item in the "What done means for a phase" checklist you were
-given, including the commit and the report.
-EOF
-}
+# Checked BEFORE any output redirection: a die() inside build_prompt would have
+# its message swallowed into the redirect target and exit silently.
+for phase in "${phases[@]}"; do
+  [ -f "$PROMPTS/$phase.txt" ] || die "missing prompt file $PROMPTS/$phase.txt —
+       run the preparation session first (see dev/night_run_prompt.md)"
+done
 
 # --- run ------------------------------------------------------------------
 for phase in "${phases[@]}"; do
@@ -181,15 +156,42 @@ for phase in "${phases[@]}"; do
   # The final stream-json line is the result envelope.
   tail -n 200 "$plog" | grep '"type":"result"' | tail -n 1 > "$rlog" || true
 
-  cost=$(python3 -c 'import json,sys
-try: print(f"{json.load(open(sys.argv[1])).get(\"total_cost_usd\",0):.2f}")
-except Exception: print("?")' "$rlog" 2>/dev/null)
-  sid=$(python3 -c 'import json,sys
-try: print(json.load(open(sys.argv[1])).get("session_id","?"))
-except Exception: print("?")' "$rlog" 2>/dev/null)
+  if parsed=$(python3 "$RUNDIR/parse_result.py" "$rlog" 2>>"$LOGDIR/driver.log"); then
+    read -r cost sid c1h c5m <<< "$parsed"
+    parse_ok=1
+  else
+    cost="?"; sid="?"; c1h="?"; c5m="?"; parse_ok=0
+  fi
 
   after=$(git rev-parse HEAD)
-  log "Phase $phase : rc=$rc cost=\$$cost session=$sid"
+  log "Phase $phase : rc=$rc cost≈\$$cost session=$sid cache(1h/5m)=$c1h/$c5m"
+
+  # --- billing tripwire -----------------------------------------------------
+  # Documented (code.claude.com/docs/en/costs.md): the prompt-cache lifetime "is an
+  # hour on a subscription and drops to five minutes once you're drawing on usage
+  # credits; on an API key or cloud provider, it's five minutes by default." So a
+  # 5-minute cache appearing here means this phase left the subscription pool and
+  # is spending real money. Halt rather than discover it in the morning.
+  # (Only valid while ENABLE_PROMPT_CACHING_1H is unset — it would mask the signal.)
+  if [ "${ALLOW_USAGE_CREDITS:-0}" != "1" ]; then
+    if [ "$parse_ok" != "1" ]; then
+      # Fail CLOSED: an unreadable envelope is not evidence of safety.
+      echo "$phase" > "$STATE"
+      die "phase $phase produced no readable result envelope, so the billing
+       tripwire could not be evaluated. Refusing to start another phase blind.
+       Inspect $rlog and $plog, then resume with:
+         dev/night_run/run_night.sh $phase"
+    fi
+    if [ "$c5m" -gt 0 ]; then
+      echo "$phase" > "$STATE"
+      die "phase $phase used a 5-MINUTE prompt cache ($c5m tokens), which means it was
+       NOT drawing on the subscription — usage credits, an API key or a cloud
+       provider was billed. Stopping before the next phase spends more.
+       Check claude.ai/settings/usage, then resume with:
+         dev/night_run/run_night.sh $phase
+       Override deliberately with ALLOW_USAGE_CREDITS=1."
+    fi
+  fi
 
   # --- rate-limit / auth stop, distinguished from a real failure -----------
   if grep -qiE 'usage limit|rate.?limit|Claude AI usage limit reached|quota' "$rlog" "$LOGDIR/$phase.stderr" 2>/dev/null; then

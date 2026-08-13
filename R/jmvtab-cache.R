@@ -383,14 +383,18 @@ jmv_cache_aggregate <- function(ctx) {
   # test sees drop's NA-cell removal). Used only when chi2 is on AND non-contrib (contrib writes
   # per-cell ctr/var fields, not in the test tibble -> must recompute).
   chi2      <- ctx$chi2
-  color_ctr <- ctx$color_ctr
+  color     <- ctx$color                       # Phase 19c: the ONE resolved measure (was color_ctr)
   comp      <- ctx$comp
   na_scalar <- ctx$na
   tier2_keys  <- stats::setNames(vector("list", length(row_vars)), row_vars)
   cached_tests <- stats::setNames(vector("list", length(row_vars)), row_vars)
   for (i in seq_along(row_vars)) {
     rv <- row_vars[[i]]
-    if (!isTRUE(chi2[[i]]) || color_ctr[[i]] != "no") next
+    # Skip when the colour makes the test step write per-cell fields (contrib -- not in the test
+    # tibble, so it must recompute), and when the colour is still the unresolved "auto" sentinel: that
+    # is a numeric-only table, whose test is the ANOVA computed outside this path.
+    if (!isTRUE(chi2[[i]]) || identical(color[[i]], "auto") ||
+        identical(measure_stage(color[[i]]), "chi2")) next
     tkey <- jmv_hash(list("test", comp[[i]], na_scalar,
                           sort(unlist(fct_keys_by_rv[[rv]])), num_keys_by_rv[[rv]]))
     tier2_keys[[rv]] <- tkey
@@ -680,16 +684,17 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
 # The colour "arming class" -> which measure fields the armed table populates. diff/ratio/auto share
 # the "diff" class (tab_plain computes diff AND ratio together), so a diff<->ratio toggle is a pure
 # re-paint (same tuple). or / contrib populate their own fields; "off" colours nothing.
+# Phase 19c: that IS the measure's declared `builds` class (MEASURES, R/fmt_class.R) -- the four-arm
+# classification written here was a fourth copy of it. `TRUE` / `"auto"` arm the diff class because
+# that is what the smart default resolves to on every table the tier-3 cache handles.
 #' @keywords internal
 #' @noRd
 jmv_tab3_arming <- function(color) {
   if (isFALSE(color)) return("off")
   if (isTRUE(color))  return("diff")
   m <- as.character(color)[1]
-  if (m %in% c("or", "OR"))    "or"
-  else if (m == "contrib")     "contrib"
-  else if (m %in% c("no", "")) "off"
-  else                         "diff"
+  if (identical(m, "auto")) return("diff")
+  measure_builds(m)
 }
 
 # The tier-3 TRANSFORM tuple: everything that changes field VALUES or POPULATION beyond the base. An
@@ -751,8 +756,12 @@ jmv_reref_shape_ok <- function(opts, has_num_col) {
     # comp = "tab" (the default, ref-invariant) is rerefable.
     identical(opts$comp, "tab") &&
     # tab_ci gets color = "no" in the rebuild for every reref-eligible case EXCEPT color = "auto"
-    # with an explicit ci = "diff" (which resolves to "after_ci" -> a ref-dependent CI colour the reref
-    # would not reproduce). Exclude it -> rebuild. (color = "diff"/"ratio" always give color_ci = "no".)
+    # with an explicit ci = "diff" (which resolved to "after_ci" -> a ref-dependent CI colour the reref
+    # would not reproduce). Exclude it -> rebuild.
+    # Phase 19c: that resolution is GONE -- the pipeline hands tab_ci `color = "no"` unconditionally
+    # now, so this exclusion is vestigial and the case is in fact rerefable. Kept as is deliberately:
+    # lifting it changes which cache PATH a live jamovi toggle takes (rebuild -> re-ref), which is the
+    # delicate seam this phase was told not to move. Lift it in 19k, with the cold/warm/reref lock.
     !(identical(opts$color, "auto") && identical(opts$ci, "diff"))
 }
 

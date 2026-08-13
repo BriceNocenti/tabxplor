@@ -67,7 +67,7 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
 
   ctx <- tabxplor:::tab_setup(ctx)
   testthat::expect_true(all(c("col_vars_num", "col_vars_text", "tot_cols_type", "settings",
-                              "color_diff_OR", "cache_keys") %in% names(ctx)))
+                              "color", "cache_keys") %in% names(ctx)))
   # Phase 17e: the per-pair settings live in the star schema (rows / cols / pairs), not pct_vect.
   testthat::expect_named(ctx$settings, c("rows", "cols", "pairs"))
   testthat::expect_named(ctx$cache_keys, c("tier0", "tier1_common", "tier2"))

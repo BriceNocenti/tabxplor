@@ -67,8 +67,11 @@ Phase 19 is **not a feature phase**. It exists to make the package's own model e
    is exactly what it claims (`dev/verify_golden_field_delta.R`, which learns one new mode per new
    kind of delta).
 9. **End-of-phase documentation discipline** (CLAUDE.md § The last step of every implementation):
-   file-header docstrings, `# DESIGN:` / `# WARNING:` tags, the CLAUDE.md phase "DONE" summary (do **NOT** write it in the current file, but only in CLAUDE.md),
-   `dev/tabxplor_architecture.md` when structure changes *only*.
+   file-header docstrings, `# DESIGN:` / `# WARNING:` tags, and
+   `dev/tabxplor_architecture.md` when structure changes *only*. The phase **"DONE" summary goes in
+   CLAUDE.md and ONLY there** — never in this file, never in the chat response (there, give a short
+   readable account instead). **Edit CLAUDE.md's Repository Map yourself** in the same pass; do not
+   hand the maintainer lines to paste.
 
 ### What must survive, unchanged in spirit
 
@@ -517,6 +520,21 @@ compute* any more — only what to compare against, what to test, and what to sh
 
 **Read first**: study §KEY 8.2 – §8.7 and §8.16 (the rulings), §11 D20–D23, D26, D27, D28.
 
+**Handed over by 19c** (found while removing the 4-way split; both are `ci`'s surface, i.e. this
+phase's):
+
+- **D29 — the direct `tab_num()` path never forces the difference CI a policy gates on.** 14a fixed
+  that inside `tab_resolve_settings()` only, so `tab_num(color = "diff", color_signif =
+  "grey_non_signif")` (no explicit `ci`) computes no interval and the policy greys every cell.
+  19c declared the rule (`requires = c(ci = "gated")`) and applies it in the resolver; applying it on
+  the leaf path too is a behaviour change, so it was left for this phase. One line at
+  `num_resolve()`, plus a fixture.
+- **`color = "auto"` vs `color = TRUE` are still not synonyms on a factor table** — the string gives
+  ONE channel (`diff`), the logical gives two (`diff` + `ratio` bg), because only the logical takes
+  `mode = "auto"` in `normalize_color_spec()`. 19c made them agree wherever a `color_signif` policy is
+  set (the combination used to abort outright); making them agree unconditionally moves goldens, and
+  belongs with this phase's migration of `color`'s canonical values.
+
 **The resulting surface** (seven arguments, each a genuine question):
 
 ```r
@@ -896,6 +914,15 @@ target for every rendered output.
 
 **Goal**: the module stops re-implementing the R boundary. Seven rules are hand-mirrored, three of them
 in JS, one of them with a **semantic shift**.
+
+**Handed over by 19c**: `jmv_tab3_rerefable()`'s exclusion of `color = "auto"` + `ci = "diff"`
+(`R/jmvtab-cache.R`) is **vestigial**. It existed because that combination resolved to the composite
+`"after_ci"`, which made `tab_ci()` stamp a ref-dependent CI colour the re-ref could not reproduce.
+19c deleted that resolution — the pipeline hands `tab_ci()` `color = "no"` unconditionally now — so
+the case is in fact re-referable. It was deliberately NOT lifted: doing so changes which cache PATH a
+live jamovi toggle takes (rebuild → re-ref), which is the seam 19c was told not to move. Lift it here,
+with the cold + warm + reref lock. Also: `jmvtab_build()` (`:984-997`) still hand-mirrors the
+resolver's colour→`ci` cascade; it now has `measure_forces()` / `measure_builds()` to call instead.
 
 **Read first**: study §4.5 (nine items), §11 D9/D10/D11/D12/D13/D15, §7's anti-proposition on the JS
 rules. Ruling: **(b)** — a shared resolver both boundaries call, plus a **generated** table for the JS

@@ -1,8 +1,14 @@
 # PURPOSE: Single source of truth for tab()'s argument-overwrite cascade (Phase 7b).
 # ROLE: Pure, data-free resolution of the colour cascade shared by tab_build() and
-#   tab_counts(): color = "auto" -> a concrete measure; the contrib / diff-family forcing
-#   of chi2 / totrow / ci; and the split of the one `color` argument into the per-step
-#   sub-passes each leaf/step reads (color_diff_OR / color_ctr / color_ci / color_num).
+#   tab_counts(): color = "auto" -> a concrete MEASURE (through MEASURES' declared `auto_for`
+#   contexts), then that measure's declared `requires` applied to chi2 / totrow / ci / ref.
+# Phase 19c (KEY 4): it returns ONE resolved measure, not four per-step sub-passes. The old
+#   color_diff_OR / color_ctr / color_ci / color_num split was a fossil of the pre-2.0.0 four-step
+#   pipeline: it routed WHICH step stamped the colour attribute, in four hand-written recodes over
+#   measure literals, one of which (color_ci) existed only to receive a legacy combined string the
+#   cascade manufactured one step after 17d had decoded such strings away. Each consumer now asks
+#   the measure what it needs -- measure_stage() for the leaf/test split, measure_applies() for the
+#   numeric one -- so adding a measure touches no step.
 # KEY CONSTRAINTS:
 #   - Pure function of (argument values, column CLASS metadata) -> settings. It never reads
 #     column *values*. This is the boundary the Jamovi `.js` mirrors and the Phase 7c cache
@@ -22,9 +28,10 @@
 # alone lived in four places. Consolidating it here is what lets jmvtab drive the identical
 # rules from `.js` and lets the cache invalidate on a single, well-defined settings object.
 #
-# @param color         Legacy text-channel colour string, recycled over row_vars
-#   ("no"/"auto"/"diff"/"diff_ci"/"after_ci"/"contrib"/"OR"). `normalize_color_spec()` has
-#   already collapsed the two-channel `color` spec into this before we run.
+# @param color         The pipeline text-channel MEASURE, recycled over row_vars
+#   ("no"/"auto"/"diff"/"contrib"/"OR"). `normalize_color_spec()` has already collapsed the
+#   two-channel `color` spec into this before we run -- and, since 17d, decoded the legacy combined
+#   strings into a clean measure plus `color_signif`, so no composite can arrive here.
 # @param color_signif  The NORMALIZED significance policy ("ignore"/"grey_non_signif"/
 #   "guaranteed_effect"), i.e. `normalize_color_spec()$signif`. Phase 14a: the parser can only
 #   fold the policy into `color` for an explicit "diff"/"ratio" measure -- `color = TRUE`/"auto"
@@ -49,8 +56,9 @@
 # @param stars Scalar logical (Phase 16f): the resolved `stars` setting. When TRUE it forces ci = "diff"
 #   on the columns that can carry a difference CI (so the per-cell pvalue the stars are cut from exists),
 #   unless ci was set explicitly or it is an OR table (its own pvalue via the OR path).
-# @return list(color, chi2, ci, ci_scale, totrow, color_diff_OR, color_ctr, color_ci, color_num,
-#   cache_keys). `ci_scale` ("diff"/"ratio", over row_vars) = the scale the difference CI is
+# @return list(color, chi2, ci, ci_scale, totrow, cache_keys). `color` is the RESOLVED measure over
+#   row_vars; every consumer derives its own need from it through the MEASURES accessors.
+#   `ci_scale` ("diff"/"ratio", over row_vars) = the scale the difference CI is
 #   expressed on. `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
 #   0-2 (dev/tabxplor_jmvtab_cache_design.md §3); the tier-2 shaped-aggregate hash + population
 #   hashes are added by the module (Phase 7e).
@@ -113,10 +121,50 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   # its own: an "auto" numeric-only table is never an OR table (a mean has no OR notion; the OR branch
   # of the case_when below is itself guarded by `!num_only`), and its colour is resolved later by
   # tab_num()/resolve_color_auto_num() into a diff -- so it IS gated.
+  # DESIGN: color = "auto" resolves from the pct/OR settings of the FACTOR col_vars ONLY, through the
+  # declared `auto_for` contexts: an OR-type table -> "or"; row/col percentages -> "diff";
+  # counts / all-% -> "contrib". A numeric-only table (no factor col_vars) keeps "auto" here and is
+  # resolved by tab_num() via resolve_color_auto_num() (a mean has no contrib / OR notion).
+  # Phase 19c: WHICH measure answers a context is MEASURES' own `auto_for`, shared with the per-column
+  # repaint (resolve_col_measures) and with tab_reg() -- one table for what used to be three cascades.
+  # The old case_when also had a `pct_rowcol & ci == "diff" -> "after_ci"` arm: it manufactured a
+  # LEGACY COMBINED string, one step after 17d had decoded such strings away at the boundary, purely
+  # so that the CI step rather than the leaf would stamp the colour. Its net effect was nil (the
+  # per-column repaint overwrites both), and it is what the 4-way split existed to route. Gone.
+  # Phase 19c (defect): the assignment is now SCOPED to the "auto" entries. `case_when` rebuilt the
+  # WHOLE vector whenever any entry was "auto", so a per-row_var vector mixing "auto" with an explicit
+  # measure re-derived the explicit one from its `pct`. Unreachable from any public entry point today
+  # (every caller hands tab_build() a scalar `color_spec$legacy`), but wrong on its own terms.
+  color_auto_text <- color == "auto" & ! num_only
+  if (any(color_auto_text)) {
+    context <- dplyr::case_when(
+      auto_or    ~ "or_table",
+      pct_rowcol ~ "pct",
+      purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "counts",
+      TRUE       ~ NA_character_
+    )
+    resolved <- vapply(context, function(cx)
+      if (is.na(cx)) "no" else {
+        m <- measure_auto(cx, "text"); if (nzchar(m)) measure_stored(m) else "no"
+      }, character(1), USE.NAMES = FALSE)
+    color[color_auto_text] <- resolved[color_auto_text]
+  }
+
+  # Phase 14a: a `color_signif` policy must force the difference CI it gates on, so that
+  # `tab(color = TRUE, color_signif = <policy>)` is identical to the explicit
+  # `tab(color = TRUE, ci = "diff", color_signif = <policy>)` the user had to write. WHICH measures
+  # need it is their declared `requires["ci"] == "gated"` -- "gated" meaning exactly "only when a
+  # policy is in force, since that is what reads the interval". contrib (no interval at all) and the
+  # odds ratio (its OWN ci_type = "or" bounds, centred on 1 -- a difference CI would be tested against
+  # that neutral and NEVER be significant, greying the whole table) declare no `ci` requirement, which
+  # is what the two hand-written exclusions used to say.
+  # WARNING: on a NUMERIC-ONLY table `color` is still the unresolved "auto"; its measure is the one
+  # tab_num()/resolve_color_auto_num() will pick, so the requirement is read off THAT. Without it the
+  # policy greys every cell of a numeric table (the 14a bug).
   signif_on <- !identical(color_signif, "ignore") && !is.na(color_signif[1])
   if (signif_on) {
-    gated <- color %in% c("diff", "diff_ci", "after_ci") |
-      (color == "auto" & (num_only | (!auto_or & pct_rowcol)))
+    gate_measure <- dplyr::if_else(color == "auto", measure_auto("num", "text"), color)
+    gated <- vapply(gate_measure, measure_forces, logical(1), "ci", TRUE, USE.NAMES = FALSE)
     if (any(gated & ci == "cell")) {
       cli::cli_abort(c(
         "{.arg color_signif} = {.val {color_signif}} gates the colour on the DIFFERENCE confidence interval, but {.arg ci} = {.val cell} asks for the cell one.",
@@ -126,43 +174,31 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
     ci[gated & ci != "diff"] <- "diff"
   }
 
-  # DESIGN: color = "auto" resolves from the pct/OR/ci settings of the FACTOR col_vars ONLY:
-  # OR-type -> "OR"; row/col pct + ci = "diff" -> "after_ci"; row/col pct -> "diff";
-  # counts/all -> "contrib". A numeric-only table (no factor col_vars) keeps "auto" here and
-  # is resolved by tab_num() via resolve_color_auto_num() (a mean has no contrib/OR notion).
-  color_auto_text <- color == "auto" & ! num_only
-  if (any(color_auto_text)) color <- dplyr::case_when(
-    auto_or                   ~ "OR",
-
-    pct_rowcol & ci == "diff" ~ "after_ci",
-    pct_rowcol                ~ "diff"    ,
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "contrib" ,
-    TRUE                                                                                  ~ "no" ,
-  )
-
   # WARNING: contrib colouring paints the signed chi2 residual, which needs (a) total rows to
-  # store each cell's contribution to variance and (b) a chi2 pass. Force both ON. The totrow
-  # half is skipped for callers that pass totrow = NULL (tab_counts drives totals via `tot`).
+  # store each cell's contribution to variance and (b) a chi2 pass -- its declared
+  # `requires = c(chi2 = "always", totrow = "always")`. The totrow half is skipped for callers that
+  # pass totrow = NULL (tab_counts drives totals via `tot`).
+  needs_totrow <- vapply(color, measure_forces, logical(1), "totrow", USE.NAMES = FALSE)
+  needs_chi2   <- vapply(color, measure_forces, logical(1), "chi2",   USE.NAMES = FALSE)
   if (!is.null(totrow)) {
-    ctr_no_row <- color == "contrib" & totrow == FALSE
+    ctr_no_row <- needs_totrow & totrow == FALSE
     if (any(ctr_no_row)) {
       warning("total rows were added, since color == 'contrib' needs them ",
               "to store information about mean contributions to variance")
       totrow[ctr_no_row] <- TRUE
     }
   }
-  chi2[color == "contrib" & chi2 == FALSE] <- TRUE
+  chi2[needs_chi2 & chi2 == FALSE] <- TRUE
 
-  # DESIGN: a difference colour compares each cell to a reference row/column, so `ref` is
-  # mandatory; and the significance-gated variants (diff_ci / after_ci) additionally need the
-  # difference confidence interval, so they force ci = "diff".
-  if (any(color %in% c("diff", "diff_ci", "after_ci") & (ref %in% c("no", "") | is.na(ref)))) {
+  # DESIGN: a difference colour compares each cell to a reference row/column, so `ref` is mandatory --
+  # the measure's declared `requires["ref"] == "always"`.
+  if (any(vapply(color, measure_forces, logical(1), "ref", USE.NAMES = FALSE) &
+          (ref %in% c("no", "") | is.na(ref)))) {
     cli::cli_abort(c(
       "With a difference {.arg color}, {.arg ref} must be provided.",
-      "i" = "{.code color = \"diff\"} / {.code \"diff_ci\"} / {.code \"after_ci\"} compare each cell to a reference."
+      "i" = "{.code color = \"diff\"} / {.code \"ratio\"} compare each cell to a reference."
     ))
   }
-  ci[color %in% c("diff_ci", "after_ci") & ci != "diff"] <- "diff"
 
   # Phase 16f: significance stars are cut from a stored per-cell pvalue, which exists ONLY where a
   # difference CI is computed (tab_ci / tab_num compute it under ci = "diff"; with ci = "no" the whole
@@ -196,36 +232,6 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   # An explicit `ci = "ratio"` (Phase 15c) rides the ratio scale regardless of the colour measure.
   ci_scale[ci_ratio_req] <- "ratio"
 
-  # Split the one resolved colour into the sub-pass each step reads: the diff/OR colour ->
-  # tab_plain(); the contrib colour -> tab_chi2(); the ci colour -> tab_ci(); the numeric
-  # colour -> tab_num(). "auto" only survives here for numeric-only tables (see above).
-  color_diff_OR <- dplyr::case_when(
-    color %in% c("OR", "or")     ~ "OR",
-    color %in% c("diff", "auto") ~ "diff",
-    TRUE                         ~ "no"
-  )
-  color_ctr  <- dplyr::recode(color,
-                              "no"       = "no"  ,
-                              "auto"     = "auto",
-                              "diff"     = "no"  ,
-                              "diff_ci"  = "no"  ,
-                              "after_ci" = "no"  ,
-                              "contrib"  = "all" ,
-                              "OR"       = "no"   )
-  color_ci   <- dplyr::recode(color,
-                              "no"       = "no"      ,
-                              "auto"     = dplyr::if_else(any(ci == "diff"), "after_ci", "no"),
-                              "diff"     = "no"      ,
-                              "diff_ci"  = "diff_ci" ,
-                              "after_ci" = "after_ci",
-                              "contrib"  = "no"      ,
-                              "OR"       = "no"
-  )
-  color_num <- dplyr::recode(color,
-                             "contrib"  = "no" ,
-                             "OR"       = "no" ,
-                             .default = color   )
-
   # Phase 7d-ii: DATA-FREE cache-key material for the persisted jmvtab cache tiers 0-2
   # (dev/tabxplor_jmvtab_cache_design.md §3). Symbolic only: the module (Phase 7e) turns the
   # `population` descriptor into a hash and appends the tier-2 shaped-aggregate hash.
@@ -238,8 +244,6 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                                filter_expr = filter_expr)
 
   list(color = color, chi2 = chi2, ci = ci, ci_scale = ci_scale, totrow = totrow,
-       color_diff_OR = color_diff_OR, color_ctr = color_ctr,
-       color_ci = color_ci, color_num = color_num,
        cache_keys = cache_keys)
 }
 
@@ -281,22 +285,33 @@ tab_cache_keys <- function(na = "keep", wt_name = character(), other_if_less_tha
 # Numeric (means) arm of color = "auto". Kept separate from the factor cascade above because
 # a mean has no contrib / OR notion: numeric "auto" keys only on whether a difference is
 # possible (a real `ref` and ci != "cell"). Placeholder axes ("no_row_var" / "no_col_var")
-# colour nothing. Byte-identical to the former inline block in tab_num() (tab.R ~L3319-3325).
+# colour nothing.
 #
-# @param color   Scalar legacy colour string for this (single) numeric row_var.
+# Phase 19c: it no longer emits `"after_ci"`. That was the numeric twin of the factor cascade's own
+# manufactured composite -- and here it was not merely redundant, it was a live defect on BOTH of the
+# two paths that reach it with `color` still spelled `"auto"` (the string, not `TRUE`):
+#   * `tab_num(color = "auto", ci = "diff")` stored `"after_ci"` in the `color` ATTRIBUTE, which
+#     fmt_color_plan() cannot match against names(MEASURES) -> it returned NULL and the table came
+#     out entirely UNCOLOURED (measured: every slot 0);
+#   * with a `color_signif` policy, the per-column repaint then handed the unresolved sentinel to
+#     set_color(), which ABORTED ("Unknown color measure").
+# The two arms also collapse into one: `ci = "diff"` implies `ci != "cell"`, so they only ever
+# differed in which of the two spellings of the same measure they returned.
+#
+# @param color   Scalar colour measure for this (single) numeric row_var, or the "auto" sentinel.
 # @param ref,ci  Scalars for this row_var (`ci` may be NULL at this stage).
 # @param row_var,col_vars  Character name(s), used only to detect the synthetic placeholder
 #   axes tab() injects when a row_var / col_var is absent.
-# @return The resolved scalar colour ("after_ci"/"diff"/""/passed-through).
+# @return The resolved scalar colour ("diff" / "" / passed-through).
 # @keywords internal
 # @noRd
 resolve_color_auto_num <- function(color, ref, ci, row_var, col_vars) {
   if (row_var == "no_row_var" || "no_col_var" %in% col_vars) return("")
-  ci_diff <- if (!is.null(ci)) ci == "diff" else FALSE
   ci_cell <- if (!is.null(ci)) ci == "cell" else FALSE
   dplyr::case_when(
-    color == "auto" & !ref %in% c("no", "") & ci_diff  ~ "after_ci",
-    color == "auto" & !ref %in% c("no", "") & !ci_cell ~ "diff",
+    # the numeric pipeline measure is the diff BUILD class (num_core computes the difference fields);
+    # WHICH of that class's measures is finally shown is the per-column repaint's answer ("ratio").
+    color == "auto" & !ref %in% c("no", "") & !ci_cell ~ measure_of_build("diff"),
     color == "auto"                                    ~ "",
     TRUE                                               ~ color
   )

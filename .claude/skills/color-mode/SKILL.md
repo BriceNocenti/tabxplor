@@ -24,6 +24,13 @@ accepted at the boundary. Phase 17d: they are decoded ONCE by `color_decode_lega
 `(measure = "diff", color_signif = policy)` pair — nothing downstream re-parses them, the stored
 `color` attribute is always a clean measure, and `"ci"` folds into `after_ci` (the old single-shade
 `single0` mode is gone). `"after_ci"`/`"diff_ci"` with `ci = "cell"` now error (use `ci = "diff"`).
+Phase 19c: the decoding is the declared **`COLOR_ALIASES`** table (alias → `(measure, policy)`), so
+each spelling is a row rather than a switch arm and the soft-deprecation list DERIVES from it (the
+aliases carrying a policy). ⚠ Order matters at the boundary: **decode first, normalise second** —
+`measure_key()` resolves an alias to its MEASURE, so normalising first silently drops the policy half.
+Phase 19c also deleted the resolver's own manufactured `"after_ci"`: `tab_resolve_settings()` returns
+ONE resolved measure and each step asks `measure_stage()` / `measure_applies()` what it needs, instead
+of reading one of four precomputed sub-passes (`color_diff_OR`/`color_ctr`/`color_ci`/`color_num`).
 
 Re-grep exact line numbers before editing; anchors below drift.
 
@@ -37,11 +44,36 @@ integer** (0 = uncolored, **1..4 = over intensities, 5..8 = under**). `fmt_color
 There is **no x2/slot-11 override anymore** — the "×2 rule" is just a 1-break `pct_ratio` scale carried
 on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = list(over = 2)`).
 
-- **Add/rename a measure** (Phase 17d): add ONE row to the `MEASURES` fact table (R/fmt_class.R) —
-  its legend fields (word/break glyphs/ref_kind/…) AND its engine fields (`raw` getter closure,
-  `scale = c(std=, pct=)` keys, `std_when`, `sig_source ∈ {bounds,pvalue}`, `gate_row ∈
-  {refrow,totrow}`). `fmt_color_plan()` reads them; the only per-measure code left there is policy
-  (the diff↔ratio bound rescale + the `guaranteed_effect` floor).
+- **Add/rename a measure: ONE row in `MEASURES` (R/fmt_class.R), and nothing else.** Phase 19c (KEY 4)
+  made this literally true by moving the measure's VOCABULARY into the row beside its arithmetic. The
+  row's fields, and the ONE accessor that reads each:
+  - *engine*: `raw` (getter closure), `scale = c(pct=, std=, log=)` (one key per LADDER — the COLUMN
+    says which it reads, via `EST_SCALES$ladder`), `sig_source ∈ {bounds,pvalue}`, `bounds` (optional
+    closure; default = the stored ci_inf/ci_sup), `gate_row ∈ {refrow,totrow}`, `scale_from = "gap"`,
+    `force_policy`, `guar`, `by_scale`.
+  - *vocabulary*: **`channels`** (`text`/`bg` eligibility — the ONE list; `measure_validate()`),
+    **`producers`** (`tab`/`reg` — which producer can build it; the "that is a tab_reg measure" hint is
+    generated from it), **`applies_to`** (`pct`/`num` — `measure_applies()`), **`builds`**
+    (`diff`/`or`/`contrib`: which per-cell fields the pipeline must compute — `measure_builds()`, and
+    `measure_stage()` derives from it which step stamps the colour), **`requires`** (named, values
+    `"always"`/`"gated"`, keys `ref`/`ci`/`chi2`/`totrow`/`empirical`/`interaction` —
+    `measure_forces()`), **`ref_auto`**, **`auto_for`** (`list(text=, bg=)` of context keys `pct` /
+    `num` / `counts` / `or_table` / `reg_diff` / `reg_ratio` — `measure_auto()`, THE `color = TRUE`
+    resolver for both producers).
+  - *legend*: **`word`** (a CLOSURE — `function() gettext("difference")`, so gettext runs at render AND
+    potools extracts the literal statically; there is no anchor to keep in sync any more),
+    `break_over`/`break_under`/`break_scale`, `ref_kind`, `threshold_mult`, `unit_kind`,
+    `has_ref_lead`, **`method`** (`NA` = no interval; a closure = its own test sentence), **`subject`**,
+    **`caveat`** (`function(spec)`).
+  - A build-time `stopifnot` demands `channels`/`producers`/`applies_to`/`builds` on every row, and a
+    second one keeps `COLOR_BUILD_ORDER` exhaustive of the declared `builds` values.
+  - The only per-measure CODE left in `fmt_color_plan()` is policy: the diff↔ratio bound rescale and
+    the `guaranteed_effect` floor.
+- **Break scales are a fact table too** — `COLOR_SCALES` (R/tab_classes.R): `center`/`strict`/`std`/
+  `settable`/`default`/`null_default`/`derive`/`legacy`/`alias`. Adding a scale is one row;
+  `default_color_scales()`, `mk_color_scale()`'s validation and `set_color_breaks()`/
+  `get_color_breaks()`'s name maps all derive from it, and a DERIVED scale (`log_odds`,
+  `adj_diff_log`) declares its parent instead of owning a `switch` arm.
 - **Never read `MEASURES[[m]]` directly** (Phase 18z4) — go through **`measure_facts(m, policy)`**,
   which folds in a row's optional `guar` list under `guaranteed_effect`. It is the only reason the
   colour plan and the legend describing it cannot diverge; both call it (1 site in `fmt_color_plan`,
@@ -138,10 +170,15 @@ single string fed to the pipeline for ci/chi2 side-effects. `finalize_color_spec
 
 ## Verify
 
-- Temp `.R` file → `Rscript` (never `Rscript -e` on Windows); `devtools::test("d:/Statistiques/
-  github/tabxplor")` with `Sys.setenv(NOT_CRAN="true")` so the snapshot tests run. Watch
-  `test-color-golden.R` (per-cell hex), `test-color-config.R`, `test-color-engine.R`,
-  `test-render-html.R`, `test-golden.R`, `test-tab_md.R`.
+- Temp `.R` file → `OMP_NUM_THREADS=1 Rscript <file>.R` with `Sys.setenv(TESTTHAT_CPUS="8",
+  NOT_CRAN="true")` so the snapshot tests run; `devtools::test("~/github/tabxplor", filter = ...)`.
+  Watch `test-color-golden.R` (per-cell hex), `test-color-config.R`, `test-color-engine.R`,
+  `test-color-legend.R`, `test-render-html.R`, `test-golden.R`, `test-tab_md.R`.
+- **`dev/verify_color_attrs.R`** is the characterization net for anything touching the RESOLVER: it
+  builds ~290 tables over the colour × policy × pct × ci × OR argument space and dumps every stored
+  colour fact plus the resolved slot vectors. `Rscript dev/verify_color_attrs.R save <f.rds>` before,
+  `check <f.rds>` after — "IDENTICAL" is the gate. It exists because `color_ctr`/`color_ci`/
+  `color_num` were asserted by NO test at all.
 - Eyeball a console print + one `tab_kable()`/`tab_md()`, check the legend matches the cells (esp.
   numeric `diff` → SD thresholds; over-only ratio → no under side).
 - Intentional output change → regenerate consciously (`dev/make_color_golden.R`;

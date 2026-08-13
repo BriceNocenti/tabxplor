@@ -884,13 +884,13 @@ tab_apply_display <- function(tabs, display) {
 # the colour engine (fmt_color_plan) never carry a composite and never re-parse one. A clean measure
 # passes through with policy = NULL ("leave color_signif as it is"). The one-shade rendering of the old
 # `color = "ci"` (single0) is retired: it folds into guaranteed_effect, i.e. exactly `after_ci`.
+# Phase 19c: the decoding IS the declared COLOR_ALIASES table (R/fmt_class.R), so `"ci"` stopped being
+# a third switch arm and became a third row -- and the same table is what makes names(MEASURES) +
+# names(COLOR_ALIASES) the one allow-list.
 #' @keywords internal
 color_decode_legacy <- function(color) {
-  switch(color,
-         "diff_ci"  = list(measure = "diff", policy = "grey_non_signif"),
-         "after_ci" = list(measure = "diff", policy = "guaranteed_effect"),
-         "ci"       = list(measure = "diff", policy = "guaranteed_effect"),
-         list(measure = color, policy = NULL))
+  a <- COLOR_ALIASES[[color]]
+  if (is.null(a)) list(measure = color, policy = NULL) else a
 }
 
 # Phase 13a: `color` grammar -- POSITION = channel (1st -> text, 2nd -> background), NAMES = column
@@ -919,8 +919,17 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   # normalize_color_spec() is called by tab()/tab_num(), so the real user is two frames up; this keeps
   # the deprecation nudge for user calls but silent for tab_many()'s internal recursion.
   uenv       <- rlang::caller_env(2)
-  norm       <- function(m) if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m
-  ok_measure <- c("diff", "ratio", "contrib", "OR", "auto", "diff_ci", "after_ci", "ci", "")
+  # Phase 19c: the canonical stored spelling of a token, from the ONE table. "auto" is the sentinel
+  # this parser must pass through untouched (it is resolved per column TYPE downstream), so it is the
+  # only non-measure word the boundary knows.
+  # WARNING: it must run AFTER the alias decode, never before -- measure_key() resolves a
+  # policy-carrying alias to its MEASURE, so normalising first would silently discard the policy half
+  # of "diff_ci"/"after_ci"/"ci" (measured: 18 cases lost their color_signif and their forced CI).
+  norm       <- function(m) {
+    if (is.na(m) || identical(m, "no")) return("")
+    if (identical(m, "auto")) return("auto")
+    k <- measure_key(m); if (is.na(k)) as.character(m) else if (!nzchar(k)) "" else measure_stored(k)
+  }
 
   # WARNING: `deprecate = FALSE` is not a convenience -- it is required on the internal seam.
   # legacy_union() MANUFACTURES "diff_ci"/"after_ci" (e.g. color = "ratio" + color_signif =
@@ -931,7 +940,9 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   # tabxplor's tests -- and in the tests of any package that calls tab() on a numeric column.
   deprecate_old <- function(text) {
     if (!deprecate) return(invisible(NULL))
-    if (text %in% c("diff_ci", "after_ci", "ci")) {
+    # Phase 19c: the soft-deprecated spellings are the COLOR_ALIASES rows that carry a POLICY (a
+    # colour string that also says how significance gates it) -- derived, so the list cannot drift.
+    if (text %in% color_legacy_spellings()) {
       lifecycle::deprecate_soft(
         "2.0.0",
         I(paste0("The `color = \"", text, "\"` mode")),
@@ -942,40 +953,50 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
 
   # one positional channel vector (text[, background]) -> c(text, bg-or-NA) validated measures
   parse_channels <- function(v) {
-    v    <- unname(as.character(v))
-    text <- norm(v[1])
-    bg   <- if (length(v) >= 2L) norm(v[2]) else NA_character_
-    if (!is.na(bg) && bg == "") bg <- NA_character_
-    if (!text %in% ok_measure) {
-      # Phase 18z5: `adjustment` / `between_groups` score a MODEL estimate against its observed
-      # counterpart, so they exist only on a tab_reg() table. Name them here rather than let a user who
-      # read ?tab_reg get a bare "unknown measure".
-      cli::cli_abort(c(
-        "Unknown color measure {.val {text}}.",
-        "i" = if (text %in% c("adjustment", "between_groups"))
-          "{.val {text}} is a {.fn tab_reg} measure: it compares a model effect to its observed one."
-        else "Valid measures: {.val {c('diff','ratio','contrib','or')}}."))
-    }
-    if (!is.na(bg) && !bg %in% c("diff", "ratio")) {
-      cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
-    }
-    deprecate_old(text)
+    v   <- unname(as.character(v))
+    raw <- if (length(v) >= 1L) v[1] else NA_character_
+    deprecate_old(raw)
     # Phase 17d: decode a legacy combined string HERE, once. The policy rides `signif` (scalar for the
     # whole spec); the measure becomes a clean "diff". A clean measure is left untouched (policy NULL).
-    dec <- color_decode_legacy(text)
-    if (!is.null(dec$policy)) { signif <<- dec$policy; text <- dec$measure }
+    dec  <- if (is.na(raw)) list(measure = raw, policy = NULL) else color_decode_legacy(raw)
+    if (!is.null(dec$policy)) signif <<- dec$policy
+    text <- norm(dec$measure)
+    bg   <- if (length(v) >= 2L) v[2] else NA_character_
+    # A combined string is a (measure, policy) PAIR and the policy is scalar for the whole spec, so it
+    # cannot describe a second channel. Refuse it rather than silently keep its measure half.
+    if (!is.na(bg) && !is.null(COLOR_ALIASES[[bg]]$policy)) {
+      cli::cli_abort(c("{.val {bg}} cannot go on the background channel.",
+                       "i" = "It also names a significance policy; set that with {.arg color_signif}."))
+    }
+    bg <- if (is.na(bg)) NA_character_ else norm(bg)
+    if (!is.na(bg) && bg == "") bg <- NA_character_
+    # Phase 19c: ONE validator, shared with the storage boundary (resolve_color_channels). Called with
+    # producer = "tab", so a measure only tab_reg() can build is refused HERE, with a message
+    # GENERATED from its `producers` field -- the hand-written "that is a tab_reg measure" hint and
+    # the hand-written background allow-list are both gone, and with them D4 (the two lists disagreed
+    # about whether the gap measures may ride the background; they may, and they say so once).
+    # `auto` is this boundary's own sentinel, resolved per column type downstream, so it is exempt.
+    if (identical(text, "auto")) {
+      if (!is.na(bg)) measure_validate(c("", bg), producer = "tab", call = rlang::caller_env())
+    } else {
+      measure_validate(c(text, if (is.na(bg)) NULL else bg), producer = "tab",
+                       call = rlang::caller_env())
+    }
     c(text, if (is.na(bg)) NA_character_ else bg)
   }
 
   # the pipeline CLEAN measure demanded by a set of measures (ci/chi2/OR side-effects). Phase 17d: it no
   # longer manufactures diff_ci/after_ci -- the legacy strings are already decoded (parse_channels) into
   # a "diff" measure + the `signif` policy, so the cascade reads the clean measure and color_signif apart.
+  # Phase 19c: the four hand-ordered `if`s are ONE walk down the declared COLOR_BUILD_ORDER -- the
+  # pipeline computes the strongest build class any channel asks for, and the weaker channel derives
+  # from the fields that pass already produced (which is why `ratio` resolves to the diff class: the
+  # leaf computes diff AND ratio together, and ci_scale tags which of the two owns the interval).
   legacy_union <- function(ms) {
     ms <- ms[!is.na(ms) & ms != ""]
-    if ("auto"    %in% ms) return("auto")     # resolved per column type downstream (tab_resolve_settings)
-    if ("contrib" %in% ms) return("contrib")
-    if ("OR"      %in% ms) return("OR")
-    if (any(ms %in% c("diff", "ratio"))) return("diff")  # ratio uses the diff-family CI; ci_scale tags it
+    if ("auto" %in% ms) return("auto")   # resolved per column type downstream (tab_resolve_settings)
+    builds <- vapply(ms, measure_builds, character(1), USE.NAMES = FALSE)
+    for (b in COLOR_BUILD_ORDER) if (b %in% builds) return(measure_of_build(b))
     "no"
   }
 
@@ -1069,22 +1090,45 @@ color_pct_text_is_ratio <- function(spec) {
 # being partitioned into here, by two hand-written vectors, in four places.
 #' @keywords internal
 resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
+  # Phase 19c: "the pipeline built a measure this per-column pass must not repaint" IS "that measure
+  # is not selected by a column KIND" -- `or` and `contrib` are the automatic answer for a whole
+  # TABLE (an OR table, a counts table), never for a percentage-vs-mean column, so a `pct =` / `mean =`
+  # spec does not name them. Two `built %in% c("OR","contrib")` literals became one declared question,
+  # and the per-kind defaults themselves are now MEASURES' own `auto_for`.
+  kind <- if (numeric_col) "num" else if (pct_col) "pct" else NA_character_
   if (spec$mode == "auto") {                                # color = TRUE smart per-kind default
-    if (built == "OR")      return("OR")
-    if (built == "contrib") return(NULL)                    # counts / all -> keep contrib
-    if (numeric_col) return("ratio")                        # numeric -> ratio text
-    if (pct_col)     return(c("diff", "ratio"))             # factor  -> diff + ratio bg
-    return(NULL)
+    # a whole-table measure: OR is re-stamped in its canonical spelling, contrib kept as built
+    if (!measure_kind_keyed(built))
+      return(if (identical(measure_builds(built), "or")) measure_stored("or") else NULL)
+    if (is.na(kind)) return(NULL)
+    m <- c(measure_auto(kind, "text"), measure_auto(kind, "bg"))
+    m <- m[nzchar(m)]
+    return(if (length(m) == 0L) NULL else vapply(m, measure_stored, character(1), USE.NAMES = FALSE))
   }
   if (spec$mode == "by_type") {
-    if (built %in% c("OR", "contrib")) return(NULL)         # not keyable by pct/mean -> keep built
+    if (!measure_kind_keyed(built)) return(NULL)            # keep what the pipeline built
     key <- if (numeric_col) "mean" else if (pct_col) "pct" else NA_character_
     if (is.na(key) || is.null(spec$types[[key]])) return(NULL)
     m <- spec$types[[key]]
     return(if (is.na(m[2])) m[1] else m)
   }
-  # flat -- spec$text is a clean measure here (auto is mode == "auto", handled above)
+  # flat -- one measure (or a c(text, bg) pair) for every column.
+  # Phase 19c: `color = "auto"` -- the STRING form of `color = TRUE` -- also lands here (only the
+  # logical takes mode "auto"), and the unresolved sentinel used to be handed straight to set_color(),
+  # which ABORTED with "Unknown color measure". Measured on HEAD: every `color = "auto"` combined with
+  # any `color_signif` policy errored, on factor and numeric tables alike -- the one shape in which
+  # this branch is reached at all (with no policy, finalize_color_spec does not rewrite). It resolves
+  # the sentinel per column kind now, exactly as the logical form does.
   text <- spec$text
+  if (identical(text, "auto")) {
+    if (is.na(kind)) return(NULL)
+    text <- measure_stored(measure_auto(kind, "text"))
+    if (!nzchar(text)) return(NULL)
+    if (is.na(spec$bg)) {
+      bg <- measure_auto(kind, "bg")
+      return(if (nzchar(bg)) c(text, measure_stored(bg)) else text)
+    }
+  }
   if (text == "" && is.na(spec$bg)) return(NULL)
   if (is.na(spec$bg)) text else c(text, spec$bg)
 }
@@ -2088,10 +2132,11 @@ tab_setup <- function(ctx) {
 
 
   # Tests to be done before tab_plain / tab_num.
-  # Phase 7b: the whole colour cascade -- color = "auto" resolution, the contrib -> totrow/chi2
-  # and diff-family -> ci forcing, and the split of `color` into the per-step sub-passes
-  # (color_diff_OR / color_ctr / color_ci / color_num) -- now lives in ONE pure resolver,
-  # tab_resolve_settings() (R/tab-resolve.R), shared with tab_counts(). It is a data-free
+  # Phase 7b: the whole colour cascade -- color = "auto" resolution and the measure's declared
+  # forcing of totrow / chi2 / ci / ref -- lives in ONE pure resolver,
+  # tab_resolve_settings() (R/tab-resolve.R), shared with tab_counts(). Phase 19c: it returns ONE
+  # resolved measure; each consumer derives its own need from it (measure_stage / measure_applies)
+  # instead of reading one of four precomputed per-step sub-passes. It is a data-free
   # function of the arguments + column classes: the exact boundary the Jamovi `.js` mirrors and
   # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
   # the leaf tot/totaltab forcing) deliberately stays in the leaf builders below.
@@ -2107,15 +2152,11 @@ tab_setup <- function(ctx) {
                                          row_vars = as.character(row_vars),
                                          col_vars = as.character(col_vars),
                                          filter_expr = NA_character_)
-  color         <- .settings$color
+  color         <- .settings$color         # Phase 19c: ONE resolved measure (was + 4 sub-passes)
   chi2          <- .settings$chi2
   ci            <- .settings$ci
   ci_scale      <- .settings$ci_scale     # Phase 14b: "diff" / "ratio" (the Katz interval)
   totrow        <- .settings$totrow
-  color_diff_OR <- .settings$color_diff_OR
-  color_ctr     <- .settings$color_ctr
-  color_ci      <- .settings$color_ci
-  color_num     <- .settings$color_num
   cache_keys    <- .settings$cache_keys
 
   # Phase 17e: the SETTINGS SPINE -- a star schema built ONCE here, the single place the two axes
@@ -2133,9 +2174,7 @@ tab_setup <- function(ctx) {
   settings <- list(
     rows = tibble::tibble(
       row_var = rv_chr, color = color, OR = OR, chi2 = chi2, ref = ref, ref2 = ref2,
-      comp = comp, ci = ci, ci_scale = ci_scale, totaltab = totaltab, totrow = totrow,
-      color_diff_OR = color_diff_OR, color_ctr = color_ctr, color_ci = color_ci,
-      color_num = color_num
+      comp = comp, ci = ci, ci_scale = ci_scale, totaltab = totaltab, totrow = totrow
     ),
     cols = tibble::tibble(
       col_var = cv_chr, is_num = unname(col_vars_num), is_text = unname(col_vars_text),
@@ -2165,8 +2204,7 @@ tab_setup <- function(ctx) {
     inference = inference,
     digits = digits, total_names = total_names, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
-    color_diff_OR = color_diff_OR, color_ctr = color_ctr,
-    color_ci = color_ci, color_num = color_num, cache_keys = cache_keys,
+    cache_keys = cache_keys,
     var_labels = var_labels
   ))
 }
@@ -2508,6 +2546,11 @@ tab_transform <- function(ctx) {
     if (length(unique(ref_num_vec)) > 1L)
       cli::cli_inform(c("i" = paste0("Several numeric col_vars with different references: the first ",
                                      "({.val {ref_num}}) applies to all mean columns.")))
+    # Phase 19c: the numeric leaf gets the resolved measure iff the measure can colour a mean --
+    # its declared `applies_to`. `contrib` and `or` cannot (a mean has no chi2 contribution and no
+    # odds), which is exactly what the `color_num` recode used to say by naming them. `"auto"` is the
+    # resolver's own sentinel on a numeric-only table and passes through to resolve_color_auto_num().
+    color_num <- if (identical(color, "auto") || measure_applies(color, "num")) color else "no"
     r_num <- num_resolve(color_num, ref_num, ci, dplyr::if_else(totrow, "row", "no"),
                          comp[1], totaltab, rv, num_col_syms, tv_syms)
     tabs_num <- num_core(
@@ -2534,11 +2577,16 @@ tab_transform <- function(ctx) {
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
            pct_vect[col_vars_text], ref_vect[col_vars_text], OR_vect[col_vars_text]),
       function(.col_var, .digits, .na, .pct, .ref, .OR) {
+        # Phase 19c: the LEAF is the stamping stage for every measure but contrib, whose per-cell
+        # contributions only the test step can compute (measure_stage()). That single question
+        # replaced the `color_diff_OR` recode; passing the measure straight through would make the
+        # leaf stamp "diff" on a contrib table (its `color_1` fall-through).
+        color_leaf <- if (identical(measure_stage(color), "chi2")) "no" else color
         r_pl <- plain_resolve(.pct, .ref, ref2, .OR, .na, totaltab_name, total_names,
-                              c("row", "col"), comp, color_diff_OR, .digits, totaltab, tv_syms)
+                              c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms)
         plain_core(
           data, rv, .col_var, tv_syms, wt_sym,
-          pct = r_pl$pct, color = color_diff_OR, OR = r_pl$OR, na = r_pl$na, ref = r_pl$ref,
+          pct = r_pl$pct, color = color_leaf, OR = r_pl$OR, na = r_pl$na, ref = r_pl$ref,
           ref2 = r_pl$ref2, comp = r_pl$comp, totaltab = r_pl$totaltab, totaltab_name = totaltab_name,
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
@@ -2570,11 +2618,13 @@ tab_transform <- function(ctx) {
     # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order works), but
     # BOTH must run BEFORE non-first levels are dropped (in tab_assemble), so they are computed on the
     # full set of levels. See CLAUDE.md § Global Architecture. Phase 6a: one pass through the shared
-    # tab_apply_tests() (chi2 -> capture test -> ci). Phase 3b: contrib ("ctr") only when color_ctr !=
-    # "no". Phase 7e: cached_test is this row_var's tier-2 hit (NULL -> recompute as before).
+    # tab_apply_tests() (chi2 -> capture test -> ci). Phase 3b: the per-cell contributions ("ctr") only
+    # when the measure needs them. Phase 7e: cached_test is this row_var's tier-2 hit (NULL ->
+    # recompute as before). Phase 19c: `color` is the ONE resolved measure; tab_apply_tests asks
+    # measure_stage() which half of it stamps.
     applied   <- tab_apply_tests(tabs_text, do_chi2 = chi2, ci = ci, comp = comp,
                                  deff = robust_tests,
-                                 color_ctr = color_ctr, color_ci = color_ci, stars = stars,
+                                 color = color, stars = stars,
                                  ci_scale = ci_scale, cached_test = cached_test,
                                  inference = inference)
     tabs_text <- applied$tab
@@ -5198,7 +5248,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # colour, so deprecation lives ONLY here in the public wrapper (the .color_deprecate flag is gone).
   color_spec <- normalize_color_spec(color, color_signif)
   color      <- color_spec$legacy
-  stopifnot(color %in% c("auto", "diff", "diff_ci", "after_ci", "no", ""))
+  # Phase 19c: a mean column can carry only a measure whose declared `applies_to` includes "num"
+  # ("auto" is the resolver's own sentinel, resolved by resolve_color_auto_num just below). The
+  # legacy composites cannot arrive -- normalize_color_spec decodes them into a clean measure plus
+  # `color_signif` -- so what is left to check is exactly this one declared fact.
+  stopifnot(color %in% c("auto", "no", "") || measure_applies(color, "num"))
 
   # Phase 17f: resolve the leaf's forcing cascade ONCE (shared with tab_transform), then hand the
   # resolved bundle to the compute core. Colour is finalised ONCE, here, after the core returns.
@@ -5234,26 +5288,27 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
   # Phase 7b: the numeric color = "auto" resolution is the means arm of the shared cascade,
   # in resolve_color_auto_num() (R/tab-resolve.R). A mean has no contrib/OR notion, so it keys
   # only on whether a real difference is possible (a `ref`, and ci != "cell"). Under tab_build()
-  # this receives color_num (never "OR"/"contrib"); direct tab_num() callers also land here.
+  # this receives the resolved measure filtered by `applies_to` (never "OR"/"contrib"); direct
+  # tab_num() callers also land here.
   color <- resolve_color_auto_num(color, ref, ci, row_var, col_vars)
 
   if (row_var == "no_row_var" | "no_col_var" %in% col_vars) color <- ""
 
-  if (color %in% c("diff", "diff_ci", "after_ci") & ref %in% c("no", "")) {
+  # Phase 19c: the FIFTH copy of "a comparison colour needs a reference" -- the measure's own
+  # declared `requires["ref"]`. The numeric leaf warns and repairs where tab_resolve_settings()
+  # aborts (a difference against the total row is always available on a mean table); 19d unifies the
+  # two, which is why the rule is stated once even though it is applied twice.
+  needs_ref <- measure_forces(color, "ref")
+  if (needs_ref & ref %in% c("no", "")) {
     warning("since color = 'diff', ref must be provided and was set to 'tot'")
     ref <- "tot"
   }
 
-  if (!is.null(ci)) if (color %in% c("diff_ci", "after_ci") & ci != "diff")
-    rlang::warn(
-      paste0("since color = '", color, "', the confidence intervals of cells differences",
-             " from totals (or others cells) must be calculated : ci was set to 'diff' ")
-    )
-  if (color %in% c("diff_ci", "after_ci")) {
-    ci <- "diff"
-  } else {
-    if (is.null(ci)) ci <- "no"
-  }
+  # Phase 19c: the `diff_ci` / `after_ci` arms that stood here are gone with the composite spellings
+  # themselves. They forced `ci = "diff"` for a colour string that also named a significance policy;
+  # the policy is `color_signif` now, and the forcing it needs is applied once, in
+  # tab_resolve_settings() (the `requires["ci"] == "gated"` rule).
+  if (is.null(ci)) ci <- "no"
 
   if (ci == "diff" & ref %in% c("no", "")) {
     warning("since ci = 'diff', a diff was added with ref = 'tot'")
@@ -5264,13 +5319,13 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 
 
   if (is.null(tot)) {
-    tot <- if (ref == "tot" & color %in% c("diff", "diff_ci", "after_ci")) {"row"} else {"no"}
+    tot <- if (ref == "tot" & needs_ref) {"row"} else {"no"}
 
   } else {
     stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
     if (tot[1] == "both") tot <- "row"
 
-    if ((color %in% c("diff", "diff_ci", "after_ci") | ref == "tot") & !tot %in% "row") {
+    if ((needs_ref | ref == "tot") & !tot %in% "row") {
       #warning("since color = '", color, "' and ref = 'tot', a total row was added")
       tot <- "row"
     }
@@ -6328,10 +6383,11 @@ tab_ci <- function(tabs,
       else              { if (ci_ratio) "katz"            else method_diff      }
     }
 
-    # Phase 17d: `color` may arrive as a legacy combined string (the resolve cascade's color_ci, or a
-    # direct tab_ci(color = "after_ci") on the deprecated step path). Decode it ONCE into the clean
-    # (measure, policy) pair so the stored attributes are clean and the engine never re-parses -- on the
-    # tab() path finalize_color_spec() overwrites the policy with the spec's, a no-op when they agree.
+    # Phase 17d: `color` may arrive as a legacy combined string -- since 19c that is possible ONLY on
+    # the exported step path (`tab_plain() |> tab_ci(color = "after_ci")`), because the pipeline hands
+    # this step `color = "no"`: its stamping sub-pass existed to receive a composite the cascade
+    # manufactured, and both are gone. Decode it ONCE into the clean (measure, policy) pair so the
+    # stored attributes stay clean and the engine never re-parses one.
     col_dec <- color_decode_legacy(color[1])
     set_ci_col <- !is.null(color[1]) && !color[1] %in% c("no", "")
     tabs[ci_yes_ref] <-
@@ -7428,22 +7484,31 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
 # The `test` is captured BETWEEN chi2 and ci and re-attached by the caller at rewrap, matching
 # the historical order (chi2 -> get_test -> ci). `do_chi2` is the per-table chi2 flag; `ci ==
 # "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
-tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci, stars,
+# Phase 19c: it takes the ONE resolved `color` measure and derives each step's need from it, instead
+# of the four sub-passes tab_resolve_settings() used to precompute. Only `contrib` is stamped by the
+# test step (measure_stage() == "chi2"); the CI step stamps NOTHING on this path -- the sub-pass that
+# made it do so carried a legacy combined string the cascade manufactured, and it is gone (tab_ci()
+# keeps its own `color` formal for the exported step path).
+tab_apply_tests <- function(tab, do_chi2, ci, comp, color, stars,
                             ci_scale = "diff", cached_test = NULL, deff = NULL,
                             inference) {                   # REQUIRED -- see plain_core()
+  # does this table's colour need the per-cell contribution FIELDS the test step writes?
+  want_ctr <- identical(measure_stage(color), "chi2")
   if (isTRUE(do_chi2)) {
     # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
     # inject the cached omnibus test instead of re-running the vectorised engine. Restricted to
-    # color_ctr == "no": contrib coloring (calc = c("ctr","p")) also writes the per-cell ctr/var
+    # !want_ctr: contrib coloring (calc = c("ctr","p")) also writes the per-cell ctr/var
     # FIELDS, which are not in the test tibble, so it must recompute. tab_chi2(calc = "p",
     # color = "no") is structurally identity on transform tables (totrow+totcol already present),
     # so skipping it changes only the `test` attribute (locked by test-jmvtab-cache.R).
-    if (!is.null(cached_test) && color_ctr == "no") {
+    if (!is.null(cached_test) && !want_ctr) {
       tab <- set_test(tab, cached_test)
     } else {
+      # `tab_chi2()` keeps its own pre-2.0.0 vocabulary ("no"/"auto"/"all"/"all_pct") -- it is an
+      # exported superseded step, and 19j is what retires it with the step itself.
       tab <- tab_chi2(tabs = tab,
-                      calc = if (color_ctr != "no") c("ctr", "p") else "p",
-                      comp = comp, color = color_ctr, .deff = deff)
+                      calc = if (want_ctr) c("ctr", "p") else "p",
+                      comp = comp, color = if (want_ctr) "all" else "no", .deff = deff)
     }
   }
 
@@ -7452,7 +7517,7 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci, stars,
 
   if (ci != "no") {
     tab <- tab_ci(tabs = tab, ci = ci, comp = comp, conf_level = inference$conf_level,
-                  color = color_ci, visible = ci == "cell", stars = stars,
+                  color = "no", visible = ci == "cell", stars = stars,
                   ci_method = inference$method, ci_scale = ci_scale, degf = inference$degf)
   }
 

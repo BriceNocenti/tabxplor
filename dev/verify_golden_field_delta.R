@@ -31,48 +31,13 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 19b (KEY 2): `type` and `ci_type` are REPLACED by `scale` + `pct_base`. An EXPECTED_ATTR entry
-# may be a PREDICATE function(old_attrs, new_value) -> TRUE, which is what makes this a proof rather
-# than an assertion: `scale` is checked, on every one of the ~190 golden columns, against what the
-# DELETED dispatch derived from that column's own old (type, ci_type) -- so "the stored scale is
-# exactly what the code used to compute" is verified per column, not claimed.
-ADDED_ATTRS   <- c("scale", "pct_base", "ci_method")
-REMOVED_ATTRS <- c("type", "ci_type")
-
-# The pre-19b dispatch, replicated here ONCE so the delta can be proved against it. (It is the body
-# of est_scale_key() at HEAD~, minus the `kind`/`display` overrides, which no golden case reaches:
-# every golden column either stores an interval or is a plain level column. The `or` row was renamed
-# `odds_ratio` in the same phase, so the replica returns the NEW key.)
-legacy_scale_key <- function(ci_type, type, has_var = FALSE) {
-  cit <- as.character(ci_type)[1]; typ <- as.character(type)[1]
-  if (identical(cit, "or"))    return("odds_ratio")
-  if (identical(cit, "ratio")) return(if (identical(typ, "mean")) "mean_ratio" else "pct_ratio")
-  if (identical(typ, "coef") && isTRUE(has_var)) return("raw_diff")
-  if (cit %in% c("diff", "diff_row", "diff_col"))
-    return(if (identical(typ, "mean")) "mean_diff" else "points")
-  if (identical(typ, "mean")) return("level_mean")
-  if (identical(typ, "n"))    return("level_n")     # 19b gave the count column its own row
-  "level_pct"
-}
-EXPECTED_ATTR <- list(
-  scale = function(ao, v, col) {
-    # an OR table stamps `odds_ratio` on EVERY column of the col_var, its reference one included --
-    # D19, the one deliberate divergence from the old per-column ci_type. Recognise it by the display.
-    d <- unique(as.character(vctrs::field(col, "display")))
-    if (any(d %in% c("or", "OR", "or_pct", "OR_pct"))) return(identical(v, "odds_ratio"))
-    identical(v, legacy_scale_key(ao$ci_type, ao$type, !all(is.na(vctrs::field(col, "var")))))
-  },
-  pct_base = function(ao, v, col)
-    identical(v, if (ao$type %in% c("row", "col", "all", "all_tabs")) ao$type else "none"),
-  # `ci_method` (the second half of the phase) has no pre-19b counterpart to compare against -- it
-  # was a table-wide meta$ci_settings vector the legend indexed BY MEASURE. What CAN be proved per
-  # column is the invariant that replaced it: a column names a method exactly when it carries a
-  # contrast/cell interval, i.e. when its old `ci_type` was not "" -- and never otherwise.
-  # (`ci_type` could also literally hold "no" -- num_core recorded its `ci` ARGUMENT rather than the
-  # fact, which is one more instance of the disease this key cures.)
-  ci_method = function(ao, v, col)
-    identical(nzchar(v), !as.character(ao$ci_type)[1] %in% c("", "no"))
-)
+# Phase 19c (KEY 4): NOTHING is added, removed or reshaped. The whole key moves the colour
+# vocabulary out of the code and into MEASURES / COLOR_SCALES, so every stored fact must be
+# bit-identical -- an empty declaration set is the phase's own contract, and any line but "OK" is a
+# regression.
+ADDED_ATTRS   <- character(0)
+REMOVED_ATTRS <- character(0)
+EXPECTED_ATTR <- list()
 
 ADDED_TEST_COLS <- character(0)
 
@@ -82,8 +47,10 @@ ADDED_TEST_COLS <- character(0)
 # the check prints what it actually found, per case.
 # Phase 18z16-iiiii REMOVES one instead: `inference` left `meta` for the two column attributes
 # above. No golden case is weighted, so none of them stored it -- declare nothing.
+# Phase 19c: nothing. (`ci_settings` was 19b's removal and its goldens are regenerated, so leaving
+# that rule here would compare two copies of the new shape -- the reset hazard named at the top.)
 ADDED_META_FIELDS   <- character(0)
-REMOVED_META_FIELDS <- c("ci_settings")
+REMOVED_META_FIELDS <- character(0)
 
 # A phase can also RESHAPE a `meta` sub-field without changing what it says. Phase 18z16-iiiii folds
 # `ci_settings`' five `method_*` scalars into ONE named vector, and drops `method_ratio` (a one-value

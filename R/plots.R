@@ -285,8 +285,10 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     # never-greyed reference cell, and not a fourth re-derivation of the same case_when().
     pl  <- resolve_color_channel_plans(col)
     ann <- fmt_col_ann(col, tcols, want_colors = TRUE)
-    gap_chan <- if (!is.null(pl$text) && pl$text$measure %in% c("adjustment", "between_groups")) "text"
-                else if (!is.null(pl$bg) && pl$bg$measure %in% c("adjustment", "between_groups")) "bg"
+    # Phase 19c: "the channel carrying a GAP measure" is measure_own_ref() -- a measure whose baseline
+    # is another column -- so the pair is read off MEASURES rather than written out here.
+    gap_chan <- if (!is.null(pl$text) && measure_own_ref(pl$text$measure)) "text"
+                else if (!is.null(pl$bg) && measure_own_ref(pl$bg$measure)) "bg"
                 else NA_character_
 
     # the observed counterpart and the interval of the GAP (SS9.2: "the modelled point falls outside

@@ -2350,7 +2350,11 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # The LABEL is read off the column's own stored measure, never guessed from a name.
   cond_obs <- !is.na(get_obs(x)) & !shows("obs")
   out_obs <- if (any(cond_obs)) {
-    lbl <- if ("between_groups" %in% c(get_color(x), get_color_bg(x)))
+    # Phase 19c: WHICH baseline `obs` holds is the measure's declared `ref_kind` ("group" = the
+    # reference split_var group, "observed" = the crude effect), not the measure's name.
+    ks  <- vapply(c(get_color(x), get_color_bg(x)), measure_key, character(1))
+    ks  <- ks[!is.na(ks) & nzchar(ks)]
+    lbl <- if (any(vapply(ks, function(k) identical(MEASURES[[k]]$ref_kind, "group"), logical(1))))
       gettext("ref. group") else gettext("obs")
     dplyr::if_else(cond_obs, paste0(lbl, ": ", tip_num(set_display(x, "obs"))), "")
   } else blank
@@ -3869,25 +3873,20 @@ parse_color_side <- function(v, name) {
 #     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
-  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib", "zscore",
-             "adj_ratio", "adj_diff", "adj_diff_std")
-  if (!name %in% valid) {
+  sc <- COLOR_SCALES[[name]]
+  if (is.null(sc) || !isTRUE(sc$settable)) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
-                     "i" = "Valid scales: {.val {valid}}."))
+                     "i" = "Valid scales: {.val {color_scale_names()}}."))
   }
-  center <- if (name %in% c("pct_ratio", "odds_ratio", "mean_ratio", "adj_ratio")) 1 else 0
-  strict <- name != "contrib"
-  # Which scales express their breaks in SD units. `mean_diff` is standardized only on its NULL-default
-  # arm -- supplying data-unit values there is how a user asks for absolute colouring. `adj_diff_std`
-  # (Phase 18z13) is standardized BY DEFINITION: it exists so an additive gap on an arbitrary-unit
-  # outcome has a ladder meaning the same thing in every table, which raw units cannot express.
-  std <- identical(name, "adj_diff_std")
+  center <- sc$center; strict <- sc$strict; std <- sc$std
 
-  # NULL / empty: drop the measure, except mean_diff -> standardized default.
+  # NULL / empty: drop the measure -- unless the scale DECLARES a null_default (mean_diff, whose
+  # empty arm restores the standardized Glass's-delta ladder rather than switching colouring off).
   if (is.null(values) || (is.numeric(values) && length(values) == 0L)) {
-    if (name == "mean_diff") {
-      side <- parse_color_side(c(0.2, 0.5, 0.8), name)
-      return(list(center = 0, strict = TRUE, std = TRUE, over = side, under = side))
+    if (!is.null(sc$null_default)) {
+      side <- parse_color_side(sc$null_default$breaks, name)
+      return(list(center = center, strict = strict, std = sc$null_default$std,
+                  over = side, under = side))
     }
     empty <- list(breaks = numeric(0), slots = integer(0))
     return(list(center = center, strict = strict, std = std, over = empty, under = empty))
@@ -3944,47 +3943,91 @@ mk_color_scale <- function(name, values) {
   list(center = center, strict = strict, std = std, over = over, under = under)
 }
 
+# Phase 19c (KEY 4): THE colour-break scale fact table. Before it, a scale's identity was four
+# name-keyed lists inside mk_color_scale() (`valid` / the centre `%in%` / the strict `!=` / the std
+# `identical`) plus a second hand-written enumeration in default_color_scales() and two more name maps
+# in set_color_breaks()/get_color_breaks() -- so adding a scale meant editing seven places, and the
+# two DERIVED scales (log_odds / adj_diff_log) could not be declared at all: they lived as a `switch`
+# arm inside fmt_color_plan().
+#   center     the neutral value the engine folds around: 0 (additive) or 1 (multiplicative).
+#   strict     `>` at a break (TRUE) or `>=` (contrib, whose ladder counts multiples of the mean).
+#   std        the breaks are in SD units.
+#   settable   a user scale (set_color_breaks / the color_breaks argument) rather than a derived one.
+#   default    the default breaks, in mk_color_scale()'s own input grammar (NULL = "use null_default").
+#   null_default  what an empty/NULL value restores instead of switching the scale off.
+#   derive     for a NON-settable scale: how the plan builds it from another (`log` = log_odds_scale).
+#   legacy     the pre-13a flat argument that set it; `alias` the short name get_color_breaks() takes.
+#' @keywords internal
+COLOR_SCALES <- list(
+  pct_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = c(0.05, 0.1, 0.2, 0.3), legacy = "pct_breaks", alias = "pct"),
+  pct_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)),
+                    legacy = "pct_breaks"),
+  # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so
+  # pct_ratio / mean_ratio are free to be set asymmetrically without changing OR breaks. pct_ratio
+  # stays symmetric by default as a design choice, not a constraint.
+  odds_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4))),
+  # `mean_diff` is standardized only on its NULL-default arm -- supplying data-unit values there is
+  # how a user asks for absolute colouring, which is why `std` is FALSE here and TRUE in null_default.
+  mean_diff  = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE, default = NULL,
+                    null_default = list(breaks = c(0.2, 0.5, 0.8), std = TRUE)),
+  mean_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)),
+                    legacy = "mean_breaks", alias = "mean"),
+  contrib    = list(center = 0, strict = FALSE, std = FALSE, settable = TRUE,
+                    default = c(1, 2, 5, 10), legacy = "contrib_breaks"),
+  # Phase 18z4: the ABSOLUTE z scale, read by color = "contrib" under
+  # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the ladder
+  # documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6. Unlike
+  # `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every table,
+  # which is the whole point of the scale.
+  zscore     = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)))),
+  # Phase 18z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
+  # estimate sits from the value it is compared to. SHARED by both measures because they score the
+  # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
+  # adjustment gaps at x1.03-x1.12, so one ladder reads both. The multiplicative anchor is the
+  # epidemiological 10 % change-in-estimate rule; the additive one is in the effect's OWN units
+  # (2 / 5 / 10 / 20 points on an AME or a risk difference) -- a RELATIVE change would explode near
+  # the null (measured: a +0.016 shift on a -0.026 crude AME reads as -60 %).
+  adj_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = list(over = c(1.10, 1.25, 1.50, 2.00),
+                                   under = c(1.10, 1.25, 1.50, 2.00))),
+  adj_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
+                    default = c(0.02, 0.05, 0.10, 0.20)),
+  # Phase 18z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
+  # a count AME. `adj_diff`'s absolute ladder is calibrated on a PROBABILITY (2/5/10/20 points) and
+  # applying it verbatim to a beta made the reading depend on the unit: measured on the same model,
+  # tvhours in minutes saturated every cell at the deepest break while the same variable in days left
+  # the whole feature dark. Standardized by SD(Y) it means the same thing in every table.
+  # The ladder is the probability one re-expressed in SD units: a probability's SD is at most 0.5, so
+  # 2/5/10/20 points is 0.04/0.10/0.20/0.40 SD -- rounded to 0.05 at the first step, which keeps the
+  # 1:2:4:8 doubling and agrees with `adj_ratio`'s x1.10 anchor (a 10 % move on a typical 0.5 SD
+  # effect IS 0.05 SD). NOT Cohen's 0.2/0.5/0.8: that measures an EFFECT, while this measures the gap
+  # between two effects, which z5 measured at x1.03-x1.12 -- entirely below Cohen's first break.
+  adj_diff_std = list(center = 0, strict = TRUE, std = TRUE, settable = TRUE,
+                      default = c(0.05, 0.10, 0.20, 0.40)),
+  # DERIVED at plan time from a settable sibling, never stored and never user-settable: the LOG of a
+  # multiplicative ladder. A log coefficient's colour and the log twin of a gap both read one of
+  # these, so a user's set_color_breaks(odds_ratio =) / (adj_ratio =) reaches both readings.
+  log_odds     = list(settable = FALSE, derive = list(from = "odds_ratio", how = "log")),
+  adj_diff_log = list(settable = FALSE, derive = list(from = "adj_ratio",  how = "log"))
+)
+
+# The user-settable scale names -- what set_color_breaks() accepts and default_color_scales() builds.
+#' @keywords internal
+color_scale_names <- function()
+  names(COLOR_SCALES)[vapply(COLOR_SCALES, function(s) isTRUE(s$settable), logical(1))]
+
 #' @keywords internal
 default_color_scales <- function() {
-  list(
-    pct_diff   = mk_color_scale("pct_diff",   c(0.05, 0.1, 0.2, 0.3)),
-    pct_ratio  = mk_color_scale("pct_ratio",  list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)) ),
-    odds_ratio = mk_color_scale("odds_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
-    mean_diff  = mk_color_scale("mean_diff",  NULL),
-    mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
-    contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10)),
-    # Phase 18z4: the ABSOLUTE z scale, read by color = "contrib" under
-    # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the
-    # ladder documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6.
-    # Unlike `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every
-    # table, which is the whole point of the scale.
-    zscore     = mk_color_scale("zscore",     conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
-    # Phase 18z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
-    # estimate sits from the value it is compared to. SHARED by both measures because they score the
-    # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
-    # adjustment gaps at x1.03-x1.12, so one ladder reads both. The multiplicative anchor is the
-    # epidemiological 10 % change-in-estimate rule; the additive one is in the effect's OWN units
-    # (2 / 5 / 10 / 20 points on an AME or a risk difference) -- a RELATIVE change would explode near
-    # the null (measured: a +0.016 shift on a -0.026 crude AME reads as -60 %).
-    adj_ratio  = mk_color_scale("adj_ratio",  list(over  = c(1.10, 1.25, 1.50, 2.00),
-                                                   under = c(1.10, 1.25, 1.50, 2.00))),
-    adj_diff   = mk_color_scale("adj_diff",   c(0.02, 0.05, 0.10, 0.20)),
-    # Phase 18z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
-    # a count AME. `adj_diff`'s absolute ladder is calibrated on a PROBABILITY (2/5/10/20 points) and
-    # applying it verbatim to a beta made the reading depend on the unit: measured on the same model,
-    # tvhours in minutes saturated every cell at the deepest break while the same variable in days left
-    # the whole feature dark. Standardized by SD(Y) it means the same thing in every table.
-    # The ladder is the probability one re-expressed in SD units: a probability's SD is at most 0.5, so
-    # 2/5/10/20 points is 0.04/0.10/0.20/0.40 SD -- rounded to 0.05 at the first step, which keeps the
-    # 1:2:4:8 doubling and agrees with `adj_ratio`'s x1.10 anchor (a 10 % move on a typical 0.5 SD
-    # effect IS 0.05 SD). NOT Cohen's 0.2/0.5/0.8: that measures an EFFECT, while this measures the gap
-    # between two effects, which z5 measured at x1.03-x1.12 -- entirely below Cohen's first break.
-    adj_diff_std = mk_color_scale("adj_diff_std", c(0.05, 0.10, 0.20, 0.40))
-  )
+  purrr::map(rlang::set_names(color_scale_names()), function(nm) {
+    d <- COLOR_SCALES[[nm]]$default
+    mk_color_scale(nm, if (is.language(d)) eval(d) else d)
+  })
 }
-# odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so pct_ratio /
-# mean_ratio are free to be set asymmetrically without changing OR breaks. pct_ratio stays symmetric by
-# default here as a design choice, not a constraint.
 
 
 #' Set the breaks used to print colors
@@ -4039,7 +4082,9 @@ set_color_breaks <- function(breaks = NULL, ...) {
   dots <- list(...)
   # COMPAT (Phase 13a): the old flat args pct_breaks / mean_breaks / contrib_breaks, mapped onto the
   # new scales (pct_breaks splits <=1 -> pct_diff, >1 -> pct_ratio) with a soft-deprecation.
-  old_args <- intersect(names(dots), c("pct_breaks", "mean_breaks", "contrib_breaks"))
+  # Phase 19c: the legacy argument names are the scales' own declared `legacy` field, so the compat
+  # list cannot drift from the table (pct_breaks legitimately names two scales -- it is SPLIT below).
+  old_args <- intersect(names(dots), unique(unlist(purrr::map(COLOR_SCALES, "legacy"))))
   if (length(old_args)) {
     lifecycle::deprecate_soft("2.0.0", I(paste0("set_color_breaks(", old_args[1], ")")),
                               with = I("set_color_breaks(pct_diff = , pct_ratio = , mean_ratio = , contrib = )"))
@@ -4188,10 +4233,13 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
 
   if (missing(brk)) return(purrr::map(scales, as_form))
 
-  brk <- switch(brk, "pct" = "pct_diff", "mean" = "mean_ratio", brk)
+  # Phase 19c: the short aliases are the scales' own declared `alias` field.
+  aliases <- purrr::compact(purrr::map(COLOR_SCALES, "alias"))
+  ali     <- rlang::set_names(names(aliases), unlist(aliases, use.names = FALSE))
+  if (brk %in% names(ali)) brk <- unname(ali[[brk]])
   if (!brk %in% names(scales)) {
     cli::cli_abort(c("Unknown color break {.val {brk}}.",
-                     "i" = "Valid scales: {.val {names(scales)}} (aliases {.val pct}, {.val mean})."))
+                     "i" = "Valid scales: {.val {names(scales)}} (aliases {.val {names(ali)}})."))
   }
   as_form(scales[[brk]])
 }

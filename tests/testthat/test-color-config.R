@@ -149,6 +149,95 @@ testthat::test_that("tab() color argument forms set the right channels + policy"
   testthat::expect_equal(get_color(cnt), "contrib")
 })
 
+# Phase 19c (KEY 4). The colour cascade used to resolve `color = "auto"` into the LEGACY COMBINED
+# string "after_ci" on two paths, and the unresolved "auto" sentinel could then reach set_color().
+# Both were live defects, on the DOCUMENTED string spelling of `color = TRUE`:
+#   * tab_num(color = "auto", ci = "diff") stored "after_ci" in the `color` attribute, which
+#     fmt_color_plan() cannot match against names(MEASURES) -> the table came out UNCOLOURED;
+#   * any `color = "auto"` + a `color_signif` policy ABORTED ("Unknown color measure").
+# Every assertion below fails on the pre-19c tree.
+testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numeric tables", {
+  d <- forcats::gss_cat
+  col1 <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
+
+  # (1) a numeric auto table with a difference CI stores a real measure -- and colours
+  n1 <- col1(tab_num(d, race, c(age, tvhours), ci = "diff"))
+  testthat::expect_equal(get_color(n1), "diff")
+  testthat::expect_true(any(fmt_color_channels(n1)$text_slot != 0L))
+
+  # (2) the string "auto" + a policy is exactly the logical TRUE + that policy, both producers
+  a <- col1(tab(d, marital, race, pct = "row", color = "auto",
+                color_signif = "grey_non_signif"))
+  b <- col1(tab(d, marital, race, pct = "row", color = TRUE,
+                color_signif = "grey_non_signif"))
+  testthat::expect_equal(c(get_color(a), get_color_bg(a), get_color_signif(a)),
+                         c(get_color(b), get_color_bg(b), get_color_signif(b)))
+  testthat::expect_equal(get_color(a), "diff")
+  testthat::expect_equal(get_color_bg(a), "ratio")
+
+  # ... and tab_num() agrees with tab() on the same numeric request
+  n2 <- col1(tab_num(d, race, c(age, tvhours), ci = "diff", color_signif = "grey_non_signif"))
+  n3 <- col1(tab(d, race, c(age, tvhours), color = TRUE, ci = "diff",
+                 color_signif = "grey_non_signif"))
+  testthat::expect_equal(get_color(n2), get_color(n3))
+  testthat::expect_equal(fmt_color_channels(n2)$text_slot, fmt_color_channels(n3)$text_slot)
+
+  # (3) with NO policy the plain `color = "auto"` string is untouched (one channel, as before)
+  p <- col1(tab(d, marital, race, pct = "row", color = "auto"))
+  testthat::expect_equal(get_color(p), "diff")
+  testthat::expect_true(is.na(get_color_bg(p)))
+})
+
+# Phase 19c: the vocabulary IS the MEASURES / COLOR_SCALES tables. These lock the accessors every
+# consumer reads, so a row added with a missing field fails here rather than in a rendered legend.
+testthat::test_that("the colour vocabulary is declared, not written out", {
+  # names(MEASURES) + names(COLOR_ALIASES) is the allow-list
+  testthat::expect_setequal(names(MEASURES),
+                            c("diff", "ratio", "or", "contrib", "adjustment", "between_groups"))
+  testthat::expect_equal(measure_key("OR"), "or")
+  testthat::expect_equal(measure_stored("or"), "OR")
+  testthat::expect_equal(measure_key("after_ci"), "diff")   # an alias resolves to its measure
+  testthat::expect_equal(measure_key("no"), "")
+  testthat::expect_true(is.na(measure_key("nonesuch")))
+
+  # the build classes: diff and ratio share one (the leaf computes both fields together)
+  testthat::expect_equal(measure_builds("ratio"), measure_builds("diff"))
+  testthat::expect_equal(measure_builds("contrib"), "contrib")
+  testthat::expect_equal(measure_stage("contrib"), "chi2")   # only the test step stamps it
+  testthat::expect_equal(measure_stage("diff"), "leaf")
+
+  # what each measure declares it needs
+  testthat::expect_true(measure_forces("contrib", "chi2"))
+  testthat::expect_true(measure_forces("contrib", "totrow"))
+  testthat::expect_false(measure_forces("diff", "ci"))              # not gated -> no interval forced
+  testthat::expect_true(measure_forces("diff", "ci", gated = TRUE))
+  testthat::expect_false(measure_forces("or", "ci", gated = TRUE))  # the OR owns its own bounds
+  testthat::expect_true(measure_forces("adjustment", "empirical"))
+
+  # where each may go, and who may ask for it
+  testthat::expect_false("bg" %in% MEASURES$contrib$channels)
+  testthat::expect_true("bg" %in% MEASURES$adjustment$channels)
+  testthat::expect_equal(MEASURES$adjustment$producers, "reg")
+  testthat::expect_false(measure_applies("contrib", "num"))
+  testthat::expect_true(measure_applies("ratio", "num"))
+
+  # the `color = TRUE` defaults, one table for the three cascades that used to answer separately
+  testthat::expect_equal(measure_auto("pct", "text"), "diff")
+  testthat::expect_equal(measure_auto("pct", "bg"),   "ratio")
+  testthat::expect_equal(measure_auto("num", "text"), "ratio")
+  testthat::expect_equal(measure_auto("counts", "text"), "contrib")
+  testthat::expect_equal(measure_auto("or_table", "text"), "or")
+
+  # every scale states its own geometry; a derived one names its parent
+  testthat::expect_equal(COLOR_SCALES$pct_ratio$center, 1)
+  testthat::expect_equal(COLOR_SCALES$pct_diff$center, 0)
+  testthat::expect_false(COLOR_SCALES$contrib$strict)
+  testthat::expect_true(COLOR_SCALES$adj_diff_std$std)
+  testthat::expect_equal(COLOR_SCALES$log_odds$derive$from, "odds_ratio")
+  testthat::expect_false(isTRUE(COLOR_SCALES$log_odds$settable))
+  testthat::expect_error(mk_color_scale("log_odds", 2), "Unknown color-break scale")
+})
+
 testthat::test_that("tab() color argument errors are clear", {
   d <- forcats::gss_cat
   testthat::expect_error(tab(d, marital, race, pct = "row", color = "diff", color_signif = "nope"),

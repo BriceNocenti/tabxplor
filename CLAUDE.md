@@ -83,7 +83,32 @@ R/
 │                              subtle); every backend calls these two (was 5x re-ordered + 2x prep fields).
 │                              Plain one-liners tab_weight_line/reg_model_line/tab_stars_legend wrap as
 │                              1-token streams. legend_export_style() = options(tabxplor.legend_style)
-│                              terse-in-exports. contrib legend = x N BOTH sides "vs the mean"
+│                              terse-in-exports. contrib legend = x N BOTH sides "vs the mean".
+│                              19c (KEY 4): MEASURES gains its VOCABULARY beside its arithmetic, so
+│                              names(MEASURES) IS the allow-list and adding a measure is genuinely
+│                              ONE row -- `channels` (text/bg eligibility: 5 allow-lists -> 1, closing
+│                              D4), `producers` (tab/reg: what refuses a reg-only measure in tab(),
+│                              and GENERATES the "that is a tab_reg measure" hint), `applies_to`
+│                              (pct/num), `builds` (diff/or/contrib = which per-cell fields the
+│                              pipeline must compute; measure_stage() derives WHICH step stamps, and
+│                              it absorbed jmv_tab3_arming), `requires` (always/gated, keys ref/ci/
+│                              chi2/totrow/empirical/interaction -- 5 copies of "a comparison colour
+│                              needs a reference and its interval" -> 1), `ref_auto`, `auto_for`
+│                              (per channel, per CONTEXT pct/num/counts/or_table/reg_diff/reg_ratio:
+│                              the THREE `color = TRUE` cascades that could disagree -> 1), `method`
+│                              (legend_method_name's 3 leading arms), `subject`, `caveat`. Read ONLY
+│                              through measure_key/_stored/_builds/_stage/_forces/_requires/_applies/
+│                              _kind_keyed/_auto/_validate (THE validator, shared by the argument
+│                              boundary normalize_color_spec(producer="tab") and the storage one
+│                              resolve_color_channels) + COLOR_ALIASES = the declared spelling table
+│                              behind color_decode_legacy ("ci" a row, not a 3rd switch arm).
+│                              WARNING at that boundary: DECODE first, normalise second -- measure_key
+│                              resolves an alias to its MEASURE, so normalising first drops the policy
+│                              half of diff_ci/after_ci/ci. `word` is a CLOSURE (gettext at render AND
+│                              statically extractable) -> `word_i18n` + the hand-kept potools anchor
+│                              DELETED. Also folded: fmt_stars_applicable (= sig_source=="pvalue"),
+│                              partial_test + the plot gap channel (= measure_own_ref), the
+│                              contrib-needs-totrows warning (= requires), get_reference (= measure_key)
 ├── tab.R           (~6640 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
 │                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
@@ -228,10 +253,20 @@ R/
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
-├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
-│                              cascade (color="auto"/forcing/split) shared by tab_build+tab_counts;
+├── tab-resolve.R    (~230 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
+│                              cascade shared by tab_build+tab_counts -- color="auto" -> a MEASURE
+│                              (via MEASURES' declared auto_for contexts), then that measure's
+│                              declared `requires` applied to chi2/totrow/ci/ref;
 │                              resolve_color_auto_num() (numeric arm); emits ci_scale (14b: "ratio"
 │                              = the Katz interval). The jmvtab .js / cache boundary.
+│                              19c: it returns ONE resolved measure. The 4-way split
+│                              color_diff_OR/color_ctr/color_ci/color_num is GONE -- a fossil of the
+│                              pre-2.0.0 four-step pipeline (4 hand recodes over measure literals,
+│                              routing WHICH step stamped the colour), one of which (color_ci)
+│                              existed only to receive a legacy composite the cascade MANUFACTURED
+│                              one step after 17d decoded such strings away at the boundary. Each
+│                              consumer asks the measure instead: measure_stage() (leaf vs test
+│                              step), measure_applies() (can it colour a mean), measure_forces().
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
@@ -246,6 +281,13 @@ R/
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
 │                              set_color_breaks() (over/under scales), color_breaks table attr;
+│                              19c: **COLOR_SCALES** = the break-scale fact table (center/strict/std/
+│                              settable/default/null_default [mean_diff's standardized arm]/derive/
+│                              legacy/alias), from which mk_color_scale()'s validation,
+│                              default_color_scales() and both breaks accessors' name maps all derive
+│                              -- 7 edit sites per added scale -> 1 row; and the two DERIVED scales
+│                              (log_odds, adj_diff_log) declare their parent instead of owning a
+│                              switch arm in fmt_color_plan (-> color_scale_resolve);
 │                              Phase 13c-iv tabxplor_tabs (multi-table LIST class: print/[/c/knit_print,
 │                              auto-print + Viewer routing); 17g: tab_materialize_extras -> tab_materialize()
 │                              over materialize_specs() (DECLARED list(kind,when,apply): add_n_pct/or_total/
@@ -1211,7 +1253,7 @@ leaves it **inert until then** — say so in the DONE summary rather than claimi
 (ii) The study found **no statistical soundness problem anywhere**: every issue in Phase 19 is
 structural, so do not "improve" a statistic while passing through.
 
-**At the end of each Phase,** add a "#### Phase 19{x}..." markdown header here, then **write the "DONE" summary** of what have been implemented in the current session.
+**At the end of each Phase,** add a `#### Phase 19{x} — <title>` markdown header **here, in CLAUDE.md**, and write the **"DONE" summary** of what was implemented in the session under it. Write it in **this file and nowhere else** — not in `dev/tabxplor_phase19_ecosystem_integration.md`, not in the chat response. Update the Repository Map above in the same pass, yourself.
 
 ---
 
@@ -1360,6 +1402,87 @@ per-column proof. jamovi cache schema **12 → 13** (a tier-3 carrier's per-colu
 new names). No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still
 owns that.
 
+#### Phase 19c — KEY 4: what a measure declares it needs
+
+**DONE (2026-08-13).** Targeted suite green: **FAIL 0, WARN 0, SKIP 1, PASS 3792** over every file the
+phase touches. **Zero golden churn** (`dev/verify_golden_field_delta.R` with an EMPTY declaration set —
+1787 cells, 36 cases — which is this phase's own contract: it moves vocabulary, not facts) and zero
+snapshot churn. The only behaviour that moved is three defect fixtures.
+
+**The measurement that made the phase safe, and that had to be built first.** `color_ctr`, `color_ci`
+and `color_num` are asserted by **no test anywhere**; `color_diff_OR` only as a NAME in one ctx-field
+list. So the phase opens with **`dev/verify_color_attrs.R`** (committed): ~290 tables over the
+`color` × `color_signif` × `pct` × `ci` × `OR` × factor/numeric/mixed space, dumping per COLUMN
+`(color, color_bg, color_signif, scale, ci_method)` **plus the resolved per-cell slot vectors**, and
+per case the resolver's own return. `save` before, `check` after, "IDENTICAL" is the gate. It is the
+only thing standing between this refactor and a silent mis-stamping, and it caught the one real
+regression on the way (see the decode-order WARNING below).
+
+**MEASURES gained its VOCABULARY** — nine declared fields beside the arithmetic 17d put there, each
+deleting a hand-written list: `channels` · `producers` · `applies_to` · `builds` · `requires` ·
+`ref_auto` · `auto_for` · `method`/`subject`/`caveat`. Details in the Repository Map above. Two
+build-time `stopifnot`s keep the table exhaustive (every row carries the four structural fields;
+`COLOR_BUILD_ORDER` covers every declared `builds`). Counted honestly, it collapses **5 allow-lists →
+1**, **5 copies of "a comparison colour needs a reference and its interval" → 1**, **3 `color = TRUE`
+cascades → 1**, and the jamovi arming class → a lookup. `names(MEASURES)` is now the allow-list, which
+is what the `/color-mode` skill has always (wrongly) claimed; its checklist was rewritten to match.
+
+**`word` became a closure** (`function() gettext("difference")`). That deleted the `word_i18n` flag AND
+the hand-maintained `if (FALSE) c(gettext(...))` potools anchor — verified with
+`potools::get_message_data()` that all six msgids still extract statically from the closure bodies
+before deleting it, because the anchor's whole purpose was that they would not.
+
+**The break scales too**: **`COLOR_SCALES`** replaces four name-keyed lists inside `mk_color_scale()`,
+a second enumeration in `default_color_scales()` and two more name maps in `set_color_breaks()` /
+`get_color_breaks()` — and lets the two DERIVED scales be *declared* (`log_odds`, `adj_diff_log` name
+their parent) instead of living as a `switch` arm inside `fmt_color_plan()`.
+
+**Both fossils are dead.** (i) The 4-way split `color_diff_OR`/`color_ctr`/`color_ci`/`color_num` — 4
+ctx fields, 4 spine columns, 4 recodes, 4 globals entries — is gone; the resolver returns ONE measure
+and each consumer asks `measure_stage()` / `measure_applies()` / `measure_forces()`. (ii) **The
+resolver was still MANUFACTURING the legacy vocabulary it had been told to stop speaking**: its
+`case_when` produced `"after_ci"` one step after 17d decoded such strings away at the boundary, purely
+so the CI step rather than the leaf would stamp the colour — and `color_ci` existed to receive it. Its
+net effect was nil (the per-column repaint overwrites both), which is why deleting it is
+byte-identical.
+
+**Three defects, all PRE-EXISTING on HEAD, all caused by that manufactured composite** — each measured
+on the pre-phase tree first, each shipping with a fixture that fails without the fix:
+
+- `tab_num(color = "auto", ci = "diff")` stored the composite `"after_ci"` in the `color` ATTRIBUTE.
+  `fmt_color_plan()` cannot match that against `names(MEASURES)` → it returned NULL and the table came
+  out **entirely uncoloured** (measured: every slot 0). `tab_num()` now agrees with `tab()` cell for
+  cell on that request.
+- **Any** `color = "auto"` beside a `color_signif` policy **aborted** ("Unknown color measure") — on
+  factor and mean tables alike. `"auto"` is the documented STRING spelling of `color = TRUE`, and only
+  the logical took `mode = "auto"`, so the unresolved sentinel reached `set_color()`. The two spellings
+  now agree wherever a policy is set; making them agree unconditionally moves goldens and is handed to
+  19d.
+- `tab-resolve.R`'s `case_when` rebuilt the **whole** `color` vector whenever any entry was `"auto"`,
+  re-deriving an explicit per-row_var measure from its `pct`. Unreachable from any public entry point
+  today (every caller hands `tab_build()` a scalar `color_spec$legacy`) — reported as latent, fixed
+  because it is wrong on its own terms.
+
+⚠ **One WARNING earned the hard way, now in the code and in the skill**: at the argument boundary,
+**decode the alias FIRST and normalise SECOND**. `measure_key()` resolves a policy-carrying alias to
+its MEASURE, so normalising first silently discards the policy half of `diff_ci`/`after_ci`/`ci` —
+measured as 18 cases losing their `color_signif` and their forced CI, caught only by the
+characterization dump.
+
+**Two things deliberately NOT done, both logged in the roadmap.** `jmv_tab3_rerefable()`'s exclusion of
+`color = "auto"` + `ci = "diff"` is now **vestigial** (it existed because that pair resolved to
+`"after_ci"`); lifting it changes which cache PATH a live jamovi toggle takes, so it goes to **19k**
+with the cold+warm+reref lock. And applying `requires["ci"] == "gated"` on the DIRECT `tab_num()` leaf
+path would fix a real gap (a policy with no explicit `ci` greys every cell — 14a fixed that inside the
+resolver only), but it is a behaviour change on `ci`'s surface → **19d, as D29**.
+
+No `.a.yaml` / `.u.yaml` was touched (maintainer ruling: 19d/19k own the jamovi vocabulary), so **no
+`jmvtools::prepare()` is needed**.
+
+⚠ Note for the next session: `git stash` collided with concurrent writes to `dev/night_run/` from
+another session. The files were restored and verified, but **do not use `git stash` in this repo**
+while a second session may be running — compare against HEAD with `git show HEAD:<file>` instead.
+
 ---
 
 
@@ -1462,7 +1585,9 @@ After verification passes, always :
 
 1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
 2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure for real (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
-3. For package structure and architecture, also add the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt, since the details are already in `dev/tabxplor_architecture.md`. When there is nothing to change, skip it. Maintainer will move done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
+3. **Edit `CLAUDE.md` yourself** — never hand the maintainer "update lines" to paste. Two things go in, both minimalistic, concise, no bullshit, nothing that would clutter the prompt (the details are already in `dev/tabxplor_architecture.md`):
+   - the **Repository Map** / *Key Constraints* / *Design Decisions* entries of anything you really changed (a new module, a renamed function, a new config field). When there is nothing to change, skip it.
+   - the phase **"DONE" summary**, under its own `#### Phase <x> — <title>` header in the roadmap section. **CLAUDE.md is the ONLY place it goes**: not in `dev/*.md`, not in your chat response (there, give a short readable account, not the summary text). The maintainer moves done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
 4. `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary (most of the time, it’s not necessary).
 5. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)
 

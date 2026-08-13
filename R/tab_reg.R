@@ -5300,7 +5300,9 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # the `obs` field only when the crude companion was computed -- so asking for the colour asks for
   # `empirical`. Same shape as color = "contrib" forcing chi2 + totrow in the resolve cascade
   # (R/tab-resolve.R): the user states an intent, the pipeline computes what it needs.
-  if ("adjustment" %in% color && !isTRUE(empirical)) {
+  # Phase 19c: the forcing is the measure's own declared `requires["empirical"]`, so it fires from
+  # the same table the crosstab forcings read -- the last hand-written "this measure needs that step".
+  if (any(vapply(color, measure_forces, logical(1), "empirical")) && !isTRUE(empirical)) {
     cli::cli_inform(c("i" = paste0("{.code color = \"adjustment\"} compares each model effect to its ",
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
@@ -5314,7 +5316,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # pooled interaction test per predictor, in the footer. Automatic here for discoverability (and
   # because the two readings belong together); `stats = c(..., "interaction")` asks for it without the
   # colours. It costs one extra model fit per model, so say so.
-  if ("between_groups" %in% color && !is.null(split_var) &&
+  if (any(vapply(color, measure_forces, logical(1), "interaction")) && !is.null(split_var) &&
       !(is.character(stats) && "interaction" %in% stats)) {
     cli::cli_inform(c("i" = paste0("{.code color = \"between_groups\"} also adds the aggregated ",
                                    "interaction test to the footer (one extra model fit). Ask for it ",
@@ -5336,9 +5338,15 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # Phase 18z3: an explicit ladder, not `effect != "ame"`. A marginal RATIO is multiplicative
   # whatever `exponentiate` says (which is ignored for marginal effects), so keying off `effect_shape`
   # alone would colour an ame_ratio column on the 0-centred difference scale under exponentiate = FALSE.
-  color_auto_measure <- function(shape) if (effect == "ame") "diff"
-    else if (effect == "ame_ratio") "OR"
-    else if (shape == "ratio") "OR" else "diff"
+  # Phase 19c: the ladder decides the CONTEXT ("reg_diff" / "reg_ratio"); WHICH measure answers it is
+  # MEASURES' own `auto_for`, the same table tab()'s two auto passes read. So the three `color = TRUE`
+  # cascades that could once disagree are one lookup with three call sites.
+  color_auto_measure <- function(shape) {
+    ctx <- if (effect == "ame") "reg_diff"
+           else if (effect == "ame_ratio" || shape == "ratio") "reg_ratio"
+           else "reg_diff"
+    measure_stored(measure_auto(ctx, "text"))
+  }
   if (color_auto)            color        <- color_auto_measure(effect_shape)
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
   # Phase 15e: the per-dependent auto colour measure (each family its own default). An explicit user
