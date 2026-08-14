@@ -110,11 +110,11 @@ test_that("a cured predictor gets no Linearity row (its remedy is already in the
   d  <- shp_data()
   t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
   tt <- get_test(t0)
-  expect_true(any(grepl("^linearity", tt$test) & tt$term == "age"))
+  expect_true(any(grepl("^linearity", tt$test) & tt$var == "age"))
   t1 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                  shape = c(age = "quadratic")))
   t1t <- get_test(t1)
-  expect_false(any(grepl("^linearity", t1t$test) & t1t$term == "age"))
+  expect_false(any(grepl("^linearity", t1t$test) & t1t$var == "age"))
 })
 
 # ---- quantile groups + transforms ----------------------------------------------------------------
@@ -130,7 +130,7 @@ test_that("quantile groups turn the predictor into a factor, with the whole fact
   # a factor's crude twin is SATURATED, so the base column is filled per group
   expect_true(all(is.finite(get_pct(t[["Obs_%"]])[as.character(t$var) == "age"])))
   # and the predictor kind is STORED as what it now is
-  expect_identical(get_reg_meta(t)$predictor_types[["age"]], "factor")
+  expect_identical(reg_call(t)$predictor_types[["age"]], "factor")
   # an integer is the same request
   t4 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                  shape = c(age = 4), stats = FALSE))

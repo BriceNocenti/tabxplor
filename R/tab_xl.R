@@ -260,7 +260,7 @@ tab_xl <-
         function(t, rv, cv, tv, i) {
           # Phase 17b: a stored caption (set_caption()) wins over the reg auto-title, then named/auto.
           cap <- get_caption(t)
-          rt  <- reg_title(get_reg_meta(t))
+          rt  <- reg_title(reg_call(t))
           if (!is.null(cap)) cap
           else if (!is.na(rt)) rt
           else if (named_tabs) base_nm[[i]]
@@ -272,7 +272,7 @@ tab_xl <-
     # Phase 14w (item 1): a reg table's SHEET name is the compact "<short>_<dep>_<pred>" tag, not the
     # truncated prose title. Non-reg tables keep the title (truncated below).
     sheet_base <- purrr::map2_chr(tabs_src, titles, function(t, ti) {
-      sn <- reg_sheet_name(get_reg_meta(t)); if (!is.na(sn)) sn else ti
+      sn <- reg_sheet_name(reg_call(t)); if (!is.na(sn)) sn else ti
     })
 
     # Sheet-stacking offsets: within a sheet each stacked table starts below the previous one

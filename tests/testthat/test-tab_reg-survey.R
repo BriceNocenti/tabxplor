@@ -223,7 +223,8 @@ test_that("split_var footer carries per-group GOF", {
   d   <- reg_split_data()
   t   <- tab_logit(d, "y", "x1", split_var = "g", spread_models = FALSE)
   tst <- tabxplor:::get_test(t)
-  expect_setequal(unique(tst$row_var), c("north", "south"))   # tagged per split group
+  # Phase 19g: the split level rides a column NAMED after the split variable, like a crosstab's tab_var
+  expect_setequal(unique(tst$g), c("north", "south"))   # tagged per split group
   expect_true(all(c("n", "lr_null") %in% tst$test))
 })
 

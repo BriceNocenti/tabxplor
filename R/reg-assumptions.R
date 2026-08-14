@@ -303,7 +303,7 @@ reg_nested_lr <- function(base, aug) {
 }
 
 #' @keywords internal
-reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, base_fit = NULL) {
+reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit = NULL) {
   # A predictor the user has already CURED gets no row: `shape = "quadratic"` puts this very term in
   # the model, so adding it again is a collinear duplicate the engine silently drops. (`log`/`sqrt`
   # recode the column, so the check then asks the right new question -- does log(x) still curve? -- and
@@ -340,7 +340,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, bas
     lab  <- have[length(have)]
     if (!length(lab) || is.na(lab)) return(NULL)
     got <- purrr::compact(reg_term_tests(fit2, v, lab, use_f, use_wald, types = types,
-                                         col_var = fit_first_col_i, nobs = f2$nobs, row = row))
+                                         col_var = fit_first_col_i, nobs = f2$nobs))
     if (length(got)) return(got)
     # The shared dispatcher produced nothing: the engine's drop1 method has no p-value (multinomial).
     # Both fits are in hand and nested, so the likelihood ratio between them IS the same test -- but
@@ -348,7 +348,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, bas
     if (use_wald || is.null(base_fit)) return(NULL)
     lr <- reg_nested_lr(base_fit, fit2)
     if (is.null(lr)) return(NULL)
-    list(row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs))
+    list(reg_test_row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs))
   }))
 }
 
@@ -359,13 +359,9 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, row, bas
 reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_col,
                            grouped_by_fit) {
   weighted <- isTRUE(shared$weighted)
-  row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
-    tibble::tibble(row_var = "", col_var = col_var, test = test, term = predictor,
-                   statistic = statistic,
-                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
   gof <- function(test, col_var, value, nobs)
     if (is.null(value) || is.na(value)) NULL
-    else row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs)
+    else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs)
 
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
@@ -380,11 +376,12 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
     fit <- f$fit
     out <- list()
     if ("linearity" %in% keys && !isTRUE(sp$compound))
-      out <- c(out, reg_check_linearity_rows(data, sp, shared, cv, row, base_fit = fit))
+      out <- c(out, reg_check_linearity_rows(data, sp, shared, cv, base_fit = fit))
     if ("proportionality" %in% keys) {
       bp <- attr(fit, "brant_po")
       if (!is.null(bp) && !is.na(bp))
-        out <- c(out, list(row("proportionality", cv, "", NA_real_, NA_real_, NA_real_, bp, f$nobs)))
+        out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
+                                       NA_real_, bp, f$nobs)))
     }
     if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs)))
     if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs)))

@@ -207,7 +207,7 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
   d   <- reg_data()
   mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
                                   family = c("binomial", "poisson"), cleannames = FALSE))
-  meta <- get_reg_meta(mix)
+  meta <- reg_call(mix)
   # Phase 18z13: reg_fmt_cols() skips the per-level `n` columns, which also carry a "[dep]" bracket.
   mixc    <- reg_fmt_cols(mix)
   or_col  <- mix[[grep("married", mixc, value = TRUE)[1]]]
@@ -249,7 +249,7 @@ test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one
   mlh <- tabxplor:::reg_model_lines(hom)
   expect_length(mlh, 1L)
   expect_false(grepl("^Model \\(", mlh))                       # no per-family prefix when homogeneous
-  expect_identical(mlh, tabxplor:::reg_model_line(get_reg_meta(hom)))
+  expect_identical(mlh, tabxplor:::reg_model_line(reg_call(hom)))
 })
 
 test_that("mixed-family caption is generic; homogeneous keeps its family name", {
@@ -258,8 +258,8 @@ test_that("mixed-family caption is generic; homogeneous keeps its family name", 
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
   hom <- tab_reg(d, "married", c("age", "race"), family = "binomial", cleannames = FALSE)
-  expect_match(tabxplor:::reg_title(get_reg_meta(mix)), "^Regression models")
-  expect_match(tabxplor:::reg_title(get_reg_meta(hom)), "^Logistic regression")
+  expect_match(tabxplor:::reg_title(reg_call(mix)), "^Regression models")
+  expect_match(tabxplor:::reg_title(reg_call(hom)), "^Logistic regression")
 })
 
 test_that("mixed-family GOF footer keeps each outcome's own stat set", {
@@ -271,10 +271,10 @@ test_that("mixed-family GOF footer keeps each outcome's own stat set", {
   or_col   <- "Model_OR [married]"
   beta_col <- "Model_\u03b2 [tvhours]"
   # gaussian stats keyed to the gaussian column, glm stats to the logit column
-  expect_true("r2"          %in% tst$test[tst$col_var == beta_col])
-  expect_true("mcfadden_r2" %in% tst$test[tst$col_var == or_col])
-  expect_false("r2"          %in% tst$test[tst$col_var == or_col])
-  expect_false("mcfadden_r2" %in% tst$test[tst$col_var == beta_col])
+  expect_true("r2"          %in% tst$test[tst$col == beta_col])
+  expect_true("mcfadden_r2" %in% tst$test[tst$col == or_col])
+  expect_false("r2"          %in% tst$test[tst$col == or_col])
+  expect_false("mcfadden_r2" %in% tst$test[tst$col == beta_col])
 })
 
 test_that("auto colour default is per-family (OR for the logit, diff for the gaussian)", {

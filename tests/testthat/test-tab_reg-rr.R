@@ -96,9 +96,9 @@ test_that("the modelled level is the binomial one, and inverse_two_level_factors
   t1 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson"))
   t2 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson",
                                  inverse_two_level_factors = FALSE))
-  expect_equal(get_reg_meta(t1)$positive_level, reg_positive_level(d, "married", TRUE))
-  expect_equal(get_reg_meta(t2)$positive_level, reg_positive_level(d, "married", FALSE))
-  expect_false(identical(get_reg_meta(t1)$positive_level, get_reg_meta(t2)$positive_level))
+  expect_equal(reg_call(t1)$positive_level, reg_positive_level(d, "married", TRUE))
+  expect_equal(reg_call(t2)$positive_level, reg_positive_level(d, "married", FALSE))
+  expect_false(identical(reg_call(t1)$positive_level, reg_call(t2)$positive_level))
 })
 
 test_that("the estimand invariant holds: the OR is always further from 1 than the RR", {
@@ -276,7 +276,7 @@ test_that("ame_ratio: the legend names RR, not OR, on both the model and the cru
   d  <- rr_data()
   t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio",
                                  empirical = TRUE, cleannames = FALSE))
-  md <- get_reg_meta(t)
+  md <- reg_call(t)
   nm <- grep("^Model", names(t), value = TRUE)[1]
   expect_equal(legend_reg_eff_word(t[[nm]], md), "RR")
   expect_equal(legend_reg_eff_word(t$Obs_RR, md), "RR")   # crude twin, same estimand

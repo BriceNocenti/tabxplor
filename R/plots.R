@@ -380,7 +380,7 @@ reg_plot_fits <- function(x, data = NULL) {
                      predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL, design = NULL,
                      label = gettext("Model"))))
   }
-  meta <- get_reg_meta(x)
+  meta <- reg_call(x)
   fs   <- meta$fit_spec
   if (is.null(fs)) {
     cli::cli_abort(c("{.arg x} is not a {.fn tab_reg} table (no model record).",
@@ -751,12 +751,9 @@ reg_check_plots <- function(x, data = NULL, check = "auto", predictors = NULL,
   weighted <- !is.null(ctxs[[1L]]$wt)
   keys <- reg_checks_for(fam, weighted, has_fit = TRUE, what = "panel")
   if (!identical(check, "auto") && !identical(check, "all")) {
-    bad <- setdiff(check, names(REG_CHECKS))
-    if (length(bad)) {
-      cli::cli_abort(c("{.arg check} must name model checks.",
-                       "x" = "Unknown: {.val {bad}}.",
-                       "i" = "Available: {.val {names(REG_CHECKS)}}."))
-    }
+    # Phase 19g (KEY 6): ONE vocabulary and ONE validator, shared with tab_reg(stats =) -- narrowed
+    # here to the model CHECKS, which are the only things a panel can be drawn for.
+    reg_validate_stat_keys(check, arg = "check", allowed = names(REG_CHECKS))
     keys <- intersect(check, keys)
     if (!length(keys)) {
       cli::cli_abort(c("None of those checks can be drawn for a {.val {fam}} model.",
@@ -1138,7 +1135,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   # --- labels ---------------------------------------------------------------------------------------
   # when the columns do not share a scale, the unit moves into the strip and the axis title goes: one
   # ggplot object still comes back (no ggh4x, no gtable), which is what keeps `+ theme()` working.
-  rm_  <- get_reg_meta(x)
+  rm_  <- reg_call(x)
   outn <- if (!is.null(rm_)) paste(unique(rm_$dependent), collapse = " / ")
           else as.character(e$col_var[1])
   xt <- if (one) with_legend_lang(lang, function(lg)
@@ -1156,7 +1153,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
 # and the footer name the same thing. NA on a cross-table, where the unit word stands alone.
 #' @keywords internal
 reg_eff_word_of <- function(x, col_nm) {
-  m <- get_reg_meta(x)
+  m <- reg_call(x)
   if (is.null(m) || is.null(x[[col_nm]])) return(NA_character_)
   legend_reg_eff_word(x[[col_nm]], m)
 }
@@ -1171,7 +1168,7 @@ reg_eff_word_of <- function(x, col_nm) {
 #' @keywords internal
 fp_caption <- function(x, cols, caption, subtext, want_legend, theme, lang) {
   ttl  <- caption %||% get_caption(x) %||%
-    with_legend_lang(lang, function(lg) reg_title(get_reg_meta(x)))
+    with_legend_lang(lang, function(lg) reg_title(reg_call(x)))
   sub  <- if (isTRUE(subtext)) get_subtext(x) else character(0)
   foot <- suppressWarnings(rd_footer(x, "plain", theme = theme, want_legend = want_legend,
                                      subtext = if (length(sub)) sub else character(0), lang = lang))

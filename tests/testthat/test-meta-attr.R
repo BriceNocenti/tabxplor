@@ -11,7 +11,8 @@ test_that("meta gathers the attrs and every legacy getter reads into it", {
   expect_true(!is.null(get_vars_attr(t)))
   expect_true(!is.null(get_render_extras(t)))
   # the getters read the SAME objects the meta list holds
-  expect_identical(get_vars_attr(t), m$vars)
+  expect_identical(get_vars_attr(t), m$spec$vars)      # Phase 19g: `vars` is a slot of meta$spec
+  expect_identical(tab_kind(t), "crosstab")            # ...beside the STORED table kind
   # Phase 19b: which interval METHOD was used is a per-COLUMN fact, not a meta sub-field. A count
   # column carries no interval, so it names none -- which is the point: the method describes THIS
   # column's bounds, not a table-wide setting the legend then indexes by measure (D8).
@@ -151,12 +152,11 @@ test_that("tab_spread() keeps the weight footer, and narrows only tab_vars", {
   expect_identical(tabxplor:::tab_inference_basis(flat), "weights")   # non-vacuous
   expect_identical(tabxplor:::tab_inference_basis(wide), "weights")
   expect_identical(tab_weight_line(wide), tab_weight_line(flat))
-  # the spread tab_var became columns; the row/col VARIABLE names are untouched by the pivot
+  # Phase 19f/19g: the variable MODEL is derived from the columns; `vars` keeps only what none can
+  # carry, and the pivot leaves all of it alone.
   v_flat <- tabxplor:::get_vars_attr(flat); v_wide <- tabxplor:::get_vars_attr(wide)
-  expect_identical(v_wide$tab_vars, character(0))
-  expect_identical(v_wide$row_vars, v_flat$row_vars)
-  expect_identical(v_wide$col_vars, v_flat$col_vars)
   expect_identical(v_wide$wt,       v_flat$wt)
+  expect_identical(tabxplor:::tab_render_vars(wide)$tab_vars, character(0))
 })
 
 test_that("a >=2 row_var table keeps meta$inference (the footer cannot invert)", {
@@ -207,7 +207,7 @@ test_that("tab_weight_line() reads the STORED basis, never the .svy_weights colu
   # forge the internal design weight name with NO stored inference: the line is DROPPED, the internal
   # name is never printed, and no claim about the intervals is invented.
   v <- get_vars_attr(t); v$wt <- ".svy_weights"
-  t2 <- tabxplor:::set_meta_field(tabxplor:::set_meta_field(t, "vars", v), "inference", NULL)
+  t2 <- tabxplor:::set_meta_field(tabxplor:::set_vars_attr(t, v), "inference", NULL)
   expect_null(tab_weight_line(t2))
 })
 

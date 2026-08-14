@@ -101,7 +101,7 @@ test_that("Linearity is drop1() on the model plus the predictor's centred square
   tt <- get_test(t)
   li <- tt[tt$test %in% tabxplor:::reg_check_types() & startsWith(tt$test, "linearity"), ]
   expect_identical(nrow(li), 1L)                          # one numeric predictor
-  expect_identical(li$term, "age")
+  expect_identical(li$var, "age")
   expect_identical(li$test, "linearity_lr")
 
   cf <- chk_fit()
@@ -172,13 +172,13 @@ test_that("a comparison table carries one check row per (model column x numeric 
   tt <- get_test(t)
   li <- tt[startsWith(tt$test, "linearity"), , drop = FALSE]
   # age is in both models, tvhours only in m2 -> 3 rows, and the plan lays out 2 labelled rows
-  expect_setequal(paste(li$col_var, li$term), c("m1 age", "m2 age", "m2 tvhours"))
+  expect_setequal(paste(li$col_var, li$var), c("m1 age", "m2 age", "m2 tvhours"))
   plan <- tabxplor:::reg_footer_plan(tt)
   expect_setequal(plan$label[startsWith(plan$test, "linearity")],
                   c("Linearity (LR): age", "Linearity (LR): tvhours"))
   # the whole-model checks stay one row each
   expect_identical(sum(tt$test == "dispersion"), 2L)
-  expect_true(all(tt$term[tt$test == "dispersion"] == ""))
+  expect_true(all(tt$var[tt$test == "dispersion"] == ""))
   # and they render, per model column
   md <- gsub(intToUtf8(160L), " ", tab_md(t, print = FALSE), fixed = TRUE)
   expect_true(any(grepl("Linearity (LR): tvhours", md, fixed = TRUE)))

@@ -31,10 +31,10 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 19c (KEY 4): NOTHING is added, removed or reshaped. The whole key moves the colour
-# vocabulary out of the code and into MEASURES / COLOR_SCALES, so every stored fact must be
-# bit-identical -- an empty declaration set is the phase's own contract, and any line but "OK" is a
-# regression.
+# Phase 19g (KEY 6): no per-cell FIELD and no per-column ATTRIBUTE moves. The delta is entirely
+# table-level: `meta$vars` + `meta$reg_meta` become slots of ONE `meta$spec` (which also states the
+# table's `kind`), and the `test` tibble is re-keyed -- `row_var` -> `var`, `col_var` -> `col`,
+# `term` absorbed into `var`. Both are declared below and PROVED, not asserted.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
@@ -45,12 +45,26 @@ EXPECTED_ATTR <- list()
 # (logical) became `row_kind` (7 values), so "unchanged" is not bit-identity but a stated MAPPING:
 # the new field must equal map(old) on every cell of every golden. That is the phase's central claim
 # about the record, proved rather than asserted.
-RENAMED_FIELDS <- list(
-  in_totrow = list(to = "row_kind", map = function(v) ifelse(v, "total", "data"))
+# Phase 19g: nothing renamed in the RECORD (19f's in_totrow -> row_kind is landed and its goldens
+# are regenerated; leaving the rule here would compare two copies of the new field -- the reset
+# hazard named at the top).
+RENAMED_FIELDS <- list()
+
+# RENAMED_TEST_COLS -- a `test` tibble column REPLACED by another saying the same thing. Phase 19g
+# merges `row_var` (which variable, on a crosstab row) and `term` (which predictor, on a reg row)
+# into ONE `var`, and renames `col_var` -> `col`. Each entry states the mapping; the script then
+# demands bit-identity of every other column.
+RENAMED_TEST_COLS <- list(
+  col_var = list(to = "col", map = function(v, tt) v),
+  # on a crosstab `term` does not exist, so `var` is exactly the old `row_var`
+  row_var = list(to = "var", map = function(v, tt) v),
+  term    = list(to = NULL, map = NULL)          # absorbed into `var`; empty on every crosstab row
 )
-# DECLARED_INDEX_COLS -- the non-fmt label columns that gain the tabxplor_lvl class. Their VALUES
-# must be identical (a declaration is not data); only class/role/var/ordered may appear.
-DECLARE_INDEX_COLS <- TRUE
+# DECLARED_INDEX_COLS -- the non-fmt label columns that GAIN the tabxplor_lvl class in this phase.
+# Their VALUES must be identical (a declaration is not data); only class/role/var/ordered may appear.
+# Phase 19g: FALSE -- 19f's declaration is landed and its goldens are regenerated, so leaving this on
+# would compare a declared column against a stripped copy of itself (the reset hazard at the top).
+DECLARE_INDEX_COLS <- FALSE
 
 ADDED_TEST_COLS <- character(0)
 
@@ -72,18 +86,25 @@ REMOVED_META_FIELDS <- character(0)
 # Phase 19a: nothing is reshaped. (The z16-iiiii `ci_settings` rule that used to sit here was left
 # behind after its goldens were regenerated, so it then compared two copies of the NEW shape and
 # reported four false PROBLEMS -- hence the reset warning at the top.)
+# META_RESHAPE_WHOLE -- Phase 19g: the whole `meta` is re-shaped, not one sub-field, so the check is
+# one predicate over both sides. It must prove that the NEW meta carries exactly the OLD information:
+# every generic sub-field untouched, `vars` moved verbatim under `spec`, and a `kind` stated.
+META_RESHAPE_WHOLE <- function(old, new) {
+  if (is.null(old) && is.null(new)) return(TRUE)
+  old <- old %||% list(); new <- new %||% list()
+  if (!identical(new$spec$vars %||% list(), old$vars %||% list())) return(FALSE)
+  if (!identical(new$spec$call, old$reg_meta))                     return(FALSE)
+  if (!new$spec$kind %in% c("crosstab", "regression"))             return(FALSE)
+  gen <- setdiff(union(names(old), names(new)), c("vars", "reg_meta", "spec"))
+  all(vapply(gen, function(k) identical(old[[k]], new[[k]]), logical(1)))
+}
+
 RESHAPED_META_FIELDS <- list(
   # Phase 19f: `meta$vars` loses the whole variable MODEL -- row_vars / col_vars / tab_vars /
   # compacted are DERIVED now (from the declared index columns above and from the fmt columns' own
   # `col_var`), and row_roles is the `row_kind` field. What may remain is only what no column can
   # carry. The derivation itself is proved by the per-column lines this script prints and by
   # test-export-prep.R; here we prove nothing ELSE was dropped and nothing carried was altered.
-  vars = function(old, new) {
-    derived <- c("row_vars", "col_vars", "tab_vars", "compacted", "row_roles")
-    kept    <- setdiff(names(old), derived)
-    if (!all(names(new) %in% c(kept, "wt", "caption", "var_labels"))) return(FALSE)
-    all(vapply(kept, function(k) identical(old[[k]], new[[k]]), logical(1)))
-  }
 )
 
 cases   <- golden_cases()
@@ -173,6 +194,34 @@ for (nm in names(cases)) {
   # is: present, empty, and everything else bit-identical.
   ta <- function(t) attributes(t)[intersect(names(attributes(t)), c("subtext", "test", "meta"))]
   ao <- ta(old); an <- ta(new)
+  # Phase 19g: the declared `test` COLUMN renames -- prove the mapping, then compare the remainder.
+  if (length(RENAMED_TEST_COLS) && !is.null(ao$test) && !is.null(an$test)) {
+    for (cn in names(RENAMED_TEST_COLS)) {
+      r <- RENAMED_TEST_COLS[[cn]]
+      if (!cn %in% names(ao$test)) next
+      if (is.null(r$to)) {                                   # absorbed / dropped
+        ao$test[[cn]] <- NULL; next
+      }
+      if (!r$to %in% names(an$test)) {
+        issues <- c(issues, paste0(nm, ": `test` column ", cn, " -> ", r$to, " is MISSING")); next
+      }
+      if (!identical(r$map(ao$test[[cn]], ao$test), an$test[[r$to]]))
+        issues <- c(issues, paste0(nm, ": `test` column ", cn, " -> ", r$to,
+                                   " is NOT the declared mapping"))
+      ao$test[[cn]] <- NULL; an$test[[r$to]] <- NULL
+    }
+    ao$test <- ao$test[, order(names(ao$test)), drop = FALSE]
+    an$test <- an$test[, order(names(an$test)), drop = FALSE]
+  }
+  # Phase 19g: the whole-`meta` reshape (vars / reg_meta -> spec).
+  if (is.function(META_RESHAPE_WHOLE)) {
+    if (!isTRUE(tryCatch(META_RESHAPE_WHOLE(ao$meta, an$meta), error = function(e) FALSE)))
+      issues <- c(issues, paste0(nm, ": meta RESHAPE lost information"))
+    else cat(sprintf("      %-24s meta reshaped into spec(kind=%s), same information\n", nm,
+                     an$meta$spec$kind %||% "?"))
+    ao$meta <- NULL; an$meta <- NULL
+    ao <- ao[!vapply(ao, is.null, logical(1))]; an <- an[!vapply(an, is.null, logical(1))]
+  }
   if (length(ADDED_TEST_COLS) && !is.null(an$test)) {
     add <- setdiff(names(an$test), names(ao$test))
     if (!setequal(add, intersect(ADDED_TEST_COLS, add)))

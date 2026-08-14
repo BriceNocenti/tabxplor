@@ -14,7 +14,7 @@
 # KEY CONSTRAINTS:
 #   - Fast: the grid is rebuilt on every console print, so it is base-R indexing over the (small) test
 #     tibble -- no tidyr, no per-cell dplyr.
-#   - The crosstab arm keys crosstab-vs-reg off is_reg_footer(); a reg table carries reg_meta.
+#   - The crosstab-vs-reg arm keys off the STORED table kind (tab_is_reg(), R/table-spec.R).
 #   - Weak chi2 test flag: min_e < 5 -> a trailing " !" on the p-value cell (standard validity caveat).
 # See: CLAUDE.md Phase 16a; the `test` attribute is documented at R/tab_classes.R (new_test_tibble).
 
@@ -228,19 +228,32 @@ reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, chara
 reg_footer_per_term <- function() c(reg_global_types(), reg_check_types())
 # Phase 18z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
 # table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
-# (stats = FALSE) is still a reg table, so the arm detection must know them.
-is_reg_footer <- function(test_tbl)
-  !is.null(test_tbl) && nrow(test_tbl) > 0 &&
-  any(test_tbl$test %in% c(reg_footer_test_types(), reg_interaction_types()))
+# (stats = FALSE) is still a reg table, so tab_kind()'s DEGRADED fallback must know them.
+# Phase 19g (KEY 6): is_reg_footer() is GONE. "Is this a regression" is a stored fact
+# (meta$spec$kind, R/table-spec.R) that every consumer reads through tab_is_reg(); sniffing the
+# `test` tibble survives only inside tab_kind(), as the fallback for a table that lost its metadata.
 
-# The `term` column, NA-safe. A `test` tibble may legitimately have none (a crosstab's, or one built
-# before the column existed), and every reg-footer row of the whole-model kind carries "".
-# WARNING: test by NAME, never `tt$term` -- a tibble WARNS ("Unknown or uninitialised column") before
-# returning NULL, so the `$` form leaked a warning out of every degraded table.
+# A `test` column read NA-safely as a character key: absent -> all "", NA -> "".
+# WARNING: test by NAME, never `tt$<col>` -- a tibble WARNS ("Unknown or uninitialised column")
+# before returning NULL, so the `$` form leaked a warning out of every degraded table.
 #' @keywords internal
-test_term_col <- function(tt) {
-  if (!"term" %in% names(tt)) return(rep("", nrow(tt)))
-  ifelse(is.na(tt$term), "", as.character(tt$term))
+test_key_col <- function(tt, col) {
+  if (!col %in% names(tt)) return(rep("", nrow(tt)))
+  ifelse(is.na(tt[[col]]), "", as.character(tt[[col]]))
+}
+
+# Phase 19g (KEY 6): the SUB-POPULATION columns of a `test` tibble -- everything outside the fixed
+# schema. They are named after the grouping variable in BOTH arms (a crosstab's tab_vars, a
+# regression's split_var), which is what lets one rule read them: a row with no group column
+# describes the whole table / whole model.
+#' @keywords internal
+test_group_cols <- function(tt) {
+  if (is.null(tt)) return(character(0))
+  nms <- setdiff(names(tt), names(new_test_tibble()))
+  # WARNING: the two renderers add their own scratch keys (`.grp`, `.term`) to the slice they work
+  # on, so a "not in the schema" rule alone would read one of them as a grouping variable and split
+  # the footer into one block per predictor. Dot-prefixed names are render scratch, never data.
+  nms[!startsWith(nms, ".")]
 }
 
 # THE regression-footer row plan: one row per (test, term), in spec order then term order, with its
@@ -252,14 +265,13 @@ test_term_col <- function(tt) {
 # constant across groups -- tab_append_footer() requires that, and a group missing one predictor must
 # show a blank cell, not a shorter block.
 #
-# `term` is the per-predictor key (Phase 18z15). It could not be `row_var`, which on a reg footer
-# row already means the SPLIT-GROUP LEVEL in this renderer, in reg_footer_lines() and in
-# reg_spread_models() -- a predictor name there flipped a plain table into "split" mode and was
-# silently dropped on a spread one.
+# Phase 19g: the per-predictor key IS `var` -- one dimension, the same one a crosstab row uses.
+# It could not be, while `row_var` meant the SPLIT-GROUP LEVEL on a reg row; the level rides a
+# column named after the split variable now, exactly like a crosstab's tab_vars.
 #' @keywords internal
 reg_footer_plan <- function(reg) {
   spec <- reg_footer_spec()
-  tm   <- test_term_col(reg)
+  tm   <- test_key_col(reg, "var")
   keep <- reg$test %in% names(spec)
   if (!any(keep)) return(NULL)
   k <- unique(data.frame(test = reg$test[keep], term = tm[keep], stringsAsFactors = FALSE))
@@ -306,10 +318,10 @@ stat_line_fmt <- function(statistic) {
 test_summary_grid <- function(x) {
   test_tbl <- get_test(x)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(NULL)
-  if (is_reg_footer(test_tbl)) test_grid_reg(x, test_tbl) else test_grid_crosstab(x, test_tbl)
+  if (tab_is_reg(x)) test_grid_reg(x, test_tbl) else test_grid_crosstab(x, test_tbl)
 }
 
-# --- crosstab arm: chi2 / ANOVA-F, one row-group per (row_var x tab_var level) ----------------------
+# --- crosstab arm: chi2 / ANOVA-F, one row-group per (`var` x tab_var level) ------------------------
 test_grid_crosstab <- function(x, test_tbl) {
   disp <- test_display_rows(test_tbl)               # chi2 + the option-chosen F, one per (subtab, cv)
   disp <- disp[!is.na(disp$pvalue), , drop = FALSE]
@@ -317,21 +329,21 @@ test_grid_crosstab <- function(x, test_tbl) {
 
   rv <- tab_render_vars(x)
   # canonical col_var order from the table; fall back to first appearance in the test tibble
-  value_cols <- if (isFALSE(rv$degrade)) intersect(rv$col_vars, unique(disp$col_var))
-                else                     unique(disp$col_var)
-  value_cols <- value_cols[value_cols %in% disp$col_var]
+  value_cols <- if (isFALSE(rv$degrade)) intersect(rv$col_vars, unique(disp$col))
+                else                     unique(disp$col)
+  value_cols <- value_cols[value_cols %in% disp$col]
   if (length(value_cols) == 0) return(NULL)
 
   # tab_vars present in the test tibble = comp = "tab" (a per-subtable column); their absence with
-  # tab_vars on the table = comp = "all" (one whole-table p-value, the group named "row_var x tab_vars").
+  # tab_vars on the table = comp = "all" (one whole-table p-value, the group named "<var> x tab_vars").
   tab_vars      <- if (isFALSE(rv$degrade)) rv$tab_vars else character(0)
   tabvars_in_tt <- intersect(tab_vars, names(disp))
   comp_all      <- length(tab_vars) > 0 && length(tabvars_in_tt) == 0
 
   # leading label columns + the key that splits row-groups (first-appearance order)
-  key_cols   <- c("row_var", tabvars_in_tt)
+  key_cols   <- c("var", tabvars_in_tt)
   keys       <- unique(disp[key_cols])
-  # header row: blank for row_var (its values ARE the variable names), the variable name for a tab_var
+  # header row: blank for `var` (its values ARE the variable names), the variable name for a tab_var
   label_headers <- c("", tabvars_in_tt)
 
   groups <- lapply(seq_len(nrow(keys)), function(g) {
@@ -339,18 +351,18 @@ test_grid_crosstab <- function(x, test_tbl) {
     for (kc in key_cols) sel <- sel & disp[[kc]] == keys[[kc]][g]
     sub <- disp[sel, , drop = FALSE]
 
-    # the leading label cell(s): the row_var name, then each tab_var level (or the collapsed comp="all"
-    # label "row_var x tab1, tab2" in the single leading column)
+    # the leading label cell(s): the row variable's name, then each tab_var level (or the collapsed
+    # comp="all" label "<var> x tab1, tab2" in the single leading column)
     if (comp_all) {
-      lab <- paste0(keys[["row_var"]][g], " \u00d7 ", paste(tab_vars, collapse = ", "))
+      lab <- paste0(keys[["var"]][g], " \u00d7 ", paste(tab_vars, collapse = ", "))
       label_lines <- list(lab)
     } else {
-      label_lines <- c(list(keys[["row_var"]][g]),
+      label_lines <- c(list(keys[["var"]][g]),
                        lapply(tabvars_in_tt, function(tc) as.character(keys[[tc]][g])))
     }
 
     # per value col: the source test row (there is exactly one displayed test per col_var here)
-    idx  <- match(value_cols, sub$col_var)
+    idx  <- match(value_cols, sub$col)
     n    <- vapply(sub$n[idx], test_fmt_num, character(1), digits = 0L)
     # effect size: columns may be absent on a degraded / older `test` attribute -> NA vector.
     es_v  <- if (!is.null(sub[["effect_size"]])) sub$effect_size[idx] else rep(NA_real_, length(idx))
@@ -387,11 +399,11 @@ test_grid_reg <- function(x, test_tbl) {
   spec <- reg_footer_spec()
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
   if (nrow(reg) == 0) return(NULL)
-  meta <- get_reg_meta(x)
+  meta <- reg_call(x)
 
-  # model columns (value cols) = the distinct fit col_vars, first-appearance order; headers = the
-  # dependent names when their count matches, else the col_var string with a "Model <eff> (dep)" strip.
-  value_cols <- unique(reg$col_var)
+  # model columns (value cols) = the distinct fit columns, first-appearance order; headers = the
+  # dependent names when their count matches, else the column string with a "Model <eff> (dep)" strip.
+  value_cols <- unique(reg$col)
   deps <- if (!is.null(meta)) meta$dependent else NULL
   value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps
                    else vapply(value_cols, reg_strip_model_prefix, character(1))
@@ -399,10 +411,12 @@ test_grid_reg <- function(x, test_tbl) {
   # the ordered footer rows actually present: one per (stat, term), spec order then term order
   plan <- reg_footer_plan(reg)
   if (is.null(plan) || !nrow(plan)) return(NULL)
-  reg$.term <- test_term_col(reg)
+  reg$.term <- test_key_col(reg, "var")
 
-  # split levels (the group key), from reg$row_var; "" (no split) -> a single unnamed group
-  rv_key   <- if (is.null(reg$row_var)) rep("", nrow(reg)) else ifelse(is.na(reg$row_var), "", reg$row_var)
+  # split levels (the group key): Phase 19g -- the column NAMED after the split variable, read by
+  # the same rule the crosstab arm uses for its tab_vars. "" (no split) -> one unnamed group.
+  gc       <- test_group_cols(reg)
+  rv_key   <- if (!length(gc)) rep("", nrow(reg)) else test_key_col(reg, gc[1])
   reg$.grp <- rv_key
   grp_lv   <- unique(rv_key)
   is_split <- any(nzchar(grp_lv))
@@ -420,7 +434,7 @@ test_grid_reg <- function(x, test_tbl) {
     sub <- reg[reg$.grp == g, , drop = FALSE]
     rows <- lapply(seq_len(n_rows), function(k) {
       pk <- plan[k, ]
-      hit <- function(cv) sub[sub$col_var == cv & sub$test == pk$test & sub$.term == pk$term, ,
+      hit <- function(cv) sub[sub$col == cv & sub$test == pk$test & sub$.term == pk$term, ,
                               drop = FALSE]
       cells <- vapply(value_cols, function(cv) {
         r <- hit(cv)

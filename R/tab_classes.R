@@ -72,14 +72,15 @@
 #'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
 #'   \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 #'   print/export time from this attribute rather than baked into the table.
-#'   \item \code{vars} -- the table's variable roles,
-#'   \code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
-#'   rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).
+#'   \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
+#'   (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
+#'   (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
+#'   variable model being derived from the declared index columns and from the columns' own
+#'   \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
+#'   family, dependent, predictors, reference level, and the \code{fit_spec}
+#'   \code{\link{reg_check_plots}} refits from).
 #'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 #'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-#'   \item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
-#'   level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
-#'   legend line and the colour-legend wording.
 #'   \item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
 #'   bins of the outcome on the family's link scale), set by \code{\link{tab_reg}}: the data behind
 #'   the sparkline in a continuous predictor's row label and behind
@@ -213,8 +214,11 @@ set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras
 # and `row_roles` was worse, a positional character vector that existed only during one render pass,
 # so every consumer OUTSIDE that pass (tab_estimates(), anything added later) fell back to matching
 # ENGLISH row labels. A column that declares itself needs neither.
-get_vars_attr <- function(x) get_meta(x)[["vars"]]
-set_vars_attr <- function(x, vars) set_meta_field(x, "vars", vars)
+# Phase 19g (KEY 6): it is a slot of the ONE `meta$spec` now -- beside the table's `kind` and the
+# producer's `call` -- so "which table is this, what is in it, how was it made" is one object rather
+# than a crosstab attribute plus a parallel regression one. See R/table-spec.R.
+get_vars_attr <- function(x) get_spec(x)[["vars"]]
+set_vars_attr <- function(x, vars) set_spec_field(x, "vars", vars)
 
 # Phase 18z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
 # computed" is now two per-COLUMN attributes, `basis` and `degf` (R/fmt_class.R), read back through the
@@ -233,9 +237,9 @@ set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_t
 get_assumptions <- function(x) get_meta(x)[["assumptions"]]
 set_assumptions <- function(x, assumptions) set_meta_field(x, "assumptions", assumptions)
 
-# Phase 14w: `reg_meta` -- a regression table's model record (see new_tab()).
-get_reg_meta <- function(x) get_meta(x)[["reg_meta"]]
-set_reg_meta <- function(x, reg_meta) set_meta_field(x, "reg_meta", reg_meta)
+# Phase 14w: a regression table's model record. Phase 19g (KEY 6): it IS the producer's `call`
+# recipe -- `meta$spec$call`, read through reg_call() (R/table-spec.R), which is gated on the kind so
+# a crosstab's recipe can never be mistaken for a model record.
 
 #' Store a caption on a tabxplor table
 #'
@@ -262,7 +266,7 @@ set_caption <- function(x, caption) {
 
 #' @rdname set_caption
 #' @export
-get_caption <- function(x) get_meta(x)[["vars"]][["caption"]]
+get_caption <- function(x) get_spec(x)[["vars"]][["caption"]]
 new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
   out <- list()
   # Phase 16d: the weight column NAME drives the footer "Weighted by <wt>." line. It is stored ONLY when
@@ -312,7 +316,13 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
 #' @noRd
 meta_bind_rules <- list(
   # a partial per-scale override on either side survives (push_color_breaks() precedence)
-  color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m }
+  color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m },
+  # Phase 19g (KEY 6): the table identity reconciles SLOT BY SLOT (kind / vars / call). A plain
+  # first-non-NULL on the whole `spec` would drop one side's recipe merely because the other side
+  # declared its kind first -- the shape of drift this key exists to end.
+  # (a closure, not the bare symbol: this table is built at LOAD time and R/table-spec.R is sourced
+  # after this file, so the reference must be deferred to call time.)
+  spec = function(x, y) spec_bind(x, y)
 )
 
 # The attribute reconcile for a BIND of two tables (the vctrs ptype2/cast pair). `subtext` unions;
@@ -447,14 +457,15 @@ pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 # "phi"/"eta2") ride each omnibus row -- an effect size belongs ON its test's row, so it is a column,
 # not a separate row. Reg-footer / older rows carry NA/"" there (vec_rbind fills, but the uniform
 # schema keeps binds clean).
-# Phase 18z15: the 13th column `term` -- WHICH PREDICTOR a reg-footer row is about ("" = the whole
-# model). It is a new DIMENSION, not a new test type, and it could not ride `row_var`: on a reg footer
-# row `row_var` already means the SPLIT-GROUP LEVEL, in reg_footer_lines() (the `is_split` switch + the
-# cell key), in test_grid_reg() (the group key) and in reg_spread_models() (which re-keys by it and
-# DROPS the misses). A predictor name there flipped a plain table into "split" mode and silently
-# deleted the rows on a spread one -- measured. It backs the per-predictor Linearity + "global" rows
-# (reg_footer_plan() renders `label: term`) and the interaction/global LINES, which used to overload
-# `row_var` and printed the split level, repeated, instead of the predictors.
+# Phase 19g (KEY 6): the key is UNIFORM across the two producers, and `row_var` is gone with its
+# overload. A row says WHICH VARIABLE it is about (`var`: the row variable of a crosstab, the
+# predictor of a regression, "" = the whole table / whole model) and WHICH COLUMN it keys under
+# (`col`: a col_var for a crosstab, the fmt column name for a regression). The SUB-POPULATION it was
+# computed on rides a column NAMED AFTER THE GROUPING VARIABLE -- the tab_vars for a crosstab, the
+# `split_var` for a regression -- so both arms read it the same way, through test_group_cols().
+# That is what deleted the 13th column `term` (Phase 18z15 added it because `row_var` already meant
+# the split-group LEVEL on a reg row, so a predictor name there flipped a plain table into "split"
+# mode and was silently dropped on a spread one). One dimension, one column.
 # Phase 9b-3: memoized -- tibble() validation is ~1.4 ms/call and this placeholder is built several
 # times per table (~3% of the build). The empty tibble is STATELESS, so the cached copy is shared
 # safely (R copy-on-modify: any caller edit -- bind_rows / mutate / attr<- -- copies first, never
@@ -463,8 +474,7 @@ new_test_tibble <- local({
   cached <- NULL
   function() {
     if (is.null(cached)) {
-      cached <<- tibble::tibble(row_var   = character(), col_var     = character(), test = character(),
-                                term      = character(),
+      cached <<- tibble::tibble(var       = character(), col         = character(), test = character(),
                                 statistic = double()   , df1         = double()   ,
                                 df2       = double()   , pvalue      = double()   ,
                                 n         = double()   , min_e       = double()   ,
@@ -1320,13 +1330,17 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # `meta = list(...)` literal that stood here dropped every sub-field it did not name -- so a
   # >=2 row_var table lost `inference`, printed the OPPOSITE footer sentence, and lost `degf` on the
   # exported tab_ci() step path (measured: intervals 9 % too narrow at 13 PSUs).
-  # Phase 18z16-iiiii: `vars` is the ONLY genuine recompute. The explicit
+  # Phase 18z16-iiiii: `spec` is the ONLY genuine recompute (its `vars` slot; `kind` and the
+  # producer's `call` ride through from the first merged table). The explicit
   # `render_extras = <tabs[[1]]'s>` overwrites that stood beside it
   # were the left fold's own output written out by hand -- except when tabs[[1]] alone lacked the
   # field, where the overwrite DELETED what a later table carried. Reachable only through the
   # exported tab_compact() on a hand-assembled list; carrying it is the better answer.
   tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
-                  meta = tab_meta_merge(metas_in, vars = vars_merged)) |>
+                  meta = tab_meta_merge(
+                    metas_in,
+                    spec = new_spec(tab_kind(tabs[[1]]), vars = vars_merged,
+                                    call = tab_call(tabs[[1]])))) |>
     dplyr::group_by(dplyr::across(tidyselect::all_of(c(merge_tab_vars, "row_var"))))
 
   # if (pvalue_lines) {
@@ -1413,7 +1427,7 @@ materialize_specs <- function() list(
        when  = function(tab, backend, ctx) ctx$pvalue,
        apply = function(tab, backend, ctx) {
          tab <- tab_pvalue_lines(tab)
-         if (is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
+         if (tab_is_reg(tab)) tab <- reg_footer_lines(tab)
          tab
        }),
   # Phase 14n / Phase 18m: collapse the redundant per-block Total rows of a compacted several-row_vars
@@ -1589,10 +1603,17 @@ tab_pvalue_lines <- function(tabs) {
   group_chr <- purrr::map_chr(dplyr::groups(tabs), rlang::as_name)
   gv        <- tab_get_vars(tabs)
   row_var   <- gv$row_var
-  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected with
-  # the test tibble -- the tab_vars for a tab_vars table, the synthetic `row_var` column for a COMPACTED
-  # several-row_vars table (== group_chr on a crosstab, so it also drives the per-group placement).
-  disc <- intersect(group_chr, names(test_tbl))
+  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected
+  # with the test tibble -- the tab_vars for a tab_vars table, the synthetic variable column for a
+  # COMPACTED several-row_vars table (== group_chr on a crosstab, so it also drives the placement).
+  # Phase 19g (KEY 6): a tab_var keeps its own name in the `test` tibble, but a COMPACTED table's
+  # grouping column is the declared "var"-role column -- the dimension the test tibble keys as `var`.
+  # `disc` is the table's spelling, `disc_tt` the test tibble's; they differ in exactly that one slot.
+  var_col <- tab_declared_vars(tabs)$var_col
+  disc    <- intersect(group_chr, c(names(test_tbl), var_col))
+  disc_tt <- ifelse(disc %in% var_col, "var", disc)
+  disc    <- disc[disc_tt %in% names(test_tbl)]
+  disc_tt <- disc_tt[disc_tt %in% names(test_tbl)]
 
   # first-level column of each col_var (where the p-value cell is placed): col_var <-> column name
   first_lv  <- gv$col_vars_levels |> purrr::map_chr(~ rlang::as_name(dplyr::first(.)))
@@ -1601,7 +1622,7 @@ tab_pvalue_lines <- function(tabs) {
 
   # one displayed test per (subtable x col_var): chi2 (factors) / chosen F (means)
   disp <- test_display_rows(test_tbl)
-  disp <- dplyr::filter(disp, .data$col_var %in% names(cv_to_col), !is.na(.data$pvalue))
+  disp <- dplyr::filter(disp, .data$col %in% names(cv_to_col), !is.na(.data$pvalue))
   if (nrow(disp) == 0) return(tabs)
 
   # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
@@ -1618,16 +1639,16 @@ tab_pvalue_lines <- function(tabs) {
   K          <- length(row_keys)
 
   # group id per existing row + per displayed-test row (the disc-key tuple; "" when ungrouped)
-  gid <- function(df) if (length(disc))
-      do.call(paste, c(lapply(disc, function(d) as.character(df[[d]])), sep = "\r"))
+  gid <- function(df, cols) if (length(cols))
+      do.call(paste, c(lapply(cols, function(d) as.character(df[[d]])), sep = "\r"))
     else rep("", nrow(df))
-  grp_of      <- gid(tabs)
-  disp$.grp   <- gid(disp)
+  grp_of      <- gid(tabs, disc)
+  disp$.grp   <- gid(disp, disc_tt)
   # a weak chi2 with a Fisher-exact companion (Phase 18j): show the exact p (labelled "Fisher" in the
   # row-name descriptor now, not the cell).
   has_exact   <- if (!is.null(disp[["pvalue_exact"]])) !is.na(disp$pvalue_exact) else rep(FALSE, nrow(disp))
   disp$.pshow <- if (any(has_exact)) ifelse(has_exact, disp$pvalue_exact, disp$pvalue) else disp$pvalue
-  key         <- paste(disp$col_var, disp$.grp, sep = "\r")
+  key         <- paste(disp$col, disp$.grp, sep = "\r")
   # per-group row NAME for each row key (the test type / measure descriptor, computed from that group's
   # displayed tests -- one row per subtable can carry a different mix of factor/numeric col_vars).
   row_label_for <- function(key, g) {
@@ -1684,7 +1705,9 @@ tab_pvalue_lines <- function(tabs) {
 # labels. Idempotent: `test` is dropped, so a second call no-ops. Renders nothing on a crosstab.
 reg_footer_lines <- function(tabs) {
   test_tbl <- get_test(tabs)
-  if (!is_reg_footer(test_tbl)) return(tabs)
+  # Phase 19g: the KIND is stored, so it no longer doubles as the "is there anything to render"
+  # guard the dropped `test` tibble used to provide (that is what made a second call a no-op).
+  if (!tab_is_reg(tabs) || is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
   spec <- reg_footer_spec()
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
   if (nrow(reg) == 0) return(tabs)
@@ -1702,21 +1725,23 @@ reg_footer_lines <- function(tabs) {
   plan <- reg_footer_plan(reg)
   K    <- if (is.null(plan)) 0L else nrow(plan)
   if (K == 0) return(tabs)
-  reg$.term     <- test_term_col(reg)
+  reg$.term     <- test_key_col(reg, "var")
   footer_labels <- plan$label
 
-  # split_var (Phase 12h): a split table carries per-group GOF (the group level tagged in `reg$row_var`;
-  # split_var is the FIRST grouping column). It gets one "Model fit" footer block PER group; a plain
-  # table gets one block at the end (a single pseudo-group ""). tab_append_footer interleaves in row order.
-  reg_rv    <- if (is.null(reg$row_var)) rep(NA_character_, nrow(reg)) else reg$row_var
-  is_split  <- any(nzchar(reg_rv[!is.na(reg_rv)]))
+  # split_var (Phase 12h): a split table carries per-group GOF, tagged in the `test` column NAMED
+  # after the split variable (Phase 19g -- the same rule the crosstab arm reads its tab_vars by).
+  # It gets one "Model fit" footer block PER group; a plain table gets one block at the end (a single
+  # pseudo-group ""). tab_append_footer interleaves in row order.
+  gcols     <- test_group_cols(reg)
+  reg_rv    <- if (!length(gcols)) rep("", nrow(reg)) else test_key_col(reg, gcols[1])
+  is_split  <- any(nzchar(reg_rv))
   split_col <- if (is_split) group_chr[[1]] else NA_character_
   grp_of    <- if (is_split) as.character(tabs[[split_col]]) else rep("", nrow(tabs))
 
   cell_for <- function(nm, k, g) {
     pk  <- plan[k, ]
-    sel <- reg$col_var == nm & reg$test == pk$test & reg$.term == pk$term &
-      (if (is_split) (!is.na(reg_rv) & reg_rv == g) else TRUE)
+    sel <- reg$col == nm & reg$test == pk$test & reg$.term == pk$term &
+      (if (is_split) reg_rv == g else TRUE)
     r <- reg[sel, , drop = FALSE]
     if (nrow(r) == 0) return(reg_blank_cell())
     if (identical(pk$kind, "gof")) reg_gof_cell(r$statistic[1], pk$digits)
@@ -1729,8 +1754,9 @@ reg_footer_lines <- function(tabs) {
     else                               rep("Model fit", K)
 
   # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
-  # vars / empirical_tips / reg_meta named one by one; is_reg detection must not depend on
-  # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
+  # vars / empirical_tips / reg_meta named one by one; the legend reads the stored spec, and all must
+  # survive the footer materialisation. Phase 19g: the KIND is stored too, so the arm detection no
+  # longer depends on the dropped `test` at all -- reg_footer_lines() carries its own emptiness guard).
   # Phase 18z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
   # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
   # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these

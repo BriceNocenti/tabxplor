@@ -45,7 +45,7 @@ test_that("crude_key is stored per outcome, and NA only where there is genuinely
 
   d <- z10_data()
   t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE))
-  expect_identical(unname(get_reg_meta(t)$crude_keys), "multinomial")
+  expect_identical(unname(reg_call(t)$crude_keys), "multinomial")
 })
 
 

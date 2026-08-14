@@ -50,7 +50,7 @@ test_that("D1 the crude Obs_* columns under a design are weighted, not unweighte
                                   tolerance = 1e-3)))
   }
   # and the crude % really is the design-weighted proportion
-  lev <- get_reg_meta(t_des)$positive_level
+  lev <- reg_call(t_des)$positive_level
   oracle <- with(b[b$x == "mid", ], sum(w * (y == lev)) / sum(w))
   expect_equal(mid_cell(t_des, "^Obs_%", get_pct), oracle, tolerance = 1e-8)
 })
@@ -178,7 +178,7 @@ test_that("D10 tab_reg() on a CALIBRATED design with incomplete cases works and 
     tab_reg(cal, dependent = "y", predictors = "x", family = "binomial")))
   expect_s3_class(tr, "tabxplor_tab")
 
-  lev  <- get_reg_meta(tr)$positive_level
+  lev  <- reg_call(tr)$positive_level
   cal2 <- cal; cal2$variables$.pos <- as.integer(d$y == lev)
   hand <- suppressWarnings(survey::svyglm(.pos ~ x, design = cal2[which(!is.na(d$x)), ],
                                           family = stats::quasibinomial()))

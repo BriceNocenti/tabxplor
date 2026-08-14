@@ -1005,6 +1005,6 @@ testthat::test_that("tab(chi2 = ) is soft-deprecated but identical to tab(test =
 
 testthat::test_that("test = TRUE names the test per column type (chi2 for factors, F for means)", {
   te <- get_test(tab(forcats::gss_cat, race, c(marital, tvhours), pct = "row", test = TRUE))
-  testthat::expect_equal(te$test[te$col_var == "marital"], "chi2")
-  testthat::expect_true(all(c("F_welch", "F_classic") %in% te$test[te$col_var == "tvhours"]))
+  testthat::expect_equal(te$test[te$col == "marital"], "chi2")
+  testthat::expect_true(all(c("F_welch", "F_classic") %in% te$test[te$col == "tvhours"]))
 })

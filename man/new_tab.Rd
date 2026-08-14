@@ -45,14 +45,15 @@ when unset):
 \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
 \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
 print/export time from this attribute rather than baked into the table.
-\item \code{vars} -- the table's variable roles,
-\code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
-rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).
+\item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
+(\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
+(\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
+variable model being derived from the declared index columns and from the columns' own
+\code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
+family, dependent, predictors, reference level, and the \code{fit_spec}
+\code{\link{reg_check_plots}} refits from).
 \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-\item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
-level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
-legend line and the colour-legend wording.
 \item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
 bins of the outcome on the family's link scale), set by \code{\link{tab_reg}}: the data behind
 the sparkline in a continuous predictor's row label and behind

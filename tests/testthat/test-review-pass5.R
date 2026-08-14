@@ -86,10 +86,11 @@ testthat::test_that("split_var single-dependent auto-spread gives one GOF block 
   t  <- suppressWarnings(tab_reg(gss5, dependent = "married", predictors = c("rincome", "party3"),
                                  split_var = "race"))
   tst <- get_test(t)
-  # one block: the GOF rows are keyed to the spread columns (the split levels), not tripled by row_var
-  # z13: the global-test rows keep the PREDICTOR in row_var (like the interaction ones) -- they are a
+  # one block: the GOF rows are keyed to the spread columns (the split levels), not tripled by group
+  # z13: the global-test rows keep the PREDICTOR in `var` (like the interaction ones) -- they are a
   # table-wide footer LINE, deliberately not re-keyed onto a group's column.
   gof <- tst[!tst$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
-  testthat::expect_true(all(gof$row_var == ""))                # collapsed to one block
-  testthat::expect_gt(dplyr::n_distinct(tst$col_var), 1L)      # spread across the subpopulation columns
+  # Phase 19g: the split level rides a column NAMED after the split variable
+  testthat::expect_true(all(!nzchar(tabxplor:::test_key_col(gof, "race"))))   # collapsed to one block
+  testthat::expect_gt(dplyr::n_distinct(tst$col), 1L)          # spread across the subpopulation columns
 })

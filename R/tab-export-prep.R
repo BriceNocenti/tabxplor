@@ -316,7 +316,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # a crosstab tab_var whose level rides on a Total row -- it has NO Total row to carry its level, so
   # dropping it loses that information entirely. Keep it (rendered as a vertical/merged name column
   # below, like a merged row_var name) even when the other tab_vars are dropped for html/Excel.
-  split_var_col <- intersect(get_reg_meta(tab)$split_var, tab_vars)
+  split_var_col <- intersect(reg_call(tab)$split_var, tab_vars)
   subtext  <- get_subtext(tab) |> purrr::discard(\(s) s == "")
 
   # Phase 14v: resolve the multinomial crude-companion tooltip fragments to a per-column, per-ROW list
@@ -558,7 +558,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     # every backend now builds its whole footer through tab_footer_streams(), the ONE shared ordered model.
     # Phase 14w (item 1): the regression title/caption stays -- that is the CAPTION (above the table), used
     # when the exporter has no user caption. NA on a crosstab (those keep their own caption / auto-title path).
-    reg_title = reg_title(get_reg_meta(tab)),
+    reg_title = reg_title(reg_call(tab)),
     # Phase 17b: a stored caption (set_caption(), in meta$vars$caption) survives the pipeline and takes
     # precedence over reg_title when the exporter's own caption= is not supplied. NULL when none stored.
     caption = get_caption(tab),

@@ -264,6 +264,20 @@ R/
 │                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
 │                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
+├── table-spec.R     (~120 L) Phase 19g (KEY 6): THE TABLE IDENTITY -- ONE `meta$spec` with three
+│                              slots for BOTH producers. `kind` ("crosstab"/"regression"), stated by
+│                              the producer, read through tab_kind()/tab_is_reg() (is_reg_footer(),
+│                              which sniffed the `test` tibble for a reg discriminator, is DELETED;
+│                              that sniff survives only as tab_kind()'s degraded fallback). `vars` =
+│                              what NO column can carry (wt / caption / var_labels) -- the rest of
+│                              the variable model is derived (rows from the declared index columns,
+│                              cols from the fmt columns' own `col_var`), so it is uniform across
+│                              producers by construction. `call` = the producer's recipe: a
+│                              regression's model record, read through reg_call() (`meta$reg_meta`
+│                              is gone), incl. z15's `fit_spec`; a crosstab records none yet.
+│                              new_spec/get_spec/set_spec_field (which never invents a `kind` --
+│                              materialising the degraded guess would break absent-when-unset) +
+│                              spec_bind (the declared meta_bind_rules entry, slot by slot).
 ├── row-model.R      (~245 L) Phase 19f (KEY 1): THE ROW MODEL -- what a row IS, given the same treatment
 │                              a column already had. TWO facts, TWO carriers. (1) **ROW_KINDS** +
 │                              the `row_kind` FIELD (data/total/n/pct/pvalue/gof/blank) replacing
@@ -822,7 +836,8 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Phase 18s which added **`n_eff`** = the effective sample size used for a cell's CI, `p(1-p)/Var_design` (Korn-Graubard): the closed-form flat-design variance under `options(tabxplor.design_effect=TRUE)` on weighted data, `svyrecvar` under a real design, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Phase 18z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Phase 18z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **14 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11; Phase 18z13 added `conf_level` → 12; Phase 18z16-iiiii added **`degf`** + **`basis`** → 14 = "how was THIS column's interval computed", moved off the table because `meta` proved droppable). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. The 13th and 14th, **`degf`** (the design's #PSU-#strata, NA = refer to z) and **`basis`** (`"n"`/`"weights"`/`"design"`/`"design_partial"`), are the twins of `conf_level`: the level an interval was built AT, the df it is referred to, and HOW it was computed. All three are written by ONE sweep per build tail, `tab_stamp_inference()` (was `tab_stamp_conf_level`), and the ptype2 reconcile applies the weakest-claim rule (`basis_rank`/`basis_weakest`, min non-NA `degf`) so a bind cannot over-claim. All are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
 - **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Phase 18j added `effect_size`/`es_type`/`pvalue_exact` columns, Phase 18z16-i `deff` = the design effect this row's test corrected by, and the robust discriminators are `chi2_design`/`F_design` -- TWO, not four, because the flat and the full design run the same estimator; `n` is now ALWAYS the raw count), and **`meta`** — ONE named list holding `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Phase 18z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise through the DECLARED `meta_bind_rules` table — default first-non-NULL, `color_breaks` per named scale). Phase 18z16-iiiii DELETED the `inference` sub-field: "how were these numbers computed" is a per-COLUMN fact now (`degf`/`basis`), read back through the DERIVED `tab_inference_basis()`/`tab_inference_degf()`, and its bind rule moved into the fmt ptype2 reconcile where it fires without being called. A table rebuilt from SEVERAL inputs (`tab_compact()`, `tab_transpose()`) goes through **`tab_meta_merge(metas, ...)`** — reduce, then overwrite only what it recomputes — NEVER a fresh `meta = list(...)` literal: that is how z16-iv found `tab_compact()` dropping `inference` on every ≥2-`row_var` table, and how z16-iiiii found **two more** such sites -- `tab_spread()` (which is also what `tab(spread_vars =)` calls) and `reg_build()`'s `split_var` branch, both losing the WHOLE of `meta`. Their numbers are safe now (the inference facts ride the columns), but `vars` / `ci_settings` / `render_extras` still needed the merge. Guarded by a field-AGNOSTIC probe in `test-meta-attr.R`. Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Phase 18j added `effect_size`/`es_type`/`pvalue_exact` columns, Phase 18z16-i `deff` = the design effect this row's test corrected by, and the robust discriminators are `chi2_design`/`F_design` -- TWO, not four, because the flat and the full design run the same estimator; `n` is now ALWAYS the raw count), and **`meta`** — ONE named list holding `spec` (Phase 19g, KEY 6: the table IDENTITY —
+`list(kind, vars, call)`; it absorbed `vars` and `reg_meta`, see `R/table-spec.R`), `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Phase 18z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise through the DECLARED `meta_bind_rules` table — default first-non-NULL, `color_breaks` per named scale). Phase 18z16-iiiii DELETED the `inference` sub-field: "how were these numbers computed" is a per-COLUMN fact now (`degf`/`basis`), read back through the DERIVED `tab_inference_basis()`/`tab_inference_degf()`, and its bind rule moved into the fmt ptype2 reconcile where it fires without being called. A table rebuilt from SEVERAL inputs (`tab_compact()`, `tab_transpose()`) goes through **`tab_meta_merge(metas, ...)`** — reduce, then overwrite only what it recomputes — NEVER a fresh `meta = list(...)` literal: that is how z16-iv found `tab_compact()` dropping `inference` on every ≥2-`row_var` table, and how z16-iiiii found **two more** such sites -- `tab_spread()` (which is also what `tab(spread_vars =)` calls) and `reg_build()`'s `split_var` branch, both losing the WHOLE of `meta`. Their numbers are safe now (the inference facts ride the columns), but `vars` / `ci_settings` / `render_extras` still needed the merge. Guarded by a field-AGNOSTIC probe in `test-meta-attr.R`. Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -1799,6 +1814,94 @@ column-axis `ordered` when a reader exists (19m or later); the reg `var`-column 
 
 
 
+
+#### Phase 19g — KEY 6: one table identity, and `reg_build`'s assemblers
+
+**DONE (2026-08-14).** Full suite: **FAIL 8, PASS 6001, SKIP 4** — and the 8 are *exactly* the
+pre-existing `test-jmvtab-cache.R` failures 19d flagged and 19f re-verified (same file, same count,
+untouched here). The golden delta is **proved, not asserted**: `dev/verify_golden_field_delta.R`,
+taught two new modes, checks on all **1795 cells of the 36 goldens** that the new `meta$spec$vars`
+is bit-identical to the old `meta$vars`, that `spec$call` is the old `reg_meta`, that a `kind` is
+stated, that every other `meta` sub-field is untouched — and that the `test` tibble's re-key is the
+declared MAPPING (`row_var` -> `var`, `col_var` -> `col`, `term` absorbed) with every other column
+bit-identical. No per-cell field and no per-column attribute moved. No `_snaps/*.md` moved.
+
+**One `meta$spec`, three slots, both producers.** A crosstab recorded its variables in `meta$vars`
+and a regression recorded **none of them**, carrying a parallel 20-field `meta$reg_meta` instead; and
+the *kind* of table was not stored at all — `is_reg_footer()` decided "is this a regression" by
+asking whether the `test` tibble happened to contain a reg-flavoured discriminator, in the same file
+whose header comment said a reg table carries `reg_meta`. Now: `kind` is **stated** by the producer
+and read through `tab_is_reg()`; `vars` keeps only what no column can carry, which after 19f is the
+*whole* uniform variable model (everything else is derived from the columns, so the two producers
+agree by construction rather than by two code paths); `call` is the producer's recipe, so
+"a table remembers how it was made" generalises past `reg_check_plots()`'s `fit_spec`. `is_reg_footer`
+is deleted — the sniff survives ONLY inside `tab_kind()`, as the documented fallback for a table that
+lost its metadata. `reg_meta$conf_level` went with it: a stale table-wide duplicate of a per-COLUMN
+attribute (`tab_stamp_inference` stamps the level on every column), so it could only ever disagree
+with what it described.
+
+**The `test` tibble stops overloading `row_var` — and the two arms end up on ONE key.** `row_var`
+meant the row VARIABLE on a crosstab row and the SPLIT-GROUP LEVEL on a reg row, which is why z15 had
+to add a 13th column (`term`) rather than use it. Now: **`var`** = which variable the row is about
+(a crosstab's row variable, a regression's predictor, `""` = the whole table/model — `term` is
+**deleted**, folded into it), **`col`** = which column it keys under, and the sub-population rides a
+column **named after the grouping variable** — the tab_vars for a crosstab, the `split_var` for a
+regression. That last move is the integration: one rule (`test_group_cols()`) reads both arms, and
+it cost a column rather than adding one. 14 columns → 13.
+
+**`reg_build`'s four parallel assemblers → one.** The split branch carried a **complete duplicate**
+of the assembly tail (its own `tab_stamp_inference` / `new_tab` / `meta` literal / `group_by`) which
+had already drifted once — both are `reg_finalize()` now. The three column-builder blocks
+(AME, MNL-vs-rest, coefficient) were three `purrr::map2(fits, specs, ...)` chosen by a **table-scalar**
+`if`, even though 15e made the family per SPEC — so a mixed table had to be degraded upstream before
+the scalar could be trusted. They are three named builders behind ONE map with a **per-spec** choice,
+which picks exactly what the scalar picked on a homogeneous table. The four hand-written copies of the
+`test`-row tibble literal (GOF / comparison / interaction+global / checks) are `reg_test_row()`, and
+`reg_term_tests()` lost the `row =` parameter it only ever received one value for.
+
+**The `shared` bag is a typed record.** `new_reg_shared()`: 24 keys documented as 20, partially
+re-listed twice, with two fields declared nowhere and a hand-kept mirror in `fmt_class.R`'s
+`globalVariables()` — the constructor's **formals** are the contract now, the mirror is DERIVED from
+them (and moved beside the record), and `reg_build()` normalises whatever it is handed through the
+constructor, so a direct caller cannot be missing a field.
+
+**One `stats` / `check` vocabulary.** `REG_GOF_KEYS` + `reg_stat_keys()` + `reg_validate_stat_keys()`
+— `tab_reg(stats =)` and `reg_check_plots(check =)` had two hand-written lists and two validators for
+one vocabulary, so a check could be addable in one and not the other.
+
+**Two defects found while implementing, both shipping with the fixture that fails without them.**
+(i) `test_group_cols()`'s "not in the schema" rule read the renderers' own scratch keys (`.grp`,
+`.term`) as grouping variables and split a plain regression footer into one block **per predictor**;
+dot-prefixed names are render scratch, never data. (ii) `reg_footer_lines()` used the dropped `test`
+tibble as its own idempotence guard — with the KIND stored, a second call no longer no-ops by
+accident, so it carries an explicit emptiness guard.
+
+**HONEST CONCERNS.**
+
+- **The 8 `test-jmvtab-cache.R` failures are still red**, unchanged and untouched. They are 19d's
+  tier-3 carrier hole (`or` is reference-dependent on every table now and the re-ref / relevel paths
+  do not recompute it). Still a genuine correctness hole in the live jamovi module; **19k owns it and
+  it must not slip past 19k.** The tier-3 cache schema is bumped **14 → 15** here (a carrier stores a
+  built table, whose `meta` and `test` shapes both moved), so stale stores are discarded rather than
+  deserialized into the new code.
+- **`spec$call` is EMPTY on a crosstab**, deliberately. The plan asks that `fit_spec` "generalise";
+  measured, everything a crosstab would record already rides its columns or its settings spine, so
+  filling the slot today would create the duplicate this key exists to delete. The slot and its
+  accessor (`tab_call()`) exist and are read; **19i**, which makes the settings spine the only
+  interface, is where a crosstab recipe can be written without inventing a second encoding.
+- **The three extracted column builders keep their old inner indentation** (one level too deep). The
+  bodies are byte-identical to what they replaced, which is what made the extraction reviewable
+  against the golden proof; re-indenting ~110 lines would have made the diff unreadable for no
+  behaviour. Worth a mechanical pass in **19l**.
+- `?tab`'s `OR`/`ci`/`color` blocks and `NEWS.md` still describe the pre-19d surface (19d's standing
+  debt); `dev/verify_color_attrs.R` still not run (19c/19d's).
+- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed**; 19k still owns that.
+
+**FOLLOW-UPS.** 19h's `tab_shape()` can key on `tab_kind()` (the two facts together are the
+capability predicate); a crosstab `spec$call` in 19i; the tier-3 `or` recompute in 19k; the
+column-builder re-indent + `?tab`/`NEWS.md` in 19l/19n.
+
+---
 
 ### Phase 20 — last features before release
 

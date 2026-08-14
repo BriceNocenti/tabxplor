@@ -561,10 +561,11 @@ reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average
     "")
 }
 
-# Phase 14w: the "Model: <family>. <estimand>." legend line, generated fresh from `reg_meta` at render
+# Phase 14w: the "Model: <family>. <estimand>." legend line, generated fresh from the table's stored
+# recipe (`meta$spec$call`, Phase 19g) at render
 # so it can be ordered BEFORE the colour legend (item 2). For a model comparison the caption is not shown
 # in the console, so the dependent + (binomial) reference level are named here too (item 4). NULL when the
-# table is not a regression (get_reg_meta -> NULL).
+# table is not a regression (reg_call -> NULL).
 # Phase 18w: the prose is translatable (gettext); called only from reg_model_lines(), which sets the
 # LANGUAGE env via with_legend_lang(). enc2utf8 for the French accents (matches tab_weight_line et al.).
 # Does ANY of these outcomes fold its observed effect into the model cell? Reads the STORED crude keys.
@@ -604,7 +605,7 @@ reg_model_line <- function(meta) {
 # composition runs under with_legend_lang() so every nested gettext() (family name, estimand, "Model:")
 # resolves to that language; English is byte-identical (gettext returns the msgid under the en locale).
 reg_model_lines <- function(x, lang = NULL) {
-  meta <- get_reg_meta(x)
+  meta <- reg_call(x)
   if (is.null(meta)) return(character(0))
   with_legend_lang(lang, function(lg) {
     fams <- meta$families; if (is.null(fams)) fams <- meta$family
@@ -646,16 +647,16 @@ reg_interaction_lines <- function(x, lang = NULL) {
   if (is.null(tt) || nrow(tt) == 0) return(character(0))
   it <- tt[tt$test %in% reg_interaction_types(), , drop = FALSE]
   if (nrow(it) == 0) return(character(0))
-  meta <- get_reg_meta(x)
+  meta <- reg_call(x)
   sv   <- if (is.null(meta)) NA_character_ else meta$split_var
   with_legend_lang(lang, function(lg) {
     tname <- c(interact_lr = gettext("likelihood ratio"), interact_f = gettext("F test"),
                interact_wald = gettext("Wald test"))
     on_coef <- !is.null(meta) && isTRUE(meta$effect %in% c("ame", "ame_ratio"))
     # split() by a FACTOR of first-appearance order, so several models keep their column order.
-    vapply(split(seq_len(nrow(it)), factor(it$col_var, levels = unique(it$col_var))), function(idx) {
+    vapply(split(seq_len(nrow(it)), factor(it$col, levels = unique(it$col))), function(idx) {
       d     <- it[idx, , drop = FALSE]
-      items <- paste0(test_term_col(d), " p = ", test_fmt_pvalue(d$pvalue),
+      items <- paste0(test_key_col(d, "var"), " p = ", test_fmt_pvalue(d$pvalue),
                       stars_from_pvalue(d$pvalue))
       kind  <- unname(tname[d$test[1]]); if (is.na(kind)) kind <- gettext("Wald test")
       what  <- if (on_coef) gettextf("%s on the coefficients", kind) else kind
@@ -2862,7 +2863,7 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
 
 # === Model-summary footer (Phase 12f): GOF stats stored in the `test` attribute ==================
 # The regression GOF is stored in the SAME whole-table `test` tibble crosstabs use (schema
-# new_test_tibble(): row_var/col_var/test/statistic/df1/df2/pvalue/n/min_e), adding ROWS with
+# new_test_tibble(): var/col/test/statistic/df1/df2/pvalue/n/min_e), adding ROWS with
 # NEW `test` discriminators that never collide with the crosstab "chi2"/"F_welch"/"F_classic" -- so
 # test_display_rows() (chi2/F only) makes the summary block / tab_pvalue_lines() auto-no-op on a reg table,
 # and the reg renderers (R/tab_classes.R) auto-no-op on a crosstab. Value-stats (n/r2/aic/...) carry
@@ -3014,6 +3015,30 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   out
 }
 
+# Phase 19g (KEY 6): THE `stats =` / `check =` vocabulary, in one place. `tab_reg(stats =)` and
+# `reg_check_plots(check =)` name the same things with two argument names, and each used to carry its
+# own hand-written list and its own validator -- so a check could be addable in one and not the other.
+# "interaction" (Phase 18z8) is not produced by reg_glance (reg_build's split block reads it straight
+# off `stats`) but it belongs to the vocabulary, so a user vector does not drop it.
+#' @keywords internal
+REG_GOF_KEYS <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
+                  "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "phi")
+
+#' @keywords internal
+reg_stat_keys <- function() c(REG_GOF_KEYS, "interaction", "global", names(REG_CHECKS))
+
+# THE shared validator. `arg` names the user's argument in the message; `allowed` narrows the
+# vocabulary (reg_check_plots() takes model CHECKS only). Returns the accepted keys.
+#' @keywords internal
+reg_validate_stat_keys <- function(x, arg = "stats", allowed = reg_stat_keys()) {
+  bad <- setdiff(x, allowed)
+  if (length(bad))
+    cli::cli_abort(c("{.arg {arg}} must name model-fit statistics or checks.",
+                     "x" = "Unknown: {.val {bad}}.",
+                     "i" = "Available: {.val {allowed}}."))
+  x
+}
+
 # Resolve the `stats=` argument -> the ordered set of footer discriminators. Per-context defaults:
 # glm -> n/lr_null/mcfadden_r2/aic/bic (+dispersion for poisson/grouped); lm -> n/r2/r2_adj/f_model/
 # sigma; weighted -> n/wald_null/nagelkerke_r2/aic. A character vector overrides (keeping its order,
@@ -3036,13 +3061,8 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
   default <- c(default, "global", reg_checks_for(family, weighted, grouped))
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
-  # "interaction" (Phase 18z8) is not produced by reg_glance -- it is read straight off `stats` by
-  # reg_build's split block -- but it belongs to this vocabulary so a user vector does not drop it.
-  valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
-             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "phi",
-             "interaction", "global", names(REG_CHECKS))
   # A user writes a check KEY ("linearity"); a `test` row carries a discriminator ("linearity_lr").
-  reg_check_expand(stats[stats %in% valid])
+  reg_check_expand(stats[stats %in% reg_stat_keys()])
 }
 
 # Assemble the whole-table `test` tibble for a regression table: one row per (fit's first column x
@@ -3065,9 +3085,8 @@ reg_gof_tibble <- function(fits, fit_first_col, families_by_fit, weighted, group
     g    <- g[g$test %in% keep, , drop = FALSE]
     g    <- g[order(match(g$test, keep)), , drop = FALSE]        # spec order
     if (nrow(g) == 0) return(NULL)
-    tibble::tibble(row_var = "", col_var = fit_first_col[[i]], test = g$test, term = "",
-                   statistic = g$statistic, df1 = g$df1, df2 = g$df2, pvalue = g$pvalue,
-                   n = as.numeric(nobs_by_fit[[i]]), min_e = NA_real_)
+    reg_test_row(g$test, fit_first_col[[i]], statistic = g$statistic, df1 = g$df1, df2 = g$df2,
+                 pvalue = g$pvalue, nobs = as.numeric(nobs_by_fit[[i]]))
   })
   rows <- purrr::compact(rows)
   if (length(rows) == 0) return(new_test_tibble())
@@ -3150,8 +3169,8 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 
   row <- function(test, col_var, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_,
                   pvalue = NA_real_, nobs = NA_real_)
-    tibble::tibble(row_var = "", col_var = col_var, test = test, term = "", statistic = statistic,
-                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
+    reg_test_row(test, col_var, statistic = statistic, df1 = df1, df2 = df2,
+                 pvalue = pvalue, nobs = nobs)
 
   tag  <- if (compare == "sequential") "seq" else "baseline"
   rows <- purrr::map(seq_len(n), function(i) {
@@ -3225,21 +3244,26 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # weight / "Model:" lines), and both row consumers, which filter on names(reg_footer_spec()), ignore
 # them -- the existing GOF footer is untouched. `col_var` is the fit's first column, so several models
 # each get their own line.
-# Phase 18z15: the predictor rides `term`, NOT `row_var`. It used to ride `row_var`, which on a
-# split table is overwritten wholesale with the group level (reg_build's split branch tags every row of
-# the group's test tibble) -- so the line printed the split level, repeated, instead of the predictors.
-# `row_var` now means one thing everywhere: the split-group level.
+# Phase 19g: the predictor rides `var` -- the same dimension a crosstab's test row uses. The split
+# level rides a column named after the split variable, so the two facts can no longer collide (they
+# did: the split branch overwrote `row_var` wholesale with the group level, and the line printed
+# that level, repeated, instead of the predictors).
+# Phase 19g (KEY 6): ONE builder for every regression `test` row. It was written out as an identical
+# tibble literal in four places (GOF, model comparison, interaction, global, checks), which is how
+# three of them still spelled the pre-19g key. `var` = the predictor the row is about ("" = the whole
+# model); `col` = the fmt column it keys under.
+#' @keywords internal
+reg_test_row <- function(test, col, var = "", statistic = NA_real_, df1 = NA_real_, df2 = NA_real_,
+                         pvalue = NA_real_, nobs = NA_real_)
+  tibble::tibble(var = var, col = col, test = test, statistic = statistic,
+                 df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
+
 #' @keywords internal
 reg_interaction_types <- function() c("interact_lr", "interact_f", "interact_wald")
 
 #' @keywords internal
 reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_first_col) {
   weighted <- shared$weighted
-  row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
-    tibble::tibble(row_var = "", col_var = col_var, test = test, term = predictor,
-                   statistic = statistic,
-                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
-
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
     # No pooled interaction for the engines that are not a single glm/svyglm equation (multinomial /
@@ -3273,7 +3297,7 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
 
     reg_term_tests(fit, keep, terms_i, use_f, use_wald,
                    types = c(wald = "interact_wald", f = "interact_f", lr = "interact_lr"),
-                   col_var = fit_first_col[[i]], nobs = f$nobs, row = row)
+                   col_var = fit_first_col[[i]], nobs = f$nobs)
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
   if (length(rows) == 0) return(reg_gof)
@@ -3291,7 +3315,7 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, split_var, fit_fi
 # "party3:age" and drop1() then rejects the scope. Both drop1() and regTermTest() take the labels as a
 # CHARACTER vector, which skips the re-parse.
 #' @keywords internal
-reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, nobs, row) {
+reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, nobs) {
   if (length(terms) == 0L) return(NULL)
   if (use_wald) {
     return(purrr::map2(preds, terms, function(pv, tm) {
@@ -3301,7 +3325,7 @@ reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, n
              df2 = as.numeric(rt$ddf), p = as.numeric(rt$p))
       }, error = function(e) NULL)
       if (is.null(e) || is.na(e$p)) return(NULL)
-      row(types[["wald"]], col_var, pv, e$stat, e$df1, e$df2, e$p, nobs)
+      reg_test_row(types[["wald"]], col_var, pv, e$stat, e$df1, e$df2, e$p, nobs)
     }))
   }
   # WARNING: capture.output, not just suppressMessages -- nnet's drop1.multinom PRINTS its progress
@@ -3322,7 +3346,7 @@ reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, n
     p <- suppressWarnings(as.numeric(d1[[p_col[1]]][j]))
     if (is.na(p)) return(NULL)
     stat <- suppressWarnings(as.numeric(d1[[if (use_f) "F value" else "LRT"]][j]))
-    row(types[[if (use_f) "f" else "lr"]], col_var, preds[[k]],
+    reg_test_row(types[[if (use_f) "f" else "lr"]], col_var, preds[[k]],
         stat, suppressWarnings(as.numeric(d1[["Df"]][j])),
         if (use_f) suppressWarnings(as.numeric(stats::df.residual(fit))) else NA_real_,
         p, nobs)
@@ -3344,11 +3368,6 @@ reg_global_types <- function() c("global_lr", "global_f", "global_wald")
 #' @keywords internal
 reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
   weighted <- shared$weighted
-  row <- function(test, col_var, predictor, statistic, df1, df2, pvalue, nobs)
-    tibble::tibble(row_var = "", col_var = col_var, test = test, term = predictor,
-                   statistic = statistic,
-                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
-
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
     if (!reg_fam_glm(sp$family) || isTRUE(sp$compound)) return(NULL)
@@ -3369,7 +3388,7 @@ reg_global_rows <- function(reg_gof, fits, specs, shared, fit_first_col) {
                    use_f = reg_fam_disp_estimated(sp$family),
                    use_wald = reg_fam_svy_fitted(sp$family, weighted),
                    types = c(wald = "global_wald", f = "global_f", lr = "global_lr"),
-                   col_var = fit_first_col[[i]], nobs = f$nobs, row = row)
+                   col_var = fit_first_col[[i]], nobs = f$nobs)
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
   if (length(rows) == 0) return(reg_gof)
@@ -3587,20 +3606,21 @@ reg_spread_models <- function(t, split_var, sl) {
     if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
   }
   # Phase 18m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
-  # column via `row_var = level`); tab_spread pivots only the data, so the footer materialisers saw
+  # column via its split-level group column); tab_spread pivots only the data, so the materialisers saw
   # is_split = TRUE (tripled) and matched cells by a col_var that no longer exists (empty). Re-key each
-  # group's GOF rows onto that group's spread column NAME and clear `row_var` -> ONE block, each cell
+  # group's GOF rows onto that group's spread column NAME and clear the group -> ONE block, each cell
   # placed under its subpopulation's column (like the single-column non-split footer).
-  # Phase 18z8: re-key ONLY the per-group GOF block. The interaction rows (row_var = a PREDICTOR,
-  # not a split level) are a pooled, table-wide test read by reg_interaction_line() -- keying them to a
-  # group's column would be wrong, and the `col_of_group[row_var]` lookup would silently drop them.
-  if (!is.null(test) && nrow(test) > 0 && !is.null(test$row_var) && any(nzchar(test$row_var))) {
+  # Phase 18z8: re-key ONLY the per-group GOF block. The interaction rows are a pooled, table-wide
+  # test read by reg_interaction_line() -- keying them to a group's column would be wrong, and the
+  # `col_of_group[...]` lookup would silently drop them.
+  if (!is.null(test) && nrow(test) > 0 && split_var %in% names(test) &&
+      any(nzchar(test_key_col(test, split_var)))) {
     gof   <- test$test %in% reg_footer_test_types()
     part  <- test[gof, , drop = FALSE]
-    g_col <- col_of_group[part$row_var]
+    g_col <- col_of_group[test_key_col(part, split_var)]
     part  <- part[!is.na(g_col), , drop = FALSE]
-    part$col_var <- unname(g_col[!is.na(g_col)])
-    part$row_var <- ""
+    part$col <- unname(g_col[!is.na(g_col)])
+    part[[split_var]] <- ""
     test <- dplyr::bind_rows(part, test[!gof, , drop = FALSE])
     s <- set_test(s, test)
   }
@@ -3619,6 +3639,52 @@ reg_spread_models <- function(t, split_var, sl) {
 # tabxplor.design_effect option is never read. Feeds the footer sentence, nothing else.
 # `degraded` is harvested from the crude grids this build produced (attr "degrade", set by
 # reg_empirical()) -- z16-iiiii, in place of the process-global degrade flag it used to read.
+# Phase 19g (KEY 6): THE assembly tail, shared by BOTH branches of reg_build(). The split branch
+# carried a COMPLETE duplicate of it -- its own tab_stamp_inference / new_tab / meta literal / group_by
+# -- and had already drifted once (z16-iiiii found it reducing six inference keys to three, so a split
+# table's legend could not name its own interval method). One function, two callers, no drift:
+#   `basis`/`degf` are NULL on the split branch by design -- each group was built by the recursion and
+#   stamped its OWN design df and basis on its own columns, and vec_rbind()'s fmt reconcile already
+#   took the weakest of them. Re-stamping one table-wide basis there would overwrite a group whose
+#   design variance succeeded with the verdict of a group that had to fall back.
+#' @keywords internal
+reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars,
+                         degf = NULL, basis = NULL, meta_extra = list()) {
+  tab |>
+    tab_stamp_inference(conf_level, degf, basis) |>
+    new_tab(subtext = meta_extra$subtext, test = tests,
+            meta = c(meta_extra[setdiff(names(meta_extra), "subtext")],
+                     list(spec = reg_spec(var_labels)))) |>
+    dplyr::group_by(!!!rlang::syms(group_vars))
+}
+
+# Phase 19g (KEY 6): THE typed record of every per-call setting reg_build()'s leaves and assembler
+# read. It was a bare `list(...)` of 24 keys, documented as 20 in reg_build()'s header, partially
+# re-listed twice more, mirrored by hand in fmt_class.R's globalVariables() to silence R CMD check,
+# and with two fields declared nowhere -- so "what does reg_build receive" had four answers. The
+# constructor's FORMALS are the contract now: every name is always present (a direct caller that
+# omits one gets the declared default, never a missing binding), the globalVariables mirror is
+# DERIVED from names(formals(new_reg_shared)), and adding a setting is one line.
+# `split_var` stays a formal of reg_build(): it flips to NULL in the split recursion, and a NULL
+# value cannot live in a list that must round-trip through modifyList().
+#' @keywords internal
+new_reg_shared <- function(union_predictors = character(0), design_spec = list(), weighted = FALSE,
+                           inverse_two_level_factors = TRUE, conf_level = conf_level_default(),
+                           method = "wald", color_signif = "grey_non_signif", cleannames = TRUE,
+                           subtext = "", effect = "coefficient", at = "average",
+                           stats = NULL, compare = "none", baseline = NULL,
+                           multiplier = NULL, multiplier_label = NULL,
+                           shape_terms = NULL, shape_labels = NULL,
+                           empirical = FALSE, estimate_display = "value", spread_models = TRUE,
+                           var_labels = character(0), na_shared_vars = character(0),
+                           add_n = FALSE) {
+  as.list(environment())
+}
+# ...and THE globalVariables mirror, derived from those formals: reg_build() binds them with
+# list2env(), which codetools cannot see. It lived in R/fmt_class.R as a hand-kept copy and had
+# fallen behind twice.
+utils::globalVariables(names(formals(new_reg_shared)))
+
 reg_inference <- function(shared, degraded = FALSE) {
   ds <- shared$design_spec
   leaf_inference(new_inference(ds$wt, ds, force = TRUE), degraded = degraded)
@@ -3627,19 +3693,11 @@ reg_inference <- function(shared, degraded = FALSE) {
 # THE `meta$ci_settings` of a regression table -- what the colour legend names as the interval method.
 reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, reference = NULL,
                       reref = FALSE, skeleton_data = data) {
-  # `shared` bundles every per-call setting the leaves + assembler read (built once in tab_reg), replacing
-  # the 30-formal signature and its fragile positional re-listing at the split recursion. Contract (every
-  # name always present): union_predictors, design_spec, weighted, inverse_two_level_factors, conf_level,
-  # method, color_signif, cleannames, subtext, effect, at, stats, compare, baseline, multiplier,
-  # multiplier_label, empirical,
-  # estimate_display, spread_models, var_labels. (`split_var` stays a formal -- it flips to NULL in the
-  # recursion, and a NULL value cannot live in a modifyList()-mergeable list.)
+  # `shared` is the TYPED record new_reg_shared() builds (Phase 19g) -- its formals ARE the contract,
+  # so every field is present and a direct caller cannot be missing one. list2env() binds them as
+  # locals; nothing below re-reads `shared$<field>` except where the whole record is forwarded.
+  shared <- do.call(new_reg_shared, shared[intersect(names(shared), names(formals(new_reg_shared)))])
   list2env(shared, environment())
-  # Phase 18z15: the quadratic `shape` terms, named by variable. Read explicitly (not only through
-  # list2env) so a direct reg_build caller that predates the key gets NULL rather than an error --
-  # `shape_terms` is consumed by three call sites below and NULL means "every predictor is a line".
-  shape_terms  <- shared$shape_terms
-  shape_labels <- shared$shape_labels
   # Phase 15e: each spec carries its OWN resolved family / do_exp / effect_shape / eff_word / color (set by
   # tab_reg), read as sp$<key>. The homogeneous-context scalar `family` (first outcome) is still needed by
   # mnl_vsrest + reg_compare_rows; derive it FROM the specs so it can never drift from them.
@@ -3671,7 +3729,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
       tg  <- reg_build(sub, specs, shared,
                        split_var = NULL, .fit_cache = .fit_cache, reference = NULL, reref = FALSE,
                        skeleton_data = data)
-      tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
+      # Phase 19g (KEY 6): the group level rides a column NAMED AFTER the split variable -- exactly
+      # how a crosstab names its tab_var levels -- so both arms are read by one rule
+      # (test_group_cols()) and a predictor name in `var` can no longer be mistaken for a group.
+      tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst[[split_var]] <- as.character(g)
       list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
                                      "{split_var}" := new_lvl(factor(g, levels = sl),
                                                               "tab_var", split_var), .before = 1L),
@@ -3700,29 +3761,19 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     # it is not on by default. This is the ONE place with the full data, every spec and `shared`.
     if ("between_groups" %in% color_ms ||
         (is.character(shared$stats) && "interaction" %in% shared$stats)) {
-      fit_cols <- unique(tests$col_var[tests$test %in% reg_footer_test_types()])
+      fit_cols <- unique(tests$col[tests$test %in% reg_footer_test_types()])
       if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
       tests <- reg_interaction_rows(tests, data, specs, shared, split_var, fit_cols)
     }
-    grouped <- combined |>
-      # Phase 18z13 (D3): the per-column confidence level. z16-iiiii: the LEVEL only -- each group
-      # was built by the recursion above, which stamped its OWN design df and basis on its own
-      # columns, and vec_rbind()'s fmt reconcile already took the weakest of them. Re-stamping one
-      # table-wide basis here would overwrite a group whose design variance succeeded with the verdict
-      # of a group that had to fall back.
-      tab_stamp_inference(conf_level) |>
-      # Phase 19b: the interval METHOD rides the columns (`ci_method`), so this branch cannot lose
-      # it -- the z16-iiiii defect (a THREE-key reduction of the non-split branch's six, leaving a
-      # split table's legend unable to name its own interval method) is now unrepresentable.
-      # NOT carried from the groups, deliberately: `empirical_tips` and `assumptions` are per-GROUP
-      # facts (crude tooltips keyed var\rlevel\rcategory; the observed curve of each predictor) and
-      # `meta` has no per-group slot, so merging them would attach the FIRST group's numbers to every
-      # other group's cells. Absent is honest; wrong is not. (A split table's sparklines are already
-      # baked into its row labels at build time, and reg_check_plots() refits from reg_meta$fit_spec.)
-      new_tab(subtext = subtext, test = tests,
-              meta = list(
-                vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
-      dplyr::group_by(!!rlang::sym(split_var), var)
+    # `empirical_tips` and `assumptions` are deliberately NOT carried from the groups: they are
+    # per-GROUP facts (crude tooltips keyed var\rlevel\rcategory; the observed curve of each
+    # predictor) and `meta` has no per-group slot, so merging them would attach the FIRST group's
+    # numbers to every other group's cells. Absent is honest; wrong is not. (A split table's
+    # sparklines are already baked into its row labels, and reg_check_plots() refits from
+    # spec$call$fit_spec.)
+    grouped <- reg_finalize(combined, tests, conf_level, var_labels,
+                            group_vars = c(split_var, "var"),
+                            meta_extra = list(subtext = subtext))
     # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
     # is not multinomial (a multinomial has several columns for one model, so side-by-side is ambiguous).
     # spread_models = FALSE keeps the stacked grouped_tab.
@@ -3802,8 +3853,12 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # built_per_fit: a list PER FIT of {label, col} lists (a multinomial / MNL-vs-rest / AME-per-category
   # fit contributes SEVERAL columns). Kept un-flattened so reg_gof_tibble() can key the model-summary
   # footer to each fit's FIRST output column (Phase 12f).
-  if (effect %in% c("ame", "ame_ratio")) {
-    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
+  # Phase 19g (KEY 6): ONE assembler over three named column builders. They were three parallel
+  # `purrr::map2(fits, specs, ...)` blocks chosen by a TABLE-scalar `if` -- even though Phase 15e made
+  # the family per SPEC, so a mixed table had to be degraded upstream before the scalar could be
+  # trusted. The choice is per spec now, where the fact lives; on a homogeneous table it picks
+  # exactly what the scalar picked.
+  cols_ame <- function(f, sp) {
       # Phase 15e: prob-scale / per-category / colour shape are per OUTCOME family (a mixed AME table
       # mixes binomial prob-points with a gaussian coef in one grid).
       sp_fam       <- sp$family
@@ -3854,12 +3909,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                       var_y, f$nobs, NA_character_, sp_col, color_signif,
                                       cv, or_tip = or_tip, model_family = sp_fam)))
       }
-    })
-  } else if (mnl_vsrest) {
+  }
+  cols_vsrest <- function(f, sp) {
     # MNL "j vs rest" OR at the reference profile (D3-flavour-2): exp of the profile log-odds-ratio of
     # "category j vs the rest" for each predictor level; one OR column per outcome category. Reached only
     # for a HOMOGENEOUS multinomial table (a mixed table degrades at="reference" -> "average" upstream).
-    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       sp_fam <- sp$family
       sp_col <- sp$color
       marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
@@ -3875,9 +3929,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                                          NA_real_, f$nobs, g, sp_col, color_signif, sp$label,
                                          model_family = sp_fam))
       })
-    })
-  } else {
-    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
+  }
+  cols_coef <- function(f, sp) {
       # Phase 15e: each column takes its own family shape (multinomial fans out; glm/gaussian are one col).
       sp_fam   <- sp$family
       sp_shape <- sp$effect_shape
@@ -3907,8 +3960,12 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         list(list(label = reg_model_col_name(sp_eff, sp$dependent, is_comparison, sp$label, n_dep),
                   col = col))
       }
-    })
   }
+  built_per_fit <- purrr::map2(fits, specs, function(f, sp)
+    if (effect %in% c("ame", "ame_ratio"))             cols_ame(f, sp)
+    else if (mnl_vsrest && sp$family == "multinomial") cols_vsrest(f, sp)
+    else                                               cols_coef(f, sp))
+
   built  <- purrr::flatten(built_per_fit)
   labels <- make.unique(purrr::map_chr(built, "label"))
 
@@ -4323,24 +4380,19 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
+  # Phase 18z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design df
+  # it is referred to and the basis it was computed on, all on each fmt column -- the colour engine
+  # is per column and cannot read a table attribute. It is what makes the gap interval
+  # (fmt_gap_bounds), manufactured at print time, follow `conf_level`; and it is where the footer
+  # reads the basis from (ruling 1: a weighted tab_reg() is ALWAYS on the weighted basis, model
+  # column and crude companions alike).
   reg_inf <- reg_inference(shared, emp_degraded)
-  tab |>
-    # Phase 18z13 (D3) + z16-iiiii: the level every interval in this table was built at, the design
-    # df it is referred to and the basis it was computed on, all on each fmt column -- the colour
-    # engine is per column and cannot read a table attribute. It is what makes the gap interval
-    # (fmt_gap_bounds), which is manufactured at print time, follow `conf_level`; and it is where the
-    # footer now reads the basis from (ruling 1: a weighted tab_reg() is ALWAYS on the weighted basis,
-    # model column and crude companions alike).
-    tab_stamp_inference(conf_level, reg_inf$degf, reg_inf$basis) |>
-    new_tab(subtext = subtext, test = reg_gof,
-            meta = list(empirical_tips = empirical_tips,
-                        # Phase 18z15: the observed curves the sparklines were drawn from, and the
-                        # only thing reg_check_plots() needs that a refit cannot give back.
-                        assumptions = assumptions,
-                        # Phase k: variable labels for the opt-in name display-swap (absent when none).
-                        vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL
-                        )) |>
-    dplyr::group_by(var)
+  reg_finalize(tab, reg_gof, conf_level, var_labels, group_vars = "var",
+               degf = reg_inf$degf, basis = reg_inf$basis,
+               meta_extra = list(subtext = subtext, empirical_tips = empirical_tips,
+                                 # Phase 18z15: the observed curves the sparklines were drawn from,
+                                 # and the only thing reg_check_plots() needs a refit cannot give back.
+                                 assumptions = assumptions))
 }
 
 
@@ -5622,7 +5674,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                      estimate_display %in% c("prob", "ame"))
   # Phase 17h: every per-call setting reg_build's leaves + assembler read, bundled once (the specs carry
   # the per-dependent family/do_exp/effect_shape/eff_word/color, so those scalars are no longer threaded).
-  shared <- list(
+  shared <- new_reg_shared(
     union_predictors = union_predictors, design_spec = design_spec, weighted = weighted,
     inverse_two_level_factors = inverse_two_level_factors, conf_level = conf_level, method = method,
     color_signif = color_signif, cleannames = cleannames, subtext = subtext, effect = effect, at = at,
@@ -5658,7 +5710,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   wt_disp <- if (is.null(wt) || (length(wt) == 1L && is.na(wt))) NA_character_
              else if (rlang::is_formula(wt)) all.vars(wt)[1]
              else as.character(wt)[1]
-  reg_meta <- list(
+  reg_call_record <- list(
     family = family, families = families_vec, exponentiate = exp_on,
     effect = effect, at = at, do_exp = do_exp, eff_word = eff_word,
     dependent = dependent, positive_level = positive_levels, predictors = union_predictors,
@@ -5685,10 +5737,14 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     crude_keys = if (isTRUE(empirical))
       stats::setNames(purrr::map_chr(specs, ~ .$crude_key), purrr::map_chr(specs, "dependent"))
       else stats::setNames(rep(NA_character_, length(specs)), purrr::map_chr(specs, "dependent")),
-    split_var = split_var, comparison = is_comparison, wt = wt_disp,
-    conf_level = conf_level
+    split_var = split_var, comparison = is_comparison, wt = wt_disp
   )
-  set_reg_meta(res, reg_meta)
+  # Phase 19g (KEY 6): the model record IS this table's `spec$call` -- "how was this table made",
+  # the slot every producer has, rather than a regression-only sibling of `meta$vars`. `conf_level`
+  # left it here: it was a stale duplicate of a per-COLUMN attribute (tab_stamp_inference stamps the
+  # level on every column, and get_conf_level() is what every consumer reads), so keeping a
+  # table-wide copy could only ever disagree with the columns it described.
+  set_reg_call(res, reg_call_record)
 }
 
 

@@ -137,7 +137,7 @@ A **build-time `stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs))`** is 
   supplies the p-value/statistic rows keyed by grouping ∩ `test`, a regression the per-split GOF block).
 The remaining metadata lives inside the ONE **`meta`** list (Phase 17b), each item an optional sub-field
 (`NULL` when unset; an all-`NULL` meta attaches no attribute at all). Every legacy getter
-(`get_render_extras`/`get_vars_attr`/`get_empirical_tips`/`get_reg_meta`/
+(`get_render_extras`/`get_vars_attr`/`get_empirical_tips`/`reg_call`/
 `get_color_breaks_attr`) is a thin accessor into it; `set_meta_field(x, field, value)` writes one
 sub-field (a `NULL` value removes it). The sub-fields:
 
@@ -1872,3 +1872,25 @@ re-derived half of (`format()`, `fmt_color_plan()`, the legend, and `or_plot()`'
   `R/tab_reg_plots.R` became `R/plots.R`; `reg_plot_*` became `tx_plot_*`; `or_plot()` is DELETED
   (ruling D1, never released). Also `tab_export(format = "forest")`, and `ggplot2 (>= 3.5.0)` for
   `transform =` / `sec_axis(transform =)`.
+
+
+## Phase 19g (KEY 6) — one table identity
+
+`meta$spec = list(kind, vars, call)` (`R/table-spec.R`) is what a table says about *itself*, for both
+producers. `kind` (`"crosstab"`/`"regression"`) is stated by the producer and read through
+`tab_kind()`/`tab_is_reg()`; the old `is_reg_footer()` sniff of the `test` tibble survives only as
+`tab_kind()`'s fallback for a table that lost its metadata. `vars` (was `meta$vars`) keeps only what
+no column can carry — `wt`, `caption`, `var_labels` — the row axis being derived from the declared
+`tabxplor_lvl` index columns (19f) and the column axis from the fmt columns' own `col_var`. `call`
+(was `meta$reg_meta`, read through `reg_call()`) is the producer's recipe, including `fit_spec`;
+a crosstab records none yet (19i).
+
+The `test` tibble is keyed uniformly: **`var`** (which variable — a crosstab's row variable, a
+regression's predictor, `""` = whole table/model; it absorbed z15's `term`), **`col`** (which column
+it keys under) and one column **named after the grouping variable** for the sub-population (tab_vars
+for a crosstab, `split_var` for a regression), read by `test_group_cols()`.
+
+`reg_build()` has ONE assembly tail (`reg_finalize()`, shared with the split branch) and ONE column
+assembler (`cols_ame` / `cols_vsrest` / `cols_coef` behind a **per-spec** choice); its settings ride
+the typed `new_reg_shared()` record, whose formals also derive the `globalVariables()` mirror. The
+`stats =` / `check =` vocabulary is `reg_stat_keys()` with one validator.

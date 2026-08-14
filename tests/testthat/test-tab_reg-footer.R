@@ -30,11 +30,11 @@ test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; disp
   t1  <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   tst <- get_test(t1)
   cv  <- "Model_OR"
-  gv  <- function(s) tst$statistic[tst$col_var == cv & tst$test == s]
+  gv  <- function(s) tst$statistic[tst$col == cv & tst$test == s]
 
   # the footer is DISPLAY-ONLY: the built object is the coefficient skeleton, no "Model fit" rows
   expect_false(any(as.character(t1$var) == "Model fit"))
-  expect_true(is_reg_footer(tst))
+  expect_true(tab_is_reg(t1))
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(rincome))
   dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
@@ -47,7 +47,7 @@ test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; disp
   expect_equal(gv("bic"), stats::BIC(g), tolerance = 1e-6)
   lr <- g$null.deviance - g$deviance
   expect_equal(gv("lr_null"), lr, tolerance = 1e-6)
-  expect_equal(tst$pvalue[tst$col_var == cv & tst$test == "lr_null"],
+  expect_equal(tst$pvalue[tst$col == cv & tst$test == "lr_null"],
                stats::pchisq(lr, g$df.null - g$df.residual, lower.tail = FALSE), tolerance = 1e-6)
   expect_equal(gv("mcfadden_r2"),
                1 - as.numeric(stats::logLik(g)) / as.numeric(stats::logLik(g0)), tolerance = 1e-6)
@@ -62,7 +62,7 @@ test_that("the footer does not alter the built coefficient skeleton (stats= togg
   expect_equal(nrow(with), nrow(without))
   expect_equal(get_or(with[[col]]), get_or(without[[col]]))
   expect_equal(sum(!is.na(get_pvalue(with[[col]]))), sum(!is.na(get_pvalue(without[[col]]))))
-  expect_false(is_reg_footer(get_test(without)))
+  expect_false(tab_is_reg(tab(forcats::gss_cat, marital, race, pct = "row")))
 
   # materialised only at display (backend text/xl, pvalue = TRUE)
   mat <- tab_materialize_extras(with, backend = "text", pvalue = TRUE)
@@ -85,7 +85,7 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
   tst <- get_test(t1); cv <- "Model_\u03b2"
-  gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
+  gv  <- function(s) unname(tst$statistic[tst$col == cv & tst$test == s])
 
   # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks),
   # plus z13's overall-association rows and z15's model-check rows (both in the default set).
@@ -120,7 +120,7 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
   # z15: the exact Pearson dispersion keeps its own row under the key `phi` (the key `dispersion` now
   # names the robust/model-SE CHECK). n - rank, never df.residual(fit) -- they agree for a glm.
   phi <- sum(stats::residuals(m, "pearson")^2) / stats::df.residual(m)
-  expect_equal(tst$statistic[tst$col_var == cv & tst$test == "phi"], phi, tolerance = 1e-6)
+  expect_equal(tst$statistic[tst$col == cv & tst$test == "phi"], phi, tolerance = 1e-6)
 })
 
 # ---- multi-model comparison -----------------------------------------------------------------
@@ -275,9 +275,10 @@ test_that("stats='global' IS drop1() on the fit already in hand, as per-predicto
                                 cleannames = FALSE))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
-  # z15: the predictor rides `term`; `row_var` means the split-group level and nothing else
-  expect_setequal(g$term, c("race", "rincome"))          # one per multi-level predictor
-  expect_true(all(g$row_var == ""))
+  # Phase 19g: the predictor rides `var`, the same dimension a crosstab test row uses; a split-group
+  # level rides a column named after the split variable, so the two can no longer collide
+  expect_setequal(g$var, c("race", "rincome"))           # one per multi-level predictor
+  expect_identical(tabxplor:::test_group_cols(g), character(0))   # no split -> no group column
   expect_identical(unique(g$test), "global_lr")
 
   # the numbers ARE drop1's, no extra fit involved
@@ -286,9 +287,9 @@ test_that("stats='global' IS drop1() on the fit already in hand, as per-predicto
   dm$race <- forcats::fct_drop(dm$race); dm$rincome <- forcats::fct_drop(dm$rincome)
   fit <- stats::glm(married ~ race + rincome, data = dm, family = stats::binomial())
   d1  <- stats::drop1(fit, scope = c("race", "rincome"), test = "Chisq")
-  expect_equal(g$pvalue[match(rownames(d1)[-1], g$term)],
+  expect_equal(g$pvalue[match(rownames(d1)[-1], g$var)],
                d1[["Pr(>Chi)"]][-1], tolerance = 1e-8)
-  expect_equal(g$statistic[match(rownames(d1)[-1], g$term)],
+  expect_equal(g$statistic[match(rownames(d1)[-1], g$var)],
                d1[["LRT"]][-1], tolerance = 1e-8)
 
   # z15: they are GOF ROWS now -- one per (model column x predictor), labelled "<stat>: <predictor>"
@@ -305,7 +306,7 @@ test_that("the global test skips 1-df terms, unsupported engines and stats = FAL
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 cleannames = FALSE))
   g <- get_test(t); g <- g[g$test %in% tabxplor:::reg_global_types(), ]
-  expect_setequal(g$term, "race")
+  expect_setequal(g$var, "race")
   # opt out
   t0 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE,
                                  cleannames = FALSE))
@@ -328,9 +329,11 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
   expect_true(nrow(g) > 0)
-  # BEFORE z15 the predictor rode `row_var`, which reg_build's split branch overwrites wholesale with
+  # BEFORE z15 the predictor rode `row_var`, which reg_build's split branch overwrote wholesale with
   # the group level -- so every item printed the group's name, repeated, instead of "race"/"rincome".
-  expect_setequal(unique(g$term), c("race", "rincome"))
-  expect_setequal(unique(g$row_var), c("early", "late"))
-  expect_false(any(g$term %in% c("early", "late")))
+  # Phase 19g: the two facts ride two columns that cannot collide -- `var` and a column NAMED after
+  # the split variable.
+  expect_setequal(unique(g$var), c("race", "rincome"))
+  expect_setequal(unique(g$grp), c("early", "late"))
+  expect_false(any(g$var %in% c("early", "late")))
 })

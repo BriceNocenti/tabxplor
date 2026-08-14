@@ -21,7 +21,7 @@ test_that("tab_reg() records reg_meta; a crosstab records none", {
   skip_if_not_installed("broom")
   t  <- tab_reg(w14_data(), "married", c("race", "rincome"), family = "binomial",
                 cleannames = FALSE)
-  m  <- tabxplor:::get_reg_meta(t)
+  m  <- tabxplor:::reg_call(t)
   expect_type(m, "list")
   expect_identical(m$family, "binomial")
   expect_identical(m$effect, "coefficient")
@@ -31,23 +31,23 @@ test_that("tab_reg() records reg_meta; a crosstab records none", {
   expect_setequal(m$predictors, c("race", "rincome"))
 
   ct <- tab(forcats::gss_cat, marital, race, pct = "row")
-  expect_null(tabxplor:::get_reg_meta(ct))
+  expect_null(tabxplor:::reg_call(ct))
 })
 
 test_that("reg_meta survives dplyr verbs and footer materialisation", {
   skip_if_not_installed("broom")
   t <- tab_reg(w14_data(), "married", "race", family = "binomial", cleannames = FALSE)
-  expect_false(is.null(tabxplor:::get_reg_meta(dplyr::mutate(t, x = 1))))
+  expect_false(is.null(tabxplor:::reg_call(dplyr::mutate(t, x = 1))))
   # reg_footer_lines() drops `test`; is_reg must NOT depend on it -> reg_meta must survive
   mat <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE)
-  expect_false(is.null(tabxplor:::get_reg_meta(mat)))
+  expect_false(is.null(tabxplor:::reg_call(mat)))
 })
 
 # ---- titles / sheet names -------------------------------------------------------------------
 
 test_that("reg_title names the model family, dependent and predictors", {
   skip_if_not_installed("broom")
-  rt <- function(...) tabxplor:::reg_title(tabxplor:::get_reg_meta(tab_reg(..., cleannames = FALSE)))
+  rt <- function(...) tabxplor:::reg_title(tabxplor:::reg_call(tab_reg(..., cleannames = FALSE)))
   expect_identical(rt(w14_data(), "married", c("race", "rincome"), family = "binomial"),
                    "Logistic regression: married by race, rincome")
   expect_identical(rt(forcats::gss_cat, "tvhours", "race", family = "gaussian"),
@@ -61,7 +61,7 @@ test_that("a model comparison title carries the dependent, reference level and e
   skip_if_not_installed("broom")
   t  <- multi_logit(w14_data(), "married", models = list(demo = "race", full = c("race", "rincome")),
                     cleannames = FALSE)
-  m  <- tabxplor:::get_reg_meta(t)
+  m  <- tabxplor:::reg_call(t)
   expect_true(m$comparison)
   expect_identical(tabxplor:::reg_title(m),
                    "Logistic regressions (models comparison): married, 'Married' (OR)")
@@ -69,7 +69,7 @@ test_that("a model comparison title carries the dependent, reference level and e
 
 test_that("reg_sheet_name is the compact tag", {
   skip_if_not_installed("broom")
-  sn <- function(t) tabxplor:::reg_sheet_name(tabxplor:::get_reg_meta(t))
+  sn <- function(t) tabxplor:::reg_sheet_name(tabxplor:::reg_call(t))
   expect_identical(sn(tab_reg(w14_data(), "married", c("race", "rincome"),
                               family = "binomial", cleannames = FALSE)),
                    "logit_married_race_rincome")

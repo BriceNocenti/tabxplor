@@ -160,7 +160,7 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 14L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 15L   # bump on any store-shape change -> discard stale stores
                             # 13 = Phase 19b (KEY 2): a tier-3 carrier's per-column `meta` list carries
                             #     `scale` + `pct_base` instead of `type` + `ci_type`, and gains
                             #     `ci_method`. A pre-13 carrier has the old names -> unusable.

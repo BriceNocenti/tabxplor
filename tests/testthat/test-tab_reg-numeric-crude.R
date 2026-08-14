@@ -50,7 +50,7 @@ test_that("a LOGICAL predictor produces a real (non-NA) model row", {
 
   # same 0/1 recode tab_reg used (inverse_two_level_factors picks the modelled level)
   dm <- d
-  dm$y <- as.integer(dm$married == get_reg_meta(t)$positive_level)
+  dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
   ref  <- stats::glm(y ~ old + race, data = dm, family = stats::binomial())
   expect_equal(or[!is.na(or) & or != 1],
                unname(exp(stats::coef(ref)["oldTRUE"])), tolerance = 1e-8)
@@ -59,7 +59,7 @@ test_that("a LOGICAL predictor produces a real (non-NA) model row", {
 test_that("reg_meta stores the predictor-kind map", {
   d  <- num_data()
   t  <- tab_reg(d, "married", c("age", "race"), family = "binomial", cleannames = FALSE)
-  pt <- get_reg_meta(t)$predictor_types
+  pt <- reg_call(t)$predictor_types
   expect_identical(pt[["age"]],  "numeric")
   expect_identical(pt[["race"]], "factor")
 })
@@ -99,7 +99,7 @@ test_that("binomial: Obs_OR for a numeric == exp(coef(glm(y ~ x))) on the MODEL'
   t <- tab_reg(d, "married", c("age", "tvhours", "race"), family = "binomial",
                empirical = TRUE, multiplier = 1, cleannames = FALSE)
   dm <- tidyr::drop_na(d, "married", "age", "tvhours", "race")
-  dm$y <- as.integer(dm$married == get_reg_meta(t)$positive_level)
+  dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
 
   for (v in c("age", "tvhours")) {
     i <- which(as.character(t$var) == v)
@@ -120,10 +120,10 @@ test_that("the crude fit uses the MODEL's complete-case population, not its own"
   t  <- tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                 empirical = TRUE, multiplier = 1, cleannames = FALSE)
   dm <- tidyr::drop_na(d, "married", "age", "tvhours")
-  dm$y  <- as.integer(dm$married == get_reg_meta(t)$positive_level)
+  dm$y  <- as.integer(dm$married == reg_call(t)$positive_level)
   gsmall <- stats::glm(y ~ age, data = dm, family = stats::binomial())          # model population
   gbig   <- stats::glm(y ~ age, data = transform(tidyr::drop_na(d, "married", "age"),
-                                                 y = as.integer(married == get_reg_meta(t)$positive_level)),
+                                                 y = as.integer(married == reg_call(t)$positive_level)),
                        family = stats::binomial())                              # the wrong one
   i <- which(as.character(t$var) == "age")
   expect_equal(get_or(t[["Obs_OR"]])[i], unname(exp(stats::coef(gsmall)["age"])), tolerance = 1e-10)
@@ -169,7 +169,7 @@ test_that("exponentiate = FALSE gives the LOGGED crude effect for a numeric row"
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", exponentiate = FALSE,
                empirical = TRUE, multiplier = 1, cleannames = FALSE)
   dm <- tidyr::drop_na(d, "married", "age", "race")
-  dm$y <- as.integer(dm$married == get_reg_meta(t)$positive_level)
+  dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
   g <- stats::glm(y ~ age, data = dm, family = stats::binomial())
   i <- which(as.character(t$var) == "age")
   expect_equal(get_diff(t[["Obs_log(OR)"]])[i], unname(stats::coef(g)["age"]), tolerance = 1e-10)
@@ -197,7 +197,7 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
     t <- tab_reg(d, "married", c("age", "race"), family = "binomial", effect = eff,
                  empirical = TRUE, multiplier = 1, cleannames = FALSE)
     i  <- which(as.character(t$var) == "age")
-    dm$y <- as.integer(dm$married == get_reg_meta(t)$positive_level)
+    dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
     g  <- stats::glm(y ~ age, data = dm, family = stats::binomial())
     m  <- if (eff == "ame_ratio")
       marginaleffects::avg_comparisons(g, variables = "age", comparison = "lnratioavg")
@@ -249,7 +249,7 @@ test_that("scalar 'sd' / '2sd' / a number scale EVERY numeric predictor", {
   t1 <- tab_reg(d, "married", p, family = "binomial", multiplier = 1,     cleannames = FALSE)
   ts <- tab_reg(d, "married", p, family = "binomial", multiplier = "sd",  cleannames = FALSE)
   t2 <- tab_reg(d, "married", p, family = "binomial", multiplier = "2sd", cleannames = FALSE)
-  k  <- get_reg_meta(ts)$multiplier
+  k  <- reg_call(ts)$multiplier
   expect_named(k, c("age", "tvhours"))
   for (v in c("age", "tvhours")) {
     expect_equal(or_of(ts, v), or_of(t1, v)^k[[v]],       tolerance = 1e-8)
@@ -270,7 +270,7 @@ test_that("a NAMED vector overrides per variable; unnamed predictors keep the sc
 
   tm <- tab_reg(d, "married", p, family = "binomial",
                 multiplier = c(age = "2sd", tvhours = 5), cleannames = FALSE)
-  k  <- get_reg_meta(tm)$multiplier
+  k  <- reg_call(tm)$multiplier
   expect_equal(unname(k[["tvhours"]]), 5)
   expect_equal(or_of(tm, "tvhours"), or_of(t1, "tvhours")^5, tolerance = 1e-8)
 })
@@ -279,7 +279,7 @@ test_that("multiplier = 1 is per-1-unit everywhere (and stores nothing)", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = 1,
                cleannames = FALSE)
-  expect_null(get_reg_meta(t)$multiplier)
+  expect_null(reg_call(t)$multiplier)
   expect_false(any(grepl("per ", as.character(t$levels), fixed = TRUE)))
 })
 
@@ -303,7 +303,7 @@ test_that("the numeric row's label names its unit", {
 
 test_that("the SD is frozen ONCE: same unit across split groups, compared models and dependents", {
   d <- num_data()
-  base_k <- function(t) get_reg_meta(t)$multiplier[["age"]]
+  base_k <- function(t) reg_call(t)$multiplier[["age"]]
 
   plain <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = "sd",
                    cleannames = FALSE)
@@ -346,7 +346,7 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
   expect_true(is.finite(se) && se > 0)
 
   dm <- tidyr::drop_na(d, "married", "age", "tvhours", "race")
-  dm$y <- as.numeric(dm$married == get_reg_meta(t)$positive_level)
+  dm$y <- as.numeric(dm$married == reg_call(t)$positive_level)
   des  <- suppressWarnings(survey::svydesign(ids = ~1, data = dm))
   fm   <- survey::svyglm(y ~ age + tvhours + race, design = des, family = stats::quasipoisson())
   fc   <- survey::svyglm(y ~ age,                  design = des, family = stats::quasipoisson())

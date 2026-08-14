@@ -2983,7 +2983,8 @@ tab_assemble_tables <- function(ctx) {
     wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
     var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
   # Phase 17b: the two 2.0.0-new attrs left here are ONE `meta` list (drop-NULL happens in new_tab()).
-  meta <- list(render_extras = render_extras, vars = vars_attr)
+  # Phase 19g (KEY 6): the table STATES its identity -- kind + what no column can carry.
+  meta <- list(render_extras = render_extras, spec = new_spec("crosstab", vars = vars_attr))
   # Phase 18z13 (D3): project the call's confidence level onto every fmt column. `meta$ci_settings`
   # records it for the legend, but the colour engine is per COLUMN and never sees the table -- so
   # without this stamp every threshold in it falls back to the global option, and a table built at
@@ -3136,19 +3137,15 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   # calls, so this was the second rebuild-from-a-literal site (z16-iv's record claims tab_compact()
   # was the only one). See tab_meta_merge()'s WARNING: never a fresh `meta = list(...)`.
   meta_in  <- get_meta(tabs)
-  vars_out <- get_vars_attr(tabs)
 
   get_vars   <- tab_get_vars(tabs)
   col_levels <- get_vars$col_vars_levels |> purrr::flatten_chr()
   row_var    <- get_vars$row_var
   tab_vars   <- get_vars$tab_vars
   tab_vars_new <- tab_vars[!tab_vars %in% spread_vars]
-  # The ONE role this pivot genuinely changes: the spread tab_vars became columns. `row_vars` and
-  # `col_vars` are variable NAMES, which the pivot does not touch (it only suffixes the column
-  # labels), so they stand. Mutating the stored list rather than rebuilding it through
-  # new_vars_attr() keeps `wt`, `var_labels` and a user `caption` -- none of which that constructor
-  # can express.
-  if (!is.null(vars_out)) vars_out$tab_vars <- as.character(tab_vars_new)
+  # Phase 19f emptied `vars` of the variable MODEL (the columns declare it), so the pivot has nothing
+  # to re-key here: `wt` / `caption` / `var_labels` all survive it untouched.
+  spec_out <- get_spec(tabs)
 
   na_values <- purrr::map(dplyr::ungroup(tabs)[col_levels],
                           ~ fmt0(scale = get_scale(.x), display = get_display(.x[1]))) |>
@@ -3238,7 +3235,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   tabs <- complete_partial_totals(tabs)
 
 
-  meta_out <- tab_meta_merge(list(meta_in), vars = vars_out)
+  meta_out <- tab_meta_merge(list(meta_in), spec = spec_out)
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, test = test, meta = meta_out)
@@ -3417,12 +3414,12 @@ tab_transpose <- function(tabs, name = NULL) {
   # shape is gone, undone by the pivot, so there is no "var"-role column to declare.
   wide[[name]] <- new_lvl(factor(new_labels, levels = new_labels), "level", name)
 
-  # re-key the whole-table test tibble: the new row_var is the old col_var and vice versa.
+  # re-key the whole-table test tibble: the new row variable is the old col_var and vice versa.
   test <- get_test(tabs)
   if (is.data.frame(test) && nrow(test) > 0) {
-    rv <- test[["row_var"]]; cv <- test[["col_var"]]
-    test[["row_var"]] <- cv
-    test[["col_var"]] <- rv
+    rv <- test[["var"]]; cv <- test[["col"]]
+    test[["var"]] <- cv
+    test[["col"]] <- rv
   }
 
   # Phase 10i-B: carry the add_n/add_pct DISPLAY intent through the transpose (orientation-agnostic --
@@ -3437,8 +3434,8 @@ tab_transpose <- function(tabs, name = NULL) {
   # tab_meta_merge(), the ONE "rebuild a meta" idiom -- so every other sub-field rides along by
   # construction instead of by this call remembering to carry it.
   attrs$meta <- tab_meta_merge(
-    list(attrs$meta),
-    vars = new_vars_attr(wt = get_vars_attr(tabs)$wt))   # Phase 16d: weight survives transpose
+    list(attrs$meta),                                    # Phase 16d: weight survives transpose
+    spec = new_spec("crosstab", vars = new_vars_attr(wt = get_vars_attr(tabs)$wt)))
   rlang::exec(new_tab, wide, !!!attrs)
 }
 
@@ -4857,12 +4854,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
                           tab_vars = purrr::map_chr(tab_vars, rlang::as_name))
   vars_attr <- new_vars_attr(wt = plain_wt)
   result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr)) |>
+    new_tab(tabs, subtext = subtext, meta = list(spec = new_spec("crosstab", vars = vars_attr))) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
-                    meta = list(vars = vars_attr))
+                    meta = list(spec = new_spec("crosstab", vars = vars_attr)))
   }
 
   # Phase 18z13 (D3) + z16-iiiii: the level, the design df and the basis on every fmt COLUMN, for
@@ -6952,9 +6949,12 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
     test_tbl <- test_tbl |>
       dplyr::arrange(.data$subtab, .data$col_var, .data$test) |>
       dplyr::left_join(subtab_keys2, by = "subtab") |>
-      dplyr::mutate(row_var = !!row_var) |>
+      # Phase 19g (KEY 6): the uniform key -- `var` (which variable this test is about), `col` (which
+      # column it keys under), and the tab_var columns naming the sub-population.
+      dplyr::mutate(var = !!row_var) |>
+      dplyr::rename(col = "col_var") |>
       dplyr::select(-"subtab") |>
-      dplyr::relocate(tidyselect::any_of(tab_vars_chr), "row_var", "col_var")
+      dplyr::relocate(tidyselect::any_of(tab_vars_chr), "var", "col")
   }
 
   test_tbl

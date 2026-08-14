@@ -174,7 +174,7 @@ test_that("split_var x design: an uncalibrated design with UNEQUAL groups builds
   des <- svc_des(d)
   tt  <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", split_var = "grp"))
   pos <- levels(d$y)[1]                         # tab_reg models the FIRST outcome level by default
-  expect_identical(get_reg_meta(tt)$positive_level, pos)
+  expect_identical(reg_call(tt)$positive_level, pos)
   des$variables$.pos <- as.integer(d$y == pos)
   for (g in c("A", "B")) {
     fit <- suppressWarnings(survey::svyglm(

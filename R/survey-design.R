@@ -371,7 +371,7 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
     for (cv in col_vars) {
       r <- svy_omnibus_one(sub, row_var, cv, isTRUE(col_num[[cv]]), wt, basis,
                            rows_g, design)
-      row <- tibble::tibble(row_var = row_var, col_var = cv, test = r$test,
+      row <- tibble::tibble(var = row_var, col = cv, test = r$test,
                             statistic = r$statistic, df1 = r$df1, df2 = r$df2,
                             pvalue = r$pvalue, n = r$n, deff = r$deff)
       if (!is.null(g$keys)) row <- dplyr::bind_cols(g$keys, row)
@@ -383,7 +383,7 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
 }
 
 # Overlay the producer's grid onto a classic `test` tibble: replace (statistic, df, pvalue, n, deff)
-# per (subtable x col_var), keep the classic effect_size / es_type / min_e, drop Fisher. The result
+# per (subtable x col), keep the classic effect_size / es_type / min_e, drop Fisher. The result
 # has chi2_compute_test's column shape, so every downstream reader (display, bind) is unchanged.
 # The effect size is deliberately NOT recomputed here: it is descriptive, so it describes the weighted
 #   population (chi2_compute_test already computes it on the weighted table), never the effective
@@ -396,15 +396,15 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
 tab_robust_overlay <- function(test_tbl, rob, tab_vars) {
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
   if (is.null(rob) || nrow(rob) == 0)           return(test_tbl)
-  # the classic per-(subtable x col_var) effect-size / validity facts to carry through
+  # the classic per-(subtable x col) effect-size / validity facts to carry through
   es_keep    <- test_tbl[test_tbl$test %in% c("chi2", "F_welch"), , drop = FALSE]
   tabvars_in <- intersect(tab_vars, names(test_tbl))
-  jk  <- intersect(c(tabvars_in, "col_var"), names(es_keep))
+  jk  <- intersect(c(tabvars_in, "col"), names(es_keep))
   rob <- dplyr::semi_join(rob, dplyr::distinct(es_keep[jk]), by = jk)
   if (nrow(rob) == 0) return(test_tbl)
   rob <- dplyr::left_join(
     rob, dplyr::select(es_keep, dplyr::all_of(jk), "min_e", "effect_size", "es_type"), by = jk)
-  dplyr::relocate(rob, tidyselect::any_of(c(tabvars_in, "row_var", "col_var")))
+  dplyr::relocate(rob, tidyselect::any_of(c(tabvars_in, "var", "col")))
 }
 
 # svy_deff_lookup() -- key a producer grid onto a BUILT table's groups: a named numeric (Rao-Scott's
@@ -417,8 +417,8 @@ svy_deff_lookup <- function(rob, group_vars) {
   if (is.null(rob) || !nrow(rob) || !"deff" %in% names(rob))  return(NULL)
   if (length(group_vars) && !all(group_vars %in% names(rob))) return(NULL)
   key <- if (length(group_vars))
-    do.call(paste, c(lapply(rob[group_vars], svy_key_chr), list(rob$col_var), list(sep = "\r")))
-  else paste("", rob$col_var, sep = "\r")
+    do.call(paste, c(lapply(rob[group_vars], svy_key_chr), list(rob$col), list(sep = "\r")))
+  else paste("", rob$col, sep = "\r")
   ok <- !is.na(rob$deff) & is.finite(rob$deff) & rob$deff > 0
   if (!any(ok)) return(NULL)
   if (anyDuplicated(key[ok])) return(NULL)

@@ -66,11 +66,10 @@ utils::globalVariables(c(
   # `inference_mode` listed here until z16-iv had been retired, so the live field went undeclared
   # (an R CMD check "no visible binding" NOTE on tab_transform / tab_assemble_tables).
   "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "inference_basis",
-  "robust_tests", "var_labels",
-  # reg_build()'s `shared` list fields (Phase 17h):
-  "at", "baseline", "compare", "effect", "empirical", "estimate_display",
-  "inverse_two_level_factors", "method", "multiplier", "spread_models", "stats",
-  "union_predictors", "weighted"))
+  "robust_tests", "var_labels"))
+
+# (reg_build()'s `shared` record used to be mirrored here by hand. Phase 19g DERIVES it from
+# new_reg_shared()'s own formals, in R/tab_reg.R beside the record itself.)
 
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
@@ -5473,7 +5472,7 @@ legend_specs <- function(x, theme = "light") {
   col_vars_levels <- col_vars_levels[names(col_vars_levels) != "all_col_vars"]
   kept_names <- names(x)[keep]
 
-  meta   <- get_reg_meta(x)
+  meta   <- reg_call(x)
   is_reg <- !is.null(meta)                            # Phase 14w: robust, survives footer materialisation
   shades <- legend_shade_names(theme)
   # Phase 16d: the mean_diff scale in force (pushed per render). Its `std` flag decides whether a numeric
@@ -5893,7 +5892,7 @@ tab_stars_legend <- function(x, lang = NULL) {
     # the `Constant` row has no reference category, and its star tests the baseline value itself (odds
     # of 1, a beta of 0). One wording that is true of every starred row, keyed on the stored reg
     # metadata rather than on a row label.
-    first <- if (is_reg_footer(get_test(x))) gettextf(
+    first <- if (tab_is_reg(x)) gettextf(
       "%s: significantly different from no effect (the reference category in bold; for the Constant, the null value) at the %s%% confidence level",
       lab[1], legend_num(conf[1], lg))
     else gettextf(
@@ -5921,7 +5920,7 @@ tab_stars_legend <- function(x, lang = NULL) {
 tab_weight_line <- function(x, lang = NULL) {
   wt <- get_vars_attr(x)$wt
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt))
-    wt <- tryCatch(get_reg_meta(x)$wt, error = function(e) NULL)
+    wt <- tryCatch(reg_call(x)$wt, error = function(e) NULL)
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
   wt    <- as.character(wt)[1]
   # Phase 18z16-iv (W-A): the basis is a STORED fact, read through its one resolver. The
