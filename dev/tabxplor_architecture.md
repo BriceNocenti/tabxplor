@@ -289,7 +289,13 @@ field and inherits its default). `chi2` stays the per-row_var logical flag and `
 whole-table test tibbles (no name overload).
 `ctx_update()` repacks NULL-safely (single-bracket `[<-`, not `$<-` which deletes on NULL); `new_ctx()`
 reuses it as its body, so an explicit `totcol = NULL` is a present-but-NULL key (the rule the downstream
-`list2env()` needs, now encoded in the helper instead of comments).
+`list2env()` needs, now encoded in the helper instead of comments). Phase 19i extends the declaration
+to every STAGE PRODUCT (`settings`, the four variable roles, `fine_num`/`fine_fused`, `tabs_text`/
+`tabs_num`/`tests`, …): 54 declared fields against ~81 live ones had left 27 undeclared, and an
+undeclared field is *absent*, so `list2env()` creates no binding and its own `is.null()` guard errors
+instead of firing (the 19a D7 class). The `utils::globalVariables()` declaration those bindings need
+is DERIVED from `new_ctx()` + `CTX_SETTINGS_LOCALS` at the end of `R/tab.R`, replacing a ~70-name
+hand-kept mirror in `R/fmt_class.R` that had outlived one of the fields it named.
 `tab_apply_tests()` is the ONE place both `tab_build()` and `tab_counts()` build the chi2/ci calls
 (Phase 6a). `tab_counts()` reuses the SAME stages: it holds its aggregate, so it builds a single-pair
 ctx, runs `tab_setup()` (incl. the `tot`→totrow/totcol translation tab() uses) then `tab_transform()`
@@ -531,19 +537,32 @@ makes that class unrepresentable by combining the two axes ONCE, in `tab_setup()
 stored at `ctx$settings`:
 
 - **`rows`** — one row per row_var; the per-row_var scalar settings (`color` — ONE resolved measure
-  since Phase 19c, `OR`, `chi2`, `ref`, `ref2`, `comp`, `ci`, `ci_scale`, `totaltab`, `totrow`).
+  since Phase 19c, `comparison`, `or_ci`, `chi2`, `ref`, `ref2`, `comp`, `ci`, `ci_scale`, `totaltab`,
+  `totrow`, + `na_num` from `tab_prepare_pop`).
 - **`cols`** — one row per col_var; the per-col_var settings + the factor/numeric masks (`is_num`,
-  `is_text`, `lvs`, `digits`).
-- **`pairs`** — one row per (row_var × col_var), the fact table carrying `pct` and `ref`. Built
-  `row-major` via `expand_grid(row_var, col_var)`, so it is byte-identical to (and REPLACES) the former
-  `pct_vect` (5-branch nested list) and `ref_vect` (2-branch) ctx fields — those axes now meet only here.
+  `is_text`, `lvs`, `digits`, + `lv1` from `tab_prepare_pop`).
+- **`pairs`** — one row per (row_var × col_var), the fact table carrying `pct`, `ref`, `ref2` and the
+  `na` policy. Built `row-major` via `expand_grid(row_var, col_var)`, so it is byte-identical to (and
+  REPLACES) the former `pct_vect` (5-branch nested list) and `ref_vect` (2-branch) ctx fields — those
+  axes now meet only here.
 
-`tab_rowvar_ctxs()` slices this by key (above), so the `length(x) == n` guessing is gone. The per-row_var
-**population/aggregate** objects — `na_text`, `na_num` (a `tab_prepare_pop` na-policy detail) and `fine_num`
-(a `tab_aggregate` product) — are NOT settings; they stay per-row_var objects sliced by index / by name.
-The flat per-row scalar ctx fields remain alongside `rows` for the pre-slice stages + the jmvtab cache that
-still read them directly; `rows` is a view assembled from them at build. The typed ctx (`new_ctx()`) and
-this spine are the foundation the Phase 17f reference plan + leaf wrapper/core split build on.
+**Phase 19i makes it the ONLY carrier.** Until then the same ~15 facts existed twice: `tab_setup()`
+built the spine *and* wrote every one of them flat into the ctx, and `tab_rowvar_ctxs()` sliced the
+spine only to re-flatten it into those same names — so the spine advertised itself as the interface
+while every consumer read the duplicate (`ctx$settings` had exactly one functional reader). Now:
+`tab_setup()` writes the spine and then DELETES the raw inputs it owns (`SPINE_OWNED_INPUTS`);
+`tab_rowvar_ctxs()` slices and stops; and each stage opens with
+`list2env(ctx_settings_locals(ctx), environment())`, which projects the spine into the bare names the
+resolution blocks have always read. Pre-slice a spine column projects to a VECTOR over row_vars,
+post-slice to the scalar the per-row_var stages expect — the same property the flat duplicates had,
+which is why they existed. A bare-name read of a fact the spine owns can no longer find a
+pre-resolution value.
+
+The line: the spine carries **settings** (values the user chose or a resolver derived), at one of the
+three grains. It never carries built **objects** — `fine_num` (a moment aggregate, sliced by name),
+`remove_levels`, `na_drop_all` and the stage products ride the ctx, and `new_ctx()` declares every one
+of them (19i) so an absent field can no longer make its own NULL guard *error*. The typed ctx and this
+spine are the foundation the Phase 17f reference plan + leaf wrapper/core split build on.
 
 **jmvtab live cache (Phase 7e, `R/jmvtab-cache.R`).** The jamovi module reuses this exact pipeline
 via `jmvtab_build()`, which calls `tab()` with a content-addressed multi-tier store injected through a
@@ -853,7 +872,7 @@ Read through accessors only — `measure_key()` (the ONE spelling normaliser; `C
 
 Every consumer maps `(text_slot, bg_slot)` to colour the same way: `pillar_shaft.tabxplor_fmt()` (console, the reference two-channel consumer), `fmt_get_color_code()` (single-channel, the golden), the shared `fmt_channel_codes()` helper (text + bg hex, used by `tab_kable`/`tab_plot`/`tab_xl`), and `tab_color_legend()` (which reads the same scales, so legend and cells never disagree). The old combined strings (`"diff_ci"`/`"after_ci"`/`"ci"`) are decoded to `(measure = "diff", policy)` ONCE at the argument / storage boundary by `color_decode_legacy()` (in `normalize_color_spec()`, and in `tab_ci()` for the deprecated step path) — the engine never re-parses them, and `"ci"` folds into `after_ci` (the old `single0` one-shade mode is retired).
 
-The `color`/`color_signif` **arguments** are parsed once at the front by `normalize_color_spec()` (`R/tab.R`), then reconciled with `ci` by **`ci_disable_signif()`** (D28's one rule: `ci = "cell"` informs and disables `stars`/`color_signif` — applied at the boundary too, because the STORED policy attribute comes from this spec, not from the resolver); the built table is then finalised by the shared **`finalize_color_tail(result, color_spec, color_breaks, display)`** — `finalize_color_spec()` → `tab_apply_display()` → `set_color_breaks_attr()` — the ONE wrapper tail `tab()`, `tab_many()`, `tab_num()` and `tab_counts()` all run (and, since the 19d tail, `tab_plain()`/`tab_num()`'s own `display =` goes through the same `tab_apply_display()` → `display_write_col()`, the single per-column template writer that `set_display(col, "num_ci")` also calls) (so none can drift; `tab()` keeps its later `output_kable` / `as_tabxplor_tabs` steps).
+The `color`/`color_signif` **arguments** are parsed once at the front by `normalize_color_spec()` (`R/tab.R`), then reconciled with `ci` by **`ci_disable_signif()`** (D28's one rule: `ci = "cell"`/`"no"` informs and disables `stars`/`color_signif` — applied at the boundary too, because the STORED policy attribute comes from this spec, not from the resolver). Since Phase 19i both steps happen inside the ONE argument boundary **`tab_resolve_common_args()`** (`R/tab-resolve.R`), which every crosstab producer calls — so `tab_counts()`, which built and finalised a spec without ever applying D28, cannot store a gate it does not apply, and `tab_num()`, which handed the resolver the RAW `color_signif` instead of the decoded `color_spec$signif`, no longer drops the policy half of a composite colour; the built table is then finalised by the shared **`finalize_color_tail(result, color_spec, color_breaks, display)`** — `finalize_color_spec()` → `tab_apply_display()` → `set_color_breaks_attr()` — the ONE wrapper tail `tab()`, `tab_many()`, `tab_num()` and `tab_counts()` all run (and, since the 19d tail, `tab_plain()`/`tab_num()`'s own `display =` goes through the same `tab_apply_display()` → `display_write_col()`, the single per-column template writer that `set_display(col, "num_ci")` also calls) (so none can drift; `tab()` keeps its later `output_kable` / `as_tabxplor_tabs` steps).
 
 **Colour legend (Phase 13b, `R/fmt_class.R`).** `tab_color_legend(x, medium = c("console","html","md","runs","plain"), style = c("terse","prose"), lang=)` builds the legend as `legend_specs(x)` (per col_var group: measure/breaks/ref/method/policy/shade names + regression effect word) → `legend_tokens_terse`/`_prose` (a **token stream**: plain-text | coloured break-word tokens) → `legend_render_line(medium)` (console ANSI via `cli` / inline html span / md pandoc span / plain / **`"runs"`** = the token stream returned unrendered as `list(text, color, bold)`). Console = terse, exports = prose; the break-word colours come from the same 8-slot palette the cells use, so they can't disagree.
 
@@ -1363,9 +1382,11 @@ finalize tail, forking no math.
   `cleannames = TRUE` strips the cleannames regex off the key levels HERE via the SAME `tab_cleannames_relabel()`
   the microdata path runs pre-aggregate (a relabel commutes with the count sum → byte-identical; the keyby
   re-aggregation merges any collapsed level).
-- `tab_counts()` — `normalize_color_spec()` at the front (so every modern `color` form works), then the
-  same typed `new_ctx()` → `tab_setup()` (arg resolution incl. the SHARED `tab_resolve_settings()` colour
-  cascade + `tot` → totrow/totcol) → inject `fine` as `fine_fused` → `tab_build_tables()`, then the shared
+- `tab_counts()` — the SHARED `tab_resolve_common_args()` at the front (Phase 19i: validation, the
+  colour spec, `stars`, `ci_method`, the `OR` route, `tot` → totrow/totcol, `total_names` — ~15
+  copy-pasted lines gone, and with them two rules it had never had), then the same typed `new_ctx()`
+  → `tab_setup()` (the SHARED `tab_resolve_settings()` colour cascade) → inject `fine` as `fine_fused`
+  → `tab_build_tables()`, then the shared
   `finalize_color_tail(result, color_spec, color_breaks, display)`. Base-less input (non-integer counts)
   disables CI/chi2 with a message. Weighted = real unweighted `n` + weighted `wn` (§14). It starts PAST the
   microdata prep (`tab_prepare_pop`), so the `tab()` arguments resolved there are not offered

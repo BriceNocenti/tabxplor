@@ -5,10 +5,17 @@
 #   (tab_pct, tab_ci, tab_chi2, tab_tot, tab_totaltab, tab_spread).
 # KEY CONSTRAINTS:
 #   - The leaves are Phase 17f wrapper/core splits: the public tab_plain()/tab_num() = NSE defuse +
-#     validate + normalize colour, then call the shared resolver (plain_resolve/num_resolve) + the
+#     the shared ARGUMENT BOUNDARY (19i: tab_resolve_common_args(), R/tab-resolve.R -- the same one
+#     tab() and tab_counts() run), then the shared resolver (plain_resolve/num_resolve) + the
 #     resolved-args compute core (plain_core/num_core). The pipeline (tab_transform) calls the CORES
 #     directly, so argument forcing runs ONCE and colour is finalised ONCE downstream (no double
 #     finalize_color_spec, no .color_deprecate flag). num_core never finalises (returns pre-finalise).
+#     Both cores open with leaf_inference_setup() and close with leaf_finish() (19i), so the two
+#     leaves cannot disagree about what a built table IS.
+#   - The build pipeline has ONE carrier for its settings: `ctx$settings`, the star schema
+#     tab_setup() builds and tab_prepare_pop() completes. Each stage projects it into the bare names
+#     it reads with ctx_settings_locals(); nothing writes those names into the ctx, and the raw
+#     inputs the spine owns (SPINE_OWNED_INPUTS) leave it once tab_setup() has consumed them.
 #   - tab_plain()/tab_num() use data.table internally for aggregation speed.
 #     Column names are temporarily renamed to avoid DT conflicts, then restored.
 #   - tab() and tab_many() BOTH call tab_build(); they differ only in the default `output`
@@ -601,12 +608,25 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 .levels_order = NULL,
                 filter) {
 
-  # Phase 14a: `chi2` renamed `test` -- for a numeric col_var the whole-table test is Welch's F, not
-  # a chi2 (Phase 3b), so the old name named only half of what it does.
-  if (lifecycle::is_present(chi2)) {
-    lifecycle::deprecate_soft("2.0.0", "tab(chi2 = )", "tab(test = )")
-    test <- chi2
-  }
+  # Phase 19i: THE argument boundary -- validation + every "one rule written N times" derivation --
+  # runs once, here, in tab_resolve_common_args() (R/tab-resolve.R), shared with tab_many(),
+  # tab_plain(), tab_num(), tab_counts() and the jamovi bridge. What stays in this function is what
+  # is genuinely tab()'s: the tidy-select of the four variable roles, the survey unwrap, and the
+  # `na` -> population translation.
+  # WARNING: it must run BEFORE the tidy-select block below, because `chi2` -> `test` and the `OR`
+  # route change values that block does not touch but the tab_build() call does.
+  .a <- tab_resolve_common_args(
+    "tab", test = test, chi2 = chi2, color = color, color_signif = color_signif,
+    ci = ci, stars = stars, conf_level = conf_level,
+    ci_method = ci_method, method_cell = method_cell, method_diff = method_diff,
+    cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
+    tot = tot, total_names = total_names, na = na, levels = levels, pct = pct,
+    comp = comp, totaltab = totaltab, n_min = n_min,
+    user_env = rlang::caller_env())
+  test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars ; ci_method <- .a$ci_method
+  display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
+  color_spec <- .a$color_spec ; color <- .a$color
+  total_names <- .a$total_names ; tot <- .a$tot
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
   # row_vars/col_vars (which now accept one variable OR several). Capture the effective quosure
@@ -621,9 +641,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     lifecycle::deprecate_soft("2.0.0", "tab(col_var = )", "tab(col_vars = )")
     .cv_dep
   } else rlang::enquo(col_vars)
-
-  cleannames <-
-    resolve_cleannames(cleannames)
 
   # Phase 18z14-i: a prebuilt survey design passed as `data` is unwrapped at THE one boundary
   # (R/survey-design.R) -- its model frame drives the whole pipeline, its weights become the weight
@@ -706,52 +723,27 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                      "i" = "Rename that column, or pass a {.fn survey::svydesign} as {.arg data}."))
 
   # `test` says only WHETHER to test; the BASIS (n / weights / design) is derived once in tab_setup()
-  # -- see svy_inference_basis() in R/survey-design.R.
-  test_on     <- svy_check_test(test)
+  # -- see svy_inference_basis() in R/survey-design.R. `test_on` is the boundary's resolved logical.
+  test_on     <- test
   design_spec <- svy$spec
-  # Phase 18z16-iiiii: the FOUR interval methods, resolved once from the one named-vector argument
-  # (the released `method_cell` / `method_diff` are soft-deprecated aliases into it).
-  ci_method   <- resolve_ci_method(ci_method, method_cell, method_diff, "tab")
 
-  vctrs::vec_assert(comp, size = 1)
-  # Phase 5: `color` accepts FALSE / TRUE / a scalar / c(text, background) / c(text=, background=),
-  # so it is NOT size-1-asserted. It is parsed to a spec here; the pipeline runs on the text-channel
-  # legacy string, then finalize_color_spec() sets the final color / color_signif attributes.
-  color_spec <- normalize_color_spec(color, color_signif)
-  # Phase 19d (D28), applied HERE because the stored `color_signif` attribute is written from this
-  # spec by finalize_color_spec(): a policy the resolver silently disabled would still be STORED on
-  # every column, i.e. the table would claim a gate it does not apply. One rule, one message.
-  ci_off <- ci_disable_signif(ci, color_spec$signif, stars)
-  color_spec$signif <- ci_off$color_signif ; stars <- ci_off$stars
-  color <- color_spec$legacy
   # Phase 19h: `pct` is per COL_VAR, like `levels` and `digits` -- it used to be the odd one out,
   # size-1-asserted, although the engine has always recycled it (that is how tab_many() offered it).
-  # A per-ROW_VAR list stays refused: Phase 6 globalised the row axis on purpose (§5).
+  # A per-ROW_VAR list stays refused: Phase 6 globalised the row axis on purpose (§5). (It is a
+  # SHAPE refusal, not a vocabulary one, so it stays here rather than in TAB_ARG_VALUES.)
   if (is.list(pct))
     cli::cli_abort(c(
       "{.arg pct} is per {.arg col_vars}, so it must be a character vector, not a list.",
       "i" = "The row-variable axis is global in {.fn tab}: for different percentages per row
              variable, build one {.fn tab} per variable."))
-  stopifnot(all(is.na(pct) | pct %in% c("row", "col", "all", "all_tabs", "no")))
   # Phase 6d (§4): `ref` may be a (named) vector -- one reference row per row_var -- so it is NOT
   # size-1-asserted. tab_build() matches names to row_vars (else by order); scalar applies to all.
   vctrs::vec_assert(ref2, size = 1)
-  vctrs::vec_assert(na, size = 1)
-  stopifnot(na %in% c("keep", "drop", "drop_all", "common_base"))
-  # Phase 7a: `levels` (per col_var) is honoured for the main col_vars (see the tab_build call).
-  stopifnot(all(levels %in% c("all", "first", "auto")))
-
   # Phase 6 (§5): the row_var axis is globalised -- ci/chi2 (like comp/pct/ref/ref2) apply to
   # ALL row_vars. For genuinely different settings per variable, build separate tab()s and list
   # them. (The col_var axis stays flexible: pct/levels/digits are still per col_var in tab_many.)
   vctrs::vec_assert(ci  , size = 1)
   vctrs::vec_assert(test, size = 1)
-
-  # Phase 19d (KEY 8a): `OR` is retired. It was `color` + `display` + `ref2` welded into one
-  # argument, and the weld is where D20 and D21 lived. The odds ratio is computed on every row/col-%
-  # table now, so nothing is left to switch on -- only what to SHOW and which 2x2 to take.
-  or_route <- tab_deprecate_or(OR, display, ref2, ref)
-  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
 
   # Phase 6g (§4, S3) + Phase 7a: `na` population policy.
   # - "keep": NAs shown as an explicit level.
@@ -770,9 +762,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                         "drop_all"    = character(),
                         "common_base" = c(row_var, col_var[1], tab_vars))
   na_effective <- if (na == "common_base") "keep" else na
-
-  stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
-  if (tot[1] == "both") tot <- c("row", "col")
 
   # Phase 19h: the deprecated `sup_cols` axis is folded into the col_var axis ONCE, here, instead of
   # being mirrored into three separate arguments of the call below (col_vars / levels / pct), where
@@ -794,12 +783,12 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            other_if_less_than = other_if_less_than, other_level = other_level,
            totaltab = totaltab, totaltab_name = totaltab_name,
            common_totrow = common_totrow,
-           totrow = "row" %in% tot,
+           totrow = .a$totrow,
            # Phase 6e (§6): exactly ONE total column by default. With several main col_vars the
            # per-col_var totals are redundant (all equal each row's base for row%, and the
            # row_var marginal for col%), so "last" shows a single total column. For one col_var
            # this is byte-identical to the historical per-col_var total.
-           totcol = if ("col" %in% tot) { "last" } else { "no" },
+           totcol = .a$totcol,
            total_names = total_names,
            pct  = sup$pct,
            ref = ref, ref2 = ref2, #c(ref, rep(ref , length(sup_cols))),
@@ -1613,6 +1602,67 @@ ctx_update <- function(ctx, updates) {
 }
 
 
+# ctx_settings_locals() -- Phase 19i: project the SETTINGS SPINE into the bare names every stage
+# reads. THE SPINE IS THE ONLY CARRIER; this is its projection into ONE stage's scope, rebuilt at
+# each stage head and never written back into the ctx.
+#
+# WHY THIS SHAPE. Before 19i the same ~15 facts existed TWICE: `tab_setup()` built the spine and
+# then also wrote every one of them flat into the ctx, and `tab_rowvar_ctxs()` sliced the spine only
+# to re-flatten it into those same names per row_var (`row_scalar <- setdiff(names(rows),
+# "row_var")`). Two carriers for one fact -- so the spine advertised itself as the interface while
+# every consumer read the duplicate. The alternative (rewrite ~200 bare reads as `settings$rows$x`)
+# would have made the resolution blocks less readable, not more; projecting the spine keeps the
+# reading idiom and leaves exactly one carrier.
+#
+# DESIGN: pre-slice a spine column is a VECTOR over row_vars; post-slice (`tab_rowvar_ctxs()` hands
+# each unit `rows[i, ]`) it is a length-1 slice, i.e. the scalar the per-row_var stages expect. Same
+# code, both shapes -- which is exactly the property the flat duplicates had, and why they existed.
+# `NULL` spine -> `list()`: a hand-built ctx that never ran `tab_setup()` keeps `new_ctx()`'s
+# defaults, so the NULL guards in `tab_transform()` stay reachable (Phase 19a, D7).
+#
+# WARNING: `col_vars_num` / `col_vars_text` are NAMED logicals downstream (`names()` is read to pick
+# the total column, `tab.R` ~L2173) but the spine stores them unnamed -- the names are restored here
+# from `cols$col_var`. Dropping them silently returns NULL from that `names() |> last()`.
+#
+# CTX_SETTINGS_LOCALS = the names this produces, declared so codetools can be told about them below
+# (they are bindings no static reader can see) and so a spine column added without a projection --
+# or a projection with no home in the spine -- fails the assert rather than going quiet.
+#' @keywords internal
+#' @noRd
+CTX_SETTINGS_LOCALS <- c(
+  # settings$rows, minus its key (na_num is added by tab_prepare_pop)
+  "color", "comparison", "or_ci", "chi2", "ref", "ref2", "comp", "ci", "ci_scale",
+  "totaltab", "totrow", "na_num",
+  # settings$cols (lv1 added by tab_prepare_pop)
+  "lvs", "lv1", "digits", "col_vars_num", "col_vars_text",
+  # settings$pairs (na added by tab_prepare_pop)
+  "pct_vect", "ref_vect", "ref2_vect", "na_text"
+)
+
+#' @keywords internal
+#' @noRd
+ctx_settings_locals <- function(ctx) {
+  s <- ctx$settings
+  if (is.null(s)) return(list())
+  # WARNING: `[[`, never `$` -- the spine is filled in TWO stages (`lv1` / `na` / `na_num` are
+  # tab_prepare_pop's), and tibble's `$` warns "Unknown or uninitialised column" on the earlier ones.
+  out <- c(as.list(s$rows[setdiff(names(s$rows), "row_var")]),
+           list(lvs           = s$cols[["lvs"]],
+                lv1           = s$cols[["lv1"]],
+                digits        = s$cols[["digits"]],
+                col_vars_num  = stats::setNames(s$cols[["is_num"]] , s$cols[["col_var"]]),
+                col_vars_text = stats::setNames(s$cols[["is_text"]], s$cols[["col_var"]]),
+                pct_vect      = s$pairs[["pct"]],
+                ref_vect      = s$pairs[["ref"]],
+                ref2_vect     = s$pairs[["ref2"]],
+                na_text       = s$pairs[["na"]][s$pairs[["is_text"]]]))
+  # one-directional: the spine is filled in two stages, so a column may legitimately be absent here
+  # (before tab_prepare_pop) -- but never present-and-undeclared.
+  stopifnot(all(names(out) %in% CTX_SETTINGS_LOCALS))
+  out
+}
+
+
 # Phase 17e: the TYPED ctx constructor. The entry ctx used to be a hand-written `list(...)` literal
 # in BOTH tab_build() and tab_counts() (which drift), with ~7 downstream fields left absent and
 # defaulted by scattered `exists(<field>, inherits = FALSE)` guards. new_ctx() gives every field a
@@ -1659,31 +1709,50 @@ new_ctx <- function(...) {
     # ctx -- so there is no "directly" to pass it. It is a DECLARED field with one legitimate reader,
     # exactly like its two neighbours here. Revisit in 19k, which owns the jamovi boundary.
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
-    # lean-ctx field whose absence was previously covered by an exists() guard
-    # Phase 19a (D7): pct_vect / ref_vect join their sibling OR_vect. All three are tab_setup()
-    # products written by tab_rowvar_ctxs(), so on a hand-built ctx they are simply ABSENT -- and
-    # tab_transform() does `list2env(ctx, environment())`, which creates no binding for an absent
-    # key, so `is.null(ref_vect)` did not return TRUE, it ERRORED ("object not found"). The guard
-    # that existed to serve exactly that case could therefore never serve it. Declaring them here is
-    # what makes it live; `pct_vect` additionally had NO guard at all and was kept quiet only by a
-    # globalVariables() entry, which is now unnecessary.
-    cached_tests = NULL, pct_vect = NULL, ref_vect = NULL, ref2_vect = NULL,
+
+    # --- STAGE PRODUCTS: written by one stage, read by a later one -----------------------------
+    # Phase 19i: they are DECLARED, not left to appear. An undeclared key is simply ABSENT, and
+    # `list2env(ctx, environment())` creates no binding for an absent key -- so its own NULL guard
+    # does not return TRUE, it ERRORS ("object not found"). That is exactly the class of bug 19a's D7
+    # was (`is.null(ref_vect)` on an undeclared field), and 54 declared keys against ~81 live ones
+    # left 27 more of them possible. Declaring costs one line each and makes the ctx self-describing:
+    # a reader can see what a stage may find without running the pipeline.
+    # NOTE: the per-row_var / per-col_var / per-pair SETTINGS are not here -- they ride
+    # `settings` and reach each stage through ctx_settings_locals(). What is listed is what the
+    # spine's three grains cannot express.
+    #
+    # tab_setup:        the resolved variable roles + the arg products no grain fits
+    settings = NULL, row_vars = NULL, col_vars = NULL, tab_vars = NULL, wt = NULL,
+    tab_row_names = NULL, na_drop_all = NULL, tot_cols_type = NULL, cache_keys = NULL,
+    # (`totcol` is an INPUT above -- tab_setup resolves it in place, it is not a second field)
+    # tab_prepare_pop:  the non-first levels dropped at display time (NULL = nothing to drop)
+    remove_levels = NULL,
+    # tab_aggregate:    the tier-1 aggregates + the two jmvtab cache products
+    fine_num = NULL, fine_fused = NULL, cached_tests = NULL, tier2_keys = NULL,
+    # tab_transform:    this row_var's built tables + its whole-table tests
+    tabs_text = NULL, tabs_num = NULL, chi2_num = NULL,
     # Phase 18z16-iv (W-B): the robust omnibus GRID, produced once in tab_transform() because two
     # consumers need it -- the contrib residual's base (there) and the `test` overlay (assemble).
     robust_tests = NULL,
+    # tab_*_tables:     the finished per-row_var tab(s) + the tier-2 test store
+    tabs = NULL, tests = NULL,
     # Phase k: variable labels (name -> label) captured in tab_setup for the opt-in name display-swap
     var_labels = character()
   )
   ctx_update(defaults, list(...))
 }
+# (the derived globalVariables() declaration for these fields is at the END of this file -- see there)
 
 
 # Phase 17e: single-source the two "resolve NULL -> option / force default" rules that were copy-pasted
 # across the pipeline and its public leaves. (Full leaf-side removal waits on the 17f wrapper/core split;
 # these keep the leaves callable directly while the logic lives in ONE place.)
-# resolve_stars(): NULL -> the tabxplor.stars option (else the explicit value). Sites: tab_setup, tab_num,
-# tab_ci. force_comp(): comp = "all" is meaningless without tab_vars -> collapse to "tab". Sites: the two
-# leaves tab_plain / tab_num.
+# resolve_stars(): NULL -> the tabxplor.stars option (else the explicit value). Since 19i it is called
+# at ONE place per producer -- tab_resolve_common_args() for tab()/tab_plain()/tab_num()/tab_counts(),
+# plus tab_ci() (a self-contained step entry). It used to be resolved at three different DEPTHS, and
+# tab_num()'s was so late that `resolve_leaf_ci()` had already tested a NULL: see the fixture in
+# test-arg-boundary.R. force_comp(): comp = "all" is meaningless without tab_vars -> collapse to
+# "tab". Sites: the two leaf resolvers plain_resolve / num_resolve.
 #' @keywords internal
 #' @noRd
 resolve_stars <- function(stars) {
@@ -1855,15 +1924,18 @@ tab_build_tables <- function(ctx) {
 # tab_rowvar_ctxs() -- split the post-aggregate ctx into one lean ctx per row_var, ready to map/ship
 # (Phase 9a; replaces ctx_slice() + the tabxplor_rowvar_fields constant). Phase 17e: slices the
 # SETTINGS SPINE (ctx$settings, built in tab_setup) by explicit KEY -- the former `length(x) == n`
-# heuristic (guess "per-row_var iff length happens to equal the row_var count") is GONE. The per-row
-# scalars come from `settings$rows[i, ]`; each pair's pct/ref from `settings$pairs` filtered to this
-# row_var (col order preserved -- pairs is row-major); the per-row_var population/aggregate objects
-# (na_text, na_num, fine_num) are sliced by index / by NAME. Each unit also carries its own sliced
-# `settings` (rows[i, ] / cols / this row_var's pairs) for downstream (Phase 17f). Everything else --
-# per-col_var (digits, col_vars_*), scalar, or the shared jmvtab cached_tests list (kept whole; the
-# transform picks its row_var entry) -- rides in the shared skeleton. `data` / `fine_fused` are dropped
-# (shipped once by tab_pmap); the heavy NSE quosures are dropped (they would drag user data into every
-# mirai task).
+# heuristic (guess "per-row_var iff length happens to equal the row_var count") is GONE.
+#
+# Phase 19i: it SLICES the spine and stops there. It used to slice it and then RE-FLATTEN every
+# column into the ~11 bare names the ctx already carried from tab_setup(), which is what made the
+# spine a vehicle rather than an interface; the stages read those names through
+# ctx_settings_locals() now, so one slice is the whole job. What is left is the per-row_var work the
+# spine's grain cannot express: which row_var symbol this unit is, its tab_row_names, and its moment
+# aggregate (sliced by NAME).
+#
+# Everything else -- scalars, or the shared jmvtab cached_tests list (kept whole; the transform picks
+# its row_var entry) -- rides in the shared skeleton. `data` / `fine_fused` are dropped (shipped once
+# by tab_pmap); the heavy NSE quosures are dropped (they would drag user data into every mirai task).
 #' @keywords internal
 #' @noRd
 tab_rowvar_ctxs <- function(ctx) {
@@ -1871,11 +1943,7 @@ tab_rowvar_ctxs <- function(ctx) {
   pairs <- ctx$settings$pairs
   n     <- nrow(rows)
   # per-row_var fields carried into each unit, so they must not ALSO ride whole in `shared`:
-  #  - the `rows` scalar columns (former atomic per_rv fields, still flat in ctx for the pre-slice
-  #    stages / jmvtab), the per-pair pct_vect/ref_vect (now `pairs`), and na_text/na_num/fine_num.
-  row_scalar <- setdiff(names(rows), "row_var")
-  per_rv     <- c("row_vars", "settings", "pct_vect", "ref_vect", "ref2_vect",
-                  "na_text", "na_num", "fine_num", row_scalar)
+  per_rv <- c("row_vars", "settings", "tab_row_names", "fine_num")
   # Phase 18z14-i: the survey DESIGN is dropped here and SHIPPED once, like `data` -- a prebuilt
   # design carries its whole `$variables` frame, so riding in `shared` copied the entire dataset into
   # every per-row_var unit while the microdata itself was serialised once. z16-iiiii: it now rides
@@ -1890,15 +1958,12 @@ tab_rowvar_ctxs <- function(ctx) {
   lapply(seq_len(n), function(i) {
     rv   <- rows$row_var[i]
     keep <- pairs$row_var == rv
-    u <- as.list(rows[i, row_scalar])                              # the per-row_var scalars
+    u <- list()
     u$row_vars      <- ctx$row_vars[i]                             # keep as a length-1 sym list
     u$tab_row_names <- as.character(c(ctx$tab_vars, ctx$row_vars[i]))
+    # the slice: this row_var's scalars, the shared per-col_var settings, this row_var's pairs
+    # (col order preserved -- pairs is row-major).
     u$settings      <- list(rows = rows[i, ], cols = ctx$settings$cols, pairs = pairs[keep, ])
-    u$pct_vect      <- pairs$pct[keep]                             # this row_var's per-col_var vectors
-    u$ref_vect      <- pairs$ref[keep]
-    u$ref2_vect     <- pairs$ref2[keep]                            # z10/19d: resolved per pair (cumulative)
-    u$na_text       <- ctx$na_text[[i]]
-    u$na_num        <- ctx$na_num[[i]]
     u$fine_num      <- ctx$fine_num[[rv]]                          # by NAME (NULL when no numeric cols)
     c(shared, u)
   })
@@ -2298,12 +2363,21 @@ tab_setup <- function(ctx) {
   # DESIGN: three typed tibbles at their natural grain:
   #   rows  = one row per row_var (the per-row_var scalars),
   #   cols  = one row per col_var (the per-col_var settings + factor/numeric masks),
-  #   pairs = one row per (row_var x col_var) -- the fact table carrying pct + ref (na added in
-  #           prepare_pop). expand_grid is ROW-MAJOR (row_var outer, col_var inner), matching the
-  #           unlist() order of the former pct_vect/ref_vect nested lists, so pairs$pct/$ref are
-  #           byte-identical to those. pct_vect/ref_vect thus stop being ctx fields (pairs is their
-  #           home); tab_resolve_settings() above still consumed the LOCAL pct_vect. na_num/fine_num
-  #           stay per-row_var objects sliced by name/index (an aggregate + the pre-slice na policy).
+  #   pairs = one row per (row_var x col_var) -- the fact table carrying pct + ref + the `na` policy
+  #           (added in prepare_pop, which is what resolves it). expand_grid is ROW-MAJOR (row_var
+  #           outer, col_var inner), matching the unlist() order of the former pct_vect/ref_vect
+  #           nested lists, so pairs$pct/$ref are byte-identical to those. pct_vect/ref_vect thus
+  #           stop being ctx fields (pairs is their home); tab_resolve_settings() above still
+  #           consumed the LOCAL pct_vect.
+  #
+  # Phase 19i: it is now the ONLY carrier -- `tab_setup()` no longer ALSO writes each of these flat
+  # into the ctx, and `tab_rowvar_ctxs()` no longer re-flattens them per row_var. Every stage reads
+  # them through ctx_settings_locals() (which see), so the two copies that used to be "kept in sync
+  # by the same ctx_update" are one.
+  #
+  # WHERE THE LINE IS: the spine carries SETTINGS -- values the user chose or a resolver derived,
+  # at one of the three grains. It never carries built OBJECTS: `fine_num` (a moment aggregate,
+  # sliced by name), `remove_levels`, `na_drop_all` and the stage products ride the ctx.
   rv_chr <- as.character(row_vars) ; cv_chr <- as.character(col_vars)
   settings <- list(
     rows = tibble::tibble(
@@ -2327,23 +2401,39 @@ tab_setup <- function(ctx) {
 
   # --- repack: setup produces the resolved/recycled settings every downstream stage reads.
   # ctx_update() preserves a field resolved to NULL (e.g. totcol) as a NULL element -- `ctx$x <-
-  # NULL` would delete it, breaking the downstream list2env() unpack. ---
-  ctx_update(ctx, list(
+  # NULL` would delete it, breaking the downstream list2env() unpack.
+  # Phase 19i: the 15 fields that duplicated a spine column (color / comparison / or_ci / chi2 /
+  # ci / ci_scale / totaltab / totrow / ref / ref2 / comp / lvs / digits / col_vars_num /
+  # col_vars_text) are GONE from here -- they ride `settings` and reach each stage through
+  # ctx_settings_locals(). What stays is what the spine's three grains cannot express. ---
+  ctx <- ctx_update(ctx, list(
     data = data, settings = settings,
     row_vars = row_vars, col_vars = col_vars, tab_vars = tab_vars, wt = wt,
-    col_vars_num = col_vars_num, col_vars_text = col_vars_text,
     tab_row_names = tab_row_names, na_drop_all = na_drop_all,
-    cleannames = cleannames, stars = stars, lvs = lvs, color_signif = color_signif,
-    totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
-    comp = comp, color = color, comparison = comparison, or_ci = or_ci,
-    ci = ci, ci_scale = ci_scale, chi2 = chi2,
+    cleannames = cleannames, stars = stars, color_signif = color_signif,
     inference = inference,
-    digits = digits, total_names = total_names, na = na,
+    total_names = total_names, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
     cache_keys = cache_keys,
     var_labels = var_labels
   ))
+  # ... and the INPUTS the spine now owns leave the ctx entirely. They are the user's raw,
+  # unrecycled, unresolved values: keeping them beside the resolved spine column of the same name is
+  # the same two-carriers problem one step earlier, and the stale copy is the one a bare-name read
+  # would find. Deleting them makes "the spine is the only carrier" mechanical rather than
+  # conventional -- a downstream read of the old flat name now fails loudly instead of quietly
+  # returning the pre-resolution value. (`na` stays: it is a scalar the cache key and tab_counts()
+  # read as such, and the spine carries only its per-grain resolutions.)
+  ctx[SPINE_OWNED_INPUTS] <- NULL
+  ctx
 }
+
+# The tab_build() inputs whose resolved form is a SETTINGS SPINE column, and which therefore stop
+# existing as ctx fields once tab_setup() has run (see there). `levels` resolves to `cols$lvs`.
+#' @keywords internal
+#' @noRd
+SPINE_OWNED_INPUTS <- c("pct", "color", "chi2", "ci", "ref", "ref2", "comp",
+                        "totaltab", "totrow", "digits", "levels")
 
 
 # === STAGE 2/5: tab_prepare_pop() -- prepare the population ONCE (cache tier 0) ==============
@@ -2356,6 +2446,7 @@ tab_setup <- function(ctx) {
 #' @noRd
 tab_prepare_pop <- function(ctx) {
   list2env(ctx, environment())
+  list2env(ctx_settings_locals(ctx), environment())   # Phase 19i: lvs / col_vars_text, from the spine
   # Phase 7e: jmvtab sets ctx$defer_level_merge = TRUE so `levels = "first"` does NOT collapse
   # non-first levels PRE-aggregate -- the aggregate + chi2/ANOVA see FULL levels (cacheable; the
   # level-drop is a display step in tab_assemble). tab()/tab_counts() leave it at new_ctx()'s FALSE
@@ -2385,8 +2476,8 @@ tab_prepare_pop <- function(ctx) {
     na_drop_all <- as.character(c(row_vars, col_vars, tab_vars))
     # Per-row_var lists of "keep" (SAME shape as the else branch): na_num one scalar per row_var,
     # na_text one char vector (per text col_var) per row_var. Keeping the "keep" value preserves the
-    # speed shortcut; the list shape lets any positional consumer index per row_var -- notably
-    # jmv_cache_aggregate()'s ctx$na_num[[i]], which broke on the former scalar with >=2 row_vars.
+    # speed shortcut; the per-row_var shape is what the spine's two grains are assembled from below
+    # (19i) -- it must not collapse to a scalar, which is what broke jmvtab on >= 2 row_vars.
     na_text <- rep(list(rep("keep", sum(col_vars_text))), length(row_vars))
     na_num  <- rep(list("keep"), length(row_vars))
 
@@ -2516,18 +2607,29 @@ tab_prepare_pop <- function(ctx) {
   # --- repack: prepare_pop produces the prepared population + level metadata (tier 0) ---
   # Phase 19a (study §7.10): the SETTINGS SPINE is refreshed here too, and it must be. `lvs` is
   # written into ctx$settings$cols by tab_setup() while it may still hold the sentinel "auto";
-  # THIS stage is what resolves it (against the real level counts), and only the flat ctx$lvs used
-  # to be updated -- so the spine's copy stayed "auto", and tab_rowvar_ctxs() shipped that stale
-  # copy to every parallel worker. Dormant when found (settings$cols is read at exactly one site,
-  # only to be copied forward; every live consumer reads the derived `lv1`), but the spine advertises
-  # itself as THE interface and 19i makes it the only one -- the next reader would have silently got
-  # "auto". `lv1`, the fact consumers actually want, is stored beside it rather than re-derived.
+  # THIS stage is what resolves it (against the real level counts), and only a flat ctx duplicate
+  # used to be updated -- so the spine's copy stayed "auto", and tab_rowvar_ctxs() shipped that stale
+  # copy to every parallel worker. Dormant when found (nothing read settings$cols for a value), but
+  # 19i made the spine the only carrier, so that stale "auto" is now what EVERY consumer would read.
+  # `lv1`, the fact consumers actually want, is stored beside it rather than re-derived.
+  #
+  # Phase 19i: the `na` policy joins it, at the two grains it really has -- per PAIR for the factor
+  # leaves (a text col_var whose row_var/col_var/tab_vars are all in `na_drop_all` keeps its NAs, so
+  # the policy genuinely varies by pair) and per ROW_VAR for the numeric one. That is what the spine's
+  # own comment has promised since 17e. The per-pair vector is assembled from the two lists rather
+  # than recomputed, so the values are the ones the byte-parity nets already lock; a numeric pair
+  # carries its row_var's `na_num`, which is what the leaves read for it.
   ctx$settings$cols$lvs <- lvs
   ctx$settings$cols$lv1 <- lv1
+  ctx$settings$rows$na_num <- purrr::map_chr(na_num, 1L)
+  ctx$settings$pairs$na <- unlist(
+    purrr::map2(na_text, na_num, function(nt, nn) {
+      v <- rep(nn[[1]], length(col_vars_text))
+      v[col_vars_text] <- nt
+      v
+    }), use.names = FALSE)
   ctx_update(ctx, list(
     data = data,
-    na_text = na_text, na_num = na_num,
-    lvs = lvs, lv1 = lv1,
     remove_levels = if (any(lv1)) remove_levels else NULL
   ))
 }
@@ -2548,6 +2650,7 @@ tab_aggregate <- function(ctx) {
   if (!is.null(ctx$cache_env)) return(jmv_cache_aggregate(ctx))
 
   list2env(ctx, environment())
+  list2env(ctx_settings_locals(ctx), environment())   # Phase 19i: col_vars_num / na_num, from the spine
   .by_table <- by_table
 
   # Numeric tier-1: per-row_var moment-sum aggregate via tab_aggregate_num() (Phase 7d-i seam, now
@@ -2614,6 +2717,11 @@ fine_for_pair <- function(fine, row_var, col_var) {
 #' @noRd
 tab_transform <- function(ctx) {
   list2env(ctx, environment())
+  # Phase 19i: this ctx describes ONE row_var, so every spine column projects to the scalar this
+  # stage has always read -- color / chi2 / ci / ci_scale / ref / ref2 / comp / totaltab / totrow /
+  # comparison / or_ci / na_num, plus the per-col_var digits / col_vars_* / lv1 and the per-pair
+  # pct_vect / ref_vect / ref2_vect / na_text.
+  list2env(ctx_settings_locals(ctx), environment())
   .by_table <- by_table
   .fine     <- fine_fused
   row_var   <- as.character(row_vars)                 # this ctx describes exactly ONE row_var
@@ -2625,10 +2733,11 @@ tab_transform <- function(ctx) {
   # jmv_cache_aggregate) -- kept whole in the shared ctx, this row_var's entry picked below. new_ctx()'s
   # NULL default carries on the tab()/tab_counts() path -> recompute in tab_apply_tests(). The method_*
   # CI-method fields are likewise always present (new_ctx defaults). Phase 17e: their former exists()
-  # guards are gone. pct_vect / ref_vect / ref2_vect (tab_setup products, written per row_var by
-  # tab_rowvar_ctxs) default to the scalar broadcast over col_vars only if a hand-built ctx reached
-  # transform without them -- which Phase 19a's new_ctx() declarations are what make REACHABLE (D7:
-  # only the third was declared, so the other two guards errored instead of firing).
+  # guards are gone. Phase 19i: pct_vect / ref_vect / ref2_vect come from `settings$pairs` through
+  # ctx_settings_locals(), so on a real build they are bound and non-NULL. The broadcast below is the
+  # NO-SPINE path only -- a ctx hand-built for a stage test, which keeps new_ctx()'s raw inputs
+  # because tab_setup() never ran to consume them into the spine. (Phase 19a's declarations are what
+  # made these guards REACHABLE at all: D7, an absent field errors instead of testing NULL.)
   if (is.null(pct_vect))  pct_vect  <- rep(pct , length(col_vars))
   if (is.null(ref_vect))  ref_vect  <- rep(ref , length(col_vars))
   # z10/19d: same rule for ref2_vect (the per-pair ref2, "cumulative" already resolved per col_var).
@@ -2803,6 +2912,7 @@ tab_transform <- function(ctx) {
 #' @noRd
 tab_assemble_tables <- function(ctx) {
   list2env(ctx, environment())
+  list2env(ctx_settings_locals(ctx), environment())   # Phase 19i: lv1 / col_vars_* / totrow / ref
   row_var <- as.character(row_vars)
 
   if (sum(col_vars_text) != 0) {
@@ -4006,9 +4116,16 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # makes tab_plain(design, ...) return the same estimates as tab(design, ...).
   svy   <- svy_unwrap_data(data, "tab_plain")
   if (!is.null(svy)) data <- svy$data
-  # Phase 18z16-iiiii (D7): the two leaves hard-coded conf_level = 0.95 and stars = FALSE while
-  # ?tabxplor-options promised both options are honoured everywhere. They now resolve like tab().
-  stars <- resolve_stars(stars)
+  # Phase 19i: the shared argument boundary (see tab()). Phase 18z16-iiiii (D7): the two leaves
+  # hard-coded conf_level = 0.95 and stars = FALSE while ?tabxplor-options promised both options are
+  # honoured everywhere; they resolve like tab() -- now literally, through the same call.
+  .a <- tab_resolve_common_args(
+    "tab_plain", color = color, color_signif = color_signif, stars = stars,
+    conf_level = conf_level, OR = OR, display = display, ref = ref, ref2 = ref2,
+    tot = tot, total_names = total_names, na = na, pct = pct, comp = comp, totaltab = totaltab,
+    user_env = rlang::caller_env())
+  stars <- .a$stars ; display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
+  total_names <- .a$total_names
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -4068,11 +4185,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # Phase 17f: resolve the leaf's validation + forcing cascade ONCE (shared with tab_transform),
   # then hand the resolved bundle to the compute core. tab_plain never finalises colour -- the outer
   # tab()/tab_many() wrapper is the sole finaliser -- so the core returns the built table directly.
-  # Phase 19d/19e: the ONE `OR` retirement route. The leaf carries a real `display` of its own, so
-  # the route is LOSSLESS here as it is on the pipeline (`OR = "OR"` -> `display = "{or}"`): the leaf
-  # and the wrapper speak one grammar, and a superseded argument no longer degrades on the way in.
-  or_route <- tab_deprecate_or(OR, display, ref2, ref)
-  ref2 <- or_route$ref2 ; ref <- or_route$ref ; display <- or_route$display
+  # Phase 19d/19e: the ONE `OR` retirement route ran at the boundary above. The leaf carries a real
+  # `display` of its own, so it is LOSSLESS here as on the pipeline (`OR = "OR"` -> `display =
+  # "{or}"`): the leaf and the wrapper speak one grammar.
   comparison <- tab_leaf_comparison(color, display, pct, ref)
   # tab_plain() computes no contrast interval of its own (that is tab_ci()'s step) EXCEPT the Woolf
   # log-OR one, which is the odds ratio's -- so the leaf's whole `ci` question is this single
@@ -4106,18 +4221,16 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #' @noRd
 plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
                           digits, totaltab, tab_vars, comparison = NA_character_) {
-  vctrs::vec_assert(pct, size = 1)
+  # Phase 19i: the VOCABULARY checks (pct / na / tot / comp) moved to the one argument boundary,
+  # tab_resolve_common_args() -- this resolver's job is the FORCING cascade. What stays is the
+  # normalisation the cascade itself needs.
   vctrs::vec_assert(ref, size = 1)
   ref <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref, "\\s+", " "))
   vctrs::vec_assert(ref2, size = 1)
   ref2 <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref2, "\\s+", " "))
-  vctrs::vec_assert(na, size = 1)
-  stopifnot(na %in% c("keep", "drop"))
   vctrs::vec_assert(totaltab_name, size = 1)
-  total_names  <- vctrs::vec_recycle(total_names, 2)
 
   #pct
-  stopifnot(pct %in% c("no", "row", "col", "all", "all_tabs"))
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
   if (color != "no" & ref == "no") {
@@ -4143,7 +4256,8 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
     )
 
   } else {
-    stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
+    # the vocabulary is checked at the boundary (TAB_ARG_VALUES); the EXPANSION stays here, because
+    # it means different things on the two leaves -- both totals on a crosstab, ...
     if (tot[1] == "both") tot <- c("row", "col")
 
     if (!"col" %in% tot) {
@@ -4242,31 +4356,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # inference object exists to end. Every call site passes it explicitly.
 
   # Phase 18z16-iiiii: ONE resolved inference object (new_inference(), built in tab_setup) instead
-  # of the four flat formals conf_level / design_spec / inference_basis / degf. Unpacked here so the
-  # body below reads exactly as before.
-  conf_level      <- inference$conf_level
-  inference_basis <- inference$basis
-
-
-  # DESIGN: fused aggregation. When tab_many supplies a shared finest-grain aggregate (`.fine`),
-  # skip the per-table raw-data prep + scan and roll `.fine` up instead (see the aggregation branch
-  # below). `use_raw` keeps the table-by-table path fully intact; forced on by `.by_table`.
-  # Phase 17f: df/num no longer force the raw scan -- they build the normal table then extract the
-  # displayed numbers with get_num() (leaf_extract_raw), so they can adopt `.fine` like any build.
-  # Phase 18z14-ii: a design-based variance is a function of the OBSERVATIONS (survey::svyrecvar on
-  # per-cell influence vectors), so it cannot come from a count aggregate -- under a design the raw
-  # scan is mandatory. In practice the two never meet (tab_counts() refuses a design and no design
-  # reaches jamovi), so this is an invariant made explicit rather than a new path.
-  # svy_inference_basis() returns "design" only WITH a design object, so the old
-  # `&& !is.null(design_spec$design)` conjunction could never be FALSE here (W12.1).
-  # z16-ii: a FLAT svydesign(ids = ~1, weights = ~w) has the closed form as its exact answer, so it
-  # takes the algebraic path -- same number, no influence matrix, no 400 MB ceiling.
-  design_on   <- identical(inference_basis, "design")
-  design_flat <- design_on && svy_design_is_flat(inference$design)
-  # the raw scan stays mandatory under ANY design: even the flat one needs the per-cell Sigma w^2,
-  # which a count aggregate cannot carry.
-  use_raw     <- .by_table || is.null(.fine) || design_on
-  des_rows    <- NULL
+  # of the four flat formals conf_level / design_spec / inference_basis / degf.
+  # Phase 19i: the six statements both leaves share are leaf_inference_setup(); what stays local to
+  # each is what genuinely differs (here `can_neff`/`has_w2`, in num_core the per-col_var
+  # `num_served` and the two `method_mean_*`).
+  list2env(leaf_inference_setup(inference, .fine, .by_table), environment())
+  des_rows <- NULL
 
   if (use_raw) {
     # Phase k: convert labelled (haven/labelled) row/col/tab columns to value-label factors for the
@@ -4397,12 +4492,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   degraded <- FALSE
   # Phase 18z16-iv (W-G.2): TWO facts, each said once, replacing the near-synonymous `use_w2` and
   # the four hand-written `(use_w2 || design_on)` sites -- the basis is a single RESOLVED value
-  # (svy_inference_basis()) and must not be re-encoded in five booleans. `want_neff` = the basis asks
-  # for an effective base; `can_neff` = this input can supply one. num_core() uses the same pair
-  # (`num_served` is its per-col_var `can_neff`, the moment triples rather than one Sigma w^2 column).
-  # leaf_neff() below still gates its FLAT arm on `has_w2` alone, which is correct and deliberate: a
-  # non-flat design whose variance degrades falls THROUGH to it.
-  want_neff <- !identical(inference_basis, "n")
+  # (svy_inference_basis()) and must not be re-encoded in five booleans. `want_neff` (from
+  # leaf_inference_setup) = the basis asks for an effective base; `can_neff` = this input can supply
+  # one. num_core() uses the same pair (`num_served` is its per-col_var `can_neff`, the moment
+  # triples rather than one Sigma w^2 column). leaf_neff() below still gates its FLAT arm on `has_w2`
+  # alone, which is correct and deliberate: a non-flat design whose variance degrades falls THROUGH.
   can_neff  <- has_w2 || design_on
 
   tabs <-
@@ -4813,40 +4907,60 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         dplyr::relocate("wn", .after = tidyselect::last_col() )
   }
 
+  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num)
+}
+
+
+# leaf_finish() -- Phase 19i: the RESULT TAIL both leaves run, in one place. Declare the row-index
+# columns, decide whether the tab_vars survive as groups, wrap in the class with the table's own
+# identity, stamp the inference facts on every fmt column, and hand back either the fmt table or the
+# extracted raw numbers.
+#
+# It replaces two ~30-line blocks that were structurally identical and differed in ONE thing: the
+# factor leaf passed `meta = list(spec = new_spec("crosstab", ...))` and the numeric leaf passed no
+# `meta` at all -- so a table built by a direct `tab_num()` carried no `spec$kind` (`tab_kind()` fell
+# back to its degraded guess) and no `vars$wt` (the "Weighted by" footer line had nothing to read).
+# `tab()` masked it by setting the meta itself at assemble. Sharing the tail is what fixes it.
+#
+# @param tabs      the assembled tibble, totals renamed, before any class
+# @param row_var,tab_vars  symbols (tab_vars a list of symbols)
+# @param wt        the weight column name (symbol or character(0))
+# @param inference the build-time inference object; `unserved`/`degraded` are what THIS build found
+#                  out about it (see leaf_inference()) and only this build can know
+# @param df,num    the two raw-extraction modes of the public leaves
+#' @keywords internal
+#' @noRd
+leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
+                        unserved = FALSE, degraded = FALSE, df = FALSE, num = FALSE) {
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ length(unique(.)) == 1))
 
-  # Phase 17b: record the variable ROLES here, where they are known -- so tab_render_vars() reads them
-  # instead of guessing (the last-factor heuristic). The recorded roles MUST match that heuristic:
-  # row_var = the row_var column (last non-group factor); tab_vars = the SURVIVING tab_var columns only
-  # (dropped in the 1-level branch -> character(0), else the heuristic's `all(tab_vars %in% nms)` guard
-  # would fail and silently fall back). col_var "no_col_var" is not a real col_var.
-  plain_col_vars <- if (identical(as.character(col_var), "no_col_var")) character(0)
-                    else as.character(col_var)
-  plain_wt <- if (length(wt) == 0L) NA_character_ else as.character(wt)[1]
-  # Phase 18z16-i: the leaf records its own inference basis, so a DIRECT tab_plain() (the exported
-  # step path) carries the fact its footer and its tab_ci() need -- the pipeline overwrites it with
-  # the same value at assemble.
-  plain_inf <- leaf_inference(inference, unserved, degraded)
+  # Phase 18z16-i: the leaf records its own inference basis, so a DIRECT tab_plain()/tab_num() (the
+  # exported step path) carries the fact its footer and its tab_ci() need.
+  inf <- leaf_inference(inference, unserved, degraded)
+
   # Phase 19f (KEY 1): the leaf DECLARES its row-index columns, in one call, where the truth is known
   # -- instead of assembling a `vars` list that consumers then had to validate against the real
   # columns. `tab_render_vars()` reads the declaration; nothing guesses "the last factor column".
   tabs <- tab_stamp_index(tabs, level = rlang::as_name(row_var),
                           var = rlang::as_name(row_var),
                           tab_vars = purrr::map_chr(tab_vars, rlang::as_name))
-  vars_attr <- new_vars_attr(wt = plain_wt)
+  # Phase 19g (KEY 6): the producer STATES the kind. `vars` holds only what no column can carry --
+  # after 19f that is the weight name (and the variable labels, added at assemble).
+  meta <- list(spec = new_spec("crosstab", vars = new_vars_attr(
+    wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])))
+
   result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext, meta = list(spec = new_spec("crosstab", vars = vars_attr))) |>
+    new_tab(tabs, subtext = subtext, meta = meta) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
-                    meta = list(spec = new_spec("crosstab", vars = vars_attr)))
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext, meta = meta)
   }
 
   # Phase 18z13 (D3) + z16-iiiii: the level, the design df and the basis on every fmt COLUMN, for
   # the per-column colour engine and for tab_ci() -- see tab_stamp_inference().
-  result <- tab_stamp_inference(result, conf_level, plain_inf$degf, plain_inf$basis)
+  result <- tab_stamp_inference(result, inference$conf_level, inf$degf, inf$basis)
 
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else the fmt table.
   if (df || num) leaf_extract_raw(result, df, num, row_var) else result
@@ -4870,6 +4984,63 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 # defaults ("n", NA) and is byte-unchanged.
 #' @keywords internal
 #' @noRd
+# num_total_postprocess() -- Phase 19i: the tail num_core() runs after EACH of its two num_rollup()s
+# (the total rows, then the total table). It was written out twice, differing only in the key set --
+# the tab_vars there, the row_var here. In place (data.table `:=`), so the caller's own object is
+# updated and nothing is returned.
+#
+# Two steps: (1) a rollup's key columns come back as plain character, so coerce them to factors in
+# APPEARANCE order (`forcats::as_factor`, never `base::as.factor`, which would sort them and move
+# "Total"); (2) under na = "keep", order NAs last and give them an explicit "NA" level, so the total
+# rows carry the same NA level the cells do.
+#
+# WARNING: this is NOT the same as the coercion of the MAIN aggregate a hundred lines above, which
+# uses `base::as.factor`. That one runs on data.table's own keyed output, already in sorted order.
+#' @keywords internal
+#' @noRd
+num_total_postprocess <- function(dt, keys, na, tab_row_names) {
+  not_fct <- !purrr::map_lgl(dplyr::select(dt, tidyselect::any_of(tab_row_names)), is.factor)
+  if (any(not_fct)) {
+    dt[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
+       .SDcols = names(not_fct)[not_fct]]
+  }
+  if (identical(na, "keep") && length(keys) != 0) {
+    data.table::setorderv(dt, keys, na.last = TRUE
+    )[, (keys) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"), .SDcols = keys]
+  }
+  invisible(dt)
+}
+
+
+# leaf_inference_setup() -- Phase 19i: the inference PREAMBLE both leaves open with, list2env()'d
+# into each core so the bodies below read exactly as before. Six statements, not the ~45 lines of
+# comment they were buried in -- the rest of each preamble is genuinely leaf-specific and stays put
+# (plain_core's `has_w2` / `can_neff`, num_core's per-col_var `num_served` and its two `method_mean_*`).
+#
+#   conf_level / inference_basis  -- the two facts unpacked from the ONE build-time object
+#   design_on / design_flat       -- a FLAT svydesign(ids = ~1) has the closed form as its EXACT
+#                                    answer, so it takes the algebraic path: same number, no
+#                                    influence matrix, no 400 MB ceiling (z16-ii)
+#   want_neff                     -- the basis asks for an effective base (W-G.2)
+#   use_raw                       -- the aggregate-injection seam. `.by_table` or no `.fine` forces
+#                                    the raw scan; so does ANY design, because a design-based
+#                                    variance is a function of the OBSERVATIONS (svyrecvar on
+#                                    per-cell influence vectors) and even the flat one needs the
+#                                    per-cell Sigma w^2, which a count aggregate cannot carry.
+#' @keywords internal
+#' @noRd
+leaf_inference_setup <- function(inference, .fine, .by_table) {
+  basis     <- inference$basis
+  design_on <- identical(basis, "design")
+  list(conf_level      = inference$conf_level,
+       inference_basis = basis,
+       design_on       = design_on,
+       design_flat     = design_on && svy_design_is_flat(inference$design),
+       want_neff       = !identical(basis, "n"),
+       use_raw         = .by_table || is.null(.fine) || design_on)
+}
+
+
 leaf_inference <- function(inf, unserved = FALSE, degraded = FALSE) {
   if (!svy_weighted(inf)) return(list(basis = NULL, degf = NULL))
   basis <- inf$basis
@@ -5406,7 +5577,20 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # Phase 18z14-i: unwrap a survey design FIRST -- see tab_plain(); a no-op on the pipeline path.
   svy       <- svy_unwrap_data(data, "tab_num")
   if (!is.null(svy)) data <- svy$data
-  ci_method <- resolve_ci_method(ci_method, fn = "tab_num")
+  # Phase 19i: the shared argument boundary (see tab()). It is also where `stars` is resolved now:
+  # this leaf used to hand a possibly-NULL `stars` to resolve_leaf_ci() -- which tests
+  # `isTRUE(stars)` -- and resolve it only much later inside num_core(), so
+  # options(tabxplor.stars = TRUE) built a reference interval through tab_plain() and none here.
+  # (`na` and `comp` carry a match.arg-style vector default, so take the first entry before the
+  # boundary, which asks for one value.)
+  .a <- tab_resolve_common_args(
+    "tab_num", color = color, color_signif = color_signif, ci = ci, stars = stars,
+    conf_level = conf_level, ci_method = ci_method, display = display, ref = ref,
+    tot = tot, total_names = total_names, na = na[1], comp = comp[1], totaltab = totaltab,
+    user_env = rlang::caller_env())
+  ci_method <- .a$ci_method ; stars <- .a$stars ; display <- .a$display ; ref <- .a$ref
+  total_names <- .a$total_names ; na <- .a$na ; comp <- .a$comp
+  color_spec <- .a$color_spec ; color <- .a$color
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -5448,21 +5632,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   #forbid the level to have the name of the variable, othewise problems ----
 
   vctrs::vec_assert(ref, size = 1)
-  # ci    <-  ci[1]
-  # stopifnot(ci %in% c("diff", "cell", "no", ""))
-  comp  <-  comp[1]
-  stopifnot(comp %in% c("tab", "all", "") | is.na(comp) | is.null(comp))
   digits <- vctrs::vec_recycle(vctrs::vec_cast(digits, integer()), length(col_vars))
-  na <- na[1]
-  stopifnot(na %in% c("keep", "drop"))
   vctrs::vec_assert(totaltab_name, size = 1)
-  total_names  <- vctrs::vec_recycle(total_names, 2)
-  # Phase 5: `color` accepts the new forms (FALSE/TRUE/scalar/c(text,bg)/named) + `color_signif`.
-  # Parse to a spec, run the pipeline on the text-channel legacy string, finalize on the result.
-  # Phase 17f: the pipeline calls num_resolve()/num_core() directly with an already-clean legacy
-  # colour, so deprecation lives ONLY here in the public wrapper (the .color_deprecate flag is gone).
-  color_spec <- normalize_color_spec(color, color_signif)
-  color      <- color_spec$legacy
   # Phase 19c: a mean column can carry only a measure whose declared `applies_to` includes "num"
   # ("auto" is the resolver's own sentinel, resolved by resolve_color_auto_num just below). The
   # legacy composites cannot arrive -- normalize_color_spec decodes them into a clean measure plus
@@ -5476,7 +5647,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # gated forcing (a `color_signif` policy needs the interval it gates on) is applied HERE too, not
   # only inside tab_resolve_settings() -- without it the policy greyed every cell of a directly-built
   # numeric table. Same shared rule, so the two paths cannot drift again.
-  r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref)
+  r_ci  <- resolve_leaf_ci(ci, color, color_spec$signif, stars, ref)
   stars <- r_ci$stars ; color_spec$signif <- r_ci$color_signif
   ci    <- if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
   # The SAME comparison chain the pipeline resolves (`color` -> `display` -> the difference); a mean
@@ -5551,7 +5722,8 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
     tot <- if (ref == "tot" & needs_ref) {"row"} else {"no"}
 
   } else {
-    stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
+    # ... and only the total ROW on the numeric leaf, which has no total-column notion. Two rules,
+    # deliberately; one vocabulary, at the boundary.
     if (tot[1] == "both") tot <- "row"
 
     if ((needs_ref | ref == "tot") & !tot %in% "row") {
@@ -5599,48 +5771,30 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
                      subtext, digits, num, df, .fine, .by_table,
                      inference) {                          # REQUIRED -- see plain_core()
 
-  # Phase 18z16-iiiii: ONE resolved inference object -- see plain_core(). It also carries the two
-  # numeric interval methods, which used to be two more formals threaded through five layers.
-  conf_level        <- inference$conf_level
-  inference_basis   <- inference$basis
+  # Phase 18z16-iiiii: ONE resolved inference object -- see plain_core().
+  # Phase 19i: the six statements both leaves share are leaf_inference_setup() (which see: it also
+  # settles `use_raw`, the aggregate-injection seam, whose rule "a design-based variance reads the
+  # OBSERVATIONS, so the raw scan is mandatory" is the same on both sides). What stays here is what
+  # this leaf alone needs: the two numeric interval METHODS, the design df, and `tab_row_names`.
+  list2env(leaf_inference_setup(inference, .fine, .by_table), environment())
   method_mean_diff  <- inference$method[["mean_diff"]]
   method_mean_ratio <- inference$method[["mean_ratio"]]
-
-  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
-
-  # Phase 18s: the effective n applies to the weighted mean CIs (already) AND is now surfaced into
-  # the per-cell `n_eff` FIELD, symmetric with the factor side. Function-scoped so the reshape region
-  # can read it even when ci == "no". Phase 18z16-ii: that effective n is the EXACT flat closed
-  # form (svy_flat_neff_mean) or the design variance, never Kish -- which survives only as the
-  # degenerate-cell limit inside those producers.
-  # Phase 18z14-ii: the basis is RESOLVED once (svy_inference_basis(), tab_setup()) and no longer
-  # re-read from the option here. Phase 18z16-i: the redundant `&& !is.null(design_spec$design)`
-  # conjunction is gone (the resolver returns "design" only with one), and the BASIS -- not the
-  # aggregate's shape -- decides whether the always-accumulated Sigma w^2 is USED (ruling 8).
-  # Phase 18z16-iv (W-G.2): `want_neff` is plain_core()'s predicate, spelled the same way; its
-  # "can this input supply one" twin is `num_served` below (per-col_var moment triples, not one column).
-  want_neff   <- !identical(inference_basis, "n")
-  design_on   <- identical(inference_basis, "design")
-  design_flat <- design_on && svy_design_is_flat(inference$design)
-  des_rows    <- NULL
+  des_rows          <- NULL
   # Phase 18z16-i (W7): the DESIGN's degrees of freedom (#PSU - #strata), Inf/NA otherwise. It
   # REPLACES the sample-based df of every mean pivot -- survey refers a design-based mean interval to
   # t(degf), never to t(n_eff - 1). df_or_design() is the no-op when there is no design df.
   degf      <- inference$degf
 
+  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
 
-
-  # Phase 7d: aggregate-injection seam (mirrors tab_plain's `.fine`). When tab_build() supplies a
-  # prebuilt moment-sum aggregate (`.fine`, from tab_aggregate_num()), skip the raw-data prep + scan
-  # and adopt it. `use_raw` keeps the table-by-table path intact; forced on by `.by_table`. Phase 17f:
-  # df/num no longer force the raw scan -- they build the normal moment aggregate then extract the
-  # means with get_num() (leaf_extract_raw). The moment MATH lives once in num_moment_scan()
-  # (R/tab-agg.R), shared with the producer.
-  # Phase 18z14-ii: a design-based variance reads the OBSERVATIONS, so the raw scan is mandatory
-  # under a design. Unlike the factor leaf this is a real change of path -- the numeric aggregate
-  # `fine_num` is normally adopted -- but not of VALUES: tab_aggregate_num() and this branch call the
-  # same num_moment_scan() (R/tab-agg.R), which test-num-fuse-parity.R locks.
-  use_raw <- .by_table || is.null(.fine) || design_on
+  # Phase 18s: the effective n applies to the weighted mean CIs (already) AND is surfaced into the
+  # per-cell `n_eff` FIELD, symmetric with the factor side. Phase 18z16-ii: that effective n is the
+  # EXACT flat closed form (svy_flat_neff_mean) or the design variance, never Kish -- which survives
+  # only as the degenerate-cell limit inside those producers. `want_neff`'s "can this input supply
+  # one" twin is `num_served` below (per-col_var moment triples, not one Sigma w^2 column).
+  # WARNING: unlike the factor leaf, `use_raw` under a design is a real change of PATH here -- the
+  # numeric aggregate `fine_num` is normally adopted -- but not of VALUES: tab_aggregate_num() and
+  # the scan branch call the same num_moment_scan(), which test-num-fuse-parity.R locks.
 
   if (use_raw) {
     # Phase k: convert labelled (haven/labelled) GROUPING columns (row_var/tab_vars) to value-label
@@ -5748,27 +5902,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       )
     )
 
-    not_fct <- !purrr::map_lgl(dplyr::select(tabs_tot, tidyselect::any_of(tab_row_names)), is.factor)
-    if (any(not_fct)) {
-      # not_fct_names <- names(not_fct)[not_fct]
-      tabs_tot[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
-               .SDcols = names(not_fct)[not_fct]]
-    }
-
     # Fixed in Phase 6e (the grand-total grouping-set is now a length-1 LIST, see above) and
     # golden-locked by n_ci_tabvars / n_ci_tabvars_all; num_rollup() guarantees every tab_var is
     # present in tabs_tot. Phase 7d belt-and-suspenders: restrict the reorder/relabel to the
     # tab_vars actually present, so it is byte-identical in every real case (intersect == the full
     # set) and can only differ on the genuinely-absent-column path that used to crash.
-    if (na == "keep" & length(tab_vars) != 0) {
-      tv <- intersect(as.character(tab_vars), names(tabs_tot))
-      if (length(tv) != 0) {
-        data.table::setorderv(
-          tabs_tot, tv, na.last = TRUE
-        )[, (tv) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
-          .SDcols = tv]
-      }
-    }
+    num_total_postprocess(tabs_tot, intersect(as.character(tab_vars), names(tabs_tot)),
+                          na, tab_row_names)
 
     tabs <- rbind(tabs, tabs_tot)
     data.table::setorderv(tabs, tab_row_names)
@@ -5789,20 +5929,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       tab_vars_chr = as.character(tab_vars)
     )
 
-    not_fct <- !purrr::map_lgl(dplyr::select(tabs_totaltab, tidyselect::any_of(tab_row_names)), is.factor)
-    if (any(not_fct)) {
-      # not_fct_names <- names(not_fct)[not_fct]
-      tabs_totaltab[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
-                    .SDcols = names(not_fct)[not_fct]]
-    }
-
-    if (na == "keep") {
-      data.table::setorderv(
-        tabs_totaltab, as.character(row_var), na.last = TRUE
-      )[, as.character(row_var) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
-        .SDcols = as.character(row_var)]
-    }
-
+    num_total_postprocess(tabs_totaltab, as.character(row_var), na, tab_row_names)
 
     tabs <- rbind(tabs, tabs_totaltab)
     data.table::setorderv(tabs, tab_row_names)
@@ -6149,36 +6276,14 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-  tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
-                                    ~ length(unique(.)) == 1))
-
-  num_inf <- leaf_inference(inference, unserved, degraded)
-  # Phase 19f (KEY 1): the numeric leaf declares its index columns too -- it recorded NO `vars` at all
-  # before, so tab_num()'s row variable was found by the last-factor heuristic new_vars_attr() existed
-  # to replace.
-  tabs <- tab_stamp_index(tabs, level = rlang::as_name(row_var),
-                          var = rlang::as_name(row_var),
-                          tab_vars = purrr::map_chr(tab_vars, rlang::as_name))
-  result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext) |>
-      dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
-  } else {
-    tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
-  }
-
-  # Phase 18z13 (D3) + z16-iiiii: the level this leaf's intervals were built at, the design df they
-  # are referred to and the basis they were computed on, all on every fmt COLUMN -- the colour engine
-  # is per column and cannot see the call's `conf_level`, and tab_ci() on the exported step path must
-  # find the design df on the object it is handed. Stamped in the LEAF so a direct tab_num() carries
-  # them too, and it is now the ONLY stamp of the two: the assembler no longer overwrites the leaves'
-  # basis, so a factor block whose design variance succeeded keeps "design" beside a numeric block
-  # that fell back (the table-level answer is the weakest of its columns -- tab_inference_basis()).
-  result <- tab_stamp_inference(result, conf_level, num_inf$degf, num_inf$basis)
-
-  # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else return the
-  # PRE-FINALISE fmt table (colour is finalised once by the caller: the public tab_num() wrapper).
-  if (df || num) leaf_extract_raw(result, df, num, row_var) else result
+  # Phase 19i: the shared result tail. It is what closes the numeric leaf's `meta` gap -- this leaf
+  # recorded NO meta at all, so a direct tab_num() had no `spec$kind` (tab_kind() fell back to its
+  # degraded guess) and no `vars$wt` (nothing for the "Weighted by" footer to read); tab() masked it
+  # by setting the meta itself at assemble. Also: the inference stamp here is the ONLY one of the two
+  # (the assembler no longer overwrites the leaves' basis), so a factor block whose design variance
+  # succeeded keeps "design" beside a numeric block that fell back -- the table-level answer being
+  # the weakest of its columns (tab_inference_basis()).
+  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num)
 }
 
 
@@ -6336,13 +6441,22 @@ tab_ci <- function(tabs,
   # table attribute -- that is what makes the exported step path, and a table a pipeline has stripped
   # of its metadata, still refer their intervals to t(degf) instead of silently falling back to z.
   if (is.null(degf)) degf <- tab_inference_degf(tabs)
-  stopifnot(all(ci %in% c("auto", "cell", "diff", "no", "ratio", "ref")), #"r_to_r", "c_to_c", "tab_to_tab",
-            all(ci_scale %in% c("diff", "ratio")),
+  stopifnot(all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all"))
   )
-  # Phase 19d: this superseded STEP keeps the computational vocabulary ("no"/"cell"/"diff"), but it
-  # must also accept the public anchor one -- `ci = "ref"` means "the interval of the comparison",
-  # which for tab_ci() is exactly its difference branch (the odds-ratio one is the leaf's).
+  # Phase 19i: the vocabulary is DECLARED (TAB_CI_STEP_VALUES, beside resolve_ci_value() in
+  # R/tab-resolve.R) instead of hand-listed here, and the abort names the valid set.
+  # WARNING -- and this is why it is a SEPARATE declaration rather than resolve_ci_value(): this
+  # superseded step speaks the COMPUTATIONAL vocabulary ("no"/"cell"/"diff"), in which `"diff"` is
+  # its own native word, not the deprecated anchor spelling 19d retired on tab()/tab_num()/
+  # tab_counts(). The pipeline itself calls it that way (tab_apply_tests hands it the resolved
+  # step value), so routing it through the public resolver would fire a deprecation on tabxplor's
+  # own build. `"ref"` -- "the interval of the comparison" -- is the anchor synonym for that branch
+  # (the odds-ratio one is the leaf's).
+  bad_ci <- !ci %in% TAB_CI_STEP_VALUES
+  if (any(bad_ci))
+    cli::cli_abort(c("Unknown {.arg ci} value {.val {unique(ci[bad_ci])}}.",
+                     "i" = "Valid: {.val {TAB_CI_STEP_VALUES}}."))
   ci[ci == "ref"] <- "diff"
   # Phase 15c: a direct `ci = "ratio"` == a difference CI on the ratio (Katz) scale, independent of
   # colour. Fold it to ci = "diff" + ci_scale = "ratio" (the pipeline already does this via
@@ -8148,3 +8262,18 @@ tab_apply_n_min <- function(tab, n_min) {
 }
 
 
+
+
+# --- codetools: the tab_build() ctx fields -----------------------------------------------------
+# Every stage starts with `list2env(ctx, environment())` + `list2env(ctx_settings_locals(ctx), ...)`,
+# which binds every field as a local -- correct at run time, invisible to codetools, which then
+# reports each one as an undefined global. Phase 19i DERIVES the list from the two declarations
+# instead of mirroring ~70 names by hand in R/fmt_class.R (where `inference_mode` outlived by two
+# phases the field it named, leaving the LIVE one undeclared). Same move as 19g's for reg_build()'s
+# `shared`, and it lives beside the declarations it derives from, so it cannot go stale.
+# The third source is leaf_inference_setup(), whose result the two compute cores also list2env().
+# Derived by CALLING it on a neutral inference object, so it cannot go stale either.
+# WARNING: it must stay at the END of this file -- `new_ctx()`'s defaults call
+# `conf_level_default()`, which is defined further down, and top-level code runs in source order.
+utils::globalVariables(c(names(new_ctx()), CTX_SETTINGS_LOCALS,
+                         names(leaf_inference_setup(new_inference(), NULL, FALSE))))

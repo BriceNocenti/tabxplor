@@ -1,0 +1,135 @@
+# PURPOSE: Phase 19i -- lock THE argument boundary. tab() / tab_plain() / tab_num() / tab_counts()
+#          run one `tab_resolve_common_args()` (R/tab-resolve.R) instead of re-implementing the same
+#          rules; this file pins the five defects that re-implementation had produced, and the new
+#          validation the shared boundary makes possible.
+# See: R/tab-resolve.R (TAB_ARG_VALUES / tab_validate_args / tab_resolve_common_args); CLAUDE.md
+#      > 2.0.0 roadmap > Phase 19i.
+
+ab_gss <- function() {
+  gss <- forcats::gss_cat
+  gss$w <- ((as.integer(gss$marital) * 3L + as.integer(gss$race)) %% 5L) + 1
+  gss
+}
+
+# --- validation: three arguments that were checked NOWHERE -------------------------------------
+# `tab(totaltab = "tabel")` used to mean, silently, "no total table": nothing validated the value,
+# and every consumer tests `totaltab %in% c("line","table")`.
+testthat::test_that("an unknown argument value aborts, naming the valid set", {
+  gss <- ab_gss()
+  testthat::expect_error(tab(gss, marital, race, totaltab = "tabel"), "Unknown .*totaltab")
+  testthat::expect_error(tab(gss, marital, race, totaltab = "tabel"), "line")
+  testthat::expect_error(tab(gss, marital, race, na = "dropp"),       "Unknown .*na")
+  testthat::expect_error(tab(gss, marital, race, pct = "rows"),       "Unknown .*pct")
+  testthat::expect_error(tab(gss, marital, race, tot = "rows"),       "Unknown .*tot")
+  testthat::expect_error(tab(gss, marital, race, levels = "firsts"),  "Unknown .*levels")
+  # the leaves and tab_counts get the restricted `na` vocabulary, from the same table
+  testthat::expect_error(tab_plain(gss, marital, race, na = "drop_all"), "Unknown .*na")
+})
+
+testthat::test_that("conf_level and n_min are validated, and conf_level guesses the typo", {
+  gss <- ab_gss()
+  testthat::expect_error(tab(gss, marital, race, conf_level = 95), "0\\.95")
+  testthat::expect_error(tab(gss, marital, race, conf_level = 0),  "conf_level")
+  testthat::expect_error(tab(gss, marital, race, n_min = -1),      "n_min")
+  testthat::expect_error(tab_num(gss, race, tvhours, conf_level = 95), "0\\.95")
+})
+
+# A per-row_var LIST `pct` is a SHAPE refusal with its own message (Phase 19h); the shared validator
+# must step aside for it rather than deparsing the list into a bogus "unknown value".
+testthat::test_that("a per-row_var `pct` list still gets its own message", {
+  gss <- ab_gss()
+  testthat::expect_error(
+    tab(gss, c(marital, relig), race, pct = list(marital = "row", relig = "col")),
+    "must be a character vector")
+})
+
+# --- defect 1: tab_counts() stored a significance gate it never applied -------------------------
+# It builds a color_spec and finalises it, but never ran ci_disable_signif() -- so with an anchor
+# that leaves nothing to test, every column carried a `color_signif` the resolver ignored.
+testthat::test_that("tab_counts() informs and disables a policy `ci` cannot anchor (D28)", {
+  cu <- dplyr::count(ab_gss(), marital, race)
+  t <- testthat::expect_message(
+    tab_counts(cu, marital, race, counts = n, pct = "row",
+               ci = "cell", color = "diff", color_signif = "grey_non_signif"),
+    "nothing to test")
+  testthat::expect_true(all(vapply(t[vapply(t, tabxplor::is_fmt, logical(1))],
+                                   function(x) identical(attr(x, "color_signif"), "ignore"),
+                                   logical(1))))
+  # ... exactly as tab() has done since 19d
+  tt <- suppressMessages(tab(ab_gss(), marital, race, pct = "row",
+                             ci = "cell", color = "diff", color_signif = "grey_non_signif"))
+  testthat::expect_equal(unique(vapply(tt[vapply(tt, tabxplor::is_fmt, logical(1))],
+                                       function(x) attr(x, "color_signif"), "")),
+                         "ignore")
+})
+
+# --- defect 2: the `stars` option reached tab() and not tab_num() -------------------------------
+# tab_num() handed a possibly-NULL `stars` to resolve_leaf_ci(), which tests isTRUE(stars), and
+# resolved it against the option only much later, inside num_core(). Measured: the same call built
+# a reference interval through tab() and none through tab_num().
+testthat::test_that("options(tabxplor.stars) reaches tab_num() as it reaches tab()", {
+  gss  <- ab_gss()
+  inf  <- function(t) vctrs::field(t$tvhours, "ci_inf")
+  withr::with_options(list(tabxplor.stars = TRUE), {
+    testthat::expect_equal(inf(tab_num(gss, race, tvhours)), inf(tab(gss, race, tvhours)))
+    testthat::expect_true(any(!is.na(inf(tab_num(gss, race, tvhours)))))
+  })
+  # and with the option off, neither builds one
+  withr::with_options(list(tabxplor.stars = FALSE), {
+    testthat::expect_true(all(is.na(inf(tab_num(gss, race, tvhours)))))
+    testthat::expect_true(all(is.na(inf(tab(gss, race, tvhours)))))
+  })
+})
+
+# --- defect 3: a direct tab_num() carried no `meta` at all -------------------------------------
+testthat::test_that("both leaves record the table's identity (shared leaf_finish())", {
+  gss <- ab_gss()
+  for (leaf in list(tab_num(gss, race, tvhours, wt = w),
+                    tab_plain(gss, marital, race, pct = "row", wt = w))) {
+    testthat::expect_equal(tab_kind(leaf), "crosstab")
+    testthat::expect_equal(tabxplor:::get_vars_attr(leaf)$wt, "w")
+  }
+  # the weight footer therefore has something to read on the numeric leaf too
+  testthat::expect_match(paste(tab_md(tab_num(gss, race, tvhours, wt = w), print = FALSE),
+                               collapse = " "),
+                         "Weighted by w")
+})
+
+# --- defect 4: tab_num() dropped the policy half of a composite colour --------------------------
+# resolve_leaf_ci() was handed the RAW `color_signif` argument instead of the DECODED
+# `color_spec$signif`, and its `if (signif_on) ... else "ignore"` overwrote the policy the composite
+# carried -- so `tab_num(color = "after_ci")` stored "ignore" where tab() stored "grey_non_signif".
+# (19c's standing warning: decode the alias FIRST, normalise second.)
+testthat::test_that("a composite colour keeps its policy on the numeric leaf, as on tab()", {
+  gss <- ab_gss()
+  pol <- function(t) unique(vapply(t[vapply(t, tabxplor::is_fmt, logical(1))],
+                                   function(x) attr(x, "color_signif"), ""))
+  a <- suppressWarnings(tab_num(gss, race, c(age, tvhours), comp = "all", ci = "ref",
+                                color = "after_ci"))
+  b <- suppressWarnings(tab(gss, race, c(age, tvhours), comp = "all", ci = "ref",
+                            color = "after_ci"))
+  testthat::expect_equal(pol(a), "guaranteed_effect")   # what "after_ci" decodes to
+  testthat::expect_equal(pol(a), pol(b))
+})
+
+# --- tab_counts()'s half-gated limits become real -----------------------------------------------
+testthat::test_that("tab_counts() refuses the ci_method slots it cannot honour", {
+  cu <- dplyr::count(ab_gss(), marital, race)
+  testthat::expect_error(
+    tab_counts(cu, marital, race, counts = n, pct = "row",
+               ci_method = c(mean_diff = "student")),
+    "no mean columns")
+  # the two slots that DO apply are accepted, and reach the build
+  testthat::expect_no_error(
+    tab_counts(cu, marital, race, counts = n, pct = "row", ci = "cell",
+               ci_method = c(cell = "wald")))
+})
+
+# --- tab_ci()'s vocabulary is declared, and stays the STEP one ----------------------------------
+testthat::test_that("tab_ci() aborts on an unknown `ci`, but `diff` is its own native word", {
+  t <- tab_plain(ab_gss(), marital, race, pct = "row")
+  testthat::expect_error(tab_ci(t, ci = "bogus"), "Unknown .*ci")
+  testthat::expect_error(tab_ci(t, ci = "bogus"), "cell")
+  # no deprecation here: the pipeline itself calls the step with "diff"
+  testthat::expect_no_condition(tab_ci(t, ci = "diff"), class = "lifecycle_warning_deprecated")
+})

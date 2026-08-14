@@ -282,8 +282,9 @@ jmv_cache_aggregate <- function(ctx) {
 
   row_vars      <- as.character(ctx$row_vars)
   col_vars      <- as.character(ctx$col_vars)
-  fct_cols      <- col_vars[ctx$col_vars_text]
-  num_cols      <- col_vars[ctx$col_vars_num]
+  # Phase 19i: the SETTINGS SPINE is the only carrier of these -- the flat ctx duplicates are gone.
+  fct_cols      <- col_vars[ctx$settings$cols$is_text]
+  num_cols      <- col_vars[ctx$settings$cols$is_num]
   tab_vars      <- as.character(ctx$tab_vars)
   wt            <- ctx$wt                       # symbol or character()
   weighted      <- length(wt) != 0L
@@ -350,7 +351,7 @@ jmv_cache_aggregate <- function(ctx) {
     fine_num <- stats::setNames(vector("list", length(row_vars)), row_vars)
     for (i in seq_along(row_vars)) {
       rv     <- row_vars[[i]]
-      na_rv  <- ctx$na_num[[i]]
+      na_rv  <- ctx$settings$rows$na_num[[i]]
       msr    <- sort(num_cols)
       msr_fp <- lapply(msr, function(v) fp[[v]])
       key    <- jmv_hash(list("num", pop_tag, rv, fp[[rv]], msr, msr_fp,
@@ -385,9 +386,9 @@ jmv_cache_aggregate <- function(ctx) {
   # pct/ref/ci/levels/color/digits (none change the omnibus test). na disambiguates keep vs drop (the
   # test sees drop's NA-cell removal). Used only when chi2 is on AND non-contrib (contrib writes
   # per-cell ctr/var fields, not in the test tibble -> must recompute).
-  chi2      <- ctx$chi2
-  color     <- ctx$color                       # Phase 19c: the ONE resolved measure (was color_ctr)
-  comp      <- ctx$comp
+  chi2      <- ctx$settings$rows$chi2
+  color     <- ctx$settings$rows$color         # Phase 19c: the ONE resolved measure (was color_ctr)
+  comp      <- ctx$settings$rows$comp
   na_scalar <- ctx$na
   tier2_keys  <- stats::setNames(vector("list", length(row_vars)), row_vars)
   cached_tests <- stats::setNames(vector("list", length(row_vars)), row_vars)
@@ -433,7 +434,7 @@ jmv_cache_aggregate <- function(ctx) {
     data <- jmv_relevel_cols(data, spec, unique(c(row_vars, col_vars, tab_vars)))
     # levels = "first" + reorder: the column KEPT must be the reordered-first. Recompute remove_levels
     # for lv1 col_vars in spec (defer_level_merge appends the explicit "NA" column). Others untouched.
-    lv1 <- ctx$lv1
+    lv1 <- ctx$settings$cols$lv1
     rl  <- ctx$remove_levels
     if (!is.null(lv1) && any(lv1) && !is.null(rl)) {
       for (cv in intersect(col_vars[lv1], names(spec))) {

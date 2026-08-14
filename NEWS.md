@@ -201,6 +201,13 @@
 
 ## Changes that may affect existing code
 
+* **An unknown argument value now aborts instead of being silently ignored.** `totaltab`, `n_min` and
+  `conf_level` were validated nowhere at all, so `tab(totaltab = "tabel")` quietly meant "no total
+  table" and `conf_level = 95` reached the interval engine as a probability. Every crosstab producer
+  (`tab()`, `tab_plain()`, `tab_num()`, `tab_counts()`) now checks its arguments against one declared
+  vocabulary and names the valid set in the message; `conf_level = 95` suggests `0.95`.
+* **`tab_counts(ci_method = c(mean_diff = ))` now aborts.** A counts table has no mean columns, so the
+  two mean slots were accepted and did nothing; `cell` and `diff` are unaffected.
 * **A weighted table now says, in its footer, what its intervals and tests are based on** — and the
   default position ("the raw number of respondents") is stated rather than left silent. The
   development-only option `tabxplor.kish_neff` is **renamed `tabxplor.design_effect`** (it was never
@@ -281,6 +288,16 @@
 
 ## Bug fixes
 
+* **`options(tabxplor.stars = TRUE)` did not reach `tab_num()`**, although it reached `tab()` for the
+  same table: the option was read too late to decide whether a reference interval is needed, so the
+  two produced different numbers.
+* **`tab_num()` and `tab_plain()` recorded nothing about the table they built** — no table kind, and
+  no weight name, so a directly-built weighted `tab_num()` printed no "Weighted by …" footer.
+* **`tab_num(color = "after_ci")` dropped the significance policy** the combined value carries, so its
+  cells were coloured without the greying `tab()` applies to the same request.
+* **`tab_counts()` stored a `color_signif` policy it never applied** when `ci` anchored nothing to test
+  (`"cell"` / `"no"`): the table claimed a significance gate its colours did not use. It now informs
+  and disables it, as `tab()` does.
 * **`tab(filter = )` accepted only a character string.** A bare expression (`filter = !is.na(x)`) was
   evaluated in the caller's frame instead of the data, and aborted with "object not found" — although
   that is the form the documentation shows. Both forms work now, and an expression may reference the

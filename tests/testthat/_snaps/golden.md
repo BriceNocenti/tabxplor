@@ -954,6 +954,7 @@
       | C       | |      10 (σ3)  |
       |**Total**| |  **10** (σ3)  |
       
+      Weighted by w; confidence intervals and tests use the unweighted sample size.
       Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
       :::
 

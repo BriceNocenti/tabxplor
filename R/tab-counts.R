@@ -5,10 +5,13 @@
 #       data.frame, a table/xtabs/matrix object, frequencies + base N) to the canonical count-aggregate
 #       and routes them through the SAME core as tab(): tab_plain()'s `.fine` pre-aggregate entry (the
 #       scan-fusion path, locked byte-for-byte by test-fuse-parity.R) + the shared finalize (tab_chi2 /
-#       tab_ci / tab_add_n_pct / tab_pvalue_lines). It ALSO shares tab()'s colour boundary
-#       (normalize_color_spec at the front) and its finalize_color_tail() at the back, so every modern
-#       colour form (TRUE / two-channel / per-type / color_signif / ratio), `display` and a per-table
-#       `color_breaks` behave EXACTLY as in tab(). No math is forked.
+#       tab_ci / tab_add_n_pct / tab_pvalue_lines). Phase 19i: it also shares tab()'s whole ARGUMENT
+#       boundary -- one tab_resolve_common_args() call where ~15 copy-pasted lines used to be -- and
+#       its finalize_color_tail() at the back, so every modern colour form (TRUE / two-channel /
+#       per-type / color_signif / ratio), `display` and a per-table `color_breaks` behave EXACTLY as
+#       in tab(). What stays local is what is TRUE OF THIS PRODUCER ONLY: the survey-design refusal,
+#       the microdata-only `na` refusal (which says WHY, where the shared message would only say the
+#       word is not in the vocabulary), and the inert `ci_method` mean slots. No math is forked.
 # KEY CONSTRAINTS:
 #   - Require a real unweighted `n`; weighted input carries BOTH a real unweighted count and a
 #     weighted count (weighted estimate + unweighted n -- decisions doc §14). Input whose counts
@@ -267,16 +270,6 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                        chi2 = lifecycle::deprecated()) {
 
-  # Phase 14a: `chi2` renamed `test` (see tab()) -- kept working, one soft nudge.
-  if (lifecycle::is_present(chi2)) {
-    lifecycle::deprecate_soft("2.0.0", "tab_counts(chi2 = )", "tab_counts(test = )")
-    test <- chi2
-  }
-
-  # Phase 19d: the ONE `OR` retirement route, shared with tab() / tab_many() / tab_plain().
-  or_route <- tab_deprecate_or(OR, display, ref2, ref)
-  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
-
   # Phase 18z14-i: tab_counts() starts from pre-aggregated counts, so it is the ONE entry point
   # that REFUSES a survey design rather than unwrapping it -- a design's weights and structure are
   # per-observation facts that a count table cannot carry. Same svy_is_design() as the four accepting
@@ -286,33 +279,36 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
       "{.fn tab_counts} works on pre-aggregated counts; a survey design carries microdata.",
       "i" = "Pass the design to {.fn tab} instead, or give the weighted counts in {.arg wt_counts}."
     ))
-  # `test` is TRUE/FALSE. It used to be forwarded as a truthy `chi2`, so tab_counts(test = "survey")
-  # silently produced a CLASSIC test.
-  test <- svy_check_test(test)
-
-  input <- rlang::arg_match(input)
-  vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(na, size = 1)
-  # `color` is NOT size-1-asserted (like tab()): it accepts FALSE/TRUE/scalar/c(text, background)/
-  # a per-type list -- parsed by normalize_color_spec() below.
   # Phase 6g (S3): na = "common_base" is microdata-only -- it fixes the population from who is
   # NA on the row_var/first col_var, which pre-aggregated counts cannot reconstruct. na = "drop_all"
   # (drop every row missing on ANY variable) is likewise a whole-DB row drop with no meaning on counts.
+  # This runs BEFORE the shared boundary because it says WHY, where the shared "unknown value" message
+  # would only say the word is not in the leaf vocabulary.
   if (identical(na, "common_base") || identical(na, "drop_all")) {
     cli::cli_abort(c(
       "{.code na = {na}} is only available in {.fn tab} (from microdata).",
       "i" = "Pre-aggregated counts cannot reconstruct who was missing; use {.val keep} or {.val drop}."
     ))
   }
-  stopifnot(na %in% c("keep", "drop"))
-  stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
-  if (tot[1] == "both") tot <- c("row", "col")
-  total_names <- vctrs::vec_recycle(total_names, 2)
-  cleannames <- resolve_cleannames(cleannames)
+  # Phase 19i: the ~15 copy-pasted boundary lines are ONE call -- the same one tab() makes. That is
+  # also what closes two rules this constructor never had: `ci = "cell"`/"no" beside a significance
+  # policy now informs and disables it (D28) instead of STORING a gate the resolver ignores, and
+  # `stars` is resolved from the option at the boundary rather than four layers down.
+  .a <- tab_resolve_common_args(
+    "tab_counts", test = test, chi2 = chi2, color = color, color_signif = color_signif,
+    ci = ci, stars = stars, conf_level = conf_level, ci_method = ci_method,
+    cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
+    tot = tot, total_names = total_names, na = na, pct = pct, comp = comp,
+    totaltab = totaltab, n_min = n_min, user_env = rlang::caller_env())
+  test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars
+  display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
+  color_spec <- .a$color_spec ; total_names <- .a$total_names
+  # The two MEAN interval methods are inert on a counts table -- there are no mean columns -- so an
+  # explicit setting is refused rather than silently accepted (it used to ride along and do nothing).
+  counts_refuse_mean_methods(ci_method)
+  ci_method <- .a$ci_method
 
-  # Phase 5: parse `color` (+ `color_signif`) once, exactly as tab()/tab_many() do: the engine runs
-  # on the legacy string ($legacy) + the significance policy ($signif) + the ratio-CI flag, then
-  # finalize_color_tail() sets the final two-channel colour attributes on the built table.
-  color_spec <- normalize_color_spec(color, color_signif)
+  input <- rlang::arg_match(input)
 
   # -- resolve the input SHAPE to canonical long tidy counts, then to the aggregate (the one
   #    validation boundary) --
@@ -353,9 +349,9 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   #    `tot`). --
   data_skel <- as.data.frame(fine)
 
-  # tot -> (totrow, totcol), exactly as tab()'s wrapper translates it.
-  totrow <- "row" %in% tot
-  totcol <- if ("col" %in% tot) "last" else "no"
+  # tot -> (totrow, totcol): the boundary's translation, the same one tab() reads.
+  totrow <- .a$totrow
+  totcol <- .a$totcol
 
   # Phase 17e: the same typed new_ctx() constructor tab_build() uses. tab_counts() sets the fields it
   # needs and inherits the rest (parallel / cache_env / defer_level_merge / levels_order) from the
@@ -376,7 +372,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     na = na, levels = "all",
     cleannames = cleannames, output = "single",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
-    ci_method = resolve_ci_method(ci_method, fn = "tab_counts"),
+    ci_method = ci_method,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,
@@ -393,9 +389,15 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   # no NA-drop beyond the `na` policy) and inject the count aggregate as the fused tier-1 (tab_plain
   # (.fine=) adopts it). levels = "first"/"auto" would need remove_levels computed in the bypassed
   # tab_prepare_pop, so tab_counts keeps all levels (see the header KEY CONSTRAINTS).
+  # Phase 19i: the population/level metadata goes onto the SETTINGS SPINE, which is where
+  # tab_prepare_pop() would have written it -- `lvs` and `lv1` were previously written flat, and
+  # `lvs` not at all, so the spine tab_counts() shipped to tab_build_tables() was incomplete.
+  ctx$settings$cols$lvs    <- rep("all", nrow(ctx$settings$cols))
+  ctx$settings$cols$lv1    <- FALSE
+  ctx$settings$rows$na_num <- ctx$na
+  ctx$settings$pairs$na    <- rep(ctx$na, nrow(ctx$settings$pairs))
   ctx <- ctx_update(ctx, list(
-    na_text = list(ctx$na), na_num = list(ctx$na),
-    lv1 = FALSE, remove_levels = NULL,
+    remove_levels = NULL,
     fine_num = NULL, fine_fused = fine
   ))
 
@@ -405,4 +407,23 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   # tab()/tab_many() -> a modern colour (TRUE / two-channel / per-type / color_signif / ratio), a
   # `display` recipe and a per-table `color_breaks` override are all applied here, on the built table.
   finalize_color_tail(result, color_spec, color_breaks, display)
+}
+
+
+# counts_refuse_mean_methods() -- Phase 19i: `ci_method`'s two MEAN slots have nothing to act on
+# here. A counts table has no mean column, so `mean_diff` / `mean_ratio` used to be accepted in full
+# and do nothing -- the half-gated limit the design notes admit to ("enforced by argument omission
+# plus one roxygen paragraph"). Setting one is now a refusal, naming the two slots that DO apply.
+# The argument stays whole: it is one named vector across every producer, and that is the point.
+#' @keywords internal
+#' @noRd
+counts_refuse_mean_methods <- function(ci_method) {
+  if (is.null(ci_method) || is.null(names(ci_method))) return(invisible(NULL))
+  hit <- intersect(c("mean_diff", "mean_ratio"), names(ci_method))
+  if (length(hit) == 0L) return(invisible(NULL))
+  cli::cli_abort(c(
+    "{.code ci_method = c({hit[[1]]} = )} has no effect in {.fn tab_counts}: a counts table has no
+     mean columns.",
+    "i" = "The slots that apply here are {.val cell} and {.val diff}."
+  ))
 }

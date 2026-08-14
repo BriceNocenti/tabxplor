@@ -159,14 +159,43 @@ R/
 │                              graceful degrade, used by print + exporters),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
 │                              tab_build() = staged pipeline over a TYPED ctx (17e: new_ctx(), one
-│                              defaults list, kills the exists() guards + both hand-written ctx literals):
+│                              defaults list; 19i: it declares every STAGE PRODUCT too -- 54 declared
+│                              vs ~81 live had left 27 undeclared, and an undeclared field is ABSENT,
+│                              so list2env() creates no binding and its own is.null() guard ERRORS
+│                              [19a's D7 class]; utils::globalVariables() for those bindings is now
+│                              DERIVED from new_ctx() + CTX_SETTINGS_LOCALS at the END of tab.R --
+│                              ⚠ it must stay there, new_ctx()'s defaults call conf_level_default(),
+│                              defined further down -- replacing the ~70-name hand mirror in
+│                              fmt_class.R that had outlived a field it named):
 │                              tab_setup (builds the SETTINGS SPINE ctx$settings = rows/cols/pairs star
 │                              schema; pairs REPLACES pct_vect/ref_vect -- the axes meet only there) /
 │                              tab_prepare_pop / tab_aggregate / tab_build_tables (Phase 9a: the OUTER
-│                              row_var map -> tab_build_one, + tab_rowvar_ctxs, which 17e slices by KEY --
-│                              length heuristic GONE) ; tab_transform / tab_assemble_tables are SCALAR
+│                              row_var map -> tab_build_one, + tab_rowvar_ctxs, which 17e slices by KEY
+│                              -- length heuristic GONE, and 19i STOPS THERE: it used to slice the
+│                              spine only to re-flatten every column into the same bare names the ctx
+│                              already carried) ; tab_transform / tab_assemble_tables are SCALAR
 │                              over one row_var ; tab_assemble_output (merge/pvalue/unwrap);
-│                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
+│                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare).
+│                              19i: **ctx_settings_locals()** = the spine is the ONLY carrier. Each
+│                              stage opens `list2env(ctx_settings_locals(ctx), environment())`, which
+│                              projects settings$rows/cols/pairs into the bare names the resolution
+│                              blocks read (pre-slice a VECTOR over row_vars, post-slice the scalar --
+│                              the same property the flat duplicates had, which is why they existed);
+│                              tab_setup writes NEITHER the 15 resolved duplicates NOR the raw inputs
+│                              the spine owns (`SPINE_OWNED_INPUTS` are DELETED from the ctx), so a
+│                              bare-name read cannot find a pre-resolution value. `na` joins the spine
+│                              at its two real grains (pairs$na / rows$na_num), `lvs`/`lv1` at theirs.
+│                              CTX_SETTINGS_LOCALS declares the projected names (build-time assert).
+│                              **leaf_finish()** = the two leaves' shared result tail (row-index
+│                              declaration -> group-or-not -> new_tab/new_grouped_tab WITH the table's
+│                              own `spec` -> tab_stamp_inference -> leaf_extract_raw): num_core passed
+│                              NO meta at all, so a direct tab_num() had no spec$kind and no vars$wt
+│                              (nothing for the weight footer to read). **leaf_inference_setup()** =
+│                              the 6 preamble statements they share (basis/design_on/design_flat/
+│                              want_neff/use_raw); the divergent halves stay local, with the reason.
+│                              **num_total_postprocess()** = num_core's two identical post-rollup
+│                              blocks. ⚠ build_total_rows() and num_rollup() are NOT merged: base::sum
+│                              over split() vs data.table gforce is a 1-ULP contract on both sides.
 ├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3) + z16-iiiii's **CI_METHODS** = THE interval-method
 │                              vocabulary (4 kinds x their legal values, first = default), from which
 │                              default_ci_method() derives and resolve_ci_method() validates -- so the ONE
@@ -366,9 +395,30 @@ R/
 │                              same record from a finished RENDER model (the transpose has no table).
 │                              Refusals that are NOT shape facts (duplicated row keys, >1 total
 │                              row/column) stay local to tab_transpose(), with a comment saying so.
-├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
-│                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
-├── tab-resolve.R    (~230 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
+├── tab-counts.R     (~390 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
+│                              input shape → count-aggregate → tab_plain(.fine) + shared finalize.
+│                              19i: its ~15 copy-pasted boundary lines are ONE
+│                              tab_resolve_common_args() call, which also gave it two rules it never
+│                              had (D28 on its OWN color_spec -- it stored a gate it never applied --
+│                              and `stars` resolved from the option). What stays local is what is
+│                              true of THIS producer: the design refusal, the microdata-only `na`
+│                              refusal (it says WHY) and counts_refuse_mean_methods() (the ci_method
+│                              mean slots are inert here -- accepted-and-ignored before)
+├── tab-resolve.R    (~430 L) THE argument boundary + the arg-overwrite cascade.
+│                              19i: **tab_resolve_common_args()** = what every crosstab producer
+│                              must do to its arguments, run once, by tab() / tab_plain() / tab_num()
+│                              / tab_counts() (5 hand-written copies that had drifted -> 1): the
+│                              chi2->test rename, **TAB_ARG_VALUES** + tab_validate_args() (the
+│                              vocabulary AS DATA: `values` / `leaf` / `size` / `na_ok` per argument,
+│                              so `totaltab`/`n_min`/`conf_level`, validated NOWHERE before, abort
+│                              naming the valid set), resolve_cleannames/_stars/_ci_method, the `OR`
+│                              route, normalize_color_spec + ci_disable_signif ON THE SPEC, tot ->
+│                              (totrow, totcol), total_names. ⚠ `ci` is deliberately NOT in
+│                              TAB_ARG_VALUES: its vocabulary carries a soft-deprecation, so
+│                              validating it means REWRITING it -- resolve_ci_value()'s job.
+│                              TAB_CI_STEP_VALUES = tab_ci()'s own STEP vocabulary, declared beside
+│                              it, in which "diff" is native (the pipeline calls the step that way)
+│                              and carries no deprecation. Then tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
 │                              cascade shared by tab_build+tab_counts -- color="auto" -> a MEASURE
 │                              (via MEASURES' declared auto_for contexts), then that measure's
 │                              declared `requires` applied to chi2/totrow/ci/ref;
@@ -2380,6 +2430,136 @@ No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** 
 **FOLLOW-UPS.** 19i can start on this commit. 19l: the `"all_col_vars"` disambiguation, the
 deprecation-warning corpus migration, and re-checking whether `roles$new_col_var` and `has_color`
 have grown other consumers. 19n: the spread-crosstab render eyeball, and the vignettes.
+
+---
+
+#### Phase 19i — The build pipeline and the `tab_counts` boundary
+
+**DONE (2026-08-14).** Full suite **FAIL 0, WARN 133, SKIP 4, PASS 6042**, against the inherited
+FAIL 0 / WARN 133 / PASS 6031 — same warning count, +11 assertions, nothing red. The delta is
+*proved*: `dev/verify_golden_field_delta.R` reports **only the declared addition** across all
+**1788 cells of the 36 goldens** (no field, no other column attribute, no `test` column, no other
+`meta` sub-field), `dev/verify_color_attrs.R` prints **IDENTICAL** over its 293 cases, and
+`test-parallel-parity.R` is green unsandboxed. Two fixtures moved, both consciously and both
+*because of* a defect fixed here: 8 `tab_num()` goldens gain `meta$spec` (Defect 3) with one
+snapshot line, and one `_color_golden` case (Defect 4).
+
+**A — the settings spine becomes the ONLY carrier.** Measured on HEAD, `ctx$settings` had exactly
+**one functional reader**: `tab_rowvar_ctxs()`, whose whole job was to slice it and then
+**re-flatten** every column into the same ~15 bare names `tab_setup()` *also* wrote flat into the
+ctx. Two carriers for one fact, with the flat one the interface. Now:
+
+- **`ctx_settings_locals()`** projects the spine into those bare names at each stage head
+  (`list2env(ctx_settings_locals(ctx), environment())`). Pre-slice a spine column projects to a
+  VECTOR over row_vars, post-slice to the scalar the per-row_var stages expect — the same property
+  the flat duplicates had, which is exactly why they existed. That is what made the migration ~6
+  stage-head edits instead of ~200 rewritten reads. (Maintainer's ruling: *one carrier, projected
+  locals*.)
+- `tab_setup()` writes **neither** the 15 resolved duplicates **nor** the raw inputs the spine owns:
+  **`SPINE_OWNED_INPUTS`** are DELETED from the ctx once consumed. So a bare-name read can no longer
+  find the user's raw, unrecycled, pre-resolution value beside the resolved one — the two-carriers
+  problem one step earlier.
+- **`na` joins the spine at its two real grains** (the promise `settings`' own comment has carried
+  since 17e): `pairs$na` per (row_var × col_var) — a text col_var whose row/col/tab vars are all in
+  `na_drop_all` genuinely keeps its NAs, so the policy varies by PAIR — and `rows$na_num` per
+  row_var. `lvs`/`lv1` join at theirs. The flat `na_text`/`na_num`/`lvs`/`lv1` are gone.
+- `tab_rowvar_ctxs()` slices and stops; `per_rv` is four names. `tab_counts()` writes the spine where
+  it hand-wrote the flat fields — and it wrote **neither `lvs` nor `settings$cols$lv1`** before, a
+  latent gap closed on the way.
+- **The line is stated**: the spine carries SETTINGS (values a user chose or a resolver derived) at
+  one of three grains; never built OBJECTS (`fine_num`, `remove_levels`, the stage products).
+
+**`new_ctx()` declares every live key** — 54 declared against ~81 live left 27 undeclared, and an
+undeclared field is *absent*, so `list2env()` creates no binding and its own `is.null()` guard
+**errors** instead of firing (19a's D7, generalised). The roadmap's alternative ("17 fields become
+locals") was **measured and not taken**: every one is either a public input or a product that
+genuinely crosses a stage boundary, so converting them removes nothing. A free win fell out:
+`utils::globalVariables()` for those bindings is **derived** from `new_ctx()` + `CTX_SETTINGS_LOCALS`
+(the 19g move for `reg_build`'s `shared`), deleting a ~70-name hand-kept mirror in `fmt_class.R` that
+had already outlived a field it named. ⚠ It must sit at the **end** of `tab.R` — `new_ctx()`'s
+defaults call `conf_level_default()`, defined further down, and top-level code runs in source order.
+
+**The two leaves share their head and their tail.** **`leaf_finish()`** (row-index declaration →
+group-or-not → `new_tab`/`new_grouped_tab` → `tab_stamp_inference` → `leaf_extract_raw`) replaces two
+~30-line blocks that differed in ONE thing — and that one thing was a defect (below).
+**`leaf_inference_setup()`** is the 6 statements the preambles genuinely share; the ~45 lines of
+divergent comment around them stay put, because they are divergent. **`num_total_postprocess()`**
+folds `num_core`'s two identical post-rollup blocks.
+
+**B — one argument boundary.** **`tab_resolve_common_args()`** (`R/tab-resolve.R`) is what every
+crosstab producer does to its arguments, run once: the `chi2` → `test` rename, validation,
+`resolve_cleannames`/`_stars`/`_ci_method`, the `OR` route, `normalize_color_spec` + D28 **on the
+spec**, `tot` → `(totrow, totcol)`, `total_names`. Five hand-written copies collapse — copies that
+had drifted in ways a reader could not distinguish from intent (`tot`'s "both" expansion written 4×,
+one of them differently; `na`'s allow-list 3× with 3 contents; `pct`'s vocabulary 3×, one of them
+checking the SIZE only). **`TAB_ARG_VALUES`** is the vocabulary as data (`values` / `leaf` / `size` /
+`na_ok`), read by `tab_validate_args()`; the ruling was **abort on every unknown value**, so
+`totaltab` / `n_min` / `conf_level` — validated nowhere at all — now abort naming the valid set, and
+`conf_level = 95` suggests `0.95`. `tab_counts()`'s inert `ci_method` mean slots became a real
+refusal.
+
+**Five defects, each with the fixture that fails without it** (`test-arg-boundary.R`):
+
+1. **`tab_counts()` stored a significance gate it never applied.** It builds a `color_spec` and
+   finalises it but never ran `ci_disable_signif()`, so with `ci = "cell"`/`"no"` every column
+   carried a `color_signif` the resolver ignored — the exact situation D28's own comment says the
+   rule exists to prevent.
+2. **`options(tabxplor.stars = TRUE)` reached `tab()` and not `tab_num()`.** Measured: the same call
+   built a reference interval through one and none through the other. `tab_num()` handed a possibly-
+   `NULL` `stars` to `resolve_leaf_ci()` — which tests `isTRUE(stars)` — and resolved it against the
+   option only much later, inside `num_core()`.
+3. **A direct `tab_num()` carried no `meta` at all**: no `spec$kind` (19g's `tab_kind()` fell back to
+   its degraded guess) and no `vars$wt`, so a weighted one printed no "Weighted by …" footer. `tab()`
+   masked it by setting the meta itself at assemble. Fixed by `leaf_finish()`, which is why the 8
+   numeric goldens moved.
+4. **`tab_num(color = "after_ci")` dropped the policy half of the composite.** `resolve_leaf_ci()`
+   was handed the RAW `color_signif` argument instead of the DECODED `color_spec$signif`, and its
+   `if (signif_on) … else "ignore"` overwrote it — so the leaf stored `"ignore"` where `tab()` stored
+   `"guaranteed_effect"` for the same request. **19c's standing warning, hit again**: decode the
+   alias FIRST, normalise second.
+5. **`totaltab = "tabel"` silently meant "no total table"** (and `conf_level = 95` reached the
+   interval engine as a probability). Closed by B1.
+
+**Three roadmap items were measured and NOT done**, with the measurement recorded rather than the
+item silently dropped:
+
+- **Folding `num_core`'s totals into `build_total_rows()`/`finalize_total_rows()`** — the two use
+  *deliberately different* accumulators (`base::sum()` over `split()` because data.table gforce
+  drifts 1 ULP, which `build_total_rows()`'s own header says), and both carry byte-parity locks.
+  Maintainer's ruling: skip the merge, dedupe inside `num_core`. Written into both headers.
+- **"17 ctx fields become locals"** — see above.
+- **Routing `tab_ci(ci =)` through `resolve_ci_value()`.** Tried, and it was wrong: this superseded
+  STEP speaks the COMPUTATIONAL vocabulary, in which `"diff"` is its own native word — the pipeline
+  itself calls it that way (`tab_apply_tests` hands it the resolved step value), so the public
+  resolver fired a deprecation on tabxplor's own build. What it really lacked was a *declared*
+  vocabulary, so it got one: **`TAB_CI_STEP_VALUES`**, beside `resolve_ci_value()`, with the
+  difference stated. A smaller win than planned.
+
+**HONEST CONCERNS.**
+
+- **`ctx[SPINE_OWNED_INPUTS] <- NULL` is a deliberate sharp edge.** A future stage that reads a raw
+  `pct` / `color` / `ci` after `tab_setup()` fails loudly ("object not found") rather than getting a
+  stale value. That is the intent, and the three `tab_transform()` NULL-fallbacks are the documented
+  no-spine path — but it is a rule a reader must know, so it is stated in the code, in the header and
+  here.
+- **The jamovi boundary was NOT consolidated** — 19k owns it, and it already reuses
+  `resolve_leaf_ci()` / `normalize_color_spec()`. What this phase did there is the minimum the spine
+  change required: its three pre-slice ctx reads now read `ctx$settings`. Its own hand-mirrored rules
+  (the digits floor, the population descriptor, family detection) are untouched. ⚠ Note it passes the
+  RAW `color_signif` to `resolve_leaf_ci()`, the shape of Defect 4 — harmless today because the UI
+  never sends a composite, and left for 19k with the rest of that boundary.
+- **`test-carve-parity.R`'s ctx assertions were rewritten**, which the plan flagged as the signal
+  that the design moved — it did, by design: they now assert that each fact is ON the spine and NOT
+  flat beside it, which is the phase's contract rather than a description of the old shape.
+- **`tab_ci()`'s `ci_scale` and `comp` keep their own `stopifnot`** (they are step-internal, not
+  public-surface vocabularies).
+- `?tab`'s prose was rewritten in 19h; only `NEWS.md` needed the new aborts.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still owns that.
+
+**FOLLOW-UPS.** 19j can start on this commit — the leaf now owns its whole head and tail, which is
+what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_signif` note above.
+19l: the deprecation-warning corpus migration (133 remain).
 
 ---
 

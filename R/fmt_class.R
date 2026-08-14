@@ -40,36 +40,10 @@ utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot"
                   "grandtot", "nr", "nc", "e", "contrib", "signed_contrib", "contrib_unc",
                   "statistic", "df", "min_e", "w", "group_id"))
 
-# The `ctx` fields of the tab_build() pipeline (Phase 7d-ii) and reg_build()'s `shared` list
-# (Phase 17h). Each stage starts with `list2env(ctx, environment())` (R/tab.R: tab_setup /
-# tab_prepare_pop / tab_aggregate / tab_transform / tab_assemble_tables / tab_assemble_output;
-# R/tab_reg.R: reg_build), which binds every field as a local -- correct at run time, but
-# invisible to codetools, which then reports each one as an undefined global. Listing them here
-# is the only way to keep R CMD check quiet short of unpacking ~70 fields by hand.
-utils::globalVariables(c(
-  "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
-  # Phase 19c (KEY 4): `color_ci` / `color_ctr` / `color_diff_OR` / `color_num` left this list with
-  # the 4-way split itself -- the ctx carries ONE resolved `color` measure now.
-  "col_vars_text", "comp", "conf_level",
-  "data", "digits", "fine_fused", "fine_num", "lv1", "ci_method", "design_effect",
-  "inference", "na",
-  "na_drop_all_quo", "na_num", "na_text", "names_prefix", "names_sort", "other_if_less_than",
-  # Phase 19a (D7): `pct_vect` left this list -- it is a declared new_ctx() field now and carries an
-  # `if (is.null(...))` guard in tab_transform(), so codetools sees a local binding.
-  "other_level", "output", "pct", "ref", "ref2", "remove_levels", "row_vars",
-  "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
-  "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
-  "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
-  "color_ratio_ci", "ci_scale",
-  # tab_build ctx fields added by Phases 17e/j/k and z16 (settings spine, the inference basis, the
-  # robust omnibus grid, var labels). `inference_basis` is the LIVE name (z16-i); the z14-ii
-  # `inference_mode` listed here until z16-iv had been retired, so the live field went undeclared
-  # (an R CMD check "no visible binding" NOTE on tab_transform / tab_assemble_tables).
-  "cached_tests", "common_totrow", "defer_level_merge", "design_spec", "n_min", "inference_basis",
-  "robust_tests", "var_labels"))
-
-# (reg_build()'s `shared` record used to be mirrored here by hand. Phase 19g DERIVES it from
-# new_reg_shared()'s own formals, in R/tab_reg.R beside the record itself.)
+# (The `ctx` fields of the tab_build() pipeline used to be mirrored here by hand -- ~70 names kept in
+# sync with new_ctx() by eye, which is how `inference_mode` outlived the field it named. Phase 19i
+# DERIVES them from new_ctx()'s own defaults + CTX_SETTINGS_LOCALS, in R/tab.R beside the
+# constructor; reg_build()'s `shared` record got the same treatment in 19g, in R/tab_reg.R.)
 
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)

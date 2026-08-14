@@ -233,9 +233,13 @@ tab_declared_vars <- function(tabs) {
 }
 
 # tab_stamp_index() -- declare a table's row-index columns in ONE call, at the point the producer
-# knows the truth. Every producer (both leaves, tab_counts(), tab_compact(), tab_reg(), the
-# transpose) calls exactly this, so there is one stamping idiom and no producer assembles a `vars`
-# list any more.
+# knows the truth, so no producer assembles a `vars` list any more.
+# WHO CALLS IT: the two leaves, through their shared tail leaf_finish() (R/tab.R) -- and therefore
+# every table tab() / tab_many() / tab_counts() build, since all of them route through a leaf. The
+# producers that BUILD a row index of their own rather than inheriting one (tab_compact(),
+# tab_reg(), the transpose) call new_lvl() directly on the one or two columns they create; they have
+# no full index to declare. (Phase 19f's header claimed six callers of this function; there was
+# never more than one route per producer, and 19i's shared leaf tail made it literally one.)
 #   level    the column holding the row levels
 #   var      the source variable name that column's levels belong to (NA on a merged column)
 #   tab_vars the sub-table columns

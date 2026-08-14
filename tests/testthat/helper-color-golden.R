@@ -130,7 +130,12 @@ color_golden_cases <- function() {
     c_or             = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "col", display = "{or}", ref = "first", color = "OR")),
 
-    # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta) ---
+    # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta;
+    #     and again at Phase 19i: the two composite-colour cases below stored `color_signif =
+    #     "ignore"` where tab() stored "grey_non_signif" for the SAME request. tab_num() handed
+    #     resolve_leaf_ci() the RAW `color_signif` argument instead of the DECODED `color_spec$signif`,
+    #     and its `if (signif_on) ... else "ignore"` then overwrote the policy the composite carried.
+    #     The two producers now agree cell for cell -- see test-arg-boundary.R.) ---
     c_mean_diff      = function() color_golden_capture_tab(
       tab_num(gss, race, c(age, tvhours), comp = "all", color = "diff", digits = 1L)),
     c_mean_diff_ci   = function() color_golden_capture_tab(suppressWarnings(

@@ -221,7 +221,12 @@ testthat::test_that("`vars` survives dplyr verbs, and a stale one loses to the r
 
 testthat::test_that("a table with no recorded roles still detects them (tab_num / hand-built)", {
   leaf <- tab_num(gss, race, age)
-  testthat::expect_null(tabxplor:::get_vars_attr(leaf))
+  # Phase 19i: the numeric leaf records its identity like the factor one (they share leaf_finish()).
+  # It used to record NO `meta` at all -- no `spec$kind`, and no `vars$wt` for the weight footer.
+  testthat::expect_equal(tab_kind(leaf), "crosstab")
+  testthat::expect_null(tabxplor:::get_vars_attr(leaf)$wt)          # unweighted -> nothing to record
+  testthat::expect_equal(tabxplor:::get_vars_attr(tab_num(gss, race, age, wt = tvhours))$wt,
+                         "tvhours")
   testthat::expect_equal(tab_get_vars(leaf)$row_var, "race")
 })
 

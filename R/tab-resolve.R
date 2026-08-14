@@ -1,7 +1,15 @@
-# PURPOSE: Single source of truth for tab()'s argument-overwrite cascade (Phase 7b).
-# ROLE: Pure, data-free resolution of the colour cascade shared by tab_build() and
-#   tab_counts(): color = "auto" -> a concrete MEASURE (through MEASURES' declared `auto_for`
-#   contexts), then that measure's declared `requires` applied to chi2 / totrow / ci / ref.
+# PURPOSE: THE argument boundary of the crosstab producers -- validation (Phase 19i) and the
+#          argument-overwrite cascade (Phase 7b), each stated once.
+# ROLE: two layers, in this file, in this order.
+#   (1) tab_resolve_common_args() + TAB_ARG_VALUES / tab_validate_args() (Phase 19i, at the BOTTOM
+#       of this file): what every producer must do to its arguments before any of them means
+#       anything -- the `chi2` -> `test` rename, the vocabularies, the sizes, the "NULL -> option"
+#       resolutions, the `OR` route, the colour spec + D28, `tot` -> (totrow, totcol),
+#       `total_names`. tab() / tab_plain() / tab_num() / tab_counts() call it; five hand-written
+#       copies that had already drifted are one.
+#   (2) tab_resolve_settings(): the pure, data-free CASCADE shared by tab_build() and tab_counts():
+#       color = "auto" -> a concrete MEASURE (through MEASURES' declared `auto_for` contexts), then
+#       that measure's declared `requires` applied to chi2 / totrow / ci / ref.
 # Phase 19c (KEY 4): it returns ONE resolved measure, not four per-step sub-passes. The old
 #   color_diff_OR / color_ctr / color_ci / color_num split was a fossil of the pre-2.0.0 four-step
 #   pipeline: it routed WHICH step stamped the colour attribute, in four hand-written recodes over
@@ -20,8 +28,11 @@
 #     built row labels), `na` dropping, and the leaf `tot`/`totaltab` forcing + warnings.
 #   - The numeric `color = "auto"` arm (resolve_color_auto_num) is type-specific and lives
 #     here too, but is invoked from tab_num() (means path), not from this settings pass.
+#   - VALIDATION happens once, in layer (1), before the cascade: the cascade may then assume its
+#     inputs are legal. `ci` is the exception, and deliberately so -- its vocabulary carries a
+#     soft-deprecation, so validating it means REWRITING it, which is resolve_ci_value()'s job.
 # See: dev/tabxplor_argument_computation_map.md (the full argument -> computation map),
-#      CLAUDE.md § "Phase 7b".
+#      CLAUDE.md § "Phase 7b" / "Phase 19i".
 
 # Why this exists: before Phase 7b the same colour cascade was re-implemented in tab_build(),
 # tab_counts() and (partly) tab_num(); the "diff-family colour needs a difference CI" rule
@@ -249,6 +260,16 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
 # of `color = "ratio"`. Both soft-deprecate onto "ref"; the caller keeps `ci == "ratio"` separately
 # so the deprecation stays LOSSLESS (it still pins the Katz scale) while the message teaches the
 # replacement.
+# TAB_CI_STEP_VALUES -- the vocabulary of the superseded STEP `tab_ci(ci = )`, declared beside the
+# public one it deliberately differs from. `"diff"` is the step's own computational word (the
+# pipeline hands it that value), so it carries no deprecation here even though the same spelling is
+# soft-deprecated on the ANCHOR surface above; `"ref"` is its anchor synonym, `"ratio"` additionally
+# pins the Katz scale. Phase 19i: one declared list instead of a hand-written stopifnot whose
+# contents no message ever named.
+#' @keywords internal
+#' @noRd
+TAB_CI_STEP_VALUES <- c("auto", "no", "cell", "diff", "ratio", "ref")
+
 #' @keywords internal
 #' @noRd
 resolve_ci_value <- function(ci, user_env = rlang::caller_env(2)) {
@@ -455,4 +476,199 @@ resolve_color_auto_num <- function(color, ref, ci, row_var, col_vars) {
     color == "auto"                                    ~ "",
     TRUE                                               ~ color
   )
+}
+
+
+# === THE ARGUMENT BOUNDARY (Phase 19i) ==========================================================
+# Five entry points -- tab() / tab_many() / tab_plain() / tab_num() / tab_counts(), plus the jamovi
+# one -- used to re-implement the same boundary by hand, and had drifted: `tot`'s "both" expansion
+# was written four times (one of them differently), `total_names`'s recycling four times, `na`'s
+# allow-list three times with three contents, `pct`'s vocabulary three times (tab_counts checked the
+# SIZE only), and `totaltab` / `n_min` / `conf_level` were validated nowhere at all -- so
+# `tab(totaltab = "tabel")` silently meant "no total table".
+#
+# TAB_ARG_VALUES is the vocabulary as DATA: one entry per argument, `values` (what tab()/tab_many()
+# accept), `leaf` (the restricted set for the leaves and tab_counts, NULL = same), `size` (1L, or NA
+# for a per-col_var vector) and `na_ok`. Adding a value is one edit, and no two producers can
+# disagree about what a word means.
+#
+# NOT here, deliberately: `ci`. Its vocabulary carries a soft-deprecation (`"diff"`/`"ratio"` ->
+# `"ref"`), so validating it means RESOLVING it, and that is resolve_ci_value()'s job -- called by
+# every producer's own resolver (tab_resolve_settings / resolve_leaf_ci / tab_ci). One validator, in
+# the one place that can also rewrite the value.
+#' @keywords internal
+#' @noRd
+TAB_ARG_VALUES <- list(
+  pct      = list(values = c("no", "row", "col", "all", "all_tabs"),   leaf = NULL, size = NA,  na_ok = TRUE),
+  na       = list(values = c("keep", "drop", "drop_all", "common_base"),
+                  leaf = c("keep", "drop"),                                         size = 1L,  na_ok = FALSE),
+  levels   = list(values = c("all", "first", "auto"),                  leaf = NULL, size = NA,  na_ok = FALSE),
+  comp     = list(values = c("tab", "all", ""),                        leaf = NULL, size = 1L,  na_ok = TRUE),
+  tot      = list(values = c("row", "col", "both", "no", ""),          leaf = NULL, size = NA,  na_ok = FALSE),
+  totaltab = list(values = c("line", "table", "no", ""),               leaf = NULL, size = 1L,  na_ok = FALSE),
+  totcol   = list(values = c("last", "each", "all_col_vars", "no", ""), leaf = NULL, size = 1L, na_ok = FALSE),
+  output   = list(values = c("single", "list"),                        leaf = NULL, size = 1L,  na_ok = FALSE)
+)
+
+# tab_validate_args() -- check the supplied arguments against TAB_ARG_VALUES, aborting on the first
+# unknown value with the valid list in the message. Arguments not supplied are not checked; `fn`
+# selects the full or the leaf vocabulary. The numeric arguments are checked here too, beside the
+# vocabularies, because "what may this argument be" is one question.
+#' @keywords internal
+#' @noRd
+tab_validate_args <- function(fn = "tab", ..., conf_level = NULL, n_min = NULL) {
+  args <- list(...)
+  full <- fn %in% c("tab", "tab_many")
+  for (nm in intersect(names(args), names(TAB_ARG_VALUES))) {
+    v <- args[[nm]]
+    if (is.null(v)) next
+    spec <- TAB_ARG_VALUES[[nm]]
+    ok   <- if (!full && !is.null(spec$leaf)) spec$leaf else spec$values
+    # a LIST is a shape error, not a vocabulary one: as.character() would turn it into a deparsed
+    # string and report an "unknown value" that no vocabulary could ever contain. The producer that
+    # accepts a list on some axis says so itself, in its own words (see tab()'s `pct`).
+    if (is.list(v)) next
+    if (!is.na(spec$size) && length(v) != spec$size)
+      cli::cli_abort(c("{.arg {nm}} must be a single value in {.fn {fn}}.",
+                       "i" = "Got {length(v)}."), call = NULL)
+    v <- as.character(v)
+    bad <- !v %in% ok & !(isTRUE(spec$na_ok) & is.na(v))
+    if (any(bad))
+      cli::cli_abort(c("Unknown {.arg {nm}} value {.val {unique(v[bad])}}.",
+                       "i" = "Valid: {.val {ok}}."), call = NULL)
+  }
+  # A confidence LEVEL is a probability. `conf_level = 95` used to reach the interval engine, where
+  # `stopifnot(conf_level <= 1)` fired -- but only if an interval was actually computed, so on most
+  # tables it was silently taken as 95 %'s complement or worse.
+  if (!is.null(conf_level)) {
+    if (length(conf_level) != 1L || !is.numeric(conf_level) || is.na(conf_level) ||
+        conf_level <= 0 || conf_level >= 1)
+      cli::cli_abort(c("{.arg conf_level} must be a single probability strictly between 0 and 1.",
+                       "i" = if (is.numeric(conf_level) && length(conf_level) == 1L &&
+                                 !is.na(conf_level) && conf_level > 1)
+                         "Got {conf_level}; did you mean {conf_level / 100}?"
+                       else "Got {.val {conf_level}}."), call = NULL)
+  }
+  if (!is.null(n_min)) {
+    if (length(n_min) != 1L || !is.numeric(n_min) || is.na(n_min) || n_min < 0)
+      cli::cli_abort(c("{.arg n_min} must be a single non-negative number (0 = off).",
+                       "i" = "Got {.val {n_min}}."), call = NULL)
+  }
+  invisible(TRUE)
+}
+
+
+# tab_resolve_common_args() -- THE argument boundary, run once per call, by every producer.
+#
+# It validates first (tab_validate_args) and derives second, in the order tab()'s own boundary
+# proved correct. WARNING (19c): the colour spec must be DECODED before it is normalised --
+# normalize_color_spec() does both, in that order; never split them.
+#
+# Every argument is optional: a producer passes what it has, and reads back the subset it needs.
+# `missing()` rather than a NULL default, because several of these arguments mean something
+# specific when NULL (`stars = NULL` = "read the option", `cleannames = NULL` likewise).
+#
+# @param fn  the producer's name, for the messages AND for the leaf-vs-full vocabularies.
+# @return a named list holding only what was supplied, resolved:
+#   test         `chi2` folded in, then svy_check_test()'d to a plain logical
+#   cleannames, stars, ci_method   the three "NULL -> option / named-vector" resolutions
+#   color_spec   the parsed two-channel spec, its policy already subject to D28
+#   stars        likewise disabled when `ci` anchors nothing to test
+#   display, ref, ref2             the retired `OR` argument's route
+#   tot          VALIDATED but not expanded -- "both" means c("row","col") to tab()/tab_counts()
+#                and "row" to the numeric leaf, so each expands it itself, next to its own totals
+#   totrow, totcol                 the (row, col) translation tab() and tab_counts() share
+#   total_names  recycled to 2
+#' @keywords internal
+#' @noRd
+tab_resolve_common_args <- function(fn = "tab",
+                                    test, chi2, color, color_signif, ci, stars, conf_level,
+                                    ci_method, method_cell, method_diff, cleannames,
+                                    OR, display, ref, ref2, tot, total_names,
+                                    na, levels, pct, comp, totaltab, totcol, output, n_min,
+                                    user_env = rlang::caller_env()) {
+  out <- list()
+
+  # 1. the renamed argument, folded before anything reads `test`.
+  if (!missing(chi2) && lifecycle::is_present(chi2)) {
+    lifecycle::deprecate_soft("2.0.0", I(paste0(fn, "(chi2 = )")), I(paste0(fn, "(test = )")),
+                              user_env = user_env)
+    test <- chi2
+  }
+  # `test` says only WHETHER to test; the BASIS (n / weights / design) is derived in tab_setup().
+  if (!missing(test)) out$test <- svy_check_test(test)
+
+  # 2. validation.
+  tab_validate_args(
+    fn,
+    pct      = if (missing(pct))      NULL else pct,
+    na       = if (missing(na))       NULL else na,
+    levels   = if (missing(levels))   NULL else levels,
+    comp     = if (missing(comp))     NULL else comp,
+    tot      = if (missing(tot))      NULL else tot,
+    totaltab = if (missing(totaltab)) NULL else totaltab,
+    totcol   = if (missing(totcol))   NULL else totcol,
+    output   = if (missing(output))   NULL else output,
+    conf_level = if (missing(conf_level)) NULL else conf_level,
+    n_min      = if (missing(n_min))      NULL else n_min
+  )
+  # the validated values pass straight through, so a caller reads ONE object.
+  if (!missing(pct))        out$pct        <- pct
+  if (!missing(na))         out$na         <- na
+  if (!missing(levels))     out$levels     <- levels
+  if (!missing(comp))       out$comp       <- comp
+  if (!missing(totaltab))   out$totaltab   <- totaltab
+  if (!missing(output))     out$output     <- output
+  if (!missing(conf_level)) out$conf_level <- conf_level
+  if (!missing(n_min))      out$n_min      <- n_min
+
+  # 3. the three "NULL -> option" / named-vector resolutions.
+  if (!missing(cleannames)) out$cleannames <- resolve_cleannames(cleannames)
+  # `stars` is resolved HERE, at the boundary, and not four layers down: resolve_leaf_ci() tests
+  # `isTRUE(stars)`, so tab_num()'s late resolution (inside num_core) meant
+  # options(tabxplor.stars = TRUE) built a reference interval through tab_plain() and none through
+  # tab_num(). One place, one timing.
+  if (!missing(stars)) stars <- resolve_stars(stars)
+  if (!missing(ci_method))
+    out$ci_method <- resolve_ci_method(ci_method,
+                                       if (missing(method_cell)) NULL else method_cell,
+                                       if (missing(method_diff)) NULL else method_diff, fn)
+
+  # 4. the retired `OR`, routed to what it was: a display, a 2x2 and a reference.
+  if (!missing(OR)) {
+    route   <- tab_deprecate_or(OR,
+                                if (missing(display)) NULL else display,
+                                if (missing(ref2))    "first" else ref2,
+                                if (missing(ref))     "auto"  else ref)
+    display <- route$display ; ref2 <- route$ref2 ; ref <- route$ref
+  }
+  if (!missing(display)) out$display <- display
+  if (!missing(ref))     out$ref     <- ref
+  if (!missing(ref2))    out$ref2    <- ref2
+
+  # 5. the colour spec, then D28 on it. This must run on the SPEC, not on the resolver's copy: the
+  # stored `color_signif` attribute is written from the spec by finalize_color_spec(), so a policy
+  # the resolver silently disabled would still be stamped on every column -- the table claiming a
+  # gate it does not apply. tab_counts() built and finalised a spec without ever applying the rule.
+  if (!missing(color)) {
+    spec <- normalize_color_spec(color, if (missing(color_signif)) "ignore" else color_signif)
+    if (!missing(ci)) {
+      off <- ci_disable_signif(ci, spec$signif, if (missing(stars)) FALSE else stars)
+      spec$signif <- off$color_signif
+      if (!missing(stars)) stars <- off$stars
+    }
+    out$color_spec <- spec
+    out$color      <- spec$legacy
+  }
+  if (!missing(stars)) out$stars <- stars
+
+  # 6. totals. `tot` comes back VALIDATED but NOT expanded (see @return).
+  if (!missing(tot)) {
+    out$tot    <- tot
+    out$totrow <- "row" %in% tot || identical(tot[1], "both")
+    out$totcol <- if ("col" %in% tot || identical(tot[1], "both")) "last" else "no"
+  }
+  if (!missing(total_names)) out$total_names <- vctrs::vec_recycle(total_names, 2)
+
+  out
 }

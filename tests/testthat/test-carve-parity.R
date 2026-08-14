@@ -66,14 +66,31 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
                    overrides = list(pct = "row", color = "diff", ci = "diff"))
 
   ctx <- tabxplor:::tab_setup(ctx)
-  testthat::expect_true(all(c("col_vars_num", "col_vars_text", "tot_cols_type", "settings",
-                              "color", "cache_keys") %in% names(ctx)))
+  testthat::expect_true(all(c("tot_cols_type", "settings", "cache_keys") %in% names(ctx)))
   # Phase 17e: the per-pair settings live in the star schema (rows / cols / pairs), not pct_vect.
   testthat::expect_named(ctx$settings, c("rows", "cols", "pairs"))
   testthat::expect_named(ctx$cache_keys, c("tier0", "tier1_common", "tier2"))
+  # Phase 19i: the spine is the ONLY carrier. Each fact is ON it ...
+  testthat::expect_true(all(c("color", "comparison", "or_ci", "chi2", "ref", "ref2", "comp",
+                              "ci", "ci_scale", "totaltab", "totrow")
+                            %in% names(ctx$settings$rows)))
+  testthat::expect_true(all(c("is_num", "is_text", "lvs", "digits") %in% names(ctx$settings$cols)))
+  testthat::expect_true(all(c("pct", "ref", "ref2") %in% names(ctx$settings$pairs)))
+  # ... and NOT flat beside it: the resolved duplicates are gone, and so are the raw inputs the
+  # spine now owns (SPINE_OWNED_INPUTS), so a bare-name read cannot find a pre-resolution value.
+  testthat::expect_false(any(c("comparison", "or_ci", "ci_scale", "lvs", "col_vars_num",
+                               "col_vars_text", "pct_vect", "ref_vect", "ref2_vect")
+                             %in% names(ctx)))
+  testthat::expect_false(any(tabxplor:::SPINE_OWNED_INPUTS %in% names(ctx)))
 
   ctx <- tabxplor:::tab_prepare_pop(ctx)
-  testthat::expect_true(all(c("na_text", "na_num", "lv1", "remove_levels") %in% names(ctx)))
+  testthat::expect_true("remove_levels" %in% names(ctx))
+  # Phase 19i: the `na` policy and the resolved `levels` join the spine, at their real grains --
+  # per row_var for the numeric leaf, per PAIR for the factor ones.
+  testthat::expect_true("na_num" %in% names(ctx$settings$rows))
+  testthat::expect_true(all(c("lvs", "lv1") %in% names(ctx$settings$cols)))
+  testthat::expect_true("na" %in% names(ctx$settings$pairs))
+  testthat::expect_false(any(c("na_text", "na_num", "lv1") %in% names(ctx)))
 
   ctx <- tabxplor:::tab_aggregate(ctx)
   testthat::expect_true(all(c("fine_num", "fine_fused") %in% names(ctx)))  # tier 1 (NULL when off)
