@@ -185,7 +185,13 @@ for (nm in names(cases)) {
   # table-level attributes (subtext / test / meta) must be untouched by a field pass -- EXCEPT for the
   # `test` tibble's declared new COLUMNS (ADDED_TEST_COLS), which are checked the same way a new field
   # is: present, empty, and everything else bit-identical.
-  ta <- function(t) attributes(t)[intersect(names(attributes(t)), c("subtext", "test", "meta"))]
+  # WARNING: sorted by NAME. Attribute ORDER is a by-product of the order in which a producer happened
+  # to set them, never a contract -- and comparing it as one was a false positive on all 36 cases in
+  # Phase 19j (the leaf sets `test` before `meta`, the post-assembly step set it after).
+  ta <- function(t) {
+    a <- attributes(t)[intersect(names(attributes(t)), c("subtext", "test", "meta"))]
+    a[order(names(a))]
+  }
   ao <- ta(old); an <- ta(new)
   # Phase 19g: the declared `test` COLUMN renames -- prove the mapping, then compare the remainder.
   if (length(RENAMED_TEST_COLS) && !is.null(ao$test) && !is.null(an$test)) {

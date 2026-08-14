@@ -26,8 +26,10 @@ tab_plain(
   digits = 0,
   num = FALSE,
   df = FALSE,
+  ci = "auto",
   conf_level = conf_level_default(),
   stars = NULL,
+  ci_method = NULL,
   design_effect = NULL,
   color_signif = "ignore",
   .fine = NULL,
@@ -173,18 +175,65 @@ rows and cols.}
 with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
 
-\item{conf_level}{The confidence level used for the odds-ratio confidence intervals
-(only computed when \code{OR} is requested and \code{stars} or \code{color_signif} ask for them),
-as a single numeric between 0 and 1. Default to 0.95.}
+\item{ci}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
+\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
+(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
+ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
+\itemize{
+\item \code{"auto"} (default): an interval on the comparison when the table makes one
+(percentages by row/column, means), an absolute cell interval for plain frequencies, and
+none at all when nothing needs one.
+\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
+and its reference -- the total cell, or the first cell under \code{ref = "first"}.
+\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
+\item \code{"no"}: no interval.
+}
+\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
+\code{color_signif} have nothing to read: asking for either alongside them informs you once and
+disables it, rather than silently testing something else.
+Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
+use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
+dual, so the bracket and the stars always agree), and means the Welch t interval. With
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
+\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
+also pins the ratio scale -- say \code{color = "ratio"} instead).}
 
-\item{stars}{Set to \code{TRUE} to compute the significance stars attached to the
-odds-ratio confidence intervals (with \code{OR}).}
+\item{conf_level}{The confidence level, as a single numeric between 0 and 1.
+Default to 0.95 (95\%).}
+
+\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+significance stars for each cell's difference from its reference, read from the displayed interval
+itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
+\code{FALSE}). See \code{\link{tab_many}}.}
+
+\item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector --
+partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
+\itemize{
+\item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
+(default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
+degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
+the effective base, referred to a survey design's own degrees of freedom).
+\item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+(default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
+(Agresti-Caffo) or \code{"wald"}.
+\item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
+group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
+interval).
+\item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
+\code{"robust"} (default, each group's own variance = modified/robust Poisson),
+\code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
+(naive).
+}
+Whatever the method, the significance stars come from that same interval, so bracket and stars
+always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
+a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.}
 
 \item{design_effect}{See \code{\link{tab}}: whether a \strong{weighted} table's intervals account
 for the weighting's own design effect. \code{NULL} (default) takes
 \code{options("tabxplor.design_effect")}.}
 
-\item{color_signif}{How significance interacts with \code{color} (with \code{OR}):
+\item{color_signif}{How significance interacts with \code{color}:
 \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
 See \code{\link{tab}}.}
 
@@ -205,13 +254,18 @@ using them in calculations, be sure they are of class \code{character}.
 Plain single cross-table
 }
 \examples{
-# A typical workflow with tabxplor step-by-step functions :
 \donttest{
 data <- dplyr::starwars |> tab_prepare(sex, hair_color)
 
+# the leaf builds the cells AND their intervals (2.0.0): `ci` is resolved here exactly as in
+# tab(), so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
+data |>
+  tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row",
+            ci = "ref", color = "difference", color_signif = "grey_non_signif")
+
+# the whole-table test is still a step (superseded, but supported)
 data |>
   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
-  tab_chi2() |>
-  tab_ci(color = "after_ci")
+  tab_chi2()
 }
 }

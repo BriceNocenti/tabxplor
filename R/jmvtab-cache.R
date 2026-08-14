@@ -770,8 +770,12 @@ jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
   identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
     !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
     identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
-    # Phase 19e: the reref rebuilds the interval with tab_ci(), which is the DIFFERENCE engine -- so a
-    # table whose comparison owns a ratio (Katz) or odds-ratio (Woolf) interval cannot be re-ref'd.
+    # Phase 19e: the reref rebuilt the interval with tab_ci(), the DIFFERENCE engine, so a ratio (Katz)
+    # comparison could not be re-ref'd.
+    # Phase 19j (KEY 5): that reason is GONE -- the reref now builds it with leaf_ci_plain(), which
+    # takes `ci_scale`, so a ratio interval is one argument away. What is left is purely the PATH
+    # decision (rebuild vs re-ref) and the four assertions in test-jmvtab-cache.R that state the
+    # rebuild explicitly. Lift it in 19k, with the cold/warm/reref lock and the live pass.
     # `geom` is in the tuple, so this also guarantees old and new agree.
     identical(new_tuple$geom, "diff") &&
     # an odds-ratio table -> rebuild (its `or` sweep and its Woolf interval are not the re-ref's)
@@ -866,6 +870,22 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   by_cv <- split(pct_cols, vapply(pct_cols,
                                   function(nm) carrier$fmt[[nm]]$meta$col_var %||% "",
                                   character(1)))
+  # Phase 19j (KEY 5): the interval is REBUILT IN THE SAME SWEEP, by the leaf's own producer. It used
+  # to be a separate fmt_wrap() -> tab_ci() -> fmt_unwrap() round trip below, which existed only
+  # because the interval was not part of the build -- the study's own example of a cache path shaped
+  # by a pipeline defect. WARNING: `degf` must be passed. tab_ci() derived it implicitly from the
+  # columns (tab_inference_degf) because this caller passed none; dropping it silently falls back to z
+  # (measured 9 % too narrow at 13 PSUs, test-degraded-attrs.R).
+  ci_scale_r <- if (identical(tuple$geom, "ratio")) "ratio" else "diff"
+  # the carrier's own smallest design df -- tab_inference_degf()'s rule, read off the stored per-column
+  # metas (the carrier is a list of frames, not a table of fmt columns).
+  degf_all   <- vapply(fmt_names, function(nm) {
+    d <- carrier$fmt[[nm]]$meta$degf; if (length(d) == 0L) NA_real_ else as.double(d[[1]])
+  }, double(1))
+  degf_all   <- degf_all[is.finite(degf_all) & degf_all > 0]
+  degf_r     <- if (length(degf_all)) min(degf_all) else Inf
+  grp_r      <- if (identical(comp, "all") || length(tab_vars) == 0L) rep(1L, length(n_field)) else
+    do.call(paste, c(lapply(tab_vars, function(v) as.character(carrier$factors[[v]])), sep = "\r"))
   for (grp in by_cv) {
     ref_res <- tab_apply_reference(
       tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = tuple$ref2, comp = comp,
@@ -884,30 +904,32 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
       # the OLD baseline while diff/ratio described the new one.
       if (!is.null(ref_res$or)) carrier$fmt[[nm]]$frame$or <- ref_res$or[[nm]]
     }
+
+    if (!identical(ci_resolved, "no")) {
+      ci_res <- leaf_ci_plain(
+        P     = do.call(cbind, lapply(grp, function(nm) carrier$fmt[[nm]]$frame$pct)),
+        tot_n = do.call(cbind, lapply(grp, function(nm) carrier$fmt[[nm]]$frame$tot_n)),
+        n_eff = do.call(cbind, lapply(grp, function(nm) carrier$fmt[[nm]]$frame$n_eff)),
+        ci = ci_resolved, pct = "row", ci_scale = ci_scale_r,
+        grp = grp_r,
+        ref_row = if (identical(ref_v, "tot")) totrow_vector else ref_res$refrows,
+        totrow  = totrow_vector,
+        refcol  = NA_integer_,
+        totcol  = vapply(grp, function(nm) isTRUE(carrier$fmt[[nm]]$meta$totcol), logical(1)),
+        conf_level = tuple$conf_level, stars = tuple$stars,
+        ci_method = tuple$ci_method, degf = degf_r)
+      for (j in seq_along(grp)) {
+        carrier$fmt[[grp[[j]]]]$frame$ci_inf <- ci_res$inf[, j]
+        carrier$fmt[[grp[[j]]]]$frame$ci_sup <- ci_res$sup[, j]
+        carrier$fmt[[grp[[j]]]]$frame$pvalue <- ci_res$pvalue[, j]
+      }
+    }
   }
   for (nm in fmt_names) {
     carrier$fmt[[nm]]$frame$in_refrow <- inref
     carrier$fmt[[nm]]$meta$ref        <- ref_1
   }
 
-  # --- re-run the diff CI (the interval depends on the reference) via tab_ci() -------------------
-  # The carrier has no p-value rows (Phase 10i-B), so tab_ci() sees the same grouped table the fresh
-  # build's tab_ci() saw -- no ungroup/slice/regroup dance. fmt_wrap restores the carrier's grouping;
-  # colour is kept from the cache (color = "no") and re-applied by finalize_color_spec; the input
-  # `carrier` is otherwise returned untouched, so its attrs (test/groups/subtext) stay verbatim.
-  if (!identical(ci_resolved, "no")) {
-    rec  <- fmt_wrap(carrier)
-    rec  <- tab_ci(tabs = rec, ci = ci_resolved, comp = comp, conf_level = tuple$conf_level,
-                   color = "no", visible = identical(ci_resolved, "cell"), stars = tuple$stars,
-                   ci_method = tuple$ci_method)
-    ci_d <- fmt_unwrap(rec)
-    for (nm in names(carrier$fmt)) {
-      cd <- ci_d$fmt[[nm]]$frame
-      carrier$fmt[[nm]]$frame$ci_inf  <- cd$ci_inf
-      carrier$fmt[[nm]]$frame$ci_sup  <- cd$ci_sup
-      carrier$fmt[[nm]]$frame$pvalue  <- cd$pvalue
-    }
-  }
   carrier
 }
 

@@ -7,6 +7,12 @@
 #       and tab_aggregate_num() (the tier-1 producer tab_num(.fine=) adopts), the numeric analogue
 #       of tab_plain()'s `.fine` factor path.
 # KEY CONSTRAINTS:
+#   - TWO declared vocabularies, side by side: CI_METHODS says which METHOD a kind of interval may
+#     be built with; CI_GEOMS (Phase 19j, KEY 5) says which INTERVAL a column's plan asks for --
+#     the engine, the method slot that names it, and the EST_SCALES key it makes the column
+#     estimate. Read CI_GEOMS only through ci_geom / ci_geom_scale / ci_geom_method / ci_dispatch;
+#     its three consumers (the factor leaf, num_core, the superseded tab_ci step) had six copies
+#     of that rule between them before.
 #   - data.table non-standard evaluation: keep aggregations GForce-friendly (bare per-column
 #     sums), never re-scan N rows for a quantity the aggregate already carries.
 #   - Byte-identity: the derived statistics must reproduce the pre-2.0.0 definitions EXACTLY
@@ -373,6 +379,145 @@ resolve_ci_method <- function(ci_method = NULL, method_cell = NULL, method_diff 
     cli::cli_abort(c("{.arg ci_method} {.field {s}} must be one of {.val {CI_METHODS[[s]]}}.",
                      "x" = "Got {.val {out[[s]]}}."))
   out
+}
+
+
+# === SECTION: the interval GEOMETRY vocabulary (Phase 19j, KEY 5) ===================================
+#
+# CI_METHODS above says WHICH METHOD a kind of interval may be built with. CI_GEOMS says WHICH INTERVAL
+# a column's plan asks for -- the engine that builds it, the CI_METHODS slot that names it, and the
+# EST_SCALES key it makes the column ESTIMATE. One row per (kind x var_kind x scale) the package can
+# answer, keyed "<kind>.<var_kind>[.<scale>]".
+#
+# WHY IT EXISTS. That rule was written SIX times, in two functions: tab_ci()'s engine switch +
+# ci_scale_of() + ci_method_of(), and num_core()'s if/else + scale_num + method_num. Six encodings of
+# one dispatch is exactly the disease Phase 19 exists to cure -- and it had already bitten (D8: an
+# eight-branch chain that named a method the bounds were never built with, most visibly "Welch t" on a
+# one-sample cell interval). Now the leaf, the numeric leaf and the superseded tab_ci() step all read
+# this table, so what the bounds were built with and what the legend prints cannot diverge.
+#
+#   kind         "cell" (the cell's own interval) | "diff" (the cell against its reference)
+#   var_kind     the column's fmt_var_kind(): "pct" | "mean". A "count"/"coef" column has no row here.
+#   scale        the ci_scale the reader sees: "diff" | "ratio". Absent on a cell interval (no contrast).
+#   method_slot  the CI_METHODS slot that CHOOSES the engine -- NA where there is no choice
+#   method_fixed the stamped ci_method where there is no choice ("student", "katz")
+#   scale_key    the EST_SCALES key stamped on the column. NA = "the level scale stands", which is what
+#                a cell interval does: a mean with its own interval is still a mean.
+#   wants_ref    the caller must supply `ref` / `ref_n` (+ `ref_var` for a mean)
+#   wants_p      a p-value exists at all -- a cell interval has no null, so never
+#   engine       the call, written out ONCE.
+#
+# WARNING: the engine call is written out PER ROW, never as one do.call() over a shared argument list.
+#   The proportion engines take `df =` (the design df, straight to conf_level_to_crit); the mean ones
+#   take `df_design =`, which REPLACES the sample-based df via df_or_design(). A shared name list would
+#   make that swappable by a typo; a per-row closure cannot.
+CI_GEOMS <- list(
+  "cell.pct" = list(
+    kind = "cell", var_kind = "pct", scale = NA_character_,
+    method_slot = "cell", method_fixed = NA_character_,
+    scale_key = NA_character_, wants_ref = FALSE, wants_p = FALSE,
+    engine = function(a) switch(
+      a$method,
+      "wilson" = ci_wilson(a$est, a$base, conf_level = a$conf_level, df = a$degf),
+      "wald"   = ci_wald(  a$est, a$base, conf_level = a$conf_level, df = a$degf),
+      # z16-iii: Korn-Graubard, on the very effective n this framework already computes; z16-iiiii:
+      # plus its own df rescale, which needs the cell's RAW base beside it -- hence `n_raw`, which is
+      # NOT `base` (that one is n_eff-coalesced and NA'd on the reference cell).
+      "beta"   = ci_beta(  a$est, a$base, conf_level = a$conf_level,
+                           df = a$degf, n_raw = a$n_raw))),
+  "cell.mean" = list(
+    kind = "cell", var_kind = "mean", scale = NA_character_,
+    method_slot = NA_character_, method_fixed = "student",
+    scale_key = NA_character_, wants_ref = FALSE, wants_p = FALSE,
+    # Rule B (14v-ii, SS48): one-sample Student t(n-1) cell interval (a variance is estimated).
+    engine = function(a) ci_pivot(a$est, sqrt(a$var / a$base),
+                                  df = df_or_design(a$base - 1, a$degf),
+                                  conf_level = a$conf_level, want_p = FALSE)),
+  "diff.pct.diff" = list(
+    kind = "diff", var_kind = "pct", scale = "diff",
+    method_slot = "diff", method_fixed = NA_character_,
+    scale_key = "points", wants_ref = TRUE, wants_p = TRUE,
+    engine = function(a) ci_prop_diff(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
+                                      method = a$method, want_p = a$want_p, df = a$degf)),
+  "diff.pct.ratio" = list(
+    kind = "diff", var_kind = "pct", scale = "ratio",
+    method_slot = NA_character_, method_fixed = "katz",
+    scale_key = "pct_ratio", wants_ref = TRUE, wants_p = TRUE,
+    # Katz's log-RR bounds are the ONLY proportion-ratio interval the package has, so the method is
+    # not a choice -- which is why CI_METHODS has no `ratio` slot (z16-iiiii).
+    engine = function(a) ci_katz_rr(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
+                                    want_p = a$want_p, df = a$degf)),
+  "diff.mean.diff" = list(
+    kind = "diff", var_kind = "mean", scale = "diff",
+    method_slot = "mean_diff", method_fixed = NA_character_,
+    scale_key = "mean_diff", wants_ref = TRUE, wants_p = TRUE,
+    engine = function(a) ci_mean_diff2(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
+                                       method = a$method, conf_level = a$conf_level,
+                                       want_p = a$want_p, df_design = a$degf)),
+  "diff.mean.ratio" = list(
+    kind = "diff", var_kind = "mean", scale = "ratio",
+    method_slot = "mean_ratio", method_fixed = NA_character_,
+    scale_key = "mean_ratio", wants_ref = TRUE, wants_p = TRUE,
+    engine = function(a) ci_mean_ratio(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
+                                       method = a$method, conf_level = a$conf_level,
+                                       want_p = a$want_p, df_design = a$degf))
+)
+
+# Build-time exhaustiveness: every row carries the eight declared members, and its KEY says what it is.
+stopifnot(all(vapply(CI_GEOMS, function(g) setequal(
+  names(g), c("kind", "var_kind", "scale", "method_slot", "method_fixed",
+              "scale_key", "wants_ref", "wants_p", "engine")), logical(1))),
+  identical(names(CI_GEOMS),
+            vapply(CI_GEOMS, function(g) if (is.na(g$scale)) paste(g$kind, g$var_kind, sep = ".")
+                   else paste(g$kind, g$var_kind, g$scale, sep = "."), character(1),
+                   USE.NAMES = FALSE)))
+
+# --- the four readers. Nothing else may index CI_GEOMS. --------------------------------------------
+
+#' @keywords internal
+ci_geom <- function(kind, var_kind, ci_scale = "diff") {
+  if (length(kind) == 0L || is.na(kind[1]) || identical(kind[1], "no")) return(NULL)
+  key <- if (identical(kind[1], "cell")) paste("cell", var_kind[1], sep = ".")
+         else paste("diff", var_kind[1], ci_scale[1], sep = ".")
+  CI_GEOMS[[key]]
+}
+
+# The EST_SCALES key the interval makes the column estimate. NA = unchanged (see `scale_key`).
+#' @keywords internal
+ci_geom_scale <- function(kind, var_kind, ci_scale = "diff") {
+  g <- ci_geom(kind, var_kind, ci_scale)
+  if (is.null(g)) NA_character_ else g$scale_key
+}
+
+# WHICH engine built these bounds, in the vocabulary the legend names (D8). "" = no interval here.
+#' @keywords internal
+ci_geom_method <- function(kind, var_kind, ci_scale = "diff", method = default_ci_method()) {
+  g <- ci_geom(kind, var_kind, ci_scale)
+  if (is.null(g)) return("")
+  if (is.na(g$method_slot)) g$method_fixed else as.character(method[[g$method_slot]])
+}
+
+# ci_dispatch() -- THE interval producer. Every argument is a plain vector of the same length.
+# DESIGN: the REFERENCE-CELL rule belongs to the CALLER, never here. tab_ci() NAs the cell's own
+#   `base` (so the engine returns NA bounds and NA p); num_core() NAs the RESULTS after the fact. Those
+#   two are not equivalent on a mean CELL interval, so folding them in would be a behaviour change
+#   wearing a refactor's clothes. Same for the column masking (total / reference columns).
+#' @keywords internal
+ci_dispatch <- function(kind, var_kind, ci_scale = "diff",
+                        est, base, var = NULL,
+                        ref = NULL, ref_var = NULL, ref_n = NULL, n_raw = NULL,
+                        conf_level = 0.95, want_p = FALSE,
+                        method = default_ci_method(), degf = Inf) {
+  g <- ci_geom(kind, var_kind, ci_scale)
+  if (is.null(g)) cli::cli_abort(
+    "No interval geometry for {.val {kind}} / {.val {var_kind}} / {.val {ci_scale}}.")
+  g$engine(list(
+    est = est, base = base, var = var, ref = ref, ref_var = ref_var, ref_n = ref_n, n_raw = n_raw,
+    conf_level = conf_level,
+    # a caller that forgets the kind test still gets FALSE where there is no null to test
+    want_p = isTRUE(want_p) && isTRUE(g$wants_p),
+    method = if (is.na(g$method_slot)) g$method_fixed else as.character(method[[g$method_slot]]),
+    degf = degf))
 }
 
 #' Convert confidence levels into z thresholds

@@ -154,7 +154,28 @@ R/
 │                              ("48% [-3;+4]" IS the flagship cell). WARNING: its `across()` callback
 │                              must stay a NAMED function -- dplyr inlines an anonymous one into the
 │                              data mask, `r$col` yields NULL, and across() DROPS the column.
-│                              tab_prepare(), tab_ci(), tab_chi2(), tab_spread(), tab_get_vars(),
+│                              19j (KEY 5) — **ONE AGGREGATE CORE**: the leaf computes the cells, THEIR
+│                              INTERVAL and the whole-table TEST, because that is where the plan is.
+│                              **leaf_ci_plain()** (beside tab_apply_reference, sharing its matrices and
+│                              its `ra`/refcols) = tab_ci()'s per-cell arithmetic with the plan
+│                              RECONSTRUCTION removed: the 8-branch case_when collapses to 5 scalar
+│                              lines (in a factor leaf pct_base/var_kind are column-invariant, so
+│                              `ci_able` IS `pct != "no"` and the direction IS `pct`). ⚠ it reproduces
+│                              group_last_pos()'s LAST-in-group reference row (tab_apply_reference's own
+│                              ref_abs takes the FIRST -- they coincide, but the class of risk is gone),
+│                              tab_ci()'s ungroup-only-under-diff_row asymmetry, and diff_col's
+│                              `ref_n` read at the group's TOTAL row (invisible unweighted, wrong on
+│                              every design-based col-% table). Shared verbatim with jmv_tab3_reref, so
+│                              the two cannot fork. **leaf_chi2()/leaf_chi2_num()/leaf_test_view()** call
+│                              the SAME chi2_compute_test()/chi2_write_contrib() the step calls -- what
+│                              moved is not the arithmetic but the QUESTION. ⚠ leaf_test_view() applies
+│                              `comp = "all"` as a LOCAL ungrouping: tab_chi2() ungrouped the table it
+│                              RETURNED, so whether a comp="all" table came back grouped depended on
+│                              whether a test ran (and the tier-2 test cache, which skips the step,
+│                              returned a different CLASS). plain_core gains ci/ci_scale/test/deff,
+│                              leaf_finish a `test`; tab_apply_tests() is DELETED and the ordering
+│                              invariant is STRUCTURAL. tab_plain() gains a public `ci`/`ci_method`.
+│                              tab_prepare(), tab_spread(), tab_get_vars(),
 │                              tab_render_vars() (Phase 10c: robust group_vars-based role detection +
 │                              graceful degrade, used by print + exporters),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
@@ -196,7 +217,19 @@ R/
 │                              **num_total_postprocess()** = num_core's two identical post-rollup
 │                              blocks. ⚠ build_total_rows() and num_rollup() are NOT merged: base::sum
 │                              over split() vs data.table gforce is a 1-ULP contract on both sides.
-├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3) + z16-iiiii's **CI_METHODS** = THE interval-method
+├── tab-agg.R        (~640 L) Aggregate-core (Phase 2-3) + 19j's **CI_GEOMS + ci_dispatch()** = THE
+│                              interval GEOMETRY vocabulary beside the method one: one row per
+│                              (kind cell|diff x var_kind pct|mean x scale diff|ratio) carrying the
+│                              `engine`, the `method_slot` that names it and the `scale_key` it makes
+│                              the column ESTIMATE. Read only through ci_geom/_scale/_method/
+│                              ci_dispatch. Its 3 consumers (the factor leaf, num_core, the superseded
+│                              tab_ci step) held SIX copies of that rule -- which is how D8 happened
+│                              (a chain that could name a method the bounds were never built with).
+│                              ⚠ the engine call is written per ROW, never one do.call over a shared
+│                              arg list: the proportion engines take `df=`, the mean ones `df_design=`.
+│                              The reference-cell NA rule stays the CALLER's (tab_ci NAs the base,
+│                              num_core the results -- they genuinely differ on a mean cell).
+│                              + z16-iiiii's **CI_METHODS** = THE interval-method
 │                              vocabulary (4 kinds x their legal values, first = default), from which
 │                              default_ci_method() derives and resolve_ci_method() validates -- so the ONE
 │                              public `ci_method = c(cell=, diff=, mean_diff=, mean_ratio=)` named vector
@@ -457,13 +490,20 @@ R/
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
-├── tab-steps-legacy.R (~700 L) Phase 17f quarantine: the superseded dplyr-era step functions
-│                              tab_pct()/tab_tot()/tab_totaltab() (exported, superseded badge) + their
-│                              trio-exclusive helpers pct_formula()/diff_formula(), moved OUT of the live
-│                              tab.R pipeline. They call INTO shared helpers that stay in tab.R
-│                              (tab_match_groups_and_totrows/tab_add_totcol_if_no/tab_validate_comp/
-│                              tab_match_comp_and_tottab) + live tab_ci()/tab_chi2(); nothing here is
-│                              called BY the aggregate core.
+├── tab-steps-legacy.R (~1230 L) The superseded dplyr-era step API, quarantined OUT of tab.R's live
+│                              pipeline: tab_pct()/tab_tot()/tab_totaltab() + pct_formula()/
+│                              diff_formula() (17f), and **tab_ci()/tab_chi2() (19j)**. With 19j the
+│                              WHOLE pre-2.0.0 chain is here -- nothing in the build calls a step.
+│                              All exported, superseded badge, NO lifecycle warning. WHAT A WRAPPER IS:
+│                              it RECONSTRUCTS a plan from fmt markers, because it runs on a table it
+│                              did not build (tab_get_vars / detect_totcols / detect_refcol /
+│                              detect_firstcol, the 8-branch ci case_when, the 2nd `ci = "ratio"` fold,
+│                              the stars-from-the-option + degf-from-the-columns fallbacks, and the
+│                              four tab_match_*/tab_add_* passes that MUTATE the table to make the
+│                              step's preconditions true). That is their PURPOSE, which is why 19j did
+│                              not delete them -- but the ARITHMETIC is shared with the leaves
+│                              (ci_dispatch()/CI_GEOMS; chi2_compute_test()/chi2_write_contrib()), so
+│                              a step and a build cannot compute two different answers.
 ├── tab_classes.R   (~3700 L) tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
@@ -860,7 +900,14 @@ R/
 │                             content-addressed store + jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
 │                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
 │                             live tab; jmv_tab3_base_key/tuple, jmv_reapply_digits re-paint +
-│                             jmv_tab3_reref/rerefable instant reference re-ref -- ONE SWEEP PER
+│                             jmv_tab3_reref/rerefable instant reference re-ref (19j: it rebuilds the
+│                             INTERVAL in the same per-col_var sweep, via leaf_ci_plain(), where it used
+│                             to fmt_wrap -> tab_ci -> fmt_unwrap a whole record -- the study's own
+│                             example of a cache path shaped by a pipeline defect. ⚠ it must pass
+│                             `degf` explicitly: tab_ci() derived it from the columns because this
+│                             caller passed none. The `geom == "diff"` restriction in
+│                             jmv_tab3_rerefable() is now only a PATH decision, liftable in 19k)
+│                             -- ONE SWEEP PER
 │                             col_var there, as the build runs one leaf per col_var: `or`'s 2x2 is
 │                             (this level) x (the ref2 level OF THE SAME VARIABLE), so a pooled sweep
 │                             compared a partyid level against a race one. The TUPLE keys
@@ -2271,6 +2318,116 @@ No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** 
 non-field ComboBox display values, and the vocabulary/`prepare()` items already listed. 19l: the
 deprecation-warning corpus migration (127 remain, all `ci = "diff"` / `OR = TRUE` / short colour names
 in the test corpus — harmless, but they hide new warnings).
+
+---
+
+#### Phase 19j — KEY 5: one aggregate core
+
+**DONE (2026-08-15), both halves.** 2.0.0's own keystone is honoured: **`tab_apply_tests()` is
+deleted**, and with it the second pass. The leaf computes the cells, **their interval** and **their
+whole-table test** — because that is where the plan is. `tab_ci()` and `tab_chi2()` join
+`tab_pct()`/`tab_tot()`/`tab_totaltab()` in `R/tab-steps-legacy.R` as superseded public wrappers, so
+the whole pre-2.0.0 chain now lives in one quarantined file and nothing in the build calls a step.
+
+**Verified, and the delta is PROVED rather than asserted.** Full suite **FAIL 0, WARN 133, SKIP 4,
+PASS 6100**. The baseline was measured *in the same session, on the same reporter*, by stashing the
+whole diff and re-running: HEAD gives **6073**, this tree gave **6073** before the new fixture file —
+identical assertion count, identical result — and 6100 is 6073 + this phase's 27 new assertions.
+(CLAUDE.md's recorded 6042 for 19i is a parallel-reporter count; the +31 is a reporter artefact, not a
+change.) `dev/verify_golden_field_delta.R` with an **empty** declaration set reports **no delta** on
+all **1788 cells of the 36 goldens** — no field, no column attribute, no `test` column, no `meta`
+sub-field — and no `_snaps/*.md` or `_color_golden` fixture moved. So the *declared* golden delta of
+this phase is EMPTY, on both halves.
+
+**The interval.** **`CI_GEOMS` + `ci_dispatch()`** (`R/tab-agg.R`, beside `CI_METHODS`): one row per
+(kind × var_kind × scale), carrying the engine, the `CI_METHODS` slot that names it, and the
+`EST_SCALES` key it makes the column *estimate*. Its three consumers held **six** encodings of that
+rule between them — `tab_ci()`'s engine `switch` + `ci_scale_of()` + `ci_method_of()`, and
+`num_core()`'s `if/else` + `scale_num` + `method_num` — which is exactly how D8 happened (a chain that
+could name a method the bounds were never built with). **`leaf_ci_plain()`** is `tab_ci()`'s per-cell
+arithmetic with the plan *reconstruction* removed, on the matrices `tab_apply_reference()` already
+holds; `plain_core()` gains `ci`/`ci_scale` off the settings spine, and stamps the display, the scale
+and the method from the same lookup. **One slot, one interval**: the Woolf log-OR bounds when the odds
+ratio IS the comparison, this producer's otherwise — the resolver already guaranteed they are mutually
+exclusive, which is why the two could finally share the field.
+
+**The test.** `chi2_compute_test()` and `chi2_write_contrib()` are **not rewritten** — the leaf calls
+them, on its own single-`col_var` table, through **`leaf_chi2()`** / **`leaf_chi2_num()`** /
+**`leaf_test_view()`**. That was the design decision worth taking: a matrix port of 180 lines carrying
+an explicit byte-identity lock would have been a second implementation. What moves is not the
+arithmetic but the *question* — the step had to reconstruct its metadata from markers
+(`tab_get_vars`, `detect_totcols`, `tab_validate_comp`) **and mutate the table to make its own
+preconditions true** (`tab_match_groups_and_totrows` / `tab_add_totcol_if_no` /
+`tab_match_comp_and_tottab`, five warning branches between them); the leaf simply knows all of it, and
+built the totals itself. The numeric ANOVA folds in the same way (`leaf_chi2_num`), so
+`tab_chi2()` has no caller left.
+
+**Two real defects, both found by the migration, both fixed.**
+
+- ⚠ **A computation step decided the table's SHAPE.** `tab_chi2()` ungrouped the table it *returned*,
+  so whether a `comp = "all"` table came back GROUPED depended on whether a test happened to run — and
+  the jamovi **tier-2 test cache, which skips the step, therefore returned a different CLASS from a
+  fresh build**. It was invisible only because `tab_ci()` ungrouped too; removing that half turned it
+  into a red assertion mid-flight, and removing the other half closed it. `comp = "all"` is a LOCAL
+  ungrouping now (`leaf_test_view`), and all four `comp = "all"` combinations agree.
+  Fixture: `test-aggregate-core.R`.
+- **The jamovi re-reference passed no `degf`.** It got away with it because `tab_ci()` derived one off
+  the columns; calling the producer directly would have silently fallen back to *z* (the 9 %-too-narrow
+  defect `test-degraded-attrs.R` records). Stated in the code where it now must be passed.
+
+**`tab_plain()` gains a public `ci =` / `ci_method =`** — it had none, so the step chain was the only
+route to a factor cell interval. It resolves the same `(or_ci, ci, ci_scale)` triple
+`tab_resolve_settings()` derives, so `tab_plain(ci = "cell")` and `tab(ci = "cell")` agree **by
+construction**, not by mirroring. Default `"auto"` is byte-identical to the previous hard-passed NULL.
+
+**What actually died, and what did NOT — the roadmap's "What dies" list is wrong on three items and
+the correction is the honest part of this report.** A wrapper's *entire job* is to reconstruct a plan
+from markers on a table it did not build (`test-steps-legacy.R` calls `tab_ci()` on a chain that never
+saw a settings spine), so:
+
+| item | roadmap | reality |
+|---|---|---|
+| `detect_totcols` / `detect_refcol` / `detect_firstcol` | dies | **survives** in the wrapper + the exporters; stops running on the `tab()` path — that is the honest win |
+| the 8-branch `case_when` | dies | **survives** in the wrapper; **collapses to 5 scalar lines** in the leaf. Two encodings of *different questions* ("reconstruct" vs "state") |
+| the 2nd `ci = "ratio"` fold, the 3rd `stars`, the `degf` re-derivation | die | **survive** in the wrapper (that is what makes it self-contained); stop running on the pipeline |
+| the engine `switch`, `ci_scale_of`, `ci_method_of`, the four `method_*` scalar unpacks | — | **die** → `CI_GEOMS` |
+| `tab_apply_tests()`, the `spread_col` token | — | **die** |
+| the jamovi `fmt_wrap` → `tab_ci` → `fmt_unwrap` round trip | — | **dies** |
+
+**HONEST CONCERNS.**
+
+- **`measure_stage()` was NOT deleted**, contrary to the plan. Its two values are still a real
+  distinction — the contribution is a *different computation* from a plain colour stamp — so it now
+  answers "which of the leaf's two passes stamps this measure" rather than "which step". Its `"chi2"`
+  value is therefore a misnomer; renaming it would churn `test-color-config.R` for no behaviour, so it
+  is flagged for **19l** instead of half-done here.
+- **`tab_ci()`'s `set_wn(col, get_wn(col))` quirk did not travel to the leaf** (the maintainer's
+  ruling), but **no golden surfaced it** — none is *grouped + factor + ci*, and `chi2_write_contrib()`
+  still runs the same write, so `f_color_contrib` is unchanged. The declared `MATERIALISED_FIELDS`
+  mode was therefore never needed. The behaviour change is real but unobserved: a grouped unweighted
+  factor table with a difference interval now stores `wn = NA` where it stored `n`. `get_wn()`
+  coalesces, so nothing rendered moves.
+- **The whole-table chi2 is now one `agg_chi2()` call per col_var** instead of one batched call for
+  all of them. The values are identical (`table_id` already partitioned by col_var); the cost is not
+  measured — `test-benchmark.R` was not re-run. Worth a look in **19l** on a wide table.
+- **`dev/verify_golden_field_delta.R` gained an order-insensitivity fix**: it compared the table
+  attributes as an *ordered* list, and reported all 36 cases as CHANGED because the leaf sets `test`
+  before `meta` where the post-assembly step set it after. Attribute order is a by-product, never a
+  contract — but it means that check was previously stricter than intended, and any earlier phase that
+  reordered an attribute would have been reported as a regression.
+- **`jmv_tab3_rerefable()`'s `geom == "diff"` restriction was NOT lifted.** It is now only a *path*
+  decision (the producer takes `ci_scale`), but lifting it flips four assertions that state the rebuild
+  explicitly and changes which cache path a live toggle takes — **19k's**, with its cold/warm/re-ref
+  lock and the live pass. The comment there says so.
+- The two items the plan refused stay refused: `if (!all(is.na(a[[11]]))) "woolf"` (a magic-value test
+  that should die, but moves the stamp on a degenerate all-NA OR table) and unifying `tab_ci()`'s
+  NA-**base** device with `num_core()`'s NA-**results** one (they genuinely disagree on a mean *cell*
+  reference row — a behaviour change wearing a refactor's clothes). Both → **19l**, and both are
+  stated in the code where they live.
+- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still owns that.
+
+**FOLLOW-UPS.** 19k can start on this commit. 19l: `measure_stage()`'s naming, the per-col_var
+`agg_chi2` cost, and the two refused items above.
 
 ---
 

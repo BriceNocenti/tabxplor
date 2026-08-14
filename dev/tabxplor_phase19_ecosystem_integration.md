@@ -1089,6 +1089,24 @@ This is a *deliberately open* phase. It has a method, not a checklist.
 4. **Report what did not shrink**, and why. A key that did not pay for itself is a finding worth
    recording, not something to hide.
 
+**Handed over by 19j** (each stated in the code where it lives, none half-done):
+
+- **`measure_stage()` is misnamed now.** Its `"chi2"` value means "the CONTRIBUTION pass stamps this
+  measure", not "the chi2 step does" — the test step is gone. The distinction is real (the
+  contribution is a different computation), so the function stays; only the vocabulary is stale.
+  Renaming it churns `test-color-config.R`, so it was deliberately not done in 19j.
+- **`if (!all(is.na(a[[11]]))) "woolf"`** (`plain_core`'s `ci_method` stamp) — a magic-value test that
+  should read the plan (`or_ci`) instead, but flipping it changes the stamp on a degenerate all-NA OR
+  table.
+- **`tab_ci()` NAs the reference cell's BASE; `num_core()` NAs its RESULTS.** They genuinely disagree
+  on a mean *cell* interval's reference row. Unifying them is a behaviour change wearing a refactor's
+  clothes — decide it consciously, with a fixture.
+- **The whole-table chi2 is one `agg_chi2()` call per col_var** now, not one batched call for all of
+  them (values identical, `table_id` already partitioned by col_var). Cost unmeasured — re-run
+  `test-benchmark.R` on a wide table.
+- **`dev/verify_golden_field_delta.R` compared table attributes ORDER-sensitively** until 19j fixed
+  it. Any earlier phase that merely reordered an attribute would have been reported as a regression.
+
 **Verification**: targeted per deletion. Zero golden churn is the expectation — if a deletion moves
 output, it was not dead.
 

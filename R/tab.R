@@ -1,9 +1,16 @@
 # PURPOSE: Main user-facing API for cross-tabulation.
 # ROLE: tab() and tab_many() are thin wrappers over the internal engine tab_build() (Phase 6);
-#   plus the pipeline workers tab_plain(), tab_num(), tab_prepare(), the shared finalize helper
-#   tab_apply_tests(), tab_add_n_pct(), and the superseded step functions
-#   (tab_pct, tab_ci, tab_chi2, tab_tot, tab_totaltab, tab_spread).
+#   plus the pipeline workers tab_plain(), tab_num(), tab_prepare(), tab_add_n_pct(), and
+#   tab_spread(). (The superseded step functions live in R/tab-steps-legacy.R.)
 # KEY CONSTRAINTS:
+#   - ONE AGGREGATE CORE (Phase 19j, KEY 5): the leaf computes the cells, THEIR INTERVAL and the
+#     whole-table TEST -- leaf_ci_plain() / num_core()'s own block for the interval, leaf_chi2() /
+#     leaf_chi2_num() for the test -- because that is where the plan is. There is no second pass:
+#     tab_apply_tests() is gone, and tab_ci()/tab_chi2() are superseded wrappers that RECONSTRUCT a
+#     plan from fmt markers for the exported step path only. Both sides share the arithmetic
+#     (ci_dispatch()/CI_GEOMS in R/tab-agg.R; chi2_compute_test()/chi2_write_contrib() below), so a
+#     step and a build cannot compute two different answers. The ordering invariant (compute on the
+#     FULL level set, before tab_assemble drops the non-first levels) is now STRUCTURAL.
 #   - The leaves are Phase 17f wrapper/core splits: the public tab_plain()/tab_num() = NSE defuse +
 #     the shared ARGUMENT BOUNDARY (19i: tab_resolve_common_args(), R/tab-resolve.R -- the same one
 #     tab() and tab_counts() run), then the shared resolver (plain_resolve/num_resolve) + the
@@ -2807,10 +2814,11 @@ tab_transform <- function(ctx) {
       num = FALSE, df = FALSE, .fine = fine_num, .by_table = .by_table,
       inference = inference
     )
-    # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), via
-    # tab_chi2()'s test step (it detects mean col_vars and calls agg_anova()). Only the tidy `test`
-    # tibble is kept (merged with the factor test at assemble); NULL when chi2 is off for this row_var.
-    if (isTRUE(chi2)) chi2_num <- get_test(tab_chi2(tabs = tabs_num, calc = "p", comp = comp))
+    # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F). Only the
+    # tidy `test` tibble is kept (merged with the factor test at assemble); NULL when chi2 is off for
+    # this row_var. Phase 19j: computed from the leaf's own metadata (leaf_chi2_num) instead of
+    # through tab_chi2(), which re-derived it from markers and could MUTATE the table on the way.
+    if (isTRUE(chi2)) chi2_num <- leaf_chi2_num(tabs_num, comp, rv, num_col_syms, tv_syms)
   }
 
   # --- factor col_vars: one plain_core() per col_var, joined into ONE table ---
@@ -2818,6 +2826,13 @@ tab_transform <- function(ctx) {
   tabs_text <- NULL
   tests     <- chi2   # logical placeholder; assemble's is.logical() fallback handles a numeric-only tab
   if (sum(col_vars_text) != 0) {
+    # Phase 19j (KEY 5): WHICH test each leaf must compute. "ctr" also writes the per-cell contribution
+    # FIELDS (which are not in the `test` tibble, so a tier-2 cache HIT cannot serve it); "no" covers
+    # both `test = FALSE` and a hit, whose cached tibble is injected below instead.
+    want_ctr  <- identical(measure_stage(color), "chi2")
+    test_leaf <- if (!isTRUE(chi2)) "no"
+                 else if (!is.null(cached_test) && !want_ctr) "no"
+                 else if (want_ctr) "ctr" else "p"
     text <- purrr::pmap(
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
            pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text],
@@ -2831,6 +2846,9 @@ tab_transform <- function(ctx) {
         # contributions only the test step can compute (measure_stage()). That single question
         # replaced the `color_diff_OR` recode; passing the measure straight through would make the
         # leaf stamp "diff" on a contrib table (its `color_1` fall-through).
+        # Phase 19j (KEY 5): the test step IS the leaf now, so the two halves of that question are one
+        # call -- `color_leaf` stays "no" for contrib (chi2_write_contrib stamps it), and `test_leaf`
+        # says which of the two the leaf must compute.
         color_leaf <- if (identical(measure_stage(color), "chi2")) "no" else color
         r_pl <- plain_resolve(.pct, .ref, .ref2, .na, totaltab_name, total_names,
                               c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms,
@@ -2842,6 +2860,9 @@ tab_transform <- function(ctx) {
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
           comparison = comparison, or_ci = or_ci, dichotomise = isTRUE(.lv1),
+          # Phase 19j (KEY 5): the interval AND test plans reach the leaf, exactly as the numeric arm
+          # above already hands the interval to num_core(). Both are per row_var on the settings spine.
+          ci = ci, ci_scale = ci_scale[1], test = test_leaf, deff = robust_tests,
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
           .by_table = .by_table, inference = inference
         )
@@ -2860,27 +2881,26 @@ tab_transform <- function(ctx) {
         dplyr::if_else(.names %in% duplicated_levels, paste0(.names, "_", .y), .names)))
     }
 
+    # Phase 19j (KEY 5): each leaf carries its OWN test tibble (one row per subtable x col_var x
+    # test-type -- the grain chi2_compute_test() already produced), so the join is where they are
+    # bound, and the `arrange` reproduces its final sort across col_vars. The ordering invariant
+    # (compute on the FULL level set, before tab_assemble drops the non-first levels) is now
+    # STRUCTURAL: the leaf is upstream of assemble entirely.
+    leaf_tests <- purrr::map(text, get_test) |> purrr::compact()
+    text       <- purrr::map(text, ~ set_test(.x, NULL))
+
     tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(as.character(tab_vars), row_var))
 
-    # Phase 9b-5: the 9b-4 no-op carrier round-trip that used to sit here is gone -- tab_chi2()'s
-    # whole-table test now reads plain fields directly (chi2_compute_test(), no fmt reconstruction),
-    # so the tests boundary no longer needs a pre-established carrier. (tab_ci() is still record-based;
-    # its carrier write-back is Phase 9b-5 increment 2. fmt_unwrap/fmt_wrap stay for that + the tests.)
-
-    # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order works), but
-    # BOTH must run BEFORE non-first levels are dropped (in tab_assemble), so they are computed on the
-    # full set of levels. See CLAUDE.md § Global Architecture. Phase 6a: one pass through the shared
-    # tab_apply_tests() (chi2 -> capture test -> ci). Phase 3b: the per-cell contributions ("ctr") only
-    # when the measure needs them. Phase 7e: cached_test is this row_var's tier-2 hit (NULL ->
-    # recompute as before). Phase 19c: `color` is the ONE resolved measure; tab_apply_tests asks
-    # measure_stage() which half of it stamps.
-    applied   <- tab_apply_tests(tabs_text, do_chi2 = chi2, ci = ci, comp = comp,
-                                 deff = robust_tests,
-                                 color = color, stars = stars,
-                                 ci_scale = ci_scale, cached_test = cached_test,
-                                 inference = inference)
-    tabs_text <- applied$tab
-    tests     <- applied$test
+    tests <- if (!isTRUE(chi2)) chi2
+             else if (!is.null(cached_test) && !want_ctr) cached_test           # tier-2 hit
+             else if (length(leaf_tests) == 0L) new_test_tibble()
+             else {
+               tt <- vctrs::vec_rbind(!!!leaf_tests)
+               if (nrow(tt) == 0L) new_test_tibble() else
+                 dplyr::arrange(tt, dplyr::across(tidyselect::any_of(
+                   c(as.character(tab_vars), "col", "test"))))
+             }
+    if (isTRUE(chi2)) tabs_text <- set_test(tabs_text, tests)
   }
 
   # --- repack: transform produces this row_var's built+tested table(s) + the tier-2 test. ---
@@ -4060,18 +4080,13 @@ fmt_stack_frames <- function(frames, meta) {
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 #' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 #' correspondence analysis with \pkg{FactoMineR}.
-#' @param conf_level The confidence level used for the odds-ratio confidence intervals
-#' (only computed when `OR` is requested and `stars` or `color_signif` ask for them),
-#' as a single numeric between 0 and 1. Default to 0.95.
 #' @param design_effect See \code{\link{tab}}: whether a \strong{weighted} table's intervals account
 #' for the weighting's own design effect. \code{NULL} (default) takes
 #' \code{options("tabxplor.design_effect")}.
-#' @param stars Set to \code{TRUE} to compute the significance stars attached to the
-#' odds-ratio confidence intervals (with `OR`).
 #' @param display A \code{{}} display template applied to the built table -- the same grammar
 #'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
 #'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
-#' @param color_signif How significance interacts with `color` (with `OR`):
+#' @param color_signif How significance interacts with `color`:
 #' \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
 #' See \code{\link{tab}}.
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed count-aggregate to roll up from
@@ -4089,14 +4104,20 @@ fmt_stack_frames <- function(frames, meta) {
 #' using them in calculations, be sure they are of class \code{character}.
 #' @export
 #'
-#' @examples # A typical workflow with tabxplor step-by-step functions :
+#' @examples
 #' \donttest{
 #' data <- dplyr::starwars |> tab_prepare(sex, hair_color)
 #'
+#' # the leaf builds the cells AND their intervals (2.0.0): `ci` is resolved here exactly as in
+#' # tab(), so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
+#' data |>
+#'   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row",
+#'             ci = "ref", color = "difference", color_signif = "grey_non_signif")
+#'
+#' # the whole-table test is still a step (superseded, but supported)
 #' data |>
 #'   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
-#'   tab_chi2() |>
-#'   tab_ci(color = "after_ci")
+#'   tab_chi2()
 #' }
 tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       pct = "no", color = "no", display = NULL, OR = "no",
@@ -4106,8 +4127,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       tot = NULL, total_names = "Total",
                       subtext = "", digits = 0,
                       num = FALSE, df = FALSE,
-                      conf_level = conf_level_default(), stars = NULL,
-                      design_effect = NULL, color_signif = "ignore",
+                      ci = "auto", conf_level = conf_level_default(), stars = NULL,
+                      ci_method = NULL, design_effect = NULL, color_signif = "ignore",
                       .fine = NULL, .by_table = FALSE
 ) {
   # Phase 18z14-i: a survey design as `data` is unwrapped FIRST -- tidyselect must see a data frame.
@@ -4123,9 +4144,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     "tab_plain", color = color, color_signif = color_signif, stars = stars,
     conf_level = conf_level, OR = OR, display = display, ref = ref, ref2 = ref2,
     tot = tot, total_names = total_names, na = na, pct = pct, comp = comp, totaltab = totaltab,
-    user_env = rlang::caller_env())
+    ci = ci, ci_method = ci_method, user_env = rlang::caller_env())
   stars <- .a$stars ; display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
-  total_names <- .a$total_names
+  total_names <- .a$total_names ; ci_method <- .a$ci_method
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -4189,11 +4210,15 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # `display` of its own, so it is LOSSLESS here as on the pipeline (`OR = "OR"` -> `display =
   # "{or}"`): the leaf and the wrapper speak one grammar.
   comparison <- tab_leaf_comparison(color, display, pct, ref)
-  # tab_plain() computes no contrast interval of its own (that is tab_ci()'s step) EXCEPT the Woolf
-  # log-OR one, which is the odds ratio's -- so the leaf's whole `ci` question is this single
-  # predicate, resolved by the shared rule (D28/D29 included).
-  r_ci <- resolve_leaf_ci(NULL, color, color_signif, stars, ref)
+  # Phase 19j (KEY 5): the leaf computes EVERY per-cell interval now, so `ci` is a real argument here,
+  # in tab()'s own anchor vocabulary, resolved by the rule both leaves share (D28/D29 included).
+  # `or_ci` / `ci` / `ci_scale` are the same triple tab_resolve_settings() derives for the pipeline,
+  # so tab_plain(ci = "cell") and tab(ci = "cell") agree by construction rather than by mirroring.
+  r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref)
   stars <- r_ci$stars ; color_signif <- r_ci$color_signif
+  or_ci <- identical(comparison, "odds_ratio") && identical(r_ci$ci, "ref")
+  ci_leaf  <- if (or_ci) "no" else if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
+  ci_scale <- if (identical(comparison, "ratio")) "ratio" else "diff"
   r <- plain_resolve(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
                      digits, totaltab, tab_vars, comparison = comparison)
   tab_apply_display(plain_core(
@@ -4202,12 +4227,12 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
     subtext = subtext, digits = r$digits, num = num, df = df,
     stars = stars, color_signif = color_signif, .fine = .fine, .by_table = .by_table,
-    comparison = comparison,
-    or_ci = identical(comparison, "odds_ratio") && identical(r_ci$ci, "ref"),
+    comparison = comparison, ci = ci_leaf, ci_scale = ci_scale,
+    or_ci = or_ci,
     # Phase 18z14-ii: tab_plain(design, ...) gets the design-based intervals too -- through the
     # same inference object tab_setup() builds for the pipeline (no design -> "weights"/"n" from
     # `design_effect` or its option, byte-identical to the leaf's former inline read).
-    inference = new_inference(wt, svy$spec, conf_level, design_effect = design_effect)
+    inference = new_inference(wt, svy$spec, conf_level, ci_method, design_effect = design_effect)
   ), display)
 }
 
@@ -4342,13 +4367,18 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref, ref2, comp,
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
                        stars, color_signif, .fine, .by_table, inference,
-                       comparison = NA_character_, or_ci = FALSE, dichotomise = FALSE) {
+                       comparison = NA_character_, or_ci = FALSE, dichotomise = FALSE,
+                       ci = "no", ci_scale = "diff", test = "no", deff = NULL) {
   # Phase 19d (KEY 8a): `OR` is gone from the leaf. The odds ratio is computed on EVERY row/col-%
   # table (measured free: the 2x2 it needs is four numbers the wide table already holds, in the same
   # tab_apply_reference() sweep that produces diff and ratio), so nothing here switches it on.
   # What the two new arguments carry is the ONE fact the resolver settled: `comparison` = which
   # geometry this table compares on, `or_ci` = whether the LEAF owns the interval (the Woolf log-OR
   # one) rather than tab_ci(). `ref2` alone picks the 2x2 -- a level, or "cumulative".
+  # Phase 19j (KEY 5): ... and `ci` / `ci_scale` are the rest of that one settled fact -- the leaf owns
+  # EVERY per-cell interval now, the Woolf one and the cell/contrast one alike (they are mutually
+  # exclusive: `or_ci` is TRUE only where `ci` is "no"). They come straight off the settings spine.
+  # `test` ("no" | "p" | "ctr") and `deff` are the same for the WHOLE-TABLE test (see leaf_chi2()).
   or_compare <- identical(comparison, "odds_ratio")
   # Phase 19a: `inference` is REQUIRED (it was `= new_inference()`). A lazy default could only
   # fire on a caller that forgot to thread the build-time object, and would then silently
@@ -4795,6 +4825,32 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     rep(FALSE, nrow(tabs_n))
   }
 
+  # Phase 19j (KEY 5): THE cell / contrast interval, computed here -- where the plan is -- instead of
+  # 1 500 lines later by tab_ci() from reconstructed markers. Everything it needs is a clean matrix at
+  # this point (the text columns are dropped just above, so each data.table's columns ARE `cols`).
+  # `ref = "tot"` zeroes `refrows` above (the total row is not a "reference row" marker), which is
+  # exactly the distinction tab_ci()'s ref_mask() drew by reading `ref` back off the column.
+  ci_res <- leaf_ci_plain(
+    P     = if (exists("tabs_pct" , rlang::current_env(), inherits = F))
+              as.matrix(tabs_pct)  * 1.0 else matrix(NA_real_, nrow(tabs_n), ncol(tabs_n)),
+    tot_n = if (exists("tabs_totn", rlang::current_env(), inherits = F))
+              as.matrix(tabs_totn) * 1.0 else matrix(NA_real_, nrow(tabs_n), ncol(tabs_n)),
+    n_eff = if (exists("tabs_neff", rlang::current_env(), inherits = F))
+              as.matrix(tabs_neff) * 1.0 else NULL,
+    ci = ci, pct = pct, ci_scale = ci_scale,
+    # tab_ci() ungroups for a ROW contrast under comp = "all" and for nothing else -- so a column
+    # contrast and a cell interval keep their sub-table grouping even there. Reproduced literally.
+    grp = if (identical(comp, "all") || length(tab_vars) == 0L) rep(1L, nrow(tabs_n)) else
+      do.call(paste, c(lapply(as.character(tab_vars), function(v) as.character(tabs_text[[v]])),
+                       sep = "\r")),
+    ref_row = if (identical(as.character(ref), "tot")) totrow_vector else refrows,
+    totrow  = totrow_vector,
+    refcol  = if (exists("refcols_vector", rlang::current_env(), inherits = F) &&
+                  any(refcols_vector)) which(refcols_vector)[1] else NA_integer_,
+    totcol  = totcol_vector,
+    conf_level = conf_level, stars = stars,
+    ci_method = inference$method, degf = inference$degf)
+
   # Phase 7f-1: display / colour / type / ref / comp / col_var and the digits recycle are
   # column-INVARIANT here (they read only tab_plain-scope scalars/symbols -- pct/OR/wt/color/ref/
   # ref2/row_var/col_var/comp/digits -- never the per-column pmap args ..N), yet the old code
@@ -4804,7 +4860,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # reused for every all-NA field (identical values, one allocation instead of ~6 per column).
   # Phase 19d: the leaf builds the CELL, not a chosen geometry -- `display` is the tail's job now
   # (tab_apply_display), and the `or`/`or_pct` arms went with the `OR` argument.
+  # Phase 19j: ... except the one display a CELL interval implies -- "show the bracket you asked for"
+  # (tab_ci()'s `visible` argument, which existed only because the interval arrived after the leaf).
   display_1 <- dplyr::case_when(
+    isTRUE(ci_res$visible)                           ~ "pct_ci",
     pct != "no"                                      ~ "pct",
     length(wt) != 0                                  ~ "wn" ,
     TRUE                                             ~ "n"
@@ -4826,14 +4885,32 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # the rendered display: `scale` says which estimate the column's INTERVAL belongs to, and the
   # display is free (a `{or}` template on a difference-tested table shows odds ratios over a
   # difference interval -- which is exactly what the D23 bracket rule refuses to print together).
-  # Everything else is a LEVEL here; tab_ci() upgrades it to `points` / `pct_ratio`.
+  # Phase 19j: and a CONTRAST interval makes it a difference (`points`) or a ratio of proportions --
+  # the leaf's own CI_GEOMS row says which, so the scale, the method name and the bounds all come from
+  # one lookup. A NA scale_key is a cell interval: the level scale stands. (The odds-ratio arm wins by
+  # position; the two cannot co-occur, `or_ci` being TRUE only where `ci` is "no".)
   scale_1  <- dplyr::case_when(or_compare & pct %in% c("row", "col") & ref != "no" ~ "odds_ratio",
+                               !is.na(ci_res$scale)             ~ ci_res$scale,
                                pct != "no"                      ~ "level_pct",
                                TRUE                             ~ "level_n")
   ref_1    <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
   comp_1   <- dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA)
   colvar_1 <- rlang::as_name(col_var)
   digits_v <- vctrs::vec_recycle(as.integer(digits), nrow(tabs_n))
+
+  # Phase 19j: ONE SLOT, ONE INTERVAL. The Woolf log-OR bounds when the odds ratio IS the comparison
+  # (`or_ci`), this leaf's cell/contrast bounds otherwise -- the resolver guarantees the two are
+  # mutually exclusive, which is the whole reason the geometry had to be settled before either was
+  # asked for. `or_from_leaf` also keeps the ci_method stamp honest: under `or_ci` a column whose own
+  # 2x2 was degenerate carries all-NA bounds and therefore names no method (D19).
+  or_from_leaf <- exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)
+  mat_cols     <- function(M) lapply(seq_len(ncol(M)), function(j) M[, j])
+  ci_inf_1     <- if (or_from_leaf) tabs_or_ci_inf else
+                  if (!is.null(ci_res$inf))    mat_cols(ci_res$inf)    else list(NA_reals)
+  ci_sup_1     <- if (or_from_leaf) tabs_or_ci_sup else
+                  if (!is.null(ci_res$sup))    mat_cols(ci_res$sup)    else list(NA_reals)
+  ci_pvalue_1  <- if (or_from_leaf) tabs_or_pvalue else
+                  if (!is.null(ci_res$pvalue)) mat_cols(ci_res$pvalue) else list(NA_reals)
 
   tabs <-
     list(tabs_n,
@@ -4848,9 +4925,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
          if (exists("refcols_vector", rlang::current_env(), inherits = F)) { refcols_vector } else {
            rep(FALSE, length(cols)) },
          if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) },
-         if (exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)) { tabs_or_ci_inf } else { list(NA_reals) },
-         if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) { tabs_or_ci_sup } else { list(NA_reals) },
-         if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) { tabs_or_pvalue } else { list(NA_reals) },
+         ci_inf_1, ci_sup_1, ci_pvalue_1,
          if (exists("tabs_neff", rlang::current_env(), inherits = F)) { tabs_neff } else { list(NA_reals) }
     ) |>
     # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
@@ -4873,9 +4948,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
           row_kind  = kind_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
           scale     = scale_1, comp_all = comp_1, ref = ref_1,
-          # the only interval this leaf computes itself is the empirical-OR one (ci_or, Woolf's
-          # log-OR); the cell / contrast intervals are tab_ci()'s, and it stamps its own engine.
-          ci_method = if (!all(is.na(a[[11]]))) "woolf" else "",
+          # WHICH engine built these bounds (D8), from the same source that built them. Under `or_ci`
+          # it is Woolf's log-OR one -- and a column whose own 2x2 was degenerate carries all-NA
+          # bounds, which is the data fact saying "no interval here", so it names no method.
+          # Otherwise it is the CI_GEOMS row leaf_ci_plain() used, column-invariant like the scale.
+          ci_method = if (or_from_leaf) { if (!all(is.na(a[[11]]))) "woolf" else "" }
+                      else ci_res$method,
           pct_base  = base_1, col_var = colvar_1,
           totcol    = a[[8]], refcol = a[[9]], color = color_1, color_signif = "ignore")
       )
@@ -4907,7 +4985,102 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         dplyr::relocate("wn", .after = tidyselect::last_col() )
   }
 
-  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num)
+  # Phase 19j (KEY 5): the WHOLE-TABLE TEST, here, on this leaf's own col_var -- which is its natural
+  # grain (`chi2_compute_test()` already produces one row per subtable x col_var, and the residual is
+  # a property of ONE contingency table). See leaf_chi2().
+  leaf_test <- NULL
+  if (!identical(test, "no")) {
+    lt        <- leaf_chi2(tabs, test, comp, row_var, col_var, tab_vars, deff)
+    tabs      <- lt$tabs
+    leaf_test <- lt$test
+  }
+
+  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num,
+              test = leaf_test)
+}
+
+
+# leaf_chi2() -- Phase 19j (KEY 5): the leaf's OWN whole-table test + contribution pass.
+#
+# DESIGN: it calls the SAME chi2_write_contrib() / chi2_compute_test() the superseded tab_chi2() step
+#   calls -- no second implementation, no matrix rewrite of a 180-line function carrying a byte-identity
+#   lock. What moves is not the arithmetic but the QUESTION: the step had to reconstruct the metadata
+#   from fmt markers (tab_get_vars, detect_totcols, tab_validate_comp) and MUTATE the table to make its
+#   own preconditions true (tab_match_groups_and_totrows / tab_add_totcol_if_no / tab_match_comp_and_-
+#   tottab, five warning branches between them); the leaf simply knows all of it, and built the totals
+#   itself. `col_vars_levels` is this leaf's value columns, `tot_cols` is its "Total", `is_a_mean` is
+#   FALSE (a factor leaf), and the reference/total structure is the one it just wrote.
+#
+# WARNING: `comp = "all"` is applied as a LOCAL ungrouping, not a table mutation. tab_chi2() ungrouped
+#   the table it returned, so whether a comp = "all" table came back GROUPED depended on whether a test
+#   happened to run -- and the jamovi tier-2 test cache, which skips the step, therefore returned a
+#   different CLASS from a fresh build (measured; masked until 19j only because tab_ci() ungrouped too).
+#   A computation step must not decide the table's shape.
+#' @keywords internal
+#' @noRd
+leaf_chi2 <- function(tabs, test, comp, row_var, col_var, tab_vars, deff = NULL) {
+  # `test` is the leaf's plan value ("p" | "ctr"); chi2_write_contrib() speaks tab_chi2()'s own
+  # pre-2.0.0 colour vocabulary ("no"/"auto"/"all"/"all_pct"), so it is derived here, once, exactly
+  # as tab_apply_tests() derived it.
+  do_ctr  <- identical(test, "ctr")
+  calc    <- if (do_ctr) c("ctr", "p") else "p"
+  color   <- if (do_ctr) "all" else "no"
+  cv      <- rlang::as_name(col_var)
+  lev_all <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+  if (length(lev_all) == 0L || identical(cv, "no_col_var"))
+    return(list(tabs = tabs, test = new_test_tibble()))
+
+  col_vars_levels        <- stats::setNames(list(rlang::syms(lev_all)), cv)
+  is_tot                 <- purrr::map_lgl(lev_all, ~ any(is_totcol(tabs[[.x]])))
+  col_vars_levels_no_tot <- stats::setNames(list(rlang::syms(lev_all[!is_tot])), cv)
+  tot_nm                 <- if (any(is_tot)) lev_all[is_tot][[1]] else lev_all[[length(lev_all)]]
+  tot_cols               <- stats::setNames(rlang::syms(rep(tot_nm, length(lev_all))), lev_all)
+
+  keep  <- dplyr::group_vars(tabs)
+  work  <- leaf_test_view(tabs, comp, tab_vars)
+
+  # the contribution reads the col_var's own TOTAL column (the chi2 marginals live there), which the
+  # measure's declared `requires` forces on -- so its absence means the caller did not ask for contrib.
+  if (do_ctr && any(is_tot))
+    work <- chi2_write_contrib(work, calc, comp, color, col_vars_levels,
+                               col_vars_levels_no_tot, is_a_mean = FALSE, all_col_tot = FALSE,
+                               tot_cols = tot_cols, deff = deff)
+
+  test_tbl <- chi2_compute_test(work, comp, as.character(rlang::as_name(row_var)),
+                                col_vars_levels, col_vars_levels_no_tot,
+                                is_a_mean = FALSE, all_col_tot = FALSE)
+
+  work <- dplyr::ungroup(work)
+  if (length(keep)) work <- dplyr::group_by(work, dplyr::across(dplyr::all_of(keep)))
+  list(tabs = work, test = test_tbl)
+}
+
+
+# leaf_test_view() -- the grouping the whole-table test is computed ON. `comp = "all"` means "one test
+# for the whole table", so the sub-table grouping is dropped -- for the COMPUTATION only (see the
+# WARNING on leaf_chi2()). Shared by both leaves so they cannot answer it differently.
+#' @keywords internal
+#' @noRd
+leaf_test_view <- function(tabs, comp, tab_vars) {
+  gv <- as.character(tab_vars)
+  if (identical(comp, "all") || length(gv) == 0L) dplyr::ungroup(tabs)
+  else dplyr::group_by(tabs, dplyr::across(dplyr::all_of(gv)))
+}
+
+
+# leaf_chi2_num() -- the numeric leaf's twin: the one-way ANOVA (Welch + classic F) over its mean
+# columns, via the same chi2_compute_test(). A numeric col_var IS its own single "level" column, and
+# there is no contribution to write -- so this is the metadata, and nothing else.
+#' @keywords internal
+#' @noRd
+leaf_chi2_num <- function(tabs, comp, row_var, col_vars, tab_vars) {
+  cvs <- as.character(col_vars)
+  cvs <- cvs[cvs %in% names(tabs)]
+  if (length(cvs) == 0L) return(new_test_tibble())
+  cvl <- stats::setNames(lapply(cvs, function(v) rlang::syms(v)), cvs)
+  chi2_compute_test(leaf_test_view(tabs, comp, tab_vars), comp,
+                    as.character(rlang::as_name(row_var)), cvl, cvl,
+                    is_a_mean = rep(TRUE, length(cvs)), all_col_tot = rep(FALSE, length(cvs)))
 }
 
 
@@ -4931,7 +5104,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 #' @keywords internal
 #' @noRd
 leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
-                        unserved = FALSE, degraded = FALSE, df = FALSE, num = FALSE) {
+                        unserved = FALSE, degraded = FALSE, df = FALSE, num = FALSE,
+                        test = NULL) {
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ length(unique(.)) == 1))
 
@@ -4950,12 +5124,16 @@ leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
   meta <- list(spec = new_spec("crosstab", vars = new_vars_attr(
     wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])))
 
+  # WARNING: `test` defaults to new_test_tibble() in new_tab(), never NULL -- so a leaf with no test
+  # must let the default stand, not pass NULL (that would DROP the empty-tibble attribute every table
+  # has carried, on every numeric golden).
+  tst <- if (is.null(test)) new_test_tibble() else test
   result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext, meta = meta) |>
+    new_tab(tabs, subtext = subtext, test = tst, meta = meta) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext, meta = meta)
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext, test = tst, meta = meta)
   }
 
   # Phase 18z13 (D3) + z16-iiiii: the level, the design df and the basis on every fmt COLUMN, for
@@ -5443,6 +5621,113 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 }
 
 
+# leaf_ci_plain() -- Phase 19j (KEY 5): THE factor leaf's confidence interval, on matrices, FROM THE
+# PLAN. It is tab_ci()'s per-cell arithmetic with the plan RECONSTRUCTION removed: the leaf knows
+# `pct`, `ci`, `ci_scale`, `comp`, its reference row and its reference column, so nothing here re-reads
+# an fmt marker, re-recycles a per-column vector or re-detects a total column. Shared verbatim by
+# plain_core() and by the jamovi tier-3 re-reference (jmv_tab3_reref), so those two cannot fork.
+#
+# DESIGN: it lives BESIDE tab_apply_reference(), not inside it. `ci = "cell"` needs no reference at all
+#   and must run when ref == "no", which is outside that function's own gate; and the Woolf log-OR
+#   interval is genuinely internal there (three arms build three different 2x2s through the `or_cells`
+#   closure). "One cell, one interval" still holds: the RULE is one (CI_GEOMS, R/tab-agg.R), and
+#   `or_ci` / `ci` are mutually exclusive by construction (tab_resolve_settings()).
+#
+# @param P,tot_n   n x k matrices: the WEIGHTED proportion and its RAW unweighted base
+# @param n_eff     n x k effective base, or NULL on inference basis "n"
+# @param ci        the RESOLVED step value: "no" | "cell" | "diff"
+# @param pct       "row" | "col" | "all" | "all_tabs" | "no"
+# @param ci_scale  "diff" | "ratio"
+# @param grp       integer/character(n): each row's comparison group (the tab_vars key, or one group)
+# @param ref_row   logical(n): the reference ROW mask (the total rows when ref == "tot")
+# @param totrow    logical(n): the total rows (diff_col reads the reference column's base THERE)
+# @param refcol    integer(1): the reference COLUMN index, NA when there is none (pct == "col" only)
+# @param totcol    logical(k): the total columns
+# @return list(kind, inf, sup, pvalue, scale, method, visible) -- three n x k matrices plus the three
+#   COLUMN-INVARIANT stamps (`scale` NA = the level scale stands).
+leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
+                          grp, ref_row, totrow, refcol = NA_integer_, totcol,
+                          conf_level = 0.95, stars = FALSE,
+                          ci_method = default_ci_method(), degf = Inf) {
+  n <- nrow(P); k <- ncol(P)
+  none <- list(kind = "no", inf = NULL, sup = NULL, pvalue = NULL,
+               scale = NA_character_, method = "", visible = FALSE)
+
+  # (a) THE DIRECTION. tab_ci()'s eight-branch case_when collapses to this, because in a factor leaf
+  # `pct_base` and `var_kind` are COLUMN-INVARIANT: `ci_able` is `pct != "no"` (a count column carries
+  # no cell interval), `is_rm` is `pct == "row"`, and "all"/"all_tabs" can only take a cell interval.
+  # "auto" never arrives -- the resolver settles it (tab_resolve_settings / resolve_leaf_ci).
+  kind <- if (length(ci) == 0L || is.na(ci[1]) || identical(ci[1], "no") || identical(pct, "no")) "no"
+          else if (identical(ci[1], "cell"))                                          "cell"
+          else if (identical(pct, "row"))                                             "diff_row"
+          else if (identical(pct, "col"))                                             "diff_col"
+          else                                                                        "no"
+  if (identical(kind, "no")) return(none)
+
+  kind_base <- if (identical(kind, "cell")) "cell" else "diff"
+
+  # (b) THE REFERENCE ROW, per comparison group.
+  # WARNING: this is group_last_pos()'s LAST-in-group semantics, deliberately, NOT the FIRST that
+  # tab_apply_reference()'s own ref_abs() takes. The two coincide on every reachable shape (a
+  # calculate_refrows() mask holds exactly one TRUE per group), but the CI and the difference have
+  # always been written that way and re-implementing it here costs four lines and removes the class.
+  grp_last <- function(mask) {
+    pos <- rep(NA_integer_, n)
+    for (g in unique(grp)) { r <- which(grp == g); w <- which(mask[r])
+                             if (length(w)) pos[r] <- r[[w[[length(w)]]]] }
+    pos
+  }
+  rp    <- grp_last(ref_row)
+  rtona <- !is.na(rp) & (seq_len(n) == rp)     # the cell's own reference row: no interval against itself
+
+  # (c) THE BASES. `fmt_base()`'s coalesce, on matrices: the effective n where it is populated, the raw
+  # percentage base otherwise. `n_raw` stays the RAW base -- ci_beta's df rescale needs it beside the
+  # effective one, and it is neither coalesced nor NA'd.
+  B <- tot_n * 1.0
+  if (!is.null(n_eff)) { ok <- is.finite(n_eff); B[ok] <- n_eff[ok] }
+  X <- B; X[rtona, ] <- NA_real_
+
+  REF <- REF_N <- NULL
+  if (identical(kind, "diff_row")) {
+    REF   <- P[rp, , drop = FALSE]
+    REF_N <- B[rp, , drop = FALSE]
+  } else if (identical(kind, "diff_col")) {
+    if (is.na(refcol)) refcol <- 1L      # detect_refcol()'s fallback: the group's FIRST column
+    # WARNING: the reference column's PROPORTION is read in the cell's own row, but its BASE at the
+    # group's TOTAL row (tab_ci()'s `fmt_base(rcol)[group_last_pos(is_totrow(col))]`). Under pct = "col"
+    # the raw base is constant down a column, so this is invisible unweighted -- and wrong on every
+    # design-based col-% table, where `n_eff` varies per cell.
+    tr    <- grp_last(totrow)
+    REF   <- P[, rep(refcol, k), drop = FALSE]
+    REF_N <- B[tr, rep(refcol, k), drop = FALSE]
+  }
+
+  res <- ci_dispatch(
+    kind = kind_base, var_kind = "pct", ci_scale = ci_scale[1],
+    est = as.vector(P), base = as.vector(X),
+    ref = if (!is.null(REF)) as.vector(REF), ref_n = if (!is.null(REF_N)) as.vector(REF_N),
+    n_raw = as.vector(tot_n),
+    conf_level = conf_level, want_p = isTRUE(stars), method = ci_method, degf = degf)
+
+  INF <- matrix(res$inf, n, k); SUP <- matrix(res$sup, n, k); PV <- matrix(res$pvalue, n, k)
+
+  # (d) THE MASKING -- a total column has no reference row to differ from, a reference column no
+  # reference column. Applied to the RESULTS, after the stamps are decided: the scale and the method
+  # describe the whole col_var, and NA bounds are the data fact saying "no interval in this cell" (D19).
+  if (identical(kind, "diff_row") && any(totcol)) {
+    INF[, totcol] <- NA_real_; SUP[, totcol] <- NA_real_; PV[, totcol] <- NA_real_
+  }
+  if (identical(kind, "diff_col")) {
+    INF[, refcol] <- NA_real_; SUP[, refcol] <- NA_real_; PV[, refcol] <- NA_real_
+  }
+
+  list(kind = kind, inf = INF, sup = SUP, pvalue = PV,
+       scale   = ci_geom_scale( kind_base, "pct", ci_scale[1]),
+       method  = ci_geom_method(kind_base, "pct", ci_scale[1], ci_method),
+       visible = identical(kind, "cell"))
+}
+
+
 
 
 
@@ -5775,10 +6060,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # Phase 19i: the six statements both leaves share are leaf_inference_setup() (which see: it also
   # settles `use_raw`, the aggregate-injection seam, whose rule "a design-based variance reads the
   # OBSERVATIONS, so the raw scan is mandatory" is the same on both sides). What stays here is what
-  # this leaf alone needs: the two numeric interval METHODS, the design df, and `tab_row_names`.
+  # this leaf alone needs: the design df and `tab_row_names`. (Phase 19j: the two numeric interval
+  # METHODS are no longer unpacked -- `inference$method` travels whole and CI_GEOMS names its slot.)
   list2env(leaf_inference_setup(inference, .fine, .by_table), environment())
-  method_mean_diff  <- inference$method[["mean_diff"]]
-  method_mean_ratio <- inference$method[["mean_ratio"]]
   des_rows          <- NULL
   # Phase 18z16-i (W7): the DESIGN's degrees of freedom (#PSU - #strata), Inf/NA otherwise. It
   # REPLACES the sample-based df of every mean pivot -- survey refers a design-based mean interval to
@@ -6067,26 +6351,22 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
         m  <- tabs[[paste0(v, "_mean")]]
         vv <- tabs[[paste0(v, "_var")]]
         nn <- tabs[[paste0(v, "_en")]]
-        if (ci == "cell") {
-          # Rule B (14v-ii, §48): a mean cell interval estimates the variance -> one-sample Student
-          # t(n-1), not z (df = Inf). z was a large-sample approximation; t is the textbook cell CI.
-          res <- ci_pivot(m, sqrt(vv / nn), df = df_or_design(nn - 1, degf),
-                          conf_level = conf_level, want_p = FALSE)
-        } else {
-          mr <- tabs[[paste0(v, "_refm")]]
-          vr <- tabs[[paste0(v, "_refv")]]
-          nr <- tabs[[paste0(v, "_refn")]]
-          # 14v-ii: the mean interval follows the measure the reader sees (ci_scale). "ratio" -> a real
-          # ratio-of-means CI (method_mean_ratio); else the mean-DIFFERENCE CI (method_mean_diff). The
-          # old path always used the difference bounds, so a ratio-coloured mean showed the diff CI
-          # mislabelled as a ratio (decisions §48).
-          res <- if (identical(ci_scale[1], "ratio"))
-            ci_mean_ratio(m, vv, nn, mr, vr, nr, method = method_mean_ratio,
-                          conf_level = conf_level, want_p = want_p, df_design = degf)
-          else
-            ci_mean_diff2(m, vv, nn, mr, vr, nr, method = method_mean_diff,
-                          conf_level = conf_level, want_p = want_p, df_design = degf)
-          # A reference row has no CI/test against itself.
+        # Phase 19j (KEY 5): ONE lookup in CI_GEOMS (R/tab-agg.R) instead of this leaf's own copy of
+        # the rule -- a mean cell interval is Rule B's one-sample Student t(n-1) (14v-ii, §48), and a
+        # contrast follows the measure the reader sees (ci_scale: a real ratio-of-means interval, else
+        # the mean-difference one; the old path always used the difference bounds, so a ratio-coloured
+        # mean showed them mislabelled as a ratio, decisions §48).
+        res <- ci_dispatch(
+          kind = ci, var_kind = "mean", ci_scale = ci_scale[1],
+          est = m, base = nn, var = vv,
+          ref     = if (ci == "diff") tabs[[paste0(v, "_refm")]],
+          ref_var = if (ci == "diff") tabs[[paste0(v, "_refv")]],
+          ref_n   = if (ci == "diff") tabs[[paste0(v, "_refn")]],
+          conf_level = conf_level, want_p = want_p, method = inference$method, degf = degf)
+        # A reference row has no CI/test against itself. WARNING: this leaf NAs the RESULTS, where
+        # tab_ci() NAs the BASE -- so a mean CELL reference row keeps its interval here and loses it
+        # there. A real divergence, deliberately left alone (unifying it is a behaviour change).
+        if (ci == "diff") {
           res$inf[refrows] <- NA_real_
           res$sup[refrows] <- NA_real_
           res$pvalue[refrows] <- NA_real_
@@ -6213,16 +6493,14 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # Phase 19b (KEY 2): what these columns estimate. A cell interval leaves the column a LEVEL (a mean
   # with its own interval is still a mean); a contrast interval makes it a mean DIFFERENCE, or a
   # ratio of means when that is the scale asked for.
-  scale_num <- if (ci %in% c("diff", "diff_row", "diff_col")) {
-    if (identical(ci_scale[1], "ratio")) "mean_ratio" else "mean_diff"
-  } else "level_mean"
   # ... and WHICH engine built its bounds (D8). A one-sample cell interval on a mean is a Student t
   # pivot -- which the legend used to announce as "Welch t", because it had to pick a slot back out
   # of a table-wide vector by measure.
-  method_num <- if (identical(ci, "no")) ""
-                else if (identical(ci, "cell")) "student"
-                else if (identical(ci_scale[1], "ratio")) inference$method[["mean_ratio"]]
-                else inference$method[["mean_diff"]]
+  # Phase 19j: both are the CI_GEOMS row that chose the engine above. A NA scale_key means the level
+  # scale stands, which covers `ci = "no"` and `ci = "cell"` alike.
+  scale_num  <- ci_geom_scale(ci, "mean", ci_scale[1])
+  if (is.na(scale_num)) scale_num <- "level_mean"
+  method_num <- ci_geom_method(ci, "mean", ci_scale[1], inference$method)
   ref_1     <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
   comp_1    <- dplyr::if_else(ref != "no" | ci != "no", comp == "all", NA)
   NA_reals  <- rep(NA_real_, nrow(tabs_n))
@@ -6311,581 +6589,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 # }
 
 
-# DESIGN: CI is stored as a half-width (margin of error), not a full interval.
-#   The ci field = z * sqrt(variance). For pct, stored as 0-1 (multiplied by 100 in format).
-#   method_cell controls the proportion CI formula (wilson default); method_diff controls
-#   the difference CI formula (agresti-caffo default). Negative CI values indicate
-#   non-significant differences (used by color_formula for diff_ci/after_ci modes).
-#Ci spread (negative numbers mean no significant difference)
-#' Add confidence intervals to a \code{\link[tabxplor]{tab}}
-#'
-#' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
-#' @param ci What the interval is anchored on -- \code{"ref"} (the comparison with the reference
-#'  cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
-#'  \code{\link{tab}}, which is where this is normally set: \code{"auto"} gives a comparison
-#'  interval for means and row/column percentages and a cell interval for plain frequencies.
-#'  \code{"diff"} and \code{"ratio"} are the soft-deprecated spellings of \code{"ref"}.
-#'  With \code{ci = "cell"} the result prints as `[inf;sup]`; set
-#'  `options("tabxplor.ci_print" = "moe")` for `pct +- moe`.
-#' @param comp Comparison level. When \code{tab_vars} are present, should the
-#' contributions to variance be calculated for each subtable/group (by default,
-#'  \code{comp = "tab"}) ? Should they be calculated for the whole table
-#'  (\code{comp = "all"}) ?
-#'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-#'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param conf_level The confidence level, as a single numeric between 0 and 1.
-#' Default to 0.95 (95%).
-#' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
-#' With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
-#' the reference, read from the same interval that is displayed (universal CI-inclusion), so the
-#' stars and the bracket never disagree. \code{FALSE} skips the significance computation.
-#' @param ci_method The confidence-interval method of each kind of interval, as ONE named vector
-#' (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial) -- see \code{\link{tab}}. The
-#' \code{cell} slot also takes \code{"beta"} (Korn-Graubard:
-#' \code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval on the effective sample size
-#' -- the textbook design-based cell interval, conservative near 0 and 1. Beta quantiles have no
-#' degrees of freedom of their own, so under a \code{survey} design the effective base is first
-#' rescaled by \code{(qt(a, n - 1) / qt(a, degf))^2}, exactly as \code{survey} does, which refers the
-#' interval to the design's own df; \code{degf} is the whole design's, as it is for every other
-#' interval here).
-#' @param method_cell,method_diff `r lifecycle::badge("deprecated")` Use
-#' \code{ci_method = c(cell = , diff = )} instead.
-#' @param degf The design's degrees of freedom, the reference distribution of every interval
-#' (\code{#PSU - #strata}). \code{NULL} (default) takes the value the table itself stores when it was
-#' built from a \code{survey::svydesign}; \code{Inf} is the large-sample normal pivot.
-#' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
-#' \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{ci_method["diff"]}
-#' methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
-#' centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
-#' ratio method), or a ratio-of-means interval for numeric means (\code{ci_method["mean_ratio"]}).
-#' \code{tab()} sets it from
-#' the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
-#' \code{c("ratio", "diff")}) asks for the ratio one.
-#' @param color The type of colors to print, as a single string.
-#' \itemize{
-#'   \item \code{"no"}: by default, no colors are printed
-#'   \item \code{"diff_ci"}: color pct and means based on cells differences from totals
-#'   or first cells, removing coloring when the confidence interval of this difference
-#'   is higher than the difference itself
-#'   \item \code{"after_ci"}: idem, but cut off the confidence interval from the
-#'   difference
-#' }
-#' @param visible By default confidence intervals are calculated and used to set colors,
-#' but not printed. Set to \code{TRUE} to print them in the result.
-#'
-#' @section Significance stars:
-#' With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
-#' difference from the reference is real and not just sampling noise: \code{*} means significant at
-#' the 10\% level (p < 0.10), \code{**} at 5\% (p < 0.05), \code{***} at 1\% (p < 0.01). The exact
-#' p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
-#' \code{$pvalue} or \code{get_pvalue()}.
-#'
-#' There is no separate statistical test run behind the scenes: the significance is read straight
-#' from the confidence interval that is displayed. A cell is significant at a given level exactly
-#' when its interval at that confidence level no longer contains zero, so the stars and the printed
-#' \code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
-#' the interval:
-#' \itemize{
-#'   \item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
-#'     Newcombe hybrid-score interval. This is, to a very close approximation, the classical
-#'     two-sample test of proportions (the score / "N-1" chi-squared test).
-#'   \item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
-#'     the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
-#'   \item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
-#'     variances); inverting the Welch t interval is exactly this well-known test.
-#'   \item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
-#'     so it carries no stars and its \code{pvalue} is \code{NA}.
-#' }
-#' On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-#' number of cases, unless you opt in to the weighting's own design effect with
-#' \code{options("tabxplor.design_effect" = TRUE)}.
-#'
-#' @return A \code{tibble} of class \code{tab}, colored based on differences (from
-#' totals/first cells) and confidence intervals.
-#' @export
-#'
-#' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \donttest{
-#' data <- dplyr::starwars |>
-#'   tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
-#'               na_drop_all = sex)
-#'
-#' data |>
-#'   tab_plain(sex, hair_color, gender, tot = c("row", "col"),
-#'     pct = "row", comp = "all") |>
-#'     tab_ci("diff", color = "after_ci")
-#'   }
-tab_ci <- function(tabs,
-                   ci = "auto",
-                   comp = NULL,
-                   conf_level = conf_level_default(),
-                   color = "no",
-                   visible = FALSE,
-                   stars = NULL,
-                   ci_method = NULL,
-                   method_cell = NULL, method_diff = NULL,
-                   ci_scale = "diff", degf = NULL) {
-  # Phase 18z16-iiiii: the four interval methods are ONE named vector (see CI_METHODS); the
-  # released `method_cell` / `method_diff` are soft-deprecated aliases into it, and validation is the
-  # shared resolver's, so tab_ci() cannot accept a value tab() rejects.
-  ci_method         <- resolve_ci_method(ci_method, method_cell, method_diff, "tab_ci")
-  method_cell       <- ci_method[["cell"]]
-  method_diff       <- ci_method[["diff"]]
-  method_mean_diff  <- ci_method[["mean_diff"]]
-  method_mean_ratio <- ci_method[["mean_ratio"]]
-  # Phase 18z16-i (W7): the DESIGN's degrees of freedom. Taken from the table's own stored
-  # inference fact when the caller does not supply one, so the exported STEP path
-  # (tab_plain(design) |> tab_ci()) refers its intervals to t(degf) exactly as the pipeline does.
-  # Phase 18z16-iiiii: read off the COLUMNS (the smallest design df any of them carries), not off a
-  # table attribute -- that is what makes the exported step path, and a table a pipeline has stripped
-  # of its metadata, still refer their intervals to t(degf) instead of silently falling back to z.
-  if (is.null(degf)) degf <- tab_inference_degf(tabs)
-  stopifnot(all(ci_scale %in% c("diff", "ratio")),
-            all(comp %in%  c("tab", "all"))
-  )
-  # Phase 19i: the vocabulary is DECLARED (TAB_CI_STEP_VALUES, beside resolve_ci_value() in
-  # R/tab-resolve.R) instead of hand-listed here, and the abort names the valid set.
-  # WARNING -- and this is why it is a SEPARATE declaration rather than resolve_ci_value(): this
-  # superseded step speaks the COMPUTATIONAL vocabulary ("no"/"cell"/"diff"), in which `"diff"` is
-  # its own native word, not the deprecated anchor spelling 19d retired on tab()/tab_num()/
-  # tab_counts(). The pipeline itself calls it that way (tab_apply_tests hands it the resolved
-  # step value), so routing it through the public resolver would fire a deprecation on tabxplor's
-  # own build. `"ref"` -- "the interval of the comparison" -- is the anchor synonym for that branch
-  # (the odds-ratio one is the leaf's).
-  bad_ci <- !ci %in% TAB_CI_STEP_VALUES
-  if (any(bad_ci))
-    cli::cli_abort(c("Unknown {.arg ci} value {.val {unique(ci[bad_ci])}}.",
-                     "i" = "Valid: {.val {TAB_CI_STEP_VALUES}}."))
-  ci[ci == "ref"] <- "diff"
-  # Phase 15c: a direct `ci = "ratio"` == a difference CI on the ratio (Katz) scale, independent of
-  # colour. Fold it to ci = "diff" + ci_scale = "ratio" (the pipeline already does this via
-  # tab_resolve_settings(); this makes tab_ci() a self-contained entry point too).
-  if (any(ci == "ratio")) {
-    ci_scale <- rep_len(ci_scale, length(ci))
-    ci_scale[ci == "ratio"] <- "ratio"
-    ci[ci == "ratio"] <- "diff"
-  }
-  # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
-  stars <- resolve_stars(stars)
-
-  subtext <- get_subtext(tabs)
-  test    <- get_test(tabs)
-
-  # no_col_var <- get_col_var(tabs) == "no_col_var"
-  # no_col_var <- no_col_var[no_col_var]
-  # tabs <- tabs |> mutate(across(
-  #   all_of(no_col_var),
-  #   as_totcol,
-  #   .names = "{.col}_Total"
-  # ))
-
-  get_vars          <- tab_get_vars(tabs)
-
-  col_vars_with_all <- rlang::syms(get_vars$col_vars)
-  col_vars_no_all   <- col_vars_with_all |> purrr::discard(\(s) as.character(s) == "all_col_vars")
-
-  fmtc <- purrr::map_lgl(tabs, is_fmt)
-  ci <- vctrs::vec_recycle(ci, length(col_vars_no_all)) |>
-    purrr::set_names(col_vars_no_all)
-  ci <- c(ci, all_col_vars = dplyr::last(ci[ci != "no"]))
-  ci <- purrr::map_chr(tabs, ~ ci[get_col_var(.)] ) |>
-    tidyr::replace_na(NA_character_)
-
-  visible <- vctrs::vec_recycle(visible, length(col_vars_no_all)) |>
-    purrr::set_names(col_vars_no_all)
-  visible <- c(visible, all_col_vars = dplyr::last(visible[visible != "no"]))
-  visible <- purrr::map_lgl(tabs, ~ visible[get_col_var(.)] ) |>
-    tidyr::replace_na(FALSE)
-
-
-  comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
-  tabs <- tabs |> tab_match_comp_and_tottab(comp)
-
-  # Phase 19b: which axis the comparison runs along (`pct_base`) and whether the column summarises a
-  # mean -- the two facts this step was reading out of the old `type` attribute.
-  base   <- get_pct_base(tabs)
-  vkind  <- fmt_var_kind(tabs)
-  is_rm  <- base == "row" | vkind == "mean"          # the reference is a ROW
-  ci_able <- vkind == "mean" | base != "none"        # a count / a coefficient carries no cell CI
-  tot_cols <- detect_totcols(tabs)
-  tot_cols[is.na(ci)] <- list(rlang::sym(""))
-  names_totcols <- tot_cols |> purrr::map_chr(as.character) |> unique() |>
-    purrr::discard(\(s) s == "")
-
-  ref <- get_ref_type(tabs)
-  # Phase 7g-iii: the diff-CI reference column must match the diff/colour reference column
-  # (detect_refcol = the marked refcol, falling back to the first level -> byte-identical for
-  # ref = "first"; ref = "tot" uses tot_cols below, so detect_refcol is not consulted there).
-  ref_cols  <- detect_refcol(tabs)
-  ref_cols[is.na(ci)] <- list(rlang::sym(""))
-
-  ref_cols <- dplyr::if_else(ref == "tot",
-                             true  = tot_cols,
-                             false = ref_cols     ) |>
-    purrr::set_names(names(ref)) #keep ci_yes ?
-  names_refcols <- ref_cols |> purrr::map_chr(as.character) |> unique() |>
-    purrr::discard(\(s) s == "")
-
-  ci[fmtc] <- dplyr::case_when(
-    !ci_able[fmtc]                                              ~ "no"      ,
-    ci[fmtc] == "cell"                                          ~ "cell"    ,
-    ci[fmtc] == "diff"   & is_rm[fmtc]                          ~ "diff_row",
-    ci[fmtc] == "diff"   & base[fmtc] == "col"                  ~ "diff_col",
-
-    ci[fmtc] == "auto"   & is_rm[fmtc]                          ~ "diff_row",
-    ci[fmtc] == "auto"   & base[fmtc] == "col"                  ~ "diff_col",
-    ci[fmtc] == "auto"   & base[fmtc] %in% c("all","all_tabs")  ~ "cell"    ,
-
-    TRUE                                                        ~ "no"
-  )
-
-
-  #Depending of ci type, totals and reference cols (for diff), not calculate ci
-  ci <- dplyr::if_else(
-    condition = !ci_able | (ci %in% c("diff_col", "spread_col") & vkind == "mean"),
-    true = "no",
-    false = ci
-  )
-  ci_with_ref <- ci |> purrr::set_names(names(tabs))
-  ci <- dplyr::if_else(
-    condition = (ci == "diff_col" & names(tabs) %in% names_refcols) |
-      (ci == "diff_col" & get_col_var(tabs) == "all_col_vars") |
-      (ci == "diff_row" & names(tabs) %in% names_totcols),
-    true = "no",
-    false = ci
-  )
-  ci <- ci |> purrr::set_names(names(tabs))
-  ci_yes <- !is.na(ci) & ! ci == "no"
-
-
-  if (any(ci_yes)) {
-    #Ready table for percentages (needed totals, compatible grouping)
-    if ( any(ci == "diff_col" ) ) tabs <- tabs |> tab_add_totcol_if_no()
-    if ( any(ci == "diff_row") ) {
-      tabs <- switch(comp[1],
-                     "tab" = tabs |> tab_match_groups_and_totrows(),
-                     "all" = tabs |> dplyr::ungroup()               )
-    }
-
-    # Phase 9b-5 increment 2: reference-row selection + reference stats on PLAIN fields, replacing the
-    # ref_rows/tot_rows/ref_to_na grouped transmutes and the x_n/ref/ref_var/ref_n transmutes (each a
-    # reconstruction over the fmt columns). Per SUBTABLE, group_last_pos(mask) = the ABSOLUTE index of
-    # the group's last masked row, broadcast to that group (NA if none) -- the plain form of
-    # `.[dplyr::last(which(<mask>))]` under grouping. The old `tot_rows` was DEAD (computed, never read).
-    ci_cols   <- names(ci_yes)[ci_yes]
-    diff_cols <- names(ci_yes)[ci %in% c("diff_row", "diff_col")]
-    mean_cols <- names(ci_yes)[ci == "diff_row" & vkind == "mean"]
-
-    gid  <- dplyr::group_indices(tabs)
-    gids <- unique(gid)
-    group_last_pos <- function(mask) {
-      pos <- rep(NA_integer_, length(mask))
-      for (g in gids) {
-        r <- which(gid == g); w <- which(mask[r])
-        if (length(w)) pos[r] <- r[[w[[length(w)]]]]
-      }
-      pos
-    }
-    # the reference row per cell = last total row (ref = "tot") else last is_refrow row.
-    ref_mask <- function(col) if (identical(get_ref_type(col), "tot")) is_totrow(col) else is_refrow(col)
-
-    empty <- stats::setNames(vector("list", length(ci_cols)), ci_cols)
-    x_n <- ref <- ref_var <- ref_n <- ci_inf <- ci_sup <- pvalue <- empty
-    for (nm in ci_cols) {
-      col <- tabs[[nm]]
-      tp  <- fmt_var_kind(col)
-      rp  <- group_last_pos(ref_mask(col))                     # per-row reference-row index (NA if none)
-      rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
-      # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
-      # reference cell so its own CI is not computed.
-      # Phase 18s: the CI base is the effective n (`n_eff`) when populated, else the raw base --
-      # Phase 19a folds that coalesce, written out at all five read sites below, into fmt_base().
-      x_n[[nm]] <- dplyr::if_else(
-        rtona, NA_integer_,
-        # every proportion's base is `tot_n`, a mean's is `n`. (Phase 18z16-ii had to add "all" /
-        # "all_tabs" to a hand-written list of percentage types here, which is exactly the kind of
-        # omission `var_kind` removes: there is one arm per KIND of column, not one per type value.)
-        if (identical(tp, "mean")) fmt_base(col, mean = TRUE) else fmt_base(col))
-      if (nm %in% diff_cols) {
-        if (ci[[nm]] == "diff_col") {
-          rcol        <- tabs[[as.character(ref_cols[[nm]])]]  # the reference COLUMN (its own base)
-          ref[[nm]]   <- get_pct(rcol)
-          ref_n[[nm]] <- fmt_base(rcol)[group_last_pos(is_totrow(col))]
-        } else {                                               # diff_row: the reference ROW cell
-          ref[[nm]]   <- if (tp == "mean") get_mean(col)[rp] else get_pct(col)[rp]
-          ref_n[[nm]] <- fmt_base(col, mean = tp == "mean")[rp]
-        }
-        if (nm %in% mean_cols) ref_var[[nm]] <- get_var(col)[rp]
-      }
-
-      # Confidence interval + per-cell pvalue via the closed-form engine (R/tab-agg.R). Weighted rule
-      # (§14): weighted proportion get_pct() / weighted mean get_mean(), UNWEIGHTED base x_n. Cell CIs
-      # carry no pvalue; diff CIs star only when `stars` is on (want_p). The reference cell has
-      # x_n = NA (rtona) -> NA bounds, so it is never self-compared.
-      want_p <- isTRUE(stars) && ci[[nm]] %in% c("diff_row", "diff_col")
-      res <- switch(
-        ci[[nm]],
-        "cell" = switch(
-          tp,
-          # Rule B (14v-ii, §48): one-sample Student t(n-1) cell interval (variance is estimated).
-          "mean" = ci_pivot(get_mean(col), sqrt(get_var(col) / x_n[[nm]]),
-                            df = df_or_design(x_n[[nm]] - 1, degf),
-                            conf_level = conf_level, want_p = FALSE),
-          # Phase 7g: the proportion cell CI honours method_cell (default wilson; wald opt-in).
-          switch(method_cell,
-                 "wilson" = ci_wilson(get_pct(col), x_n[[nm]], conf_level = conf_level, df = degf),
-                 "wald"   = ci_wald(  get_pct(col), x_n[[nm]], conf_level = conf_level, df = degf),
-                 # z16-iii: Korn-Graubard, on the very effective n this framework already computes;
-                 # z16-iiiii: plus its own df rescale, which needs the cell's RAW base beside it.
-                 "beta"   = ci_beta(  get_pct(col), x_n[[nm]], conf_level = conf_level,
-                                      df = degf, n_raw = get_tot_n(col)))),
-        "diff_col" = ,
-        "diff_row" = switch(
-          tp,
-          # 14v-ii: a MEAN's interval now also follows the measure the reader sees (ci_scale). "ratio"
-          # -> a real ratio-of-means CI (ci_mean_ratio, method_mean_ratio: robust / quasipoisson /
-          # poisson); else the mean-DIFFERENCE CI (method_mean_diff: welch / student). Was a plain
-          # ci_mean_diff2 whatever the colour, which showed the diff bounds mislabelled as a ratio.
-          "mean" = if (identical(ci_scale[1], "ratio"))
-            ci_mean_ratio(get_mean(col), get_var(col), x_n[[nm]],
-                          ref[[nm]], ref_var[[nm]], ref_n[[nm]], method = method_mean_ratio,
-                          conf_level = conf_level, want_p = want_p, df_design = degf)
-          else
-            ci_mean_diff2(get_mean(col), get_var(col), x_n[[nm]],
-                          ref[[nm]], ref_var[[nm]], ref_n[[nm]], method = method_mean_diff,
-                          conf_level = conf_level, want_p = want_p, df_design = degf),
-          # Proportions: the interval follows the measure the reader sees (ci_scale, resolved once in
-          # tab_resolve_settings()). "ratio" -> Katz's log-RR bounds on the ratio scale, which is the
-          # ONLY proportion-ratio interval the package has -- so it is not a choice, and z16-iiiii
-          # dropped the one-value `method_ratio` with the rest of the `method_*` family (CI_METHODS).
-          # `ci_method["diff"]` selects among the DIFFERENCE approximations only.
-          if (identical(ci_scale[1], "ratio"))
-            ci_katz_rr(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
-                       conf_level = conf_level, want_p = want_p, df = degf)
-          else
-            ci_prop_diff(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
-                         conf_level = conf_level, method = method_diff, want_p = want_p,
-                         df = degf)))
-      ci_inf[[nm]] <- res$inf; ci_sup[[nm]] <- res$sup; pvalue[[nm]] <- res$pvalue
-
-    }
-
-    # Phase 9b-5 increment 2: apply the precomputed CI bounds/pvalue (loop above) + `comp_all` + the
-    # `visible` display in ONE mutate over plain vectors (was: a with_groups(NULL) CI mutate, then a
-    # mutate for comp_all, then one for display -- 3 fmt reconstructions). All three writes are
-    # ROW-WISE, so run ungrouped then restore grouping (matching the with_groups(NULL) the CI used).
-    diff_row_any <- any(ci == "diff_row")
-    comp_all_val <- comp[1] == "all"
-    vis_mask     <- visible & ci != "no"
-    visible_cols <- names(visible)[!is.na(vis_mask) & vis_mask]
-    display      <- stats::setNames(lapply(visible_cols, function(nm)
-      if (ci[[nm]] == "cell") ifelse(vkind[[nm]] == "mean", "mean_ci", "pct_ci") else "ci"), visible_cols)
-    # comp_all touches ALL fmt columns (if diff_row); otherwise only the CI + visible columns.
-    write_cols   <- if (diff_row_any) names(tabs)[purrr::map_lgl(tabs, is_fmt)]
-                    else union(ci_cols, visible_cols)
-    grp <- dplyr::group_vars(tabs); drp <- dplyr::group_by_drop_default(tabs)
-    tabs <- dplyr::mutate(dplyr::ungroup(tabs), dplyr::across(
-      tidyselect::all_of(write_cols),
-      function(col) {
-        nm <- dplyr::cur_column()
-        if (nm %in% ci_cols)
-          col <- set_pvalue(set_ci_sup(set_ci_inf(col, ci_inf[[nm]]), ci_sup[[nm]]), pvalue[[nm]])
-        if (diff_row_any)         col <- set_comp_all(col, comp_all_val)
-        if (nm %in% visible_cols) col <- set_display(col, display[[nm]])
-        # Byte-identity quirk (as in chi2_write_contrib): the pre-9b-5 comp_all / visible writes were
-        # GROUPED mutates, whose per-group recombine MATERIALISES the `wn` field (NA -> n). Reproduce
-        # it for exactly those columns (comp_all = all fmt on diff_row; visible = its own columns) when
-        # the table is grouped; a no-op when wn is already set / weighted, or the table is ungrouped.
-        if (length(grp) > 0L && (diff_row_any || nm %in% visible_cols))
-          col <- set_wn(col, get_wn(col))
-        col
-      }))
-    if (length(grp)) tabs <- dplyr::group_by(tabs, dplyr::across(dplyr::all_of(grp)), .drop = drp)
-
-
-    #Change the scale and the color, even for totals with no ci result
-    ci_with_ref <- stringi::stri_replace_first_regex(ci_with_ref, "_row|_col", "")
-    # Phase 19b (KEY 2): this step does not RECORD ITS ARGUMENT any more -- it stamps what the column
-    # now estimates. Adding a contrast interval to a percentage column CHANGES WHAT THAT COLUMN IS
-    # (`level_pct` -> `points`), and every reader (ci_center(), format()'s bracket, the colour
-    # significance gate, the legend, the forest-plot axis) reads that one fact instead of re-deriving
-    # a colour spec. A `cell` interval changes nothing: a mean with its own interval is still a mean.
-    # 14v-ii: a mean also takes the ratio branch above (ci_mean_ratio), so a ratio mean lands on
-    # `mean_ratio` (neutral 1, bare bracket) like a ratio proportion.
-    ci_yes_ref  <- !is.na(ci_with_ref) & !ci_with_ref == "no"
-    ci_ratio    <- identical(ci_scale[1], "ratio")
-    ci_scale_of <- function(col, ci_ref) {
-      if (!identical(ci_ref, "diff")) return(get_scale(col))   # "cell": the level scale stands
-      if (identical(fmt_var_kind(col), "mean")) if (ci_ratio) "mean_ratio" else "mean_diff"
-      else                                      if (ci_ratio) "pct_ratio"  else "points"
-    }
-    # Phase 19b (D8): WHICH engine built these bounds, stamped where it is known instead of being
-    # picked back out of a table-wide vector BY MEASURE (an eight-branch chain that could name a
-    # method the bounds were never built with -- most visibly a one-sample cell interval on a mean,
-    # announced as "Welch t"). Like the scale above it is stamped for the WHOLE col_var, totals and
-    # reference columns included: their own bounds are NA by construction, and THAT is the data fact
-    # saying "no interval here" -- exactly the rule D19 settled for the odds-ratio scale.
-    ci_method_of <- function(col, ci_ref) {
-      is_mean <- identical(fmt_var_kind(col), "mean")
-      if (identical(ci_ref, "cell")) { if (is_mean) "student" else method_cell }
-      else if (is_mean) { if (ci_ratio) method_mean_ratio else method_mean_diff }
-      else              { if (ci_ratio) "katz"            else method_diff      }
-    }
-
-    # Phase 17d: `color` may arrive as a legacy combined string -- since 19c that is possible ONLY on
-    # the exported step path (`tab_plain() |> tab_ci(color = "after_ci")`), because the pipeline hands
-    # this step `color = "no"`: its stamping sub-pass existed to receive a composite the cascade
-    # manufactured, and both are gone. Decode it ONCE into the clean (measure, policy) pair so the
-    # stored attributes stay clean and the engine never re-parses one.
-    col_dec <- color_decode_legacy(color[1])
-    set_ci_col <- !is.null(color[1]) && !color[1] %in% c("no", "")
-    tabs[ci_yes_ref] <-
-      purrr::map2_df(tabs[ci_yes_ref],
-                     ci_with_ref[ci_yes_ref],
-                     function(col, ci_ref) {
-                       col <- set_scale(col, ci_scale_of(col, ci_ref))
-                       col <- set_ci_method(col, ci_method_of(col, ci_ref))
-                       if (set_ci_col) {
-                         col <- set_color(col, col_dec$measure)
-                         if (!is.null(col_dec$policy)) col <- set_color_signif(col, col_dec$policy)
-                       }
-                       col
-                     })
-  }
-
-
-  # Phase 18z13 (D3): this step COMPUTES the intervals, so it owns their level -- otherwise
-  # tab_plain() |> tab_ci(conf_level = 0.99) would store 99 % bounds under the leaf's 95 % stamp and
-  # the engine would grey at the wrong level.
-  tabs <- tab_stamp_inference(tabs, conf_level)
-
-  # Phase 19a: this IS tab_restore()'s body (same lv1_group_vars() downgrade, same three attributes)
-  # -- with one difference that mattered: neither tail passed `meta`, so a direct
-  # `tab_plain() |> tab_ci()` on the exported step path silently dropped `vars` / `ci_settings` /
-  # `render_extras` / `color_breaks` / `reg_meta`. It survived only by accident of
-  # tibble::new_tibble() carrying the incoming attributes through, which the grouped branch does not
-  # guarantee. Passing them explicitly removes the whole hazard class from the step path.
-  tab_restore(tabs, tabs, attrs = list(subtext = subtext, test = test, meta = get_meta(tabs)))
-}
 
 
 
 
 
-#' Add Chi2 summaries to a \code{\link[tabxplor]{tab}}
-#'
-#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
-#' @param calc By default all elements of the Chi2 summary are calculated :
-#' contributions to variance, pvalue, variance and unweighted count. You can choose which
-#' are computed by selecting elements in the vector \code{c("ctr", "p", "var", "counts")}.
-#' @param comp Comparison level. When \code{tab_vars} are present, should the
-#' contributions to variance be calculated for each subtable/group (by default,
-#'  \code{comp = "tab"}) ? Should they be calculated for the whole table
-#'  (\code{comp = "all"}) ?
-#'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-#'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param color The type of colors to print, as a single string.
-#' \itemize{
-#'   \item \code{"no"}: by default, no colors are printed
-#'   \item \code{"all"}: color all cells based on their contribution to variance
-#' (except for mean columns, from numeric variables)
-#'   \item \code{"all_pct"}: color all percentages cells based on their contribution to
-#'   variance
-#'   \item \code{"auto"}: only color columns with counts, \code{pct = "all"} or
-#'    \code{pct = "all_tabs"}
-#' }
-#' @param .deff Internal pipeline seam. The design-based omnibus grid (one row per subtable x
-#' col_var, carrying Rao-Scott's mean generalized design effect), used as the divisor of the
-#' \code{color = "contrib"} residual's base when the table's inference basis is not \code{"n"}.
-#' \code{NULL} --- the default, and every direct call --- keeps the unweighted base.
-#' @return A \code{tibble} of class \code{tab}, with Chi2 summaries as metadata,
-#' possibly colored based on contributions of cells to variance.
-#' @export
-#'
-# @examples # A typical workflow with tabxplor step-by-step functions :
-# \donttest{
-# data <- dplyr::starwars |>
-#   tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
-#               na_drop_all = sex)
-#
-# data |>
-#   tab_plain(sex, hair_color, gender, tot = c("row", "col")) |>
-#   tab_chi2(calc = c("p", "ctr"), color = TRUE)
-#   }
-tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
-                     comp = NULL, color = c("no", "auto", "all", "all_pct"),
-                     .deff = NULL
-) {
-  get_vars        <- tab_get_vars(tabs)
-  row_var         <- get_vars$row_var
-  #col_vars        <- rlang::sym(get_vars$col_vars)
-  col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
-
-  stopifnot(all(calc %in% c("all", "ctr", "p", "var", "counts")))
-  if ("all" %in% calc) calc <- c("ctr", "p", "var", "counts")
-  subtext         <- get_subtext(tabs)
-
-  if (all(get_col_var(tabs) %in% c("", "no_col_var")) |
-      "no_row_var" %in% names(tabs)
-  ) return(tabs)
-
-  comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
-  tabs <- tabs |> tab_match_comp_and_tottab(comp)
-
-  # Phase 10j-B: per col_var, is ANY of its level columns a mean? Read get_type() -- a scalar column
-  # attribute -- DIRECTLY off each level column, instead of dplyr::select(ungroup(tabs), <levels>) per
-  # col_var (which reconstructed the fmt columns just to read that attribute: ~4.6 % of a chi2 build).
-  # Byte-identical (PoC dev/benchmarks/phase10j_tests_parity.R: 26/26 identical over factor/mixed/mean
-  # x comp tab/all x 0-2 tab_vars x weighted x a 2x2 Yates).
-  is_a_mean <-
-    purrr::map_lgl(col_vars_levels, function(levs) {
-      cols <- purrr::map_chr(levs, rlang::as_name)
-      any(vapply(cols, function(cc) fmt_var_kind(tabs[[cc]]) == "mean", logical(1)))
-    })
-  # Phase 3b: mean col_vars now get an ANOVA F (the chi2 mirror), so an all-means table is no
-  # longer skipped -- only the factor total-row/total-col scaffolding (which is factor-oriented)
-  # is skipped for it. The ANOVA runs on the data rows (row_var-level groups) via agg_anova().
-  if (!all(is_a_mean)) {
-    tabs <- tabs |> tab_match_groups_and_totrows() |> tab_add_totcol_if_no()
-  }
-
-  if (comp == "all") tabs <- tabs |> dplyr::ungroup()
-
-  tot_cols <- detect_totcols(tabs)
-
-
-  all_col_tot <- names(col_vars_levels) == "all_col_vars"
-
-  tot_cols_names <- purrr::map_lgl(tabs, is_totcol) #|>  .[.] |> names()
-  tot_cols_names <- tot_cols_names[tot_cols_names] |> names()
-  col_vars_levels_no_tot <-
-    purrr::map(col_vars_levels,~ purrr::discard(., . %in% tot_cols_names ) )
-
-
-
-  # Phase 9b-5: the per-cell contribution-to-variance WRITES (var, ctr) + the comp_all / contrib-color
-  # col-meta -- ported to ONE mutate(across()) over plain-precomputed vectors (chi2_write_contrib()),
-  # replacing the pre-9b-5 ~6 mutate(across(where(is_fmt), set_*)) passes (each a full fmt-record
-  # reconstruction). Byte-identical; the real cost of the contrib color path (+~97% vs a plain build).
-  if ("ctr" %in% calc | "var" %in% calc) {
-    tabs <- chi2_write_contrib(tabs, calc, comp, color, col_vars_levels,
-                               col_vars_levels_no_tot, is_a_mean, all_col_tot, tot_cols,
-                               deff = .deff)
-  }
-
-  # Phase 9b-5: the whole-table chi2/ANOVA test is a READ-ONLY computation over the cell fields (it
-  # builds the tidy `test` tibble, never touches the cells) -- extracted so its plain-field
-  # marshalling is isolated from the record-based tab_chi2 orchestration. See chi2_compute_test().
-  test_tbl <- chi2_compute_test(tabs, comp, row_var, col_vars_levels,
-                                col_vars_levels_no_tot, is_a_mean, all_col_tot)
-
-  tabs <- tabs |> dplyr::select(-tidyselect::any_of("tottabs"))
-
-  # Phase 19a: tab_restore(), carrying `meta` explicitly -- see the twin tail in tab_ci().
-  tab_restore(tabs, tabs, attrs = list(subtext = subtext, test = test_tbl, meta = get_meta(tabs)))
-}
 
 
 # chi2_compute_test() -- the whole-table chi2 (factor col_vars) + ANOVA (mean col_vars) tests for one
@@ -7831,54 +7539,6 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
   }
 }
 
-
-# tab_apply_tests() -- the shared "chi2 -> capture test -> ci" finalize block for ONE built
-# factor table. Extracted (Phase 6a) so tab_many() and tab_counts() construct the
-# tab_chi2()/tab_ci() calls in exactly ONE place: the argument wiring must stay in sync (the
-# whole-table `test` attribute + per-cell CI fmt fields flow through here).
-# Returns list(tab = <table, CI/contrib fmt fields set>, test = <whole-table test tibble>).
-# The `test` is captured BETWEEN chi2 and ci and re-attached by the caller at rewrap, matching
-# the historical order (chi2 -> get_test -> ci). `do_chi2` is the per-table chi2 flag; `ci ==
-# "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
-# Phase 19c: it takes the ONE resolved `color` measure and derives each step's need from it, instead
-# of the four sub-passes tab_resolve_settings() used to precompute. Only `contrib` is stamped by the
-# test step (measure_stage() == "chi2"); the CI step stamps NOTHING on this path -- the sub-pass that
-# made it do so carried a legacy combined string the cascade manufactured, and it is gone (tab_ci()
-# keeps its own `color` formal for the exported step path).
-tab_apply_tests <- function(tab, do_chi2, ci, comp, color, stars,
-                            ci_scale = "diff", cached_test = NULL, deff = NULL,
-                            inference) {                   # REQUIRED -- see plain_core()
-  # does this table's colour need the per-cell contribution FIELDS the test step writes?
-  want_ctr <- identical(measure_stage(color), "chi2")
-  if (isTRUE(do_chi2)) {
-    # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
-    # inject the cached omnibus test instead of re-running the vectorised engine. Restricted to
-    # !want_ctr: contrib coloring (calc = c("ctr","p")) also writes the per-cell ctr/var
-    # FIELDS, which are not in the test tibble, so it must recompute. tab_chi2(calc = "p",
-    # color = "no") is structurally identity on transform tables (totrow+totcol already present),
-    # so skipping it changes only the `test` attribute (locked by test-jmvtab-cache.R).
-    if (!is.null(cached_test) && !want_ctr) {
-      tab <- set_test(tab, cached_test)
-    } else {
-      # `tab_chi2()` keeps its own pre-2.0.0 vocabulary ("no"/"auto"/"all"/"all_pct") -- it is an
-      # exported superseded step, and 19j is what retires it with the step itself.
-      tab <- tab_chi2(tabs = tab,
-                      calc = if (want_ctr) c("ctr", "p") else "p",
-                      comp = comp, color = if (want_ctr) "all" else "no", .deff = deff)
-    }
-  }
-
-  test <- get_test(tab)
-  if (is.null(test)) test <- new_test_tibble()
-
-  if (ci != "no") {
-    tab <- tab_ci(tabs = tab, ci = ci, comp = comp, conf_level = inference$conf_level,
-                  color = "no", visible = ci == "cell", stars = stars,
-                  ci_method = inference$method, ci_scale = ci_scale, degf = inference$degf)
-  }
-
-  list(tab = tab, test = test)
-}
 
 
 # tab_append_pctcol_rows() -- Phase 14a. Under pct = "col" the add_n / add_pct extras are ROWS: a

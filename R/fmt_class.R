@@ -4557,9 +4557,12 @@ measure_of_build <- function(build) {
   if (!length(k)) "" else k[[1]]
 }
 
-# WHICH build step stamps the measure. Derived from `builds`, not declared: the contributions are
-# computed by the test step and everything else by the leaf. (Phase 19j folds the test step into the
-# leaf, and this becomes a constant.)
+# WHICH PASS stamps the measure. Derived from `builds`, not declared.
+# Phase 19j (KEY 5): the test step is gone -- everything happens in the leaf now -- but the
+# distinction did NOT become a constant, because the contributions are still a SEPARATE computation
+# there (leaf_chi2 -> chi2_write_contrib), which a tier-2 cache hit cannot serve and which needs the
+# col_var's total column. So the two values are still real; only the name of the second is stale
+# ("chi2" now means "the contribution pass"). Renaming it is a 19l item -- see the roadmap.
 #' @keywords internal
 measure_stage <- function(measure)
   if (identical(measure_builds(measure), "contrib")) "chi2" else "leaf"

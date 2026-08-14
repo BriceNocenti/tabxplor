@@ -272,10 +272,13 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
          └─ tab_build_tables(ctx)  the OUTER row_var map + the output shape (Phase 9a). Resolves one lean
                 ctx per row_var (tab_rowvar_ctxs) and maps tab_build_one() over it — serial purrr::map OR
                 mirai, the single dispatch — then tab_assemble_output() once on main. Each unit runs:
-                ├─ tab_transform(ctx)    (tier 3 + tier-2 test) SCALAR over one row_var: the UNCHANGED
-                │      tab_num(.fine=)/tab_plain(.fine=) leaves (pct/diff/ratio/or/CI + fmt, O(cells);
-                │      `.fine` may be a per-pair list, fine_for_pair) + factor join + tab_apply_tests()
-                │      (chi2/ANOVA → capture `test` → tab_ci; BEFORE the level-drop — the ordering invariant)
+                ├─ tab_transform(ctx)    (tier 3 + tier-2 test) SCALAR over one row_var: the
+                │      num_core(.fine=)/plain_core(.fine=) leaves, which compute the CELLS, their
+                │      INTERVAL and their whole-table TEST (pct/diff/ratio/or + leaf_ci_plain +
+                │      leaf_chi2 + fmt, O(cells); `.fine` may be a per-pair list, fine_for_pair), then
+                │      the factor join, which binds the per-col_var `test` tibbles. Phase 19j (KEY 5):
+                │      there is NO second pass — tab_apply_tests() is gone, and the ordering invariant
+                │      (compute on the full level set, before the level-drop) is structural.
                 └─ tab_assemble_tables(ctx)  (tier 4) SCALAR: level-drop, tab_add_n_pct(), total col/row
                        removal, num+factor join, test-merge + rewrap (new_tab/new_grouped_tab)
              tab_assemble_output() [cross-row_var: output shape (§13), tab_compact() merge,
@@ -1357,11 +1360,16 @@ The main API file. Contains:
   + `plain_core`/`num_core` (the data.table aggregation core, total rows/cols, reference, fmt wrapping;
   numeric = moment sums + roll-ups). Shared tails `leaf_totrow_tottab()`/`leaf_rename_totals()`;
   `df=`/`num=` extract via `leaf_extract_raw()`.
-- `tab_ci()` — confidence interval calculation (Wilson/Wald/AC methods).
-- `tab_chi2()` — chi-squared (factors) + ANOVA F (means) via the vectorised engine
-  `agg_chi2()` / `agg_anova()` in `R/tab-agg.R`; contributions to variance for `color="contrib"`.
-- `tab_pct()`, `tab_tot()`, `tab_totaltab()` + `pct_formula()`/`diff_formula()` — the superseded
-  dplyr-era step API, quarantined in **`R/tab-steps-legacy.R`** (Phase 17f), off the build path.
+- `leaf_ci_plain()` — the factor leaf's cell / contrast interval, on matrices, **from the plan**
+  (Phase 19j, KEY 5). Shared verbatim with the jamovi tier-3 re-reference. `num_core()` has the same
+  block inline for means. Both route through `ci_dispatch()` / `CI_GEOMS` (`R/tab-agg.R`).
+- `leaf_chi2()` / `leaf_chi2_num()` / `leaf_test_view()` — the leaf's whole-table test, calling the
+  same `chi2_compute_test()` / `chi2_write_contrib()` the superseded step calls: chi-squared (factors)
+  + ANOVA F (means) via `agg_chi2()`/`agg_anova()`, and the contributions for `color = "contrib"`.
+- `tab_pct()`, `tab_tot()`, `tab_totaltab()`, `tab_ci()`, `tab_chi2()` + `pct_formula()`/`diff_formula()`
+  — the superseded dplyr-era step API, quarantined in **`R/tab-steps-legacy.R`** (17f for the trio,
+  19j for the two tests), off the build path. They RECONSTRUCT a plan from fmt markers (that is their
+  purpose, since they run on a table they did not build) but share the arithmetic with the leaves.
   Internal helpers `diff_index()`/`calculate_refrows()`/`quo_miss_na_null_empty_no()` stay in `R/tab.R`.
 - `tab_add_n_pct(tabs_text, add_n, add_pct)` — the `add_n`/`add_pct` block, factored out of `tab_many()`'s
   finalize so `tab_many()` and `tab_counts()` share one implementation.

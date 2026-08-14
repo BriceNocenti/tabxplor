@@ -36,6 +36,9 @@
   chooses each interval's method.
 * **Mean columns get a whole-table test** — a one-way ANOVA (Welch or classic, `options(tabxplor.anova)`),
   the counterpart of the chi-squared for factor columns.
+* **`tab_plain()` gains `ci =` and `ci_method =`**, so it builds its own intervals like `tab_num()`
+  does, instead of needing `|> tab_ci()`. It resolves them exactly as `tab()` does, so
+  `tab_plain(ci = "cell")` and `tab(ci = "cell")` agree cell for cell.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
   sparse table uses Fisher's exact.
 * **`tab_shape()` and `tab_supports()`** answer "what have I got, and what can I do with it?" before
@@ -401,7 +404,11 @@ Soft-deprecated (still work):
   `tab_vars` and `wt` may be passed by position; everything else must be named.
 * Singular `row_var` / `col_var`; `tab(sup_cols =)` (use `col_vars =`); `tab(filter =)` (filter
   upstream); `tab(names_prefix =, names_sort =)` (they belong to `tab_spread()`).
-* `tab_pct()` / `tab_tot()` / `tab_totaltab()`; `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
+* `tab_pct()` / `tab_tot()` / `tab_totaltab()` / **`tab_ci()`** / **`tab_chi2()`** — the whole
+  step-by-step chain is superseded. Confidence intervals and the whole-table test are computed by the
+  build itself, from `tab()`'s `ci` / `ci_method` / `conf_level` / `stars` / `test` / `color`
+  arguments. The steps still work on an existing table and give the same numbers.
+* `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
 * Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
   `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`.
 * The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "difference"` +
