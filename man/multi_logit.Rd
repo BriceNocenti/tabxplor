@@ -19,7 +19,7 @@ multi_logit(
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
-  estimate_display = c("value", "ci", "prob", "ame"),
+  display = "value",
   color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
   stars = TRUE,
   na = c("drop_by_outcome", "drop_by_model", "drop_all"),
@@ -104,7 +104,7 @@ categorical predictor under every family except ordinal) it has a closed form an
 directly; otherwise it is a real fit, so the crude column shares the model's family, link,
 confidence-interval method and \code{multiplier} by construction. The only outcomes left with no
 observed counterpart at all are the compound-\code{formula} escape hatch (there is no predictor
-structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3+ level outcome (no
+structure to be crude about) and, for a marginal contrast, a \emph{weighted} 3+ level outcome (no
 \code{marginaleffects} method).
 
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
@@ -196,14 +196,18 @@ message.}
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}
 
-\item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
-estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
-family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
-(\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
-\code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
-\code{"ci"} otherwise, with a message). Note \code{estimate_display = "ame"} \emph{adds} an AME beside the odds
-ratio, whereas \code{effect = "ame"} makes the whole column an AME (probability scale); the two are
-different and, when both are set, \code{effect = "ame"} wins and \code{estimate_display} is reset to \code{"value"}.}
+\item{display}{What each effect cell shows, mirroring \code{\link[=tab]{tab()}}'s display grammar. \code{"value"}
+(default) the plain estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket
+(\verb{2.34 [1.20; 4.50]}, any family); \code{"prob"} folds the model-adjusted predicted probability into
+the cell (\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). The last two
+are shorthands for the templates \code{"{or} ({pct})"} and \code{"{or} ({diff})"}, which you may write out
+instead; they need the \code{marginaleffects} package and apply to binomial coefficient models only
+(they degrade to \code{"ci"} otherwise, with a message).
+
+A template may ask for an \strong{auxiliary} quantity of the same fit; it never changes the fit or
+the estimand --- that is \code{measure}'s job alone. Note \code{display = "ame"} \emph{adds} an AME beside the
+odds ratio, whereas \code{effect = "marginal"} makes the whole column an AME; when both are set the
+column wins and \code{display} is ignored, with a message.}
 
 \item{color_signif}{How significance drives the colours. \code{"grey_non_signif"} (default) colours
 only odds ratios whose confidence interval excludes 1 and greys the rest.}

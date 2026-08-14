@@ -157,7 +157,7 @@ test_that("weighted multinomial errors clearly without svyVGAM", {
 
 test_that("effect='ame' is refused for weighted 3+ level outcomes", {
   d <- reg_survey_multi_data()
-  expect_error(tab_reg(d, "yo", "x1", family = "ordinal", wt = "w", effect = "ame"),
+  expect_error(tab_reg(d, "yo", "x1", family = "ordinal", wt = "w", effect = "marginal"),
                "not available for survey-weighted")
 })
 

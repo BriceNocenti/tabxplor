@@ -206,8 +206,8 @@ test_that("a calibrated design with incomplete cases keeps its adjustment gap te
   cal <- suppressMessages(survey::calibrate(
     svc_des(d), ~aux, c(`(Intercept)` = nrow(d), aux = sum(d$aux))))
   tt <- suppressWarnings(suppressMessages(
-    tab_reg(cal, "y", c("x", "z"), family = "binomial", empirical = TRUE, effect = "ame",
-            color = c("OR", "adjustment"))))
+    tab_reg(cal, "y", c("x", "z"), family = "binomial", empirical = TRUE, effect = "marginal",
+            color = c(TRUE, "adjustment"))))
   mc <- names(tt)[vapply(tt, function(cc) is_fmt(cc) && identical(get_role(cc), "model"),
                          logical(1))]
   gse <- vctrs::field(tt[[mc[1]]], "gap_se")
@@ -321,10 +321,11 @@ test_that("the crude bracket is referred to the SAME degrees of freedom as the m
   g  <- reg_empirical(sv$data, "x", "y", "binomial", "yes", ".svy_weights", design_spec = ds)
   cz <- reg_empirical_columns(
     tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
-    g, "x", "binomial", "binomial", "coefficient", NA_real_, weighted = TRUE)
+    g, "x", "binomial", "binomial", reg_estimand("binomial"), NA_real_, weighted = TRUE)
   ct <- reg_empirical_columns(
     tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
-    g, "x", "binomial", "binomial", "coefficient", NA_real_, weighted = TRUE, degf = dg)
+    g, "x", "binomial", "binomial", reg_estimand("binomial"), NA_real_, weighted = TRUE,
+    degf = dg)
   or_z <- cz$cols[[2]]; or_t <- ct$cols[[2]]
   w_z <- get_ci_sup(or_z) / get_ci_inf(or_z)
   w_t <- get_ci_sup(or_t) / get_ci_inf(or_t)

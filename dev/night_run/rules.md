@@ -90,6 +90,19 @@ whether the next may start.
 - **The commit must be the very last thing you do in the session**: it is what triggers the next
   phase, in a fresh headless session.
 
+## Pace yourself against the 5-hour window, not a budget
+
+There is no money at stake — this is a Claude subscription. The real constraint is the **5-hour
+session window**. The driver checks it before starting you and waits for a reset rather than
+launching a phase that cannot finish, but it cannot see how much you have left mid-phase.
+
+- If you sense you are running out before the phase is whole, **stop early and deliberately at a
+  boundary** rather than being cut off mid-migration. Commit what genuinely works with the phase
+  header suffixed `— partial`, and say precisely what is left.
+- The driver will **re-run a `— partial` phase in a fresh session** to finish it, so a truthful
+  partial is a checkpoint, not a failure. A phase cut off mid-migration is not.
+- Never rush verification to fit a window. An unverified "complete" is worse than an honest partial.
+
 ## If you are blocked
 
 Complete every independent part of the phase in full, commit what genuinely works with the phase

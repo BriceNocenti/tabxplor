@@ -90,7 +90,7 @@ test_that("binomial coefficient: single-predictor OR == crude OR (Obs_OR) == mod
 
 test_that("binomial AME: single-predictor risk-diff (Obs_diff) == observed risk difference", {
   d <- emp_data()
-  t <- tab_reg(d, "married", "race", family = "binomial", effect = "ame", empirical = TRUE,
+  t <- tab_reg(d, "married", "race", family = "binomial", effect = "marginal", empirical = TRUE,
                cleannames = FALSE)
   emp_diff <- get_diff(t[["Obs_diff"]]); names(emp_diff) <- as.character(t$levels)
 
@@ -159,7 +159,7 @@ test_that("binomial Obs_OR CI == crude logistic-regression CI (Woolf = Wald, per
 # reg's method_diff = "wald" and the model AME's Wald delta interval), not Newcombe.
 test_that("binomial AME Obs_diff CI == Wald risk-difference CI", {
   d <- emp_data()
-  t <- tab_reg(d, "married", "race", effect = "ame", family = "binomial", empirical = TRUE,
+  t <- tab_reg(d, "married", "race", effect = "marginal", family = "binomial", empirical = TRUE,
                cleannames = FALSE)
   ed  <- t[["Obs_diff"]]
   pos <- emp_positive_level(t, d, "married")
@@ -253,13 +253,13 @@ test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_rat
   expect_equal(get_or(tq[["Obs_IRR"]]),    get_or(tp[["Obs_IRR"]]),    tolerance = 1e-9)
 })
 
-# ---- Phase g: exponentiate = FALSE colours the coef + logs the empirical companion ----------------
+# ---- Phase g: measure = "log" colours the coef + logs the empirical companion ----------------
 
-test_that("exponentiate = FALSE: a binomial coefficient is coloured (log_odds scale), not all grey", {
+test_that("measure = log: a binomial coefficient is coloured (log_odds scale), not all grey", {
   skip_if_not_installed("broom")
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
-                                exponentiate = FALSE, cleannames = FALSE))
+                                measure = "log", cleannames = FALSE))
   bc <- t[["Model_\u03b2"]]
   expect_identical(tabxplor:::fmt_var_kind(bc), "coef")
   expect_identical(get_model_family(bc), "binomial")
@@ -270,14 +270,13 @@ test_that("exponentiate = FALSE: a binomial coefficient is coloured (log_odds sc
   expect_no_match(tab_color_legend(t, medium = "md"), "SD")
 })
 
-test_that("exponentiate = FALSE + empirical: Obs_log(OR) / Obs_log(IRR), logged effect + logged CI", {
+test_that("measure = log + empirical: Obs_log(OR) / Obs_log(IRR), logged effect + logged CI", {
   skip_if_not_installed("broom")
   d <- emp_data()
   # binomial: Obs_% + Obs_log(OR); the logged empirical == log of the OR-version, same colour as the model
   tb  <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
-                                  exponentiate = FALSE, cleannames = FALSE))
-  tbo <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
-                                  exponentiate = TRUE,  cleannames = FALSE))
+                                  measure = "log", cleannames = FALSE))
+  tbo <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,  cleannames = FALSE))
   expect_true(all(c("Obs_%", "Obs_log(OR)") %in% names(tb)))
   expect_false("Obs_OR" %in% names(tb))
   lc <- tb[["Obs_log(OR)"]]
@@ -289,7 +288,7 @@ test_that("exponentiate = FALSE + empirical: Obs_log(OR) / Obs_log(IRR), logged 
   expect_identical(fmt_color_channels(lc)$text, fmt_color_channels(tb[["Model_\u03b2"]])$text)
   # poisson: Obs_rate + Obs_log(IRR)
   tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
-                                 exponentiate = FALSE, cleannames = FALSE))
+                                 measure = "log", cleannames = FALSE))
   expect_true(all(c("Obs_rate", "Obs_log(IRR)") %in% names(tp)))
   expect_identical(tabxplor:::fmt_var_kind(tp[["Obs_log(IRR)"]]), "coef")
 })
@@ -382,7 +381,7 @@ test_that("change B: empirical companions use the model's complete-case frame, n
 test_that("change A: adjusted % coheres with the AME; unadjusted prediction == Obs_% (identity)", {
   skip_if_not_installed("marginaleffects")
   d <- emp_data()
-  t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "ame",
+  t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "marginal",
                empirical = TRUE, cleannames = FALSE)
 
   # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and

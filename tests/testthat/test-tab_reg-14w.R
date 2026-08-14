@@ -127,7 +127,7 @@ test_that("a reg legend says 'reference category', never 'Total row' (AME includ
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   leg <- tabxplor:::tab_color_legend(
-    tab_reg(w14_data(), "married", "race", family = "binomial", effect = "ame",
+    tab_reg(w14_data(), "married", "race", family = "binomial", effect = "marginal",
             cleannames = FALSE),
     medium = "md", style = "prose")
   expect_true(any(grepl("reference category", leg)))

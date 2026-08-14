@@ -101,7 +101,7 @@ test_that("the marginal path keeps ONE row per predictor (an AME already integra
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                shape = c(age = "quadratic"), effect = "ame", stats = FALSE))
+                                shape = c(age = "quadratic"), effect = "marginal", stats = FALSE))
   expect_length(lv(t, "age"), 1L)
 })
 

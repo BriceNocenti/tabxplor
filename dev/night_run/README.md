@@ -63,8 +63,32 @@ dev/night_run/run_night.sh 19f          # start here
 dev/night_run/run_night.sh 19f 19h      # inclusive range
 DRY_RUN=1 dev/night_run/run_night.sh    # write prompts to the log dir, call nothing
 
-MAX_BUDGET_USD=25 PHASE_TIMEOUT=14400 STALL_TIMEOUT=1800 dev/night_run/run_night.sh
+MIN_SESSION_PCT=45 PHASE_TIMEOUT=14400 STALL_TIMEOUT=1800 dev/night_run/run_night.sh
 ```
+
+### The 5-hour window gate
+
+There is no money at stake on a subscription; the real constraint is the **5-hour session window**.
+Before every phase the driver asks `/usage` — answered locally by the CLI, zero tokens, zero turns —
+and refuses to start a phase without `MIN_SESSION_PCT` (45%) of the window left, **sleeping until the
+reset instead**. It also learns: it records what each completed phase actually consumed and requires
+1.3x the worst seen so far. A weekly cap at `WEEK_HALT_PCT` (98%) halts rather than waits, naming the
+day it lifts.
+
+### The commit must name its phase
+
+"A new commit appeared" is not enough. On the 13 Aug run the session prompted for **19e** found the
+tree red, spent itself finishing **19d**, and committed under 19d's header — the driver counted that
+as "19e done" and ran two more phases on a dependency that was never built. So now:
+
+| what the new commits say | what the driver does |
+|---|---|
+| names this phase, no `— partial` | advance to the next phase |
+| names this phase, ends `— partial` | **re-run the same phase** in a fresh session to finish it |
+| names no phase, or another one | halt: this phase never ran |
+| nothing committed | halt |
+
+Retries are bounded by `MAX_ATTEMPTS` (3); each attempt gets its own `<phase>.aN.jsonl` log.
 
 **Preflight**: aborts unless you are on `dev` with a clean tree. The success signal is "a new commit
 appeared", which is meaningless otherwise.
@@ -109,7 +133,7 @@ From forensics on the hand-driven runs it replaces:
 - One session died silently at 01:10 and sat dead until the maintainer woke at 04:21 — **5 h 12 m
   lost with nothing watching**. Hence the stall watchdog.
 - ~8 subagents were once killed by a monthly spend limit, then a 429. Hence limit detection and
-  `--max-budget-usd`.
+  the 5-hour window gate.
 - The old prompt template ended by inviting `AskUserQuestion` — a built-in stall. Hence `rules.md`.
 
 A cold `claude -p` here costs about **$0.68 / 162k tokens** before any work (`CLAUDE.md` alone is

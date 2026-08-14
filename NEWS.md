@@ -145,12 +145,31 @@
   `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
   effect-modification test, asked once for all a predictor's levels, so it carries none of the
   multiplicity of a per-cell reading. `color = "between_groups"` turns it on for you.
-* **Risk ratios, two ways.** With a common outcome an odds ratio is not a "times more likely", and it
-  cannot be compared across nested models. `tab_reg(effect = "ame_ratio")` reports the **marginal risk
-  ratio** from the usual logistic fit (with the adjusted probability in parentheses), and
-  `tab_reg(family = "poisson")` on a **binary** outcome fits a **modified Poisson** regression (robust
-  standard errors) whose coefficients are risk ratios. Both are opt-in — a binary outcome still defaults
-  to logistic — and `empirical = TRUE` gives the matching crude `Obs_RR`.
+* **`tab_reg()` asks two questions instead of four.** An estimand is *which contrast* × *which effect
+  measure*, so that is what the arguments are: **`effect = c("coefficient", "marginal",
+  "at_reference")`** and **`measure = c("auto", "odds_ratio", "ratio", "difference", "log")`**, both
+  resolved per dependent like `family`. `measure` takes the full word or the discipline's acronym
+  (`"RR"` / `"IRR"` / `"RD"` / `"OR"`), and the column header keeps the acronym. This **replaces**
+  `exponentiate` (→ `measure = "log"`), `at` (→ `effect = "at_reference"`), `effect = "ame"` /
+  `"ame_ratio"` (→ `"marginal"`, with `measure = "ratio"`) and `estimate_display` (→ `display`,
+  which also takes a `"{or} ({pct})"` template). The retired names abort with the new spelling.
+* **Risk ratios, risk differences and ratios of means, through the front door.** `measure = "ratio"`
+  on a **binary** outcome fits the **modified Poisson** (robust standard errors) — it used to require
+  naming the wrong distribution, `family = "poisson"`, which still works; on a **continuous** outcome
+  it gives a **ratio of adjusted means** (Poisson pseudo-likelihood), which `tab_reg()` refused
+  outright although `tab()` has given one for years. `measure = "difference"` on a binary outcome
+  gives the **risk difference** from an identity-link fit (falling back to the linear probability
+  model, with a message, if it does not converge). `effect = "marginal", measure = "ratio"` is the
+  **marginal** risk ratio from the usual logistic fit, and is now available for every outcome.
+  `empirical = TRUE` gives the matching crude companion in every case.
+* **New `reg_measures(data, dependent)`** lists what an outcome can be modelled as: every
+  `effect` × `measure` cell with its status — *available*, *not defined* (an odds ratio needs a
+  probability), or *not offered* — and the header it would produce. It is the same runtime table
+  the argument validator, the error messages and `?tab_reg`'s own generated section read.
+* **`tab_reg(color =)` can no longer contradict the column.** The colour ladder comes from what the
+  column estimates, so the geometry values are gone: `color = TRUE` grades each cell on its own
+  scale, and what is left to choose is what to compare it *to* — `c(TRUE, "adjustment")` (was
+  `c("OR", "adjustment")`) or `c(TRUE, "between_groups")`.
 * **Regression tables now show the numbers behind the estimates.** An `n` column gives each predictor
   level its unadjusted count (`add_n = FALSE` to drop it), and the footer answers "is this variable
   associated with the outcome at all?" with one overall test per multi-level predictor (it costs no

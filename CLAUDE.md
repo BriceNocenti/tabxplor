@@ -264,6 +264,48 @@ R/
 │                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
 │                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
+├── reg-estimand.R   (~700 L) Phase 19e (KEY 8b): WHAT A REGRESSION COLUMN ESTIMATES. The user's two
+│                              questions -- `effect` (which CONTRAST: coefficient / marginal /
+│                              at_reference) x `measure` (which MEASURE: odds_ratio / ratio /
+│                              difference / log) -- resolved through ONE declared library,
+│                              **REG_ESTIMANDS**: a row per (family, effect, measure) carrying
+│                              `builder` (which of reg_build's three column builders runs -- the
+│                              table-scalar `if` is GONE), `fit` (the internal family key: "rr" =
+│                              modified Poisson, "rd" = identity link, "mr" = log-link pseudo-ML,
+│                              each a LINK chosen to reach a measure and never a distribution the
+│                              user should name), `exp`, `word` (the header), `scale` (the
+│                              EST_SCALES key stamped on the column), `display`, `crude_fam` /
+│                              `crude_shape` (which REG_EMPIRICAL row pairs with it),
+│                              `comparison` (the marginaleffects contrast), `status` + the `why` /
+│                              `note` closures (gettext at render, statically extractable). It
+│                              replaced a FOUR-argument product (family x effect x at x
+│                              exponentiate = 36 cells for 9 estimands, 3 degrade blocks, 2 aborts,
+│                              ~19 silently-ignored cells) and DELETED reg_effect_word() (a
+│                              4-argument nested switch = the `word` column), reg_model_note()
+│                              (6 arms x do_exp = the `note` closures), reg_crude_shape()'s dispatch
+│                              incl. its cross-family borrow (= 2 columns), and do_exp_for /
+│                              effect_shape_for / eff_word_for (views of one row).
+│                              THE VOCABULARY IS tab()'s: `measure`'s values ARE EST_SCALES$geometry
+│                              (19b), so the argument that asks, the attribute that stores, the
+│                              legend that names and the plot axis that draws are one vocabulary --
+│                              *the argument names the geometry, the attribute names the row*.
+│                              THREE STATES: a row (`ok`) builds; `impossible` aborts with its own
+│                              reason; NO ROW = "not offered", the message ENUMERATING what the
+│                              outcome does offer, generated from the table (+ a fourth at run time:
+│                              a link that did not converge). Read ONLY through reg_measure_key /
+│                              reg_estimand / reg_estimands_for / reg_estimand_abort /
+│                              reg_default_measure / reg_estimand_note, with a build-time stopifnot.
+│                              Also: reg_normalize_color (D25 -- a reg colour cannot contradict the
+│                              column: the ladder comes from its stored `scale`, so only the
+│                              own-ref measures remain, a DERIVED allow-list; `TRUE` in the text
+│                              slot = "the column's own geometry", so c(TRUE, "adjustment") replaces
+│                              c("OR", "adjustment")), reg_retired_args / reg_effect_key (the
+│                              retired spellings abort with their mapping -- 19b's fmt(type=) idiom),
+│                              reg_per_dep (THE per-dependent slicer shared by family / effect /
+│                              measure and the multi-dependent recursion, D6), REG_FIT_FAMILY, and
+│                              the exported **reg_measures(data, dependent)** lister +
+│                              reg_measures_rd() (the roxygen `@eval` that GENERATES ?tab_reg's
+│                              estimand section) -- four consumers, one table.
 ├── table-spec.R     (~120 L) Phase 19g (KEY 6): THE TABLE IDENTITY -- ONE `meta$spec` with three
 │                              slots for BOTH producers. `kind` ("crosstab"/"regression"), stated by
 │                              the producer, read through tab_kind()/tab_is_reg() (is_reg_footer(),
@@ -1800,7 +1842,6 @@ outright.
 - `dev/verify_color_attrs.R` was not run (19d/19c's standing debt); nothing in this phase touches the
   colour vocabulary, and the golden delta proof covers the stored colour attributes cell by cell.
 - `?tab` / `NEWS.md` / the vignettes still describe the pre-19d surface (19d's debt, still open).
-- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed**; 19k still owns that.
 
 **FOLLOW-UPS.** 19g (`meta$spec`) can now derive half its `vars` and key the `test` tibble on
 `(scope, var, level, col)`; 19h's `tab_shape()` capability predicate replaces the five scattered
@@ -1901,6 +1942,147 @@ accident, so it carries an explicit emptiness guard.
 capability predicate); a crosstab `spec$call` in 19i; the tier-3 `or` recompute in 19k; the
 column-builder re-indent + `?tab`/`NEWS.md` in 19l/19n.
 
+#### Phase 19e — KEY 8b + KEY 3a: the `tab_reg()` estimand surface
+
+**DONE (2026-08-14).** Full suite: **FAIL 8, WARN 131, SKIP 4, PASS 5997**, against a same-session
+baseline of the 19g commit measured by stashing the whole diff and re-running: **FAIL 9, WARN 131,
+SKIP 4, PASS 5871**. So +126 assertions, one failure fixed, and the remaining 8 are *exactly* the
+pre-existing `test-jmvtab-cache.R` set (verified the same way: same file, same 8 line numbers). No
+`_snaps/` and no `_golden/` fixture moved: 19e touches no crosstab path, and every retired spelling
+has an **exact** new equivalent, which is what `test-reg-estimand.R` asserts cell by cell.
+
+**The four-argument product is gone.** `family` × `effect` × `at` × `exponentiate` was 36
+combinations for 9 distinct estimands, with three degrade blocks, two aborts and ~19 cells in which
+an argument was silently ignored (`exponentiate` was a no-op on the whole marginal path; `at` was
+degraded away in three separate places). The surface is now the minimal non-redundant
+parameterisation — **(which contrast) × (which measure)**:
+
+```r
+effect  = c("coefficient", "marginal", "at_reference")            # absorbs `at`
+measure = c("auto", "odds_ratio", "ratio", "difference", "log")   # absorbs `exponentiate`
+```
+
+both resolved **per dependent** exactly where `family` is. `measure` takes the full word (taught) or
+the discipline's acronym (`"OR"` / `"RR"` / `"IRR"` / `"RD"`, permanent aliases), and the column
+header keeps the acronym — **so the table prints the mapping between the two every time it renders**.
+`"log"` is not a peer value: it is the family's default estimand un-exponentiated (which is what
+`exponentiate = FALSE` meant), with `log_odds` / `log_risk` / `log_rate` pinning *which* base.
+
+**`R/reg-estimand.R` — the declared library.** One row per (family, effect, measure) the package can
+answer, plus rows that state why one cannot be. Details in the Repository Map. What it **deleted**,
+counted honestly: `reg_effect_word()` (a four-argument nested switch) IS the `word` column;
+`reg_model_note()` (six family arms × `do_exp`) IS the `note` closures; `reg_crude_shape()`'s
+dispatch — *including* its cross-family borrow (a binary marginal ratio reusing `REG_EMPIRICAL$rr$rr`)
+— IS two declared columns; `do_exp_for` / `effect_shape_for` / `eff_word_for` are views of one row;
+and reg_build's **table-scalar `if`** choosing between the three column builders is the row's own
+`builder`, so the choice is per spec where 19g made the builders per spec. `reg_column()` now writes
+the estimate into the field its SCALE declares (`or` / `ratio` / `diff`) instead of choosing between
+two hard-coded `fmt()` calls — which is precisely what made a third shape unrepresentable.
+
+**The vocabulary is `tab()`'s, end to end.** `measure`'s values ARE `EST_SCALES$geometry` (19b), so
+the argument that asks, the attribute that stores, the legend that names and the forest-plot axis that
+draws are one vocabulary: *the argument names the geometry, the attribute names the row.*
+
+**The two capability gaps are closed** (maintainer ruling), both mirroring the existing modified-Poisson
+route one link over — same fitter (`svyglm`, whose design-based variance IS the Huber–White sandwich),
+same crude-companion rule, one `reg_fit` arm each:
+
+- **`measure = "ratio"` on a binary outcome** = the modified Poisson, reachable **by name** at last.
+  It used to require typing `family = "poisson"` on a binary outcome — naming the wrong distribution
+  to get a measure. That route still works, unchanged and byte-identical (asserted), and its message
+  now names the front door.
+- **`measure = "difference"` on a binary outcome** (new internal fit `"rd"`) = the identity-link
+  additive-risk model, started from OLS and falling back to the **linear probability model** with a
+  message if it does not converge — the runtime third state made real. Its crude twin needed **no new
+  `REG_EMPIRICAL` rows**: `binomial$base` + `binomial$ame` already are the risk pair.
+- **`measure = "ratio"` on a continuous outcome** (new internal fit `"mr"`) = the ratio of adjusted
+  means by Poisson pseudo-maximum-likelihood, on the `mean_ratio` scale tabxplor already owned and
+  `tab()` has used for years, with a new `REG_EMPIRICAL$mr` crude block. Guarded on a non-negative
+  outcome.
+- **The marginal ratio opens to every family** — the "needs a probability-scale outcome" abort is
+  deleted; a gaussian/poisson `effect = "marginal", measure = "ratio"` is `lnratioavg` on
+  `mean_ratio` (new `reg_marginal_column()` shape `"raw_ratio"`).
+
+Both new fits are checked against hand-fitted `glm(binomial("identity"))` / `glm(quasipoisson("log"))`
+in `test-reg-estimand.R` (agreement to 1e-6).
+
+**The capability table ships as a runtime object with four consumers**, as the ruling required: the
+boundary resolver, the **enumerated** error message (it says which of the three states it is, and
+lists what the outcome *does* offer, generated from the table), the new exported
+**`reg_measures(data, dependent)`** lister, and `?tab_reg`'s section — a roxygen `@eval` of
+`reg_measures_rd()`, so the documentation is rendered *from* the resolver. Phase 19k adds the jamovi
+eligibility rule as the fifth reader of the same table.
+
+**`estimate_display` → a real `display =`** on `tab_reg()` / `tab_logit()` / `multi_logit()`, mirroring
+`tab()`'s grammar, with the four old values kept as documented shorthands over it — deleting a preset
+layer rather than adding machinery, since `"prob"` already *was* `"{or} ({pct})"`. The rule is stated
+in the code: **a display template may ask for an auxiliary quantity of the SAME fit; it may never
+change the fit or the estimand.** That is the anti-proposition at its true grain, and it is what keeps
+`measure` the only estimand argument.
+
+**D25 closed and made unrepresentable.** `tab_reg(color = "difference")` on an odds-ratio column used
+to be *accepted*, storing a measure that contradicted what the column estimates. The ladder comes from
+the column's stored `scale` now, so what is left to choose is what to compare it **to** — the measures
+for which `measure_own_ref()` is TRUE, a **derived** allow-list, not a new one. `TRUE` in the text slot
+means "the column's own geometry", so the documented headline `c("OR", "adjustment")` becomes
+`c(TRUE, "adjustment")`. ⚠ `c(TRUE, "adjustment")` is coerced by `c()` to `c("TRUE", "adjustment")`, so
+the STRING spellings are the ones the normaliser must accept — stated in the code.
+
+**D6 closed**: the multi-dependent × model-list recursion forwarded neither `spread_models` nor
+`.fit_cache` (so a user's `spread_models = FALSE` silently reverted, and the jamovi cache never
+filled), and passed a **positional** `family` vector whole to each recursion, where its first entry
+became every outcome's family. `reg_per_dep()` is the one slicer, shared by `family` / `effect` /
+`measure` and the recursion. **D5** was already fixed in-tree (verified, not re-done).
+
+**19g's corrective pass, reported as asked.** `spec$call` did *not* record enough to reproduce the
+estimand: `at` and `estimate_display` were absent from `fit_spec`, and `effect` was stored twice. It
+records the estimand per dependent now (`measures` / `effects` beside `families`), read back through
+the new `reg_meta_estimand()`, and `exponentiate` / `do_exp` / `at` left with the arguments they
+mirrored. `spec$vars` needed no change. **Found in passing**: `test-reg-checks.R:175` was already
+failing on the 19g commit — 19g renamed the `test` tibble's `col_var` to `col` and this assertion was
+missed (its summary reports 8 failures, all in `test-jmvtab-cache.R`; measured here, the baseline is
+**9**). Fixed here.
+
+**The jamovi module keeps working, with stale labels.** Its generated `.h.R` can only be rebuilt by a
+maintainer `jmvtools::prepare()`, which **19k** owns together with the `.a.yaml` / `.u.yaml` / `.js`
+vocabulary — so the retired options are **translated at the bridge** (`jmv_reg_estimand_opts()` in
+`jmvtabreg-cache.R`, the same silent routing 19d used for the retired `tab(OR =)`), one function that
+dies in one edit when 19k lands. `JMVREG_CACHE_SCHEMA` **3 → 4** (the raw-fit key's `extra` carries
+`(effect, measure, display)` instead of `(effect, at, estimate_display)`). **No `.a.yaml` / `.u.yaml`
+was touched.**
+
+**The corpus and the call sites migrated in the same phase** (rule 5): ~70 call sites across 19 test
+files, both reg vignettes (EN + FR), `?tab_reg`'s examples and prose, and `NEWS.md`. The **marginal
+risk ratio keeps its full teaching** — prose, worked example and `Model_RR` header — under the new
+spelling, as instructed. `tab_reg()` has never been released, so the retired names are **removed**,
+not deprecated; a `...` catches them and the mapping IS the message (19b's `fmt(type =)` idiom).
+
+**HONEST CONCERNS.**
+
+- **The 8 `test-jmvtab-cache.R` failures are still red**, unchanged and untouched — 19d's tier-3 `or`
+  hole. Still a genuine correctness hole in the live jamovi module; **19k owns it.**
+- **`Model_MR`** is a header this package invents: there is no settled acronym for `exp(coef)` of a
+  log-link mean model ("ratio of means" has no standard one). Flagged for the maintainer to veto.
+- **The `rd` fallback means two different estimators can produce one column.** The footer says which
+  ran (the family display name differs), and the fallback informs — but a user who does not read the
+  message will not know from the numbers.
+- **The new footer phrases are untranslated.** `reg_family_display_name()` gained two arms and the
+  estimand notes gained several msgids; `po/R-fr.po` is 19n's single pass, as planned. The pre-existing
+  French phrases are untouched and still resolve (verified).
+- **`REG_EMPIRICAL`'s `coef` / `coef_log` per-family fields were NOT deleted**, contrary to the plan.
+  They name a family's own coefficient shape and its logged twin, and the binary arm builds *both* at
+  once — they are family facts, not an estimand dispatch. The estimand row is the authority for which
+  shape the current estimand pairs with; these two are the fallback and the twin lookup.
+- **`dev/verify_color_attrs.R` was still not run** (19c/19d's standing debt), and the golden cell
+  review 19d owed is still open. Nothing here touches the crosstab colour vocabulary, and
+  `test-golden.R` + every `_snaps/` file pass unchanged.
+- `?tab`'s `OR` / `ci` / `color` blocks still describe the pre-19d surface (19d's debt, still open).
+
+**FOLLOW-UPS.** 19k: the tier-3 `or` recompute, the `.a.yaml`/`.u.yaml`/`.js` estimand vocabulary + a
+`prepare()`, and deleting `jmv_reg_estimand_opts()`. 19l: the `Model_MR` naming call, and re-checking
+whether `reg_fam_binary()`/`reg_fam_logscale()` still earn their keep now that `REG_FIT_FAMILY` exists.
+19n: `po/R-fr.po` + the vignette prose pass.
+
 ---
 
 ### Phase 20 — last features before release
@@ -1953,7 +2135,7 @@ a second Suggests-guard idiom would be exactly the ad-hoc layer Phase 17 removed
 
 
 
-### Phase 21 — release
+### Phase 2{x} — release
 
 
 
@@ -1993,14 +2175,14 @@ The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the 
 
 ---
 
-## The last step of every implementation : Update instructions and relevant development files
+## The last step of every implementation, during the final `check()` : Update instructions and relevant development files
 
-After verification passes, always :
+The final `check()` is now quite long, **so you must always start updating documentation and writing "DONE" summary while you wait for the final `check()` to finish** (if check fails and you modify stuff, briefly correct the documentation that needs to be corrected after verification passes) :
 
 1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
-2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure for real (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
-3. **Edit `CLAUDE.md` yourself** — never hand the maintainer "update lines" to paste. Two things go in, both minimalistic, concise, no bullshit, nothing that would clutter the prompt (the details are already in `dev/tabxplor_architecture.md`):
-   - the **Repository Map** / *Key Constraints* / *Design Decisions* entries of anything you really changed (a new module, a renamed function, a new config field). When there is nothing to change, skip it.
-   - the phase **"DONE" summary**, under its own `#### Phase <x> — <title>` header in the roadmap section. **CLAUDE.md is the ONLY place it goes**: not in `dev/*.md`, not in your chat response (there, give a short readable account, not the summary text). The maintainer moves done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
-4. `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary (most of the time, it’s not necessary).
+2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure *for real* (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
+3. **Edit `CLAUDE.md` yourself** — never hand the maintainer "update lines" to paste. Two things go in, both minimalistic, concise, no bullshit, nothing that would clutter the prompt (the details are already in the docstring/comments):
+   - the **Repository Map** / *Key Constraints* / *Design Decisions* entries of anything you really changed (a new module, a renamed function, a new config field). When there is nothing to change, *skip it*.
+   - the phase **"DONE" summary**, under its own `#### Phase <x> — <title>` header in the roadmap section. **CLAUDE.md is the ONLY place it goes**. The maintainer moves done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
+4. (`NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and really important user-facing bugs fixes. Keep it *fully* minimalistic and *radically* no bullshit. Do not edit it when it’s not necessary. Most of the time, it’s not necessary.)
 5. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)

@@ -15,8 +15,8 @@ skip_if_not_installed("broom")
 reg_opts <- function(...) {
   o <- utils::modifyList(list(
     dependent = "married", predictors = c("race", "age"), wt = character(), ids = NULL, strata = NULL,
-    fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial", exponentiate = TRUE,
-    effect = "coefficient", at = "average", estimate_display = "value",
+    fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial",
+    effect = "coefficient", display = "value",
     inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
     method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "drop_by_outcome",
     cleannames = TRUE, stats = NULL, subtext = "",

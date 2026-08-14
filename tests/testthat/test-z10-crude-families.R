@@ -9,7 +9,7 @@
 # KEY CONSTRAINTS:
 #   - The coefficient-scale gap test stays BLOCKED for multinomial / ordinal (and binomial), by the
 #     pre-existing collapsibility gate: a conditional odds ratio moves under adjustment with zero
-#     confounding. Only `effect = "ame"` / `"ame_ratio"` carry a real test.
+#     confounding. Only the MARGINAL contrasts carry a real test.
 #   - A multinomial crude effect is per OUTCOME CATEGORY and rides IN-CELL (`{or} ({obs})`), because one
 #     Obs_* column per category would double the table's width.
 #   - `reg_empirical()` and `reg_empirical_tips()` were the same computation at two key widths; the
@@ -165,10 +165,10 @@ test_that("the marginal paths of a 3+ level outcome get a real gap SE", {
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d <- z10_data()
-  for (eff in c("ame", "ame_ratio")) {
+  for (meas in c("difference", "ratio")) {
     t <- suppressMessages(tab_reg(d, "party3", c("race", "mar3"), family = "multinomial",
-                                  effect = eff, empirical = TRUE,
-                                  color = c("OR", "adjustment"), cleannames = FALSE))
+                                  effect = "marginal", measure = meas, empirical = TRUE,
+                                  color = c(TRUE, "adjustment"), cleannames = FALSE))
     g <- get_gap_se(t[[reg_fmt_cols(t)[[1]]]])
     expect_true(any(!is.na(g)))
     expect_true(all(g[!is.na(g)] > 0))
@@ -181,7 +181,7 @@ test_that("the coefficient path of a 3+ level outcome stays blocked (non-collaps
   skip_if_not_installed("nnet")
   d <- z10_data()
   t <- suppressMessages(tab_reg(d, "party3", c("race", "mar3"), family = "multinomial",
-                                empirical = TRUE, color = c("OR", "adjustment"),
+                                empirical = TRUE, color = c(TRUE, "adjustment"),
                                 cleannames = FALSE))
   expect_true(all(is.na(get_gap_se(t[[reg_fmt_cols(t)[[1]]]]))))               # obs yes, test no
   expect_true(any(!is.na(get_obs(t[[reg_fmt_cols(t)[[1]]]]))))

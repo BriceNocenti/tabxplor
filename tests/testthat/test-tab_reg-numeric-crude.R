@@ -164,9 +164,9 @@ test_that("gaussian / poisson / rr numeric crude effects match their univariable
   expect_true(get_or(tr[["Obs_RR"]])[ir] != 1)
 })
 
-test_that("exponentiate = FALSE gives the LOGGED crude effect for a numeric row", {
+test_that("measure = log gives the LOGGED crude effect for a numeric row", {
   d <- num_data()
-  t <- tab_reg(d, "married", c("age", "race"), family = "binomial", exponentiate = FALSE,
+  t <- tab_reg(d, "married", c("age", "race"), family = "binomial", measure = "log",
                empirical = TRUE, multiplier = 1, cleannames = FALSE)
   dm <- tidyr::drop_na(d, "married", "age", "race")
   dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
@@ -193,17 +193,18 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
   d  <- num_data()
   dm <- tidyr::drop_na(d, "married", "age", "race")
 
-  for (eff in c("ame", "ame_ratio")) {
-    t <- tab_reg(d, "married", c("age", "race"), family = "binomial", effect = eff,
+  for (eff in c("difference", "ratio")) {
+    t <- tab_reg(d, "married", c("age", "race"), family = "binomial",
+                 effect = "marginal", measure = eff,
                  empirical = TRUE, multiplier = 1, cleannames = FALSE)
     i  <- which(as.character(t$var) == "age")
     dm$y <- as.integer(dm$married == reg_call(t)$positive_level)
     g  <- stats::glm(y ~ age, data = dm, family = stats::binomial())
-    m  <- if (eff == "ame_ratio")
+    m  <- if (eff == "ratio")
       marginaleffects::avg_comparisons(g, variables = "age", comparison = "lnratioavg")
     else marginaleffects::avg_comparisons(g, variables = "age")
 
-    if (eff == "ame_ratio") {
+    if (eff == "ratio") {
       expect_equal(get_or(t[["Obs_RR"]])[i],     exp(m$estimate), tolerance = 1e-10)
       expect_equal(get_ci_inf(t[["Obs_RR"]])[i], exp(m$conf.low), tolerance = 1e-10)
     } else {
@@ -221,7 +222,7 @@ test_that("poisson + effect='ame' still writes NO obs on a numeric row (estimand
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
-                                effect = "ame", empirical = TRUE, cleannames = FALSE))
+                                effect = "marginal", empirical = TRUE, cleannames = FALSE))
   i  <- which(as.character(t$var) == "age")
   mc <- names(t)[purrr::map_lgl(t, is_fmt)]
   expect_true(all(is.na(get_obs(t[[mc[[length(mc)]]]])[i])))
@@ -231,7 +232,7 @@ test_that("at = 'reference' writes no obs on a numeric row either", {
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   t <- suppressWarnings(tab_reg(d, "married", c("age", "race"), family = "binomial",
-                                effect = "ame", at = "reference", empirical = TRUE,
+                                effect = "at_reference", empirical = TRUE,
                                 cleannames = FALSE))
   i  <- which(as.character(t$var) == "age")
   mc <- names(t)[purrr::map_lgl(t, is_fmt)]
@@ -340,7 +341,7 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
   # `rr` (modified Poisson on a binary outcome) is collapsible, so the COEFFICIENT gap test fires
   # (a conditional OR is not -- reg_estimand_collapsible()).
   t <- tab_reg(d, "married", c("age", "tvhours", "race"), family = "poisson", empirical = TRUE,
-               color = c("OR", "adjustment"), multiplier = 1, cleannames = FALSE)
+               color = c(TRUE, "adjustment"), multiplier = 1, cleannames = FALSE)
   i  <- which(as.character(t$var) == "age")
   se <- get_gap_se(t[["Model_RR"]])[i]
   expect_true(is.finite(se) && se > 0)
@@ -358,7 +359,7 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
 test_that("multiplier scales the numeric gap SE by |k| (so the z is invariant)", {
   d <- num_data()
   mk <- function(k) tab_reg(d, "married", c("age", "tvhours", "race"), family = "poisson",
-                            empirical = TRUE, color = c("OR", "adjustment"),
+                            empirical = TRUE, color = c(TRUE, "adjustment"),
                             multiplier = if (identical(k, 1)) 1 else c(age = k), cleannames = FALSE)
   i   <- which(as.character(mk(1)$var) == "age")
   t1  <- mk(1); t10 <- mk(10)
@@ -374,9 +375,10 @@ test_that("multiplier scales the numeric gap SE by |k| (so the z is invariant)",
 test_that("effect = 'ame' / 'ame_ratio': numeric rows get a gap SE too (the IF numeric arm)", {
   skip_if_not_installed("marginaleffects")
   d <- num_data()
-  for (eff in c("ame", "ame_ratio")) {
-    t <- tab_reg(d, "married", c("age", "race"), family = "binomial", effect = eff,
-                 empirical = TRUE, color = c("diff", "adjustment"), multiplier = 1,
+  for (eff in c("difference", "ratio")) {
+    t <- tab_reg(d, "married", c("age", "race"), family = "binomial",
+                 effect = "marginal", measure = eff,
+                 empirical = TRUE, color = c(TRUE, "adjustment"), multiplier = 1,
                  cleannames = FALSE)
     mc <- names(t)[purrr::map_lgl(t, is_fmt)]
     col <- t[[mc[[length(mc)]]]]
@@ -388,8 +390,8 @@ test_that("effect = 'ame' / 'ame_ratio': numeric rows get a gap SE too (the IF n
                                                 !is_refrow(col)])), info = eff)
     # the two estimators share their rows, so the IF SE must be SMALLER than naive quadrature
     se_m <- (get_ci_sup(col)[i] - get_ci_inf(col)[i]) / (2 * stats::qnorm(0.975))
-    ec   <- if (eff == "ame_ratio") "Obs_RR" else "Obs_diff"
-    se_c <- if (eff == "ame_ratio")
+    ec   <- if (eff == "ratio") "Obs_RR" else "Obs_diff"
+    se_c <- if (eff == "ratio")
       (log(get_ci_sup(t[[ec]])[i]) - log(get_ci_inf(t[[ec]])[i])) / (2 * stats::qnorm(0.975))
     else (get_ci_sup(t[[ec]])[i] - get_ci_inf(t[[ec]])[i]) / (2 * stats::qnorm(0.975))
     expect_lt(se, sqrt(se_m^2 + se_c^2))
@@ -399,7 +401,7 @@ test_that("effect = 'ame' / 'ame_ratio': numeric rows get a gap SE too (the IF n
 test_that("a conditional OR still gets NO gap test on a numeric row (collapsibility ruling)", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", empirical = TRUE,
-               color = c("OR", "adjustment"), multiplier = 1, cleannames = FALSE)
+               color = c(TRUE, "adjustment"), multiplier = 1, cleannames = FALSE)
   expect_true(all(is.na(get_gap_se(t[["Model_OR"]]))))
 })
 

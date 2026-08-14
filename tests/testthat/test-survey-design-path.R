@@ -64,11 +64,11 @@ test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal e
     unname(get_diff(col)[which(as.character(t$levels) == "high")])
   }
   a_des <- ame(suppressMessages(
-    tab_reg(des, dependent = "y", predictors = c("x", "z"), family = "binomial", effect = "ame")))
+    tab_reg(des, dependent = "y", predictors = c("x", "z"), family = "binomial", effect = "marginal")))
   a_wt  <- ame(tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
-                       effect = "ame", wt = "w"))
+                       effect = "marginal", wt = "w"))
   a_un  <- ame(tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
-                       effect = "ame"))
+                       effect = "marginal"))
   expect_equal(a_des, a_wt, tolerance = 1e-8)
   expect_false(isTRUE(all.equal(a_des, a_un, tolerance = 1e-3)))
 })

@@ -190,6 +190,52 @@ variable-name column is `rv$var_col`, one rule for a merged crosstab and a regre
 length(tab_vars) == 0` is gone, since the row-variable axis is a declared column and no longer
 competes with `tab_vars` for the single dplyr grouping slot.
 
+### The regression estimand (Phase 19e, KEY 8b --- `R/reg-estimand.R`)
+
+A `tab_reg()` table's ONE decision --- *what does this column estimate* --- used to be spread over
+FOUR arguments (`family` x `effect` x `at` x `exponentiate`): 36 combinations for 9 distinct
+estimands, three degrade blocks, two aborts, and ~19 cells in which an argument was silently ignored
+(`exponentiate` was a no-op on the whole marginal path; a RISK RATIO could only be obtained by naming
+the wrong distribution). It is now **two questions and one declared library**:
+
+```r
+effect  = c("coefficient", "marginal", "at_reference")            # WHICH contrast
+measure = c("auto", "odds_ratio", "ratio", "difference", "log")   # WHICH effect measure
+```
+
+**`REG_ESTIMANDS`** holds one row per (family, effect, measure) the package can answer, plus the rows
+that state why one CANNOT be answered. A row carries `builder` (which of `reg_build()`'s three column
+builders runs --- the table-scalar `if` is gone), `fit` (the internal family key: `"rr"` = modified
+Poisson, `"rd"` = identity link, `"mr"` = log-link pseudo-ML --- each a LINK chosen to reach a
+measure, never a distribution a user should name), `exp`, `word` (the column header), `scale` (the
+`EST_SCALES` key stamped on the column), `display`, `crude_fam` / `crude_shape` (which `REG_EMPIRICAL`
+row pairs with it), `comparison` (the `marginaleffects` contrast), `status` and two closures `why` /
+`note`. Read ONLY through `reg_measure_key()` / `reg_estimand()` / `reg_estimands_for()` /
+`reg_estimand_abort()`, with a build-time `stopifnot` keeping it coherent with `EST_SCALES`.
+
+**The vocabulary is `tab()`'s.** `measure`'s values ARE `EST_SCALES$geometry`, which is what
+`tab(color =)` resolves into --- *the argument names the geometry; the attribute names the row*. So
+`tab_reg(color =)` no longer takes a geometry at all (**D25**): the ladder comes from the column's
+stored `scale`, and what is left to choose is what to compare it TO --- the measures for which
+`measure_own_ref()` is TRUE, a DERIVED allow-list. `TRUE` in the text slot means "the column's own
+geometry", so `c(TRUE, "adjustment")` replaces `c("OR", "adjustment")`.
+
+**Three states, not two.** A row with `status = "ok"` builds; `"impossible"` aborts with its own
+reason (an odds ratio needs a probability to take the odds of); **no row** means "not offered", and
+the message ENUMERATES what the outcome does offer, generated from the table. A fourth state exists
+only at run time --- a link that does not converge, where the risk-difference fit falls back to the
+linear probability model and says so. Four consumers, one table: the boundary resolver, the error
+message, the exported `reg_measures()` lister, and `?tab_reg`'s section (a roxygen `@eval` of
+`reg_measures_rd()`; Phase 19k adds the jamovi eligibility rule as the fifth).
+
+**What it deleted.** `reg_effect_word()` (a four-argument nested switch) IS the `word` column;
+`reg_model_note()` (six family arms x `do_exp`) IS the `note` closures; `reg_crude_shape()`'s
+dispatch --- including its cross-family borrow --- IS `crude_fam` / `crude_shape`;
+`do_exp_for` / `effect_shape_for` / `eff_word_for` are views of one row; and `reg_column()` writes the
+estimate into the field its SCALE declares (`or` / `ratio` / `diff`) instead of choosing between two
+hard-coded fmt() calls, which is what made a third shape (a risk difference in percentage points, a
+ratio of means in the `ratio` field) unrepresentable.
+
 ### tabxplor_grouped_tab — Subtabled Results
 
 When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same table attributes, plus `groups` data from dplyr.

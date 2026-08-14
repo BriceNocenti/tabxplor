@@ -30,7 +30,9 @@
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 3L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 4L   # bump on any store-shape change -> discard stale stores
+# 4 (Phase 19e): the raw-fit key's `extra` carries the ESTIMAND (effect, measure, display) instead of
+# (effect, at, estimate_display) -- a stale store would key a different estimand to the same digest.
   #   history: 2 = Phase 17b table attrs merged into one `meta` list
   #            3 = Phase 17i unified kernel entry shape list(value, bytes, seq)
 # 2 tiers: KB-sized `digest` (reference-invariant fast path) + raw `fit`. A raw reg_fit (glm + model
@@ -163,6 +165,30 @@ jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 # A character vector is returned as soon as one entry is a keyword -- tab_reg() parses both.
 #' @keywords internal
 #' @noRd
+# jmv_reg_estimand_opts() -- Phase 19e: the jamovi UI's retired estimand options -> the (effect,
+# measure, display) triple tab_reg() takes. The UI is a generated layer this phase cannot rebuild
+# (see jmvtab_reg_build), so the translation lives here and is DELETED in Phase 19k, when the
+# `.a.yaml` gains `measure` and the `.h.R` is regenerated. Every mapping below is exact:
+#   exponentiate = FALSE  ->  measure = "log"
+#   effect = "ame"        ->  effect  = "marginal"
+#   effect = "ame_ratio"  ->  effect  = "marginal", measure = "ratio"
+#   at     = "reference"  ->  effect  = "at_reference"
+#   estimate_display      ->  display (same four shorthands)
+#' @keywords internal
+jmv_reg_estimand_opts <- function(opts) {
+  eff <- opts$effect %||% "coefficient"
+  at  <- opts$at     %||% "average"
+  measure <- if (identical(eff, "ame_ratio")) "ratio"
+             else if (identical(opts$exponentiate, FALSE)) "log"
+             else "auto"
+  effect  <- if (eff %in% c("ame", "ame_ratio"))
+               (if (identical(at, "reference")) "at_reference" else "marginal")
+             else if (identical(at, "reference")) "at_reference"
+             else "coefficient"
+  list(effect = effect, measure = measure,
+       display = opts$estimate_display %||% "value")
+}
+
 jmvtab_reg_mult_vector <- function(multiplicator) {
   if (length(multiplicator) == 0L) return(NULL)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
@@ -278,15 +304,21 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   inv_arg <- if (all(invs)) TRUE else stats::setNames(invs, dep)   # scalar unless a pick overrode it
   tri_arg <- if (all(is.na(tris))) NULL else stats::setNames(as.integer(tris), dep)
 
+  # Phase 19e: the jamovi UI still speaks the RETIRED estimand vocabulary (`exponentiate` / `effect`
+  # with its `ame_ratio` value / `at` / `estimate_display`), because its generated `.h.R` can only be
+  # rebuilt by a maintainer `jmvtools::prepare()` -- which Phase 19k owns, together with carrying the
+  # new words into the `.a.yaml` / `.u.yaml` / `.js`. So the options are TRANSLATED here, silently:
+  # the same move Phase 19d made for the retired `tab(OR =)` at jmv_tab3_build_armed(). One function,
+  # jmv_reg_estimand_opts(), so the mapping is stated once and dies in one edit when 19k lands.
+  est_opts <- jmv_reg_estimand_opts(opts)
   tabs <- tab_reg(
     data,
     dependent    = dep,
     predictors   = preds,
     family       = fam_arg,
     wt           = nz(opts$wt),
-    exponentiate = opts$exponentiate,
-    effect       = opts$effect,
-    at           = opts$at,
+    effect       = est_opts$effect,
+    measure      = est_opts$measure,
     conf_level   = opts$conf_level,
     method       = opts$method,
     reference    = opts$reference,
@@ -294,7 +326,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     split_var    = nz(opts$split_var),
     empirical    = isTRUE(opts$empirical),
     stats        = opts$stats,
-    estimate_display = opts$estimate_display,
+    display      = est_opts$display,
     color        = opts$color,
     color_signif = opts$color_signif,
     stars        = isTRUE(opts$stars),

@@ -69,11 +69,11 @@ testthat::test_that("multi-dependent reg legend drops the [dep] bracket (kept on
   testthat::expect_false(grepl("\\[tvhours\\]", md))
 })
 
-# ---- Item 5: binomial exponentiate=FALSE + empirical does NOT bold every row -------------------------
-testthat::test_that("binomial exponentiate=FALSE empirical bolds only reference rows + footer", {
+# ---- Item 5: binomial measure = "log" + empirical does NOT bold every row -------------------------
+testthat::test_that("binomial measure = log empirical bolds only reference rows + footer", {
   skip_if_not_installed("broom")
   t  <- suppressWarnings(tab_reg(gss5, dependent = "married", predictors = c("race", "rincome", "age"),
-                                 family = "binomial", empirical = TRUE, exponentiate = FALSE))
+                                 family = "binomial", empirical = TRUE, measure = "log"))
   tb <- tabxplor:::tab_export_prep(t, backend = "md")$tables[[1]]
   # NOT every row is bold (the pre-fix all-FALSE-ref_alltot edge bolded the whole table)
   testthat::expect_lt(length(tb$bold_rows), nrow(tb$tab))

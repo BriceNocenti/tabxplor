@@ -30,7 +30,7 @@ gap_data <- function() {
 
 gap_tab <- function(d, policy = "ignore", preds = "race", ...)
   suppressMessages(tab_reg(d, dependent = "married", predictors = preds, split_var = "party3",
-                           family = "binomial", color = c("OR", "between_groups"),
+                           family = "binomial", color = c(TRUE, "between_groups"),
                            color_signif = policy, ...))
 
 # --- A. gap_se IS sqrt(SE_A^2 + SE_B^2), from the printed intervals --------------------------------
@@ -223,7 +223,7 @@ test_that("`color = 'between_groups'` turns the interaction test on; `stats=` as
   d <- gap_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                 family = "binomial", color = c("OR", "between_groups")),
+                 family = "binomial", color = c(TRUE, "between_groups")),
     "interaction test")
   testthat::expect_length(tabxplor:::reg_interaction_lines(t, "en"), 1L)
   # off by default
@@ -277,7 +277,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
   d <- gap_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-                 effect = "ame", at = "reference", empirical = TRUE),
+                 effect = "at_reference", empirical = TRUE),
     "reference profile")
   mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
@@ -307,7 +307,7 @@ test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   skip_if_not_installed("broom")
   d  <- gap_data()
   sp <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "poisson",
-                                 empirical = TRUE, color = c("OR", "between_groups"),
+                                 empirical = TRUE, color = c(TRUE, "between_groups"),
                                  spread_models = FALSE))
   fc <- reg_fmt_cols(sp)
   mdl <- fc[get_role(sp[fc]) == "model"]

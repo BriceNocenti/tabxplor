@@ -117,13 +117,13 @@ gss_simple |>
 
 ### Effets marginaux moyens (AME) d'une régression logistique
 
-Une autre manière d'interpréter une régression logistique est d'utiliser les **effets marginaux moyens** (AME) avec `effect = "ame"` :
+Une autre manière d'interpréter une régression logistique est d'utiliser les **effets marginaux moyens** (AME) avec `effect = "marginal"` :
 
 - Au lieu de lire directement le rapport de cotes modélisé, on peut calculer la différence moyenne de pourcentage de chaque modalité comparée à la catégorie de référence.
 - Ici `Model_AME` se lit ainsi : « En comparant des répondants noirs et des répondants blancs semblables en revenu, âge et religion, être noir est associé à un taux de mariage inférieur de 19,8 points, en moyenne. »
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE)
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "marginal", empirical = TRUE)
 ```
 
 On peut alors utiliser `empirical = TRUE` pour comparer cette nouvelle quantité modélisée à la **différence brute, observée, de pourcentages** :
@@ -168,12 +168,12 @@ tabxplor propose deux façons d'obtenir un **rapport de risques** (RR) ; sur don
 donnent des résultats très proches.
 
 La première conserve le modèle logistique habituel et demande simplement l'effet sous forme de rapport,
-avec `effect = "ame_ratio"`. Chaque case affiche le rapport de risques et, entre parenthèses, la même
+avec `effect = "marginal", measure = "ratio"`. Chaque case affiche le rapport de risques et, entre parenthèses, la même
 probabilité prédite ajustée que la colonne AME :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
-        effect = "ame_ratio", empirical = TRUE)
+        effect = "marginal", measure = "ratio", empirical = TRUE)
 ```
 
 `Model_RR` se lit alors très simplement : « à revenu, âge et religion comparables, les personnes noires
@@ -192,7 +192,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
 ```
 
 C'est strictement optionnel — une variable binaire reste par défaut logistique — et tabxplor vous
-prévient quand il bascule. Laquelle choisir ? `effect = "ame_ratio"` conserve l'ajustement logistique,
+prévient quand il bascule. Laquelle choisir ? `effect = "marginal", measure = "ratio"` conserve l'ajustement logistique,
 bien conditionné, et ne peut jamais prédire une probabilité supérieure à 100 % ; `family = "poisson"` est
 la forme que reconnaîtront les épidémiologistes, et elle échappe à la réserve suivante : un rapport
 marginal est standardisé sur la composition de l'échantillon considéré (avec `split_var`, chaque groupe
@@ -220,7 +220,7 @@ aux deux questions :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 Couleur du texte = la force du rapport de cotes ajusté. Fond = sa distance à l'effet observé : un pôle
@@ -259,14 +259,14 @@ cotes, une couleur de fond légère peut donc relever de l'arithmétique plutôt
 légende d'un tableau exporté le signale.
 
 Les comparaisons qui *sont* propres sont celles que cette vignette a déjà présentées :
-`effect = "ame"` et `effect = "ame_ratio"` (effets marginaux), `family = "poisson"` sur une variable
+`effect = "marginal"` et `effect = "marginal", measure = "ratio"` (effets marginaux), `family = "poisson"` sur une variable
 binaire (rapports de risques) et le bêta d'une régression linéaire. Sur ces échelles, l'écart est bien
 la confusion apportée par les variables ajoutées, et rien d'autre. Si lire la confusion est l'objet de
 votre tableau, préférez l'une d'elles :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
-        effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
+        effect = "marginal", measure = "ratio", empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 ### L'écart est-il plus grand que le hasard ?
@@ -280,7 +280,7 @@ vraiment changé cet effet » :
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         family = "poisson", empirical = TRUE,
-        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+        color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
 Ici `family = "poisson"` sur une variable binaire donne des **rapports de risques**, l'une des échelles
@@ -308,7 +308,7 @@ Remarquez que les rapports de cotes bougent aussi — y compris pour les enquêt
 de risques dit que rien ne s'est passé. C'est la non-collapsibilité de la section précédente, qui
 apparaît sous la forme d'un « changement » fantôme. C'est pourquoi `color_signif` n'est **pas appliqué
 aux rapports de cotes simples** : `tab_reg()` y laisse les couleurs descriptives et le signale une
-fois, en renvoyant à `effect = "ame"`, `effect = "ame_ratio"` ou `family = "poisson"`.
+fois, en renvoyant à `effect = "marginal"`, `effect = "marginal", measure = "ratio"` ou `family = "poisson"`.
 
 Le grisage prend toute sa valeur sur les petits échantillons. Avec 20 000 enquêtés, presque tout
 déplacement visible est réel ; sur 2 000, le même tableau ne garde qu'une couleur de fond sur trois :
@@ -318,7 +318,7 @@ set.seed(1)
 small <- gss_simple[sample(nrow(gss_simple), 2000), ]
 tab_reg(small, "married", c("race", "rincome", "relig"),
         family = "poisson", empirical = TRUE,
-        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+        color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
 ### Trois façons de se tromper
@@ -383,7 +383,7 @@ significativement.
 
 Deux détails encore. La direction se mesure par rapport à la valeur nulle : un effet protecteur ramené
 vers 1 se colore comme un effet risqué ramené vers 1. Et le test exige que les deux estimations portent
-sur les mêmes personnes : avec `at = "reference"`, ou avec `na = "drop_by_model"` quand un modèle
+sur les mêmes personnes : avec `effect = "at_reference"`, ou avec `na = "drop_by_model"` quand un modèle
 comparé écarte d'autres valeurs manquantes que les colonnes observées, la comparaison n'est pas faite du
 tout. (Par défaut elle l'est toujours — voir plus bas.)
 
@@ -419,7 +419,7 @@ La plupart du temps, les effets marginaux moyens (AME) sont plus faciles à inte
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), 
-        effect = "ame", empirical = TRUE
+        effect = "marginal", empirical = TRUE
         ) # |> tab_export()
 ```
 
@@ -444,7 +444,7 @@ Le revenu est ici un facteur **ordonné**, donc ajusté comme un modèle à cote
 
 ```{r}
 tab_reg(gss_simple, "rincome", c("race", "relig"),
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 Lisez une ligne de gauche à droite : le rapport de cotes cumulé observé, puis celui du modèle, le **fond** colorant l'écart entre les deux. Être noir est associé à un revenu plus faible (`1/1,54` observé), et ajuster sur la religion ne le bouge presque pas (`1/1,51`) : l'association n'est pas expliquée par la religion. Comparez avec « bouddhiste/hindouiste », dont l'effet *grandit* une fois la race et les autres groupes tenus constants : l'ajustement peut renforcer une association aussi facilement qu'il peut en dissoudre une.
@@ -455,7 +455,7 @@ Un modèle multinomial dépense déjà une colonne par catégorie de la variable
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 `0,41 (0,41)` veut dire « modélisé 0,41, observé 0,41 » : rien à signaler. `0,08 (0,10)` veut dire que l'ajustement a un peu ramené l'effet vers 1. La note de bas de tableau dit quel nombre est lequel, et le survol d'une case (dans un export HTML) ajoute les pourcentages bruts qui sont derrière.
@@ -468,7 +468,7 @@ Avec `trials =`, les colonnes observées donnent la part moyenne de réponses «
 gss_simple |>
   score_from_lv1("score", vars_list = c("married", "income25k")) |>
   tab_reg("score", c("race", "age"), family = "binomial", trials = 2,
-          empirical = TRUE, color = c("OR", "adjustment"))
+          empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 ### Comment le lire — et comment ne pas le lire
@@ -479,11 +479,11 @@ Trois habitudes valent la peine d'être prises.
 
 **Ne lisez pas un écart comme « le vrai effet moins l'effet biaisé ».** Les deux nombres sont des estimations. Si le nombre brut repose sur peu de personnes, il fluctue, et l'écart fluctue avec lui. C'est à cela que sert le grisage (ci-dessous).
 
-**Attention à l'échelle, surtout avec les rapports de cotes.** Un rapport de cotes change quand on ajoute un prédicteur *même si ce prédicteur n'a rien à voir avec l'exposition* : une propriété purement mathématique, la non-collapsibilité. Sur les colonnes de rapports de cotes ci-dessus, une part de chaque écart est donc de l'arithmétique, pas de la confusion, et les couleurs restent purement descriptives : elles montrent la taille du déplacement sans prétendre qu'il est significatif. Si vous voulez un écart testable, demandez une mesure collapsible — un rapport de risques (`family = "poisson"` sur une variable binaire) ou un effet marginal (`effect = "ame"`), qui est aussi la quantité la plus facile à expliquer :
+**Attention à l'échelle, surtout avec les rapports de cotes.** Un rapport de cotes change quand on ajoute un prédicteur *même si ce prédicteur n'a rien à voir avec l'exposition* : une propriété purement mathématique, la non-collapsibilité. Sur les colonnes de rapports de cotes ci-dessus, une part de chaque écart est donc de l'arithmétique, pas de la confusion, et les couleurs restent purement descriptives : elles montrent la taille du déplacement sans prétendre qu'il est significatif. Si vous voulez un écart testable, demandez une mesure collapsible — un rapport de risques (`family = "poisson"` sur une variable binaire) ou un effet marginal (`effect = "marginal"`), qui est aussi la quantité la plus facile à expliquer :
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        effect = "ame", empirical = TRUE, color = c("diff", "adjustment"),
+        effect = "marginal", empirical = TRUE, color = c(TRUE, "adjustment"),
         color_signif = "grey_non_signif")
 ```
 
@@ -495,12 +495,12 @@ La couleur `"adjustment"` montre toujours la **taille** de l'écart. Qu'elle le 
 
 | ce que vous avez demandé | effet observé | écart testé ? |
 |---|---|---|
-| `effect = "ame"` / `"ame_ratio"`, toute famille | oui | **oui** |
+| `effect = "marginal"` / `"ame_ratio"`, toute famille | oui | **oui** |
 | `family = "poisson"` sur une variable binaire (rapports de risques) | oui | **oui** |
 | rapports de taux d'incidence de Poisson, bêta linéaire | oui | **oui** |
 | rapports de cotes — binomial, multinomial, ordinal cumulé | oui | non (non collapsible) |
 | une `formula =` composée | non | non |
-| une variable à 3 modalités ou plus *pondérée*, avec `effect = "ame"` | oui | non (pas de méthode `marginaleffects`) |
+| une variable à 3 modalités ou plus *pondérée*, avec `effect = "marginal"` | oui | non (pas de méthode `marginaleffects`) |
 
 Là où il n'y a pas de test, `color_signif` est ignoré pour ce canal et les couleurs se lisent descriptivement : le tableau ne feint jamais une significativité qu'il n'a pas.
 
@@ -628,7 +628,7 @@ seulement du bruit » :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
-        color = c("OR", "between_groups"), color_signif = "grey_non_signif")
+        color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
 Couleur du texte = la force de l'effet dans ce groupe. Couleur de fond = la distance à l'effet du
@@ -685,20 +685,20 @@ chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celui de l
 dans l'infobulle. Et le test agrégé du bas de tableau est un test du rapport de vraisemblance (un test
 F pour les modèles linéaires et quasi, un test de Wald fondé sur le plan de sondage avec des poids —
 la même règle que `compare =` ci-dessous), calculé sur un modèle groupé supplémentaire, et portant sur
-les **coefficients** : avec `effect = "ame"` les cases montrent des effets marginaux tandis que le bas
+les **coefficients** : avec `effect = "marginal"` les cases montrent des effets marginaux tandis que le bas
 de tableau teste les coefficients, deux questions proches mais distinctes, et la ligne le précise.
 
 ## Affiner l'affichage, mettre à l'échelle un prédicteur
 
 Plusieurs arguments changent *ce que chaque case affiche*, ou *comment un prédicteur est mis à l'échelle* sans changer le modèle lui-même.
 
-**`estimate_display`** ajoute une seconde quantité entre parenthèses dans chaque case. `"ci"` affiche l'intervalle de confiance à côté de chaque estimation :
+**`display`** ajoute une seconde quantité entre parenthèses dans chaque case. `"ci"` affiche l'intervalle de confiance à côté de chaque estimation :
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), estimate_display = "ci")
+tab_reg(gss_simple, "married", c("race", "age"), display = "ci")
 ```
 
-Pour un modèle logistique, il est possible d’ajouter la probabilité prédite ajustée par le modèle (`"prob"`) ou l'effet marginal moyen (`"ame"`) à la case du rapport de cotes. Une différence à noter : `estimate_display = "ame"` *conserve* la colonne du rapport de cotes et ajoute l'AME à côté, tandis que `effect = "ame"` (vu plus haut) transforme la colonne **entière** en un AME.
+Pour un modèle logistique, il est possible d’ajouter la probabilité prédite ajustée par le modèle (`"prob"`) ou l'effet marginal moyen (`"ame"`) à la case du rapport de cotes. Une différence à noter : `display = "ame"` *conserve* la colonne du rapport de cotes et ajoute l'AME à côté, tandis que `effect = "marginal"` (vu plus haut) transforme la colonne **entière** en un AME.
 
 **`multiplier`** choisit l'**unité** dans laquelle l'effet d'un prédicteur continu est rapporté. Une unité est rarement une quantité lisible : un changement d'un an de `age` déplace à peine les cotes, donc son rapport de cotes reste près de 1, ne franchit jamais un seuil de couleur, et la ligne se lit comme « aucun effet » — alors qu'un écart-type entier d'âge multiplie les cotes par environ 0,66. Par défaut, l'effet est donc rapporté **par écart-type**, et l'intitulé de la ligne indique laquelle :
 
@@ -714,10 +714,10 @@ tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 
 Tout est mis à l'échelle ensemble — l'estimation, son intervalle, la colonne observée `Obs_*` et la comparaison modèle/observé — et la p-value ne change jamais. Deux points à connaître : comme la valeur par défaut n'est pas 1, le `Model_OR` d'un prédicteur continu ne correspondra **pas** à `exp(coef(glm(...)))` tant que vous ne demandez pas `multiplier = 1` ; et l'écart-type est mesuré une seule fois, sur les cas complets des prédicteurs, de sorte qu'une même variable garde la même unité entre plusieurs variables expliquées, entre modèles comparés et entre groupes de `split_var`.
 
-**`at = "reference"`** évalue l'effet au profil de référence (la population, abstraite, qui combine la modalité de référence de chacune des variables explicatives/prédicteurs) au lieu de le moyenner sur l'échantillon — un effet marginal *à la référence* pour `effect = "ame"`, ou, pour un modèle multinomial, un rapport de cotes « chaque catégorie vs toutes les autres » à ce profil de réference. 
+**`effect = "at_reference"`** évalue l'effet au profil de référence (la population, abstraite, qui combine la modalité de référence de chacune des variables explicatives/prédicteurs) au lieu de le moyenner sur l'échantillon — un effet marginal *à la référence* pour `effect = "marginal"`, ou, pour un modèle multinomial, un rapport de cotes « chaque catégorie vs toutes les autres » à ce profil de réference. 
 
 ```{r, eval = FALSE}
-tab_reg(gss_simple, "married", c("race", "age"), effect = "ame", at = "reference")
+tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
 ```
 
 

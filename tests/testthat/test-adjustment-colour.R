@@ -54,12 +54,12 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
   chk(tab_reg(d, dependent = "age", predictors = c("race", "party3"),
               family = "gaussian", empirical = TRUE), "Model_\u03b2", "Obs_diff", get_diff)
   chk(tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-              exponentiate = FALSE, empirical = TRUE), "Model_\u03b2", "Obs_log(OR)", get_diff)
+              measure = "log", empirical = TRUE), "Model_\u03b2", "Obs_log(OR)", get_diff)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"),
-               family = "binomial", effect = "ame", empirical = TRUE)
+               family = "binomial", effect = "marginal", empirical = TRUE)
   chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_diff", get_diff)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"),
-               family = "binomial", effect = "ame_ratio", empirical = TRUE)
+               family = "binomial", effect = "marginal", measure = "ratio", empirical = TRUE)
   chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RR", get_or)
 })
 
@@ -68,14 +68,14 @@ test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {
   # The Constant has no crude counterpart. (Phase 18z9: a NUMERIC predictor now HAS one -- its
   # univariable fit -- so it is no longer part of this list; see the next test.)
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
-               empirical = TRUE, color = c("OR", "adjustment"))
+               empirical = TRUE, color = c(TRUE, "adjustment"))
   o <- get_obs(t$Model_OR)
   testthat::expect_true(is.na(o[[1]]))                              # Constant
   testthat::expect_identical(fmt_color_channels(t$Model_OR)$bg_slot[[1L]], 0L)
 
   # a compound formula has no predictor structure to be crude about -- the one remaining gap.
   t <- suppressMessages(tab_reg(d, married ~ race * age, family = "binomial",
-                                empirical = TRUE, color = c("OR", "adjustment")))
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   testthat::expect_true(all(is.na(get_obs(t[[ncol(t)]]))))
 
   # a plain cross-table never fills the field.
@@ -113,7 +113,7 @@ test_that("a NUMERIC predictor gets an obs, and `adjustment` colours it", {
   # Phase 18z9 inverted this test's premise: the univariable fit IS the numeric row's crude twin.
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = c("race", "age"), family = "binomial",
-               empirical = TRUE, color = c("OR", "adjustment"))
+               empirical = TRUE, color = c(TRUE, "adjustment"))
   i <- which(as.character(t$var) == "age")
   testthat::expect_true(all(!is.na(get_obs(t$Model_OR)[i])))
   testthat::expect_true(all(!is.na(get_or(t$Obs_OR)[i])))
@@ -197,7 +197,7 @@ test_that("several dependents: each fit takes its OWN crude block", {
 test_that("between_groups carries the reference group's estimate, stacked AND spread", {
   d <- adj_data()
   sp <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore")
+                family = "binomial", color = c(TRUE, "between_groups"), color_signif = "ignore")
   fmt_cols <- reg_fmt_cols(sp)
   testthat::expect_length(fmt_cols, 3L)                            # one column per group
   ref <- get_or(sp[[fmt_cols[[1]]]])
@@ -209,7 +209,7 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
   testthat::expect_true(any(fmt_color_channels(sp[[fmt_cols[[3]]]])$bg_slot > 0L))
 
   st <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c("OR", "between_groups"), color_signif = "ignore",
+                family = "binomial", color = c(TRUE, "between_groups"), color_signif = "ignore",
                 spread_models = FALSE)
   col <- st[[reg_fmt_cols(st)[[1]]]]
   k   <- length(ref)
@@ -231,7 +231,7 @@ test_that("color = 'adjustment' turns empirical on, and the two measures are exc
   d <- adj_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"),
-                 family = "binomial", color = c("OR", "adjustment")),
+                 family = "binomial", color = c(TRUE, "adjustment")),
     "empirical")
   testthat::expect_true("Obs_OR" %in% names(t))
   testthat::expect_error(
@@ -251,7 +251,7 @@ test_that("color_signif does not apply to an odds-ratio `adjustment` gap: it rea
   d <- adj_data()
   testthat::expect_message(
     t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-                 empirical = TRUE, color = c("OR", "adjustment"),
+                 empirical = TRUE, color = c(TRUE, "adjustment"),
                  color_signif = "guaranteed_effect"),
     "color_signif")
   testthat::expect_true(all(is.na(get_gap_se(t$Model_OR))))    # the reason it reads under `ignore`
@@ -264,7 +264,7 @@ test_that("color_signif does not apply to an odds-ratio `adjustment` gap: it rea
     "guaranteed_effect")
   # ... while `between_groups` now HONOURS the policy (its gap has a test of its own)
   b  <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                                 family = "binomial", color = c("OR", "between_groups"),
+                                 family = "binomial", color = c(TRUE, "between_groups"),
                                  color_signif = "guaranteed_effect"))
   bc <- b[[reg_fmt_cols(b)[[2]]]]
   testthat::expect_identical(
@@ -276,17 +276,17 @@ test_that("the legend names each channel's own baseline, and warns only on a non
   d <- adj_data()
   leg <- function(t) tab_color_legend(t, medium = "plain", style = "prose", lang = "en")
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-               empirical = TRUE, color = c("OR", "adjustment"))
+               empirical = TRUE, color = c(TRUE, "adjustment"))
   l <- leg(t)
   testthat::expect_true(any(grepl("observed (crude) effect", l, fixed = TRUE)))
   testthat::expect_true(any(grepl("non-collapsibility", l, fixed = TRUE)))
   # a COLLAPSIBLE estimand earns no caveat -- that contrast is the point of the sentence
   t2 <- suppressMessages(tab_reg(d, dependent = "married", predictors = c("race", "party3"),
-                                 family = "poisson", empirical = TRUE, color = c("OR", "adjustment")))
+                                 family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
   testthat::expect_false(any(grepl("non-collapsibility", leg(t2), fixed = TRUE)))
   # and the group measure names ITS baseline, not the observed effect
   t3 <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c("OR", "between_groups"))
+                family = "binomial", color = c(TRUE, "between_groups"))
   testthat::expect_true(any(grepl("reference group", leg(t3), fixed = TRUE)))
 })
 
@@ -308,7 +308,7 @@ test_that("{obs} renders bare and in a composite, and round-trips through get_nu
   testthat::expect_equal(unique(format(set_display(x, "obs"), syntax = "excel")), "#,##0.00")
   # an AME column's obs is a probability difference -> x100, signed, "%" (both media agree)
   a <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-               effect = "ame", empirical = TRUE)
+               effect = "marginal", empirical = TRUE)
   ac <- a[[grep("^Model_", names(a), value = TRUE)[[1]]]]
   testthat::expect_true(any(grepl("%$", format(set_display(ac, "obs")))))
   testthat::expect_true(any(grepl("^\\+", stringi::stri_trim(format(set_display(ac, "obs"))))))
@@ -347,7 +347,7 @@ test_that("the tooltip carries the comparison value once, and never on a cross-t
 test_that("stars still ride the model estimate under color = 'adjustment'", {
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-               empirical = TRUE, color = c("OR", "adjustment"))
+               empirical = TRUE, color = c(TRUE, "adjustment"))
   testthat::expect_true(any(grepl("*", format(t$Model_OR, stars = TRUE), fixed = TRUE)))
   # the reference row keeps its bold anchor when the measure rides the TEXT channel
   t2 <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
@@ -362,7 +362,7 @@ test_that("stars still ride the model estimate under color = 'adjustment'", {
 test_that("every exporter renders an adjustment-coloured table without error", {
   d <- adj_data()
   t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
-               empirical = TRUE, color = c("OR", "adjustment"))
+               empirical = TRUE, color = c(TRUE, "adjustment"))
   testthat::expect_no_error(format(t$Model_OR))
   testthat::expect_no_error(tab_md(t))
   testthat::expect_no_error(tab_html(t))
@@ -382,7 +382,7 @@ test_that("D2: the additive gap is unit-invariant (hours / minutes / days colour
   slots <- function(v) {
     t  <- suppressMessages(suppressWarnings(
       tab_reg(d, v, c("race", "party3"), family = "gaussian",
-              empirical = TRUE, color = c("diff", "adjustment"), cleannames = FALSE)))
+              empirical = TRUE, color = c(TRUE, "adjustment"), cleannames = FALSE)))
     mc <- grep("^Model_", names(t), value = TRUE)[[1]]
     fmt_color_channels(t[[mc]])$bg_slot
   }
@@ -402,7 +402,7 @@ test_that("D4: the gap's break glyphs follow the selected scale, not the measure
 
   # multiplicative estimate -> a multiplicative ladder
   t_mult <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
-                                     empirical = TRUE, color = c("OR", "adjustment"),
+                                     empirical = TRUE, color = c(TRUE, "adjustment"),
                                      cleannames = FALSE))
   l_mult <- leg(t_mult)
   testthat::expect_match(l_mult, "\u00d71.1", fixed = TRUE)   # x1.1
@@ -411,7 +411,7 @@ test_that("D4: the gap's break glyphs follow the selected scale, not the measure
   # additive estimate -> a signed ladder in the outcome's SD, never "x0.05"
   t_add <- suppressMessages(suppressWarnings(
     tab_reg(d, "tvhours", c("race", "party3"), family = "gaussian",
-            empirical = TRUE, color = c("diff", "adjustment"), cleannames = FALSE)))
+            empirical = TRUE, color = c(TRUE, "adjustment"), cleannames = FALSE)))
   # "+0.05" can only come from the gap ladder: `diff`'s own standardized breaks are 0.2/0.5/0.8.
   l_add <- leg(t_add)
   testthat::expect_match(l_add, "+0.05", fixed = TRUE)

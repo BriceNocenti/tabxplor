@@ -135,10 +135,10 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
 
 # ---- exponentiate + references --------------------------------------------------------------
 
-test_that("exponentiate=FALSE on a logit yields raw log-odds (additive coef shape)", {
+test_that("measure = log on a logit yields raw log-odds (additive coef shape)", {
   skip_if_not_installed("broom")
   d   <- reg_data()
-  col <- tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE,
+  col <- tab_reg(d, "married", "race", family = "binomial", measure = "log",
                  cleannames = FALSE)[["Model_\u03b2"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_scale(col), "log_coef")   # a link-scale (log-odds) coefficient
@@ -366,7 +366,7 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
 })
 
 
-test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the coef shape", {
+test_that("trials=TRUE uses the observed max score; measure = log gives the coef shape", {
   skip_if_not_installed("broom")
   d  <- gb_data()
   # suppressWarnings: over-dispersed fixture -> the dispersion flag (asserted in test-tab_reg-footer.R).
@@ -378,7 +378,7 @@ test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the
   expect_equal(get_or(auto[["Model_OR"]]), get_or(ten[["Model_OR"]]))
 
   b <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
-                                exponentiate = FALSE,
+                                measure = "log",
                                 cleannames = FALSE))[["Model_\u03b2"]]
   expect_identical(tabxplor:::fmt_var_kind(b), "coef")
   expect_identical(get_scale(b), "log_coef")
@@ -620,7 +620,7 @@ test_that("multinomial + ordinal tab_reg output exports without error", {
   expect_no_error(tab_md(ord))
 })
 
-# ---- effect = "ame": average marginal effects + adjusted predictions (Phase 12e-i) ----------
+# ---- effect = "marginal": average marginal effects + adjusted predictions (Phase 12e-i) ----------
 # Parity is checked against marginaleffects run on the SAME model tab_reg fits (binomial: fct_rev to
 # model the positive level; factor predictors fct_drop'd), aligning the AME by the "Level - Reference"
 # contrast label. The composed cell is AME-first ("-8%*** (16%)") with the prediction in parentheses.
@@ -631,7 +631,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame", multiplier = 1,
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "marginal", multiplier = 1,
                  cleannames = FALSE)
   col <- t1[["Model_AME"]]
 
@@ -680,7 +680,7 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
-  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame", multiplier = 1,
+  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "marginal", multiplier = 1,
                  cleannames = FALSE)[["Model_AME"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_scale(col), "raw_diff")
@@ -704,7 +704,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
-                                  effect = "ame", cleannames = FALSE))[["Model_AME"]]
+                                  effect = "marginal", cleannames = FALSE))[["Model_AME"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -721,7 +721,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
-  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "ame",
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "marginal",
                 cleannames = FALSE)
   expect_true(all(c("Ind", "Dem", "Rep") %in% names(t1)))   # every outcome category
 
@@ -745,7 +745,7 @@ test_that("ordinal AME: one column per outcome category, matches marginaleffects
   skip_if_not_installed("MASS")
   skip_if_not_installed("marginaleffects")
   d  <- ord_data()
-  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "ame",
+  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal",
                                  cleannames = FALSE))
   expect_true(all(c("Rep", "Ind", "Dem") %in% names(t1)))
 
@@ -770,7 +770,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
   # svyglm() warns ("observations with zero weight not used for calculating dispersion"). That is
   # upstream (survey/stats), not tabxplor, and it fires identically on the hand-run oracle below.
   col <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", wt = "tvhours",
-                                  effect = "ame", cleannames = FALSE))[["Model_AME"]]
+                                  effect = "marginal", cleannames = FALSE))[["Model_AME"]]
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
   dm$race    <- forcats::fct_drop(dm$race)
@@ -787,7 +787,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
 test_that("AME tables export through every backend without error", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
-  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "ame")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "marginal")
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
   skip_if_not_installed("openxlsx2")
@@ -805,8 +805,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
-                 at = "reference", multiplier = 1, cleannames = FALSE)
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", multiplier = 1, cleannames = FALSE)
   col <- t1[["Model_MER"]]                           # the label switches AME -> MER at reference
   expect_identical(get_pct_base(col), "row")
 
@@ -832,7 +831,7 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
-  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", at = "reference",
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "at_reference",
                 cleannames = FALSE)
   expect_true(all(c("Ind vs rest", "Dem vs rest", "Rep vs rest") %in% names(t1)))
   expect_identical(get_scale(t1[["Dem vs rest"]]), "odds_ratio")
@@ -854,27 +853,34 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   expect_true(all(get_or(t1[["Ind vs rest"]])[ref] == 1))    # reference predictor level -> OR 1
 })
 
-test_that("at='reference' is a no-op (with a message) for non-multinomial coefficients", {
+# Phase 19e: `at` is retired. `at = "reference"` used to be a NO-OP on a non-multinomial coefficient
+# (a message, then the ordinary coefficients); asking for the reference profile is now a CONTRAST,
+# `effect = "at_reference"`, which on a binomial outcome gives the marginal effect there (MER).
+test_that("the retired `at` argument aborts naming its replacement", {
   skip_if_not_installed("broom")
-  skip_if_not_installed("marginaleffects")
   d <- reg_data()
-  expect_message(
-    t1 <- tab_reg(d, "married", "race", family = "binomial", at = "reference", cleannames = FALSE),
-    "profile-independent"
+  expect_error(
+    tab_reg(d, "married", "race", family = "binomial", at = "reference", cleannames = FALSE),
+    "at_reference"
   )
-  t2 <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
-  expect_equal(get_or(t1[["Model_OR"]]), get_or(t2[["Model_OR"]]))   # identical coefficients
+  expect_error(
+    tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE),
+    'measure = "log"'
+  )
+  expect_error(
+    tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio"),
+    "marginal"
+  )
 })
 
 test_that("MER-at-reference exports through every backend without error", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
-  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "ame",
-                at = "reference")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "at_reference")
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
   skip_if_not_installed("nnet")
-  t2 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial", at = "reference")
+  t2 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial", effect = "at_reference")
   expect_no_error(tab_kable(t2))
   expect_no_error(tab_md(t2))
 })

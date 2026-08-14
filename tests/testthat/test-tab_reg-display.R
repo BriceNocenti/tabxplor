@@ -10,25 +10,25 @@ reg_data <- function() {
 # Phase 18z13: skip the per-level `n` column (add_n = TRUE by default) -- see helper-reg.R.
 first_fmt <- function(t) reg_first_fmt(t)
 
-# ---- estimate_display = "ci" : visible confidence-interval bracket ---------------------------
+# ---- display = "ci" : visible confidence-interval bracket ---------------------------
 
-test_that("estimate_display='ci' shows a visible CI bracket for OR and beta", {
+test_that("display='ci' shows a visible CI bracket for OR and beta", {
   skip_if_not_installed("broom")
   d  <- reg_data()
-  oc <- first_fmt(tab_logit(d, "married", c("race", "age"), estimate_display = "ci"))
+  oc <- first_fmt(tab_logit(d, "married", c("race", "age"), display = "ci"))
   txt <- format(oc, special_formatting = TRUE)
   expect_true(any(grepl("\\[.*;.*\\]", txt)))            # "<or> [<lo>;<hi>]"
   expect_equal(get_num(oc), get_or(oc))                  # primary value = the odds ratio (no reciprocal)
 
   bc <- first_fmt(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
-                          estimate_display = "ci"))
+                          display = "ci"))
   expect_true(any(grepl("\\[.*;.*\\]", format(bc, special_formatting = TRUE))))
   expect_equal(get_num(bc), get_diff(bc))                # beta point estimate
 })
 
 test_that("est_ci bracket reads the stored asymmetric bounds", {
   skip_if_not_installed("broom")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "age", estimate_display = "ci"))
+  oc  <- first_fmt(tab_logit(reg_data(), "married", "age", display = "ci"))
   txt <- format(oc, special_formatting = TRUE)
   # a non-reference cell's bracket contains the rounded ci_inf / ci_sup
   i   <- which(!is.na(get_ci_inf(oc)))[1]
@@ -36,20 +36,20 @@ test_that("est_ci bracket reads the stored asymmetric bounds", {
   expect_match(txt[i], lo, fixed = TRUE)
 })
 
-# ---- estimate_display = "prob" / "ame" : OR + predicted probability / marginal effect ---------
+# ---- display = "prob" / "ame" : OR + predicted probability / marginal effect ---------
 
-test_that("estimate_display='prob' folds the predicted probability into the OR cell", {
+test_that("display='prob' folds the predicted probability into the OR cell", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", estimate_display = "prob"))
+  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", display = "prob"))
   txt <- format(oc)
   expect_true(any(grepl("\\([0-9]", txt)))               # "(16%)" prediction
   expect_equal(get_num(oc), get_or(oc))                  # OR is still the primary field
   expect_true(any(!is.na(get_pct(oc))))                  # the prediction is stored in `pct`
 })
 
-test_that("estimate_display='ame' folds the average marginal effect into the OR cell", {
+test_that("display='ame' folds the average marginal effect into the OR cell", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", estimate_display = "ame"))
+  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", display = "ame"))
   expect_true(any(grepl("\\([-+][0-9]", format(oc))))    # "(-21%)" / "(+1%)" marginal effect
   expect_equal(get_num(oc), get_or(oc))
 })
@@ -58,12 +58,12 @@ test_that("estimate_display prob/ame degrade to 'ci' for non-binomial (message)"
   skip_if_not_installed("broom")
   d <- reg_data()
   expect_message(
-    tab_reg(d, "tvhours", "race", family = "gaussian", estimate_display = "prob"),
+    tab_reg(d, "tvhours", "race", family = "gaussian", display = "prob"),
     "binomial coefficient")
   # and ignored (with a message) for marginal-effects output
   skip_if_not_installed("marginaleffects")
   expect_message(
-    tab_reg(d, "married", "race", family = "binomial", effect = "ame", estimate_display = "ci"),
+    tab_reg(d, "married", "race", family = "binomial", effect = "marginal", display = "ci"),
     "ignored")
 })
 
@@ -125,7 +125,7 @@ test_that("an ordered-factor predictor's AME is non-NA on every non-reference le
   skip_if_not_installed("marginaleffects")
   d <- ame_data()
   suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
-                                effect = "ame", cleannames = FALSE))
+                                effect = "marginal", cleannames = FALSE))
   col  <- first_fmt(t)
   rin  <- as.character(t[[2]]) %in% levels(d$rincome)   # rincome level rows
   # the '-' levels ($20000 - 24999, $15000 - 19999, $10000 - 14999) used to be NA; only the reference is

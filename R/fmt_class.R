@@ -4913,17 +4913,20 @@ legend_reg_eff_word <- function(col, meta) {
   # beta scale (AME is handled by the effect branch above), so no scalar `do_exp` check is needed -- that
   # scalar would mislabel a gaussian column in a binomial-first mixed table.
   fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
-  # Phase 18z3: two ways a multiplicative column can be a RISK ratio rather than an odds ratio.
-  # (a) effect = "ame_ratio" -- the ESTIMAND is a ratio of adjusted probabilities, whatever family was
-  #     fitted (a logistic fit still yields a marginal RR), so it wins over the family switch; it also
-  #     covers the crude Obs_RR companion, which carries the model's family attribute.
-  # (b) family "rr" -- the modified Poisson, whose exp(coef) is a risk ratio by construction.
+  # Phase 19e: the word IS the estimand row's own `word` -- one lookup instead of the three arms this
+  # function used to re-derive from (family, effect, at) after the column-name suffix parse died. The
+  # two subtleties it encoded are declared there: a marginal RATIO is a RISK ratio whatever family was
+  # fitted (a logistic fit still yields a marginal RR), and the modified-Poisson `fit` is one too.
+  est <- reg_meta_estimand(meta, family = fam)
   if (identical(get_scale(col), "odds_ratio")) {
-    if (identical(meta$effect, "ame_ratio")) return("RR")
-    return(switch(fam, "poisson" = , "quasipoisson" = "IRR", "rr" = "RR", "OR"))
+    if (!identical(get_role(col), "emp") && !is.null(est$word) && est$word %in% c("RR", "IRR", "OR"))
+      return(est$word)
+    # a CRUDE companion carries the model's family attribute, so its own scale names it
+    return(switch(fam, "poisson" = , "quasipoisson" = "IRR", "rr" = "RR",
+                  if (identical(est$word, "RR")) "RR" else "OR"))
   }
   if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
-    if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
+    if (!is.null(est$word) && est$word %in% c("AME", "MER", "MR", "RD")) return(est$word)
     if (identical(fmt_var_kind(col), "coef")) return(.lg_beta)   # gaussian beta
   }
   NA_character_

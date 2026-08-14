@@ -39,7 +39,7 @@ test_that("every table shape draws one ggplot", {
     xt_subs  = tab(d, race, party3, pct = "row", ci = "diff", tab_vars = black),
     reg_or   = q(tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)),
     reg_beta = q(tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE)),
-    reg_log  = q(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE)),
+    reg_log  = q(tab_reg(d, "married", "race", family = "binomial", measure = "log")),
     reg_mnl  = q(tab_reg(d, "party3", "race", family = "multinomial")),
     reg_cmp  = q(tab_reg(d, "married", list(m1 = "race", m2 = c("race", "rincome")),
                          family = "binomial", empirical = TRUE)))
@@ -103,7 +103,7 @@ test_that("the gap band is drawn exactly where the model says", {
   fp_dev()
   d <- fp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
-                                empirical = TRUE, color = c("OR", "adjustment")))
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- forest_plot(t, return_data = TRUE)
   bd <- e[is.finite(e$gap_lo), , drop = FALSE]
   expect_gt(nrow(bd), 3L)

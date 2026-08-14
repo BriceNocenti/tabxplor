@@ -15,7 +15,7 @@
 #     mode), when the fitted object was distilled away (jamovi's digest path), or at a profile.
 #   - `color_signif = "ignore"` must be BYTE-IDENTICAL to z5 wherever a gap_se now exists.
 #   - The crude and model columns must be the SAME estimand -- this closes a z5 defect where
-#     effect = "ame" + family = "poisson" wrote a rate RATIO into an additive AME column's `obs`.
+#     effect = "marginal" + family = "poisson" wrote a rate RATIO into an additive AME column's `obs`.
 # See: dev/model_vs_observed_gap_test.md (SS2 the estimator side, SS3 the variance side, SS4 what the
 #      test rejects and why the OR path is off, SS7 the architecture).
 
@@ -37,7 +37,7 @@ gapb_data <- function() {
 # would let the policy tests pass vacuously.
 gapb_tab <- function(d, policy = "ignore", preds = c("race", "party3", "relig"), ...)
   suppressMessages(tab_reg(d, dependent = "married", predictors = preds, family = "poisson",
-                           empirical = TRUE, color = c("OR", "adjustment"),
+                           empirical = TRUE, color = c(TRUE, "adjustment"),
                            color_signif = policy, ...))
 
 gapb_model_col <- function(t) t[[grep("^Model", names(t), value = TRUE)[[1]]]]
@@ -167,18 +167,18 @@ test_that("no gap_se where the gap has no honest test", {
   # (1) a CONDITIONAL odds ratio -- non-collapsible, ruling Q1(b). Both exponentiate directions.
   testthat::expect_true(none(suppressMessages(tab_reg(
     d, "married", c("race", "party3"), family = "binomial", empirical = TRUE,
-    color = c("OR", "adjustment")))))
+    color = c(TRUE, "adjustment")))))
   testthat::expect_true(none(suppressMessages(tab_reg(
-    d, "married", c("race", "party3"), family = "binomial", exponentiate = FALSE,
-    empirical = TRUE, color = c("diff", "adjustment")))))
+    d, "married", c("race", "party3"), family = "binomial", measure = "log",
+    empirical = TRUE, color = c(TRUE, "adjustment")))))
   # (2) at the reference profile the model cell is a different estimand (a z5 defect z8-A fixed)
   skip_if_not_installed("marginaleffects")
   testthat::expect_true(none(suppressMessages(tab_reg(
-    d, "married", c("race", "party3"), family = "binomial", effect = "ame", at = "reference",
-    empirical = TRUE, color = c("diff", "adjustment")))))
+    d, "married", c("race", "party3"), family = "binomial", effect = "at_reference",
+    empirical = TRUE, color = c(TRUE, "adjustment")))))
   # (3) no crude twin at all: multinomial
   m <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
-                                color = c("OR", "adjustment")))
+                                color = c(TRUE, "adjustment")))
   testthat::expect_true(all(vapply(m[vapply(m, is_fmt, logical(1))],
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
 })
@@ -192,7 +192,7 @@ test_that("z17 D2: gap_se is written without asking for the colour", {
   d <- gapb_data()
   plain  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE))
   asked  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE,
-                                     color = c("OR", "adjustment")))
+                                     color = c(TRUE, "adjustment")))
   gp <- get_gap_se(gapb_model_col(plain))
   ga <- get_gap_se(gapb_model_col(asked))
   testthat::expect_true(any(!is.na(gp)))          # would have been all-NA before z17
@@ -221,7 +221,7 @@ test_that("D1: every compared model shares its outcome's population, so every co
   d <- adjgap_inc_data()
   testthat::expect_true(any(is.na(d$inc)))                       # the fixture must actually bite
   t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods,
-                                family = "poisson", empirical = TRUE, color = c("OR", "adjustment")))
+                                family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
   fc <- grep("^m1|^m2", names(t), value = TRUE)
   testthat::expect_length(fc, 2L)
   # both models now solve their equations on the crude block's rows -> both carry a real gap SE (D5:
@@ -242,7 +242,7 @@ test_that("D1: every compared model shares its outcome's population, so every co
 test_that("D1: under the opt-in per-model drop, a model on other rows gets NO obs at all", {
   d <- adjgap_inc_data()
   t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
-                                family = "poisson", empirical = TRUE, color = c("OR", "adjustment")))
+                                family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
   fc <- grep("^m1|^m2", names(t), value = TRUE)
   # m1 is fitted on more rows than the observed block -> no observed value, hence no colour and no
   # test. It used to keep the colour while losing only the test.
@@ -253,12 +253,12 @@ test_that("D1: under the opt-in per-model drop, a model on other rows gets NO ob
   # ... and the choice is named
   testthat::expect_message(
     tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
-            family = "poisson", empirical = TRUE, color = c("OR", "adjustment")),
+            family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")),
     "drop_by_model")
 })
 
 test_that("a crude companion on another scale writes neither obs nor a gap SE (a z5 defect)", {
-  # reg_empirical_columns() ignores `effect` on the poisson branch, so effect = "ame" pairs an ADDITIVE
+  # reg_empirical_columns() ignores `effect` on the poisson branch, so effect = "marginal" pairs an ADDITIVE
   # count AME with the crude rate RATIO. z5 wrote that ratio into `obs` and scored the difference of
   # two scales; reg_same_estimand() now gates both.
   skip_if_not_installed("marginaleffects")
@@ -266,15 +266,15 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   # (tvhours is over-dispersed -> reg_fit warns and phi-scales; irrelevant here, and suppressed so the
   #  assertion is about the estimand mismatch alone)
   t <- suppressWarnings(suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
-                                                 effect = "ame", empirical = TRUE,
-                                                 color = c("diff", "adjustment"))))
+                                                 effect = "marginal", empirical = TRUE,
+                                                 color = c(TRUE, "adjustment"))))
   x <- gapb_model_col(t)
   testthat::expect_identical(get_scale(x), "raw_diff")   # a count AME, in the outcome's own units
   testthat::expect_true(all(is.na(get_obs(x))))
   testthat::expect_true(all(is.na(get_gap_se(x))))
   # the coefficient path on the same data DOES match scales, so it keeps both
   t2 <- suppressWarnings(suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
-                                                  empirical = TRUE, color = c("OR", "adjustment"))))
+                                                  empirical = TRUE, color = c(TRUE, "adjustment"))))
   testthat::expect_false(all(is.na(get_obs(gapb_model_col(t2)))))
   testthat::expect_false(all(is.na(get_gap_se(gapb_model_col(t2)))))
 })
@@ -293,7 +293,7 @@ test_that("`force_policy` is a predicate on the column, not on the measure", {
   # no gap_se -> `ignore`, whatever was asked for
   testthat::expect_identical(pol(suppressMessages(tab_reg(
     d, "married", c("race", "party3"), family = "binomial", empirical = TRUE,
-    color = c("OR", "adjustment"), color_signif = "guaranteed_effect"))), "ignore")
+    color = c(TRUE, "adjustment"), color_signif = "guaranteed_effect"))), "ignore")
   # with no column to ask, the caller's policy stands (the accessor must not force on a NULL)
   testthat::expect_identical(
     tabxplor:::measure_policy("adjustment", "grey_non_signif"), "grey_non_signif")
@@ -305,10 +305,10 @@ test_that("the same predicate fixes between_groups under method = 'profile'", {
   # descriptive reading.
   d  <- gapb_data()
   pr <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "binomial",
-                                 color = c("OR", "between_groups"),
+                                 color = c(TRUE, "between_groups"),
                                  color_signif = "grey_non_signif", method = "profile"))
   ig <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "binomial",
-                                 color = c("OR", "between_groups"),
+                                 color = c(TRUE, "between_groups"),
                                  color_signif = "ignore", method = "profile"))
   cn <- names(pr)[vapply(pr, is_fmt, logical(1))]
   for (nm in cn) {
@@ -367,7 +367,7 @@ test_that("the legend names the gap's own test, and only caveats a non-collapsib
   # the OR path: the caveat fires, and the background clause must NOT claim a greying that never
   # happened (the text channel is greyed by its Wald interval, the background is not gated at all)
   o <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "binomial",
-                                empirical = TRUE, color = c("OR", "adjustment"),
+                                empirical = TRUE, color = c(TRUE, "adjustment"),
                                 color_signif = "grey_non_signif"))
   lo <- leg(o)
   testthat::expect_true(any(grepl("non-collapsibility", lo, fixed = TRUE)))
@@ -400,7 +400,7 @@ test_that("D3: conf_level reaches the gap interval, not only the printed one", {
   d <- gapb_data()
   w <- function(cl) {
     t <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
-                                  empirical = TRUE, color = c("OR", "adjustment"),
+                                  empirical = TRUE, color = c(TRUE, "adjustment"),
                                   color_signif = "grey_non_signif", conf_level = cl,
                                   cleannames = FALSE))
     x <- t[["Model_RR"]]

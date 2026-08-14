@@ -11,9 +11,8 @@ tab_reg(
   split_var = NULL,
   wt = NULL,
   family = "auto",
-  effect = c("coefficient", "ame", "ame_ratio"),
-  at = c("average", "reference"),
-  exponentiate = TRUE,
+  effect = "coefficient",
+  measure = "auto",
   trials = NULL,
   empirical = FALSE,
   add_n = TRUE,
@@ -30,11 +29,12 @@ tab_reg(
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
   na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-  estimate_display = c("value", "ci", "prob", "ame"),
+  display = "value",
   cleannames = NULL,
   subtext = "",
   spread_models = TRUE,
-  .fit_cache = NULL
+  .fit_cache = NULL,
+  ...
 )
 }
 \arguments{
@@ -84,7 +84,8 @@ families work only with a character \code{predictors} (one model per outcome); a
 
 \strong{A binary outcome with \code{family = "poisson"} (modified Poisson).} Asking for \code{"poisson"} on a
 binary outcome is not a mistake and not a count model: it fits the \strong{modified Poisson regression}
-(Zou 2004), whose exponentiated coefficient is a \strong{risk ratio} (RR), not an odds ratio. It is
+(Zou 2004), whose exponentiated coefficient is a \strong{risk ratio} (RR), not an odds ratio --- the same
+table as \code{measure = "ratio"}, which names the measure rather than the distribution. It is
 strictly opt-in --- a binary outcome still auto-detects as \code{"binomial"}; you must name \code{"poisson"}.
 Reach for it when the outcome is \strong{common} (above roughly 10\%), where an odds ratio is much further
 from 1 than the risk ratio and is almost always narrated as if it were one ("twice as likely"), and
@@ -109,50 +110,67 @@ above 1) its CIs and p-values are \strong{identical to \code{"quasipoisson"}}, a
 the result matches a standard \code{glm(family = poisson)} z-interval — so a user comparing to a
 hand-fit Poisson \code{glm} is not surprised by wider intervals.}
 
-\item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
-native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
-effects} with the \strong{adjusted predicted probability} in parentheses (e.g. \verb{-8\%*** (16\%)}): a
-probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
-outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
-gaussian. The parenthetical is a \emph{marginal-standardized} prediction (\code{avg_predictions(variables=)}:
-the predictor set to each level for the whole sample, other covariates kept as observed, then
-averaged), so it is genuinely covariate-adjusted and coheres with the effect --- adjusted-\%(reference)
+\item{effect}{\strong{Which contrast} the table shows --- one of the two questions an estimand asks.
+\code{"coefficient"} (default) is the model's own conditional effect (the beta / odds ratio /
+incidence-rate ratio / cumulative odds ratio, "holding the other predictors constant").
+\code{"marginal"} is the \strong{average marginal effect}: the model's effect averaged over the observed
+covariate distribution --- a probability-scale, cross-model-comparable summary (Mood 2010) for
+logistic / multinomial / ordinal outcomes, the expected-count change for poisson, the
+coefficient itself for gaussian. \code{"at_reference"} evaluates the same quantity \strong{at the reference
+profile} (every other predictor at its reference level / mean): the marginal effect at
+reference (MER), and for a \strong{multinomial} outcome the odds ratio of each outcome category
+\emph{versus the rest} at that profile. \code{"marginal"} / \code{"at_reference"} need the \code{marginaleffects}
+package. Resolved \strong{per dependent} like \code{family} (scalar / vector / named vector).
+
+The parenthetical of a probability-scale marginal cell is a \emph{marginal-standardized} prediction
+(\code{avg_predictions(variables=)}: the predictor set to each level for the whole sample, other
+covariates kept as observed, then averaged), so it is genuinely covariate-adjusted and coheres
+with the effect --- adjusted-\%(reference) + AME(level) equals adjusted-\%(level). Read it as a
+standardized comparison ("holding the measured covariates' distribution fixed"), not a
+manipulation. Note the reference profile can be an unusual baseline (e.g. a factor's first
+level = \code{"No answer"}).}
+
+\item{measure}{\strong{Which effect measure} --- the other question. \code{"auto"} (default) takes the
+family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a coefficient
+for a linear model; a difference for a marginal contrast). The full word is the canonical
+spelling and the discipline's acronym is an accepted synonym, so the argument teaches the
+concept while the column header keeps the acronym:
 \itemize{
-\item AME(level) equals adjusted-\%(level). Read it as a standardized comparison ("holding the measured
-covariates' distribution fixed"), not a manipulation. Requires the \code{marginaleffects} package. A
-multinomial / ordinal outcome gets one AME column per outcome category.
+\item \code{"odds_ratio"} (\code{"OR"}) --- the odds ratio of a logit / multinomial / ordinal fit.
+\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"MR"}) --- a \strong{risk} ratio on a binary outcome (the modified
+Poisson, Zou 2004: a log link with robust standard errors), an \strong{incidence-rate} ratio on a
+count, a \strong{ratio of adjusted means} on a continuous one (Poisson pseudo-maximum-likelihood,
+Santos Silva & Tenreyro 2006). Reach for it when the outcome is \strong{common}: an odds ratio is
+then much further from 1 than the risk ratio and is almost always narrated as if it were one
+("twice as likely"), and unlike an odds ratio a risk ratio stays comparable \strong{across nested
+models} (an odds ratio is non-collapsible --- it moves when you add a covariate even if that
+covariate is not a confounder).
+\item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- a linear coefficient on a continuous outcome; on a
+\strong{binary} one the \strong{risk difference} in percentage points, from an identity-link
+(additive-risk) fit with robust standard errors. The identity link is unbounded, so it can
+fail to converge: the linear probability model then takes over, with a message, and the footer
+says which one ran.
+\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same fit, \strong{un-exponentiated}:
+coefficients on the model's own link scale. Bare \code{"log"} logs the family's default measure;
+the precise spellings pin which (so \code{"log_risk"} is the modified-Poisson fit, logged).
 }
 
-\code{"ame_ratio"} is the same quantity as a \strong{ratio} instead of a difference: the \strong{marginal risk
-ratio} (RR), i.e. the ratio of those adjusted predicted probabilities, with the adjusted
-probability again in parentheses (e.g. \verb{0.62*** (32\%)}). Its cell is coherent by construction, the
-multiplicative twin of the AME identity --- adjusted-\%(reference) * RR(level) equals
-adjusted-\%(level). Reach for it for the same reason as the modified Poisson (see \code{family}): with a
-\strong{common} outcome an odds ratio is not a risk ratio and should not be narrated as one, and unlike
-the odds ratio a risk ratio stays comparable \strong{across nested models}. The two routes answer
-slightly different questions --- \code{ame_ratio} gives a \strong{marginal} (population-averaged) risk ratio
-from the familiar logistic fit and can never predict a probability above 1, while
-\code{family = "poisson"} gives a \strong{conditional} one; on real data they agree closely. Standard errors
-are the delta-method interval on the log ratio (design-based when the model is weighted), and the
-observed companion is the crude risk ratio \code{Obs_RR} with a Katz interval --- the same estimand.
-Requires \code{marginaleffects}; \strong{probability-scale outcomes only} (binomial / multinomial / ordinal),
-since a ratio of adjusted means or counts has no such interpretation. One caveat worth knowing:
-the estimate is standardized to the covariate distribution of the sample at hand, so under
-\code{split_var} each group standardizes to \strong{its own} subpopulation.}
+Resolved \strong{per dependent} like \code{family}. \code{effect} and \code{measure} are orthogonal: a \emph{conditional}
+ratio is a different \strong{fit}, a \emph{marginal} one a different \strong{estimator}, and both land on the
+same stored scale. Call \code{\link[=reg_measures]{reg_measures()}} on your outcome to see what it offers, with the reason
+whenever something is not available.
 
-\item{at}{Where the profile-conditional quantities are evaluated (needs \code{marginaleffects}).
-\code{"average"} (default) is the sample average (the AME / adjusted prediction over the data).
-\code{"reference"} evaluates at the \strong{reference profile} --- every other predictor held at its
-reference (factor first level, numeric mean): for \code{effect = "ame"} this gives the marginal effect
-\emph{at reference} (MER) with the adjusted prediction there; for a \strong{multinomial} \code{effect = "coefficient"} it gives the odds ratio of each outcome category \emph{versus the rest} at that profile
-(one column per category). It has no effect on ordinary coefficients (they are profile-independent).
-Note the reference profile can be an unusual baseline (e.g. a factor's first level = \code{"No answer"}).}
+Two caveats worth knowing. A conditional risk ratio and a marginal one answer slightly different
+questions --- the marginal one is population-averaged and can never predict a probability above
+1 --- though on real data they agree closely; and a marginal estimate is standardized to the
+covariate distribution at hand, so under \code{split_var} each group standardizes to \strong{its own}
+subpopulation.
 
-\item{exponentiate}{Logical. \code{TRUE} (default) exponentiates coefficients into ratios (odds ratios
-for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
-automatically leaving gaussian linear betas on their raw scale. \code{FALSE} keeps every coefficient on
-the coefficient (log / linear) scale. Ignored when \code{effect = "ame"} (marginal effects are always
-on the response scale).}
+\strong{How this is called elsewhere.} \code{measure = "ratio"} on a binary outcome is Stata's
+\verb{binreg y x, rr}, \code{glm(family = binomial("log"))} or the modified Poisson, and
+\code{marginaleffects}' \code{comparison = "ratio"} on the marginal path; \code{measure = "log"} is
+\code{exponentiate = FALSE} in broom / parameters / gtsummary; \code{effect = "marginal"} is
+\code{avg_comparisons()}.}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
@@ -184,7 +202,7 @@ categorical predictor under every family except ordinal) it has a closed form an
 directly; otherwise it is a real fit, so the crude column shares the model's family, link,
 confidence-interval method and \code{multiplier} by construction. The only outcomes left with no
 observed counterpart at all are the compound-\code{formula} escape hatch (there is no predictor
-structure to be crude about) and, for \code{effect = "ame"}, a \emph{weighted} 3+ level outcome (no
+structure to be crude about) and, for a marginal contrast, a \emph{weighted} 3+ level outcome (no
 \code{marginaleffects} method).
 
 By design every crude quantity is computed on \strong{exactly the same complete-case population as the
@@ -236,15 +254,16 @@ Constant row shows the model N. Continuous predictors are left blank: on a listw
 their count is the model N for every one of them. Unlike \code{\link[=tab]{tab()}}'s \code{add_n}, this is a real column
 rather than a display option, because only the model frame knows the counts.}
 
-\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
-sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
-\code{color = FALSE} turns colouring off for every column (model and empirical). Power users may pass a
-measure string (\code{"OR"}, \code{"diff"}, \code{"ratio"}, \code{"no"}) to override. \code{color_signif} is the
-significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
+\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) grades each cell
+on \strong{its own scale} --- the ladder follows what the column estimates (\code{measure}), so it is never
+asked for separately; \code{color = FALSE} turns colouring off for every column (model and empirical).
+\code{color_signif} is the significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
 
-Two measures are \strong{specific to regression tables}, and both are meant for the \emph{background}
-channel so the text keeps showing the effect size — \code{color = c("OR", "adjustment")} answers
-"how strong is this effect?" and "how much did the model change it?" in one glance:
+What is left to choose is what each effect is compared \strong{to}, and both such measures are meant
+for the \emph{background} channel so the text keeps showing the effect size. \code{color} is positional,
+\code{c(text, background)}, and \code{TRUE} in the text slot means "the column's own scale" --- so
+\code{color = c(TRUE, "adjustment")} answers "how strong is this effect?" and "how much did the model
+change it?" in one glance:
 \itemize{
 \item \code{"adjustment"} — how far each \strong{modelled} effect sits from its \strong{observed} (crude,
 unadjusted) counterpart, i.e. what adjusting for the other predictors did to it. It turns
@@ -284,19 +303,19 @@ or a design it is design-based (strata, clusters and FPC respected).
 }
 
 The \code{"adjustment"} test is only computed where a zero gap really means "no confounding" — that is,
-on a \strong{collapsible} effect measure: an average marginal effect (\code{effect = "ame"}), a marginal risk
-ratio (\code{effect = "ame_ratio"}), a risk ratio (\code{family = "poisson"} on a binary outcome), an
+on a \strong{collapsible} effect measure: an average marginal effect (\code{effect = "marginal"}), a marginal risk
+ratio (\verb{effect = "marginal", measure = "ratio"}), a conditional risk ratio (\code{measure = "ratio"}), an
 incidence-rate ratio, or a linear β. A \strong{conditional odds ratio} is not collapsible: adjusting it
 moves it away from 1 even when the extra variable is independent of the exposure, so at survey
 sizes every row would test "significant" for a reason that is not confounding. There the colours
 stay descriptive, \code{color_signif} is ignored, and \code{tab_reg()} says so once. The test is also skipped
-when the two estimates cannot be compared cell by cell: at \code{at = "reference"}, and under
+when the two estimates cannot be compared cell by cell: at \code{effect = "at_reference"}, and under
 \code{na = "drop_by_model"} when a compared model's complete cases differ from the observed columns'
 (there the observed value is withheld altogether, so nothing is coloured either).
 
 That ruling covers the \strong{3+ level outcomes} too, and it is the reason they behave as they do: a
 multinomial or ordinal \emph{coefficient} is a conditional odds ratio, so those columns show the
-observed effect but carry no test. Their \strong{marginal} paths (\code{effect = "ame"} / \code{"ame_ratio"}) are
+observed effect but carry no test. Their \strong{marginal} paths (\code{effect = "marginal"}) are
 collapsible and do get one, per outcome category.
 
 Two things to keep in mind. A difference between two groups, or before and after adjustment, is a
@@ -319,7 +338,7 @@ this effect", not as "this variable is a confounder". For a formal treatment of 
 adjusted difference see Clogg, Petkova & Haritou (1995) and Allison's (1995) comment; for nested
 logit models, where part of the change is rescaling rather than confounding, see the KHB
 decomposition (Karlson, Holm & Breen 2012; Kohler, Karlson & Holm 2011). The collapsible routes
-this function offers (\code{effect = "ame"} / \code{"ame_ratio"}, \code{family = "poisson"}) are what the
+this function offers (\code{effect = "marginal"}, \code{measure = "ratio"}) are what the
 literature calls \strong{marginal standardization} (g-computation).
 
 The gap test uses the \strong{robust (sandwich)} variance on both sides, which is what a comparison of
@@ -332,7 +351,7 @@ difference, unweighted \emph{n} under \code{wt}).
 predicts the outcome moves it away from 1 even with no confounding at all (about +8\% in a
 simulation where the covariate is independent of the exposure — the same size as the first
 colour step). So part of an OR gap is arithmetic, not confounding. The collapsible comparisons
-are \code{effect = "ame"} / \code{"ame_ratio"} (marginal effects), \code{family = "poisson"} on a binary
+are \code{effect = "marginal"} (marginal effects), \code{measure = "ratio"} on a binary
 outcome (risk ratios) and a gaussian beta; on those the gap is confounding by the adjustment
 set. The legend says so on the odds-ratio path, and it is why the significance test above is
 computed only on the collapsible scales.}
@@ -448,14 +467,18 @@ get no observed effect at all (no \code{obs}, no \code{color = "adjustment"}, no
 distance between two such estimates is listwise deletion rather than adjustment.
 \code{"drop_all"} shares one population across the whole call, all outcomes included.}
 
-\item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
-estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
-family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
-(\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
-\code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
-\code{"ci"} otherwise, with a message). Note \code{estimate_display = "ame"} \emph{adds} an AME beside the odds
-ratio, whereas \code{effect = "ame"} makes the whole column an AME (probability scale); the two are
-different and, when both are set, \code{effect = "ame"} wins and \code{estimate_display} is reset to \code{"value"}.}
+\item{display}{What each effect cell shows, mirroring \code{\link[=tab]{tab()}}'s display grammar. \code{"value"}
+(default) the plain estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket
+(\verb{2.34 [1.20; 4.50]}, any family); \code{"prob"} folds the model-adjusted predicted probability into
+the cell (\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). The last two
+are shorthands for the templates \code{"{or} ({pct})"} and \code{"{or} ({diff})"}, which you may write out
+instead; they need the \code{marginaleffects} package and apply to binomial coefficient models only
+(they degrade to \code{"ci"} otherwise, with a message).
+
+A template may ask for an \strong{auxiliary} quantity of the same fit; it never changes the fit or
+the estimand --- that is \code{measure}'s job alone. Note \code{display = "ame"} \emph{adds} an AME beside the
+odds ratio, whereas \code{effect = "marginal"} makes the whole column an AME; when both are set the
+column wins and \code{display} is ignored, with a message.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
@@ -497,8 +520,8 @@ The arguments fall into groups:
 \itemize{
 \item \strong{The model}: \code{data}, \code{dependent}, \code{predictors} (a character vector = one model; a named
 list = several models to compare), \code{family} (usually detected), \code{wt} (survey weights).
-\item \strong{What each cell shows}: \code{exponentiate}, \code{effect} (\code{"coefficient"} or average marginal
-effect \code{"ame"}), \code{estimate_display}, \code{empirical} (crude vs adjusted effect).
+\item \strong{What each cell shows}: \code{effect} (which contrast) x \code{measure} (which effect measure),
+\code{display} (the cell layout), \code{empirical} (crude vs adjusted effect).
 \item \strong{Colors & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level} --- as in \code{\link[=tab]{tab()}}.
 \item \strong{Comparisons & structure}: \code{reference} (baseline levels), \code{compare} / \code{baseline} (model
 comparison test), \code{split_var} (one table per group), \code{multiplier} (the unit a continuous
@@ -513,10 +536,10 @@ collinearity, proportionality), \code{shape} (the cure for a non-linearity), and
 be a vector -> one column per dependent; a \strong{named list} of predictor sets fits one model each ->
 one column per model (predictors absent from a model are left blank), for comparing specifications.
 
-\code{effect = "ame"} switches from the native coefficient to \strong{average marginal effects} with the
+\code{effect = "marginal"} switches from the native coefficient to \strong{average marginal effects} with the
 adjusted \strong{predicted probability} shown in parentheses (e.g. \verb{-8\%*** (16\%)}) -- a probability-scale,
 cross-model-comparable interpretation (Mood 2010), computed with the \code{marginaleffects} package.
-\code{at = "reference"} instead evaluates at a \strong{reference profile} (other predictors held at their
+\code{effect = "at_reference"} instead evaluates at a \strong{reference profile} (other predictors held at their
 reference level / mean): the marginal effect \emph{at reference}, or -- for a multinomial
 \code{effect = "coefficient"} -- the odds ratio of each outcome category \emph{versus the rest} at that profile.
 
@@ -590,7 +613,7 @@ per-cell \code{color = "between_groups"} colours. It is printed as a footer line
 row (a pooled test belongs to no single model column), and it costs one extra model fit.
 \code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
 linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
-\code{compare}) on the model \strong{coefficients} — so under \code{effect = "ame"} / \code{"ame_ratio"} the footer
+\code{compare}) on the model \strong{coefficients} — so under a marginal contrast the footer
 and the colours answer related but distinct questions, and the line says so. Multinomial and
 ordinal outcomes get no such test.
 
@@ -604,6 +627,20 @@ Weighted models show a reduced, survey-appropriate set of goodness-of-fit statis
 Three families of models are deliberately \strong{not} supported, and are unlikely to be: \strong{survival /
 Cox} models, \strong{mixed / multilevel} models, and pooling over \strong{multiply-imputed} datasets. Fit
 those with their own packages.
+}
+
+\section{Which estimands each outcome offers}{
+
+Generated from the package's own resolution table, so it cannot drift from what
+\code{tab_reg()} builds. Call \code{\link{reg_measures}()} on your outcome for the same
+table with its per-cell status.
+\itemize{
+\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_β}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_MR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_MR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_MR})
+\item \strong{binomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RR}); \code{effect = "coefficient", measure = "difference"} (\code{Model_RD}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
+\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_MR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_MR})
+\item \strong{multinomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
+\item \strong{ordinal} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
+}
 }
 
 \examples{
@@ -630,19 +667,24 @@ those with their own packages.
 # average marginal effects + adjusted predictions (needs the marginaleffects package):
 if (requireNamespace("marginaleffects", quietly = TRUE)) {
   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame")
-  # marginal effects at the reference profile (others at their reference level / mean):
+                family = "binomial", effect = "marginal")
+  # the same contrast at the reference profile (others at their reference level / mean):
   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame", at = "reference")
+                family = "binomial", effect = "at_reference")
   # the same quantity as a RATIO: marginal risk ratios beside the crude ones. With a common
   # outcome this is what a reader means by "x times more likely" -- an odds ratio is not.
   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame_ratio", empirical = TRUE)
+                family = "binomial", effect = "marginal", measure = "ratio", empirical = TRUE)
 }
-# modified Poisson (Zou 2004): a binary outcome + family = "poisson" gives conditional RISK
-# ratios with robust standard errors. Opt-in -- a binary outcome still defaults to logistic.
+# the CONDITIONAL risk ratio: measure = "ratio" on a binary outcome fits the modified Poisson
+# (Zou 2004), a log link with robust standard errors. Ask for the measure, not the distribution.
   tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
-                family = "poisson", empirical = TRUE)
+                measure = "ratio", empirical = TRUE)
+# ... and the risk DIFFERENCE, from an identity-link (additive-risk) fit:
+  tab_reg(reg_data, dependent = "married", predictors = c("race", "rincome"),
+                measure = "difference")
+# what this outcome can be modelled as, with the reason wherever it cannot:
+  reg_measures(reg_data, "married")
 # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
   tab_reg(reg_data, dependent = "party3", predictors = c("race", "age"),
                 family = "multinomial", reference = c(party3 = "3-Republican"))
@@ -666,6 +708,9 @@ Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies wi
 
 Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
 \emph{BMJ}, 326, 219. --- the \code{color = "between_groups"} test.
+
+Santos Silva, J. M. C. & Tenreyro, S. (2006). The log of gravity. \emph{The Review of Economics and
+Statistics}, 88(4), 641-658. --- \code{measure = "ratio"} on a continuous outcome.
 }
 \seealso{
 \code{\link[=forest_plot]{forest_plot()}} draws the finished table -- every effect with its interval, its stars and

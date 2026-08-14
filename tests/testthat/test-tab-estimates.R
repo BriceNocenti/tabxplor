@@ -38,7 +38,7 @@ test_that("fmt_scale_of() reads every column shape", {
   # regressions: one key per family x effect
   b  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   expect_identical(key(b, "Model_OR"), "odds_ratio")
-  bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE))
+  bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "log"))
   expect_identical(key(bl, mod_col(bl)), "log_coef")
   g  <- suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian"))
   expect_identical(key(g, mod_col(g)), "raw_diff")
@@ -68,8 +68,8 @@ test_that("the record carries the ladder, the SD and the secondary axis", {
   expect_true(is.finite(sg$sd_y))
   expect_equal(sort(sg$breaks[sg$break_dir > 0]), sort(c(0.2, 0.5, 0.8) * sg$sd_y))
 
-  # exponentiate = FALSE: the secondary axis is exp(), the ladder the logged odds_ratio one
-  bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE))
+  # measure = "log": the secondary axis is exp(), the ladder the logged odds_ratio one
+  bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "log"))
   sb <- tabxplor:::fmt_scale_of(bl[[mod_col(bl)]])
   expect_identical(sb$sec, "exp")
   expect_equal(sort(sb$breaks[sb$break_dir > 0]), sort(round(log(c(1.2, 1.5, 2, 4)), 1)))
@@ -204,7 +204,7 @@ test_that("the plotted estimate IS the number the table stores and prints", {
     or   = suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE)),
     beta = suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE)),
     logc = suppressMessages(tab_reg(d, "married", "race", family = "binomial",
-                                    exponentiate = FALSE, empirical = TRUE)),
+                                    measure = "log", empirical = TRUE)),
     irr  = suppressWarnings(suppressMessages(
              tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE))),
     mnl  = suppressMessages(tab_reg(d, "party3", "race", family = "multinomial")),
@@ -214,7 +214,7 @@ test_that("the plotted estimate IS the number the table stores and prints", {
     xt_o = tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE))
   if (requireNamespace("marginaleffects", quietly = TRUE))
     tabs$ame <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
-                                         effect = "ame", empirical = TRUE))
+                                         effect = "marginal", empirical = TRUE))
   n_checked <- 0L
   for (t in tabs) {
     e <- est(t, observed = "ci")
@@ -244,7 +244,7 @@ test_that("the gap band's containment IS the gap test", {
   skip_if_not_installed("survey")
   d <- te_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
-                                empirical = TRUE, color = c("OR", "adjustment")))
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- est(t)
   ok <- is.finite(e$gap_se)
   expect_gt(sum(ok), 3L)                                      # never vacuous
@@ -295,7 +295,7 @@ test_that("the colours are the table's own slots and hexes", {
 test_that("the gap slot comes from whichever channel carries the gap measure", {
   d <- te_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
-                                empirical = TRUE, color = c("OR", "adjustment")))
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- est(t)
   cd <- fmt_channel_codes(t[["Model_RR"]], tabxplor:::tx_plot_colors(NULL)$theme)
   expect_identical(e$gap_slot, cd$bg_slot[e$row])             # `adjustment` rides the background here
@@ -311,7 +311,7 @@ test_that("what = 'level' pairs the observed and adjusted percentages", {
   skip_if_not_installed("marginaleffects")
   d <- te_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
-                                effect = "ame", empirical = TRUE))
+                                effect = "marginal", empirical = TRUE))
   e <- est(t, what = "level")
   expect_setequal(unique(e$series), c("observed", "modelled"))
   expect_identical(unique(e$kind), "level")

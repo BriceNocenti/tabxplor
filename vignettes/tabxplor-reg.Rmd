@@ -124,13 +124,13 @@ gss_simple |>
 
 ### Average marginal effects (AME) of a logistic regression
 
-Another way to interpret a logistic regression is to use **average marginal effects** (AME) with `effect = "ame"` :
+Another way to interpret a logistic regression is to use **average marginal effects** (AME) with `effect = "marginal"` :
 
 - Instead of directly reading the modelised odd-ratio we can infer, from it, the average difference of percentage of each level compared to the reference.
 - Here `Model_AME` reads like this : "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate 19.8 points lower, on average."
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE)
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "marginal", empirical = TRUE)
 ```
 
 Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
@@ -172,12 +172,12 @@ means it moves when you add a covariate **even if that covariate is not a confou
 tabxplor gives you two ways to get a **risk ratio** (RR), and on real data they agree closely.
 
 The first keeps the familiar logistic model and just asks for the effect as a ratio, with
-`effect = "ame_ratio"`. Each cell shows the risk ratio and, in parentheses, the same adjusted predicted
+`effect = "marginal", measure = "ratio"`. Each cell shows the risk ratio and, in parentheses, the same adjusted predicted
 probability as the AME column:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
-        effect = "ame_ratio", empirical = TRUE)
+        effect = "marginal", measure = "ratio", empirical = TRUE)
 ```
 
 `Model_RR` now reads plainly: "comparing Black and White respondents alike in income, age and religion,
@@ -195,7 +195,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
 ```
 
 This is strictly opt-in — a binary outcome still defaults to logistic — and tabxplor tells you when it
-switches. Which to choose? `effect = "ame_ratio"` keeps the well-behaved logistic fit and can never
+switches. Which to choose? `effect = "marginal", measure = "ratio"` keeps the well-behaved logistic fit and can never
 predict a probability above 100%; `family = "poisson"` is the form epidemiologists will recognise, and it
 is unaffected by the caveat that a marginal ratio is standardized to the sample at hand (so under
 `split_var` each group standardizes to its own subpopulation). Neither is for prediction: with the
@@ -219,7 +219,7 @@ showing the effect size, so one look answers both questions:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 Text colour = how strong the adjusted odds ratio is. Background = how far it sits from the observed
@@ -256,14 +256,14 @@ by 0.3% and the marginal effect by essentially nothing. Eight percent is about t
 colour step, so on the odds-ratio scale a faint background colour may be arithmetic rather than
 confounding. The legend of an exported table says so.
 
-The comparisons that *are* clean are the ones this vignette has already introduced: `effect = "ame"`
-and `effect = "ame_ratio"` (marginal effects), `family = "poisson"` on a binary outcome (risk ratios),
+The comparisons that *are* clean are the ones this vignette has already introduced: `effect = "marginal"`
+and `effect = "marginal", measure = "ratio"` (marginal effects), `measure = "ratio"` on a binary outcome (risk ratios),
 and the beta of a linear regression. On those scales the gap is confounding by the variables you added
 — nothing else. If reading confounding is the point of your table, prefer one of them:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
-        effect = "ame_ratio", empirical = TRUE, color = c("OR", "adjustment"))
+        effect = "marginal", measure = "ratio", empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 ### Is the gap bigger than noise?
@@ -276,10 +276,10 @@ background now means "the model really changed this effect":
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         family = "poisson", empirical = TRUE,
-        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+        color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-Here `family = "poisson"` on a binary outcome gives **risk ratios**, one of the clean scales from the
+Here `measure = "ratio"` on a binary outcome gives **risk ratios** (the modified Poisson), one of the clean scales from the
 previous section. Text colour = how strong the adjusted risk ratio is. Background = how far it sits
 from the observed one, greyed out when that distance could be chance. Hovering a cell in the html table
 gives the exact numbers: the observed effect, the size of the gap, its confidence interval and its
@@ -302,7 +302,7 @@ gap between the two numbers is far too big to be luck: that difference *was* exp
 Notice that the odds ratios move too — including for Black respondents, where the risk ratio says
 nothing happened. That is the non-collapsibility of the previous section, showing up as a phantom
 "change". It is why `color_signif` is **not applied to plain odds ratios**: `tab_reg()` leaves those
-colours descriptive and says so once, pointing at `effect = "ame"`, `effect = "ame_ratio"` or
+colours descriptive and says so once, pointing at `effect = "marginal"`, `effect = "marginal", measure = "ratio"` or
 `family = "poisson"`.
 
 The greying earns its keep on smaller samples. With 20 000 respondents almost every visible move is
@@ -313,7 +313,7 @@ set.seed(1)
 small <- gss_simple[sample(nrow(gss_simple), 2000), ]
 tab_reg(small, "married", c("race", "rincome", "relig"),
         family = "poisson", empirical = TRUE,
-        color = c("OR", "adjustment"), color_signif = "grey_non_signif")
+        color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
 ### Three ways to get this wrong
@@ -374,7 +374,7 @@ effect worth reporting, but adjustment moved it a lot, and significantly.
 
 Two more details. The direction is measured from the null, so a protective effect pulled toward 1
 colours like a risky one pulled toward 1. And the test needs both estimates computed on the same
-people: at `at = "reference"`, or under `na = "drop_by_model"` when a compared model drops different
+people: at `effect = "at_reference"`, or under `na = "drop_by_model"` when a compared model drops different
 missing rows than the observed columns, the comparison is not made at all. (By default it always is —
 see just below.)
 
@@ -409,7 +409,7 @@ Relative risk ratios may be quite difficult to read because they are relative to
 Most of the time, average marginal effects (AME) are easier to interpret, because they make the second reference level disappear, and directly modelise, for each level of the dependent variable, difference of percentages of each predictor compared to their reference level (a less abstract quantity than odds ratios). 
 
 ```{r}
-tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE) # |> tab_export()
+tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "marginal", empirical = TRUE) # |> tab_export()
 ```
 
 With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips, available at mouse hover of a cell.
@@ -433,7 +433,7 @@ Income here is an **ordered** factor, so it is fit as a proportional-odds model.
 
 ```{r}
 tab_reg(gss_simple, "rincome", c("race", "relig"),
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 Read a row left to right: the observed cumulative odds ratio, then the modelled one, with the **background** colouring the gap between them. Being Black is associated with lower income (`1/1.54` observed), and adjusting for religion barely moves it (`1/1.51`) — the association is not explained by religion. Compare Buddhist/Hinduist, where the effect *grows* once race and the other groups are held constant: adjustment can strengthen an association as easily as it can wash one away.
@@ -444,7 +444,7 @@ A multinomial model already spends one column per outcome category, so a second 
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        empirical = TRUE, color = c("OR", "adjustment"))
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 `0.41 (0.41)` means "modelled 0.41, observed 0.41" — nothing to see. `0.08 (0.10)` means adjustment pulled the effect a little toward 1. The footer says which number is which, and hovering a cell (in an HTML export) adds the crude percentages behind it.
@@ -457,7 +457,7 @@ With `trials =`, the observed columns are the average share of "yes" answers exp
 gss_simple |>
   score_from_lv1("score", vars_list = c("married", "income25k")) |>
   tab_reg("score", c("race", "age"), family = "binomial", trials = 2,
-          empirical = TRUE, color = c("OR", "adjustment"))
+          empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 ### How to read it — and how not to
@@ -468,11 +468,11 @@ Three habits are worth acquiring.
 
 **Do not read a gap as "the true effect minus the biased one".** Both numbers are estimates. If the crude one is based on few people it will wander, and the gap wanders with it. That is what the greying is for (below).
 
-**Watch the scale, especially with odds ratios.** An odds ratio changes when you add a predictor *even if that predictor has nothing to do with the exposure* — a purely mathematical property called non-collapsibility. So on the odds-ratio columns above, part of every gap is arithmetic, not confounding, and the colours stay purely descriptive: they show the size of the move without claiming it is significant. If you want a gap you can test, ask for a collapsible measure — a risk ratio (`family = "poisson"` on a binary outcome) or a marginal effect (`effect = "ame"`), which is also the friendlier quantity to explain:
+**Watch the scale, especially with odds ratios.** An odds ratio changes when you add a predictor *even if that predictor has nothing to do with the exposure* — a purely mathematical property called non-collapsibility. So on the odds-ratio columns above, part of every gap is arithmetic, not confounding, and the colours stay purely descriptive: they show the size of the move without claiming it is significant. If you want a gap you can test, ask for a collapsible measure — a risk ratio (`measure = "ratio"`) or a marginal effect (`effect = "marginal"`), which is also the friendlier quantity to explain:
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        effect = "ame", empirical = TRUE, color = c("diff", "adjustment"),
+        effect = "marginal", empirical = TRUE, color = c(TRUE, "adjustment"),
         color_signif = "grey_non_signif")
 ```
 
@@ -484,12 +484,12 @@ The `"adjustment"` colour always shows the **size** of the gap. Whether it also 
 
 | what you asked for | observed effect | gap tested? |
 |---|---|---|
-| `effect = "ame"` / `"ame_ratio"`, any family | yes | **yes** |
-| `family = "poisson"` on a binary outcome (risk ratios) | yes | **yes** |
+| `effect = "marginal"` / `"ame_ratio"`, any family | yes | **yes** |
+| `measure = "ratio"` on a binary outcome (risk ratios) | yes | **yes** |
 | Poisson incidence-rate ratios, linear β | yes | **yes** |
 | odds ratios — binomial, multinomial, ordinal cumulative | yes | no (non-collapsible) |
 | a compound `formula =` | no | no |
-| a *weighted* 3+ level outcome with `effect = "ame"` | yes | no (`marginaleffects` has no method) |
+| a *weighted* 3+ level outcome with `effect = "marginal"` | yes | no (`marginaleffects` has no method) |
 
 Where there is no test, `color_signif` is ignored for that channel and the colours read descriptively — the table never pretends to a significance it does not have.
 
@@ -607,7 +607,7 @@ means "this really is a different effect, not just noise":
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
-        color = c("OR", "between_groups"), color_signif = "grey_non_signif")
+        color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
 Text colour = how strong the effect is inside that group. Background = how far it sits from the first
@@ -660,20 +660,20 @@ Two details worth knowing. The significance **stars** in the cells keep reading 
 p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip.
 And the footer's aggregated test is a likelihood-ratio test (an F test for linear and quasi models, a
 design-based Wald test when you supply survey weights — the same rule as `compare =` below) computed on
-one extra pooled model, on the **coefficients**: with `effect = "ame"` the cells show marginal effects
+one extra pooled model, on the **coefficients**: with `effect = "marginal"` the cells show marginal effects
 while the footer tests the coefficients, two related but distinct questions, and the line says so.
 
 ## Fine-tuning the display, and scaling a predictor
 
 A few arguments change *what each cell shows*, or *how a predictor is scaled* — without changing the model itself.
 
-**`estimate_display`** folds a second quantity into each estimate cell. `"ci"` shows the confidence interval beside every estimate (any family):
+**`display`** folds a second quantity into each estimate cell. `"ci"` shows the confidence interval beside every estimate (any family):
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), estimate_display = "ci")
+tab_reg(gss_simple, "married", c("race", "age"), display = "ci")
 ```
 
-For a logistic model you can instead fold the model-adjusted predicted probability (`"prob"`) or the average marginal effect (`"ame"`) into the odds-ratio cell (these two need the `marginaleffects` package). Note the difference: `estimate_display = "ame"` *keeps* the odds-ratio column and adds the AME beside it, whereas `effect = "ame"` (seen above) turns the **whole** column into an AME.
+For a logistic model you can instead fold the model-adjusted predicted probability (`"prob"`) or the average marginal effect (`"ame"`) into the odds-ratio cell (these two need the `marginaleffects` package). Note the difference: `display = "ame"` *keeps* the odds-ratio column and adds the AME beside it, whereas `effect = "marginal"` (seen above) turns the **whole** column into an AME.
 
 **`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row label says which:
 
@@ -689,10 +689,10 @@ tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 
 Everything scales together — the estimate, its interval, the observed `Obs_*` companion and the model-versus-observed comparison — and the p-value never changes. Two things worth knowing: because the default is not 1, a continuous predictor's `Model_OR` will **not** match `exp(coef(glm(...)))` unless you ask for `multiplier = 1`; and the standard deviation is measured once, on the predictors' complete cases, so the same variable keeps the same unit across several outcomes, compared models and `split_var` groups.
 
-**`at = "reference"`** evaluates the effect at the reference profile (the abstract population combined the reference level of all predictors) instead of averaging it over the sample — a marginal effect *at the reference* for `effect = "ame"`, or a "category vs. the rest" odds ratio at that profile for a multinomial model:
+**`effect = "at_reference"`** evaluates the effect at the reference profile (the abstract population combined the reference level of all predictors) instead of averaging it over the sample — a marginal effect *at the reference* for `effect = "marginal"`, or a "category vs. the rest" odds ratio at that profile for a multinomial model:
 
 ```{r, eval = FALSE}
-tab_reg(gss_simple, "married", c("race", "age"), effect = "ame", at = "reference")
+tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
 ```
 
 
