@@ -732,6 +732,32 @@ testthat::test_that("levels = 'first' keeps NA rows in the row_var (na = 'keep')
   testthat::expect_true("NA" %in% as.character(t[[1]]))          # the NA row_var group stays
 })
 
+# Phase 19d-tail: under `levels = "first"` the table SHOWS one level against the merged rest, so its
+# odds ratio is the TRUE binary one -- that level against everything else, not a level-vs-ref2 ratio.
+# That is what makes showing a single column meaningful. tab() merges before the leaf; the jamovi
+# path defers the merge (the aggregate and the whole-table test must see every level), and the
+# surviving level is also `ref2`, so every column referenced ITSELF and `or` came out 1 everywhere --
+# invisible until 19d made the odds ratio unconditional. The leaf is told the col_var is shown
+# dichotomised and rebuilds the complement, so both paths land on the same number.
+testthat::test_that("levels = 'first' gives the true binary odds ratio, on both merge paths", {
+  gss  <- forcats::gss_cat
+  t    <- tab(gss, marital, race, pct = "row", levels = "first", cleannames = FALSE)
+  kept <- names(t)[[2]]
+  p    <- get_pct(t[[kept]])
+  ra   <- length(p)                                  # ref = "tot" -> the Total row, last
+  odds <- function(x) x / (1 - x)
+  testthat::expect_equal(as.numeric(get_or(t[[kept]])), as.numeric(odds(p) / odds(p[ra])))
+  # ... and it is NOT the degenerate self-reference the deferred path used to produce
+  testthat::expect_false(all(get_or(t[[kept]]) == 1))
+
+  # a genuinely 2-level col_var is the same statement, and its pre-19d value must not move
+  d <- dplyr::mutate(gss, bin = factor(ifelse(race == "White", "white", "other")))
+  b <- tab(d, marital, bin, pct = "row", levels = "first", cleannames = FALSE)
+  pb <- get_pct(b[[2]])
+  testthat::expect_equal(as.numeric(get_or(b[[2]])),
+                         as.numeric(odds(pb) / odds(pb[length(pb)])))
+})
+
 
 # ---- Phase 17a janitorial fixes: failing-first fixture ----
 

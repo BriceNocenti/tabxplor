@@ -916,7 +916,16 @@ finalize_color_tail <- function(result, color_spec, color_breaks = NULL, display
 tab_apply_display <- function(tabs, display) {
   if (is.null(display) || length(display) == 0L) return(tabs)
   ds <- display[[1]]
-  if (is.na(ds) || ds %in% c("", "no")) return(tabs)
+  # "auto" = "every column keeps the display it was built with", i.e. exactly what NULL / "" / "no"
+  # already mean. It is the jamovi ComboBox's idle value, which reached tab() only through the armed
+  # build (`.return_armed = TRUE` returns before this tail), so the two vocabularies silently differed
+  # by one token -- and any caller mirroring the jamovi options had to state the mapping itself.
+  if (is.na(ds) || ds %in% c("", "no", "auto")) return(tabs)
+  # A BARE token is the same request as its one-field template, so accept it: `display = "n"` reads
+  # better than `display = "{n}"`, and it is the spelling the jamovi ComboBox has always used --
+  # which is why the module had to keep its own writer, and why that writer stamped the literal
+  # "{or}" where this one normalises back to the bare `or` the pipeline itself writes.
+  if (ds %in% DISPLAY_BARE_TOKENS) ds <- paste0("{", ds, "}")
   ds <- if (identical(ds, "num_ci")) ds else validate_display_template(ds)
   missing_tok <- character()
   # WARNING: this must be a NAMED function, never an anonymous one written inside across(). dplyr
@@ -2771,8 +2780,13 @@ tab_transform <- function(ctx) {
   if (sum(col_vars_text) != 0) {
     text <- purrr::pmap(
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
-           pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text]),
-      function(.col_var, .digits, .na, .pct, .ref, .ref2) {
+           pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text],
+           # `levels = "first"` on THIS col_var: the table shows one level against the merged rest, so
+           # the leaf must build the odds ratio of that dichotomy (see tab_apply_reference). True on
+           # both paths -- tab() has already merged, jmvtab has not -- and the leaf picks which
+           # realisation applies, so the fact travels instead of being re-derived from the level count.
+           lv1[col_vars_text]),
+      function(.col_var, .digits, .na, .pct, .ref, .ref2, .lv1) {
         # Phase 19c: the LEAF is the stamping stage for every measure but contrib, whose per-cell
         # contributions only the test step can compute (measure_stage()). That single question
         # replaced the `color_diff_OR` recode; passing the measure straight through would make the
@@ -2787,7 +2801,7 @@ tab_transform <- function(ctx) {
           ref2 = r_pl$ref2, comp = r_pl$comp, totaltab = r_pl$totaltab, totaltab_name = totaltab_name,
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
-          comparison = comparison, or_ci = or_ci,
+          comparison = comparison, or_ci = or_ci, dichotomise = isTRUE(.lv1),
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
           .by_table = .by_table, inference = inference
         )
@@ -4247,7 +4261,7 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref, ref2, comp,
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
                        stars, color_signif, .fine, .by_table, inference,
-                       comparison = NA_character_, or_ci = FALSE) {
+                       comparison = NA_character_, or_ci = FALSE, dichotomise = FALSE) {
   # Phase 19d (KEY 8a): `OR` is gone from the leaf. The odds ratio is computed on EVERY row/col-%
   # table (measured free: the 2x2 it needs is four numbers the wide table already holds, in the same
   # tab_apply_reference() sweep that produces diff and ratio), so nothing here switches it on.
@@ -4676,7 +4690,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         # z14-ii: keyed on the object existing rather than on the basis, since it also carries the
         # DESIGN base -- byte-identical, `tabs_neff` having only ever existed under one of the two.
         tabs_neff = if (or_want_ci && exists("tabs_neff", inherits = FALSE)) tabs_neff else NULL,
-        conf_level = conf_level, stars = stars, degf = inference$degf
+        conf_level = conf_level, stars = stars, degf = inference$degf,
+        dichotomise = dichotomise
       )
       tabs_diff <- ref_res$diff
       tabs_mean <- ref_res$ratio
@@ -5011,7 +5026,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
                                 tabs_totn = NULL, tabs_neff = NULL, conf_level = 0.95, stars = FALSE,
-                                degf = Inf) {
+                                degf = Inf, dichotomise = FALSE) {
   # Phase 9d: the reference arithmetic (diff = cell - ref, ratio = cell / ref, rr / or) runs on a
   # plain numeric matrix via base-R sweep instead of the former per-cell data.table `:=` +
   # purrr::map_if -- byte-identical, ~100x faster on the isolated block (proven across 648 shapes:
@@ -5109,16 +5124,38 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
       ok_ref2 <- length(ridx0) != 0 && !is.na(ridx0) && ridx0 >= 1L && ridx0 <= k
       lv      <- which(nm != "Total")
       binary  <- length(lv) == 2L
+      # Phase 19d-tail: `levels = "first"` SHOWS one level against the merged rest, so the reader's
+      # col_var is a dichotomy and its odds ratio is the TRUE binary one -- that level against
+      # everything else -- which is the whole reason showing a single column makes sense. tab() merges
+      # before the leaf, so `binary` already catches it there; the jamovi path DEFERS the merge (the
+      # aggregate and the whole-table test must see every level) and the surviving level is ALSO
+      # `ref2`, so every column referenced itself and `or` came out 1 everywhere -- invisible until
+      # 19d made the odds ratio unconditional. `dichotomise` says the col_var is shown dichotomised;
+      # the length test picks which realisation applies, so the pre-merged path is untouched.
+      dich <- isTRUE(dichotomise) && !binary && length(lv) >= 3L
 
-      if (binary || ok_ref2) {
+      if (binary || ok_ref2 || dich) {
         ref_col_idx <- rep(if (ok_ref2) as.integer(ridx0) else NA_integer_, k)
         if (binary) { ref_col_idx[lv[1]] <- lv[2]; ref_col_idx[lv[2]] <- lv[1] }
-        RR <- P / P[, ref_col_idx, drop = FALSE]
+        Pref_col <- P[, ref_col_idx, drop = FALSE]
+        # The merged "rest" column does not exist yet on the deferred path -- it is materialised by the
+        # display drop. Build it: within a row base the complement of a level IS 1 - p, which is
+        # exactly the column the pre-merge would have produced (proven by the byte-identity lock
+        # against a plain tab(levels = "first")). The Total column keeps its ref2 index, as there.
+        if (dich) {
+          Pref_col[, lv] <- 1 - P[, lv, drop = FALSE]
+          # ... and those columns no longer reference a COLUMN, exactly as in the binary case. The
+          # index survives only to feed `refcols_vector` below, and leaving it pointing at ref2 would
+          # mark the kept level as the baseline where the pre-merged path does not.
+          ref_col_idx[lv] <- NA_integer_
+        }
+        RR <- P / Pref_col
         or_cells <- function(N) {
-          PN <- P * N
-          list(a = PN, b = PN[, ref_col_idx, drop = FALSE],
+          PN <- P * N; PrefN <- Pref_col * N
+          list(a = PN, b = if (dich) PrefN else PN[, ref_col_idx, drop = FALSE],
                c = (P * N)[ra, , drop = FALSE],
-               d = ((P * N)[ra, , drop = FALSE])[, ref_col_idx, drop = FALSE])
+               d = if (dich) PrefN[ra, , drop = FALSE]
+                   else ((P * N)[ra, , drop = FALSE])[, ref_col_idx, drop = FALSE])
         }
       } else {
         warning(paste0(

@@ -160,7 +160,10 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 15L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 16L   # bump on any store-shape change -> discard stale stores
+                            # 16 = Phase 19d-tail: the tier-3 TUPLE replaces `display` + `or` with the
+                            #     one `comparison` they both encoded. A stale tuple has the old keys,
+                            #     so every comparison would read as a mismatch (or, worse, match).
                             # 13 = Phase 19b (KEY 2): a tier-3 carrier's per-column `meta` list carries
                             #     `scale` + `pct_base` instead of `type` + `ci_type`, and gains
                             #     `ci_method`. A pre-13 carrier has the old names -> unusable.
@@ -523,10 +526,11 @@ jmvtab_cleannames_display <- function(tabs) {
 #' @noRd
 jmv_apply_display <- function(tabs, opts) {
   one <- function(tb) {
-    if (opts$display != "auto") {
-      tb <- dplyr::mutate(tb, dplyr::across(dplyr::where(is_fmt),
-                                            ~ set_display(., opts$display)))
-    }
+    # ONE writer, tab()'s own: it normalises a one-field template back to its bare token (so the
+    # retired `OR` option's "{or}" renders as the pipeline's `or`, 1/x form and reference annotation
+    # included -- this used to stamp the literal "{or}") and it writes only on genuine value cells,
+    # leaving the p-value / blank / total-marker rows their own token. "auto" is a no-op there too.
+    tb <- tab_apply_display(tb, opts$display)
     if (opts$ci == "cell" && opts$pct %in% c("row", "col")) {
       tb <- dplyr::mutate(tb, dplyr::across(
         dplyr::where(is_fmt) &
@@ -724,9 +728,15 @@ jmv_tab3_tuple <- function(opts, ci_resolved, arming, geom, or_route) {
   # `OR` is a shim that rewrites all three, so two different `OR` values could share a tuple while the
   # armed build used different ones -- measured as a cached table displaying "{or}" where a rebuild
   # displayed the percentage.
+  # Phase 19d-tail: what the tuple needs from `display` is the COMPARISON it names, not the string.
+  # `.return_armed = TRUE` returns before tab_apply_display(), so the armed carrier never carries a
+  # display -- it is re-applied at tier 4 on every build. The only way `display` reaches the carrier
+  # is by naming the comparison the table is built on (the 19d chain), which is a four-value fact.
+  # Keying the raw string made every display toggle -- the second most frequent jamovi interaction --
+  # rebuild the whole table, and it also duplicated the `or` flag, which was that same fact tested
+  # for one of its values. One key, and the display combobox is a re-paint again.
   list(arming = arming, geom = geom,
-       or = identical(display_comparison(or_route$display), "odds_ratio"),
-       display = or_route$display %||% NA_character_,
+       comparison = display_comparison(or_route$display),
        ref = or_route$ref, ref2 = or_route$ref2,
        comp = opts$comp, ci = ci_resolved, conf_level = opts$conf_level,
        ci_method = jmv_ci_method(opts), stars = opts$stars)
@@ -755,7 +765,7 @@ jmv_tab3_measure <- function(color) {
 #' @keywords internal
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys <- c("arming", "geom", "or", "display", "comp", "ci", "conf_level", "ci_method", "stars")
+  keys <- c("arming", "geom", "comparison", "comp", "ci", "conf_level", "ci_method", "stars")
   identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
     !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
     identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
@@ -763,7 +773,8 @@ jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
     # table whose comparison owns a ratio (Katz) or odds-ratio (Woolf) interval cannot be re-ref'd.
     # `geom` is in the tuple, so this also guarantees old and new agree.
     identical(new_tuple$geom, "diff") &&
-    isFALSE(new_tuple$or)                                             # an odds-ratio table -> rebuild
+    # an odds-ratio table -> rebuild (its `or` sweep and its Woolf interval are not the re-ref's)
+    !identical(new_tuple$comparison, "odds_ratio")
 }
 
 # Structural gate for jmv_tab3_reref(): the STORE-KEY-invariant conditions (pct / row_var count /
@@ -840,24 +851,38 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   totrow_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$row_kind == "total"
   tottab_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_tottab
 
-  ref_res <- tab_apply_reference(
-    tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = tuple$ref2, comp = comp,
-    or_compare = TRUE, pct = "row", tab_row_names = label_cols,
-    tab_vars = rlang::syms(tab_vars), row_var = rlang::sym(row_var),
-    tottab_vector = tottab_vector, totrow_vector = totrow_vector,
-    cols = stats::setNames(rep(TRUE, length(pct_cols)), pct_cols))
-
-  # --- write diff/ratio (pct cols) + in_refrow / ref attr (ALL cols) into the carrier ------------
+  # ONE SWEEP PER col_var, exactly as the build runs one leaf per col_var (tab_transform's pmap).
+  # `diff` and `ratio` are column-wise, so pooling every col_var's levels into one sweep gave the
+  # right answer and this used to be a single call. The ODDS RATIO is not: its 2x2 is (this level) x
+  # (the ref2 level OF THE SAME VARIABLE), so a pooled sweep read `nm` as one variable's level set and
+  # compared a partyid level against a race one. Measured on a two-col_var table as ORs in the tens
+  # against a rebuild's 1.00 -- latent since 19d made the odds ratio unconditional (before, the re-ref
+  # wrote no `or` at all), and invisible because the test that covers it was silently building a
+  # one-col_var table. Same fact as the leaf's own `dichotomise`: `or` is the only per-cell field
+  # whose value depends on which OTHER columns are present.
   ref_1 <- switch(as.character(ref_v), "no" = "", "tot" = "tot", as.character(ref_v))
   inref <- logical(length(n_field))                             # ref = "tot" -> all FALSE (tab_plain L3062)
-  if (!identical(ref_v, "tot")) inref[] <- ref_res$refrows
-  for (nm in pct_cols) {
-    carrier$fmt[[nm]]$frame$diff  <- ref_res$diff[[nm]]
-    carrier$fmt[[nm]]$frame$ratio <- ref_res$ratio[[nm]]
-    # Phase 19d: the odds ratio is a reference-DEPENDENT field on every row/col-% table now, so the
-    # re-ref has to refresh it too -- otherwise a reference toggle left the cached `or` describing
-    # the OLD baseline while diff/ratio described the new one.
-    if (!is.null(ref_res$or)) carrier$fmt[[nm]]$frame$or <- ref_res$or[[nm]]
+  by_cv <- split(pct_cols, vapply(pct_cols,
+                                  function(nm) carrier$fmt[[nm]]$meta$col_var %||% "",
+                                  character(1)))
+  for (grp in by_cv) {
+    ref_res <- tab_apply_reference(
+      tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = tuple$ref2, comp = comp,
+      or_compare = TRUE, pct = "row", tab_row_names = label_cols,
+      tab_vars = rlang::syms(tab_vars), row_var = rlang::sym(row_var),
+      tottab_vector = tottab_vector, totrow_vector = totrow_vector,
+      cols = stats::setNames(rep(TRUE, length(grp)), grp))
+
+    # --- write diff/ratio (pct cols) + the ref-row marker into the carrier ----------------------
+    if (!identical(ref_v, "tot")) inref[] <- ref_res$refrows
+    for (nm in grp) {
+      carrier$fmt[[nm]]$frame$diff  <- ref_res$diff[[nm]]
+      carrier$fmt[[nm]]$frame$ratio <- ref_res$ratio[[nm]]
+      # Phase 19d: the odds ratio is a reference-DEPENDENT field on every row/col-% table now, so the
+      # re-ref has to refresh it too -- otherwise a reference toggle left the cached `or` describing
+      # the OLD baseline while diff/ratio described the new one.
+      if (!is.null(ref_res$or)) carrier$fmt[[nm]]$frame$or <- ref_res$or[[nm]]
+    }
   }
   for (nm in fmt_names) {
     carrier$fmt[[nm]]$frame$in_refrow <- inref

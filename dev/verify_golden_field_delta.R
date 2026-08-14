@@ -31,10 +31,10 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 19g (KEY 6): no per-cell FIELD and no per-column ATTRIBUTE moves. The delta is entirely
-# table-level: `meta$vars` + `meta$reg_meta` become slots of ONE `meta$spec` (which also states the
-# table's `kind`), and the `test` tibble is re-keyed -- `row_var` -> `var`, `col_var` -> `col`,
-# `term` absorbed into `var`. Both are declared below and PROVED, not asserted.
+# Phase 19d-tail (the green-light pass): the intended delta is EMPTY. It unifies the `ci` anchor rule,
+# gives the leaf the dichotomised level geometry its odds ratio needs, and repairs the jamovi tier-3
+# tuple -- none of which may move a per-cell field, a column attribute, a `test` column or a `meta`
+# sub-field on any golden. A single CHANGED line is a regression, not a declaration.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
@@ -54,12 +54,9 @@ RENAMED_FIELDS <- list()
 # merges `row_var` (which variable, on a crosstab row) and `term` (which predictor, on a reg row)
 # into ONE `var`, and renames `col_var` -> `col`. Each entry states the mapping; the script then
 # demands bit-identity of every other column.
-RENAMED_TEST_COLS <- list(
-  col_var = list(to = "col", map = function(v, tt) v),
-  # on a crosstab `term` does not exist, so `var` is exactly the old `row_var`
-  row_var = list(to = "var", map = function(v, tt) v),
-  term    = list(to = NULL, map = NULL)          # absorbed into `var`; empty on every crosstab row
-)
+# Phase 19d-tail: nothing renamed (19g's re-key is landed and its goldens are regenerated; leaving
+# the rules here would compare two copies of the new schema -- the reset hazard named at the top).
+RENAMED_TEST_COLS <- list()
 # DECLARED_INDEX_COLS -- the non-fmt label columns that GAIN the tabxplor_lvl class in this phase.
 # Their VALUES must be identical (a declaration is not data); only class/role/var/ordered may appear.
 # Phase 19g: FALSE -- 19f's declaration is landed and its goldens are regenerated, so leaving this on
@@ -86,18 +83,14 @@ REMOVED_META_FIELDS <- character(0)
 # Phase 19a: nothing is reshaped. (The z16-iiiii `ci_settings` rule that used to sit here was left
 # behind after its goldens were regenerated, so it then compared two copies of the NEW shape and
 # reported four false PROBLEMS -- hence the reset warning at the top.)
-# META_RESHAPE_WHOLE -- Phase 19g: the whole `meta` is re-shaped, not one sub-field, so the check is
-# one predicate over both sides. It must prove that the NEW meta carries exactly the OLD information:
-# every generic sub-field untouched, `vars` moved verbatim under `spec`, and a `kind` stated.
-META_RESHAPE_WHOLE <- function(old, new) {
-  if (is.null(old) && is.null(new)) return(TRUE)
-  old <- old %||% list(); new <- new %||% list()
-  if (!identical(new$spec$vars %||% list(), old$vars %||% list())) return(FALSE)
-  if (!identical(new$spec$call, old$reg_meta))                     return(FALSE)
-  if (!new$spec$kind %in% c("crosstab", "regression"))             return(FALSE)
-  gen <- setdiff(union(names(old), names(new)), c("vars", "reg_meta", "spec"))
-  all(vapply(gen, function(k) identical(old[[k]], new[[k]]), logical(1)))
-}
+# META_RESHAPE_WHOLE -- a whole-`meta` predicate, for a phase that re-shapes the container itself
+# rather than one sub-field. NULL = "no reshape this phase", and then plain bit-identity is demanded.
+# Phase 19d-tail: NULL. 19g's rule (vars moved verbatim under spec, a `kind` stated) is landed and its
+# goldens are regenerated, so it was comparing the new shape against a stripped copy of itself -- and
+# it PASSED on 35 cases only because `old$vars %||% list()` and an empty `spec$vars` are both
+# `list()`. The single weighted case, whose `vars` holds `wt`, reported a PROBLEM that was purely the
+# stale declaration. Third time this hazard has fired; see the reset warning at the top.
+META_RESHAPE_WHOLE <- NULL
 
 RESHAPED_META_FIELDS <- list(
   # Phase 19f: `meta$vars` loses the whole variable MODEL -- row_vars / col_vars / tab_vars /

@@ -66,7 +66,7 @@ Phase 19 is **not a feature phase**. It exists to make the package's own model e
 8. **Golden discipline.** Each phase declares which goldens are allowed to move and proves the delta
    is exactly what it claims (`dev/verify_golden_field_delta.R`, which learns one new mode per new
    kind of delta).
-9. **End-of-phase documentation discipline**: see CLAUDE.md "## The last step of every implementation, during the final `check()`") ; The phase **"DONE" summary goes in CLAUDE.md and ONLY there**.
+9. **End-of-phase documentation discipline**: see CLAUDE.md "## The last step of every implementation, during the final test suite") ; The phase **"DONE" summary goes in CLAUDE.md and ONLY there**.
 
 ### What must survive, unchanged in spirit
 
@@ -878,6 +878,10 @@ export stack's integration onto the shared render model.
   not accept; `tabxplor_tabs` is kept but not grown (its one behavioural bit could key on
   `!is.null(names(x))`); **verify** whether `names_prefix`/`names_sort` belong to the spread path and,
   if so, leave them there and drop them from `tab()`.
+- **Owed by 19d, deliberately parked until the mirrors collapse**: `?tab`'s `OR` / `ci` / `color`
+  blocks still describe the pre-19d surface, in **three** mirrored copies (`tab`, `tab_many`,
+  `tab_plain`) plus four of `ci`. Rewriting them before this phase means writing the prose three
+  times and deleting two. Do it here, once, as the last item — `NEWS.md` is already up to date.
 
 **Contents — the render half**
 
@@ -1002,6 +1006,20 @@ the case is in fact re-referable. It was deliberately NOT lifted: doing so chang
 live jamovi toggle takes (rebuild → re-ref), which is the seam 19c was told not to move. Lift it here,
 with the cold + warm + reref lock. Also: `jmvtab_build()` (`:984-997`) still hand-mirrors the
 resolver's colour→`ci` cascade; it now has `measure_forces()` / `measure_builds()` to call instead.
+
+**Handed over by the 19d-tail (the green-light pass)** — the tier-3 cache is green and its value
+assertions are all locked, so what is left here is purely *which path serves a toggle*:
+
+- **A `diff` ↔ `ratio` colour toggle rebuilds**, and must, because since 19d the stored interval
+  follows the comparison (percentage points vs Katz log-RR). The re-ref could serve it by recomputing
+  the interval on the other scale (`tab_ci(ci_scale = "ratio")` — every input is already in the
+  carrier); an exact re-paint never can. Four assertions in `test-jmvtab-cache.R` now state the
+  rebuild explicitly (`hit = FALSE` / the `reference` vector), so lifting it means flipping them back.
+- `jmv_apply_display()` now delegates to `tab_apply_display()`, so **the display vocabulary gap above
+  is half closed**: a bare token and a `{}` template both work. What remains for the presets is the
+  four ComboBox values that are not fields at all (`pct_ci` / `mean_ci` / `OR` / `OR_pct`).
+- `jmv_oracle()` in the test file calls `tab_deprecate_or()` and `resolve_leaf_ci()` directly, so when
+  the `.a.yaml` learns the new vocabulary the oracle needs no edit — only `jmv_opts()`'s defaults.
 
 **Read first**: study §4.5 (nine items), §11 D9/D10/D11/D12/D13/D15, §7's anti-proposition on the JS
 rules. Ruling: **(b)** — a shared resolver both boundaries call, plus a **generated** table for the JS

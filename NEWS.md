@@ -32,8 +32,8 @@
   tooltips off document-wide. The vignettes now showcase the live html tables.
 * **Significance stars and correct confidence intervals.** Stars are opt-in (`stars =`); cell / difference
   / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read
-  the same interval. `ci` gains `"ratio"`; one named vector, `ci_method = c(cell =, diff =,
-  mean_diff =, mean_ratio =)`, chooses each interval's method.
+  the same interval. One named vector, `ci_method = c(cell =, diff =, mean_diff =, mean_ratio =)`,
+  chooses each interval's method.
 * **Mean columns get a whole-table test** — a one-way ANOVA (Welch or classic, `options(tabxplor.anova)`),
   the counterpart of the chi-squared for factor columns.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
@@ -43,10 +43,10 @@
   It reads the finished table and re-computes nothing, so the figure cannot disagree with the numbers
   you printed: the gridlines are your `set_color_breaks()` ladder, the colour key is the table's own
   legend, and it returns an ordinary `ggplot` you can `+ theme()` and `ggsave()`. By default it draws
-  whatever the table computed (`ci = "cell"` → percentages with their intervals, `ci = "diff"` →
-  differences from the reference, `OR = TRUE` → odds ratios on a log axis). On a regression table with
-  `empirical = TRUE` it draws the observed effect with the margin of error **of the gap** between the
-  two, so "is the point outside the bracket?" is exactly the table's own gap test — rather than the
+  whatever the table computed (`ci = "cell"` → percentages with their intervals, `ci = "ref"` →
+  differences from the reference, `display = "{or}"` → odds ratios on a log axis). On a regression
+  table with `empirical = TRUE` it draws the observed effect with the margin of error **of the gap**
+  between the two, so "is the point outside the bracket?" is exactly the table's own gap test — rather than the
   two overlapping intervals that reading invites and that are wrong for correlated estimates.
   Also reachable as `tab_export(format = "forest")`.
 * **Weights, and survey designs.** A weighted `tab()` estimates the population, and now **says in its
@@ -114,19 +114,29 @@
   and the html tooltip gives its confidence interval and p-value. The gap is also printable
   (`display = "{or} (obs {obs})"`). Part of an **odds-ratio** gap is non-collapsibility rather than
   confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
-  (`effect = "ame"` / `"ame_ratio"`) or risk ratios (`family = "poisson"`) for a comparison the test can
-  read.
+  (`effect = "marginal"`) or risk ratios (`measure = "ratio"`) for a comparison the test can read.
 * **Every outcome now has an observed counterpart.** `tab_reg(empirical = TRUE)` used to go quiet on
   three families. A **summed score** (`trials =`) now shows its mean score plus the odds ratio of the
   summed items; an **ordinal** outcome shows `Obs_cumOR`, the cumulative odds ratio of the same model
   with one predictor; a **multinomial** outcome would need one crude column per category, so its
   observed effect is folded into the model cell instead — `2.31 (obs 2.05)`. `color = "adjustment"`
-  therefore works everywhere, and on the marginal paths (`effect = "ame"` / `"ame_ratio"`) of a 3+ level
+  therefore works everywhere, and on the marginal paths (`effect = "marginal"`) of a 3+ level
   outcome the gap now carries a real significance test. One rule covers all of it: *the observed effect
   is the model's own effect, fitted with a single predictor*.
-* **`tab(OR = "cumOR")`** — the descriptive twin of that ordinal model: one **cumulative odds ratio per
-  cut point** ("at or below level j") for an `ordered` col_var, with no proportional-odds assumption.
-  The spread of the odds ratios across a row *is* the departure from proportional odds.
+* **The odds ratio is always there.** On any `pct = "row"` / `"col"` table every cell now carries its
+  odds ratio, so seeing one is a display choice rather than a build option: `display = "{or}"` (or
+  `"{or} ({pct})"`), `color = "odds_ratio"` to colour it, `ref2` to pick which level the 2×2 compares
+  against. The `OR =` argument is soft-deprecated onto exactly that. With `levels = "first"` the table
+  shows one level against the merged rest, so its odds ratio is the true binary one.
+* **`tab(ref2 = "cumulative")`** — the descriptive twin of that ordinal model: one **cumulative odds
+  ratio per cut point** ("at or below level j") for an `ordered` col_var, with no proportional-odds
+  assumption. The spread of the odds ratios across a row *is* the departure from proportional odds.
+* **`ci` asks one question: where does the interval sit?** `"auto"` (the new default — an interval
+  whenever something reads it), `"no"`, `"cell"` (each cell's own) or `"ref"` (against the reference).
+  *Which* comparison it measures is `color`'s to say, so the old `"diff"` / `"ratio"` are
+  soft-deprecated onto `"ref"`. `ci = "no"` and `ci = "cell"` leave nothing to test a comparison
+  against, so they inform you and disable `stars` / `color_signif` instead of overruling what you
+  typed. `display` also accepts a bare field name (`display = "n"`, the same as `"{n}"`).
 * **`ordered` factors now survive `tab()`.** They used to be silently stripped to plain factors. Note
   that the synthetic `Total` / `Ensemble` / `NA` levels are appended after the real ones, so on an
   ordered grouping column they compare as the greatest levels — they are labels, not scale points.
@@ -263,7 +273,7 @@
 * **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.
   The combination used to abort with *"Unknown color measure"* — on cross-tables and on mean tables
   alike.
-* **`tab_num(ci = "diff")` colours its cells.** With the default `color = "auto"` the table came out
+* **`tab_num(ci = "ref")` colours its cells.** With the default `color = "auto"` the table came out
   entirely uncoloured.
 * **`dplyr::bind_rows()` on two subtabled (grouped) tables no longer loses everything below the
   table**: the weight footnote, the colour legend, the confidence-interval note, the test summary and
@@ -285,8 +295,8 @@
 * The **`lang` argument now works on Linux** (`lang = "fr"` used to return an English legend).
 * In `tab_reg()`, a **logical predictor** rendered as an empty row, and the `Constant` row lost its bold
   when `empirical = TRUE`.
-* `color = TRUE` with `OR = TRUE` and **two or more factor `col_vars`** silently coloured on the
-  difference instead of the odds ratio.
+* `color = TRUE` on an odds-ratio table with **two or more factor `col_vars`** silently coloured on
+  the difference instead of the odds ratio.
 * HTML **tooltips no longer repeat what the cell already prints**: a composite cell (`"{pct} (n={n})"`,
   or an average-marginal-effect cell) used to show its own bracket again on hover.
 * **`tab_reg()` on a survey design now weights everything it should.** The observed (`empirical = TRUE`)
@@ -347,13 +357,20 @@ Soft-deprecated (still work):
 * `tab_pct()` / `tab_tot()` / `tab_totaltab()`; `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
 * Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
   `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`.
-* The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "diff"` +
+* The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "difference"` +
   `color_signif =`); `color_type` (now inert).
+* **`tab(OR =)`** — `"OR"` / `"OR_pct"` map to `display = "{or}"` / `"{or} ({pct})"`, `"cumOR"` to
+  `ref2 = "cumulative"`. **`ci = "diff"` / `"ratio"`** map to `ci = "ref"` (`"ratio"` also keeps its
+  Katz bounds; `color = "ratio"` is the way to ask for them).
+* `color`'s canonical values are the full words — `"difference"`, `"ratio"`, `"odds_ratio"`,
+  `"contrib"`. The acronyms (`"diff"`, `"OR"`, `"or"`) are permanent aliases, not deprecations, but a
+  built table now stores and its legend now names the full word.
 
 Removed / defunct (now error):
 
 * `tab_xl(n_min =, hide_near_zero =)` (long inert); the little-used `totcol` vector
-  forms; the `tabxplor.compact` option (use `output_list =`).
+  forms; the `tabxplor.compact` option (use `output_list =`); `tab_num(ci_scale =)` (a duplicate of
+  `color = "ratio"`).
 * `method_ratio` / `method_mean_diff` / `method_mean_ratio` (never released; use `ci_method`).
   A proportion *ratio* has only one interval (Katz), so it was never a choice.
 * `or_plot()` (never released; use `forest_plot()`, which draws every family and effect, follows

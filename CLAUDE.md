@@ -126,9 +126,15 @@ R/
 │                              + leaf_rename_totals(). Both public leaves take a real `display =` (19d
 │                              tail) and run the SAME tab_apply_display() the pipeline runs, so the
 │                              `OR` retirement route is lossless on them too -- the leaf and the
-│                              wrapper speak ONE display grammar. tab_apply_reference() = the ONE
-│                              reference executor
-│                              (tab_num's diff_index_mean twin + inline calculate_refrows copy DELETED).
+│                              wrapper speak ONE display grammar; tab_apply_display() also takes a BARE
+│                              field name ("n" == "{n}") and "auto" as a no-op, which is what let the
+│                              jamovi writer delegate to it instead of stamping a literal "{or}".
+│                              tab_apply_reference() = the ONE reference executor
+│                              (tab_num's diff_index_mean twin + inline calculate_refrows copy DELETED);
+│                              its `dichotomise` = "this col_var is SHOWN as first-level-vs-the-rest"
+│                              (carried from `lv1`), so the odds ratio is the TRUE binary one on both
+│                              merge paths -- tab() pre-merges before the leaf, jmvtab defers it and
+│                              the surviving level is also ref2, which made `or` come out 1 everywhere.
 │                              display_write_col() = THE per-column display-template writer, shared by
 │                              build-time tab(display =) and post-hoc set_display(col, "num_ci")
 │                              (fmt_apply_num_ci DELETED: the two copies disagreed on every total row).
@@ -361,7 +367,13 @@ R/
 │                              ("or"/"ratio"/"diff"), shared with the jmvtab tier-3 cache TUPLE so the
 │                              cache and the pipeline cannot disagree (a diff<->ratio toggle changes
 │                              the interval, so it can never be a re-paint); ci_disable_signif() =
-│                              D28's ONE rule (`ci = "cell"` informs and disables stars/color_signif),
+│                              D28's ONE rule -- the CI_NO_INTERVAL_TO_TEST values ("cell" AND, since
+│                              the 19d tail, "no") inform and disable stars/color_signif, because `ci`
+│                              is the ANCHOR question and those two read what it anchors. ONLY "auto"
+│                              resolves in either resolver now: tab_resolve_settings() used to
+│                              silently upgrade an explicit "no" to "ref" while resolve_leaf_ci() did
+│                              not, so tab() built an interval tab_num() did not and the jamovi tuple
+│                              recorded a `ci` its carrier contradicted. It is
 │                              called by both resolvers AND by tab()'s argument boundary -- the last
 │                              because the STORED policy attribute is written from the colour spec,
 │                              not from what the resolver decided.
@@ -771,7 +783,14 @@ R/
 │                             content-addressed store + jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
 │                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
 │                             live tab; jmv_tab3_base_key/tuple, jmv_reapply_digits re-paint +
-│                             jmv_tab3_reref/rerefable instant reference re-ref) + jmvtab_build
+│                             jmv_tab3_reref/rerefable instant reference re-ref -- ONE SWEEP PER
+│                             col_var there, as the build runs one leaf per col_var: `or`'s 2x2 is
+│                             (this level) x (the ref2 level OF THE SAME VARIABLE), so a pooled sweep
+│                             compared a partyid level against a race one. The TUPLE keys
+│                             `comparison = display_comparison(display)`, not the raw display string:
+│                             .return_armed returns before tab_apply_display, so the only way display
+│                             reaches the carrier is by naming the comparison -- and that absorbed the
+│                             separate `or` flag) + jmvtab_build
 │                             (engine-free core; reuses tab() via .cache) + jmvtab_ref_vector (ref-picker)
 │                             + jmvtab_levels_order/jmv_relevel_cols (7g-ii level-reorder,
 │                             post-aggregate; .levels_order arg on tab())
@@ -2085,6 +2104,99 @@ whether `reg_fam_binary()`/`reg_fam_logscale()` still earn their keep now that `
 
 ---
 
+#### Phase 19d-tail — the green light: verifying 19d–19g and closing the red tail
+
+**DONE (2026-08-14).** The tree is **GREEN for the first time since 19d**: full suite
+**FAIL 0, WARN 127, SKIP 4, PASS 6005**, against the inherited **FAIL 8, WARN 131, PASS 5997**. The
+delta is *proved*: `dev/verify_golden_field_delta.R` with an **empty** declaration set reports no
+change on any of the **1795 cells of the 36 goldens** — no field, no column attribute, no `test`
+column, no `meta` sub-field — and `dev/verify_color_attrs.R` prints **IDENTICAL** over its 293 cases
+(every stored colour attribute and both resolved slot vectors). No `_snaps/*.md` and no `_golden/`
+fixture moved.
+
+**19d, 19e, 19f and 19g are verified landed**, by mechanism rather than by re-reading their summaries:
+the `OR` and `ci = "diff"` shims are `all.equal`-lossless; every stored `color` is a `names(MEASURES)`
+full word and every stored `scale` an `EST_SCALES` key across 293 argument combinations;
+`reg_measures()` returns its three-state table; `tab(c(marital, relig), race, tab_vars = year)` returns
+a grouped table; `tab_kind()` answers. **The three standing debts are closed**: the colour
+characterisation now has a real before/after, the golden review is superseded by two per-cell proofs,
+and `NEWS.md` is written (`?tab`'s three mirrored blocks are parked in 19h, which deletes two of them).
+
+**The 8 failures were four independent problems, none of them what the summaries said.** The `or`
+recompute inside `jmv_tab3_reref()` was already there and correct; what was actually broken:
+
+- **The `ci` anchor rule was written twice and the two copies disagreed** — the pipeline resolver
+  silently UPGRADED an explicit `ci = "no"` to `"ref"` whenever `stars`/`color_signif` wanted an
+  interval, the leaf resolver upgraded only `"auto"`. So `tab(ci = "no", stars = TRUE)` built an
+  interval that `tab_num()` did not, and the jamovi tuple recorded a `ci` its own carrier contradicted
+  (hence a re-ref that refreshed everything except the bounds). **Maintainer ruling: extend D28's
+  "inform and disable" from `"cell"` to `"no"`** — `ci` is the anchor question, `stars` and
+  `color_signif` READ what it anchors, so the two values with nothing to read now disable them from
+  ONE place (`ci_disable_signif()`, already the single statement with three consumers, gains
+  `CI_NO_INTERVAL_TO_TEST`). Overruling what the user typed was the root of it. The disagreement is
+  unrepresentable now rather than reconciled.
+- **`or` under `levels = "first"`** — a *leaf* divergence reproducing on a cold build, so it was live
+  in the module. The table shows one level against the merged rest, so its odds ratio is the **true
+  binary one** (that level against everything else — which is what makes showing a single column
+  meaningful). `tab()` merges before the leaf and gets it right; the jamovi path DEFERS the merge (the
+  aggregate and the whole-table test must see every level) and the surviving level is also `ref2`, so
+  every column referenced itself and `or` came out **1 everywhere**. The leaf is now TOLD the col_var
+  is shown dichotomised (`dichotomise`, carried from `lv1` — the fact travels instead of being
+  re-derived from a level count) and rebuilds the complement, which within a row base is just `1 - p`.
+  Both paths are byte-identical on `pct = "row"` and `pct = "col"`.
+- **Two test-harness slips, one of which was hiding a real bug.** `jmv_opts()` is `modifyList`, which
+  keeps the FIRST of two same-named entries — so every `o0(...)` wrapper silently swallowed the
+  caller's override: `o0(color = "ratio")` built with `color = "diff"`, and the multi-`col_var` case
+  built a **one**-col_var table. It keeps the LAST now (R's ordinary override semantic), and that
+  exposed **`jmv_tab3_reref()` pooling every col_var's levels into ONE sweep** — so a partyid level's
+  odds ratio was computed against a race level (measured: ORs in the tens against a rebuild's 1.00).
+  It runs one sweep per `col_var` now, exactly as the build runs one leaf per `col_var`. `diff` and
+  `ratio` are column-wise and were unaffected: **`or` is the only per-cell field whose value depends
+  on which OTHER columns are present** — the same fact as the dichotomise fix, found twice.
+- **`display` was applied by two writers.** `jmv_apply_display()` stamped the literal `"{or}"` where
+  `tab_apply_display()` normalises a one-field template back to the bare `or` token (1/x form and
+  reference annotation included). It delegates now — so it also stopped writing a display onto p-value
+  and blank rows — and `tab_apply_display()` gained the two tokens that kept the vocabularies apart:
+  **a bare field name** (`display = "n"` ≡ `"{n}"`, which is the better spelling anyway and is what
+  the jamovi ComboBox has always sent) and **`"auto"`** as a no-op beside `NULL` / `""` / `"no"`.
+
+**One optimisation taken, one deliberately refused.** The tier-3 tuple keyed the RAW `display` string,
+which made every display toggle — the second most frequent jamovi interaction — rebuild the whole
+table; `.return_armed = TRUE` returns before `tab_apply_display()`, so the only way `display` reaches
+the carrier is by NAMING the comparison. The tuple carries `comparison = display_comparison(display)`
+instead, which also absorbed the `or` flag (that same fact tested for one of its values): two keys →
+one, and the toggle is a re-paint again. **Refused**: recovering the `diff ↔ ratio` toggle, which since
+19d genuinely changes the stored interval (percentage points vs Katz log-RR) — the re-ref could
+recompute it on the other scale, an exact re-paint never can, and that is 19k's seam with its
+cold/warm/re-ref lock. Four assertions state the rebuild explicitly, with the reason. Cache schema
+**15 → 16**.
+
+**HONEST CONCERNS.**
+
+- **`tab(ci = "no", stars = TRUE)` changed behaviour** — it informs and drops the stars where it used
+  to build an interval silently. Nothing in the corpus or the goldens moved, but it is a real change
+  on a CRAN-released argument, and it is in `NEWS.md` rather than merely in the code.
+- **`jmv_apply_display()` no longer writes a display onto p-value / blank / total-marker rows.** That
+  is correct (a p-value cell has no `n`) and no test moved, so it is *asserted* by the shared writer's
+  rule rather than *seen*. Worth one eyeball in a live jamovi pass, which 19k schedules anyway.
+- **The `dichotomise` fix assumes the kept level is the FIRST**, which is what `levels = "first"`
+  means. A user combining it with an explicit `ref2` naming a level that gets dropped would see the
+  Total column's odds ratio differ between the two merge paths — pathological, untested, and stated in
+  the code rather than guarded.
+- **`?tab`'s `OR` / `ci` / `color` blocks are still pre-19d**, now consciously parked in 19h (three
+  mirrored copies, two of which that phase deletes) rather than left as an open debt.
+- The three phases' own *HONEST CONCERNS* above are left as written — they are the historical record;
+  what this pass closed is stated here.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k still owns that.
+
+**FOLLOW-UPS.** 19h can start on this commit. 19k: the `diff ↔ ratio` re-ref, the remaining four
+non-field ComboBox display values, and the vocabulary/`prepare()` items already listed. 19l: the
+deprecation-warning corpus migration (127 remain, all `ci = "diff"` / `OR = TRUE` / short colour names
+in the test corpus — harmless, but they hide new warnings).
+
+---
+
 ### Phase 20 — last features before release
 
 #### Phase 20{x} — `tab_reg()` parallelisation
@@ -2175,9 +2287,9 @@ The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the 
 
 ---
 
-## The last step of every implementation, during the final `check()` : Update instructions and relevant development files
+## The last step of every implementation, during the final test suite : Update instructions and relevant development files
 
-The final `check()` is now quite long, **so you must always start updating documentation and writing "DONE" summary while you wait for the final `check()` to finish** (if check fails and you modify stuff, briefly correct the documentation that needs to be corrected after verification passes) :
+The final test suite is now quite long, **so you must always start updating documentation and writing "DONE" summary while you wait for the final test suite to finish** (if some tests fails and you modify stuff, briefly correct the documentation that needs to be corrected after verification passes) :
 
 1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
 2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure *for real* (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.

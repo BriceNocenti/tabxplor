@@ -465,6 +465,35 @@ testthat::test_that("an explicit ci = 'cell' with a color_signif policy informs 
     tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell"))
 })
 
+# Phase 19d-tail: `ci = "no"` is the OTHER value with nothing to test, and it is now the SAME rule --
+# the anchor the user typed wins, the consumers that would read an interval are informed and
+# disabled. It used to be answered the opposite way, and in two places that disagreed: the pipeline
+# resolver silently upgraded an explicit "no" to "ref", the leaf resolver did not. So `tab()` built an
+# interval where `tab_num()` built none, and the jamovi tuple recorded a `ci` its carrier contradicted.
+testthat::test_that("an explicit ci = 'no' informs and disables, on both resolvers", {
+  gss <- forcats::gss_cat
+  testthat::expect_message(
+    t <- tab(gss, race, marital, pct = "row", color = TRUE, ci = "no",
+             color_signif = "grey_non_signif"),
+    'ci = "no"'
+  )
+  testthat::expect_equal(get_color_signif(t$Married), "ignore")
+  testthat::expect_true(all(is.na(get_ci_inf(t$Married))))       # the user said no interval
+
+  testthat::expect_message(
+    s <- tab(gss, race, marital, pct = "row", ci = "no", stars = TRUE), 'ci = "no"')
+  testthat::expect_true(all(is.na(get_ci_inf(s$Married))))
+
+  # the numeric leaf, called directly, agrees cell for cell -- that is the whole point of one rule
+  testthat::expect_message(
+    n <- tab_num(gss, race, tvhours, ci = "no", stars = TRUE), 'ci = "no"')
+  testthat::expect_true(all(is.na(get_ci_inf(n$tvhours))))
+
+  # `ci = "auto"` is untouched: it still resolves to the reference interval when something reads it
+  a <- tab(gss, race, marital, pct = "row", stars = TRUE)
+  testthat::expect_false(all(is.na(get_ci_inf(a$Married))))
+})
+
 testthat::test_that("contrib / OR never get a difference CI forced on them", {
   # contrib has no difference CI (documented gap)
   t <- tab(forcats::gss_cat, race, marital, color = "contrib", color_signif = "grey_non_signif")

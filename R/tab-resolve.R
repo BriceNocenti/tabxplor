@@ -168,9 +168,13 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
     vapply(gate_measure, measure_forces, logical(1), "ci", TRUE, USE.NAMES = FALSE)
   # a comparison interval needs a comparison: a reference, and columns that can carry one.
   can_compare <- (num_only | pct_rowcol | has_num) & !(ref %in% c("no", "") | is.na(ref))
-  want_ref    <- (gated | isTRUE(stars) | ci == "ref") & can_compare
-  ci[ci == "auto"] <- "no"
-  ci[want_ref & ci == "no"] <- "ref"
+  # ONLY "auto" resolves. An explicit "no" is the user's answer to the anchor question and stands --
+  # ci_disable_signif() above has already turned off whatever wanted to read an interval, so `gated`
+  # and `stars` are FALSE by here and the two resolvers agree by construction.
+  want_ref <- (gated | isTRUE(stars)) & can_compare
+  was_auto <- ci == "auto"
+  ci[was_auto] <- "no"
+  ci[want_ref & was_auto] <- "ref"
   # nothing to anchor a reference interval to -> say so rather than silently computing nothing.
   ci[ci == "ref" & !can_compare] <- "no"
 
@@ -283,20 +287,39 @@ measure_geometry <- function(measure, color_ratio_ci = FALSE, ci_ratio_req = FAL
 # ci_disable_signif() -- Phase 19d (D28), THE single statement of the rule, so its three consumers
 # (the pipeline resolver, the leaf resolver, and tab()'s own argument boundary -- which must apply it
 # too, because the stored `color_signif` attribute is written from the color SPEC, not from what the
-# resolver decided) cannot drift. The cell interval answers "how precise is this 26 %", which no
-# comparison can be tested against: `stars` and `color_signif` are INFORMED and DISABLED. Before,
-# `color_signif` aborted and `stars` was silently dropped -- two consumers of one fact, two
-# behaviours. Idempotent, so the boundary applying it first silences the resolvers.
+# resolver decided) cannot drift. `ci` is the ANCHOR question; `stars` and `color_signif` READ the
+# interval it anchors. So the two `ci` values that leave nothing to read INFORM and DISABLE them:
+#   "cell" -- the interval answers "how precise is this 26 %", which no comparison can be tested against
+#   "no"   -- there is no interval at all
+# Before, `color_signif` aborted on "cell" and `stars` was silently dropped -- two consumers of one
+# fact, two behaviours. Idempotent, so the boundary applying it first silences the resolvers.
+#
+# Phase 19d-tail: "no" joined "cell" here, which is what makes the rule ONE rule. It used to be
+# answered the opposite way, and in two places that disagreed: the pipeline resolver silently
+# UPGRADED an explicit `ci = "no"` to "ref" whenever stars/gating wanted an interval, while the leaf
+# resolver upgraded only "auto". Measured consequence: `tab(ci = "no", stars = TRUE)` carried a
+# difference interval that `tab_plain(ci = "no", stars = TRUE)` did not, and the jamovi tier-3 tuple
+# recorded `ci = "no"` for a carrier that held a reference-DEPENDENT interval -- so a reference toggle
+# re-ref'd everything except the bounds, and the cached table kept the old reference's CI and
+# p-values. Overruling what the user typed explicitly was the root of it; the anchor wins now.
+#' @keywords internal
+#' @noRd
+CI_NO_INTERVAL_TO_TEST <- c("cell", "no")
+
 #' @keywords internal
 #' @noRd
 ci_disable_signif <- function(ci, color_signif = "ignore", stars = FALSE) {
   out <- list(color_signif = color_signif, stars = stars)
   signif_on <- length(color_signif) > 0L && !is.na(color_signif[1]) &&
     !identical(color_signif[1], "ignore")
-  if (!any(ci == "cell", na.rm = TRUE) || !(signif_on || isTRUE(stars))) return(out)
+  hit <- intersect(CI_NO_INTERVAL_TO_TEST, ci[!is.na(ci)])
+  if (length(hit) == 0L || !(signif_on || isTRUE(stars))) return(out)
+  why <- if ("cell" %in% hit)
+    gettext("stores each cell's own interval, so there is nothing to test a comparison against")
+  else gettext("computes no interval, so there is nothing for a significance test to read")
   cli::cli_inform(c(
-    "i" = paste0("{.code ci = \"cell\"} stores each cell's own interval, so there is nothing to test ",
-                 "a comparison against: {.arg stars} and {.arg color_signif} are disabled here."),
+    "i" = paste0("{.code ci = \"", hit[[1]], "\"} ", why,
+                 ": {.arg stars} and {.arg color_signif} are disabled here."),
     "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
   ))
   list(color_signif = "ignore", stars = FALSE)
@@ -317,7 +340,7 @@ DISPLAY_COMPARISON <- c(or = "odds_ratio", ratio = "ratio", diff = "difference")
 display_comparison <- function(display) {
   if (is.null(display) || length(display) == 0L) return(NA_character_)
   d <- display[[1]]
-  if (is.na(d) || !nzchar(d) || identical(d, "no") || identical(d, "num_ci")) return(NA_character_)
+  if (is.na(d) || !nzchar(d) || d %in% c("no", "auto", "num_ci")) return(NA_character_)
   tok <- tryCatch(parse_display_template(validate_display_template(d))$fields[1],
                   error = function(e) NA_character_)
   if (length(tok) == 0L || is.na(tok)) return(NA_character_)
@@ -326,8 +349,11 @@ display_comparison <- function(display) {
 
 
 # resolve_leaf_ci() -- Phase 19d: the SAME three rules the pipeline resolver applies (D28's
-# "ci = 'cell' informs and disables", the measure's `requires["ci"] == "gated"`, and "a reference
-# interval needs a reference"), for a leaf called DIRECTLY. This is what closes D29: 14a applied the
+# "a ci with nothing to test informs and disables", the measure's `requires["ci"] == "gated"`, and "a
+# reference interval needs a reference"), for a leaf called DIRECTLY. Only "auto" resolves here, and
+# that is now the pipeline's rule too -- until the 19d tail, tab_resolve_settings() ALSO upgraded an
+# explicit "no", so the same call built an interval through tab() and none through tab_plain(). This
+# resolver was the correct half; the fix was to stop the other one overruling the user. This is what closes D29: 14a applied the
 # gated forcing inside tab_resolve_settings() only, so `tab_num(color = "diff", color_signif =
 # "grey_non_signif")` with no explicit `ci` computed no interval and the policy greyed every cell.
 # Returns the ANCHOR value ("no"/"cell"/"ref"); each leaf maps it to what it must compute.
