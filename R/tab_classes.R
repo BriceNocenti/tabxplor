@@ -886,14 +886,11 @@ tab_html <- function(tabs,
 
   # Phase 13d: "auto" (follow the reader's colour scheme) needs a stylesheet we control. kableExtra's
   # themes are baked at render time (kable_classic / kable_material_dark) and its HTML is not ours to
-  # restyle, so downgrade rather than pretend.
-  if (identical(theme, "auto") && !identical(engine, "html")) {
-    cli::cli_inform(
-      c("!" = 'theme = "auto" needs {.code engine = "html"}; rendering {.val light}.',
-        "i" = "The kableExtra engine's themes are static."),
-      .frequency = "once", .frequency_id = "tabxplor_theme_auto_kableextra")
-    theme <- "light"
-  }
+  # restyle, so downgrade rather than pretend. Phase 19h: through THE one downgrade (R/tab-css.R).
+  theme <- tx_theme_resolve(
+    theme, allow_auto = identical(engine, "html"),
+    note = c("!" = 'theme = "auto" needs {.code engine = "html"}; rendering {.val light}.',
+             "i" = "The kableExtra engine's themes are static."))
 
   # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
   # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
@@ -1232,24 +1229,10 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # DECLARED column now, so the two compose: group by (tab_vars, row_var). The only thing still
   # refused is a set of tables that disagree about WHICH tab_vars they have -- there is no one
   # sub-table axis to merge them on.
-  merge_tab_vars <- purrr::map(tabs, ~ tab_get_vars(.)$tab_vars)
-  if (length(unique(merge_tab_vars)) > 1L) {
-    message("since the tables have different tab_vars, tab_compact() was not used")
-    return(tabs_base)
-  }
-  merge_tab_vars <- merge_tab_vars[[1]]
-
-  same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
-  same_col_vars <- same_col_vars |>
-    purrr::map(~ .[!. %in% c("all_col_vars", "", "no") & !is.na(.)])
-  longest_col_vars <- purrr::map_int(same_col_vars, length)
-  longest_col_vars <-
-    dplyr::first(which(longest_col_vars == max(longest_col_vars, na.rm = TRUE)))
-  longest_col_vars <- same_col_vars[[longest_col_vars]]
-  same_col_vars <- same_col_vars |> purrr::map_lgl(~ all(. %in% longest_col_vars))
-  if(!all(same_col_vars)) {
-    stop("tab_compact() can only be used with the same col_vars in each tab")
-  }
+  # Phase 19h (KEY 7): the two shape refusals are DECLARED (TAB_OPS, R/tab-shape.R), not written out
+  # here -- so `tab_supports(x, "compact")` answers them before the call, and both read one rule.
+  if (!tab_check_shape(tabs, "compact")) return(tabs_base)
+  merge_tab_vars <- tab_get_vars(tabs[[1]])$tab_vars
 
 
   subtext <- get_subtext(tabs[[1]])
@@ -1906,7 +1889,6 @@ tab_plot <- function(tabs,
   other_cols  <- rd$roles$other_cols
   totcols     <- rd$roles$totcols
   totrows     <- rd$roles$totrows
-  no_totrows  <- rd$roles$no_totrows
   new_col_var <- rd$roles$new_col_var
   any_bg      <- rd$roles$any_bg
 
@@ -1978,8 +1960,7 @@ tab_plot <- function(tabs,
   # apply it hits the WHOLE body -- the row labels turn monospace too, a small deviation confined to a
   # STARRED, superseded tab_plot(). Revert with options("tabxplor.plot_num_font" = ""). "Cascadia Mono"
   # must be available to the graphics device (else it substitutes).
-  plot_num_font <- if (isTRUE(rd$roles$has_stars))
-    getOption("tabxplor.plot_num_font", "Cascadia Mono") else ""
+  plot_num_font <- tx_num_font("plot", rd$roles$has_stars)
   tbody_args <- list(color = "black", size = 11, fill = "white", linewidth = 0,
                      linecolor = "black", hjust = 0.98, x = 0.95) # x/hjust = right-adjust
   if (nzchar(plot_num_font)) tbody_args$fontfamily <- plot_num_font
@@ -2095,16 +2076,29 @@ tab_plot <- function(tabs,
   footer_runs <- rd_footer(footer_src, "runs", theme = theme[1],
                            want_legend = color_legend && length(color_cols) != 0,
                            subtext = subtext, lang = lang)
+  # Phase 19h: tab_plot TRANSLATES the footer model's typography instead of overriding it. The
+  # "runs" medium already carries bold / italic / underline per token (fmt_class.R), and tab_xl reads
+  # them; this backend dropped them, grouped by COLOUR alone and then forced face = "bold" on every
+  # cell -- so under theme = "print", whose palette encodes direction as bold-vs-italic on black
+  # text, the whole legend collapsed into one uniform run and said nothing. ggpubr has no underline,
+  # so that one is dropped (with a comment) rather than silently mapped to something else.
   color_legend <- purrr::map(footer_runs, function(line) {
-    text  <- purrr::map_chr(line, "text")
-    color <- purrr::map_chr(line, "color")
+    text   <- purrr::map_chr(line, "text")
+    color  <- purrr::map_chr(line, "color")
+    bold   <- purrr::map_lgl(line, ~ isTRUE(.x$bold))
+    italic <- purrr::map_lgl(line, ~ isTRUE(.x$italic))
     color[is.na(color)] <- text_color
+    face <- dplyr::case_when(bold & italic ~ "bold.italic", bold ~ "bold",
+                             italic ~ "italic", TRUE ~ "plain")
     # one ggtexttable column per token is wasteful (and the separators are their own tokens): fold
-    # each run of same-coloured tokens into one cell.
-    grp <- cumsum(color != dplyr::lag(color, default = ""))
+    # each run of same-LOOKING tokens into one cell -- same colour AND same face, or the fold would
+    # flatten the typography it is meant to carry.
+    key <- paste(color, face)
+    grp <- cumsum(key != dplyr::lag(key, default = ""))
     tibble::tibble(
       text  = vapply(split(text, grp), paste0, character(1), collapse = ""),
-      color = color[!duplicated(grp)]
+      color = color[!duplicated(grp)],
+      face  = face[!duplicated(grp)]
     ) |>
       # otherwise, unbreakable spaces fail in some graphic devices
       dplyr::mutate(text = stringi::stri_replace_all_regex(.data$text, unbrk, " "))
@@ -2126,6 +2120,13 @@ tab_plot <- function(tabs,
             dplyr::mutate(name = dplyr::row_number()) |>
             tidyr::pivot_wider( names_from = "name", values_from = "color")
 
+        )
+
+      tab_legend_face <- color_legend |>
+        purrr::map_dfr(
+          ~ dplyr::select(., "face") |>
+            dplyr::mutate(name = dplyr::row_number()) |>
+            tidyr::pivot_wider( names_from = "name", values_from = "face")
         )
 
       tab_legend_plot <- tab_legend |>
@@ -2153,11 +2154,12 @@ tab_plot <- function(tabs,
 
       for(i in 1:nrow(tab_legend)) {
         for(j in 1:ncol(tab_legend)) {
+          fc <- tab_legend_face[[j]][[i]]
           tab_legend_plot <- tab_legend_plot |> ggpubr::table_cell_font(
             row    = i + 1,
             column = j,
             color  = tab_legend_color[[j]][[i]],
-            face   = "bold"
+            face   = if (is.na(fc)) "plain" else fc
           )
         }
       }
@@ -3809,7 +3811,7 @@ get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NUL
       "2.0.0", I('The option "tabxplor.color_style_type"'),
       details = 'The colour CHANNEL is chosen by `color = c(text, background)` (see `?tab`).')
   }
-  theme <- if (is.null(theme)) tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme")) else theme
+  theme <- if (is.null(theme)) tx_theme_option("console") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"
   # Phase 13d: a palette is always light/dark. "auto" is an EXPORT render intent (`theme = "auto"`

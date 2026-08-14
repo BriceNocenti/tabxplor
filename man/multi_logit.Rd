@@ -51,10 +51,12 @@ yourself with \code{\link[survey:svydesign]{survey::svydesign()}} and pass it as
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
 
 \item{split_var}{Optional. Name of a grouping variable (character): the regression analogue of
-\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
-per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
-variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
-columns for an easy across-group comparison. A level absent from a group shows empty cells.
+\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable.
+When that leaves one column per group — a single outcome, a single set of predictors, and not a
+multinomial — the groups are pivoted into \strong{side-by-side columns} for an easy across-group
+comparison; otherwise the per-group tables are stacked into one grouped table (grouped by
+\code{split_var}), sharing the variable/level stub. Call \code{\link[=tab_spread]{tab_spread()}} yourself for full control of
+the layout in that case. A level absent from a group shows empty cells.
 Two readings of "does this effect hold in every subgroup?" come with it:
 \code{color = "between_groups"} colours (and tests) each effect against the first group's, row by row,
 and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}

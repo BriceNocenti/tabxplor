@@ -49,6 +49,39 @@ tx_resolve_theme <- function(theme) {
   if (identical(theme, "bw")) "print" else theme
 }
 
+# tx_theme_option() -- Phase 19h: THE theme option pair, in one place. There are two independent
+# axes and they were each spelled at two call sites:
+#   "export"  what a rendered/exported table should look like  (default "light", "auto" opt-in)
+#   "console" the palette the terminal is using                (auto-detected from the editor)
+# The alias comes FIRST in each chain (tx_getOption takes the first name set, canonical last).
+# WARNING: this is the drift render_footer() had -- called on the EXPORT path but reaching for the
+# CONSOLE pair when its `theme` argument was NULL, so a footer rendered outside rd_footer() silently
+# picked the console theme.
+#' @keywords internal
+tx_theme_option <- function(scope = c("export", "console")) {
+  switch(match.arg(scope),
+    export  = tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light"),
+    console = tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light"))
+}
+
+# tx_theme_resolve() -- THE "auto" downgrade, in one place. `"auto"` means "follow the reader",
+# which needs a stylesheet WE emit; a backend that bakes its colours (Excel, ggplot, kableExtra's
+# lightable themes) cannot honour it and must render something definite instead. It was written out
+# three times, with three different rules and only one of them saying so.
+# `note` is the one-time cli explanation, when the caller has a reason worth naming.
+#' @keywords internal
+tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
+                             scope = "export") {
+  if (is.null(theme)) theme <- tx_theme_option(scope)
+  theme <- tx_resolve_theme(theme)
+  if (identical(theme, "auto") && !isTRUE(allow_auto)) {
+    if (!is.null(note))
+      cli::cli_inform(note, .frequency = "once", .frequency_id = "tabxplor_theme_auto_downgrade")
+    theme <- "light"
+  }
+  theme
+}
+
 # The chrome colours (everything that is NOT a colour-measure slot), per theme. ONE literal table:
 # tab_export_prep() builds `theme_cols` from it (the inline/kableExtra/plot/xl path) and tx_css_rules()
 # emits it as CSS (the html path), so the two renderings cannot drift.
@@ -413,8 +446,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # monospace header looks wrong. `td` in the selector keeps headers on the default; `th.tx-num`
     # inherits `.tabxplor-tab{font-family:...}`.
     ".tabxplor-tab .tx-num{white-space:nowrap;}",
-    paste0(".tabxplor-tab td.tx-num{font-family:",
-           getOption("tabxplor.tab_kable_num_font", tx_num_font_html_stars),
+    paste0(".tabxplor-tab td.tx-num{font-family:", tx_num_font("html"),
            ";font-size:1.1em;line-height:1;}"),
     ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",
     ".tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}",

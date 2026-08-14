@@ -10,6 +10,13 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 19h: f_totcol_each REGENERATED, and it alone -- verified by dev/verify_golden_field_delta.R
+#     that it is the ONLY case whose shape moves and that no other case changes a field, a column
+#     attribute, a `test` column or a `meta` sub-field (1655 cells across the other 35). `totcol =
+#     "each"` is an accepted SPELLING of "last" now (exactly one total column since Phase 6), so the
+#     fixture went from a per-col_var Total_race/Total_relig pair to the single Total every other
+#     table has. The classifier it drove had TWO DEAD identical() arms (a character compared against
+#     a list of symbols), so "each" was the only way to reach a shape tab() could not produce.
 #   Phase 19b: ALL 36 regenerated -- the per-column attribute `type` split into `scale` + `pct_base`
 #     and `ci_type` was deleted (KEY 2). NO field and NO cell value moved: dev/verify_golden_field_
 #     delta.R proved, on all 1787 cells, that each stored `scale` is exactly what the deleted

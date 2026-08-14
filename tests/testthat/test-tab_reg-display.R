@@ -89,8 +89,10 @@ test_that("Excel names the test in the p-value row label, not the numFmt (Phase 
 test_that("split_var tables get a per-group export footer; plain tables one footer at the end", {
   skip_if_not_installed("broom")
   d <- reg_data()
-  # spread_models = FALSE: the STACKED per-group footer (auto-spread side-by-side is tested separately).
-  t_split <- tab_logit(d, "married", "age", split_var = "race", spread_models = FALSE)
+  # a models list keeps the STACKED per-group footer (the auto-spread side-by-side shape is tested
+  # separately). The two models share ONE "Model fit" block per group, keyed on the group.
+  t_split <- tab_reg(d, "married", list(m1 = "age", m2 = "age"), family = "binomial",
+                     split_var = "race")
   # Phase g (A7): a styled md table's label cells use non-breaking spaces; normalise for text greps.
   md_s <- gsub(intToUtf8(160L), " ", tab_md(t_split, print = FALSE), fixed = TRUE)
   expect_true(grepl("Model fit", md_s))

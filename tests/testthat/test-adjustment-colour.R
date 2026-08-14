@@ -208,9 +208,11 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
                              integer(length(ref)))                 # the baseline stays uncoloured
   testthat::expect_true(any(fmt_color_channels(sp[[fmt_cols[[3]]]])$bg_slot > 0L))
 
-  st <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
-                family = "binomial", color = c(TRUE, "between_groups"), color_signif = "ignore",
-                spread_models = FALSE)
+  # the STACKED shape (several models per group, so no side-by-side layout): each group is a block
+  # of rows, and `obs` is filled from the first group's block.
+  st <- tab_reg(d, dependent = "married", predictors = list(m1 = "race", m2 = "race"),
+                split_var = "party3", family = "binomial",
+                color = c(TRUE, "between_groups"), color_signif = "ignore")
   col <- st[[reg_fmt_cols(st)[[1]]]]
   k   <- length(ref)
   testthat::expect_true(all(is.na(get_obs(col)[seq_len(k)])))      # first group's block

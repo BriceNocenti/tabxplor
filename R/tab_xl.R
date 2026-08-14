@@ -230,7 +230,9 @@ tab_xl <-
     # the rest stays plain black -- written as fmt_txt cells by the writer. Its plain text (derived from
     # the runs so it matches byte-for-byte) is merged into `subtext` for the geometry / styling; the
     # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
-    subtext <- purrr::map(tabs_src, get_subtext) |>
+    # Phase 19h: the SOURCE is the render model's own `subtext` slot (already discarded of empties);
+    # only the newline flattening below is xl's -- a workbook cell holds one line.
+    subtext <- purrr::map(prep$tables, "subtext") |>
       purrr::map(~ stringi::stri_replace_all_regex(., "\\\n", " ") |> stringi::stri_replace_all_regex(" +", " "))
     # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars) as rich-text run lines via the
     # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
@@ -255,16 +257,14 @@ tab_xl <-
       base_nm <- names(tabs_base)
       named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
         all(nzchar(base_nm))
+      # Phase 19h: through the SHARED rd_caption() (user caption -> set_caption() -> reg auto-title),
+      # with xl's own two extra fallbacks passed as the closure. One caption rule, one place.
       titles <- purrr::pmap_chr(
-        list(tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
-        function(t, rv, cv, tv, i) {
-          # Phase 17b: a stored caption (set_caption()) wins over the reg auto-title, then named/auto.
-          cap <- get_caption(t)
-          rt  <- reg_title(reg_call(t))
-          if (!is.null(cap)) cap
-          else if (!is.na(rt)) rt
-          else if (named_tabs) base_nm[[i]]
-          else tab_get_titles(t, rv, cv, tv)
+        list(prep$tables, tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
+        function(rd, t, rv, cv, tv, i) {
+          cap <- rd_caption(rd, caption, fallback = function()
+            if (named_tabs) base_nm[[i]] else tab_get_titles(t, rv, cv, tv))
+          if (is.null(cap)) NA_character_ else cap
         })
     } else {
       titles <- vctrs::vec_recycle(titles, length(tabs))
@@ -434,7 +434,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   txt_cols    <- roles$other_cols
   # Phase 14m-ii (rework): monospace numbers (Cascadia Mono) only for a table that SHOWS stars, else the
   # proportional font. Per-table, because a list export can mix starred (reg) and plain (crosstab) sheets.
-  font_num    <- if (isTRUE(roles$has_stars)) o$font_num_stars else o$font_num
+  font_num    <- tx_num_font("xl", roles$has_stars, plain = o$font_num, stars = o$font_num_stars)
   row_var_col <- roles$row_var_col
   totcols     <- roles$totcols
   # Phase 14o: a transposed table's `tab` is plain character (no fmt columns), so the fmt accessors that
@@ -443,7 +443,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   ref_cols    <- if (isTRUE(transposed)) integer(0) else which(is_refcol(tab))
 
   cv_names      <- if (isTRUE(transposed)) unname(roles$col_var_map) else get_col_var(tab)
-  start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
+  # the LEFT edge of each col_var block (Excel draws the border on the first column of the group)
+  start_col_var <- roles_col_var_edges(cv_names, side = "left")
 
   # Phase 14i: the label columns' runs, lifted to ABSOLUTE sheet rows. `label_merges` is one merge per
   # run (skipping length-1 runs -- Excel rejects a 1-cell "merge", and a rotated 1-row cell would only

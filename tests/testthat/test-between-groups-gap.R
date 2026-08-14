@@ -306,9 +306,9 @@ test_that("D7: `reference` picks the split_var baseline instead of the first lev
 test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   skip_if_not_installed("broom")
   d  <- gap_data()
-  sp <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "poisson",
-                                 empirical = TRUE, color = c(TRUE, "between_groups"),
-                                 spread_models = FALSE))
+  sp <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = "race"),
+                                 split_var = "party3", family = "poisson",
+                                 empirical = TRUE, color = c(TRUE, "between_groups")))
   fc <- reg_fmt_cols(sp)
   mdl <- fc[get_role(sp[fc]) == "model"]
   emp <- fc[get_role(sp[fc]) == "emp"]

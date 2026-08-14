@@ -1,9 +1,9 @@
 # PURPOSE: The single user-facing export facade -- tab_export(x, format = ) dispatches to the four
-#          format-specific exporters (tab_kable / tab_md / tab_xl / tab_plot), sharing ONE set of
+#          format-specific exporters (tab_html / tab_md / tab_xl / tab_plot), sharing ONE set of
 #          argument names and defaults (the Phase 10j unification). Mirrors jmvtab_export()'s switch.
 # ROLE: Phase 10j. A thin dispatcher: it forwards the canonical shared options + `...` to the chosen
 #       exporter, which resolves them (resolve_export_opts). The four named exporters stay exported and
-#       idiomatic (`x |> tab_kable()`); tab_export() is the one-entry alternative for `format = ` code.
+#       idiomatic (`x |> tab_html()`); tab_export() is the one-entry alternative for `format = ` code.
 # See: dev/tabxplor_phase10_exporters.md (Phase 10j), CLAUDE.md > 2.0.0 roadmap > Phase 10j.
 
 #' Export a tabxplor table to Excel, HTML, Markdown, or a plot
@@ -24,7 +24,7 @@
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 #'   inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
 #'   and any dark-mode toggle of the host page), which needs a stylesheet: it works for
-#'   \code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
+#'   \code{format = "html"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 #'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
@@ -35,7 +35,7 @@
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0 (exports are always 24-bit).
 #' @param color Set to \code{FALSE} to render without colours (monochrome).
 #' @param color_legend Print the colour legend with the subtext
-#'   (\code{"kable"}/\code{"md"}/\code{"xl"}/\code{"plot"}).
+#'   (\code{"html"}/\code{"md"}/\code{"xl"}/\code{"plot"}).
 #' @param lang Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 #'   \code{"en"} or \code{"fr"}.
 #' @param transpose Set to \code{TRUE} to transpose each table before export (rows become columns) --
@@ -43,7 +43,7 @@
 #' @param caption A single caption / title for the table.
 #' @param var_names Which variable names to write beside the table: `"both"` (the default),
 #'   `"rows"`, `"cols"` or `"none"`. Defaults to \code{getOption("tabxplor.var_names", "both")}.
-#'   See \code{\link{tab_kable}}.
+#'   See \code{\link{tab_html}}.
 #' @param ... Format-specific arguments passed to the underlying exporter.
 #'
 #' @return The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown

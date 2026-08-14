@@ -228,11 +228,13 @@ test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked
   mk <- function(...) suppressMessages(
     tab_reg(d, dependent = "y", predictors = "g", family = "binomial", wt = "w", ...))
   flat <- mk()
-  # spread_models = TRUE is the DEFAULT, and it is the shape that lost everything: it routes through
-  # reg_spread_models() -> tab_spread(), whose bare new_tab() literal dropped the whole meta, so the
-  # table asserted "intervals use the unweighted sample size" while its models came from svyglm.
+  # The auto-spread is the shape that lost everything: it routes through tab_spread(), whose bare
+  # new_tab() literal dropped the whole meta, so the table asserted "intervals use the unweighted
+  # sample size" while its models came from svyglm. The stacked shape (several models per group) is
+  # checked beside it.
   wide <- mk(split_var = "s")
-  tall <- mk(split_var = "s", spread_models = FALSE)
+  tall <- suppressMessages(tab_reg(d, dependent = "y", predictors = list(m1 = "g", m2 = "g"),
+                                   family = "binomial", wt = "w", split_var = "s"))
   expect_identical(tabxplor:::tab_inference_basis(flat), "weights")   # non-vacuous
   expect_identical(tabxplor:::tab_inference_basis(wide), "weights")
   expect_identical(tabxplor:::tab_inference_basis(tall), "weights")
@@ -254,7 +256,7 @@ test_that("a split tab_reg()'s columns name the same interval methods as an unsp
   # split gaussian/poisson table's legend could not name the interval its Obs_* columns print.
   # Phase 19b: the methods ride the COLUMNS, so a rebuild site cannot lose them at all.
   meth <- function(t) sort(unique(get_ci_method(t)[purrr::map_lgl(t, is_fmt)]))
-  expect_identical(meth(mk(split_var = "s", spread_models = FALSE)), meth(mk()))
+  expect_identical(meth(mk(split_var = "s")), meth(mk()))
 })
 
 test_that("tab_reg() on a survey design keeps the design's degrees of freedom", {

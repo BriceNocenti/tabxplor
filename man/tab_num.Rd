@@ -52,9 +52,9 @@ are converted to factor.}
 
 \item{color}{Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
 grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
-\code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
-(standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
-\code{"ratio"}. Default \code{"auto"} keeps the historical behavior.}
+\code{c("difference", "ratio")} vector). For numeric means the useful measures are
+\code{"difference"} (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio);
+\code{TRUE} uses \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.}
 
 \item{display}{A \code{{}} display template applied to the built table -- the same grammar
 \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
@@ -103,23 +103,35 @@ contributions to variance be calculated for each subtable/group (by default,
 \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
 \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-(automatically added if needed for \code{color}).
+\item{ci}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
+\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
+(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
+ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
 \itemize{
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-(relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-\item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-\code{ci = "cell"} for frequencies ("all", "all_tabs").
-}}
+\item \code{"auto"} (default): an interval on the comparison when the table makes one
+(percentages by row/column, means), an absolute cell interval for plain frequencies, and
+none at all when nothing needs one.
+\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
+and its reference -- the total cell, or the first cell under \code{ref = "first"}.
+\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
+\item \code{"no"}: no interval.
+}
+\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
+\code{color_signif} have nothing to read: asking for either alongside them informs you once and
+disables it, rather than silently testing something else.
+Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
+use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
+dual, so the bracket and the stars always agree), and means the Welch t interval. With
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
+\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
+also pins the ratio scale -- say \code{color = "ratio"} instead).}
 
 \item{conf_level}{The confidence level for the confidence intervals,
 as a single numeric between 0 and 1. Default to 0.95 (95\%).}
 
 \item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
-With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
+With \code{ci = "ref"}, print per-cell Welch t significance stars for the difference from the
 reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
 
 \item{ci_method, design_effect}{See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
@@ -165,10 +177,6 @@ correspondence analysis with \pkg{FactoMineR}.}
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
 \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces
 the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.}
-
-\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
-\code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
-as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

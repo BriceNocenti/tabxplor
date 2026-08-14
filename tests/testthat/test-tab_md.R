@@ -348,8 +348,9 @@ testthat::test_that("the stylesheet is TABLE-INDEPENDENT", {
   set_color_breaks(pct_diff = c(1, 2, 3, 4))
   b <- tab_md_css(theme = "auto")
   testthat::expect_identical(a, b)
-  # ... and it does not depend on any table at all (the `tabs` argument is inert).
-  testthat::expect_identical(tab_md_css(tabs_col), tab_md_css())
+  # ... and it does not depend on any table at all -- Phase 19h dropped the inert `tabs` argument,
+  # so the stylesheet cannot be table-specific even by accident.
+  testthat::expect_false("tabs" %in% names(formals(tab_md_css)))
 })
 
 testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {
@@ -361,7 +362,7 @@ testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {
 testthat::test_that("tab_md_css writes to a file when file is given", {
   tmp <- tempfile(fileext = ".css")
   on.exit(unlink(tmp))
-  out <- tab_md_css(tabs_col, file = tmp)
+  out <- tab_md_css(file = tmp)
   testthat::expect_true(file.exists(tmp))
   testthat::expect_gt(length(readLines(tmp)), 0)
 })

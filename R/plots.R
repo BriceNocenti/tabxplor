@@ -55,9 +55,7 @@ tx_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {
 # what ends up in a thesis appendix in greyscale.
 #' @keywords internal
 tx_plot_colors <- function(theme = NULL) {
-  th <- tx_resolve_theme(if (is.null(theme))
-    tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light") else theme)
-  if (identical(th, "auto")) th <- "light"
+  th <- tx_theme_resolve(theme)          # ggplot bakes its colours: "auto" cannot be honoured
   ch <- tx_chrome_hex(th)
   list(theme = th, text = ch$text, grey = ch$grey, bg = ch$bg,
        # the accent: a hue under colour themes, pure black under `print` (a greyscale panel leans on

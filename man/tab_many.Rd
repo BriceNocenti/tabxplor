@@ -17,42 +17,12 @@ tab_many(
   col_vars,
   tab_vars,
   wt,
-  pct = "no",
-  color = "no",
-  OR = "no",
-  chi2 = FALSE,
-  na = "keep",
-  levels = "all",
+  ...,
+  chi2,
+  totrow,
+  totcol,
+  compact,
   na_drop_all,
-  cleannames = NULL,
-  compact = NULL,
-  other_if_less_than = 0,
-  other_level = "Others",
-  ref = "auto",
-  ref2 = "first",
-  comp = "tab",
-  ci = "auto",
-  conf_level = conf_level_default(),
-  stars = NULL,
-  ci_method = NULL,
-  design_effect = NULL,
-  method_cell = NULL,
-  method_diff = NULL,
-  totaltab = "line",
-  totaltab_name = "Ensemble",
-  totrow = TRUE,
-  totcol = "last",
-  total_names = "Total",
-  add_n = TRUE,
-  add_pct = FALSE,
-  common_totrow = FALSE,
-  digits = 0,
-  subtext = "",
-  n_min = 0,
-  color_signif = "ignore",
-  color_breaks = NULL,
-  display = NULL,
-  parallel = NULL,
   filter
 )
 
@@ -93,103 +63,113 @@ set_color_breaks(breaks = NULL, ...)
 get_color_breaks(brk, type = c("positive", "all"))
 }
 \arguments{
-\item{data}{A data frame.}
+\item{data}{A data frame, or a \code{\link[survey:svydesign]{survey::svydesign}}.}
 
-\item{row_vars}{The row variable, which will be printed with one level per line.
-If numeric, it will be converted to factor. If more than one row_var if provided,
-a different table is made for each of them.}
+\item{row_vars, col_vars, tab_vars, wt}{The variable roles — see \code{\link[=tab]{tab()}}. These four (and \code{data})
+are the only arguments that may be passed by position; everything else must be named, because
+\code{\link[=tab]{tab()}}'s argument order differs from the historical one.}
 
-\item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
-One column is printed for each level of each column variable.
-For numeric variables means are calculated, in a single column.
-To pass many variables you may use syntax \code{col_vars = c(col_var1, col_var2, ...)}.}
-
-\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
-One subtable is made for each combination of levels of the tab variables.
-To pass many variables you may use syntax \code{tab_vars = c(tab_var1, tab_var2, ...)}.
-All tab variables are converted to factor. Leave empty to make a simple table.}
-
-\item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
-
-\item{pct}{The type of percentages to calculate :
+\item{...}{
+  Arguments passed on to \code{\link{tab}}
+  \describe{
+    \item{\code{row_vars,col_vars}}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
+printed with one level per line, and the column variable(s), printed with one level per
+column. For numeric variables means are calculated, in a single column. Each accepts one
+variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
+tables are merged into one by default (see \code{output_list}).}
+    \item{\code{row_var,col_var}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
+    \item{\code{sup_cols}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Supplementary columns variables, with
+only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
+set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).}
+    \item{\code{na}}{The policy to adopt for missing values, as a single string :
+\itemize{
+\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
+are printed as an explicit \code{"NA"} level.
+\item \code{"drop"}: remove \code{NA}'s in each row, col and tab variable before calculations,
+so each column is computed on its own non-missing observations (bases can then differ
+between col_vars).
+\item \code{"drop_all"}: remove every observation missing on the \code{row_vars}, \strong{any}
+\code{col_vars} or a \code{tab_vars}, so all columns share the same base (no \code{NA} anywhere).
+\item \code{"common_base"}: fix a single population -- observations non-missing on the
+\code{row_vars} and the \strong{first} \code{col_vars} (and \code{tab_vars}) -- shared by
+every column, while secondary \code{col_vars} keep their own \code{NA}'s as a level within it.
+This reproduces the historical \code{tab()} behaviour. Microdata only (not
+\code{\link{tab_counts}}).
+}
+When several \code{row_vars} are combined into one table (no \code{tab_vars}), their \code{Total}
+rows are identical whenever they share one population (\code{"keep"}, \code{"drop_all"},
+\code{"common_base"}) and are then displayed as a \strong{single} Total row; only \code{"drop"}
+can make them genuinely differ, in which case every Total row is kept (with a message).}
+    \item{\code{levels}}{The levels of \code{col_vars} to keep, as a single string or a vector the same
+length as \code{col_vars} (for finer selections use \code{\link[dplyr:select]{dplyr::select}}) :
+\itemize{
+\item \code{"all"}: by default, all levels are kept.
+\item \code{"first"}: only keep the first level of each \code{col_vars} (handy for compact
+summary tables with many indicators).
+\item \code{"auto"}: keep the first level when a \code{col_vars} has only two levels, keep all
+levels otherwise.
+}}
+    \item{\code{digits}}{The number of digits to print, as a single integer, or an integer vector the
+same length as \code{col_vars}.}
+    \item{\code{n_min}}{A single positive integer (default \code{0}, off). A pure display filter applied
+last: it hides small-base cells without recomputing anything. A row is dropped only when its
+\emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
+base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
+columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
+    \item{\code{display}}{A single optional \strong{composite display template} to show several fields in each
+value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
+Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
+\code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
+\code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
+\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid},
+\code{obs}; the first field is the \emph{primary}, shown alone by Excel and used for coloring.
+\code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
+standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
+\code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
+whether it departs from independence -- the SPSS cell layout. \code{obs} is
+\code{\link{tab_reg}}-only: the OBSERVED (crude) effect beside the modelled one, so
+\code{\link{set_display}(t, "\{or\} (obs \{obs\})")} on a regression table prints each
+adjusted odds ratio next to the unadjusted one it is compared to (\code{tab_reg} has no
+\code{display} argument of its own; see \code{color = "adjustment"} in \code{?tab_reg}). A bare field name is also accepted as a
+shorthand for its single-field template, so \code{display = "ci"} is the same as
+\code{display = "\{ci\}"} (it shows the confidence interval). The special value
+\code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
+columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, chosen per column, so a mixed
+factor + numeric table shows each value with its confidence interval in one call. Like
+\code{"\{pct\} \{ci\}"} it displays the CI the table computes (the cell, difference or ratio CI
+set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \code{color} that
+needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
+only: colors, differences and the underlying fields are unchanged.}
+    \item{\code{totaltab}}{The total table, if there are subtables/groups
+(i.e. when \code{tab_vars} is provided) :
+\itemize{
+\item \code{"line"}: by default, add a general total line (necessary for
+calculations with \code{comp = "all"})
+\item \code{"table"}: add a complete total table
+(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
+\item \code{"no"}: not to draw any total table.
+}}
+    \item{\code{totaltab_name}}{The name of the total table, as a single string.}
+    \item{\code{tot}}{The totals :
+\itemize{
+\item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
+columns.
+\item \code{"row"}: only total rows.
+\item \code{"col"}: only total column.
+\item \code{"no"}: remove all totals (after calculations if needed).
+}}
+    \item{\code{total_names}}{The names of the totals, as a character vector of length one or two.
+Use syntax of type \code{c("Total row", "Total column")} to set different names for
+rows and cols.}
+    \item{\code{pct}}{The type of percentages to calculate :
 \itemize{
 \item \code{"row"}: row percentages.
 \item \code{"col"}: column percentages.
 \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-}
-The argument is vectorised over both \code{row_vars} and \code{col_vars}. You can then write as
-the following :
-\code{pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))}}
-
-\item{color}{Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
-for the full grammar (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, a positional
-two-channel \code{c("diff", "ratio")}, or a per-type \code{c(pct = , mean = )} /
-\code{list(pct = , mean = )}). The old combined strings
-\code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by \code{color} +
-\code{color_signif}). Applies to all \code{row_vars}.}
-
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
-for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-the odds ratio of each level versus the reference level (the empirical analogue of
-the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} model).
-\itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
-\item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-\emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-row. This is the descriptive analogue of a proportional-odds (\code{\link[=tab_reg]{tab_reg()}} \code{family = "ordinal"})
-model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-the departure from proportional odds -- visible and free. Needs \code{pct = "row"} and an
-\code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
-}
-Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
-\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
-
-\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-Useful to print metadata, and to color cells based on their contribution to variance
-(\code{color = "contrib"}). Vectorised over \code{row_vars}.}
-
-\item{na}{The policy to adopt with missing values. It must be a single string.
-\itemize{
-\item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
-\item \code{na = "drop"}: removes \code{NA} levels before making each table
-(tabs made with different column variables may have a different number of
-observations, and won't exactly have the same total columns).
-\item \code{"drop_all"}: remove \code{NA}'s for all variables before making the tables.
 }}
-
-\item{levels}{The levels of \code{col_vars} to keep (for more complex selections
-use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over \code{col_vars}.
-\itemize{
-\item \code{"all"}: by default, all levels are kept.
-\item \code{"first"}: only keep the first level of each \code{col_vars}
-\item \code{"auto"}: keep the first level when \code{col_var} is only two levels,
-keep all levels otherwise
-}}
-
-\item{na_drop_all}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
-Removes all observations with a \code{NA} in any of the chosen variables, for all tables
-(tabs for each column variable will have the same number of observations).}
-
-\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
-prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
-passed to \code{\link{tab_prepare}}.}
-
-\item{compact}{With several \code{row_vars}, set to \code{TRUE} to bind all tables
-in a single \code{tabxplor_tab} (\code{FALSE} by default). The \code{tabxplor.compact} option has been
-removed; use the \code{output_list} argument of \code{\link[=tab]{tab()}} instead (the unified entry point, which
-merges by default).}
-
-\item{other_if_less_than}{When set to a positive integer, levels with less count
-than it will be merged into an "Others" level.}
-
-\item{other_level}{The name of the "Other" level, as a single string.}
-
-\item{ref}{The reference cell to calculate differences and ratios
+    \item{\code{ref}}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
 \itemize{
 \item \code{"auto"}: by default, cell difference from the corresponding total
@@ -208,120 +188,248 @@ to match with the names of the rows (or columns). Be precise enough to match onl
 column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
-
-\item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
+    \item{\code{ref2}}{The second reference level for odds ratios (or relative risk ratios), needed
 only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
 first level is used by default. For a \strong{binary} factor \code{ref2} is ignored: each level's
 OR is computed against the \emph{other} level, so both levels show a value (reciprocals of one
 another) instead of one being forced to \code{1}. See \code{ref} above for the list of possible values.}
-
-\item{comp}{The comparison level : by subtables/groups, or for the whole table.
-Vectorised over \code{row_vars}.
+    \item{\code{comp}}{The comparison level : by subtables/groups, or for the whole table.
 \itemize{
 \item \code{"tab"}: by default, contributions to variance,
 row differences from totals/first cells, and row confidence intervals for these
 differences, are calculated for each \code{tab_vars} group.
 \item \code{"all"}: compare cells to the general total line (provided there is
-a total table with a total row), or with the reference line of the total table
-when \code{ref = "first"}, an integer or a regular expression.
+a total table with a total row), or with the first line of the total table
+when \code{ref = "first"}.
 }}
-
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
-Vectorised over \code{row_vars}.
+    \item{\code{OR}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The odds ratio is computed on \strong{every} row/col
+percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
+\code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
 \itemize{
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-(relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-\item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-\code{ci = "cell"} for frequencies ("all", "all_tabs").
+\item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
+\item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
+\item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
 }
-Confidence intervals use fast closed-form methods. For percentages, \code{ci = "cell"}
-uses the Wilson score interval and \code{ci = "diff"} the Newcombe method-10 hybrid-score
-interval (its dual, so the bracket and the significance stars always agree); means use the
-Welch t interval. These can be changed with \code{method_cell} / \code{method_diff}. By
-default the interval is printed in the \verb{[inf;sup]} form; set
-\code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} instead.}
+Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
+\code{ref2} (the column level).}
+    \item{\code{test}}{Set to \code{TRUE} to calculate a statistical test of independence for each
+(sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
+ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. The whole-table summary also carries an
+\strong{effect size} (Cramer's V / phi for factors, eta-squared for means) and, on a small sparse
+factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-value. Useful to print
+metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
+Automatically added if needed for \code{color}.
 
-\item{conf_level}{The confidence level, as a single numeric between 0 and 1.
+\code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
+passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogonal fact --- the
+\strong{inference basis} (the "weighting level" of \code{vignette("tabxplor")}), stored on each
+column and named in the table's footer --- says how the \emph{interval and the test} are:
+\enumerate{
+\item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
+\strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
+they carry no design effect. This is the default, and the footer says so.
+\item \code{wt = w} plus \code{design_effect = TRUE} (or, for a whole session,
+\code{options(tabxplor.design_effect = TRUE)}) --- the same intervals and
+tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
+(the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
+\code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
+\code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. Being exact rather
+than a bound, it can make an interval \emph{narrower} as well as wider --- unequal probabilities
+can carry more information than equal ones. It is blind to clustering and to calibration, which
+the weights do not record.
+\item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
+the same quantities, now with strata, clusters, \code{fpc} and calibration, and every interval
+referred to the design's own degrees of freedom.
+}
+A fourth basis is not a choice but a fallback: when a design-based table's variance cannot be
+computed, it reverts to the weighting-only correction, and its footer says so.
+Turn the option on when you want a \code{tab()} percentage interval to be comparable with the
+\code{Obs_*} column of a \code{\link{tab_reg}} on the same data: \code{tab_reg()} never reads it,
+because its crude companions are \emph{always} on the weighted basis, beside a model column that
+always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
+\code{wt} beside a design is an error (a design already carries its own weights).}
+    \item{\code{ci}}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
+\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
+(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
+ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
+\itemize{
+\item \code{"auto"} (default): an interval on the comparison when the table makes one
+(percentages by row/column, means), an absolute cell interval for plain frequencies, and
+none at all when nothing needs one.
+\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
+and its reference -- the total cell, or the first cell under \code{ref = "first"}.
+\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
+\item \code{"no"}: no interval.
+}
+\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
+\code{color_signif} have nothing to read: asking for either alongside them informs you once and
+disables it, rather than silently testing something else.
+Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
+use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
+dual, so the bracket and the stars always agree), and means the Welch t interval. With
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
+\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
+also pins the ratio scale -- say \code{color = "ratio"} instead).}
+    \item{\code{conf_level}}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
-
-\item{stars}{Logical. When \code{TRUE} (opt-in; default \code{FALSE}) and \code{ci = "diff"}, each
-cell shows significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
-\code{***} p<0.01, customisable via \code{options("tabxplor.signif_levels")} /
-\code{"tabxplor.signif_labels"}). Significance is read from the same interval that is displayed
-(universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
-significance computation entirely. \code{NULL} uses \code{options("tabxplor.stars")}.}
-
-\item{ci_method, design_effect}{See \code{\link{tab}}. \code{ci_method} is the ONE named vector of
-interval methods (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial);
-\code{design_effect} opts a weighted table's intervals into the weighting's design effect.}
-
-\item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
+    \item{\code{stars}}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+significance stars for each cell's difference from its reference, read from the displayed interval
+itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
+\code{FALSE}). See \code{\link{tab_many}}.}
+    \item{\code{ci_method}}{The confidence-interval method of each kind of interval, as ONE named vector --
+partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
+\itemize{
+\item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
+(default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
+degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
+the effective base, referred to a survey design's own degrees of freedom).
+\item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+(default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
+(Agresti-Caffo) or \code{"wald"}.
+\item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
+group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
+interval).
+\item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
+\code{"robust"} (default, each group's own variance = modified/robust Poisson),
+\code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
+(naive).
+}
+Whatever the method, the significance stars come from that same interval, so bracket and stars
+always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
+a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.}
+    \item{\code{design_effect}}{Logical or \code{NULL} (default). Whether the confidence intervals, stars and
+colour thresholds of a \strong{weighted} table account for the weighting's own design effect (the
+exact flat-design variance) instead of using the raw sample size. \code{NULL} takes
+\code{options("tabxplor.design_effect")} (\code{FALSE} by default). Ignored without \code{wt}, and
+superseded by a \code{\link[survey]{svydesign}} passed as \code{data} (which is always
+design-based). See the "Weights" section of the introduction vignette.}
+    \item{\code{method_cell,method_diff}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
 \code{ci_method = c(cell = , diff = )} instead.}
-
-\item{totaltab}{The total table, if there are subtables/groups
-(i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.
+    \item{\code{color}}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
+prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
+\code{difference} on the text + the \code{ratio} on the background; numerics: the
+\code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"line"}: by default, add a general total line (necessary for
-calculations with \code{comp = "all"})
-\item \code{"table"}: add a complete total table
-(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-\item \code{"no"}: not to draw any total table.
-}}
-
-\item{totaltab_name}{The name of the total table, as a single string.}
-
-\item{totrow}{By default, total rows are printed.
-Set to \code{FALSE} to remove them (after calculations if needed).
-Vectorised over \code{row_vars}.}
-
-\item{totcol}{The policy with total columns. Vectorised over \code{col_vars}.
+\item \code{"difference"}: cell difference from the reference (percentage points for factors;
+the standardized difference Glass's \eqn{\Delta} for numeric means).
+\item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
+coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
+\code{"ratio"}).
+\item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
+}
+The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
+\code{"RR"}, \code{"or"} / \code{"OR"}.
+The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
+\strong{names pick the column type} (\code{pct} / \code{mean}). So
+\code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
+of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
+and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
+mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
+may go on the background.
+Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
+argument. \code{color} also names the table's COMPARISON, and so decides which interval
+\code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
+\code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)}
+    \item{\code{color_signif}}{How significance gates the color, as a single string:
 \itemize{
-\item \code{"last"}: by default, only prints a total column for the last
-column variable (of class factor, not numeric).
-\item \code{"each"}: print a total column for each column variable.
-\item \code{"no"}: remove all total columns (after calculations if needed).
-}}
-
-\item{total_names}{The names of the totals, as a character vector of length one or two.
-Use syntax of type \code{c("Total row", "Total column")} to set different names for
-rows and cols.}
-
-\item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to \code{FALSE} not to add another
+\item \code{"ignore"} (default): color every deviation by its observed size.
+\item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
+deviation is not significant at \code{conf_level}. A cell is coloured only when it is BOTH
+significant AND at least as large as the first colour threshold, so an un-coloured (grey) cell
+may still be significant -- just too small to colour (and it can carry significance stars). The
+only guarantee is: a coloured cell is significantly different from its reference.
+\item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
+only cells whose interval clears the threshold, with dimmer, conservative colors.
+}
+With \code{color = "contrib"} the three values are three readings of the same departure from
+independence, because a contribution has no confidence interval to floor:
+\itemize{
+\item \code{"ignore"} and \code{"grey_non_signif"} color the \strong{relative} contribution
+(a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
+the correspondence-analysis reading, so the scale is relative to the table);
+\item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
+the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
+thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
+}
+In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
+residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
+whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
+the package rule -- weighted estimate, and a base that follows the inference basis: the raw
+\code{n} by default (the reading a correspondence analysis expects), and under
+\code{options(tabxplor.design_effect = TRUE)} or a \code{survey} design that raw \code{n} divided
+by the \strong{association's} design effect -- Rao-Scott's mean generalized delta-bar, the very
+one the whole-table test reports, so the colours and the p-value of one table describe one design
+effect. The
+contribution itself stays weighted (it estimates the population table's structure, and is therefore
+identical at every basis, which is what keeps the correspondence-analysis reading safe). One base
+for the whole table, so a counts table and a percentage table of the same data give the SAME
+residuals. Cells whose expected count is below 1 are left
+uncolored: the normal approximation does not hold there.
+Colors are computed per column at print time; since 2.0.0 each column records the confidence level
+it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
+never recorded one (a hand-built \code{\link{fmt}}) falls back to
+\code{options(tabxplor.conf_level)}.}
+    \item{\code{color_breaks}}{A per-table override of the colour thresholds, a named list of scales like
+\code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
+a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
+Unset scales fall back to the global setting.}
+    \item{\code{add_n}}{For \code{pct = "row"} or \code{pct = "col"}, set to \code{FALSE} not to add another
 column or row with unweighted counts (\code{n}).}
-
-\item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
+    \item{\code{add_pct}}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
 (for  \code{pct = "col"}).}
+    \item{\code{common_totrow}}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
+row variable. Set to \code{TRUE} to collapse the identical Total rows into a single shared Total,
+displayed in its own group after a blank-line separator (bold when the total is the reference for
+at least one row variable). Genuinely different totals (e.g. under \code{na = "drop"}) are never merged.}
+    \item{\code{subtext}}{A character vector to print rows of legend under the table.}
+    \item{\code{output_list}}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
+merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
+one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.}
+    \item{\code{parallel}}{Opt-in parallel build of the per-\code{row_var} tables, using the (Suggests-only)
+\pkg{mirai} package. \code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off);
+\code{FALSE} forces serial; \code{TRUE} uses an auto worker count; an integer sets the number of
+worker processes. Byte-identical to the serial result. It pays off for the survey workflow --
+\emph{many} \code{row_vars} against a small/medium data frame (roughly 10k-60k rows) in ONE
+\code{tab()} call -- and is a loss for few tables or multi-million-row data (so it stays opt-in).
+The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.}
+    \item{\code{spread_vars}}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
+to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
+    \item{\code{names_prefix,names_sort}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} These belong to
+\code{\link{tab_spread}}, which is the function that names the new columns; they reach it only
+when \code{spread_vars} is given. Call \code{tab_spread()} yourself for control over the names.}
+    \item{\code{cleannames}}{Set to \code{TRUE} to clean levels names, by removing
+prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
+passed to \code{\link{tab_prepare}}.}
+    \item{\code{other_if_less_than}}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
+    \item{\code{other_level}}{The name of the "Other" level, as a single string.}
+    \item{\code{.cache,.defer_level_merge,.return_armed,.levels_order}}{Internal, for the jamovi
+\code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed
+multi-tier store is threaded through (Phase 7e); \code{.defer_level_merge} keeps full factor
+levels through the aggregate and test so \code{levels} becomes a display-time drop;
+\code{.return_armed} (Phase 7f) returns the pre-\code{finalize_color_spec} table so the tier-3
+cache can re-paint colours without a rebuild; \code{.levels_order} (Phase 7g-ii) is a named list
+of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,
+relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
+All default off; not for direct use.}
+  }}
 
-\item{common_totrow}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
-row variable; \code{TRUE} collapses the identical Total rows into a single shared Total in its own group.}
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{\link[=tab]{tab()}}'s \code{test}.}
 
-\item{digits}{The number of digits to print, as a single integer, or an integer vector
-the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}
+\item{totrow, totcol}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{\link[=tab]{tab()}}'s \code{tot}. A total row is
+always computed and exactly one total column is shown, so both are cosmetic; \code{totcol = "each"}
+and \code{"all_col_vars"} now give that same single total column instead of erroring.}
 
-\item{subtext}{A character vector to print rows of legend under the table.}
+\item{compact}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{\link[=tab]{tab()}}'s \code{output_list} (inverted).}
 
-\item{n_min}{A single positive integer (default \code{0}, off). A pure display filter -- see
-\code{\link{tab}} -- that hides small-base rows/cells (largest base below \code{n_min} drops the
-row; own base below \code{n_min} blanks the cell) without recomputing anything.}
+\item{na_drop_all}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} <\link[tidyr:tidyr_tidy_select]{tidy-select}>
+Use \code{\link[=tab]{tab()}}'s \code{filter}: \code{na_drop_all = c(a, b)} is \code{filter = !is.na(a) & !is.na(b)}.}
 
-\item{color_signif}{How significance gates the color -- see \code{\link{tab}}.}
-
-\item{color_breaks}{A per-table colour-threshold override -- see \code{\link{tab}}.}
-
-\item{parallel}{Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
-\pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
-\code{tabxplor.parallel} option.}
-
-\item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A
-\code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
-(which will be converted to code, i.e. to a call). Prefer filtering the data with
-\code{\link[dplyr:filter]{dplyr::filter}} upstream of \code{tab()}; this argument is kept
-for back-compatibility (e.g. printing multiple tabs from a
-\code{\link[tibble:tribble]{tibble::tribble}}).}
+\item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A \code{\link[dplyr:filter]{dplyr::filter}} to
+apply to the data frame first — see \code{\link[=tab]{tab()}}. Prefer filtering upstream.}
 
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
 \code{\link{tab_many}} or \code{\link{tab_plain}}.}
@@ -366,14 +474,6 @@ TYPOGRAPHY -- a list \code{bold} / \code{italic} / \code{underline} of 8 logical
 under-represented ones italic". The colour palettes report bold on every text slot and nothing on
 the background ones, i.e. exactly how they have always been drawn.}
 
-\item{...}{Scales passed individually and named, e.g.
-\code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
-value is either a plain vector of signed / reciprocal literals (negatives, or ratios < 1, are
-the under-represented side; a one-sided vector auto-mirrors; \code{NA} skips an intensity slot)
-or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switch it off, e.g.
-\code{list(over = 2)} for the "only x2" rule). The old \code{pct_breaks} / \code{mean_breaks} /
-\code{contrib_breaks} arguments are soft-deprecated but still work (mapped onto the new scales).}
-
 \item{breaks}{A named list of scales to set, e.g.
 \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 their current value.}
@@ -385,13 +485,8 @@ only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"me
 \code{mean_ratio}) are still accepted.}
 }
 \value{
-A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
-When there are two \code{row_vars} or more, a list of \code{tibble} of class \code{tab}.
-All non-text columns are of class \code{\link{fmt}}, storing all
-the data necessary to print formats and colors. Columns with \code{row_var} and
-\code{tab_vars} are of class \code{factor} : every added \code{factor} will be
-considered as a \code{tab_vars} and used for grouping. To add text columns without
-using them in calculations, be sure they are of class \code{character}.
+What \code{\link[=tab]{tab()}} returns: a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with
+\code{tab_vars}), or a \code{tabxplor_tabs} list under \code{output_list = TRUE} / \code{compact = FALSE}.
 
 A list with the variables names.
 
@@ -412,17 +507,22 @@ of these.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-Superseded (2.0.0) by \code{\link[=tab]{tab()}}, the unified entry point (it accepts several row_vars /
-col_vars). \code{tab_many()} keeps working and keeps its historical list return for >=2 row_vars
-(tab() merges them by default; pass \code{output_list = TRUE} for a list).
+Superseded (2.0.0) by \code{\link[=tab]{tab()}}, the unified entry point: it accepts several \code{row_vars} /
+\code{col_vars} and merges them into one table by default (\code{output_list = TRUE} gives the list
+\code{tab_many()} used to return).
 
-A full-featured function to create, manipulate and format many cross-tables
-as one, using colors to make the printed tab more easily readable (in R terminal or
-exported to Excel with \code{\link{tab_xl}}).
-Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you can then use all
-\pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
-\code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
-or \code{\link[dplyr:mutate]{mutate}}.
+\code{tab_many()} now forwards everything to \code{\link[=tab]{tab()}}, translating the five arguments that were
+renamed:\tabular{ll}{
+   \code{tab_many()} \tab \code{\link[=tab]{tab()}} \cr
+   \code{chi2 = TRUE} \tab \code{test = TRUE} \cr
+   \code{totrow = FALSE} \tab \code{tot = "col"} \cr
+   \code{totcol = "no"} \tab \code{tot = "row"} \cr
+   \code{compact = TRUE} \tab \code{output_list = FALSE} \cr
+   \code{na_drop_all = c(a, b)} \tab \code{filter = !is.na(a) & !is.na(b)} \cr
+}
+
+
+Everything else keeps its name and meaning — see \code{\link[=tab]{tab()}}.
 
 Color breaks are a named list of the ten measure scales \code{pct_diff},
 \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
@@ -471,35 +571,6 @@ is inert (exports are always 24-bit).
 \item \code{get_color_breaks()}: get the color breaks currently in use, in the canonical Phase-5 shape.
 
 }}
-\section{Significance stars}{
-
-With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
-difference from the reference is real and not just sampling noise: \code{*} means significant at
-the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
-p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
-\code{$pvalue} or \code{get_pvalue()}.
-
-There is no separate statistical test run behind the scenes: the significance is read straight
-from the confidence interval that is displayed. A cell is significant at a given level exactly
-when its interval at that confidence level no longer contains zero, so the stars and the printed
-\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
-the interval:
-\itemize{
-\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
-Newcombe hybrid-score interval. This is, to a very close approximation, the classical
-two-sample test of proportions (the score / "N-1" chi-squared test).
-\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
-the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
-\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
-variances); inverting the Welch t interval is exactly this well-known test.
-\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
-so it carries no stars and its \code{pvalue} is \code{NA}.
-}
-On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to the weighting's own design effect with
-\code{options("tabxplor.design_effect" = TRUE)}.
-}
-
 \examples{
 # Make a summary table with many col_vars, showing only one specific level :
 \donttest{
@@ -510,7 +581,7 @@ data <- forcats::gss_cat |> mutate(across(
   ~ forcats::fct_relevel(., first_lvs[first_lvs \%in\% levels(.)])
 ))
 tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
-         levels = "first", pct = "row", chi2 = TRUE, color = "auto")
+         levels = "first", pct = "row", test = TRUE, color = "auto")
 }
 
 # Can be used with map and tribble to program several tables with different parameters
@@ -520,13 +591,13 @@ library(purrr)
 library(tibble)
 pmap(
   tribble(
-    ~row_var, ~col_vars       , ~pct , ~filter              , ~subtext               ,
+    ~row_vars, ~col_vars      , ~pct , ~filter              , ~subtext               ,
     "race"  , "marital"       , "row", NULL                 , "Source: GSS 2000-2014",
     "relig" , c("race", "age"), "row", "year \%in\% 2000:2010", "Source: GSS 2000-2010",
     NA_character_, "race"     , "no" , NULL                 , "Source: GSS 2000-2014",
   ),
   .f = tab_many,
-  data = forcats::gss_cat, color = "auto", chi2 = TRUE)
+  data = forcats::gss_cat, color = "auto", test = TRUE)
 }
 set_color_palette(text_colors = c("#02a5b3", "#0891c9", "#0267c7", "#300dfd"))
 set_color_breaks(

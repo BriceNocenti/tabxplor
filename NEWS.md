@@ -38,6 +38,10 @@
   the counterpart of the chi-squared for factor columns.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
   sparse table uses Fisher's exact.
+* **`tab_shape()` and `tab_supports()`** answer "what have I got, and what can I do with it?" before
+  you try. A table reports whether it is merged (several row variables), grouped (sub-tables), or a
+  list, and which of `tab_compact()` / `tab_transpose()` / `transpose = TRUE` accept that shape — a
+  support matrix that used to exist only as scattered error messages.
 * **`forest_plot()` — a chart of any tabxplor table**, cross-table or regression: every estimate with
   its confidence interval, its stars and *its own cell colour*, one panel per column of the table.
   It reads the finished table and re-computes nothing, so the figure cannot disagree with the numbers
@@ -209,6 +213,13 @@
   which is what makes them match the model column beside them.
 * **`tab(pct = "all", ci = "cell")` used to error** ("`false` must be a vector, not NULL"), weighted or
   not. Fixed.
+* **What `tab()` returns is now decided by `output_list` alone.** `options(tabxplor.output_kable)` was
+  read inside a build stage and changed the *class* of the returned object; it now only renders the
+  result with `tab_html()`, as documented.
+* **`pct` is vectorised over `col_vars`**, like `levels` and `digits` (`tab(d, x, c(a, b), pct =
+  c("row", "col"))`). A per-`row_var` list is refused with a message: that axis is global in `tab()`.
+* **`totcol = "each"` and `"all_col_vars"` no longer error and no longer build per-`col_var` totals** —
+  exactly one total column is shown since 2.0.0, and they are now spellings of it.
 * **`tab_reg(stats = "dispersion")` now names the model check, not the Pearson dispersion.** The exact
   Pearson dispersion of a count model keeps its footer row under `stats = "phi"`, and it is now correct
   for weighted models too (it used to divide by a survey design's degrees of freedom, reading about 20
@@ -269,6 +280,21 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **`tab(filter = )` accepted only a character string.** A bare expression (`filter = !is.na(x)`) was
+  evaluated in the caller's frame instead of the data, and aborted with "object not found" — although
+  that is the form the documentation shows. Both forms work now, and an expression may reference the
+  caller's own variables.
+* **A transposed regression table's model-fit footer rendered grey in HTML**, where the untransposed
+  one keeps it black: the transpose dropped the per-cell "reading anchor" flags, and a silent fallback
+  hid it.
+* **`theme = "print"` on `tab_html(engine = "kableExtra")` rendered a black table** — the
+  black-and-white publication palette got the dark theme.
+* **`tab_spread()` left the table's tests pointing at columns that no longer exist**, so a spread
+  cross-table lost its whole test summary (chi-squared, effect size, p-value).
+* **`tab_plot()`'s colour legend ignored the palette's typography** and forced every token bold, so
+  under `theme = "print"` — where direction is encoded as bold vs italic on black text — the legend
+  became unreadable.
 
 * **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.
   The combination used to abort with *"Unknown color measure"* — on cross-tables and on mean tables
@@ -352,8 +378,12 @@
 
 Soft-deprecated (still work):
 
-* `tab_many()` (use `tab()` with several `row_vars` / `col_vars`); singular `row_var` / `col_var`;
-  `tab(sup_cols =)` (use `col_vars =`); `tab(filter =)` (filter upstream).
+* `tab_many()` — now a thin shim over `tab()`, translating the five arguments that were renamed
+  (`chi2` → `test`, `totrow` / `totcol` → `tot`, `compact` → `output_list`, and
+  `na_drop_all = c(a, b)` → `filter = !is.na(a) & !is.na(b)`). Only `data`, `row_vars`, `col_vars`,
+  `tab_vars` and `wt` may be passed by position; everything else must be named.
+* Singular `row_var` / `col_var`; `tab(sup_cols =)` (use `col_vars =`); `tab(filter =)` (filter
+  upstream); `tab(names_prefix =, names_sort =)` (they belong to `tab_spread()`).
 * `tab_pct()` / `tab_tot()` / `tab_totaltab()`; `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
 * Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
   `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`.

@@ -211,25 +211,16 @@ NULL
 #'    a total table with a total row), or with the first line of the total table
 #'    when \code{ref = "first"}.
 #' }
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
-#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-#'   the odds ratio of each level versus the reference level (the empirical analogue of
-#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
+#' @param OR `r lifecycle::badge("deprecated")` The odds ratio is computed on **every** row/col
+#'  percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
+#'  \code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
 #'  \itemize{
-#'   \item \code{"no"}: by default, no OR are calculated.
-#'   \item \code{"OR"}: print OR (instead of percentages).
-#'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
-#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
-#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
-#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
-#' }
-#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
-#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
+#'   \item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
+#'   \item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
+#'   \item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
+#'  }
+#'  Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
+#'  \code{ref2} (the column level).
 #' @param test Set to \code{TRUE} to calculate a statistical test of independence for each
 #' (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
 #' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. The whole-table summary also carries an
@@ -269,23 +260,29 @@ NULL
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0: the test is a
 #' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 #' misleading. Still works.
-#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-#'  (automatically added if needed for \code{color}).
+#' @param ci **What the confidence interval is anchored on** -- one question, four answers. The
+#'  \emph{geometry} of the interval is not asked here: it follows the comparison the table makes
+#'  (\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
+#'  ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
 #'   \itemize{
-#'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'    relative total cell (or relative first cell when \code{ref = "first"}).
-#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-#'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
+#'    \item \code{"auto"} (default): an interval on the comparison when the table makes one
+#'      (percentages by row/column, means), an absolute cell interval for plain frequencies, and
+#'      none at all when nothing needs one.
+#'    \item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
+#'      and its reference -- the total cell, or the first cell under \code{ref = "first"}.
+#'    \item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
+#'    \item \code{"no"}: no interval.
 #'   }
-#'  By default, for percentages, \code{ci = "cell"} uses the Wilson score interval and
-#'  \code{ci = "diff"} the Newcombe hybrid-score interval (its dual, so the bracket and the
-#'  significance stars always agree); means use the Welch t interval. The method can be changed
-#'  in \code{\link{tab_many}} (\code{method_cell} / \code{method_diff} / \code{method_mean_diff}). By
-#'  default, with \code{ci = "cell"}, the result is printed in the `[inf;sup]` form.
-#'  Set `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
+#'  \code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
+#'  \code{color_signif} have nothing to read: asking for either alongside them informs you once and
+#'  disables it, rather than silently testing something else.
+#'  Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
+#'  use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
+#'  dual, so the bracket and the stars always agree), and means the Welch t interval. With
+#'  \code{ci = "cell"} the result prints as `[inf;sup]`; set
+#'  `options("tabxplor.ci_print" = "moe")` for `pct +- moe`.
+#'  \code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
+#'  also pins the ratio scale -- say \code{color = "ratio"} instead).
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
 #' @param stars Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
@@ -324,26 +321,31 @@ NULL
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param color Which measure(s) to color, on which visual channel. \code{FALSE} (default)
-#' prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: \code{diff} on
-#' the text + \code{ratio} on the background; numerics: \code{ratio}; counts: \code{contrib};
-#' odds-ratio columns: \code{or}). Otherwise a measure name, on the \strong{text} channel:
+#' prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
+#' \code{difference} on the text + the \code{ratio} on the background; numerics: the
+#' \code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 #'  \itemize{
-#'   \item \code{"diff"}: cell difference from the reference (percentage points for factors;
+#'   \item \code{"difference"}: cell difference from the reference (percentage points for factors;
 #'   the standardized difference Glass's \eqn{\Delta} for numeric means).
 #'   \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
+#'   \item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
+#'   coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
+#'   \code{"ratio"}).
 #'   \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-#'   \item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its
-#'   own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 #'  }
+#' The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
+#' \code{"RR"}, \code{"or"} / \code{"OR"}.
 #' The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
-#' \strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
-#' puts \code{diff} on the text and \code{ratio} on the background of every column;
-#' \code{c(pct = "diff", mean = "ratio")} colors factors by \code{diff} and numeric means by
-#' \code{ratio} (text channel); \code{list(pct = c("diff", "ratio"), mean = "ratio")} combines
-#' both (per-type, with channels). Only \code{diff} / \code{ratio} may go on the background.
+#' \strong{names pick the column type} (\code{pct} / \code{mean}). So
+#' \code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
+#' of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
+#' and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
+#' mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
+#' may go on the background.
 #' Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
-#' argument. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still
-#' work but are soft-deprecated in favor of \code{color_signif}.)
+#' argument. \code{color} also names the table's COMPARISON, and so decides which interval
+#' \code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
+#' \code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)
 #' @param color_signif How significance gates the color, as a single string:
 #'  \itemize{
 #'   \item \code{"ignore"} (default): color every deviation by its observed size.
@@ -409,8 +411,9 @@ NULL
 #'  The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.
 #' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 #'  to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).
-#' @param names_prefix,names_sort Passed to \code{\link{tab_spread}} when \code{spread_vars} is
-#'  given: a string prefixed to each new column name, and whether to sort the new columns.
+#' @param names_prefix,names_sort `r lifecycle::badge("deprecated")` These belong to
+#'  \code{\link{tab_spread}}, which is the function that names the new columns; they reach it only
+#'  when \code{spread_vars} is given. Call \code{tab_spread()} yourself for control over the names.
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
 #' passed to \code{\link{tab_prepare}}.
@@ -654,9 +657,8 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     tab_vars <- names(tidyselect::eval_select(tab_vars, data))
   }
 
-  # Phase 7a: `sup_cols` is soft-deprecated. `col_vars` already accepts several variables, so
-  # supplementary columns go there with `levels = "first"`. Kept working during deprecation by
-  # folding them into col_vars at levels = "first" (below).
+  # Phase 7a: `sup_cols` is soft-deprecated -- `col_vars` already accepts several variables, so
+  # supplementary columns go there with `levels = "first"`.
   sup_cols_quo <- rlang::enquo(sup_cols)
   if (quo_miss_na_null_empty_no(sup_cols_quo)) {
     sup_cols <- character()
@@ -680,6 +682,10 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                        "i" = "Got {.val {setdiff(spread_vars, tab_vars)}}, tab_vars are {.val {tab_vars}}."))
     }
   }
+
+  # Defused here and forwarded as a VALUE (see tab_build()'s WARNING): a quosure, or NULL when absent.
+  filter_quo <- rlang::enquo(filter)
+  if (rlang::quo_is_missing(filter_quo) || rlang::quo_is_null(filter_quo)) filter_quo <- NULL
 
   wt_quo <- rlang::enquo(wt)
   if (quo_miss_na_null_empty_no(wt_quo)) {
@@ -718,7 +724,15 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   ci_off <- ci_disable_signif(ci, color_spec$signif, stars)
   color_spec$signif <- ci_off$color_signif ; stars <- ci_off$stars
   color <- color_spec$legacy
-  vctrs::vec_assert(pct  , size = 1)
+  # Phase 19h: `pct` is per COL_VAR, like `levels` and `digits` -- it used to be the odd one out,
+  # size-1-asserted, although the engine has always recycled it (that is how tab_many() offered it).
+  # A per-ROW_VAR list stays refused: Phase 6 globalised the row axis on purpose (§5).
+  if (is.list(pct))
+    cli::cli_abort(c(
+      "{.arg pct} is per {.arg col_vars}, so it must be a character vector, not a list.",
+      "i" = "The row-variable axis is global in {.fn tab}: for different percentages per row
+             variable, build one {.fn tab} per variable."))
+  stopifnot(all(is.na(pct) | pct %in% c("row", "col", "all", "all_tabs", "no")))
   # Phase 6d (§4): `ref` may be a (named) vector -- one reference row per row_var -- so it is NOT
   # size-1-asserted. tab_build() matches names to row_vars (else by order); scalar applies to all.
   vctrs::vec_assert(ref2, size = 1)
@@ -760,16 +774,20 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
 
+  # Phase 19h: the deprecated `sup_cols` axis is folded into the col_var axis ONCE, here, instead of
+  # being mirrored into three separate arguments of the call below (col_vars / levels / pct), where
+  # a fourth mirror -- `ref` -- had already been written and commented out.
+  sup <- tab_deprecate_sup_cols(sup_cols, col_var, levels, pct)
+
   result <- tab_build(data = data,
            row_vars = tidyselect::all_of(row_var),
-           col_vars = tidyselect::all_of(c(col_var, sup_cols)),
+           col_vars = tidyselect::all_of(sup$col_vars),
            tab_vars = tidyselect::all_of(tab_vars),
            wt = !!wt,
-           # Phase 7a: `levels` (per col_var) drives the main col_vars; sup_cols (soft-deprecated)
-           # always show their first level. `levels` recycles to length(col_var).
-           levels = c(rep(levels, length.out = length(col_var)), rep("first", length(sup_cols))),
+           levels = sup$levels,
            na = na_effective, na_drop_all = tidyselect::all_of(na_drop_all),
-           filter = if (missing(filter)) NULL else {{ filter }},
+           # defused here, passed as a VALUE: `{{ }}` inside the `if` used to defuse the `if` itself.
+           filter = filter_quo,
            digits = digits,
            cleannames = cleannames,
            output = if (isTRUE(output_list)) "list" else "single", #pvalue_line = pvalue_line,
@@ -783,7 +801,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            # this is byte-identical to the historical per-col_var total.
            totcol = if ("col" %in% tot) { "last" } else { "no" },
            total_names = total_names,
-           pct  = c(rep(pct, length(col_var)), rep("row", length(sup_cols))),
+           pct  = sup$pct,
            ref = ref, ref2 = ref2, #c(ref, rep(ref , length(sup_cols))),
            comp = comp,
            # tab_build()'s internal arg keeps the `chi2` name (it drives tab_chi2(); the ANOVA arm
@@ -888,6 +906,111 @@ tab_deprecate_or <- function(OR, display, ref2, ref) {
   out$ref2 <- new_ref2
   if (length(ref) == 1L && identical(as.character(ref)[1], "auto")) out$ref <- "first"
   out
+}
+
+
+# tab_deprecate_many() -- Phase 19h (KEY 7): THE `tab_many()` vocabulary map, in one place, on the
+# tab_deprecate_or() model.
+#
+# `tab_many()` is the only surviving home of the pre-2.0.0 spellings, which is why four public
+# functions documented four spellings of one table. Each legacy formal has an exact `tab()`
+# equivalent -- they were RENAMED, not removed -- so the shim translates rather than degrades:
+#
+#   chi2                  ->  test                 (a numeric col_var's whole-table test is Welch's F,
+#                                                    so the old name named half of what it does)
+#   totrow / totcol       ->  tot                  ("each"/"all_col_vars" collapse to one total
+#                                                    column, never an error -- study SS5)
+#   compact               ->  output_list          (inverted)
+#   na_drop_all = c(a,b)  ->  filter = !is.na(a) & !is.na(b)
+#
+# The `na_drop_all` mapping is exact, not an approximation: `filter` is materialised on the
+# UNSELECTED data (tab_build) and applied immediately before tab_prepare(), which is where
+# na_drop_all's own na.omit() ran. Its only other effect was the na_text/na_num "keep" shortcut,
+# which changes timing and not results (the rows are gone either way).
+#
+# Returns only the entries the caller actually set, so tab()'s own defaults apply to the rest --
+# a shim that passed `tot = "row"` because `totrow` defaults to TRUE would silently drop the
+# total column.
+#' @keywords internal
+#' @noRd
+tab_deprecate_many <- function(chi2 = NULL, totrow = NULL, totcol = NULL, compact = NULL) {
+  out <- list()
+  if (!is.null(chi2)) {
+    lifecycle::deprecate_soft("2.0.0", "tab_many(chi2 = )", "tab(test = )")
+    out$test <- chi2
+  }
+  # A total row is always computed and exactly one total column is shown; both are cosmetic.
+  if (!is.null(totrow) || !is.null(totcol)) {
+    ok_totcol <- c("last", "each", "all_col_vars", "no")
+    if (!is.null(totcol) && !as.character(totcol)[1] %in% ok_totcol)
+      cli::cli_abort(c("Unknown {.arg totcol} value {.val {as.character(totcol)[1]}}.",
+                       "i" = "Valid: {.val {ok_totcol}} -- and {.fn tab} spells it {.arg tot}."))
+    row_on <- if (is.null(totrow)) TRUE else all(as.logical(totrow))
+    col_on <- if (is.null(totcol)) TRUE else !identical(as.character(totcol)[1], "no")
+    if (!is.null(totrow) && !row_on)
+      lifecycle::deprecate_soft(
+        "2.0.0", "tab_many(totrow = )", I('tab(tot = "col")'),
+        details = "A total row is always computed; drop it with `dplyr::filter(!is_totrow(.))`.")
+    if (!is.null(totcol) && !identical(as.character(totcol)[1], "last"))
+      lifecycle::deprecate_soft(
+        "2.0.0", "tab_many(totcol = )", I('tab(tot = )'),
+        details = paste0(
+          "Exactly one total column is shown; `\"each\"` and `\"all_col_vars\"` now give that same ",
+          "single column. Move or drop columns with dplyr afterwards."))
+    out$tot <- c(if (row_on) "row", if (col_on) "col")
+    if (length(out$tot) == 0L) out$tot <- "no"
+  }
+  if (!is.null(compact)) {
+    lifecycle::deprecate_soft("2.0.0", "tab_many(compact = )", "tab(output_list = )")
+    out$output_list <- !isTRUE(compact)
+  }
+  out
+}
+
+
+# tab_deprecate_sup_cols() -- Phase 19h (KEY 7): the deprecated `sup_cols` axis folded into the
+# col_var axis in ONE place.
+#
+# `sup_cols` is mechanically `col_vars` + `levels = "first"` + `pct = "row"`, and the code said so --
+# by writing that sentence three times, inside three different arguments of the tab_build() call
+# (plus a fourth, `ref`, written and commented out). Three mirrors of one rule is how a deprecated
+# argument keeps costing edits long after it stopped being used.
+#' @keywords internal
+#' @noRd
+tab_deprecate_sup_cols <- function(sup_cols, col_var, levels, pct) {
+  list(
+    col_vars = c(col_var, sup_cols),
+    # `levels` and `pct` are per col_var and recycle over the MAIN ones; the supplementary columns
+    # always show their first level, as a row percentage.
+    levels   = c(rep(levels, length.out = length(col_var)), rep("first", length(sup_cols))),
+    pct      = c(rep(pct   , length.out = length(col_var)), rep("row"  , length(sup_cols)))
+  )
+}
+
+
+# The `na_drop_all` half of the map, split out because it needs the DATA (a tidy-select) and may
+# have to compose with a user `filter`. Returns a quosure or NULL.
+#' @keywords internal
+#' @noRd
+tab_deprecate_na_drop_all <- function(cols, filter_quo = NULL) {
+  if (length(cols) == 0L) return(filter_quo)
+  lifecycle::deprecate_soft(
+    "2.0.0", "tab_many(na_drop_all = )", I("tab(filter = )"),
+    details = paste0("This call becomes `filter = ",
+                     paste0("!is.na(", cols, ")", collapse = " & "), "`."))
+  na_expr <- rlang::parse_expr(paste0("!is.na(", cols, ")", collapse = " & "))
+  if (is.null(filter_quo) || rlang::quo_is_missing(filter_quo) || rlang::quo_is_null(filter_quo))
+    return(rlang::new_quosure(na_expr, rlang::caller_env(2)))
+  # a character `filter` (tab_many's documented tribble idiom) is parsed first, so the two halves
+  # meet as expressions rather than one being pasted into the other's text.
+  # WARNING: a CONSTANT quosure carries the EMPTY environment, in which even `%in%` is unbound.
+  fx <- rlang::quo_get_expr(filter_quo)
+  if (is.character(fx)) {
+    env <- rlang::quo_get_env(filter_quo)
+    if (identical(env, rlang::empty_env())) env <- rlang::caller_env(2)
+    filter_quo <- rlang::new_quosure(rlang::parse_expr(fx), env)
+  }
+  rlang::quo(!!filter_quo & !!na_expr)
 }
 
 
@@ -1335,232 +1458,58 @@ finalize_one_col <- function(col, spec) {
 
 
 
-# DESIGN (Phase 6): the shared engine is now the internal tab_build(); tab_many() is a thin
-# (soft-deprecated) wrapper that keeps the historical list-default. col_vars still share
-# pct/color (one table) and stay per-col_var flexible (levels/digits/pct); the row_var axis is
-# globalised on tab() (OR/pct/color/comp/ci/chi2/ref2 are scalar there). tab_build() still
-# recycles those over row_vars internally, so tab_many()'s legacy per-row_var vectors keep working.
+# DESIGN (Phase 19h, KEY 7): tab_many() is a TRANSLATING SHIM over tab(), and nothing else.
+#
+# It was the last function carrying the pre-2.0.0 vocabulary (`chi2`, `totrow`/`totcol`,
+# `compact`, `na_drop_all`), so four public functions documented four slightly different spellings
+# of one table -- 42 formals of mirror surface that drifted every time tab() moved. Every one of
+# those spellings has an exact tab() equivalent (tab_deprecate_many(), above), so the shim
+# translates and forwards; it computes nothing.
+#
+# WARNING -- POSITIONAL ARGUMENTS. Only the first five (data, row_vars, col_vars, tab_vars, wt) are
+# positional, because those are the five tab() and tab_many() always agreed on. tab_many()'s 6th
+# formal was `pct` while tab()'s is `sup_cols`, so forwarding an unnamed 6th argument would silently
+# set the WRONG argument. An unnamed element in `...` is therefore refused, not forwarded.
 #' Many cross-tables as one, with color helpers
 #' @description
 #' `r lifecycle::badge("superseded")`
 #'
-#' Superseded (2.0.0) by [tab()], the unified entry point (it accepts several row_vars /
-#' col_vars). `tab_many()` keeps working and keeps its historical list return for >=2 row_vars
-#' (tab() merges them by default; pass `output_list = TRUE` for a list).
+#' Superseded (2.0.0) by [tab()], the unified entry point: it accepts several `row_vars` /
+#' `col_vars` and merges them into one table by default (`output_list = TRUE` gives the list
+#' `tab_many()` used to return).
 #'
-#' A full-featured function to create, manipulate and format many cross-tables
-#' as one, using colors to make the printed tab more easily readable (in R terminal or
-#' exported to Excel with \code{\link{tab_xl}}).
-#' Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you can then use all
-#' \pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
-#' \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
-#' or \code{\link[dplyr:mutate]{mutate}}.
-#' @param data A data frame.
-#' @param row_vars The row variable, which will be printed with one level per line.
-#' If numeric, it will be converted to factor. If more than one row_var if provided,
-#' a different table is made for each of them.
-#' @param col_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>
-#' One column is printed for each level of each column variable.
-#' For numeric variables means are calculated, in a single column.
-#' To pass many variables you may use syntax \code{col_vars = c(col_var1, col_var2, ...)}.
-#' @param tab_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>
-#' One subtable is made for each combination of levels of the tab variables.
-#' To pass many variables you may use syntax \code{tab_vars = c(tab_var1, tab_var2, ...)}.
-#' All tab variables are converted to factor. Leave empty to make a simple table.
-#' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param levels The levels of \code{col_vars} to keep (for more complex selections
-#'  use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over `col_vars`.
-#' \itemize{
-#'   \item \code{"all"}: by default, all levels are kept.
-#'   \item \code{"first"}: only keep the first level of each \code{col_vars}
-#'   \item \code{"auto"}: keep the first level when `col_var` is only two levels,
-#'   keep all levels otherwise
-#'   }
-#' @param na The policy to adopt with missing values. It must be a single string.
-#' \itemize{
-#'   \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
-#'   \item \code{na = "drop"}: removes \code{NA} levels before making each table
-#'   (tabs made with different column variables may have a different number of
-#'   observations, and won't exactly have the same total columns).
-#'   \item \code{"drop_all"}: remove `NA`'s for all variables before making the tables.
-#'   }
-#' @param na_drop_all <\link[tidyr:tidyr_tidy_select]{tidy-select}>
-#' Removes all observations with a `NA` in any of the chosen variables, for all tables
-#' (tabs for each column variable will have the same number of observations).
-#' @param digits The number of digits to print, as a single integer, or an integer vector
-#' the same length as \code{col_vars}. The argument is vectorisez over `col_vars`.
-#' @param n_min A single positive integer (default \code{0}, off). A pure display filter -- see
-#' \code{\link{tab}} -- that hides small-base rows/cells (largest base below \code{n_min} drops the
-#' row; own base below \code{n_min} blanks the cell) without recomputing anything.
-#' @param totaltab The total table, if there are subtables/groups
-#'  (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.
-#' \itemize{
-#'   \item \code{"line"}: by default, add a general total line (necessary for
-#'   calculations with \code{comp = "all"})
-#'   \item \code{"table"}: add a complete total table
-#'  (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-#'   \item \code{"no"}: not to draw any total table.
-#'  }
-#' @param totaltab_name The name of the total table, as a single string.
-#' @param totrow By default, total rows are printed.
-#' Set to \code{FALSE} to remove them (after calculations if needed).
-#' Vectorised over `row_vars`.
-#' @param totcol The policy with total columns. Vectorised over `col_vars`.
-#' \itemize{
-#'   \item \code{"last"}: by default, only prints a total column for the last
-#'   column variable (of class factor, not numeric).
-#'   \item \code{"each"}: print a total column for each column variable.
-#'   \item \code{"no"}: remove all total columns (after calculations if needed).
-#' }
-#' @param total_names The names of the totals, as a character vector of length one or two.
-#' Use syntax of type \code{c("Total row", "Total column")} to set different names for
-#' rows and cols.
-#' @param pct The type of percentages to calculate :
-#' \itemize{
-#'   \item \code{"row"}: row percentages.
-#'   \item \code{"col"}: column percentages.
-#'   \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
-#'   \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-#' }
-#' The argument is vectorised over both `row_vars` and `col_vars`. You can then write as
-#'  the following :
-#' `pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))`
-#' @param ref The reference cell to calculate differences and ratios
-#'  (used to print \code{colors}) :
-#'  \itemize{
-#'   \item \code{"auto"}: by default, cell difference from the corresponding total
-#'   (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-#'   used for `diff` ; cell ratio from the first line (or col) is use for `OR`
-#'   (odds ratio/relative risks ratio).
-#'   \item \code{"tot"}: totals are always used.
-#'   \item \code{"first"}: calculate cell difference or ratio from the first cell
-#' of the row or column (useful to color temporal developments).
-#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
-#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-#' Resolved inside each subtable when there are \code{tab_vars}.
-#'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
-#'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
-#'   to match with the names of the rows (or columns). Be precise enough to match only one
-#'   column or row, otherwise you get a warning message.
-#'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-#' }
-#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
-#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
-#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
-#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
-#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
-#' @param comp The comparison level : by subtables/groups, or for the whole table.
-#' Vectorised over `row_vars`.
-#' \itemize{
-#'   \item \code{"tab"}: by default, contributions to variance,
-#' row differences from totals/first cells, and row confidence intervals for these
-#' differences, are calculated for each \code{tab_vars} group.
-#'   \item \code{"all"}: compare cells to the general total line (provided there is
-#'    a total table with a total row), or with the reference line of the total table
-#'    when \code{ref = "first"}, an integer or a regular expression.
-#' }
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
-#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-#'   the odds ratio of each level versus the reference level (the empirical analogue of
-#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
-#'  \itemize{
-#'   \item \code{"no"}: by default, no OR are calculated.
-#'   \item \code{"OR"}: print OR (instead of percentages).
-#'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
-#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
-#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
-#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
-#' }
-#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
-#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
-#' @param chi2 Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-#' Useful to print metadata, and to color cells based on their contribution to variance
-#'  (\code{color = "contrib"}). Vectorised over `row_vars`.
-#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
-#' Vectorised over `row_vars`.
-#'   \itemize{
-#'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'    relative total cell (or relative first cell when \code{ref = "first"}).
-#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-#'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'    \code{ci = "cell"} for frequencies ("all", "all_tabs").
-#'   }
-#'  Confidence intervals use fast closed-form methods. For percentages, \code{ci = "cell"}
-#'  uses the Wilson score interval and \code{ci = "diff"} the Newcombe method-10 hybrid-score
-#'  interval (its dual, so the bracket and the significance stars always agree); means use the
-#'  Welch t interval. These can be changed with \code{method_cell} / \code{method_diff}. By
-#'  default the interval is printed in the `[inf;sup]` form; set
-#'  `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
-#' @param conf_level The confidence level, as a single numeric between 0 and 1.
-#' Default to 0.95 (95%).
-#' @param stars Logical. When \code{TRUE} (opt-in; default \code{FALSE}) and \code{ci = "diff"}, each
-#' cell shows significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
-#' \code{***} p<0.01, customisable via `options("tabxplor.signif_levels")` /
-#' `"tabxplor.signif_labels"`). Significance is read from the same interval that is displayed
-#' (universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
-#' significance computation entirely. \code{NULL} uses `options("tabxplor.stars")`.
-# @param ci_visible By default, confidence intervals are calculated and used to set
-# colors, but not printed. Set to \code{TRUE} to print them in the result.
-#' @param ci_method,design_effect See \code{\link{tab}}. \code{ci_method} is the ONE named vector of
-#' interval methods (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial);
-#' \code{design_effect} opts a weighted table's intervals into the weighting's design effect.
-#' @param method_cell,method_diff `r lifecycle::badge("deprecated")` Use
-#' \code{ci_method = c(cell = , diff = )} instead.
-#' @param color Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
-#' for the full grammar (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, a positional
-#' two-channel \code{c("diff", "ratio")}, or a per-type \code{c(pct = , mean = )} /
-#' \code{list(pct = , mean = )}). The old combined strings
-#' \code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by \code{color} +
-#' \code{color_signif}). Applies to all \code{row_vars}.
-#' @param color_signif How significance gates the color -- see \code{\link{tab}}
-#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}).
-#' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
-#' @param parallel Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
-#' \pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
-#' \code{tabxplor.parallel} option.
-#' @param add_n For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
-#' column or row with unweighted counts (`n`).
-#' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
-#' variable (for `pct = "row"`) or a row with the frequencies of the column variable
-#' (for  `pct = "col"`).
-#' @param common_totrow With several \code{row_vars}, `FALSE` (the default) shows one Total row per
-#' row variable; `TRUE` collapses the identical Total rows into a single shared Total in its own group.
-#' @param subtext A character vector to print rows of legend under the table.
-#' @param compact With several `row_vars`, set to `TRUE` to bind all tables
-#' in a single `tabxplor_tab` (`FALSE` by default). The `tabxplor.compact` option has been
-#' removed; use the `output_list` argument of [tab()] instead (the unified entry point, which
-#' merges by default).
-#' @param cleannames Set to \code{TRUE} to clean levels names, by removing
-#' prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
-#' passed to \code{\link{tab_prepare}}.
-#' @param other_if_less_than When set to a positive integer, levels with less count
-#' than it will be merged into an "Others" level.
-#' @param other_level The name of the "Other" level, as a single string.
-#' @param filter `r lifecycle::badge("superseded")` A
-#' \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
-#' (which will be converted to code, i.e. to a call). Prefer filtering the data with
-#' \code{\link[dplyr:filter]{dplyr::filter}} upstream of \code{tab()}; this argument is kept
-#' for back-compatibility (e.g. printing multiple tabs from a
-#' \code{\link[tibble:tribble]{tibble::tribble}}).
-# @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
-#' @param color_signif How significance gates the color -- see \code{\link{tab}}.
+#' `tab_many()` now forwards everything to [tab()], translating the five arguments that were
+#' renamed:
 #'
-#' @inheritSection tab_ci Significance stars
+#' | `tab_many()` | [tab()] |
+#' | --- | --- |
+#' | `chi2 = TRUE` | `test = TRUE` |
+#' | `totrow = FALSE` | `tot = "col"` |
+#' | `totcol = "no"` | `tot = "row"` |
+#' | `compact = TRUE` | `output_list = FALSE` |
+#' | `na_drop_all = c(a, b)` | `filter = !is.na(a) & !is.na(b)` |
 #'
-#' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
-#' When there are two `row_vars` or more, a list of \code{tibble} of class \code{tab}.
-#' All non-text columns are of class \code{\link{fmt}}, storing all
-#' the data necessary to print formats and colors. Columns with \code{row_var} and
-#' \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
-#' considered as a \code{tab_vars} and used for grouping. To add text columns without
-#' using them in calculations, be sure they are of class \code{character}.
+#' Everything else keeps its name and meaning — see [tab()].
+#'
+#' @param data A data frame, or a \code{\link[survey:svydesign]{survey::svydesign}}.
+#' @param row_vars,col_vars,tab_vars,wt The variable roles — see [tab()]. These four (and `data`)
+#'   are the only arguments that may be passed by position; everything else must be named, because
+#'   [tab()]'s argument order differs from the historical one.
+#' @param ... Passed on to [tab()].
+#' @param chi2 `r lifecycle::badge("deprecated")` Use [tab()]'s `test`.
+#' @param totrow,totcol `r lifecycle::badge("deprecated")` Use [tab()]'s `tot`. A total row is
+#'   always computed and exactly one total column is shown, so both are cosmetic; `totcol = "each"`
+#'   and `"all_col_vars"` now give that same single total column instead of erroring.
+#' @param compact `r lifecycle::badge("deprecated")` Use [tab()]'s `output_list` (inverted).
+#' @param na_drop_all `r lifecycle::badge("deprecated")` <\link[tidyr:tidyr_tidy_select]{tidy-select}>
+#'   Use [tab()]'s `filter`: `na_drop_all = c(a, b)` is `filter = !is.na(a) & !is.na(b)`.
+#' @param filter `r lifecycle::badge("superseded")` A \code{\link[dplyr:filter]{dplyr::filter}} to
+#'   apply to the data frame first — see [tab()]. Prefer filtering upstream.
+#'
+#' @inheritDotParams tab
+#'
+#' @return What [tab()] returns: a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with
+#'   `tab_vars`), or a \code{tabxplor_tabs} list under `output_list = TRUE` / `compact = FALSE`.
 #' @export
 #'
 #' @examples # Make a summary table with many col_vars, showing only one specific level :
@@ -1572,7 +1521,7 @@ finalize_one_col <- function(col, spec) {
 #'   ~ forcats::fct_relevel(., first_lvs[first_lvs %in% levels(.)])
 #' ))
 #' tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
-#'          levels = "first", pct = "row", chi2 = TRUE, color = "auto")
+#'          levels = "first", pct = "row", test = TRUE, color = "auto")
 #'}
 #'
 #' # Can be used with map and tribble to program several tables with different parameters
@@ -1582,35 +1531,17 @@ finalize_one_col <- function(col, spec) {
 #' library(tibble)
 #' pmap(
 #'   tribble(
-#'     ~row_var, ~col_vars       , ~pct , ~filter              , ~subtext               ,
+#'     ~row_vars, ~col_vars      , ~pct , ~filter              , ~subtext               ,
 #'     "race"  , "marital"       , "row", NULL                 , "Source: GSS 2000-2014",
 #'     "relig" , c("race", "age"), "row", "year %in% 2000:2010", "Source: GSS 2000-2010",
 #'     NA_character_, "race"     , "no" , NULL                 , "Source: GSS 2000-2014",
 #'   ),
 #'   .f = tab_many,
-#'   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
+#'   data = forcats::gss_cat, color = "auto", test = TRUE)
 #' }
-tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
-                     pct = "no", color = "no", OR = "no", chi2 = FALSE,
-                     na = "keep", levels = "all", na_drop_all,
-                     cleannames = NULL, compact = NULL, #pvalue_line = NULL,
-                     other_if_less_than = 0, other_level = "Others",
-                     ref = "auto", ref2 = "first", comp = "tab",
-                     ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
-                     ci_method = NULL, design_effect = NULL,
-                     method_cell = NULL, method_diff = NULL,
-                     totaltab = "line", totaltab_name = "Ensemble",
-                     totrow = TRUE, totcol = "last", total_names = "Total",
-                     add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
-                     digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
-                     color_breaks = NULL, display = NULL,
-                     parallel = NULL,
-
-                     filter #, listed = FALSE,
-                     #spread_vars = NULL, names_prefix, names_sort = FALSE
-) {
-  # Phase 6f: tab_many() is soft-deprecated in favour of the unified tab(). Silent for
-  # same-package callers (e.g. the jmvtab module), so only direct external users are nudged.
+tab_many <- function(data, row_vars, col_vars, tab_vars, wt, ...,
+                     chi2, totrow, totcol, compact, na_drop_all, filter) {
+  # Silent for same-package callers (e.g. the jmvtab module), so only direct external users are nudged.
   lifecycle::deprecate_soft(
     "2.0.0", "tab_many()", "tab()",
     details = c(
@@ -1619,72 +1550,54 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     )
   )
 
-  # tab_many() keeps its historical list-default (one table per row_var; a bare tab for a single
-  # row_var) and maps the deprecated `compact` argument onto the shared engine's output shape:
-  #   compact = TRUE  -> "single" (bind the row_var tables into one)
-  #   compact = FALSE -> "legacy" (list for >=2 row_vars, bare tab for one; historical default)
-  # The `tabxplor.compact` option is dropped (§6); compact now defaults to FALSE.
-  compact <- if (is.null(compact)) FALSE else compact
+  # `...` is captured ONLY to read its NAMES (see the WARNING above, and `output_list` below); it is
+  # forwarded bare, so every argument reaches tab() with its own environment and its own missingness
+  # intact -- splicing captured quosures into a non-data-masked call would pass them as objects.
+  dot_names <- rlang::names2(rlang::enquos(..., .ignore_empty = "all"))
+  unnamed   <- which(!nzchar(dot_names))
+  if (length(unnamed) != 0L)
+    cli::cli_abort(c(
+      "{.fn tab_many} takes only {.arg data}, {.arg row_vars}, {.arg col_vars}, {.arg tab_vars} and {.arg wt} by position.",
+      "x" = "Argument{?s} {unnamed + 5L} {?is/are} unnamed.",
+      "i" = "Name {?it/them}: the rest is passed to {.fn tab}, whose argument order differs."
+    ))
 
-  # Phase 6e (§6): totrow / totcol are soft-deprecated. A total row is always computed and
-  # exactly one total column is shown by default; both remain purely cosmetic (drop/move with
-  # dplyr afterwards). Old totcol values ("each"/"no"/names) still work.
-  if (!missing(totrow) && !all(as.logical(totrow))) {
-    lifecycle::deprecate_soft(
-      "2.0.0", "tab_many(totrow = )",
-      details = "A total row is always computed; drop it afterwards with `dplyr::filter(!is_totrow(.))`."
-    )
-  }
-  if (!missing(totcol) && !identical(totcol, "last")) {
-    lifecycle::deprecate_soft(
-      "2.0.0", "tab_many(totcol = )",
-      details = "Exactly one total column is shown by default; move or drop columns with dplyr afterwards."
-    )
-  }
-
-  # Phase 18z14-i: tab_many() accepts a survey design as `data` through THE same boundary as
-  # tab() -- and, through `design_spec`, finally gets the same derived inference basis (it used to
-  # build a classic ctx whatever the input).
-  svy <- svy_unwrap_data(data, "tab_many")
-  if (!is.null(svy)) data <- svy$data
-  chi2 <- svy_check_test(chi2, "chi2")
-  # A design's own weights ARE the weight column; otherwise `wt` rides on untouched (a bare name or a
-  # tidyselect call -- `!!enquo()` round-trips both, and a missing argument).
-  wt_quo <- if (is.null(svy)) rlang::enquo(wt) else {
-    svy_abort_wt_design(!quo_miss_na_null_empty_no(rlang::enquo(wt)), "tab_many")
-    rlang::new_quosure(rlang::sym(svy$spec$wt))
-  }
-
-  # Phase 6c: parse the new color / color_signif forms here too (same one-parse contract as
-  # tab()), so tab_many() accepts color = TRUE / c(text, background) / named / a measure +
-  # color_signif. Plain scalar strings (incl. jmvtab's) pass through as the legacy color.
-  color_spec <- normalize_color_spec(color, color_signif)
-  ci_method  <- resolve_ci_method(ci_method, method_cell, method_diff, "tab_many")
-  # Phase 19d: the ONE `OR` retirement route, shared with tab() / tab_plain() / tab_counts().
-  or_route <- tab_deprecate_or(OR, display, ref2, ref)
-  display  <- or_route$display ; ref2 <- or_route$ref2 ; ref <- or_route$ref
-  result <- tab_build(
-    data = data,
-    row_vars = {{ row_vars }}, col_vars = {{ col_vars }}, tab_vars = {{ tab_vars }},
-    wt = !!wt_quo,
-    pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
-    display = display, chi2 = chi2, design_spec = svy$spec, na = na, levels = levels,
-    na_drop_all = {{ na_drop_all }},
-    cleannames = cleannames, other_if_less_than = other_if_less_than,
-    other_level = other_level, ref = ref, ref2 = ref2, comp = comp, ci = ci,
-    conf_level = conf_level, stars = stars, ci_method = ci_method,
-    design_effect = design_effect,
-    totaltab = totaltab, totaltab_name = totaltab_name,
-    totrow = totrow, totcol = totcol, total_names = total_names,
-    add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
-    digits = digits, subtext = subtext, n_min = n_min,
-    parallel = parallel,
-    filter = if (missing(filter)) NULL else {{ filter }},
-    output = if (isTRUE(compact)) "single" else "legacy"
+  extra <- tab_deprecate_many(
+    chi2    = if (missing(chi2))    NULL else chi2,
+    totrow  = if (missing(totrow))  NULL else totrow,
+    totcol  = if (missing(totcol))  NULL else totcol,
+    compact = if (missing(compact)) NULL else compact
   )
-  result <- finalize_color_tail(result, color_spec, color_breaks, display)
-  # Phase 13c-iv: wrap the multi-table list (tab_many keeps its list-default) so it auto-prints.
-  as_tabxplor_tabs(result)
+  # tab_many()'s historical shape is a list for >=2 row_vars and a BARE TABLE for one, where tab()
+  # merges. That shape is exactly the unpredictable return KEY 7 removes, so it is not an engine
+  # mode any more (`output = "legacy"` is deleted): the shim asks for a list and unwraps a length-1
+  # result itself, keeping the legacy irregularity inside the legacy function, where it dies with it.
+  # `compact` overrides the list; an explicit `output_list` in `...` wins over both -- passing it
+  # twice would be a duplicate argument.
+  legacy_shape <- is.null(extra$output_list) && !"output_list" %in% dot_names
+  if (legacy_shape) extra$output_list <- TRUE
+
+  # `na_drop_all` is a tidy-select, so it needs the frame -- and a survey design must be unwrapped
+  # first (the same ONE boundary tab() uses, called again only to resolve names; it is a pure unwrap).
+  na_cols <- if (missing(na_drop_all)) character() else {
+    svy  <- svy_unwrap_data(data, "tab_many")
+    names(tidyselect::eval_select(rlang::enquo(na_drop_all),
+                                  if (is.null(svy)) data else svy$data))
+  }
+  filter_quo <- tab_deprecate_na_drop_all(
+    na_cols, if (missing(filter)) NULL else rlang::enquo(filter))
+
+  out <- if (is.null(filter_quo)) {
+    rlang::inject(tab(data = data,
+                      row_vars = {{ row_vars }}, col_vars = {{ col_vars }},
+                      tab_vars = {{ tab_vars }}, wt = {{ wt }}, ..., !!!extra))
+  } else {
+    rlang::inject(tab(data = data,
+                      row_vars = {{ row_vars }}, col_vars = {{ col_vars }},
+                      tab_vars = {{ tab_vars }}, wt = {{ wt }}, ...,
+                      filter = !!filter_quo, !!!extra))
+  }
+  if (legacy_shape && is.list(out) && !is.data.frame(out) && length(out) == 1L) out[[1]] else out
 }
 
 
@@ -1810,9 +1723,10 @@ conf_level_default <- function() getOption("tabxplor.conf_level", 0.95)
 # exported) so a future Jamovi caching layer can drive the same core without any deprecation
 # nudge, and so tab() never triggers tab_many()'s soft-deprecation.
 #   `output`: "single" merges >=2 row_vars into one table (the tab() default); "list" always
-#   returns a list, incl. length 1 (tab(output_list = TRUE)); "legacy" returns a list for >=2
-#   row_vars and a bare table for one (the tab_many() default). Tables with tab_vars stay a
-#   list regardless (merging deferred, §7).
+#   returns a list, incl. length 1 (tab(output_list = TRUE)). Phase 19h (KEY 7) deleted the third
+#   value "legacy" (a list for >=2 row_vars, a bare table for one) together with its only producer,
+#   tab_many()'s pre-shim body -- so the returned SHAPE is now a function of `output` alone. Since
+#   19f, a table carrying tab_vars merges like any other.
 # WARNING: keep byte-identical to the pre-6b tab_many() body except the intended output-shape
 # and option changes.
 #' @keywords internal
@@ -1837,22 +1751,39 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       .cache = NULL, .defer_level_merge = FALSE,
                       .levels_order = NULL,
 
-                      filter #, listed = FALSE,
+                      # Phase 19h: `filter` is a VALUE here (a quosure / a string / NULL), not an
+                      # NSE argument -- see the WARNING at its use site below.
+                      filter = NULL #, listed = FALSE,
 ) {
   # Phase 7d-ii: tab_build is the ARGUMENT SURFACE + the five-stage pipeline. It defuses the NSE
-  # args here (where their promises live) and applies `filter` here too -- the string form (for
-  # tribble) and the pre-existing bare-expression behaviour must stay in this frame. Each stage
+  # args here (where their promises live) and applies `filter` here too. Each stage
   # takes and returns `ctx`; tab_assemble() returns the final tab/list. The stage split matches the
   # jmvtab cache tiers (dev/tabxplor_jmvtab_cache_design.md §8): setup (-) -> prepare_pop (tier 0)
   # -> aggregate (tier 1) -> transform (tier 3 + the tier-2 test) -> assemble (tier 4).
 
   # Allow to type expression as string in filter (to work with tibble::tribble)
   with_filter <- FALSE
-  if (!missing(filter)) if (! is.null(filter)) {
-    filter <- rlang::enquo(filter)
-    if (is.character(rlang::get_expr(filter))) filter <- filter |>
-        rlang::get_expr() |> str2lang()
-
+  # WARNING (Phase 19h): `filter` reaches this INTERNAL engine already DEFUSED -- a quosure, a plain
+  # character string, or NULL -- it is not an NSE argument here. It used to be, and the caller wrote
+  # `filter = if (missing(filter)) NULL else {{ filter }}`, which defuses the whole `if` CALL: a bare
+  # `filter = !is.na(g)` was then evaluated as `if (missing(filter)) NULL else !is.na(g)` inside the
+  # data mask and aborted. Only a character filter ever worked, although ?tab documents a
+  # dplyr::filter expression.
+  if (!is.null(filter) && !(rlang::is_quosure(filter) && rlang::quo_is_null(filter))) {
+    # A character filter (the documented tribble idiom) spells an expression: parse it.
+    # WARNING: rlang gives a CONSTANT quosure the EMPTY environment (a literal needs no scope), so
+    # re-quoting the parsed call with quo_get_env() would leave it unable to find even `%in%`.
+    # Fall back to this frame's caller, whose scope reaches the namespace and the search path.
+    if (rlang::is_quosure(filter)) {
+      fx <- rlang::quo_get_expr(filter)
+      if (is.character(fx)) {
+        env <- rlang::quo_get_env(filter)
+        if (identical(env, rlang::empty_env())) env <- rlang::caller_env()
+        filter <- rlang::new_quosure(str2lang(fx), env)
+      }
+    } else if (is.character(filter)) {
+      filter <- rlang::new_quosure(str2lang(filter), rlang::caller_env())
+    }
     data <- data |> dplyr::mutate(.filter = !!filter)
     with_filter <- TRUE
   }
@@ -2027,7 +1958,7 @@ tab_setup <- function(ctx) {
   # the NSE args arrive as *_quo quosures (defused in tab_build), aliased to their plain names below.
   list2env(ctx, environment())
 
-  stopifnot(output %in% c("single", "list", "legacy"))
+  stopifnot(output %in% c("single", "list"))
 
   cleannames <-
     resolve_cleannames(cleannames)
@@ -2229,38 +2160,38 @@ tab_setup <- function(ctx) {
   ncolvars    <- length(col_vars)
   lvs         <- vctrs::vec_recycle(lvs   , ncolvars)
   digits      <- vctrs::vec_recycle(digits, ncolvars)
-  # Phase 17e: the `totcol` grammar keeps only the three SCALAR forms real analysis uses -- "last"
-  # (/"all_col_vars"), "each", and "no" (tab() passes "no" whenever `tot` lacks "col"). The three
-  # vector grammars (a col_var-names subset, a "col"/"no" per-col vector, numeric indices) are cut:
-  # they were reachable only through the already-soft-deprecated `tab_many(totcol = )`.
-  if (totcol[1] %in% c("last", "all_col_vars")) {
+  # Phase 19h (KEY 7): `totcol` asks ONE question -- is there a total column? Since Phase 6 exactly
+  # one is shown, so "each" and "all_col_vars" are accepted spellings of "last" rather than shapes of
+  # their own (tab() speaks `tot`; tab_many() maps its legacy values in tab_deprecate_many()).
+  #
+  # ⚠ WARNING -- why this collapsed to three states. The classifier below used to compare `totcol`
+  # against `col_vars` with identical(), but on the "last" path `totcol` is a CHARACTER while
+  # `col_vars` is a LIST of symbols: both arms were therefore DEAD. "all_col_vars" was unreachable
+  # as a tot_cols_type, and every tab() call fell through to the catch-all "some" -- which is what
+  # actually did the work. Three states are all there ever were; naming them is the whole fix.
+  if (as.character(totcol)[1] %in% c("last", "all_col_vars", "each")) {
     totcol <- col_vars_text[col_vars_text] |> names() |> dplyr::last()
     if (all(lvs == "first") & all(pct == "row") & ncolvars > 1) {
       totcol <- NULL
     }
-  } else if (totcol[1] == "each") {
-    totcol <- col_vars[col_vars_text]
-  } else if (identical(totcol, "no")) {
+  } else if (as.character(totcol)[1] %in% c("no", "")) {
     totcol <- col_vars[0]                                       # no total column
   } else {
-    stop("totcol must be 'last', 'each', or 'no'.")
+    cli::cli_abort(c('{.arg totcol} must be {.val last} or {.val no}.',
+                     "i" = "Through {.fn tab}, say {.code tot = \"col\"} or drop it from {.arg tot}."))
   }
-  # tot_cols_type summarises what to do with total columns downstream (consumed at ~L1366):
-  #   "each"         = one total col per col_var (totcol == all col_vars)
-  #   "all_col_vars" = a single total col spanning all col_vars (the last one)
-  #   "some"         = a proper subset of col_vars get totals (e.g. `each` with some numeric col_vars,
-  #                    so totcol = the text col_vars only)
+  # tot_cols_type says what to do with the total columns downstream (consumed in tab_assemble_tables):
+  #   "one"          = keep the ONE requested total column (the last text col_var's), drop the rest
   #   "no_delete"    = none requested, but one is needed internally (pct/ci/chi2/OR need a
   #                    reference total) -> build it, drop only at the very end
   #   "no_no_create" = no total col at all
-  tot_cols_type <- dplyr::case_when(
-    identical(totcol, col_vars)                                ~ "each",
-    identical(totcol, col_vars[ncolvars])                      ~ "all_col_vars",
-    length(totcol) == 0 &
-      (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no"))~ "no_delete",
-    length(totcol) == 0                                        ~ "no_no_create",
-    TRUE                                                       ~ "some"
-  )
+  tot_cols_type <- if (length(totcol) != 0) {
+    "one"
+  } else if (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no")) {
+    "no_delete"
+  } else {
+    "no_no_create"
+  }
 
   # Phase 19d: the build-time "an OR table has no meaningful 100 % total column, so delete it" rule is
   # GONE. It keyed on `OR`, i.e. on an ARGUMENT, to decide something that is purely about what the
@@ -2889,24 +2820,10 @@ tab_assemble_tables <- function(ctx) {
     # "core" table and lets the reserved-`n`/`row_pct`/`all_col_vars` special-cases downstream go.
 
     #Remove unwanted total columns
-    if (!tot_cols_type %in% c("each", "no_no_create")) {
-      if (tot_cols_type == "no_delete")
-        tabs_text <- dplyr::select(tabs_text, -where(is_totcol))
-      if (tot_cols_type == "some")
-        tabs_text <- dplyr::select(tabs_text, -(where(~ is_totcol(.) & !get_col_var(.) %in% totcol)))
-
-      if (tot_cols_type == "all_col_vars") {
-        totcols_present <- unique(names(tabs_text)[is_totcol(tabs_text)])
-        last_tot <- dplyr::last(totcols_present)
-        drop_tot <- totcols_present[totcols_present != last_tot & !is.na(totcols_present)]
-
-        tabs_text <- tabs_text |>
-          dplyr::select(-tidyselect::any_of(drop_tot)) |>
-          dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) |>
-          dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) |>
-          dplyr::mutate(dplyr::across(tidyselect::last_col(), ~ set_col_var(., "all_col_vars")))
-      }
-    }
+    if (tot_cols_type == "no_delete")
+      tabs_text <- dplyr::select(tabs_text, -where(is_totcol))
+    if (tot_cols_type == "one")
+      tabs_text <- dplyr::select(tabs_text, -(where(~ is_totcol(.) & !get_col_var(.) %in% totcol)))
 
     # Lone total column -> "Total" with no col_var name. Phase 8: dedup with unique() so the "lone
     # total" test is on the DISTINCT total-column name (the "Total_<lastcv>" internal suffix leaked into
@@ -3031,13 +2948,15 @@ tab_assemble_output <- function(ctx) {
   list2env(ctx, environment())
 
   # === STAGE: assemble output shape (§13 truth table) ===
-  # Merge the per-row_var tables into one only in "single" mode (tab() default). `tabxplor.output_kable`
-  # also forces a merge (its historical behaviour). A length-1 list (single row_var) is never merged
-  # -- it is unwrapped below instead.
+  # Merge the per-row_var tables into one only in "single" mode (tab() default). A length-1 list
+  # (single row_var) is never merged -- it is unwrapped below instead.
   # Phase 19f (KEY 1): `can_merge <- length(tab_vars) == 0` is GONE. Several row_vars and tab_vars used
   # to compete for the one dplyr grouping slot, so asking for both silently returned a LIST rather
   # than a table -- a documented product limitation. The row-variable axis is a declared column now.
-  merge_now <- output == "single" | getOption("tabxplor.output_kable") == TRUE
+  # Phase 19h (KEY 7): `| getOption("tabxplor.output_kable") == TRUE` is GONE too. That is a DISPLAY
+  # option, read here inside a BUILD stage, and it changed the CLASS of the returned object. The
+  # option keeps its render (tab()'s tail calls tab_html()); it no longer decides a shape.
+  merge_now <- output == "single"
   if (merge_now &
       !(is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1 ) ) {
     tabs <- tabs |> tab_compact() # pvalue_lines = FALSE
@@ -3082,8 +3001,6 @@ tab_assemble_output <- function(ctx) {
   if (output != "list" &
       is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1) tabs <- tabs[[1]]
 
-  # Phase 17g: the `tabxplor.output_kable` render moved to tab()'s tail (post-finalize). Here only its
-  # merge half survives, folded into merge_now above -- the build still merges when output_kable is set.
   tabs
 }
 
@@ -3157,6 +3074,12 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   row_var    <- get_vars$row_var
   tab_vars   <- get_vars$tab_vars
   tab_vars_new <- tab_vars[!tab_vars %in% spread_vars]
+  # captured BEFORE the pivot, which is the last moment the spread variables still exist as columns:
+  # every new column name ends with one of these levels, and that is how a spread column is paired
+  # back with the sub-population it describes (spread_relabel(), below).
+  spread_levels <- unique(unlist(lapply(
+    spread_vars, function(v) as.character(unique(dplyr::pull(dplyr::ungroup(tabs), v))))))
+  spread_levels <- spread_levels[!is.na(spread_levels) & nzchar(spread_levels)]
   # Phase 19f emptied `vars` of the variable MODEL (the columns declare it), so the pivot has nothing
   # to re-key here: `wt` / `caption` / `var_labels` all survive it untouched.
   spec_out <- get_spec(tabs)
@@ -3248,6 +3171,12 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
   tabs <- complete_partial_totals(tabs)
 
+  # Phase 19h (KEY 7): THE two post-spread repairs, which used to live in reg_spread_models() and so
+  # ran for a regression's split groups only. Both are generic -- a spread column belongs to a level
+  # of the spread variable, on either producer -- and the second was a latent defect on the crosstab
+  # side: a `test` row keyed on the spread variable pointed at a column that no longer exists.
+  spread <- spread_relabel(tabs, spread_vars, spread_levels, test, get_vars$col_vars)
+  tabs   <- spread$tabs ; test <- spread$test
 
   meta_out <- tab_meta_merge(list(meta_in), spec = spec_out)
 
@@ -3259,6 +3188,70 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     new_grouped_tab(tabs, groups = group_dat, subtext = subtext, test = test, meta = meta_out)
   }
 
+}
+
+
+# spread_relabel() -- Phase 19h (KEY 7): THE post-spread repair, for both producers.
+#
+# tidyr::pivot_wider() moves the data and nothing else, so after a spread two facts are stale:
+#
+#   1. every new column's stored `col_var` still names the ORIGINAL column variable, with nothing to
+#      say which level of the spread variable the block belongs to. Folding the level in as
+#      "{level}<br>{col_var}" is what makes the exported span header read on two lines and what puts
+#      a border between the blocks -- and what lets the legend tell two sub-populations apart.
+#   2. every `test` row keyed on the spread variable points at a sub-population that is no longer a
+#      ROW group but a set of COLUMNS, so its `col` key must be re-pointed at what the spread made of
+#      what it named, and its group key cleared. This ran for a regression's split groups only; a
+#      crosstab's per-tab_var chi2 rows had the same problem and simply kept a stale key.
+#
+# Matching is by column NAME: pivot_wider names a new column `{level}` when there is a single value
+# column and `{value}_{level}` otherwise, so the longest matching level wins (that is what
+# disambiguates nested level names).
+#
+# ⚠ WARNING -- `test$col` holds TWO kinds of entity, which is why the re-key needs a discriminator:
+# a crosstab row names a COL_VAR (test_grid_crosstab intersects it with the table's col_vars), a
+# regression row names a COLUMN. One rule -- "follow `col` through the spread" -- two lookups. That
+# overload is the `test` schema's, not this function's; unifying it belongs to a later phase.
+#' @keywords internal
+#' @noRd
+spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = character(0)) {
+  if (length(spread_levels) == 0L) return(list(tabs = tabs, test = test))
+  col_of_group <- stats::setNames(rep(NA_character_, length(spread_levels)), spread_levels)
+  for (nm in names(tabs)[vapply(tabs, is_fmt, logical(1))]) {
+    hits <- spread_levels[vapply(spread_levels,
+                                 function(g) nm == g || endsWith(nm, paste0("_", g)), logical(1))]
+    if (!length(hits)) next
+    g <- hits[which.max(nchar(hits))]
+    tabs[[nm]] <- set_col_var(tabs[[nm]], paste0(g, "<br>", get_col_var(tabs[[nm]])))
+    # the `n` column comes FIRST but is a row descriptor, never a model column, so keying a group's
+    # footer block under it would put every statistic beneath its counts. Its stored role says so.
+    if (identical(get_role(tabs[[nm]]), "n")) next
+    if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
+  }
+
+  if (!is.null(test) && nrow(test) > 0) {
+    for (sv in spread_vars) {
+      key <- test_key_col(test, sv)
+      # only rows describing one of the spread groups move. A row with an empty key is table-wide
+      # (a pooled interaction test, an Ensemble chi2) and must stay exactly where it is.
+      known <- which(key %in% spread_levels)
+      if (!length(known)) next
+      lv   <- key[known]
+      old  <- test_key_col(test, "col")[known]
+      newc <- ifelse(old %in% col_vars,
+                     paste0(lv, "<br>", old),          # a col_var: it was folded, follow the fold
+                     unname(col_of_group[lv]))         # a column: this group's first real column
+      # a group that produced no column of its own has nowhere to sit: drop those rows rather than
+      # leave them pointing at something that no longer exists.
+      test$col[known[!is.na(newc)]] <- newc[!is.na(newc)]
+      # WARNING: a tab_var key column is a FACTOR, and `[<-` on a factor with an unknown level gives
+      # NA plus a warning. Blank it as character.
+      test[[sv]] <- test_key_col(test, sv)
+      test[[sv]][known] <- ""
+      if (anyNA(newc)) test <- test[-known[is.na(newc)], , drop = FALSE]
+    }
+  }
+  list(tabs = tabs, test = test)
 }
 
 
@@ -3303,14 +3296,13 @@ tab_transpose <- function(tabs, name = NULL) {
   }
   tabs <- dplyr::ungroup(tabs)
 
-  vars <- tab_get_vars(tabs)
-  if (length(vars$tab_vars) > 0) {
-    cli::cli_abort(c(
-      "{.fn tab_transpose} does not support tables with {.arg tab_vars} yet.",
-      "i" = "It transposes a single table (one row variable, one column variable)."
-    ))
-  }
+  # Phase 19h (KEY 7): the two SHAPE refusals are declared in TAB_OPS (R/tab-shape.R), so
+  # `tab_supports(x, "transpose_object")` answers them without trying.
+  tab_check_shape(tabs, "transpose_object")
+
+  vars    <- tab_get_vars(tabs)
   row_var <- vars$row_var
+  # not a shape fact: a table so degraded that the role detector finds no row-variable column at all.
   if (length(row_var) != 1) {
     cli::cli_abort("{.fn tab_transpose} needs a table with exactly one row variable.")
   }
@@ -3953,33 +3945,6 @@ fmt_stack_frames <- function(frames, meta) {
 #'  (\code{comp = "all"}) ?
 #'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
-#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-#'   the odds ratio of each level versus the reference level (the empirical analogue of
-#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
-#'  \itemize{
-#'   \item \code{"no"}: by default, no OR are calculated.
-#'   \item \code{"OR"}: print OR (instead of percentages).
-#'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
-#'   \item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-#'     \emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-#'     row. This is the descriptive analogue of a proportional-odds ([tab_reg()] `family = "ordinal"`)
-#'     model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-#'     points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-#'     the departure from proportional odds -- visible and free. Needs `pct = "row"` and an
-#'     \code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-#'     OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
-#' }
-#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
-#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
-#' @param color The type of colors to print, as a single string :
-#'  \itemize{
-#'   \item \code{"no"}: by default, no colors are printed.
-#'   \item \code{"diff"}: color percentages and means based on cells differences from
-#'   totals (or from first cells when \code{ref = "first"}).
-#'   \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
-#'   color based on odds ratios (or relative risks ratios)
-#'  }
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
@@ -4002,6 +3967,8 @@ fmt_stack_frames <- function(frames, meta) {
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed count-aggregate to roll up from
 #' instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
 #' `.by_table` forces the table-by-table path.
+#'
+#' @inheritParams tab
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -5383,9 +5350,9 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
 #' @param color Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
 #'   grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
-#'   \code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
-#'   (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
-#'   \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.
+#'   \code{c("difference", "ratio")} vector). For numeric means the useful measures are
+#'   \code{"difference"} (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio);
+#'   \code{TRUE} uses \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.
 #' @param display A \code{{}} display template applied to the built table -- the same grammar
 #'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
 #'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
@@ -5393,26 +5360,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 #'   / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.
 #' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
 #' @param subtext A character vector to print rows of legend under the table.
-#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-#'  (automatically added if needed for \code{color}).
-#'   \itemize{
-#'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'    relative total cell (or relative first cell when \code{ref = "first"}).
-#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-#'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
-#'   }
 #' @param conf_level The confidence level for the confidence intervals,
 #'  as a single numeric between 0 and 1. Default to 0.95 (95%).
 #' @param ci_method,design_effect See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
 #'  slots of \code{ci_method} are meaningful here (a numeric table has no proportion interval).
-#' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
-#'  \code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
-#'  as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).
 #' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
-#' With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
+#' With \code{ci = "ref"}, print per-cell Welch t significance stars for the difference from the
 #' reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not `fmt`).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a `tibble`),
@@ -5421,6 +5374,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed moment-sum aggregate (from
 #' \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; `.by_table` forces
 #' the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.
+#'
+#' @inheritParams tab
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -6261,16 +6216,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 #'
 #' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
-#' @param ci The type of ci to calculate. Set to "cell" to calculate absolute confidence
-#' intervals. Set to "diff" to calculate the confidence intervals of the difference
-#' between a cell and the relative total cell (or the reference cell,
-#'  when `ref` is not `"tot"` in \code{\link{tab_plain}} or \code{\link{tab_num}}).
-#'  Set to "ratio" for the same interval on the \emph{ratio} (relative risk / mean ratio)
-#'  scale (the Katz interval) rather than the difference scale.
-#'  By default, "diff" ci are calculated for means and row and col percentages,
-#'  "cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
-#'  the result is printed in the `[inf;sup]` form. Set
-#'  `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
+#' @param ci What the interval is anchored on -- \code{"ref"} (the comparison with the reference
+#'  cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
+#'  \code{\link{tab}}, which is where this is normally set: \code{"auto"} gives a comparison
+#'  interval for means and row/column percentages and a cell interval for plain frequencies.
+#'  \code{"diff"} and \code{"ratio"} are the soft-deprecated spellings of \code{"ref"}.
+#'  With \code{ci = "cell"} the result prints as `[inf;sup]`; set
+#'  `options("tabxplor.ci_print" = "moe")` for `pct +- moe`.
 #' @param comp Comparison level. When \code{tab_vars} are present, should the
 #' contributions to variance be calculated for each subtable/group (by default,
 #'  \code{comp = "tab"}) ? Should they be calculated for the whole table

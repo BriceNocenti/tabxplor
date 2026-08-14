@@ -75,8 +75,11 @@ test_that("the Constant row keeps its bold under empirical = TRUE", {
   rd <- tab_export_prep(t)
   const_row <- which(as.character(t$var) == "Constant")
   expect_true(all(const_row %in% rd$tables[[1]]$bold_rows))
-  # the mechanism: every column must flag the Constant as an anchor, crude columns included
-  expect_true(all(purrr::map_lgl(rd$tables[[1]]$ann, ~ .x$anchor[const_row])))
+  # the mechanism: every column must flag the Constant as an anchor, crude columns included.
+  # Phase 19h: the anchor signal is `keep_black` -- the shipped `ann$anchor` slot was a duplicate of
+  # it that no backend read (and the transpose silently dropped), so it is a prep-internal local now.
+  # On a Constant row the two are the same value: the footer override only touches GOF footer rows.
+  expect_true(all(purrr::map_lgl(rd$tables[[1]]$ann, ~ .x$keep_black[const_row])))
 })
 
 test_that("get_num()/set_num() handle the 'OR_pct' spelling like format() does", {
@@ -309,8 +312,8 @@ test_that("the SD is frozen ONCE: same unit across split groups, compared models
   plain <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = "sd",
                    cleannames = FALSE)
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
-  spl   <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = "sd",
-                   split_var = "grp", spread_models = FALSE, cleannames = FALSE)
+  spl   <- tab_reg(d, "married", list(m1 = c("age", "race"), m2 = c("age", "race")),
+                   family = "binomial", multiplier = "sd", split_var = "grp", cleannames = FALSE)
   expect_equal(base_k(spl), base_k(plain), tolerance = 1e-12)
 
   cmp <- tab_reg(d, "married", list(m1 = "age", m2 = c("age", "race")), family = "binomial",

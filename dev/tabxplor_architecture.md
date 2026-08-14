@@ -589,13 +589,20 @@ It is what the Jamovi `.js` mirrors and the Phase 7c cache keys on. Full arg↔c
 - `tab()` is the unified entry point: `row_vars`/`col_vars` accept one variable OR several (tidy-select);
   with several `row_vars` it **merges** by default (`output_list = TRUE` → a list). Singular
   `row_var`/`col_var` are soft-deprecated aliases.
-- The row_var axis is **globalised** on `tab()`: `OR/pct/color/comp/ci/chi2/ref2` are scalar (one value
+- The row_var axis is **globalised** on `tab()`: `color/comp/ci/chi2/ref2` are scalar (one value
   for all row_vars). Still per-row_var: `totaltab` and `ref` (a named/ordered vector, one reference row
-  per row_var). The col_var axis stays flexible: `pct/levels/digits` are per col_var. `levels`
-  (`all`/`first`/`auto`) is a `tab()` argument again (Phase 7a — a Phase 6 oversight had hardcoded it);
-  `sup_cols` is **soft-deprecated** (fold into `col_vars` + `levels = "first"`).
-- `tab_many()` is a **soft-deprecated** alias keeping its historical list return; it maps the deprecated
-  `compact` argument onto the output shape and still accepts per-row_var vectors (the engine recycles).
+  per row_var). The col_var axis stays flexible: `pct/levels/digits` are per col_var (Phase 19h made
+  `pct` join the other two; a per-row_var LIST is refused). `levels` (`all`/`first`/`auto`) is a
+  `tab()` argument again (Phase 7a); `sup_cols` is **soft-deprecated**, folded into the col_var axis by
+  the one `tab_deprecate_sup_cols()` helper (it used to be mirrored into three arguments of the
+  `tab_build()` call).
+- **`tab_many()` is a translating SHIM over `tab()`** (Phase 19h, KEY 7), 10 formals instead of 42: it
+  maps the five renamed arguments (`tab_deprecate_many()` + `tab_deprecate_na_drop_all()`) and forwards
+  `...` bare. Only the first five positional slots are accepted (the two functions' 6th formals differ,
+  so an unnamed 6th argument is refused rather than silently set). It keeps its historical shape — a
+  list for ≥2 row_vars, a bare table for one — by unwrapping a length-1 result ITSELF; `tab_build()`'s
+  third `output` mode `"legacy"` is deleted, so what `tab()` returns is a function of `output_list`
+  alone (`options(tabxplor.output_kable)` renders, and no longer decides a class).
 - `na` (microdata only, per Phase 7a): `"keep"` (NA as a level), `"drop"` (each col_var drops its OWN
   NA → bases can differ), `"drop_all"` (drop obs missing on `{row_vars, any col_var, tab_vars}` → one
   shared base; `tab_build` resolves it natively), `"common_base"` (reproduces the historical `tab()`
@@ -637,10 +644,21 @@ Concretely, for each argument vectorised over row_vars:
 | `test` | table-level `test` tibble (Chi2 + ANOVA F) | **concatenated** across blocks, not lost | preserved |
 | `totrow` / `totaltab` | rows + fields | total rows **stack as rows**; each block's total becomes its reference row | preserved |
 
+**One capability predicate (Phase 19h, `R/tab-shape.R`).** `tab_shape(x)` reads the shape off the
+DECLARED model — the row-index columns' stored roles (19f) and `meta$spec$kind` (19g), never a column
+name — returning `container` / `kind` / `merged` / `grouped` / the three variable axes (+
+`same_col_vars` / `same_tab_vars` for a list). `TAB_OPS` declares, one row per operation
+(`compact` / `transpose_object` / `transpose_render`), which of those facts it requires, at which
+`severity` (`"abort"`, or `"bail"` for `tab_compact()`'s message-and-return contract) and why; the
+exported `tab_supports(x, op)` and the internal `tab_check_shape()` are its only readers, and the five
+scattered aborts became one call each. `rd_shape(rd)` builds the same record from a finished render
+model, for the transpose. Refusals that are NOT about shape (duplicated row keys, >1 total row/column)
+stay local to `tab_transpose()`.
+
 Two structural limits of `tab_compact()`:
 
 - It **errors** if the bound tables have different `col_vars`. In practice `tab_many()` gives every row_var the same `col_vars`, so this is not a real loss.
-- It **refuses** tables that carry `tab_vars` (returns them unchanged). So when `tab_vars` are present, a multi-row_var call cannot be compacted and the multi-table structure is kept regardless of `output_list`.
+- Since Phase 19f a table carrying `tab_vars` merges like any other (it groups by `(tab_vars, row_var)`); what is still refused is a LIST whose tables disagree about which `tab_vars` they have — there is no one sub-table axis to merge them on.
 
 **Bottom line.** What the single-table default gives up is per-row_var flexibility that real data analysis does not use — a *different* colour mode, reference, or CI type for the *same column* across variables. The one case analysts genuinely rely on — each variable coloured against its own total — survives, because it lives in the cell fields and each block's reference is baked in before binding. Everything else is opt-in recoverable with `output_list = TRUE`, which is also the entry point for manual per-table editing.
 

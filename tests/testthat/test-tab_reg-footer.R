@@ -324,8 +324,9 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
   skip_if_not_installed("broom")
   d <- reg_data()
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), split_var = "grp",
-                                family = "binomial", cleannames = FALSE, spread_models = FALSE))
+  t <- suppressMessages(tab_reg(d, "married",
+                                list(m1 = c("race", "rincome"), m2 = c("race", "rincome")),
+                                split_var = "grp", family = "binomial", cleannames = FALSE))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
   expect_true(nrow(g) > 0)

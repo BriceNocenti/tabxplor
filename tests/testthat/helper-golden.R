@@ -78,7 +78,9 @@ golden_cases <- function() {
     # tab()-equivalent cases (single row_var, na="keep"/none) go through the public tab().
     # Per-col_var na="drop" (distinct per-column bases) is now also a tab() behaviour (Phase 7a
     # fixed tab()'s "drop"); these fixtures keep driving the internal engine tab_build() directly
-    # (byte-identical), as does the engine-only totcol="each".
+    # (byte-identical). Phase 19h: `totcol = "each"` is an accepted SPELLING of "last" (exactly one
+    # total column since Phase 6), so f_totcol_each now locks that the deprecated spelling gives the
+    # base behaviour rather than a per-col_var-totals shape of its own.
     m_multi          = function() tab(syn, g, c(h, k), pct = "row"),
     totn_keep        = function() tab(syn, g, c(h, k), pct = "col", na = "keep"),
     totn_drop        = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "col", na = "drop", output = "single"),

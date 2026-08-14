@@ -56,11 +56,31 @@ test_that("reg grid: Model fit header, dependent-named columns, a shared predict
   expect_true(any(vapply(g$groups[[1]]$rows, `[[`, character(1), "label") == "N"))
 })
 
+# Phase 19h (KEY 7): tab_spread() re-keys the `test` tibble onto what the spread made of what each
+# row named. Without it a crosstab's per-tab_var chi2 rows kept pointing at the PRE-spread col_var,
+# test_grid_crosstab()'s intersect() came back empty, and the whole test summary silently vanished --
+# the same defect reg_spread_models() had been fixing for the regression side alone since Phase 18m.
+test_that("a spread crosstab keeps its per-group test summary, keyed on the new columns", {
+  d  <- dplyr::filter(gss, year %in% c(2000, 2014))
+  t  <- tab(d, relig, marital, year, pct = "row", test = TRUE)
+  sp <- tab_spread(t, year)
+
+  tt <- tabxplor:::get_test(sp)
+  # each chi2 row follows its col_var through the fold, and stops claiming a row group
+  expect_setequal(tt$col[tt$test == "chi2"], c("2000<br>marital", "2014<br>marital"))
+  expect_true(all(tt$year == ""))
+  # ... so the summary still renders, one value column per spread level
+  g <- test_summary_grid(sp)
+  expect_false(is.null(g))
+  expect_setequal(g$value_headers, c("2000<br>marital", "2014<br>marital"))
+})
+
 test_that("reg grid: split_var levels become the row groups", {
   skip_if_not_installed("broom")
-  # spread_models = FALSE: the STACKED grouped form, where split levels are the row groups
-  g <- test_summary_grid(tab_reg(gss, "married", c("relig", "age"), split_var = "race",
-                                 spread_models = FALSE))
+  # a models list keeps the STACKED grouped form, where split levels are the row groups
+  g <- test_summary_grid(tab_reg(gss, "married",
+                                 list(m1 = c("relig", "age"), m2 = c("relig", "age")),
+                                 split_var = "race"))
   expect_length(g$groups, 3L)
   expect_setequal(vapply(g$groups, function(gr) gr$label_lines[[1]], character(1)),
                   c("White", "Black", "Other"))
@@ -121,8 +141,9 @@ test_that("export default = summary (p-value + effect size, no statistic); test_
 
 test_that("a regression split_var renders as a merged, vertical first column in HTML", {
   skip_if_not_installed("broom")
-  # spread_models = FALSE: the STACKED form, where the split_var is the merged vertical first column.
-  r <- tab_reg(gss, "married", c("relig", "age"), split_var = "race", spread_models = FALSE)
+  # a models list keeps the STACKED form, where the split_var is the merged vertical first column.
+  r <- tab_reg(gss, "married", list(m1 = c("relig", "age"), m2 = c("relig", "age")),
+               split_var = "race")
   h <- as.character(tab_html(r, engine = "html"))
   # each split level is one rowspan cell with the vertical (tx-vname) class
   for (lv in c("White", "Black", "Other"))

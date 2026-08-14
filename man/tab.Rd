@@ -86,26 +86,31 @@ set \code{levels = "first"} instead (\code{col_vars} already accepts several var
 }}
 
 \item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
-prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: \code{diff} on
-the text + \code{ratio} on the background; numerics: \code{ratio}; counts: \code{contrib};
-odds-ratio columns: \code{or}). Otherwise a measure name, on the \strong{text} channel:
+prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
+\code{difference} on the text + the \code{ratio} on the background; numerics: the
+\code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"diff"}: cell difference from the reference (percentage points for factors;
+\item \code{"difference"}: cell difference from the reference (percentage points for factors;
 the standardized difference Glass's \eqn{\Delta} for numeric means).
 \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
+coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
+\code{"ratio"}).
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-\item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its
-own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 }
+The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
+\code{"RR"}, \code{"or"} / \code{"OR"}.
 The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
-\strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
-puts \code{diff} on the text and \code{ratio} on the background of every column;
-\code{c(pct = "diff", mean = "ratio")} colors factors by \code{diff} and numeric means by
-\code{ratio} (text channel); \code{list(pct = c("diff", "ratio"), mean = "ratio")} combines
-both (per-type, with channels). Only \code{diff} / \code{ratio} may go on the background.
+\strong{names pick the column type} (\code{pct} / \code{mean}). So
+\code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
+of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
+and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
+mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
+may go on the background.
 Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
-argument. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still
-work but are soft-deprecated in favor of \code{color_signif}.)}
+argument. \code{color} also names the table's COMPARISON, and so decides which interval
+\code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
+\code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)}
 
 \item{color_signif}{How significance gates the color, as a single string:
 \itemize{
@@ -147,25 +152,16 @@ it was built at, so the significance thresholds follow the call's \code{conf_lev
 never recorded one (a hand-built \code{\link{fmt}}) falls back to
 \code{options(tabxplor.conf_level)}.}
 
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
-for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-the odds ratio of each level versus the reference level (the empirical analogue of
-the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} model).
+\item{OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The odds ratio is computed on \strong{every} row/col
+percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
+\code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
 \itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
-\item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-\emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-row. This is the descriptive analogue of a proportional-odds (\code{\link[=tab_reg]{tab_reg()}} \code{family = "ordinal"})
-model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-the departure from proportional odds -- visible and free. Needs \code{pct = "row"} and an
-\code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
+\item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
+\item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
+\item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
 }
-Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
-\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
+Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
+\code{ref2} (the column level).}
 
 \item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
 (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
@@ -279,23 +275,29 @@ a total table with a total row), or with the first line of the total table
 when \code{ref = "first"}.
 }}
 
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-(automatically added if needed for \code{color}).
+\item{ci}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
+\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
+(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
+ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
 \itemize{
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
-(relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
-\item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-\code{ci = "cell"} for frequencies ("all", "all_tabs").
+\item \code{"auto"} (default): an interval on the comparison when the table makes one
+(percentages by row/column, means), an absolute cell interval for plain frequencies, and
+none at all when nothing needs one.
+\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
+and its reference -- the total cell, or the first cell under \code{ref = "first"}.
+\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
+\item \code{"no"}: no interval.
 }
-By default, for percentages, \code{ci = "cell"} uses the Wilson score interval and
-\code{ci = "diff"} the Newcombe hybrid-score interval (its dual, so the bracket and the
-significance stars always agree); means use the Welch t interval. The method can be changed
-in \code{\link{tab_many}} (\code{method_cell} / \code{method_diff} / \code{method_mean_diff}). By
-default, with \code{ci = "cell"}, the result is printed in the \verb{[inf;sup]} form.
-Set \code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} instead.}
+\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
+\code{color_signif} have nothing to read: asking for either alongside them informs you once and
+disables it, rather than silently testing something else.
+Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
+use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
+dual, so the bracket and the stars always agree), and means the Welch t interval. With
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
+\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
+also pins the ratio scale -- say \code{color = "ratio"} instead).}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
@@ -430,8 +432,9 @@ The worker pool persists for the session; release it with \code{\link{tab_parall
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
 
-\item{names_prefix, names_sort}{Passed to \code{\link{tab_spread}} when \code{spread_vars} is
-given: a string prefixed to each new column name, and whether to sort the new columns.}
+\item{names_prefix, names_sort}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} These belong to
+\code{\link{tab_spread}}, which is the function that names the new columns; they reach it only
+when \code{spread_vars} is given. Call \code{tab_spread()} yourself for control over the names.}
 
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}

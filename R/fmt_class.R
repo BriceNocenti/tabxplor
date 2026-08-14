@@ -5665,7 +5665,7 @@ legend_streams <- function(x, style, lang, theme = "light") {
       # tab-export-prep.R). Gated to reg groups (columns carry a role) so a level label that happens to
       # end in "[...]" is untouched.
       if (any(nzchar(purrr::map_chr(g, "role"))))
-        spec$col_names <- sub(" \\[[^]]*\\]$", "", spec$col_names)
+        spec$col_names <- tx_strip_dep_suffix(spec$col_names)
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
     })
@@ -5797,7 +5797,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
                              theme = NULL, classes = FALSE) {
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
-  if (is.null(theme))      theme      <- tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light")
+  if (is.null(theme))      theme      <- tx_theme_option("console")
   streams <- legend_streams(x, style, lang, theme)
   if (length(streams) == 0) return(NULL)
   render_streams(streams, medium, theme, colored, classes)
@@ -5863,7 +5863,13 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
 # subtle whole (matching the historical tbl_format_footer wrapping). Other media return the rendered
 # character vector (md/html/plain) or run-lists (runs); the caller places them (tfoot, xl rows, ...).
 render_footer <- function(streams, medium, theme = NULL, colored = TRUE, classes = FALSE) {
-  if (is.null(theme)) theme <- tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light")
+  # Phase 19h: the theme option pair is read through tx_theme_option() (R/tab-css.R). The scope is
+  # derived from the MEDIUM, which is the fact that decides it: only the console footer belongs to the
+  # console palette. Before, this default reached for the console pair unconditionally -- so a footer
+  # rendered outside rd_footer() (which always passes an explicit theme) silently picked it up for an
+  # export.
+  if (is.null(theme))
+    theme <- tx_theme_option(if (identical(medium, "console")) "console" else "export")
   if (length(streams) == 0) return(if (identical(medium, "runs")) list() else character(0))
   toks_list <- lapply(streams, function(s) s$tokens)
   out <- render_streams(toks_list, medium, theme, colored, classes)

@@ -3385,7 +3385,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # footer tests never disagree about what a weighted model may claim.
 #
 # DESIGN -- these rows are deliberately ABSENT from reg_footer_spec(). A footer ROW is keyed to exactly
-# one model column and reg_spread_models() re-keys per split group; a POOLED test belongs to neither,
+# one model column and the spread re-keys per split group; a POOLED test belongs to neither,
 # and one row per predictor cannot be expressed by a fixed discriminator->label list anyway. So the
 # rows stay pure data (read by reg_interaction_line, rendered as a table-wide footer STREAM like the
 # weight / "Model:" lines), and both row consumers, which filter on names(reg_footer_spec()), ignore
@@ -3652,14 +3652,6 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level, multi
 }
 
 
-# Phase g: with a split_var + a SINGLE model (one dependent, one predictor set, not multinomial), spread
-# the stacked grouped_tab so the per-subpopulation models sit SIDE BY SIDE (spread_models = TRUE). The
-# split level is folded into each spread column's col_var as "{level}<br>{model outcome}", so a border
-# separates the sub-models and the span header reads on two lines (e.g. "White" over "married: Married").
-# The spread column NAME ends with the split level (single col_level -> the name IS the level; several
-# empirical/model columns -> "{col_level}_{level}"); the base col_var (the shared outcome) is read off
-# the pivoted column and prefixed. Console tells the models apart by that name suffix (col_var is not
-# shown there); html / Excel get the two-line span + borders.
 # reg_gap_se_of() -- Phase 18z8: recover a column's per-cell standard error, on the estimate's own
 # TEST scale, from the Wald interval it already stores. `reg_wald_finalize()` exponentiates before
 # storing, so a multiplicative interval must be logged back first -- the SE of an OR / RR / IRR lives on
@@ -3735,44 +3727,6 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
   parts
 }
 
-reg_spread_models <- function(t, split_var, sl) {
-  s    <- tab_spread(t, !!rlang::sym(split_var))
-  test <- get_test(s)                                  # carried through tab_spread untouched
-  # First spread fmt column of each split level (= the column its GOF footer keys under, mirroring the
-  # single-column non-split placement); also rewrite every spread column's col_var for legend/borders.
-  col_of_group <- stats::setNames(rep(NA_character_, length(sl)), sl)
-  for (nm in names(s)[vapply(s, is_fmt, logical(1))]) {
-    matches <- sl[vapply(sl, function(g) nm == g || endsWith(nm, paste0("_", g)), logical(1))]
-    if (!length(matches)) next
-    g <- matches[which.max(nchar(matches))]            # longest match disambiguates nested levels
-    s[[nm]] <- set_col_var(s[[nm]], paste0(g, "<br>", get_col_var(s[[nm]])))
-    # Phase 18z13: the `n` column comes FIRST, so "first spread fmt column" would key every group's
-    # GOF block under its counts. It is a row descriptor, never a model column -- its stored role says
-    # so (SS7.1), which is exactly why the role is stored.
-    if (identical(get_role(s[[nm]]), "n")) next
-    if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
-  }
-  # Phase 18m: the split build stacked one GOF block PER split level (each keyed to the SAME pre-spread
-  # column via its split-level group column); tab_spread pivots only the data, so the materialisers saw
-  # is_split = TRUE (tripled) and matched cells by a col_var that no longer exists (empty). Re-key each
-  # group's GOF rows onto that group's spread column NAME and clear the group -> ONE block, each cell
-  # placed under its subpopulation's column (like the single-column non-split footer).
-  # Phase 18z8: re-key ONLY the per-group GOF block. The interaction rows are a pooled, table-wide
-  # test read by reg_interaction_line() -- keying them to a group's column would be wrong, and the
-  # `col_of_group[...]` lookup would silently drop them.
-  if (!is.null(test) && nrow(test) > 0 && split_var %in% names(test) &&
-      any(nzchar(test_key_col(test, split_var)))) {
-    gof   <- test$test %in% reg_footer_test_types()
-    part  <- test[gof, , drop = FALSE]
-    g_col <- col_of_group[test_key_col(part, split_var)]
-    part  <- part[!is.na(g_col), , drop = FALSE]
-    part$col <- unname(g_col[!is.na(g_col)])
-    part[[split_var]] <- ""
-    test <- dplyr::bind_rows(part, test[!gof, , drop = FALSE])
-    s <- set_test(s, test)
-  }
-  s
-}
 
 # The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
 # list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
@@ -3826,7 +3780,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            stats = NULL, compare = "none", baseline = NULL,
                            multiplier = NULL, multiplier_label = NULL,
                            shape_terms = NULL, shape_labels = NULL,
-                           empirical = FALSE, display = "value", spread_models = TRUE,
+                           empirical = FALSE, display = "value",
                            var_labels = character(0), na_shared_vars = character(0),
                            add_n = FALSE) {
   as.list(environment())
@@ -3892,7 +3846,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     # Phase 18z5: `color = "between_groups"` scores each group's estimate against the REFERENCE
     # GROUP's on the same row. THIS is the only point where the groups exist as parallel, separately
     # addressable tibbles: one line later vec_rbind() stacks them into rows, and after
-    # reg_spread_models() each is a column whose group could only be recovered from a name suffix.
+    # the spread makes each a column whose group could only be recovered from a name suffix.
     # Writing the counterpart into the per-cell `obs` field here makes BOTH output shapes work with one
     # pass, and it rides vec_rbind / group_by / tab_spread untouched (fields survive the pivot).
     # It cannot be done with the existing reference machinery: fmt_broadcast_last() groups by runs of
@@ -3925,11 +3879,13 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     grouped <- reg_finalize(combined, tests, conf_level, var_labels,
                             group_vars = c(split_var, "var"),
                             meta_extra = list(subtext = subtext))
-    # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
-    # is not multinomial (a multinomial has several columns for one model, so side-by-side is ambiguous).
-    # spread_models = FALSE keeps the stacked grouped_tab.
-    if (isTRUE(spread_models) && length(specs) == 1L && !identical(family, "multinomial")) {
-      return(reg_spread_models(grouped, split_var, sl))
+    # Phase 19h (KEY 7): the split groups go side by side whenever that is unambiguous -- ONE model
+    # (a single dependent and a single predictor set) that is not multinomial (a multinomial has
+    # several columns for one model, so a side-by-side layout has no one column per group). It is an
+    # internal rule, not an argument: tab_spread() is the public way to control the layout, and
+    # reg_spread_models() -- whose two post-spread repairs were generic all along -- is deleted.
+    if (length(specs) == 1L && !identical(family, "multinomial")) {
+      return(tab_spread(grouped, tidyselect::all_of(split_var)))
     }
     return(grouped)
   }
@@ -4766,10 +4722,12 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param inverse_two_level_factors Logical, binomial only. If `TRUE` (default), models the FIRST
 #'   level of a 2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
 #' @param split_var Optional. Name of a grouping variable (character): the regression analogue of
-#'   [tab()]'s `tab_vars`. The same model(s) are fitted **within each level** of this variable and the
-#'   per-group tables are stacked into one grouped table (grouped by `split_var`), sharing the
-#'   variable/level stub. Use [tab_spread()] on `split_var` to pivot the groups into side-by-side
-#'   columns for an easy across-group comparison. A level absent from a group shows empty cells.
+#'   [tab()]'s `tab_vars`. The same model(s) are fitted **within each level** of this variable.
+#'   When that leaves one column per group — a single outcome, a single set of predictors, and not a
+#'   multinomial — the groups are pivoted into **side-by-side columns** for an easy across-group
+#'   comparison; otherwise the per-group tables are stacked into one grouped table (grouped by
+#'   `split_var`), sharing the variable/level stub. Call [tab_spread()] yourself for full control of
+#'   the layout in that case. A level absent from a group shows empty cells.
 #'   Two readings of "does this effect hold in every subgroup?" come with it:
 #'   `color = "between_groups"` colours (and tests) each effect against the first group's, row by row,
 #'   and `stats = c(..., "interaction")` adds the aggregated test, once per predictor.
@@ -5101,10 +5059,6 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
-#' @param spread_models Logical, only used with `split_var`. If `TRUE` (default), a single
-#'   non-multinomial model fitted within each `split_var` level is automatically pivoted with
-#'   [tab_spread()] so the per-group models sit side by side as columns. `FALSE` keeps the
-#'   stacked grouped table (one block of rows per group).
 #' @param .fit_cache Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
 #'   (see `jmvreg_cache_env()`) that memoizes fitted models so display / colour / reference toggles
 #'   avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is
@@ -5203,7 +5157,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     display = "value",
-                    cleannames = NULL, subtext = "", spread_models = TRUE,
+                    cleannames = NULL, subtext = "",
                     .fit_cache = NULL, ...) {
   # Phase 19e: the retired estimand arguments (`exponentiate` / `at` / `estimate_display`) are caught
   # here rather than by R's "unused argument", so the error names the spelling that replaced them.
@@ -5232,8 +5186,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                        "x" = "Got {length(trials)} for {length(dependent)} dependents."))
     }
     # Phase 19e (D6): every per-dependent argument is SLICED the way `trials` is, and every
-    # whole-call one is forwarded. Before, `spread_models` and `.fit_cache` were silently dropped
-    # (so a user's `spread_models = FALSE` reverted to TRUE and the jamovi cache never filled), and
+    # whole-call one is forwarded. Before, the per-call options and `.fit_cache` were silently
+    # dropped (so the jamovi cache never filled), and
     # a POSITIONAL `family` vector was passed whole to each recursion -- where its first entry then
     # became every outcome's family. `reg_per_dep()` is the one slicer, shared by the four.
     tabs <- purrr::map(seq_along(dependent), function(i) {
@@ -5253,7 +5207,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
               stats = stats, compare = compare, baseline = baseline,
               display = display, color = color, color_signif = color_signif,
               stars = stars, na = na, cleannames = cleannames, subtext = subtext,
-              spread_models = spread_models, .fit_cache = .fit_cache)
+              .fit_cache = .fit_cache)
     })
     names(tabs) <- dependent
     return(new_tabxplor_tabs(tabs))
@@ -5903,7 +5857,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     color_signif = color_signif, cleannames = cleannames, subtext = subtext,
     stats = stats, compare = compare, baseline = baseline, multiplier = multiplier,
     multiplier_label = multiplier_label, shape_terms = shape_terms, shape_labels = shape_labels,
-    empirical = empirical, display = display, spread_models = spread_models,
+    empirical = empirical, display = display,
     var_labels = reg_var_labels, na_shared_vars = na_shared_vars, add_n = add_n)
   res <- reg_build(data, specs, shared, split_var = split_var,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
@@ -6010,7 +5964,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       stats = NULL, display = "value",
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
                       stars = TRUE, na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                      cleannames = NULL, subtext = "", spread_models = TRUE) {
+                      cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   na           <- match.arg(na)
@@ -6022,7 +5976,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
           display = display,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, na = na,
-          cleannames = cleannames, subtext = subtext, spread_models = spread_models)
+          cleannames = cleannames, subtext = subtext)
 }
 
 

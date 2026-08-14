@@ -161,8 +161,10 @@ tab_md <- function(tabs,
   # from `<style>`: a table is styled when it is coloured OR `css = TRUE`, and a styled table always
   # carries the div -- so the "one tab_css() per document" workflow (bring the sheet via the document)
   # reaches a coloured `tab_md(css = FALSE)` too. A plain uncoloured table stays byte-identical (no div).
-  # `md_has_color()` is the one definition of "is this table coloured", shared with md_render_one().
-  any_color <- any(vapply(prep$tables, md_has_color, logical(1), color = color))
+  # Phase 19h: `roles$has_color` is THE realised "is this table coloured" flag, produced once by
+  # roles_color_flags() for the prep AND the transpose (md used to define it a second time, and the
+  # transpose a third). `compute` already gates it on the caller's `color`.
+  any_color <- any(vapply(prep$tables, function(x) isTRUE(x$roles$has_color), logical(1)))
   styled    <- any_color || isTRUE(css)
   if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
   if (isTRUE(css)) {
@@ -189,10 +191,10 @@ tab_md <- function(tabs,
 #' CSS for the colour spans of \code{\link{tab_md}}
 #'
 #' A thin wrapper around \code{\link[=tab_css]{tab_css(chrome = FALSE)}}, kept for discoverability
-#' alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a palette
-#' **slot**, not a break -- so `tabs` is ignored and one stylesheet styles every table in a document.
+#' alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a
+#' palette **slot**, not a break -- so it takes no table: one stylesheet styles every table in a
+#' document. (Phase 19h dropped the inert `tabs` argument, which was documented as ignored.)
 #'
-#' @param tabs Ignored (the CSS is table-independent). Kept so `tab_md_css(tabs)` still reads naturally.
 #' @param ... Passed to \code{\link{tab_css}} (`theme`, `style_tag`, `file`).
 #'
 #' @return A character string of CSS (invisible when `file` is given).
@@ -201,7 +203,7 @@ tab_md <- function(tabs,
 #'
 #' @examples
 #' cat(tab_md_css())
-tab_md_css <- function(tabs = NULL, ...) {
+tab_md_css <- function(...) {
   tab_css(..., chrome = FALSE)
 }
 
@@ -258,19 +260,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   # md-local: positions where a REAL col_var changes (span-header separators). Distinct from kable's
   # col-border transition index, so it is not shared.
-  new_col_var <- integer(0)
-  if (has_multi_col_vars) {
-    cv_simplified <- col_var_map
-    cv_simplified[names(other_cols)] <- names(other_cols)
-    for (k in seq_along(cv_simplified)[-1]) {
-      prev_cv <- cv_simplified[k - 1]
-      curr_cv <- cv_simplified[k]
-      if (prev_cv %in% real_col_vars && curr_cv %in% real_col_vars &&
-          prev_cv != curr_cv) {
-        new_col_var <- c(new_col_var, k - 1L)
-      }
-    }
-  }
+  # Phase 19h: through the SHARED roles_col_var_edges() (tab-export-prep.R). md's convention is the
+  # right edge of each block, counting a transition only between two REAL col_vars -- so a helper
+  # column (`n`, a total) never opens a span block. Declared there beside kable's and Excel's.
+  new_col_var <- if (has_multi_col_vars)
+    roles_col_var_edges(col_var_map, other_cols, real_col_vars,
+                        side = "right", real_only = TRUE) else integer(0)
 
   # --- Step 6: Format all cells to character ---
   # Format fmt columns. The reference masks are reused from the prep's `ann` (.ref) so
@@ -332,7 +327,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # asked for the stylesheet. In a styled table (rendered to html) a blanked continuation LABEL cell must
   # be a non-breaking space, NOT "" -- an :empty <td> makes the CSS col_var-separator rule misfire (the
   # "ragged" leftmost border that appears only on continuation rows; Phase 18m). Plain tables keep "".
-  do_color <- md_has_color(rd, color)
+  do_color <- isTRUE(rd$roles$has_color)
   styled   <- do_color || isTRUE(css)
   blank_lbl <- if (styled) "\u00a0" else ""
   for (cl in names(label_cols)) {
@@ -370,8 +365,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   # Blank out the label columns' header names (they label sub-tables, not real columns). The `""`
   # sentinel in names(cell_data) is what drives `col_names` at Step 7. Phase 14i: `tab_vars` ->
-  # `label_cols`, so a merged table's name column loses the literal "row_var" header here too (the
-  # prep already blanks it in cvh$clean, for the three backends that read the header model).
+  # `label_cols`, so a merged table's name column loses the literal "row_var" header here too.
+  # WARNING (Phase 19h): this is NOT the prep's header blanking and must not be folded into it. The
+  # prep blanks only the LITERAL "row_var" header, keeping a real variable name (`marital`) in
+  # cvh$clean for the backends that show it; md renders every label column's name as a body row
+  # instead, so it blanks them all. Two rules, deliberately.
   for (cl in names(label_cols)) {
     idx <- which(names(cell_data) == cl)
     if (length(idx) == 1) names(cell_data)[idx] <- ""
@@ -672,14 +670,7 @@ md_pad_blank <- function(widths, styled) {
 }
 
 
-# The ONE definition of "is this rendered table coloured" -- a table is coloured iff `color` is on and
-# some fmt column carries a colour measure (its prep annotation has `has_color`). Shared by tab_md()'s
-# fenced-div gate and md_render_one()'s span/styled logic, so the two cannot disagree.
-#' @keywords internal
-md_has_color <- function(rd, color) {
-  isTRUE(color) && length(rd$ann) > 0L &&
-    any(vapply(rd$ann, function(a) isTRUE(a$has_color), logical(1)))
-}
+
 
 
 # === SECTION: Phase 10f colour spans (break-derived pandoc classes) ==================

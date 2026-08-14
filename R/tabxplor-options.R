@@ -51,6 +51,9 @@
 #'     (follow the reader). `"auto"` needs a stylesheet, so only `tab_kable(engine = "html")`,
 #'     [tab_md()] and [tab_css()] honour it; static backends resolve it to `"light"`. `"print"` reaches
 #'     every backend, Excel included.}
+#'   \item{`tabxplor.color_style_type`}{`r lifecycle::badge("deprecated")` the console colour CHANNEL,
+#'     `"text"` or `"bg"`. Inert since 2.0.0: the channel is chosen per measure by
+#'     `color = c(text, background)` (see [tab()]), so setting it emits a deprecation warning.}
 #'   \item{`tabxplor.print_rules`}{`TRUE` (default): every stylesheet [tab_css()] emits also carries the
 #'     black-and-white publication palette inside an `@media print` block, so a table rendered in colour
 #'     **prints** (or saves to PDF) publication-ready with no further action. Set `FALSE` if your printer
@@ -122,7 +125,9 @@
 #'   \item{`tabxplor.kable_popover`}{`FALSE` (default): use click popovers instead of hover tooltips.}
 #'   \item{`tabxplor.tab_kable_num_font`}{the HTML/markdown number-font CSS stack. Monospace by
 #'     default so figures stay column-aligned (set a proportional stack to revert).}
-#'   \item{`tabxplor.output_kable`}{`FALSE` (default): internal switch to return kable output.}
+#'   \item{`tabxplor.output_kable`}{`FALSE` (default): make [tab()] render its result with
+#'     [tab_html()] before returning it — a convenience for `.Rmd`/`.qmd` documents. Since 2.0.0 it
+#'     only *renders*: it no longer changes the shape of the built object (that is `output_list`).}
 #' }
 #'
 #' @section Excel / `tab_xl()` export:

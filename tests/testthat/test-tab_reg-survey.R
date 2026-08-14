@@ -170,9 +170,12 @@ reg_split_data <- function() {
   tibble::tibble(y = factor(y), g = g, x1 = x1, x2 = x2, w = runif(n, 0.5, 3))
 }
 
+# Phase 19h (KEY 7): `spread_models` is gone from the user surface. The groups go side by side
+# whenever that is unambiguous -- ONE column per group -- and stay stacked otherwise, which is what a
+# models list produces (one column per model, so a side-by-side layout has no single column to key on).
 test_that("split_var stacks one model per group (grouped by split_var + var)", {
   d <- reg_split_data()
-  t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE)
+  t <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")
   expect_s3_class(t, "tabxplor_grouped_tab")
   expect_setequal(dplyr::group_vars(t), c("g", "var"))
   expect_true("g" %in% names(t))
@@ -192,26 +195,29 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
   # works with empirical = TRUE (crude companions spread too, level-suffixed)
   te <- suppressWarnings(tab_logit(d, "y", "x1", split_var = "g", empirical = TRUE))
   expect_true(any(grepl("^Obs_", names(te))))
-  # opt-out keeps the stacked grouped form
-  expect_s3_class(tab_logit(d, "y", "x1", split_var = "g", spread_models = FALSE),
-                  "tabxplor_grouped_tab")
+  # several models per group cannot go side by side, so they stay stacked
+  expect_true("g" %in% names(
+    tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")))
 })
 
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
-  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE,
-                                multiplier = 1))
+  # the groups are side by side now, so each group's estimates are its OWN column
+  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", multiplier = 1))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
-    tv   <- vapply(t[[grep("^Model_", names(t), value = TRUE)[1]]][t$g == grp], tabxplor::get_num, numeric(1))
-    expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
+    col  <- grep(paste0("^Model_.*", grp, "$"), names(t), value = TRUE)[1]
+    tv   <- vapply(t[[col]], tabxplor::get_num, numeric(1))
+    expect_equal(unname(tv[!is.na(tv) & tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
   }
 })
 
 test_that("tab_spread pivots split groups into side-by-side columns", {
   d  <- reg_split_data()
-  t  <- tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE)
+  # a models list stays stacked, so tab_spread() has something to pivot -- and this is the public
+  # route for "full control of the layout" now that the auto-spread has no opt-out.
+  t  <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")
   sp <- tab_spread(t, g)
   expect_s3_class(sp, "tabxplor_tab")
   # one OR column per split level (north / south), sharing the var/level stub
@@ -221,7 +227,8 @@ test_that("tab_spread pivots split groups into side-by-side columns", {
 
 test_that("split_var footer carries per-group GOF", {
   d   <- reg_split_data()
-  t   <- tab_logit(d, "y", "x1", split_var = "g", spread_models = FALSE)
+  # a models list keeps the STACKED shape, where each group is a row block with its own footer
+  t   <- tab_reg(d, "y", list(m1 = "x1", m2 = "x1"), family = "binomial", split_var = "g")
   tst <- tabxplor:::get_test(t)
   # Phase 19g: the split level rides a column NAMED after the split variable, like a crosstab's tab_var
   expect_setequal(unique(tst$g), c("north", "south"))   # tagged per split group
@@ -230,16 +237,15 @@ test_that("split_var footer carries per-group GOF", {
 
 test_that("split_var works with survey weights (per-group svyglm)", {
   d <- reg_split_data()
-  t <- tab_logit(d, "y", c("x1", "x2"), wt = "w", split_var = "g", spread_models = FALSE,
-                 multiplier = 1)
+  t <- tab_reg(d, "y", list(m1 = c("x1", "x2"), m2 = c("x1", "x2")), family = "binomial",
+               wt = "w", split_var = "g", multiplier = 1)
   expect_s3_class(t, "tabxplor_grouped_tab")
   sub  <- dplyr::filter(d, g == "north")
   des  <- survey::svydesign(ids = ~1, weights = ~w,
                             data = dplyr::mutate(sub, y01 = as.integer(y == levels(y)[1])))
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
   tt   <- dplyr::ungroup(t)
-  tv   <- vapply(tt[[grep("^Model_", names(tt), value = TRUE)[1]]][tt$g == "north"],
-                 tabxplor::get_num, numeric(1))
+  tv   <- vapply(tt[["m1"]][tt$g == "north"], tabxplor::get_num, numeric(1))
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-5)
 })
 

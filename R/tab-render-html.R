@@ -291,17 +291,22 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
     out <- kableExtra::add_header_above(out, header_above)
   }
 
-  if (theme == "light") {
-    out <- out |> kableExtra::kable_classic(
+  # Phase 19h (D2): only a DARK request gets the dark lightable theme. The branch used to be
+  # `theme == "light"` against everything else, so `theme = "print"` -- the black-and-white
+  # PUBLICATION palette, which z11 added and which reaches every static backend -- rendered
+  # kable_material_dark: a black table for a greyscale-print request. "auto" never arrives here
+  # (tx_theme_resolve() downgrades it: kableExtra's themes are baked at render time).
+  if (identical(theme, "dark")) {
+    out <- out |> kableExtra::kable_material_dark(
       lightable_options = "hover",
+      bootstrap_options = c("hover", "condensed", "responsive"),
       full_width = full_width,
       html_font = html_font,
       ...
     )
   } else {
-    out <- out |> kableExtra::kable_material_dark(
+    out <- out |> kableExtra::kable_classic(
       lightable_options = "hover",
-      bootstrap_options = c("hover", "condensed", "responsive"),
       full_width = full_width,
       html_font = html_font,
       ...
@@ -427,6 +432,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       bgc <- tx_slot_class("bg",   bsl)
       # Phase 14q: keep_black = ref_alltot | is_refrow | footer (the black reading anchors), so reg
       # reference cells and GOF footer cells are no longer greyed. == ref_alltot for a crosstab.
+      # Phase 19h (D1): the fallback stays as a degraded-model guard, but it is no longer LOAD-BEARING
+      # -- the transpose flips keep_black like every other per-cell logical now. It used to drop it,
+      # and this silent fallback is what turned that into "a transposed reg footer renders grey".
       keep <- if (length(a$keep_black) == n_row) a$keep_black else a$ref_alltot
       grey <- !nzchar(cls) & !nzchar(bgc) & !keep
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"

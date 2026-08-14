@@ -219,7 +219,7 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' @param base For `input = "pct"`: the column holding each row's sample size N.
 #' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
 #'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,ci_method,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars,names_prefix,names_sort
+#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,ci_method,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars
 #'   Same meaning as in [tab()]. `color` accepts every form [tab()] does (`FALSE` / `TRUE` /
 #'   a measure / `c(text, background)` / `list(pct =, mean =)`). Only `na = "keep"` / `"drop"` are
 #'   available (`"drop_all"` / `"common_base"` need the microdata). The [tab()] arguments that pick or
@@ -232,6 +232,8 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'   `output_list`; `sup_cols`. The `mean_diff` / `mean_ratio` slots of `ci_method` are inert here
 #'   (a counts table has no numeric column).
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0 (see [tab()]).
+#' @param names_prefix,names_sort `r lifecycle::badge("deprecated")` These belong to
+#'   \code{\link{tab_spread}} — see [tab()].
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
 #' @export

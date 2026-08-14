@@ -203,10 +203,9 @@ test_that("D25: a reg colour cannot contradict what the column estimates", {
 test_that("D6: the multi-dependent x model-list recursion forwards every argument", {
   skip_if_not_installed("broom")
   d <- est_data()
-  # `spread_models` used to be dropped silently (reverting to TRUE in each per-dependent table)
   tabs <- suppressMessages(tab_reg(
     d, c("married", "tvhours"), list(m1 = "race", m2 = c("race", "age")),
-    family = c("binomial", "gaussian"), spread_models = FALSE, cleannames = FALSE))
+    family = c("binomial", "gaussian"), cleannames = FALSE))
   expect_length(tabs, 2L)
   # ... and a POSITIONAL family vector reached each recursion whole, so the second outcome was
   # fitted with the first's family

@@ -4945,7 +4945,7 @@ Verification: all three vignettes render with colours (the fansi hook); `devtool
 
 
 
-### Phase 18 – lasts steps and release
+### Phase 18 – past near-release then development restart
 
 #### Phase 18g — tab_reg() improvements
 

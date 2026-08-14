@@ -34,7 +34,7 @@ tab_export(
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
 and any dark-mode toggle of the host page), which needs a stylesheet: it works for
-\code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
+\code{format = "html"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
@@ -49,7 +49,7 @@ the text palette. The colour CHANNEL is chosen by \code{color = c(text, backgrou
 \item{color}{Set to \code{FALSE} to render without colours (monochrome).}
 
 \item{color_legend}{Print the colour legend with the subtext
-(\code{"kable"}/\code{"md"}/\code{"xl"}/\code{"plot"}).}
+(\code{"html"}/\code{"md"}/\code{"xl"}/\code{"plot"}).}
 
 \item{lang}{Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
@@ -61,7 +61,7 @@ the col-percentages-with-several-row-variables use case.}
 
 \item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
 \code{"rows"}, \code{"cols"} or \code{"none"}. Defaults to \code{getOption("tabxplor.var_names", "both")}.
-See \code{\link{tab_kable}}.}
+See \code{\link{tab_html}}.}
 
 \item{...}{Format-specific arguments passed to the underlying exporter.}
 }

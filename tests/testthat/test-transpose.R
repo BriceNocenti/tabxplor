@@ -169,6 +169,36 @@ testthat::test_that("every exporter accepts transpose = TRUE without error", {
   testthat::expect_no_error(tab_plot(t, transpose = TRUE))
 })
 
+# Phase 19h (D1): rd2 is a MODIFICATION of rd, not a 39-slot literal. The literal had already lost two
+# slots and was losing `ann$keep_black` -- the "do not grey this cell" anchor set -- which the html
+# engine reads behind a length-check fallback, so a transposed regression's GOF footer cells rendered
+# GREY where the native render keeps them black, with no error and no test.
+testthat::test_that("the transposed model keeps every slot the flip does not touch (D1)", {
+  t  <- tab(gss, c(marital, race), relig, pct = "row", na = "drop")
+  rd  <- tabxplor:::tab_export_prep(t, backend = "kable",
+                                    compute = c("refs", "colors", "bold"))$tables[[1]]
+  rd2 <- tabxplor:::tab_export_prep(t, backend = "kable", transpose = TRUE,
+                                    compute = c("refs", "colors", "bold"))$tables[[1]]
+  # no top-level slot is dropped by the flip (it may be added: cells / tooltips / color_src ...)
+  testthat::expect_true(all(names(rd) %in% names(rd2)))
+  # every per-cell ann field survives too -- this is where keep_black went missing
+  testthat::expect_true(all(names(rd$ann[[1]]) %in% names(rd2$ann[[1]])))
+  testthat::expect_length(rd2$ann[[1]]$keep_black, nrow(rd2$tab))
+})
+
+testthat::test_that("a transposed regression's footer cells stay black in HTML (D1)", {
+  testthat::skip_if_not_installed("broom")
+  d <- gss_cat_data_formatting()
+  r <- suppressMessages(tab_reg(d, "married", c("relig", "age"), family = "binomial",
+                                cleannames = FALSE))
+  h <- as.character(tab_html(r, engine = "html", transpose = TRUE))
+  # the GOF footer values (N, McFadden R2 ...) are reading anchors: they must NOT carry a grey class
+  greyed <- grepl('class="[^"]*\\bg[12]\\b[^"]*"[^>]*>[^<]*McFadden', h)
+  testthat::expect_false(greyed)
+  # non-vacuous: the untransposed render has the same footer, also un-greyed
+  testthat::expect_match(as.character(tab_html(r, engine = "html")), "McFadden")
+})
+
 testthat::test_that("Phase 17g: transpose carries the caption/title through the flip (drift fix)", {
   # rd2 used to drop reg_title / caption / empirical_tips, so a transposed table lost its title. The
   # stored set_caption() must survive the flip into md's and html's shared rd_caption() fallback.

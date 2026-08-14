@@ -56,38 +56,47 @@ are converted to factor.}
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 }}
 
-\item{color}{The type of colors to print, as a single string :
+\item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
+prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
+\code{difference} on the text + the \code{ratio} on the background; numerics: the
+\code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"no"}: by default, no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
-color based on odds ratios (or relative risks ratios)
-}}
+\item \code{"difference"}: cell difference from the reference (percentage points for factors;
+the standardized difference Glass's \eqn{\Delta} for numeric means).
+\item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
+coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
+\code{"ratio"}).
+\item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
+}
+The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
+\code{"RR"}, \code{"or"} / \code{"OR"}.
+The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
+\strong{names pick the column type} (\code{pct} / \code{mean}). So
+\code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
+of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
+and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
+mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
+may go on the background.
+Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
+argument. \code{color} also names the table's COMPARISON, and so decides which interval
+\code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
+\code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)}
 
 \item{display}{A \code{{}} display template applied to the built table -- the same grammar
 \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
 or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.}
 
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
-for a binary variable the usual odds ratio; for a variable with 3 levels or more,
-the odds ratio of each level versus the reference level (the empirical analogue of
-the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} model).
+\item{OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The odds ratio is computed on \strong{every} row/col
+percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
+\code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
 \itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
-\item \code{"cumOR"}: print CUMULATIVE odds ratios, one per cut point -- for each column
-\emph{j}, the odds of falling \strong{at or below level j}, for that row against the reference
-row. This is the descriptive analogue of a proportional-odds (\code{\link[=tab_reg]{tab_reg()}} \code{family = "ordinal"})
-model, but with no proportional-odds assumption: a \emph{k}-level scale has \emph{k-1} cut
-points, so the last column is empty, and the SPREAD of the odds ratios across a row is exactly
-the departure from proportional odds -- visible and free. Needs \code{pct = "row"} and an
-\code{ordered} factor col_var with 3+ levels (each ineligible col_var quietly falls back to no
-OR, with one message naming the fix); the missing-value column, if any, is never a cut point.
+\item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
+\item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
+\item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
 }
-Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
-\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
+Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
+\code{ref2} (the column level).}
 
 \item{na}{The policy to adopt with missing values, as a single string.
 \itemize{

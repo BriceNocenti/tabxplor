@@ -23,16 +23,13 @@ tab_ci(
 \item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
-\item{ci}{The type of ci to calculate. Set to "cell" to calculate absolute confidence
-intervals. Set to "diff" to calculate the confidence intervals of the difference
-between a cell and the relative total cell (or the reference cell,
-when \code{ref} is not \code{"tot"} in \code{\link{tab_plain}} or \code{\link{tab_num}}).
-Set to "ratio" for the same interval on the \emph{ratio} (relative risk / mean ratio)
-scale (the Katz interval) rather than the difference scale.
-By default, "diff" ci are calculated for means and row and col percentages,
-"cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
-the result is printed in the \verb{[inf;sup]} form. Set
-\code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} instead.}
+\item{ci}{What the interval is anchored on -- \code{"ref"} (the comparison with the reference
+cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
+\code{\link{tab}}, which is where this is normally set: \code{"auto"} gives a comparison
+interval for means and row/column percentages and a cell interval for plain frequencies.
+\code{"diff"} and \code{"ratio"} are the soft-deprecated spellings of \code{"ref"}.
+With \code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.}
 
 \item{comp}{Comparison level. When \code{tab_vars} are present, should the
 contributions to variance be calculated for each subtable/group (by default,

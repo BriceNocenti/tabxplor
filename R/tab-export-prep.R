@@ -98,12 +98,6 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
 
   list(
     ref_alltot = ref_alltot,
-    # The row-anchor signal for the shared bold-row set: a cell anchors a row when it is a
-    # reference/total (`ref_alltot`) OR a regression reference CATEGORY (`in_refrow`, which a
-    # totals-free reg column carries but ref_alltot misses). For crosstabs is_refrow is a subset of
-    # ref_alltot, so `anchor == ref_alltot` there (byte-identical). Kept SEPARATE from `keep_black`
-    # (which prep_one_table later overrides on footer rows) so tab_bold_rows reads the pure signal.
-    anchor     = keep_black,
     ref_cells  = ref_cells,
     text_hex   = text_hex,
     bg_hex     = bg_hex,
@@ -401,12 +395,14 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                                    c("all_col_vars", "no_col_var", "no_row_var",
                                      "", "no", NA_character_)]
 
+  # DECLARED: which columns name a colour measure at all -- the LEGEND's gate (it describes the
+  # scheme, so it shows even if every cell happens to land in slot 0). Its realised twin, "does any
+  # cell actually carry a colour", is roles$has_color -- see roles_color_flags() below.
   color_cols <- get_color(tab)
   color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
 
   totcols    <- which(is_totcol(tab))
   totrows    <- which(is_totrow(tab))
-  no_totrows <- which(!is_totrow(tab))
 
   # row_var re-detected on the FINAL tab (wrap can rename the row-label column, so the index must
   # come from the wrapped names -- matches tab_kable's `which(names(tabs) == tab_get_vars(...)$row_var)`).
@@ -447,9 +443,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   totblock_bottom <- tb_edges$bottom
 
   # kable/plot col_var transition index (one-liner). md keeps its own real-col_var span loop.
-  new_col_var <- col_var_map
-  new_col_var[names(other_cols)] <- names(other_cols)
-  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
+  new_col_var <- roles_col_var_edges(col_var_map, other_cols, side = "right")
 
   align <- purrr::map_chr(
     tab, ~ dplyr::if_else(is_fmt(.) | is.numeric(.), "r", "l")
@@ -461,7 +455,15 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     stats::setNames(names(fmt_cols), names(fmt_cols)),
     ~ fmt_col_ann(tab[[.x]], theme_cols, want_colors)
   )
-  any_bg <- if (want_colors) any(purrr::map_lgl(ann, ~ isTRUE(.$has_bgc))) else FALSE
+  color_flags <- roles_color_flags(ann, color_cols)
+  any_bg      <- color_flags$any_bg
+  # The row-ANCHOR signal for the shared bold-row set: a cell anchors a row when it is a
+  # reference/total (`ref_alltot`) OR a regression reference CATEGORY (`in_refrow`, which a
+  # totals-free reg column carries but ref_alltot misses). For crosstabs is_refrow is a subset of
+  # ref_alltot, so this equals ref_alltot there. Captured HERE, BEFORE the footer override below --
+  # tab_bold_rows() needs the pure signal. Phase 19h: a LOCAL, not the shipped `ann$anchor` slot it
+  # used to be; no backend ever read that slot, and the transpose dropped it silently.
+  anchors <- purrr::map(ann, "keep_black")
 
   # Phase 14q: the regression GOF FOOTER rows must read black + bold -- they are model-fit numbers,
   # not data to grey out so colours pop. A footer row is one where EVERY fmt cell is a footer stat
@@ -481,10 +483,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     })
   }
 
-  # --- bold rows + bold cols (block D), reusing ann$anchor / ann$ref_alltot ---
+  # --- bold rows + bold cols (block D), from the pure `anchors` signal / ann$ref_alltot ---
   ref_alltot_list <- purrr::map(ann, "ref_alltot")
   bold_rows <- if ("bold" %in% compute) {
-    tab_bold_rows(purrr::map(ann, "anchor"))
+    tab_bold_rows(anchors)
   } else integer(0)
   # Phase 14q: footer rows' LABEL cells (row-var / level columns) bold too, matching the value cells.
   if ("bold" %in% compute && any(footer_rows)) bold_rows <- union(bold_rows, which(footer_rows))
@@ -537,17 +539,17 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     # Both come from the `vars` ATTRIBUTE, so they are unaffected by the ungroup/drop/wrap above.
     vars = list(degrade = FALSE, row_var = row_var_name, tab_vars = tab_vars,
                 row_vars = rv$row_vars, compacted = isTRUE(rv$compacted),
-                var_col = rv$var_col,
-                col_vars = rv$col_vars, col_vars_levels = rv$col_vars_levels),
+                var_col = rv$var_col, col_vars = rv$col_vars),
     roles = list(fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
                  row_var_col = row_var_col, totcols = totcols, totrows = totrows,
-                 no_totrows = no_totrows, totblock_top = totblock_top,
+                 totblock_top = totblock_top,
                  totblock_bottom = totblock_bottom, real_col_vars = real_col_vars,
                  col_var_map = col_var_map, new_col_var = new_col_var,
                  new_group = new_group, align = align,
                  label_cols = label_cols, var_name_col = var_name_col,
                  label_runs = label_runs, sd_cols = sd_cols,
-                 color_cols = color_cols, any_bg = any_bg, has_stars = has_stars),
+                 color_cols = color_flags$color_cols, any_bg = color_flags$any_bg,
+                 has_color = color_flags$has_color, has_stars = has_stars),
     ann = ann,
     bold_rows = bold_rows,
     bold_cols = bold_cols,
@@ -646,7 +648,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
     # Phase 18z13: "n" too -- the per-level count column is disambiguated across dependents by the
     # same bracket, for the same reason (the console needs to tell two outcomes' counts apart).
     if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp", "n"))
-      clean[j] <- sub(" \\[[^]]*\\]$", "", clean[j])
+      clean[j] <- tx_strip_dep_suffix(clean[j])
   }
   # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning
   # name row would only duplicate the column headers -> drop it. A regression table named after the
@@ -692,15 +694,94 @@ rd_footer <- function(src, medium, theme = NULL, want_legend = TRUE,
     medium = medium, theme = theme, classes = classes))
 }
 
-# Phase 17g: the ONE caption fallback shared by md / html / plot -- user caption=, else a stored
-# set_caption() (rd$caption), else a regression table's auto-title (rd$reg_title). xl keeps its own
-# variant (it reads the source tab, not rd, and has two further fallbacks: named tabs, tab_get_titles).
+# Phase 17g: the ONE caption fallback -- user caption=, else a stored set_caption() (rd$caption),
+# else a regression table's auto-title (rd$reg_title). Phase 19h: `fallback` is what let tab_xl()
+# join it: a workbook sheet has two further fallbacks (a NAMED tabxplor_tabs element, then the
+# auto-generated "<row_var> by <col_vars>" title), which are xl's own policy but not a second
+# caption RULE. A closure, so the fallback is only computed when the caption is genuinely absent.
 #' @keywords internal
-rd_caption <- function(rd, user_caption = NULL) {
+rd_caption <- function(rd, user_caption = NULL, fallback = NULL) {
   cap <- user_caption
   if (is.null(cap)) cap <- rd$caption
   if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+  if (is.null(cap) && is.function(fallback)) cap <- fallback()
   cap
+}
+
+# roles_col_var_edges() -- Phase 19h: THE col_var transition index, in the roles_totblock_edges()
+# idiom. Three backends need a boundary between two column-variable blocks and each derived it
+# itself, from the SAME seed (`col_var_map`, with the non-col_var columns standing for themselves)
+# but with three conventions that were never stated side by side:
+#
+#   side = "right"  the LAST column of each group   (kable/plot: a right border)      -- lead()
+#   side = "left"   the FIRST column of each group  (Excel: a left border)            -- lag()
+#   real_only       count a transition only between two REAL col_vars (md's span separators), so a
+#                   helper column (`n`, a total) never opens a new block
+#
+# One derivation, three declared variants; the conventions are now readable in one place.
+#' @keywords internal
+roles_col_var_edges <- function(col_var_map, other_cols = NULL, real_col_vars = NULL,
+                                side = c("right", "left"), real_only = FALSE) {
+  side <- match.arg(side)
+  cv <- col_var_map
+  if (length(other_cols)) cv[names(other_cols)] <- names(other_cols)
+  if (length(cv) == 0L) return(integer(0))
+  if (real_only) {
+    if (length(cv) < 2L) return(integer(0))
+    k    <- seq_along(cv)[-1]
+    prev <- cv[k - 1]; curr <- cv[k]
+    hit  <- prev %in% real_col_vars & curr %in% real_col_vars & prev != curr
+    return(unname(if (side == "right") (k - 1L)[hit] else k[hit]))
+  }
+  if (side == "right") which(cv != dplyr::lead(cv, default = "._at_the_end"))
+  else                 which(nzchar(cv) & cv != dplyr::lag(cv, default = NA_character_))
+}
+
+# tx_strip_dep_suffix() -- Phase 19h: the trailing " [dependent]" disambiguation bracket, removed in
+# ONE place. A regression column built across several outcomes carries it in its stored NAME
+# ("Model_OR [married]") so the console can tell two outcomes' columns apart; wherever the outcome is
+# already named -- the col_var span row above the level header, the colour legend -- it is noise.
+# The regex was written twice, each copy commenting that the other existed. The two GATES stay local:
+# the header strip keys on the column's own role, the legend on the group carrying any role at all.
+#' @keywords internal
+tx_strip_dep_suffix <- function(x) sub(" \\[[^]]*\\]$", "", x)
+
+# tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
+#
+# Measured, the three options are NOT one option -- they are three incompatible value syntaxes: a CSS
+# font stack (html/md), a single xlsx font NAME (Excel has no fallback list, so the option IS the
+# fallback), and a graphics family (ggpubr). What IS duplicated is the rule: **switch to a monospace
+# font when the table shows significance stars**, so the stars cannot push the digits out of column.
+# html/md has been unconditionally monospace since Phase g and so needs no switch; Excel and the plot
+# still choose, and both wrote the choice out themselves.
+#
+# `has_stars` is roles$has_stars -- already in the render model, computed once from the cells.
+#' @keywords internal
+tx_num_font <- function(medium = c("html", "xl", "plot"), has_stars = FALSE,
+                        plain = NULL, stars = NULL) {
+  switch(match.arg(medium),
+    html = getOption("tabxplor.tab_kable_num_font", tx_num_font_html_stars),
+    xl   = if (isTRUE(has_stars)) stars %||% getOption("tabxplor.xl_font_num_stars", "Cascadia Mono")
+           else                   plain %||% getOption("tabxplor.xl_font_num", "DejaVu Sans"),
+    # "" keeps the ggpubr default: tab_plot() has no per-column font, so a plain table is left alone
+    plot = if (isTRUE(has_stars)) getOption("tabxplor.plot_num_font", "Cascadia Mono") else "")
+}
+
+# roles_color_flags() -- Phase 19h: THE colour flags of the render model, one producer for the prep
+# and the transpose (which used to define both a third way -- realised where the prep was declared,
+# so a column whose every cell landed in slot 0 counted as coloured before the flip and not after).
+#
+# The two questions are genuinely different and now have different NAMES:
+#   color_cols  DECLARED -- which columns name a colour measure. The LEGEND's gate: it describes the
+#               scheme, so it prints even when no cell happens to reach a break.
+#   has_color   REALISED -- does any cell actually carry a colour. The gate for emitting spans / CSS,
+#               and it is FALSE whenever the caller did not ask for colours at all (`compute`).
+#   any_bg      realised, for the background channel alone (kableExtra's fill argument, plot fills).
+#' @keywords internal
+roles_color_flags <- function(ann, color_cols) {
+  list(color_cols = color_cols,
+       any_bg     = any(vapply(ann, function(a) isTRUE(a$has_bgc) , logical(1))),
+       has_color  = any(vapply(ann, function(a) isTRUE(a$has_color), logical(1))))
 }
 
 # Phase 17g: the top/bottom border rows of each "total block" -- a maximal run of TRUE in `in_block`
@@ -746,9 +827,7 @@ resolve_export_opts <- function(theme = NULL,
                                 transpose = FALSE, caption = NULL,
                                 var_names = NULL,
                                 allow_auto = FALSE) {
-  if (is.null(theme)) theme <- tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light")
-  theme <- tx_resolve_theme(theme)
-  if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
+  theme <- tx_theme_resolve(theme, allow_auto = allow_auto)
   if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")
   var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
   color <- isTRUE(color)

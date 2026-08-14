@@ -52,6 +52,9 @@ wider and would break column alignment). Override it for your own front-end / fo
 (follow the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = "html")},
 \code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}. \code{"print"} reaches
 every backend, Excel included.}
+\item{\code{tabxplor.color_style_type}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} the console colour CHANNEL,
+\code{"text"} or \code{"bg"}. Inert since 2.0.0: the channel is chosen per measure by
+\code{color = c(text, background)} (see \code{\link[=tab]{tab()}}), so setting it emits a deprecation warning.}
 \item{\code{tabxplor.print_rules}}{\code{TRUE} (default): every stylesheet \code{\link[=tab_css]{tab_css()}} emits also carries the
 black-and-white publication palette inside an \verb{@media print} block, so a table rendered in colour
 \strong{prints} (or saves to PDF) publication-ready with no further action. Set \code{FALSE} if your printer
@@ -127,7 +130,9 @@ document when every table auto-prints and tooltips are unwanted. Per-call \verb{
 \item{\code{tabxplor.kable_popover}}{\code{FALSE} (default): use click popovers instead of hover tooltips.}
 \item{\code{tabxplor.tab_kable_num_font}}{the HTML/markdown number-font CSS stack. Monospace by
 default so figures stay column-aligned (set a proportional stack to revert).}
-\item{\code{tabxplor.output_kable}}{\code{FALSE} (default): internal switch to return kable output.}
+\item{\code{tabxplor.output_kable}}{\code{FALSE} (default): make \code{\link[=tab]{tab()}} render its result with
+\code{\link[=tab_html]{tab_html()}} before returning it — a convenience for \code{.Rmd}/\code{.qmd} documents. Since 2.0.0 it
+only \emph{renders}: it no longer changes the shape of the built object (that is \code{output_list}).}
 }
 }
 

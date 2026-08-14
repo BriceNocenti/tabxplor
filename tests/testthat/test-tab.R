@@ -174,18 +174,34 @@ testthat::test_that("Phase 8: multi-row_var total column is 'Total' (not 'Total_
   testthat::expect_false(any(grepl("^Total_", names(multi))))
 })
 
-# Coverage of the soft-deprecated tab_many() alias's own features that tab() intentionally does
-# NOT expose (per-col_var pct vector, per-row_var pct list, list return). suppressWarnings() keeps
-# the deprecation nudge out (see also the dedicated deprecation test below).
-testthat::test_that("tab_many() (deprecated alias) per-variable pct vectorisation still works", {
+# Phase 19h (KEY 7): `pct` is per COL_VAR on tab() too now -- it was the odd one out among the
+# col_var-vectorised arguments (`levels`, `digits`), size-1-asserted although the engine has always
+# recycled it. The per-ROW_VAR list form stays refused: Phase 6 globalised the row axis on purpose.
+# suppressWarnings() keeps tab_many()'s deprecation nudge out (see the dedicated test below).
+testthat::test_that("pct is vectorised over col_vars, on tab() and its tab_many() shim", {
   suppressWarnings({
-    tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col"))   |> testthat::expect_s3_class("tabxplor_tab")
-    tab_many(data, c(sex, gender), hair_color, pct = c("row", "col")) |> length() |> testthat::expect_equal(2)
-    tab_many(data, c(sex, eye_color), c(hair_color, mass, gender),
-             pct = list(sex = list("row", "col", "col"), eye_color = list("col", "row", "row"))
-    ) |>
-      length() |> testthat::expect_equal(2)
+    tab(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col")) |>
+      testthat::expect_s3_class("tabxplor_tab")
+    tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col")) |>
+      testthat::expect_s3_class("tabxplor_tab")
+    # the shim is lossless: same table either way
+    testthat::expect_equal(
+      tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col")),
+      tab(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col"))
+    )
+    tab_many(data, c(sex, gender), hair_color, pct = c("row", "col")) |> length() |>
+      testthat::expect_equal(2)
   })
+})
+
+testthat::test_that("a per-row_var `pct` list is refused, and says why", {
+  suppressWarnings(
+    testthat::expect_error(
+      tab(data, c(sex, eye_color), c(hair_color, mass, gender),
+          pct = list(sex = list("row", "col", "col"), eye_color = list("col", "row", "row"))),
+      "must be a character vector"
+    )
+  )
 })
 
 testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix", {
@@ -209,6 +225,21 @@ testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix
   lifecycle::expect_deprecated(
     lifecycle::expect_deprecated(tab_many(gss, marital, race, totcol = "no"), "totcol"),
     "tab_many")
+
+  # Phase 19h (KEY 7): the two extra `totcol` values are accepted SPELLINGS of the base behaviour --
+  # exactly one total column -- and must never error. Before, "each" built one total per col_var and
+  # "all_col_vars" could not produce its own tot_cols_type at all (the identical() arms compared a
+  # character against a list of symbols, so both were dead and every call fell through to "some").
+  suppressWarnings({
+    each_lst <- tab_many(gss, marital, c(race, relig), pct = "row", totcol = "each")
+    all_cv   <- tab_many(gss, marital, c(race, relig), pct = "row", totcol = "all_col_vars")
+    base     <- tab(gss, marital, c(race, relig), pct = "row")
+  })
+  testthat::expect_equal(each_lst, base)
+  testthat::expect_equal(all_cv,   base)
+  testthat::expect_equal(sum(is_totcol(base)), 1L)
+  # ... and an unknown value still aborts, naming the argument that replaced it
+  testthat::expect_error(suppressWarnings(tab_many(gss, marital, race, totcol = "tabel")), "totcol")
 
   # Deliberate user-facing warnings. Asserted here because other suites (test-jmvtab-cache.R)
   # suppress them as incidental, so without this they would be uncovered.

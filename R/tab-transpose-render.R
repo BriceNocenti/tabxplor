@@ -31,12 +31,9 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   if (isTRUE(rd$vars$degrade)) return(rd)                       # a malformed table degrades unchanged
   # A real tab_vars table (sub-tabled / grouped) is out of scope -- its two-level structure has no
   # single flip. A SEVERAL-row_var (compacted) table is fine: it is the whole point of this phase.
-  if (length(rd$vars$tab_vars) > 0) {
-    cli::cli_abort(c(
-      "{.code transpose = TRUE} does not support tables with {.arg tab_vars}.",
-      "i" = "It flips a single- or several-row_var table (no sub-tables)."
-    ))
-  }
+  # Phase 19h (KEY 7): declared in TAB_OPS (R/tab-shape.R), read here through the render model's own
+  # variable block, so the rule and its wording live with every other shape rule.
+  tab_check_shape(rd_shape(rd), "transpose_render")
 
   tab   <- rd$tab
   roles <- rd$roles
@@ -119,6 +116,11 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   faceital_d  <- slot_lgl("face_italic")
   faceund_d   <- slot_lgl("face_underline")
   refalltot_d <- slot_lgl("ref_alltot")
+  # Phase 19h (D1): `keep_black` is the "do not grey this cell" anchor set -- ref_alltot | is_refrow |
+  # a regression's GOF footer rows (prep_one_table). It was NOT flipped, so a transposed table handed
+  # the html engine a NULL, whose length-check fell back to `ref_alltot` alone -- silently greying a
+  # transposed regression's footer cells. It is a per-cell logical like any other.
+  keepblack_d <- slot_lgl("keep_black")
   # font / back are the RESOLVED per-cell hex (theme grey folded in) -- tab_plot reads these, not slots.
   font_d      <- slot_chr("font", NA_character_)
   back_d      <- slot_chr("back", "none")
@@ -211,6 +213,7 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   # ann, keyed by new data-column name -----------------------------------------------------------
   ann_new <- stats::setNames(lapply(seq_len(n_orow), function(c) {
     list(ref_alltot = refalltot_d[[c]],
+         keep_black = keepblack_d[[c]],
          ref_cells  = rep(FALSE, n_nrow),
          text_hex   = texthex_d[[c]], bg_hex = bghex_d[[c]],
          text_slot  = text_slot_d[[c]], bg_slot = bg_slot_d[[c]],
@@ -236,45 +239,40 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
 
   has_stars <- isTRUE(roles$has_stars)
 
-  rd2 <- list(
-    tab = new_tab,
-    transposed = TRUE,
-    # the colour legend describes the MEASURES, which live on the original fmt columns (the synthetic
-    # `tab` above is plain character) -- so keep the pre-transpose fmt table for tab_color_legend().
-    color_src = tab,
-    cells = cells_all,
-    tooltips = if (!is.null(tips_data)) stats::setNames(tips_data, dnames) else NULL,
-    vars = list(degrade = FALSE, row_var = row_var_col_name, tab_vars = character(0),
-                row_vars = rd$vars$col_vars, compacted = compacted2,
-                col_vars = rd$vars$row_vars, col_vars_levels = list()),
-    roles = list(
-      fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
-      row_var_col = which(all_names == row_var_col_name),
-      totcols = new_totcols, totrows = new_totrows,
-      no_totrows = setdiff(seq_len(n_nrow), new_totrows),
-      totblock_top = totblock_top, totblock_bottom = totblock_bottom,
-      real_col_vars = unique(src_name[nzchar(src_name)]),
-      col_var_map = stats::setNames(col_grp, all_names),
-      new_col_var = new_col_var, new_group = new_group, align = align,
-      label_cols = label_cols, var_name_col = var_name_col, label_runs = label_runs,
-      sd_cols = integer(0),
-      color_cols = fmt_cols[vapply(dnames, function(nm) any(ann_new[[nm]]$text_slot > 0 |
-                                                              ann_new[[nm]]$bg_slot > 0), logical(1))],
-      any_bg = any(vapply(ann_new, function(a) any(a$bg_slot > 0), logical(1))),
-      has_stars = has_stars),
-    ann = ann_new,
-    bold_rows = bold_rows,
-    bold_cols = bold_cols,
-    range_totcol = NULL,
-    col_var_header = col_var_header,
-    subtext = rd$subtext,
-    # Phase 17g: carry the caption/title/tips through the flip (previously dropped -> a transposed
-    # regression table lost its reg_title / set_caption() caption and its multinomial crude tooltips).
-    # These describe the SOURCE table, not the axes, so they survive a transpose unchanged.
-    reg_title = rd$reg_title,
-    caption = rd$caption,
-    empirical_tips = rd$empirical_tips
-  )
+  # Phase 19h (D1): rd2 MODIFIES rd; it is not re-typed. The literal this replaces enumerated ~39
+  # slots, had already lost two silently, and was losing `ann$keep_black` when this was written --
+  # masked by a length-check fallback in the html engine. Every slot the flip does not touch
+  # (`subtext`, `reg_title`, `caption`, `empirical_tips`, `range_totcol`, and anything a later phase
+  # adds) now survives by construction, because it is never mentioned. Only what genuinely changes
+  # axes is assigned below.
+  rd2 <- rd
+  rd2$tab        <- new_tab
+  rd2$transposed <- TRUE
+  # the colour legend describes the MEASURES, which live on the original fmt columns (the synthetic
+  # `tab` above is plain character) -- so keep the pre-transpose fmt table for tab_color_legend().
+  rd2$color_src <- tab
+  rd2$cells     <- cells_all
+  rd2$tooltips  <- if (!is.null(tips_data)) stats::setNames(tips_data, dnames) else NULL
+  rd2$vars      <- list(degrade = FALSE, row_var = row_var_col_name, tab_vars = character(0),
+                        row_vars = rd$vars$col_vars, compacted = compacted2,
+                        col_vars = rd$vars$row_vars)
+  rd2$roles <- list(
+    fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
+    row_var_col = which(all_names == row_var_col_name),
+    totcols = new_totcols, totrows = new_totrows,
+    totblock_top = totblock_top, totblock_bottom = totblock_bottom,
+    real_col_vars = unique(src_name[nzchar(src_name)]),
+    col_var_map = stats::setNames(col_grp, all_names),
+    new_col_var = new_col_var, new_group = new_group, align = align,
+    label_cols = label_cols, var_name_col = var_name_col, label_runs = label_runs,
+    sd_cols = integer(0), has_stars = has_stars)
+  # the colour flags come from the SAME producer the prep uses, so "is this table coloured" cannot
+  # mean one thing before the flip and another after it (it used to: declared vs realised).
+  rd2$roles <- c(rd2$roles, roles_color_flags(ann_new, rd$roles$color_cols))
+  rd2$ann            <- ann_new
+  rd2$bold_rows      <- bold_rows
+  rd2$bold_cols      <- bold_cols
+  rd2$col_var_header <- col_var_header
   rd2
 }
 

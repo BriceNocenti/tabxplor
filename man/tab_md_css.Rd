@@ -4,11 +4,9 @@
 \alias{tab_md_css}
 \title{CSS for the colour spans of \code{\link{tab_md}}}
 \usage{
-tab_md_css(tabs = NULL, ...)
+tab_md_css(...)
 }
 \arguments{
-\item{tabs}{Ignored (the CSS is table-independent). Kept so \code{tab_md_css(tabs)} still reads naturally.}
-
 \item{...}{Passed to \code{\link{tab_css}} (\code{theme}, \code{style_tag}, \code{file}).}
 }
 \value{
@@ -16,8 +14,9 @@ A character string of CSS (invisible when \code{file} is given).
 }
 \description{
 A thin wrapper around \code{\link[=tab_css]{tab_css(chrome = FALSE)}}, kept for discoverability
-alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a palette
-\strong{slot}, not a break -- so \code{tabs} is ignored and one stylesheet styles every table in a document.
+alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a
+palette \strong{slot}, not a break -- so it takes no table: one stylesheet styles every table in a
+document. (Phase 19h dropped the inert \code{tabs} argument, which was documented as ignored.)
 }
 \examples{
 cat(tab_md_css())
