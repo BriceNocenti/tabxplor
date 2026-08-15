@@ -570,7 +570,7 @@ Alternative interval methods go in ONE argument, `ci_method` — a named vector,
 | pct  | `cell` | Wilson score interval         | `ci_method = c(cell = "wald")`  |
 | mean | `cell` | one-sample Student *t* (n-1)  | —                               |
 
-Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**. `ci_method = c(cell = )` chooses `"wilson"` (default), `"wald"` or `"beta"` (Korn-Graubard) for percentages; a mean cell interval is always the one-sample Student *t*.
+Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**, and *every* cell has one — the total row included. `ci_method = c(cell = )` chooses `"wilson"` (default), `"wald"` or `"beta"` (Korn-Graubard) for percentages; a mean cell interval is always the one-sample Student *t*.
 
 **`color_signif` turns that interval into a coloring policy.** 
 

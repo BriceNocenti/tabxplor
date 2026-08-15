@@ -104,6 +104,22 @@ display_write_col <- function(col, tmpl) {
   list(col = set_display(col, d), missing = missing)
 }
 
+# fmt_blank_fields() -- THE fields a re-displayed helper row / column must not carry. The synthetic
+# `n` / `col_pct` helpers and the appended summary ROWS copy a real column and then re-display it, so
+# every field that described the ORIGINAL cell has to go: keeping them would let a display switch, a
+# colour measure or a tooltip read a number that belongs to another quantity.
+#
+# Phase 19m-i: written out four times in R/tab-display.R, in two shapes and five different wrappings.
+# `pct` is the only variable: the two `n` helpers blank it, the two percentage helpers have just
+# WRITTEN one and must keep it. One function, one flag, that difference stated once.
+#' @keywords internal
+#' @noRd
+fmt_blank_fields <- function(col, pct = FALSE) {
+  col <- set_diff(col, NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_)
+  if (pct) col <- set_pct(col, NA_real_)
+  set_ctr(col, NA_real_) |> set_var(NA_real_)
+}
+
 # The display tokens the PIPELINE itself writes as a bare value (so a one-field template collapses
 # onto them and inherits their rendering). `resid` is derived and `obs`/`var`/`ctr` have no
 # simple-token renderer, so they stay composites.
@@ -199,7 +215,7 @@ tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
   gv   <- dplyr::group_vars(tab)
   flat <- dplyr::ungroup(tab)
   n0   <- nrow(flat)
-  tot  <- is_totrow(flat) & tab_get_vars(flat)$row_var != "no_row_var"
+  tot  <- is_totrow(flat) & !is_placeholder_var(tab_get_vars(flat)$row_var)
   if (!any(tot)) return(tab)
   gid  <- if (length(gv) > 0) dplyr::group_indices(tab) else rep(1L, n0)
   grps <- unique(gid[tot])
@@ -237,8 +253,8 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
     last_totcols_pct_rows <- tabs_text |>
       purrr::imap_chr(
         ~ dplyr::last(names(.x)[is_totcol(.x) & get_pct_base(.x) == "row" &
-                                  get_col_var(.x) != "no_col_var" &
-                                  tab_get_vars(.)$row_var != "no_row_var"]) |>
+                                  is_real_col_var(get_col_var(.x)) &
+                                  !is_placeholder_var(tab_get_vars(.)$row_var)]) |>
           purrr::set_names(.y)
       )
 
@@ -263,8 +279,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                 # 19l: DECLARED as a whole-table helper (role), with no col_var -- it used to borrow
                 # the "all_col_vars" tag, whose other, opposite meaning is the legacy grand total.
                 set_col_var("") |> set_role("pct") |>
-                set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
-                set_ctr(NA_real_) |> set_var(NA_real_)
+                fmt_blank_fields(pct = FALSE)
             )
           )
       }
@@ -279,8 +294,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
               n = set_display(!!rlang::sym(.y), "n") |>
                 set_count_col() |> as_totcol(FALSE) |> set_color("no") |>
                 set_col_var("") |> set_role("n") |>
-                set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
-                set_pct(NA_real_) |> set_ctr(NA_real_) |> set_var(NA_real_)
+                fmt_blank_fields(pct = TRUE)
             )
           )
       }
@@ -291,7 +305,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
     # rows, with pct = "col"
     last_totrow <- tabs_text |>
       purrr::map_int(
-        ~ dplyr::last(which(is_totrow(.) & tab_get_vars(.)$row_var != "no_row_var"),
+        ~ dplyr::last(which(is_totrow(.) & !is_placeholder_var(tab_get_vars(.)$row_var)),
                       default = NA_integer_)
       )
     last_totrow <- last_totrow[!is.na(last_totrow)]
@@ -299,7 +313,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
 
 
       last_totrow_pct_cols <- tabs_text |>
-        purrr::map(~ names(.)[get_pct_base(.) == "col" & get_col_var(.) != "no_col_var" &
+        purrr::map(~ names(.)[get_pct_base(.) == "col" & is_real_col_var(get_col_var(.)) &
                                  names(.) != "col_pct"] )
       last_totrow_pct_cols_no_empty <- purrr::map_lgl(last_totrow_pct_cols, ~ length(.) > 0)
 
@@ -328,11 +342,8 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                               ))
                           )
                         ),
-                        dplyr::across(where(is_fmt), ~ as_totrow(., FALSE) |>
-                                        set_diff(NA_real_) |> set_ci(NA_real_) |>
-                                        set_mean(NA_real_) |>
-                                        set_ctr(NA_real_) |> set_var(NA_real_)
-                                        ),
+                        dplyr::across(where(is_fmt),
+                                      ~ fmt_blank_fields(as_totrow(., FALSE), pct = FALSE)),
                         dplyr::across(
                           where(is_fmt) & -tidyselect::all_of(val_cols),
                           ~ set_num(., value = NA_real_)
@@ -361,11 +372,8 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                             tab_append_pctcol_rows(..1, function(src) {
                               src |> set_display("n") |>
                                 dplyr::mutate(
-                                  dplyr::across(where(is_fmt), ~ as_totrow(., FALSE)  |>
-                                                  set_diff(NA_real_) |> set_ci(NA_real_) |>
-                                                  set_mean(NA_real_) |> set_pct(NA_real_) |>
-                                                  set_ctr(NA_real_) |> set_var(NA_real_)
-                                                ),
+                                  dplyr::across(where(is_fmt),
+                                                ~ fmt_blank_fields(as_totrow(., FALSE), pct = TRUE)),
                                   dplyr::across(
                                     where(is_fmt) & -tidyselect::all_of(val_cols),
                                     ~ set_num(., value = NA_real_)
@@ -417,7 +425,7 @@ tab_is_or_display <- function(tab) {
 # NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
 tab_fold_addn_incell <- function(tab) {
   tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_pct_base(tab) == "row" &
-                                     get_col_var(tab) != "no_col_var"])
+                                     is_real_col_var(get_col_var(tab))])
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
   is_or <- tab_is_or_display(tab)
 
@@ -459,7 +467,7 @@ tab_fold_addn_incell <- function(tab) {
 tab_or_total_col <- function(tab, backend, add_n_on) {
   if (!is.data.frame(tab) || !tab_is_or_display(tab)) return(tab)
   tot_nm <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) &&
-                                        get_pct_base(.) == "row" && get_col_var(.) != "no_col_var")]
+                                        get_pct_base(.) == "row" && is_real_col_var(get_col_var(.)))]
   if (!length(tot_nm)) return(tab)
   if (identical(backend, "xl") || !isTRUE(add_n_on)) {
     tab <- dplyr::select(tab, -tidyselect::all_of(tot_nm))

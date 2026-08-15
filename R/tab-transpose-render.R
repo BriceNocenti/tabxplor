@@ -89,22 +89,30 @@ tx_transpose_render <- function(rd, backend) {
   cells_data <- flip_col(function(k) fmted$txt[[k]])
 
   # slots / bold / refs flip the same way (per source column arrays, length n_orow)
+  # Phase 19m-i: an ABSENT field is a real state -- a future phase may add one this flip does not
+  # know, and the neutral is the right answer. A field of the WRONG LENGTH is not: every `ann` entry
+  # is built per column from this same table, so it can only mean a producer went out of step, and
+  # substituting a neutral silently is what made D1 (a transposed reg footer rendering grey) survive
+  # two phases. `ann_get()` states that split once for the three flavours.
+  ann_get <- function(k, field) {
+    v <- ann[[onames[k]]][[field]]
+    if (is.null(v)) return(NULL)
+    stopifnot(length(v) == n_orow)
+    v
+  }
   slot_int <- function(field) lapply(seq_len(n_orow), function(c) {
     vapply(seq_len(n_nrow), function(k) {
-      v <- ann[[onames[k]]][[field]]
-      if (is.null(v) || length(v) != n_orow) 0L else as.integer(v[[c]])
+      v <- ann_get(k, field); if (is.null(v)) 0L else as.integer(v[[c]])
     }, integer(1))
   })
   slot_lgl <- function(field) lapply(seq_len(n_orow), function(c) {
     vapply(seq_len(n_nrow), function(k) {
-      v <- ann[[onames[k]]][[field]]
-      if (is.null(v) || length(v) != n_orow) FALSE else isTRUE(v[[c]])
+      v <- ann_get(k, field); if (is.null(v)) FALSE else isTRUE(v[[c]])
     }, logical(1))
   })
   slot_chr <- function(field, default) lapply(seq_len(n_orow), function(c) {
     vapply(seq_len(n_nrow), function(k) {
-      v <- ann[[onames[k]]][[field]]
-      if (is.null(v) || length(v) != n_orow) default else as.character(v[[c]])
+      v <- ann_get(k, field); if (is.null(v)) default else as.character(v[[c]])
     }, character(1))
   })
   text_slot_d <- slot_int("text_slot")

@@ -467,7 +467,7 @@ tab_cache_keys <- function(na = "keep", wt_name = character(), other_if_less_tha
 # @keywords internal
 # @noRd
 resolve_color_auto_num <- function(color, ref, ci, row_var, col_vars) {
-  if (row_var == "no_row_var" || "no_col_var" %in% col_vars) return("")
+  if (is_placeholder_var(row_var) || any(is_placeholder_var(col_vars))) return("")
   ci_cell <- if (!is.null(ci)) ci == "cell" else FALSE
   dplyr::case_when(
     # the numeric pipeline measure is the diff BUILD class (num_core computes the difference fields);

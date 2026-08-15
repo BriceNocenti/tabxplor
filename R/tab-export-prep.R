@@ -29,7 +29,7 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
                                     call = rlang::caller_env()) {
   same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
   same_col_vars <- same_col_vars |>
-    purrr::map(~ .[!. %in% c("all_col_vars", "", "no") & !is.na(.)])
+    purrr::map(~ .[is_real_col_var(.)])                          # 19m-i: the declared set
   longest_col_vars <- purrr::map_int(same_col_vars, length)
   longest_col_vars <-
     dplyr::first(which(longest_col_vars == max(longest_col_vars, na.rm = TRUE)))
@@ -237,7 +237,7 @@ tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
   # each col_var's total column (or its first fmt column) once. NA bases (mean cells with no base)
   # are ignored in the min/max.
   cvs <- unique(col_var_map[fmt_cols])
-  cvs <- cvs[!cvs %in% c("all_col_vars", "", "no", NA_character_)]
+  cvs <- cvs[is_real_col_var(cvs)]
   if (length(cvs) == 0) return(empty)
 
   base_of <- function(col) {
@@ -392,11 +392,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   real_col_vars <- unique(col_var_map[fmt_mask])
   # Phase 14p: `no_col_var` (the sentinel a no-col_var table's `n`/`pct`/`wn` columns carry) is NOT a
   # real variable name -- rendering it as a spanning col_var header is noise. Excluded here so
-  # tab_col_var_header() marks those columns `is_level = FALSE` (no span label). "no_row_var" and the
-  # empty/`no` markers are the sibling sentinels.
-  real_col_vars <- real_col_vars[!real_col_vars %in%
-                                   c("all_col_vars", "no_col_var", "no_row_var",
-                                     "", "no", NA_character_)]
+  # tab_col_var_header() marks those columns `is_level = FALSE` (no span label).
+  # Phase 19m-i: this site spelled the whole placeholder set and was the only one that did; the set
+  # is declared once now, as TAB_PLACEHOLDER_COL_VARS (R/fmt_class.R).
+  real_col_vars <- real_col_vars[is_real_col_var(real_col_vars)]
 
   # DECLARED: which columns name a colour measure at all -- the LEGEND's gate (it describes the
   # scheme, so it shows even if every cell happens to land in slot 0). Its realised twin, "does any

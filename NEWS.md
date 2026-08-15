@@ -206,6 +206,10 @@
 
 ## Changes that may affect existing code
 
+* **`ci = "cell"` now shows the total (reference) row's own interval too.** A cell interval compares
+  each cell to 0 %, not to a reference, so every cell has one — including the total row, which is the
+  best-estimated cell in the table. Numeric tables already printed it; percentage tables left it
+  blank.
 * **An unknown argument value now aborts instead of being silently ignored.** `totaltab`, `n_min` and
   `conf_level` were validated nowhere at all, so `tab(totaltab = "tabel")` quietly meant "no total
   table" and `conf_level = 95` reached the interval engine as a probability. Every crosstab producer

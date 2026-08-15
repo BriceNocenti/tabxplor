@@ -12,6 +12,17 @@
 R/
 ├── fmt_class.R     (~6425 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
 │                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (14 attrs)
+│                              + 19m-i's **TAB_PLACEHOLDER_COL_VARS** = the six `col_var` values that
+│                              are NOT a variable name (all_col_vars / no_col_var / no_row_var / "" /
+│                              "no" / NA), behind TWO deliberately distinct predicates:
+│                              **is_real_col_var()** of a STORED attribute and **is_placeholder_var()**
+│                              of a build-time variable NAME (⚠ as.character(): the build passes
+│                              symbols, and `sym == "x"` coerces while `sym %in% "x"` errors). Eight
+│                              hand-written filters spelled between two and six of them, exactly one
+│                              spelled all six, and the exported tab_shape() spelled two -- so it
+│                              reported "no_col_var" as a column variable. NOT folded in:
+│                              detect_totcols()'s `== "no_col_var"` (that asks "is this the TOTAL
+│                              column") and quo_miss_na_null_empty_no() (a deparsed user expression)
 │                              + 19a's **fmt_attr_rules** = HOW each attribute is carried (neutral/merge/arith/scalar,
 │                              one row each, meta_bind_rules-shaped) driving all 4 reconstructors through
 │                              fmt_attrs_of/_merge/_arith + fmt_ptype_attrs -- the 7 hand-written 14-attribute
@@ -230,15 +241,22 @@ R/
 ├── tab-agg.R        (~965 L) Aggregate-core (Phase 2-3) + 19j's **CI_GEOMS + ci_dispatch()** = THE
 │                              interval GEOMETRY vocabulary beside the method one: one row per
 │                              (kind cell|diff x var_kind pct|mean x scale diff|ratio) carrying the
-│                              `engine`, the `method_slot` that names it and the `scale_key` it makes
-│                              the column ESTIMATE. Read only through ci_geom/_scale/_method/
-│                              ci_dispatch. Its 3 consumers (the factor leaf, num_core, the superseded
-│                              tab_ci step) held SIX copies of that rule -- which is how D8 happened
-│                              (a chain that could name a method the bounds were never built with).
+│                              `engine`, the `method_slot` that names it, the `scale_key` it makes
+│                              the column ESTIMATE and (19m-i) **`ref_cell`** = does the cell that IS
+│                              the reference keep its OWN interval. Read only through ci_geom/_scale/
+│                              _method/_ref_cell/ci_dispatch. Its 3 consumers (the factor leaf,
+│                              num_core, the superseded tab_ci step) held SIX copies of that rule --
+│                              which is how D8 happened (a chain that could name a method the bounds
+│                              were never built with).
 │                              ⚠ the engine call is written per ROW, never one do.call over a shared
 │                              arg list: the proportion engines take `df=`, the mean ones `df_design=`.
-│                              The reference-cell NA rule stays the CALLER's (tab_ci NAs the base,
-│                              num_core the results -- they genuinely differ on a mean cell).
+│                              19m-i: the reference-cell MECHANISM stays the caller's (tab_ci NAs the
+│                              base, num_core the results -- they genuinely differ on a mean cell) but
+│                              the DECISION is `ref_cell`: a CELL interval compares each cell to 0 %,
+│                              not to a reference, so every cell keeps it (the total row included); a
+│                              CONTRAST interval blanks the row it would compare to itself. Two of
+│                              the three consumers had it wrong, so a factor `ci = "cell"` table's
+│                              total row showed no bracket while a numeric one's did.
 │                              + z16-iiiii's **CI_METHODS** = THE interval-method
 │                              vocabulary (4 kinds x their legal values, first = default), from which
 │                              default_ci_method() derives and resolve_ci_method() validates -- so the ONE
@@ -390,7 +408,29 @@ R/
 │                              c("OR", "adjustment")), reg_retired_args / reg_effect_key (the
 │                              retired spellings abort with their mapping -- 19b's fmt(type=) idiom),
 │                              reg_per_dep (THE per-dependent slicer shared by family / effect /
-│                              measure and the multi-dependent recursion, D6), REG_FIT_FAMILY, and
+│                              measure and the multi-dependent recursion, D6),
+│                              19m-i's **REG_FAMILIES** = WHAT EACH FAMILY IS CALLED and where it
+│                              may be named (one row per family: `display` closure = the footer
+│                              sentence, `short` = the Excel filename tag, `ui` / `ui_binary` = the
+│                              jamovi picker labels where **`NA` IS the fact "not offered in the
+│                              picker"**, `outcome` = the OUTCOME family of an internal link key).
+│                              FOUR name tables and a switch before, in two files, already
+│                              disagreeing -- and the "not offered" fact was ALSO a hardcoded
+│                              setdiff() in dev/generate_jamovi_js.R. Readers:
+│                              reg_family_display_name / reg_family_short / reg_family_ui_labels,
+│                              each keeping its own default ("regression" / "reg").
+│                              DERIVED from it: REG_FIT_FAMILY (the `outcome` column) and
+│                              **REG_FAMILY_MULT_WORD** / reg_family_mult_word() = the
+│                              multiplicative effect word of a FIT key (OR / RR / IRR / RoM), read
+│                              off REG_ESTIMANDS' own exponentiated coefficient row with a
+│                              build-time singleton assert -- it replaced the last hand-written
+│                              `switch(fam, ...)` in legend_reg_eff_word(), whose default answered
+│                              "OR" for every family it did not list. ⚠ keyed on `fit`, NOT on the
+│                              family bucket (a binomial outcome holds both the logit row, word OR,
+│                              and the modified-Poisson one, word RR), and the fit's word wins only
+│                              where the LINK makes one other than an odds ratio -- a logistic fit
+│                              asked for a MARGINAL ratio keeps its crude RR.
+│                              REG_FIT_FAMILY, and
 │                              the exported **reg_measures(data, dependent)** lister +
 │                              reg_measures_rd() (the roxygen `@eval` that GENERATES ?tab_reg's
 │                              estimand section) -- four consumers, one table.
@@ -2964,6 +3004,140 @@ deleted options.
 Tracks 5 and 6 above, the ~20 positional dead formals, and pass 1's own filed items. 19n: `po/R-fr.po`
 (the estimand notes and two family display names are still untranslated), the vignette prose pass, and
 the `_pkgdown.yml` question.
+
+---
+
+#### Phase 19m-i — Harvest 2: open integration 1
+
+**DONE (2026-08-15).** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 6402**, against the inherited
+FAIL 0 / WARN 1 / PASS 6295 — same warning count, +107 assertions, nothing red. Both proofs pass:
+`dev/verify_color_attrs.R` prints **IDENTICAL** over its 293 cases against a baseline saved from the
+pre-phase tree, and `dev/verify_golden_field_delta.R` reports **only the declared delta** on all
+**1788 cells of the 36 goldens**. One golden family moves (`f_ci_cell`) plus 11 lines of
+`_snaps/golden.md`; everything else is bit-identical.
+
+**Scope (maintainer's rulings at plan time)**: the theme is **hard rules 2 and 4 taken to
+completion** — nothing may depend on a rendered label, a name prefix, a positional vector or an
+in-band separator; a fact lives in ONE table. The display-grammar table, the options cluster and
+`tab_reg()`'s argument boundary go to **19m-ii**, filled in with everything measured here.
+
+**THREE LIVE DEFECTS, each with the fixture that fails without it** (`test-19m-defects.R`, new).
+
+- **`tab_collapse_total_rows()` keyed on `group_vars()[1]`**, but `tab_compact()` groups by
+  `c(merge_tab_vars, "row_var")` — so with tab_vars it keyed on the **tab_var**. The declared answer
+  (`tab_declared_vars()$var_col`) was already read on the function's first line. ⚠ Fixing the key
+  was not enough: the collapse also compared every total block in the WHOLE table, so with tab_vars
+  it reported *"the variables have different total rows"* (blaming `na = "drop"`) on any table whose
+  sub-tables merely differ from each other — i.e. `common_totrow` was **inert** on the shape 19f
+  made possible. It compares and collapses **within a tab_vars key** now: "the shared population" is
+  the SUB-population when there are tab_vars. Without tab_vars it is byte-identical.
+- **`tab_apply_reference()` re-derived the total COLUMN from the literal `"Total"`** while taking
+  the row totals as declared vectors. Its second caller, `jmv_tab3_reref()`, passes **post-rename**
+  names, so with `total_names = c("Total", "Ensemble")` nothing matched: measured, the re-referenced
+  odds ratio came back **1 everywhere** against a rebuild's real values. Masked only because
+  `po/R-fr.po` translates `"Total"` → `"Total"`. It takes a `totcol_vector` now — the same
+  expression `leaf_ci_plain()` is handed 20 lines below.
+- **`tab_shape()`, the EXPORTED shape reader, reported `col_vars = "no_col_var"`** for a table with
+  no column variable. Consequences taken, not guarded (ruling): `tab_supports(list, "compact")` and
+  `tab_check_same_col_vars()` now accept a list mixing a no-col_var table with a col_var one, and
+  `tab_transpose()` names its label column `"variables"` instead of the sentinel.
+
+**Found while implementing, pre-existing, and worse than the leak that surfaced it**:
+`tab_stack_tables()` bound on the FIRST table's column names, so `TAB_OPS$compact`'s declared
+NESTING rule ("every table's set a subset of the widest") **depended on list ORDER** — narrow-first
+silently DROPPED the wider table's extra columns, wide-first ERRORED. It binds on the UNION now,
+padding a table that lacks a column with NA cells from the merged ptype.
+
+**RULE 4 — the vocabularies written twice.**
+
+- **`TAB_PLACEHOLDER_COL_VARS`** + `is_real_col_var()` / `is_placeholder_var()`: eight set filters
+  spelling between two and six of the six sentinels (exactly one spelled all six) and seven
+  single-column tests, in seven files. Two predicates, deliberately distinct — a STORED attribute vs
+  a build-time variable NAME. ⚠ `is_placeholder_var()` must `as.character()`: the build passes
+  symbols, and `sym == "x"` coerces while `sym %in% "x"` errors. Two questions were NOT folded in,
+  with the reason next to each (`detect_totcols()` asks "is this the total column";
+  `quo_miss_na_null_empty_no()` tests a deparsed user expression).
+- **`REG_FAMILIES`** (`R/reg-estimand.R`): four per-family name tables and a fifth switch, in two
+  files, already disagreeing. `ui = NA` IS the fact "not offered in the picker" — which
+  `dev/generate_jamovi_js.R` wrote a second time as a hardcoded `setdiff(…, "quasipoisson")`.
+  `REG_FIT_FAMILY` is now the `outcome` column; `REG_OUTCOME_KINDS` gained `said`.
+  **The generated `jamovi/js/jmvtabreg.js` came out byte-identical** except the provenance comment,
+  and `dev/generate_jamovi_js.R check` exits clean. No `.a.yaml` / `.u.yaml` touched.
+- **`REG_FAMILY_MULT_WORD`** — DERIVED from `REG_ESTIMANDS`' own exponentiated coefficient row, with
+  a build-time singleton assert, replacing the last hand-written `switch(fam, …)` in
+  `legend_reg_eff_word()` (whose default answered `"OR"` for every family it did not list, including
+  `rd` and `mr`, added one phase after it was written). ⚠ **the assert did its job twice**: it is
+  keyed on the row's `fit`, not on the family bucket (a binomial outcome holds BOTH the logit row,
+  word OR, and the modified-Poisson one, word RR); and the fit's word may win only where the LINK
+  makes one other than an odds ratio — a logistic fit asked for a **marginal** ratio keeps its crude
+  RR, which the corpus caught and which is now its own fixture.
+- **`CI_METHOD_WORDED`** — `katz`'s label msgid was written TWICE (a `CI_METHOD_LABELS` row that was
+  intercepted before it could ever be read, plus the switch default) and `wald_log` had no row at
+  all. One table, same shape, same lookup; `potools::get_message_data()` verified every msgid still
+  extracts.
+- **`EST_SCALES$default_display`** — `fmt()` and `new_fmt()` were two copies of one rule and
+  **disagreed** for the bind neutral (`"pct"` vs `"n"`); `new_fmt()`'s deliberate `"n"` is declared.
+  **`TAB_ARG_VALUES$totcol`** — `tab-deprecate.R` had lost `""`, `tab-steps-legacy.R`
+  `"all_col_vars"`. **`fmt_blank_fields()`** — one chain written 4× in two shapes and five
+  wrappings. **`reg_glance()`'s `regTermTest` block** — byte-identical twice, ten lines apart, in
+  one function.
+
+**RULE 2 — the silent degradations.** The eight `if (length(v) == n) v else <neutral>` guards that
+are dead BY CONSTRUCTION became `stopifnot()` (`tab-render-html.R` ×4, `tab-transpose-render.R` ×3,
+and `tab_md.R`, which had only the `is.null` half its two html siblings carry and degraded to
+silently-uncoloured cells). The `is.null` half stays everywhere: an ABSENT annotation is a real
+state, a SHORT one is a producer bug — and the silent substitution is what hid D1's grey footer for
+two phases. ⚠ **The two GENUINE ones were deliberately NOT promoted** (`tab-test-display.R`,
+`plots.R`): each is a length-equality standing in for a **missing join key**, and a `stopifnot()`
+there would abort on a legitimately degraded table. Each carries a comment naming the missing key.
+
+**`is_reg` — two questions, two messages.** `reg_plot_fits()` *stated* the conflated claim out loud
+("`x` is not a `tab_reg()` table") on a table that IS one but has lost its recipe; it is two aborts
+now. `reg_eff_word_of()` gates on the stored kind and passes a possibly-NULL call through, so a
+meta-stripped table keeps its plot-axis word. `reg_model_lines()` **keeps** its guard — it genuinely
+asks "is there a recipe to describe" — and says so; reported as a rename, not a fix.
+
+**G5 — `ci = "cell"` keeps the reference row's interval** (maintainer ruling; the only user-visible
+change). The rule is stated once, as `CI_GEOMS$ref_cell`: *a CELL interval compares each cell to
+0 %, not to a reference, so every cell keeps it; a CONTRAST interval blanks the row it would compare
+to itself.* It was written in all three consumers and two were wrong, so `tab(…, ci = "cell")`'s
+Total row showed no bracket while `tab_num(…, ci = "cell", tot = "row")`'s showed one — and the
+rule the vignette teaches is the numeric one. `dev/verify_golden_field_delta.R` gained the
+**"populated field on a declared row subset"** mode for it (these cells were NA and are now finite,
+every other cell bit-identical, both directions checked) — and it was verified to FIRE, not to pass
+silently, by disabling the declaration and watching it report the change.
+
+**HONEST CONCERNS.**
+
+- **`tab_compact()` accepts more than it did**, by two independent routes: the sentinel fix (a
+  no-col_var table now nests) and the union bind (a genuinely narrower table keeps the wider one's
+  columns instead of truncating it). Both are `TAB_OPS`' own declared rule finally applied to the
+  truth — but the merged table's *layout* on those shapes is asserted by fixtures, not eyeballed.
+  Worth one look at 19n.
+- **The `ci = "cell"` change touches ~126 call sites across 25 test files.** None asserted the
+  blank; only `f_ci_cell` moved. But it is a real change on a CRAN-released argument, and it is in
+  `NEWS.md` and both vignettes rather than only in the code.
+- **`REG_FAMILY_MULT_WORD`'s "the fit wins unless its word is `OR`"** is the honest statement of
+  what the old switch did, and it is a statement about LINKS — but it reads as a magic test until
+  you have the comment beside it. The genuinely principled fact would be the crude block's own word,
+  which `REG_EMPIRICAL` does not carry (it lives in the column NAME, `Obs_RR` / `Obs_IRR`, which is
+  the guess this phase exists to stop making). Filed as a smell, not a defect.
+- **Measured and explained, needing no fix**: on a **`meta`-stripped** reg table the colour legend
+  loses the effect word and names the wrong interval ("Katz interval on the log **risk**-ratio" for
+  a Poisson crude column). Root cause: `tab_materialize_extras()` CONSUMES the `test` attribute and
+  `tab_kind()`'s degraded fallback sniffs exactly that, so the materialised table reports
+  `kind = "crosstab"`. That is the documented degraded contract (`test-degraded-attrs.R`: *"a
+  regression losing `meta` drops its title/effect wording"*); a full table is unaffected.
+- **`tab_reg()`'s argument boundary is untouched** and remains the single biggest structural item.
+  So are the display-grammar table (designed in full, filed) and the options cluster (censused, one
+  of three items taken).
+- No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 19k's maintainer
+  rebuild + live pass is still the outstanding one.
+
+**FOLLOW-UPS.** 19m-ii can start on this commit; the roadmap's 19m-ii entry now carries the full
+`DISPLAY_TOKENS` design, the two options folds, `reg_resolve_args()`/`new_reg_spec()`, the three
+carrier migrations (with `emp_tips` measured **not reachable**), the two join-key guards, and the
+four still-owed measurements.
 
 ---
 

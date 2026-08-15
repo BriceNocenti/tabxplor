@@ -883,7 +883,13 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
       or_compare = TRUE, pct = "row", tab_row_names = label_cols,
       tab_vars = rlang::syms(tab_vars), row_var = rlang::sym(row_var),
       tottab_vector = tottab_vector, totrow_vector = totrow_vector,
-      cols = stats::setNames(rep(TRUE, length(grp)), grp))
+      cols = stats::setNames(rep(TRUE, length(grp)), grp),
+      # Phase 19m-i: the STORED flag, not the literal "Total". `grp` holds FINAL column names --
+      # post leaf_rename_totals() -- so the leaf's own pre-rename convention does not hold here:
+      # with total_names = "Ensemble" no column matched and the reference 2x2 was built against the
+      # wrong column. Invisible until now only because po/R-fr.po translates "Total" -> "Total".
+      # It is the same expression leaf_ci_plain() is handed 20 lines below.
+      totcol_vector = vapply(grp, function(nm) isTRUE(carrier$fmt[[nm]]$meta$totcol), logical(1)))
 
     # --- write diff/ratio (pct cols) + the ref-row marker into the carrier ----------------------
     if (!identical(ref_v, "tot")) inref[] <- ref_res$refrows

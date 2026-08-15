@@ -47,6 +47,14 @@
 #   3. the user-callable lister                     -> reg_measures()
 #   4. the generated `?tab_reg` section (and, in Phase 19k, the jamovi eligibility rule)
 #                                                   -> reg_estimands_for()
+#
+# ALSO HERE (Phase 19m-i): **REG_FAMILIES** -- what each model family is CALLED, and where it may be
+# named. Four name tables and a switch before, in two files, already disagreeing: the footer sentence
+# (`reg_family_display_name`), the Excel filename tag (`reg_family_short`) and the two picker labels
+# (`REG_FAMILY_UI_LABEL` / `_BINARY`, which silently omitted quasipoisson / rr / rd / mr). `ui = NA`
+# IS the fact "not offered in the picker" -- which dev/generate_jamovi_js.R used to write a second
+# time as a hardcoded setdiff(). `REG_FIT_FAMILY` and `REG_FAMILY_MULT_WORD` are DERIVED from it and
+# from REG_ESTIMANDS, the latter with a build-time singleton assert.
 # =====================================================================================================
 
 
@@ -332,16 +340,135 @@ REG_ESTIMANDS$quasipoisson <- list(
     r
   }))
 
+# REG_FAMILIES -- WHAT EACH MODEL FAMILY IS CALLED, and where it may be named. Phase 19m-i: FOUR
+# name tables and a fifth switch, in two files, which already disagreed -- `reg_family_display_name()`
+# (a 9-arm switch of full sentences), `reg_family_short()` (a 9-arm switch of filename tags),
+# `REG_FAMILY_UI_LABEL` (a 5-entry vector, silently omitting quasipoisson / rr / rd / mr) and
+# `REG_FAMILY_UI_LABEL_BINARY` (2 entries). All four are DERIVED from this one table now, and adding
+# a family is one row.
+#
+# The columns:
+#   display    a CLOSURE -- gettext() at render (so the footer follows options(tabxplor.lang)) while
+#              staying statically extractable by potools. The CI_METHOD_LABELS precedent.
+#   short      the filename tag (Excel sheet names).
+#   ui         the PICKER label, or NA. ⚠ `NA` IS THE FACT "not offered in the picker": it is what
+#              dev/generate_jamovi_js.R used to write a second time as a hardcoded
+#              `setdiff(names(REG_ESTIMANDS), "quasipoisson")`.
+#   ui_binary  the picker label OVERRIDE on a 2-level outcome, where family = "poisson" is not a
+#              count model: R resolves it to the modified Poisson (Zou 2004), whose exp(coef) is a
+#              RISK ratio (18z3). Same stored value, different words -- so the dropdown never says
+#              "counts" beside a yes/no variable.
+#   outcome    NA on a user family; on an internal LINK key (rr / rd / mr), the OUTCOME family it
+#              belongs to. REG_FIT_FAMILY is derived from this column.
+#
+# ORDER IS LOAD-BEARING: `ui` is emitted into the generated jamovi JS in declaration order, and the
+# reader defaults ("regression" / "reg") replace the switches' own fall-through arms.
+#' @keywords internal
+#' @noRd
+REG_FAMILIES <- list(
+  gaussian     = list(display = function() gettext("linear regression"),
+                      short = "linear",   ui = "gaussian (linear)",    ui_binary = NA_character_,
+                      outcome = NA_character_),
+  binomial     = list(display = function() gettext("logistic regression"),
+                      short = "logit",    ui = "binomial (logistic)",  ui_binary = "binomial (logistic)",
+                      outcome = NA_character_),
+  poisson      = list(display = function() gettext("Poisson regression"),
+                      short = "poisson",  ui = "poisson (counts)",     ui_binary = "poisson (risk ratio)",
+                      outcome = NA_character_),
+  multinomial  = list(display = function() gettext("multinomial logistic regression"),
+                      short = "mlogit",   ui = "multinomial (nominal)", ui_binary = NA_character_,
+                      outcome = NA_character_),
+  ordinal      = list(display = function() gettext("ordinal logistic regression"),
+                      short = "ologit",   ui = "ordinal (ordered)",    ui_binary = NA_character_,
+                      outcome = NA_character_),
+  # a USER family the picker does not offer (the checkbox route is `family = "poisson"` + a
+  # dispersion warning): `ui = NA` says so once, where the label lives.
+  quasipoisson = list(display = function() gettext("quasi-Poisson regression"),
+                      short = "qpoisson", ui = NA_character_,          ui_binary = NA_character_,
+                      outcome = NA_character_),
+  # the three internal LINK keys: never named by a user, never offered by a picker.
+  rr           = list(display = function() gettext("modified Poisson regression"),
+                      short = "rr",       ui = NA_character_,          ui_binary = NA_character_,
+                      outcome = "binomial"),
+  rd           = list(display = function()
+                        gettext("additive-risk regression (identity link, robust standard errors)"),
+                      short = "rd",       ui = NA_character_,          ui_binary = NA_character_,
+                      outcome = "binomial"),
+  mr           = list(display = function()
+                        gettext("log-link mean regression (Poisson pseudo-likelihood, robust standard errors)"),
+                      short = "mr",       ui = NA_character_,          ui_binary = NA_character_,
+                      outcome = "gaussian")
+)
+
 # The internal family keys a `fit` may name, beside the user-facing ones, and the OUTCOME family each
 # belongs to. Every one of them is a LINK chosen to reach a measure, never a distribution the user
 # should have to name -- which is why the map exists at all: a consumer holding a column's stored
 # `model_family` (the FIT) must be able to ask the library, which is keyed by the outcome.
+# Phase 19m-i: DERIVED from REG_FAMILIES$outcome.
 #' @keywords internal
 #' @noRd
-REG_FIT_FAMILY <- c(rr = "binomial", rd = "binomial", mr = "gaussian")
+REG_FIT_FAMILY <- {
+  o <- vapply(REG_FAMILIES, function(r) r$outcome, character(1))
+  o[!is.na(o)]
+}
 #' @keywords internal
 #' @noRd
 REG_FIT_ONLY_FAMILIES <- names(REG_FIT_FAMILY)
+
+# The four readers. Each keeps its own name and its own default, so no call site moved.
+#' @keywords internal
+#' @noRd
+reg_family_display_name <- function(family) {
+  r <- REG_FAMILIES[[family]]
+  if (is.null(r)) gettext("regression") else r$display()
+}
+#' @keywords internal
+#' @noRd
+reg_family_short <- function(family) REG_FAMILIES[[family]]$short %||% "reg"
+# The picker labels, in declaration order -- `ui`/`ui_binary` non-NA IS "offered".
+#' @keywords internal
+#' @noRd
+reg_family_ui_labels <- function(binary = FALSE) {
+  f <- if (binary) "ui_binary" else "ui"
+  v <- vapply(REG_FAMILIES, function(r) r[[f]], character(1))
+  v[!is.na(v)]
+}
+
+# REG_FAMILY_MULT_WORD -- the MULTIPLICATIVE effect word of a fit key: what exp(coef) is CALLED for
+# this link. OR for a logit, RR for the modified Poisson, IRR for a (quasi-)Poisson rate, RoM for the
+# log-link mean model; NA where the family has no exponentiated coefficient estimand at all
+# (gaussian, and `rd`, whose coefficients are risk DIFFERENCES).
+#
+# Phase 19m-i: DERIVED, not declared -- it is the `word` of the family's own exponentiated
+# coefficient row, which REG_ESTIMANDS already states. It replaces the residual `switch(fam, ...)`
+# inside legend_reg_eff_word() (R/fmt_class.R), whose default silently answered "OR" for any family
+# it did not list -- including `rd` and `mr`, added one phase after it was written. The build-time
+# assert is what makes the derivation safe: if a family ever grows two exponentiated coefficient
+# rows with different words, this fails to LOAD rather than picking one at random.
+#' @keywords internal
+#' @noRd
+REG_FAMILY_MULT_WORD <- local({
+  # ⚠ keyed on the row's `fit`, NOT on the family bucket it is declared under. A binomial outcome
+  # holds BOTH the logit row (fit "binomial", word "OR") and the modified-Poisson one (fit "rr",
+  # word "RR"); asking "the binomial family's exponentiated coefficient word" is therefore ambiguous,
+  # while asking "the fit key's" is not. The consumer holds a `model_family` attribute, which is the
+  # FIT -- so the fit is also the right key.
+  all_rows <- unlist(lapply(REG_ESTIMANDS, function(fr) fr$rows), recursive = FALSE)
+  keys <- unique(c(names(REG_ESTIMANDS), names(REG_FIT_FAMILY)))
+  vapply(keys, function(k) {
+    w <- unique(vapply(Filter(function(r)
+      identical(r$fit, k) && identical(r$effect, "coefficient") && isTRUE(r$exp) &&
+        identical(r$status, "ok"), all_rows), function(r) r$word, character(1)))
+    stopifnot(length(w) <= 1L)
+    if (length(w)) w else NA_character_
+  }, character(1))
+})
+#' @keywords internal
+#' @noRd
+reg_family_mult_word <- function(family) {
+  w <- REG_FAMILY_MULT_WORD[family]                # `[` not `[[`: an unknown key is NA, not an error
+  if (length(w) != 1L) NA_character_ else unname(w)
+}
 
 # The PUBLIC family vocabulary -- what `tab_reg(family =)` accepts and what auto-detection may
 # return. Phase 19l promoted it out of a local in tab_reg(): it is the complement of

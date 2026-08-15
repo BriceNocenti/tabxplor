@@ -93,6 +93,28 @@ test_that("a regression losing `meta` drops its title/effect wording, keeps the 
   expect_true(any(grepl("\\{\\.[pm][1-4]", no_meta)))    # colours still there
 })
 
+# Phase 19m-i: "is this a regression" (the STORED kind) and "does it still carry its model recipe"
+# are two questions, and a meta-stripped table is exactly where they diverge. Three sites asked the
+# second while claiming to ask the first; one of them said so out loud in its abort message.
+test_that("a meta-stripped regression keeps its KIND, and each consumer says which question it asks", {
+  no_meta <- strip_attr(tr, "meta")
+  expect_true(tab_is_reg(no_meta))                       # the kind survives (it rides `test`)
+  expect_null(reg_call(no_meta))                         # the recipe does not
+
+  # the plot axis word comes from the COLUMN (model_family + scale), so it survives the strip
+  mcol <- grep("^Model_", names(no_meta), value = TRUE)[[1]]
+  expect_identical(reg_eff_word_of(no_meta, mcol), reg_eff_word_of(tr, mcol))
+  expect_false(is.na(reg_eff_word_of(no_meta, mcol)))
+
+  # reg_check_plots() refits, so it genuinely needs the recipe -- but it must say THAT, not "this is
+  # not a tab_reg() table". A crosstab still gets the other message.
+  expect_error(reg_check_plots(no_meta, df), "model record")
+  expect_error(reg_check_plots(tc, df), "not a")
+
+  # the "Model:" line has nothing to describe, and correctly writes none
+  expect_identical(reg_model_lines(no_meta), character(0))
+})
+
 test_that("a standalone extracted tabxplor_fmt column formats and colours on its own", {
   # a column known to be coloured in-table
   slot_of  <- function(col) fmt_color_channels(col)$text_slot

@@ -203,7 +203,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
   stopifnot(
     tot %in% c("no", "row", "col", "both"),
-    totcol %in% c("last", "each", "no", "")
+    totcol %in% TAB_ARG_VALUES$totcol$values   # 19m-i: declared (this copy had lost "all_col_vars")
   )
 
   get_vars        <- tab_get_vars(tabs)
@@ -977,11 +977,16 @@ tab_ci <- function(tabs,
       rp  <- group_last_pos(ref_mask(col))                     # per-row reference-row index (NA if none)
       rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
       # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
-      # reference cell so its own CI is not computed.
+      # reference cell so its own CI is not computed -- but ONLY where the interval is a comparison.
+      # Phase 19m-i: that decision is CI_GEOMS$ref_cell (R/tab-agg.R), the same lookup the two leaves
+      # make; a `ci = "cell"` interval has no reference, so every cell keeps its own.
       # Phase 18s: the CI base is the effective n (`n_eff`) when populated, else the raw base --
       # Phase 19a folds that coalesce, written out at all five read sites below, into fmt_base().
+      ref_na <- identical(ci_geom_ref_cell(if (identical(ci[[nm]], "cell")) "cell" else "diff",
+                                           if (identical(tp, "mean")) "mean" else "pct",
+                                           ci_scale[1]), "na")
       x_n[[nm]] <- dplyr::if_else(
-        rtona, NA_integer_,
+        rtona & ref_na, NA_integer_,
         # every proportion's base is `tot_n`, a mean's is `n`. (Phase 18z16-ii had to add "all" /
         # "all_tabs" to a hand-written list of percentage types here, which is exactly the kind of
         # omission `var_kind` removes: there is one arm per KIND of column, not one per type value.)
@@ -1177,8 +1182,10 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   if ("all" %in% calc) calc <- c("ctr", "p", "var", "counts")
   subtext         <- get_subtext(tabs)
 
-  if (all(get_col_var(tabs) %in% c("", "no_col_var")) |
-      "no_row_var" %in% names(tabs)
+  # 19m-i: "no real col_var" through the declared set (R/fmt_class.R), and the row axis through the
+  # build-time placeholder-NAME predicate -- two different questions, said as two.
+  if (!any(is_real_col_var(get_col_var(tabs))) |
+      any(is_placeholder_var(names(tabs)))
   ) return(tabs)
 
   comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))

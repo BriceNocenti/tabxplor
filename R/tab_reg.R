@@ -463,14 +463,24 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
 # `offers` is ordered, first = the detected default; a 2-level outcome offers poisson because that is
 # the opt-in modified-Poisson (risk-ratio) route (18z3), not a count model.
 #' @keywords internal
+# Phase 19m-i: `said` -- how reg_detect_family() NAMES the kind it detected. It was a `switch(kind,)`
+# re-spelling this table's own four keys twenty lines below, with no default arm (an unlisted kind
+# produced NULL, which paste0() silently dropped). Kept a BARE string, not a gettext(): it is not
+# translated today, and wrapping it would add four msgids to po/R-fr.po as a side effect of a
+# refactor.
+#' @keywords internal
 REG_OUTCOME_KINDS <- list(
-  binary   = list(detect = "binomial",    offers = c("binomial", "poisson")),
-  ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial")),
-  nominal  = list(detect = "multinomial", offers = c("multinomial", "ordinal")),
+  binary   = list(detect = "binomial",    offers = c("binomial", "poisson"),
+                  said = "binary outcome detected"),
+  ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial"),
+                  said = "ordered outcome detected"),
+  nominal  = list(detect = "multinomial", offers = c("multinomial", "ordinal"),
+                  said = "nominal outcome detected"),
   # Phase 18z13 (D10): ANY numeric is gaussian, integer-valued included -- age in years, a summed
   # score and income in whole units are all integers, and a linear model always fits. poisson stays
   # one click away in `offers`.
-  numeric  = list(detect = "gaussian",    offers = c("gaussian", "binomial", "poisson"))
+  numeric  = list(detect = "gaussian",    offers = c("gaussian", "binomial", "poisson"),
+                  said = "continuous outcome detected")
 )
 
 # The KIND of one outcome column ("" = none of them -> no family can be detected).
@@ -495,11 +505,7 @@ reg_detect_family <- function(data, dependent) {
     ))
   }
   fam  <- REG_OUTCOME_KINDS[[kind]]$detect
-  said <- switch(kind,
-    binary  = "binary outcome detected",
-    ordered = "ordered outcome detected",
-    nominal = "nominal outcome detected",
-    numeric = "continuous outcome detected")
+  said <- REG_OUTCOME_KINDS[[kind]]$said
   cli::cli_inform(c("i" = paste0(
     "{.val {dependent}}: ", said, " -> {.code family = \"", fam, "\"} (",
     reg_family_short(fam), ")",
@@ -510,59 +516,10 @@ reg_detect_family <- function(data, dependent) {
   fam
 }
 
-# Phase 14w: the human name of the model family, shared by the reg title/caption and the "Model:" footer
-# line (reg_model_line). do_exp/effect do not change the NAME (the estimand phrase carries that detail).
-# Phase 18w: translatable (gettext). Every caller runs it inside a with_legend_lang() context
-# (reg_model_lines / reg_title), so the LANGUAGE env is already set when these gettext() lookups fire.
-reg_family_display_name <- function(family) {
-  switch(family,
-    "gaussian"     = gettext("linear regression"),
-    "binomial"     = gettext("logistic regression"),
-    "poisson"      = gettext("Poisson regression"),
-    "quasipoisson" = gettext("quasi-Poisson regression"),
-    "rr"           = gettext("modified Poisson regression"),
-    "rd"           = gettext("additive-risk regression (identity link, robust standard errors)"),
-    "mr"           = gettext("log-link mean regression (Poisson pseudo-likelihood, robust standard errors)"),
-    "multinomial"  = gettext("multinomial logistic regression"),
-    "ordinal"      = gettext("ordinal logistic regression"),
-    gettext("regression"))
-}
-
-# REG_FAMILY_UI_LABEL -- Phase 19k: the short family label a PICKER shows ("what kind of model is
-# this", in three words). Distinct from reg_family_display_name() (a full sentence, for the footer)
-# and from reg_family_short() (a filename tag). Generated into the jamovi model-table dropdown by
-# dev/generate_jamovi_js.R, where it used to be typed a second time.
-# `_BINARY` overrides the label on a 2-LEVEL outcome, where family = "poisson" is not a count model:
-# R resolves it to the modified Poisson (Zou 2004), whose exp(coef) is a RISK ratio (18z3). Same
-# stored value, different words -- so the dropdown never says "counts" next to a yes/no variable.
-#' @keywords internal
-REG_FAMILY_UI_LABEL <- c(
-  gaussian    = "gaussian (linear)",
-  binomial    = "binomial (logistic)",
-  poisson     = "poisson (counts)",
-  multinomial = "multinomial (nominal)",
-  ordinal     = "ordinal (ordered)"
-)
-#' @keywords internal
-REG_FAMILY_UI_LABEL_BINARY <- c(
-  binomial = "binomial (logistic)",
-  poisson  = "poisson (risk ratio)"
-)
-
-# Phase 14w: the short model tag used for Excel sheet names ("logit_<dep>_<pred>...").
-reg_family_short <- function(family) {
-  switch(family,
-    "gaussian"     = "linear",
-    "binomial"     = "logit",
-    "poisson"      = "poisson",
-    "quasipoisson" = "qpoisson",
-    "rr"           = "rr",
-    "rd"           = "rd",
-    "mr"           = "mr",
-    "multinomial"  = "mlogit",
-    "ordinal"      = "ologit",
-    "reg")
-}
+# Phase 19m-i: the family NAMES (the footer sentence, the Excel filename tag, the two picker labels)
+# are ONE declared table, REG_FAMILIES (R/reg-estimand.R) -- four tables and a switch before, which
+# had already drifted. reg_family_display_name() / reg_family_short() / reg_family_ui_labels() are
+# its readers and live there; every call site here is unchanged.
 
 
 # Phase 14w: the "Model: <family>. <estimand>." legend line, generated fresh from the table's stored
@@ -634,6 +591,10 @@ reg_model_line <- function(meta) {
 # composition runs under with_legend_lang() so every nested gettext() (family name, estimand, "Model:")
 # resolves to that language; English is byte-identical (gettext returns the msgid under the en locale).
 reg_model_lines <- function(x, lang = NULL) {
+  # Phase 19m-i: this guard genuinely asks "is there a RECIPE to describe" -- NOT "is this a
+  # regression" (that is tab_is_reg(), the stored kind). The two diverge on a meta-stripped reg
+  # table, which keeps its kind and its columns but has no model left to name: there is no line to
+  # write, and returning none is right. Kept as it is, deliberately.
   meta <- reg_call(x)
   if (is.null(meta)) return(character(0))
   with_legend_lang(lang, function(lg) {
@@ -3131,6 +3092,19 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   row <- function(test, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_, pvalue = NA_real_)
     tibble::tibble(test = test, statistic = statistic, df1 = df1, df2 = df2, pvalue = pvalue)
   out <- row("n", statistic = as.numeric(nobs))
+  # Phase 19m-i: the design-based Wald-vs-null, written ONCE. It was byte-identical in both branches
+  # below, ten lines apart inside this same function. A fit with no `terms` component (svy_vglm, the
+  # weighted MNL) yields no row at all -- the footer degrades to `n`, which is the intended answer.
+  wald_null_row <- function(fit) {
+    terms_all <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
+    wt <- if (length(terms_all) > 0)
+      tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
+               error = function(e) NULL)
+    else NULL
+    if (is.null(wt)) return(NULL)
+    row("wald_null", statistic = as.numeric(wt$Ftest), df1 = as.numeric(wt$df),
+        df2 = as.numeric(wt$ddf), pvalue = as.numeric(wt$p))
+  }
 
   # Phase 18z3: a modified-Poisson ("rr") fit is a QUASI-likelihood on a deliberately misspecified
   # variance, so AIC / BIC / McFadden are not defined, and the Pearson dispersion of a 0/1 outcome is
@@ -3138,14 +3112,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   # n + the design-based Wald-vs-null. Placed FIRST so it holds weighted or not (the fit is an svyglm
   # either way); the weighted branch below keeps its Nagelkerke/AIC set for genuine survey models.
   if (family %in% REG_FIT_ONLY_FAMILIES) {
-    terms_all <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
-    wt <- if (length(terms_all) > 0)
-      tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
-               error = function(e) NULL)
-    else NULL
-    if (!is.null(wt)) out <- dplyr::bind_rows(out, row("wald_null",
-      statistic = as.numeric(wt$Ftest), df1 = as.numeric(wt$df), df2 = as.numeric(wt$ddf),
-      pvalue = as.numeric(wt$p)))
+    out <- dplyr::bind_rows(out, wald_null_row(fit))
     return(out)
   }
 
@@ -3155,14 +3122,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     # are inherent approximations of a survey summary, not user-actionable -> suppressed (the footer is a
     # descriptive summary, not the primary design-based inference).
     # svy_vglm (weighted MNL) has no terms component -> the Wald-vs-null degrades away (footer = n only).
-    terms_all <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
-    wt <- if (length(terms_all) > 0)
-      tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
-               error = function(e) NULL)
-    else NULL
-    if (!is.null(wt)) out <- dplyr::bind_rows(out, row("wald_null",
-      statistic = as.numeric(wt$Ftest), df1 = as.numeric(wt$df), df2 = as.numeric(wt$ddf),
-      pvalue = as.numeric(wt$p)))
+    out <- dplyr::bind_rows(out, wald_null_row(fit))
     nk <- tryCatch(suppressWarnings(as.numeric(survey::psrsq(fit, method = "Nagelkerke"))),
                    error = function(e) NA_real_)
     if (!is.na(nk)) out <- dplyr::bind_rows(out, row("nagelkerke_r2", statistic = nk))

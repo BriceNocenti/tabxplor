@@ -562,7 +562,7 @@ Les méthodes d'intervalle alternatives tiennent dans UN seul argument, `ci_meth
 | pct  | `cell` | intervalle score de Wilson       | `ci_method = c(cell = "wald")`  |
 | mean | `cell` | *t* de Student à un échantillon (n-1) | —                          |
 
-Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**. `ci_method = c(cell = )` choisit `"wilson"` (défaut), `"wald"` ou `"beta"` (Korn-Graubard) pour les pourcentages ; pour une moyenne, un intervalle de confiance au niveau de chaque case est toujours le *t* de Student à un échantillon.
+Parce qu'ils comparent à 0 et non à une référence, les intervalles de case sont purement descriptifs : ils ne portent **aucune significativité ni étoile**, et *chaque* case en a un — y compris la ligne de total. `ci_method = c(cell = )` choisit `"wilson"` (défaut), `"wald"` ou `"beta"` (Korn-Graubard) pour les pourcentages ; pour une moyenne, un intervalle de confiance au niveau de chaque case est toujours le *t* de Student à un échantillon.
 
 **`color_signif` transforme cet intervalle en repères de couleur.**
 

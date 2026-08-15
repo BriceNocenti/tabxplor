@@ -3,8 +3,8 @@
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
 // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
-// Generated from R/tab_reg.R (REG_OUTCOME_KINDS, REG_FAMILY_UI_LABEL), R/reg-estimand.R
-// (REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after
+// Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,
+// REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after
 // changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial (nominal)", "ordinal": "ordinal (ordered)" };
 var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)", "poisson": "poisson (risk ratio)" };

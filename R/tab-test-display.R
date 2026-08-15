@@ -419,6 +419,12 @@ test_grid_reg <- function(x, test_tbl) {
   # the code does now, without pretending to parse.
   value_cols <- unique(reg$col)
   deps <- if (!is.null(meta)) meta$dependent else NULL
+  # ⚠ Phase 19m-i: this length test is NOT a guard, it is a MISSING JOIN KEY standing in for one.
+  # `meta$dependent` enumerates the outcomes and `unique(reg$col)` the footer's value columns -- two
+  # different enumerations (a multinomial fit contributes several columns per outcome), paired here
+  # only when they happen to be the same length. Do NOT promote it to stopifnot(): the mismatch is a
+  # legitimate state and a degraded table must still render. The real fix is for the `test` tibble to
+  # carry which dependent each `col` belongs to -- filed to 19m-ii with reg_resolve_args().
   value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps else value_cols
 
   # the ordered footer rows actually present: one per (stat, term), spec order then term order

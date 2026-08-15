@@ -53,7 +53,10 @@ reg_block <- function() {
   # (2) the estimand grid: per family, per effect, the measures that BUILD. `reg_estimand()` is the
   #     authority (it also knows the "impossible" and the "not offered" states); the UI only needs
   #     to know what to enable, so the grid stores the available set.
-  fams  <- setdiff(names(tabxplor:::REG_ESTIMANDS), "quasipoisson")   # not offered in the picker
+  # Phase 19m-i: "which families the picker offers" is a DECLARED fact -- REG_FAMILIES$ui is NA on
+  # the ones it does not (quasipoisson, and the internal link keys). It used to be a hardcoded
+  # setdiff() here AND an omission from REG_FAMILY_UI_LABEL: one fact, two encodings.
+  fams  <- names(tabxplor:::reg_family_ui_labels())
   effs  <- tabxplor:::REG_EFFECTS_VALUES
   meas  <- setdiff(tabxplor:::REG_MEASURES_VALUES, "auto")
   grid  <- lapply(fams, function(f) {
@@ -74,11 +77,11 @@ reg_block <- function() {
 
   c(
     BEGIN,
-    "// Generated from R/tab_reg.R (REG_OUTCOME_KINDS, REG_FAMILY_UI_LABEL), R/reg-estimand.R",
-    "// (REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after",
+    "// Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,",
+    "// REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after",
     "// changing any of them; the suite checks this block (test-jamovi-vocabulary.R).",
-    paste0("var TABX_FAMILY_LABEL = ", js_obj(tabxplor:::REG_FAMILY_UI_LABEL), ";"),
-    paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::REG_FAMILY_UI_LABEL_BINARY), ";"),
+    paste0("var TABX_FAMILY_LABEL = ", js_obj(tabxplor:::reg_family_ui_labels()), ";"),
+    paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::reg_family_ui_labels(binary = TRUE)), ";"),
     paste0("var TABX_OUTCOME_DETECT = ", js_obj(detect), ";"),
     paste0("var TABX_OUTCOME_OFFERS = ", js_obj(offers, js_arr), ";"),
     paste0("var TABX_ESTIMANDS = ",

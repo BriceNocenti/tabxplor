@@ -173,7 +173,15 @@ html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
 #' @keywords internal
 html_face_wrap <- function(html, bold, italic, underline) {
   n <- length(html)
-  g <- function(v) if (length(v) == n) v %in% TRUE else logical(n)
+  # Phase 19m-i: ABSENT is a real state (a degraded model carries no face flags); SHORT is a bug.
+  # The three flags are built per column as logical(length(col)) by fmt_col_ann(), so a wrong length
+  # can only mean a producer went out of step -- and degrading silently is how D1's grey footer hid
+  # for two phases. Assert the length, keep the NULL fallback.
+  g <- function(v) {
+    if (is.null(v)) return(logical(n))
+    stopifnot(length(v) == n)
+    v %in% TRUE
+  }
   bold <- g(bold); italic <- g(italic); underline <- g(underline)
   # Innermost first, so the nesting reads <b><i><u>x</u></i></b>.
   if (any(underline)) html[underline] <- paste0("<u>", html[underline], "</u>")
@@ -255,16 +263,23 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     cls <- rep("", n_row)      # the <td>'s classes: text slot / grey / bold
     bgc <- rep("", n_row)      # the background slot, which rides the PILL span (below), not the <td>
     if (!is.null(a)) {
-      tsl <- if (length(a$text_slot) == n_row) a$text_slot else integer(n_row)
-      bsl <- if (length(a$bg_slot)   == n_row) a$bg_slot   else integer(n_row)
+      # Phase 19m-i: every `ann` field is built per column, length(col) BY CONSTRUCTION -- both by
+      # fmt_col_ann() and by the transpose's rebuild. So ABSENT is a real state (a degraded model),
+      # SHORT is a producer bug: assert it rather than silently substituting a neutral. That silent
+      # substitution is precisely what hid D1's grey footer for two phases (see keep_black below).
+      slot <- function(v) { if (is.null(v)) return(integer(n_row)); stopifnot(length(v) == n_row); v }
+      tsl <- slot(a$text_slot)
+      bsl <- slot(a$bg_slot)
       cls <- tx_slot_class("text", tsl)
       bgc <- tx_slot_class("bg",   bsl)
       # Phase 14q: keep_black = ref_alltot | is_refrow | footer (the black reading anchors), so reg
       # reference cells and GOF footer cells are no longer greyed. == ref_alltot for a crosstab.
-      # Phase 19h (D1): the fallback stays as a degraded-model guard, but it is no longer LOAD-BEARING
-      # -- the transpose flips keep_black like every other per-cell logical now. It used to drop it,
-      # and this silent fallback is what turned that into "a transposed reg footer renders grey".
-      keep <- if (length(a$keep_black) == n_row) a$keep_black else a$ref_alltot
+      # Phase 19h (D1): the ref_alltot fallback stays as a degraded-model guard, but it is no longer
+      # LOAD-BEARING -- the transpose flips keep_black like every other per-cell logical now. It used
+      # to drop it, and the silent fallback is what turned that into "a transposed reg footer renders
+      # grey"; 19m-i made the SHORT case an error, so only a genuinely absent field falls back.
+      keep <- if (is.null(a$keep_black)) a$ref_alltot else { stopifnot(length(a$keep_black) == n_row)
+                                                             a$keep_black }
       grey <- !nzchar(cls) & !nzchar(bgc) & !keep
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
       cls[a$bold] <- trimws(paste(cls[a$bold], "tx-b"))

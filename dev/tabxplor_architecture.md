@@ -1371,6 +1371,11 @@ The main API file. Contains:
 - `leaf_ci_plain()` — the factor leaf's cell / contrast interval, on matrices, **from the plan**
   (Phase 19j, KEY 5). Shared verbatim with the jamovi tier-3 re-reference. `num_core()` has the same
   block inline for means. Both route through `ci_dispatch()` / `CI_GEOMS` (`R/tab-agg.R`).
+  **Phase 19m-i**: whether the cell that IS the reference keeps its own interval is a declared
+  `CI_GEOMS` member (`ref_cell`, read through `ci_geom_ref_cell()`) — a CELL interval compares each
+  cell to 0 %, not to a reference, so every cell keeps it; a CONTRAST interval blanks the row it
+  would compare to itself. The rule was written in all three consumers and two of them were wrong,
+  so a factor `ci = "cell"` table's total row showed no bracket while a numeric one's did.
 - `leaf_chi2()` / `leaf_chi2_num()` / `leaf_test_view()` — the leaf's whole-table test, calling the
   same `chi2_compute_test()` / `chi2_write_contrib()` the superseded step calls: chi-squared (factors)
   + ANOVA F (means) via `agg_chi2()`/`agg_anova()`, and the contributions for `color = "contrib"`.
@@ -1690,7 +1695,10 @@ parsnip draft + or_plot/lm_plots deferred to a later display phase).
 `comparison`/`model_labels`/`conf_level`) via `set_reg_meta()` — since Phase 17b a sub-field of the
 `meta` list (`get/set_reg_meta` are thin accessors into it), carried automatically by the ONE
 `tab_attrs()` `meta` line + threaded through `reg_footer_lines`/`tab_pvalue_lines`). It drives: the reg
-**title/caption** (`reg_title` / `reg_family_display_name` / `reg_family_short` / `reg_sheet_name`; Excel
+**title/caption** (`reg_title` / `reg_family_display_name` / `reg_family_short` / `reg_sheet_name`;
+since Phase 19m-i the family NAMES all come from the one declared **`REG_FAMILIES`** table in
+`R/reg-estimand.R` — footer sentence, filename tag and the two jamovi picker labels, whose `ui = NA`
+IS "not offered in the picker"; `REG_FIT_FAMILY` and `REG_FAMILY_MULT_WORD` derive from it; Excel
 title+sheet, md/kable caption); the **"Model:" legend line** (`reg_model_line`, ordered before the colour
 legend at every footer site); and the **colour legend** (`legend_specs()` reads `is_reg = !is.null(reg_meta)`
 — robust across footer materialisation, which drops `test` — derives the per-column effect word from

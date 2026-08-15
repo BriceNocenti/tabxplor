@@ -99,7 +99,7 @@ tab_shape <- function(x) {
     row_vars  = as.character(dv$row_vars),
     tab_vars  = as.character(dv$tab_vars),
     # the column axis is, as always, the fmt columns' own attribute
-    col_vars  = setdiff(unique(get_col_var(x)), c("", "all_col_vars")),
+    col_vars  = unique(Filter(is_real_col_var, unique(get_col_var(x)))),
     same_col_vars = TRUE,
     same_tab_vars = TRUE
   )

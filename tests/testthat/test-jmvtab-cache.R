@@ -56,6 +56,11 @@ jmv_oracle <- function(opts, data) {
 
 gss <- forcats::gss_cat
 gssw <- dplyr::mutate(gss, w = as.numeric(1 + (as.integer(marital) %% 3)))
+# Phase 19m-i: a BINARY col_var. It is the shape on which "which column is the total" changes the
+# answer rather than merely the bookkeeping -- two levels + a total is `binary` (each level's odds
+# ratio against the OTHER level), three columns counted as levels is not.
+gssb <- dplyr::mutate(gss, white = forcats::fct_other(race, keep = "White",
+                                                      other_level = "Non-white"))
 
 
 # --- store primitives ---------------------------------------------------------------------
@@ -358,7 +363,14 @@ test_that("Phase 9b-7: a reference change re-refs (tier-3 hit) and equals the re
                      b = o0(tab_vars = "year", ref = "1")),                        # grouped (tab_vars)
     list(d = "gssw", a = o0(wt = "w"),        b = o0(wt = "w", ref = "1")),        # weighted
     list(d = "gss",  a = o0(col_vars = c("race", "partyid")),
-                     b = o0(col_vars = c("race", "partyid"), ref = "1"))           # multi col_var
+                     b = o0(col_vars = c("race", "partyid"), ref = "1")),          # multi col_var
+    # Phase 19m-i: a RENAMED total column. `grp` holds FINAL (post leaf_rename_totals) names, so
+    # tab_apply_reference()'s old `nm == "Total"` matched nothing here and the odds ratio's 2x2 was
+    # built against the wrong column -- a real defect masked only because po/R-fr.po translates
+    # "Total" -> "Total". The stored `totcol` attribute is the fact; this case is what proves it.
+    list(d = "gssb", a = o0(col_vars = "white", total_names = c("Total", "Ensemble")),
+                     b = o0(col_vars = "white", total_names = c("Total", "Ensemble"),
+                            ref = "1"))                                            # renamed total col
   )
   for (cs in cases) {
     dat <- get(cs$d)

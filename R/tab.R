@@ -2582,7 +2582,7 @@ tab_assemble_tables <- function(ctx) {
   # the intent must be OFF -- else tab_fold_addn_incell() would try to fold into a Total column that
   # does not exist and silently DROP the real `n` column (the <=1.3.1 regression).
   fmt_here        <- purrr::map_lgl(tab, is_fmt)
-  has_real_colvar <- any(fmt_here & get_col_var(tab) != "no_col_var")
+  has_real_colvar <- any(fmt_here & is_real_col_var(get_col_var(tab)))
   # Phase 18m: `common_totrow` collapses a several-row_vars table's redundant per-block Total rows into
   # ONE shared Total shown in its own group (default FALSE = one Total per row_var). `common_totrow_ref`
   # records whether ANY row_var used the total as its reference (ref = "tot"), so the shared Total renders
@@ -3042,8 +3042,7 @@ tab_transpose <- function(tabs, name = NULL) {
 
   # representative REAL col_var level column (not the total column, not the count "all_col_vars"),
   # whose per-column attributes are copied onto every transposed column (they are uniform).
-  real_col_vars <- vars$col_vars[!vars$col_vars %in%
-                                   c("all_col_vars", "", "no", NA_character_)]
+  real_col_vars <- vars$col_vars[is_real_col_var(vars$col_vars)]
   old_col_var <- if (length(real_col_vars) > 0) real_col_vars[[1]] else NA_character_
   rep_name <- fmtc[purrr::map_lgl(tabs[fmtc], ~ identical(get_col_var(.), old_col_var))]
   rep_name <- if (length(rep_name) > 0) rep_name[[1]] else fmtc[[1]]

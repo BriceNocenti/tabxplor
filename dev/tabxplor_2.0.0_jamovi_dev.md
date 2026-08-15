@@ -1544,7 +1544,9 @@ files relied on jmvtools coping with that.
 `dev/generate_jamovi_js.R` rewrites, in place, the block between
 `// --- BEGIN GENERATED … ---` / `// --- END GENERATED ---` in each `jamovi/js/*.js`. It emits the
 family-detection rule + offered families (`REG_OUTCOME_KINDS`), the family labels
-(`REG_FAMILY_UI_LABEL`), the three-state estimand grid (`REG_ESTIMANDS`), the default measure per
+(`REG_FAMILIES$ui` / `$ui_binary`, via `reg_family_ui_labels()` -- Phase 19m-i; `ui = NA` IS "not
+offered in the picker", which this generator used to write a second time as a hardcoded
+`setdiff()`), the three-state estimand grid (`REG_ESTIMANDS`), the default measure per
 (family × effect), `REG_SHAPES`, and the odds-ratio display tokens (`DISPLAY_COMPARISON`).
 `Rscript dev/generate_jamovi_js.R check` fails when a block is stale, and `test-jamovi-vocabulary.R`
 runs it as an assertion. A **marker block, not a second file**: whether jamovi's bundler would

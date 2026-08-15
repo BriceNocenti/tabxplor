@@ -304,7 +304,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
   # pipeline computes contributions solely then (calc = c("ctr","p")), so plain tables are untouched.
   pval_after <- if (do_ctr) purrr::set_names(lapply(fmt_nms, function(nm) get_pvalue(tabs[[nm]])), fmt_nms)
   elig_col  <- purrr::keep(fmt_nms, function(nm) fmt_var_kind(tabs[[nm]]) != "mean" &&
-                             get_col_var(tabs[[nm]]) != "no_col_var")
+                             is_real_col_var(get_col_var(tabs[[nm]])))
   # Phase 18z4: the residual's INFERENCE BASE, read off the total column's grand-total cell (the
   # LAST element of each subtable slice, exactly where var_contrib_ctr_signed reads the weighted N).
   # The effective `n_eff` when the table carries one, else the raw unweighted `n`; the weighted total

@@ -983,7 +983,7 @@ tab_title_rows_first <- function(tabs) {
 # nothing, and never a bare index. Placeholders and empties drop out.
 tab_title_names <- function(x, max = 2) {
   x <- as.character(x)
-  x <- x[!is.na(x) & nzchar(x) & !x %in% c("no_row_var", "no_col_var", "all_col_vars")]
+  x <- x[is_real_col_var(x)]
   if (length(x) == 0) return("")
   if (length(x) <= max) return(paste(x, collapse = ", "))
   paste0(paste(x[seq_len(max)], collapse = ", "), " +", length(x) - max, " more")

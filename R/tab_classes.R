@@ -949,26 +949,40 @@ promote_totrow_to_refrow <- function(col) {
 #     vec_ptype2.tabxplor_fmt reduce vec_rbind would use (L3: differing attr -> neutral) but is
 #     O(#tables x #attrs), not O(#rows) (a ptype is length-0). promote_totrow_to_refrow runs per table
 #     (L4, per subtable) before the field read.
-# Column order = tables[[1]]'s (all tables share columns after the same-col_vars check); row order =
-# tables stacked in list order.
+# Row order = tables stacked in list order. Column order = the UNION, first-table order then each new
+# name where it first appears.
+#
+# Phase 19m-i: the union, and the per-table padding that goes with it. `nms <- names(tables[[1]])`
+# made the declared NESTING rule (TAB_OPS$compact: "every table's col_vars a subset of the widest")
+# depend on LIST ORDER, and neither answer was the rule: narrow-first silently DROPPED the wider
+# table's extra columns, wide-first ERRORED ("Corrupt rcrd: not a list", from `.[[nm]]` returning
+# NULL). A table that simply has fewer columns now contributes NA cells under the ones it lacks --
+# which is what "fewer columns still merges" has always claimed to mean.
 tab_stack_tables <- function(tables) {
-  nms  <- names(tables[[1]])
+  nms  <- unique(unlist(lapply(tables, names)))
+  nrows <- purrr::map_int(tables, nrow)
   cols <- purrr::map(purrr::set_names(nms, nms), function(nm) {
     # unname: the table (list) names would otherwise be taken by vec_c()/vec_ptype_common() as outer
     # names and error on length > 1 vectors ("Can't merge the outer name ...").
     pieces <- unname(purrr::map(tables, ~ .[[nm]]))
-    if (is_fmt(pieces[[1]])) {
-      frames <- purrr::map(pieces, function(col) {
-        col   <- promote_totrow_to_refrow(col)   # L4, per subtable (one in_refrow field write, cheap)
+    have   <- !purrr::map_lgl(pieces, is.null)
+    if (is_fmt(pieces[have][[1]])) {
+      # the ptype comes from the tables that HAVE the column; the others are padded from it, so a
+      # padded block carries the merged column attributes and not a second, invented set.
+      common <- do.call(vctrs::vec_ptype_common, pieces[have])  # L3 reconcile via ptype2, O(#tables)
+      frames <- purrr::map(seq_along(pieces), function(i) {
+        col <- if (have[[i]]) promote_totrow_to_refrow(pieces[[i]]) else
+          vctrs::vec_init(common, nrows[[i]])   # L4, per subtable (one in_refrow field write, cheap)
         # The old imap_dfr / vec_rbind cast each column via vec_cast.tabxplor_fmt.tabxplor_fmt, reading
         # fields through the GETTERS; fmt_data_wn() reproduces that frame (only wn needs materialising).
         fmt_data_wn(col)
       })
-      common <- do.call(vctrs::vec_ptype_common, pieces)   # L3 reconcile via ptype2, O(#tables)
       meta   <- purrr::set_names(
         lapply(fmt_col_attrs, function(a) attr(common, a, exact = TRUE)), fmt_col_attrs)
       fmt_stack_frames(frames, meta)
     } else {
+      pieces <- purrr::map(seq_along(pieces), function(i)
+        if (have[[i]]) pieces[[i]] else vctrs::vec_init(pieces[have][[1]], nrows[[i]]))
       # Phase 18z10: stacking several row_vars puts DIFFERENT variables' levels in one display
       # column, so an `ordered` class on it would claim an order across variables that does not exist
       # -- and vctrs rightly refuses to combine two ordered factors with different level sets (or an
@@ -1256,9 +1270,10 @@ mat_sd_twin <- function(tab) {
 # genuinely differ. This DISPLAY-ONLY step drops the redundant Total rows (keeping the LAST block's) when
 # every block's total renders identically, else keeps them all + one message naming na = "drop". Called
 # as the final step of tab_materialize_extras(), so bold / totblock borders / new_group / references /
-# tooltips all recompute on the collapsed table with zero per-backend code. A single-row_var or a
-# tab_vars table is never compacted, so the guard leaves both untouched (a tab_vars table's per-subtable
-# totals are real, not duplicates).
+# tooltips all recompute on the collapsed table with zero per-backend code. A single-row_var table is
+# never compacted, so the guard leaves it untouched. ⚠ a tab_vars table CAN be compacted since 19f
+# (several row_vars beside tab_vars compose now), which is why the block sweep below keys on the
+# declared variable column and not on the first grouping variable.
 #
 # The comparison unit is the whole TOTAL BLOCK -- the Total row + its trailing add_n base `n` row -- not
 # just the Total row: under pct = "col" the Total row is ALWAYS "100%" and the real base lives in the `n`
@@ -1266,7 +1281,9 @@ mat_sd_twin <- function(tab) {
 #' @keywords internal
 #' @noRd
 tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
-  if (!isTRUE(tab_declared_vars(tab)$compacted)) return(tab)  # single row_var / tab_vars: untouched
+  dv <- tab_declared_vars(tab)
+  if (!isTRUE(dv$compacted)) return(tab)                      # a single row_var: untouched
+  var_col <- dv$var_col                                       # the column naming each row's VARIABLE
   is_tot <- is_totrow(tab)
   tot    <- which(is_tot)
   if (length(tot) < 2L) return(tab)
@@ -1280,8 +1297,12 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   # swept in and survives the collapse. Phase 17c: read the STORED role (seeded/extended in materialise)
   # instead of matching the English row label; the sweep is still gated to the SAME grouping value so it
   # can never cross into the next block.
-  grp_col <- dplyr::group_vars(tab)
-  grp     <- if (length(grp_col) >= 1L && grp_col[1] %in% names(tab)) as.character(tab[[grp_col[1]]]) else
+  # Phase 19m-i: the sweep is gated on the DECLARED variable column, not on `group_vars()[1]`.
+  # tab_compact() groups by `c(merge_tab_vars, "row_var")`, so with tab_vars the first grouping
+  # variable is the TAB_VAR -- the sweep then stopped distinguishing row_var blocks and could absorb
+  # the next variable's summary rows. The shape is reachable since 19f lifted the tab_vars x several
+  # row_vars refusal; `var_col` is the fact, and it is read from the same call the guard above makes.
+  grp <- if (length(var_col) && var_col %in% names(tab)) as.character(tab[[var_col]]) else
     rep(NA_character_, n_row)
   is_summary <- tab_row_roles(tab) %in% c("n", "pct")
 
@@ -1308,7 +1329,19 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
     })), collapse = "\r"),
     character(1))
 
-  if (length(unique(sig)) > 1L) {                          # genuinely different totals -> keep them all
+  # Phase 19m-i: "the SHARED population" is the SUB-population when there are tab_vars -- each
+  # sub-table has its own col_var marginal, so the blocks are compared and collapsed WITHIN a
+  # tab_vars key, never across it. Without tab_vars this is one group and everything below is
+  # byte-identical to what it replaced; with them, comparing globally made the function report
+  # "the variables have different total rows" (blaming na = "drop") on every table whose sub-tables
+  # merely differ from each other -- so `common_totrow` was inert on the shape 19f made possible.
+  tv_key <- if (length(dv$tab_vars))
+    do.call(paste, c(lapply(dv$tab_vars, function(v) as.character(tab[[v]])), sep = "\r")) else
+      rep("", n_row)
+  blk_key   <- vapply(blocks, function(rows) tv_key[[rows[[1]]]], character(1))
+  blk_group <- split(seq_along(blocks), factor(blk_key, levels = unique(blk_key)))
+
+  if (any(vapply(blk_group, function(i) length(unique(sig[i])) > 1L, logical(1)))) {
     cli::cli_inform(
       c("i" = paste0(
         "The variables have different total rows, so every total is shown ",
@@ -1319,7 +1352,8 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
     return(tab)
   }
 
-  drop_rows <- unlist(blocks[-length(blocks)])             # keep the LAST block's total; drop the rest
+  surv_blocks <- vapply(blk_group, function(i) i[[length(i)]], integer(1))  # the LAST of each group
+  drop_rows <- unlist(blocks[setdiff(seq_along(blocks), surv_blocks)])
   keep <- setdiff(seq_len(n_row), drop_rows)
   out  <- tab[keep, ]                                       # global indices -> class/attrs/grouping kept
   # Phase 19f: nothing to re-slice -- each row's kind rides its own cells.
@@ -1329,17 +1363,20 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   # row + its trailing n/row_pct rows) to a distinct blank sentinel in the grouping column and regroup, so
   # the render-time separator (group_indices) sees it. When the total is a reference for some row_var
   # (ref = "tot" -> ref_bold), mark the Total row bold (in_refrow -- the shared bold anchor signal).
-  surv_pos <- match(blocks[[length(blocks)]], keep)
+  surv_pos <- match(unlist(blocks[surv_blocks]), keep)
   surv_pos <- surv_pos[!is.na(surv_pos)]
+  tot_pos  <- match(vapply(blocks[surv_blocks], function(r) r[[1]], integer(1)), keep)
+  tot_pos  <- tot_pos[!is.na(tot_pos)]                     # one surviving Total row per tab_vars group
+  # The blank goes in the VARIABLE column (19m-i, as above); the REGROUP keeps the whole key, which
+  # with tab_vars is (tab_var, row_var) -- blanking the tab_var instead corrupted the sub-table key.
   grp_col  <- dplyr::group_vars(out)
-  if (length(surv_pos) && length(grp_col) >= 1L && grp_col[1] %in% names(out)) {
-    gc <- grp_col[1]
+  if (length(surv_pos) && length(var_col) && var_col %in% names(out)) {
+    gc <- var_col
     if (is.factor(out[[gc]]) && !"" %in% levels(out[[gc]]))
       levels(out[[gc]]) <- c(levels(out[[gc]]), "")
     out[[gc]][surv_pos] <- ""                              # blank row_var -> its own group (Q1)
-    out <- dplyr::group_by(out, dplyr::across(tidyselect::all_of(grp_col)))
+    if (length(grp_col)) out <- dplyr::group_by(out, dplyr::across(tidyselect::all_of(grp_col)))
     if (isTRUE(ref_bold)) {
-      tot_pos <- surv_pos[[1]]                             # first block row = the Total row
       for (nm in fmt_nms) {
         v  <- out[[nm]]
         fr <- vctrs::field(v, "in_refrow"); fr[tot_pos] <- TRUE

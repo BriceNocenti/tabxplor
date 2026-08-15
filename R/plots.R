@@ -378,11 +378,18 @@ reg_plot_fits <- function(x, data = NULL) {
                      predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL, design = NULL,
                      label = gettext("Model"))))
   }
+  # Phase 19m-i: TWO questions, so two messages. "Is this a regression table" is the STORED kind
+  # (tab_is_reg); "does it still carry the recipe to refit from" is `spec$call$fit_spec`. They
+  # diverge on a meta-stripped reg table (test-degraded-attrs.R builds exactly that state), where
+  # the single conflated abort told the user their tab_reg() table was not one.
+  if (!tab_is_reg(x))
+    cli::cli_abort(c("{.arg x} is not a {.fn tab_reg} table.",
+                     "i" = "Pass a {.fn tab_reg} result and its data, or a fitted model."))
   meta <- reg_call(x)
   fs   <- meta$fit_spec
   if (is.null(fs)) {
-    cli::cli_abort(c("{.arg x} is not a {.fn tab_reg} table (no model record).",
-                     "i" = "Pass a {.fn tab_reg} result and its data, or a fitted model."))
+    cli::cli_abort(c("This {.fn tab_reg} table no longer carries its model record.",
+                     "i" = "Rebuild it with {.fn tab_reg}, or pass the fitted model directly."))
   }
   if (is.null(data)) {
     cli::cli_abort(c("{.arg data} is required with a {.fn tab_reg} table.",
@@ -575,6 +582,10 @@ reg_panel_dispersion <- function(ctxs, cols, opts) {
       reg_if_se(d, des)
     }, numeric(1))
     nm <- tryCatch(names(stats::coef(cx$fit)), error = function(e) NULL)
+    # ⚠ Phase 19m-i: a MISSING JOIN KEY, not a guard -- do not promote it to stopifnot(). `nm` and
+    # `se` are two independent reads off an arbitrary user fit (aliased coefficients, survey fits,
+    # polr/multinom layouts), and nothing guarantees they line up. Falling back to "1","2",... is a
+    # degraded but honest panel; aborting on a fit the rest of the plot can draw would be worse.
     tibble::tibble(term = if (length(nm) == length(se)) nm else as.character(seq_along(se)),
                    model_se = se, robust_se = rb, model = cx$label)
   }))
@@ -1149,11 +1160,13 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
 
 # the effect word a regression column's own legend uses (OR / IRR / RR / AME / beta), so the axis title
 # and the footer name the same thing. NA on a cross-table, where the unit word stands alone.
+# Phase 19m-i: the gate is the STORED KIND, not "does it still carry the recipe". The column's own
+# `model_family` / `scale` are what legend_reg_eff_word() reads first, so a meta-stripped reg table
+# keeps its axis word instead of silently losing it -- the same split the legend itself made in 19l.
 #' @keywords internal
 reg_eff_word_of <- function(x, col_nm) {
-  m <- reg_call(x)
-  if (is.null(m) || is.null(x[[col_nm]])) return(NA_character_)
-  legend_reg_eff_word(x[[col_nm]], m)
+  if (!tab_is_reg(x) || is.null(x[[col_nm]])) return(NA_character_)
+  legend_reg_eff_word(x[[col_nm]], reg_call(x))
 }
 
 # The caption: the table's whole footer EXCEPT the colour ladder, which the guide now carries (ruling

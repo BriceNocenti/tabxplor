@@ -1257,7 +1257,7 @@ call-site-by-call-site read; the safe subset (13) is done.
 review); `dev/verify_no_ghost_functions.R` is committed and reports 149 comment sites naming a
 function defined nowhere -- all read once in pass 2, worth re-running after any deletion phase.
 
-#### Phase 19m — Harvest 2: open integration
+#### Phase 19m-i — Harvest 2: open integration 1
 
 **Goal**: **think out of the box.** With rows and columns both self-describing, one vocabulary end to
 end, and one resolution spine, *what becomes possible that was not worth attempting before?*
@@ -1290,6 +1290,100 @@ belongs in a feature phase, not here.
 
 **Verification**: whatever the accepted proposals need.
 
+#### Phase 19m-ii — Harvest 2: open integration 2
+
+**Handed forward BY 19m-i**, measured in that session and deliberately not built. The measurements
+are real; do not re-take them.
+
+**THE structural item, unchanged: `tab_reg()` has no argument boundary.** 19l pass 2's hand-over
+stands verbatim (~550 of its 821 lines are argument resolution, 62 of the package's ~190 user
+messages, ten ad-hoc local closures, two near-identical `purrr::map2()` spec literals). The key is
+**`reg_resolve_args()` + `new_reg_spec()`** — 19i's boundary medicine and 19g's typed-record medicine,
+one layer over. A resolver redesign; it deserves its own session.
+
+**THE `display` grammar — one table, designed in full, not built (19m-i's G5, cut for scope).**
+Six declared vocabularies plus two uncounted literals are six *columns* of one per-token relation:
+`get_num()`'s 22-arm switch (its own comment calls it *"the authoritative display -> underlying-field
+map"*), `tabxplor_display_fields` (12), `tabxplor_display_aliases` (`rr`->`ratio`),
+`DISPLAY_BARE_TOKENS` (8), `DISPLAY_FIELD_SOURCE` (9), `DISPLAY_TOKEN_GEOMETRY` (7),
+`DISPLAY_COMPARISON` (3, in `tab-resolve.R`), plus `c("pct","mean","n","wn")` (the value-cell gate,
+`tab-display.R`) and `c("gof","pvalue","blank")` (the numberless gate — a **genuine two-copy
+duplicate**, `fmt_class.R` and `tab-export-prep.R`).
+
+- The table: **`DISPLAY_TOKENS`**, 23 rows (22 tokens + the `rr` alias), 11 columns — `field`,
+  `settable`, `user`, `bare`, `value_cell`, `numberless`, `geometry`, `comparison`, `source`,
+  `alias`, `doc`. Row order must reproduce today's `tabxplor_display_fields` and
+  `DISPLAY_BARE_TOKENS` order (both reach a user through a message).
+- ⚠ **`OR` / `OR_pct` must NOT become aliases of `or` / `or_pct`** — they are separate arms in
+  `get_num()`, `set_num()` and `format()`, and aliasing them changes what `display_primary()`
+  returns, which `fmt_display_shows()` reads against the RAW display.
+- ⚠ **The hot path stays hand-written.** `get_num()`/`set_num()`/`format()` are ~15 rendering-class
+  masks, not a per-token map, and `display_primary()` is measured in-suite (20x over 1e6 cells).
+  Follow the `fmt_attr_rules` precedent: derive the small vocabularies, keep the switch, and add a
+  build-time `stopifnot()` that its arms equal the table's keys (read the body's string constants).
+  Collation: the assert block goes at the **tail of `R/tab-display.R`** — the first file after
+  `fmt_class.R` where `DISPLAY_TOKENS`, `EST_SCALES`, `MEASURES`, `get_num` and `set_num` are all in
+  scope (the `reg-estimand.R` / `REG_CHECK_FAMILIES` precedent).
+- The payoff is as much documentation as code: **`?fmt`'s `@param display` documents 11 of the 22
+  tokens** (missing `or`, `OR`, `or_pct`, `OR_pct`, `obs`, `resid`, `pvalue`, `coef`, `gof`,
+  `est_ci`, `blank`) and `?tab`'s hand-lists the 12 user fields a second time. Generate both from
+  the table with `#' @eval display_tokens_rd(user_only = )`, on the `reg_measures_rd()` model
+  (`R/reg-estimand.R` + `#' @eval` at `R/tab_reg.R`). Rendered output does not move; only `man/*.Rd`.
+
+**The options cluster (19m-i asked, the maintainer took only the third item).** Measured: 34 seeded
+options, **24 read at exactly one site**, none with zero reads. Two genuine duplications remain:
+
+- **`tabxplor.print = "html"` vs `tabxplor.output_kable = TRUE`** — one user question ("I want html
+  tables in this document") asked twice, and `output_kable` still acts at **build** time (`tab.R`:
+  `if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_html(result))`), so a *display* option
+  changes what `tab()` RETURNS. Fold it into `tabxplor.print` via `tx_getOption`, deprecated.
+- **`tabxplor.tab_kable_tooltips` + `tabxplor.kable_popover`** — two booleans read on adjacent lines
+  = 4 states for a 3-valued question (hover / click / none); `(FALSE, TRUE)` is undefined by the
+  docs. One tri-state, both booleans kept as silent aliases.
+- Reported, not actionable: five options are still named after `tab_kable()`, renamed `tab_html()`
+  in 18g, under three different prefixes (`tab_kable_css` / `tab_kable_tooltips` /
+  `tab_kable_num_font`, plus `kable_popover` and `output_kable`); and
+  `tabxplor.color_style_type` is a documented `\item` for an option that is never seeded and whose
+  only read emits a deprecation warning.
+
+**Carrier migrations (rule 5: each is atomic or harmful — one per session, never half).**
+
+- **`spread_relabel()` welds two facts into one string with an HTML tag** (`tab.R`:
+  `paste0(g, "<br>", get_col_var(...))`), which three sites then sniff (`tab_xl.R` x2 for "this span
+  needs two lines", `fmt_class.R` to strip it) and a fourth restores after escaping
+  (`tab-render-html.R`). No column attribute carries the sub-population today; adding one is 2 lines
+  (`new_fmt()` formal + one `fmt_attr_rules` row) but the two-line span header must then be composed
+  in `tab_col_var_header()`. ⚠ `<br>` has a SECOND producer (`tab_wrap_text(brk = "<br>")`, html path
+  only), and `fmt_class.R`'s strip already cannot tell the two apart.
+- **`emp_tips` is a positional per-row vector** (`tab-export-prep.R`) — **measured NOT reachable**:
+  every row-moving step (`tab_materialize_extras`, incl. `tab_collapse_total_rows`) runs strictly
+  BEFORE the capture, and the only later axis change (the transpose) is gated off at the sole
+  consumer. Its real fragility is elsewhere: the post-`wrap` rekey yields `NA` names silently for any
+  key not in `pre_wrap_names`, and it only runs when `wrap` is non-NULL (the xl backend passes none).
+- **The `"Total"` build-time sentinel family** — mostly MINTING sites where the literal IS the
+  declaration, so lower priority than it looks. 19m-i closed the one real hole (the shared
+  `tab_apply_reference()` re-deriving the total COLUMN, with a caller that passes post-rename names).
+  What remains: `svy_group_map(tot = "Total")` / `svy_var_prop(tot_lab = "Total")` carry the literal
+  as a DEFAULT PARAMETER of the same pre-rename contract.
+
+**The two genuine length guards** (`tab-test-display.R`, `plots.R`) — each is a length-equality
+standing in for a **missing join key** (`meta$dependent` <-> `unique(reg$col)`; `names(coef(fit))`
+<-> the SE vector). 19m-i promoted the other 8 to `stopifnot()` and left these two with a comment
+saying so: a `stopifnot()` here would abort on a legitimately degraded table. The first is
+`reg_resolve_args()`'s territory (the `test` tibble should carry which dependent each `col` is).
+
+**Measured and explained, needing no fix:** on a **`meta`-stripped** reg table the colour legend
+loses the effect word and names the wrong interval ("Katz interval on the log risk-ratio" for a
+Poisson crude column). Root cause: `tab_materialize_extras()` consumes the `test` attribute, and
+`tab_kind()`'s DEGRADED fallback sniffs exactly that — so the materialised table reports
+`kind = "crosstab"` and `legend_specs()` stops asking for a reg word. It is the documented degraded
+contract (`test-degraded-attrs.R`: *"a regression losing `meta` drops its title/effect wording"*),
+and a full table is unaffected. Worth a decision only if the degraded contract is ever tightened.
+
+**Still owed measurements** (19j/19k asked; 19l and 19m-i both deferred): the per-`col_var`
+`agg_chi2()` cost, the reg fit-cache digest path now unreachable for `color = "adjustment"` / any
+`shape`, and 19d's odds-ratio cost on a wide table. Plus the JS syntax gate (needs `V8` as a Suggest
+or a CI-only `node --check`; there is still **no** committed bracket check, contrary to CLAUDE.md).
 
 
 ---

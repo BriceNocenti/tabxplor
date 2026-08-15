@@ -823,6 +823,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp,
         or_compare = or_compare, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
         row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
+        # 19m-i: the leaf MINTS this column a few hundred lines above (`tabs[, "Total" := ...]`), so
+        # here the literal IS the declaration -- which is exactly why it may not live inside the
+        # shared function, whose other caller works on renamed columns.
+        totcol_vector = names(cols) == "Total",
         tabs_totn = if (or_want_ci) tabs_totn else NULL,
         # Phase 18s: the OR colour interval honours the effective base too, so color = "OR"
         # significance/stars on a weighted crosstab widen consistently with the % CI brackets.
@@ -913,7 +917,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   )
   color_1 <- dplyr::case_when(
     color %in% c("", "no")                            ~ "",
-    row_var == "no_row_var" | col_var == "no_col_var" ~ "",
+    is_placeholder_var(row_var) | is_placeholder_var(col_var) ~ "",
     or_compare & pct %in% c("row", "col") & ref != "no" & ref2 != "no" ~ "odds_ratio",
     pct %in% c("row", "col") & ref != "no"            ~ "difference",
     TRUE                                              ~ ""
@@ -1387,6 +1391,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 #' @noRd
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
+                                totcol_vector = names(cols) == "Total",
                                 tabs_totn = NULL, tabs_neff = NULL, conf_level = 0.95, stars = FALSE,
                                 degf = Inf, dichotomise = FALSE) {
   # Phase 9d: the reference arithmetic (diff = cell - ref, ratio = cell / ref, rr / or) runs on a
@@ -1399,6 +1404,15 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
   n  <- nrow(tabs_pct)
   k  <- length(nm)
   P  <- as.matrix(tabs_pct[, nm, with = FALSE]) * 1.0
+  # Phase 19m-i: which column is the TOTAL is a DECLARED fact, the sibling of `totrow_vector` /
+  # `tottab_vector` this function already takes. It used to be re-derived here from the literal
+  # `nm == "Total"` -- the leaf's own pre-rename convention, which holds for the leaf and NOT for the
+  # jamovi re-reference (jmv_tab3_reref passes POST-leaf_rename_totals() names, and was correct only
+  # because po/R-fr.po happens to translate "Total" -> "Total"; with total_names = "Ensemble" the
+  # reference 2x2 was built against the wrong column). The default reproduces the old expression
+  # exactly, so a caller cannot silently regress -- but every caller passes it.
+  is_tot_col <- as.logical(totcol_vector)
+  if (length(is_tot_col) != k) is_tot_col <- rep_len(FALSE, k)
 
   tabs_diff <- data.table::copy(tabs_pct)
   tabs_mean <- data.table::copy(tabs_pct)
@@ -1456,7 +1470,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
     # WARNING: the `na = "keep"` column is excluded from the cumulation. It is appended AFTER the real
     # levels by fct_na_value_to_level(), and "at or below NA" is not a cut point.
     if (ref2 == "cumulative") {
-      lv <- which(!nm %in% c("Total", "NA"))
+      lv <- which(!is_tot_col & nm != "NA")
       Pc <- matrix(NA_real_, n, k)
       if (length(lv) >= 2L) {
         U <- upper.tri(matrix(0, length(lv), length(lv)), diag = TRUE) * 1     # the cumulator
@@ -1479,13 +1493,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
       # Phase 16c: PER-COLUMN reference index. For a BINARY col_var (exactly 2 non-Total level columns)
       # each level's OR is computed against the OTHER level (the two columns are reciprocals, neither is
       # forced to "1", and ref2 is unused). For 3+ levels every column references the single ref2 column
-      # (which then shows OR = 1) -- byte-identical to the former `P / P[, refcols]`. `nm == "Total"` is
-      # the caller's own convention (tab.R below, pre-rename); tab_plain has ONE factor col_var so the
-      # non-Total columns ARE its levels.
+      # (which then shows OR = 1) -- byte-identical to the former `P / P[, refcols]`. tab_plain has ONE
+      # factor col_var, so the non-total columns ARE its levels.
       ridx0   <- diff_index(ref2, row_var = dplyr::pull(tabs_pct, !!row_var),
-                            num_names = nm, pct = "col", is_total = nm == "Total")
+                            num_names = nm, pct = "col", is_total = is_tot_col)
       ok_ref2 <- length(ridx0) != 0 && !is.na(ridx0) && ridx0 >= 1L && ridx0 <= k
-      lv      <- which(nm != "Total")
+      lv      <- which(!is_tot_col)
       binary  <- length(lv) == 2L
       # Phase 19d-tail: `levels = "first"` SHOWS one level against the merged rest, so the reader's
       # col_var is a dichotomy and its odds ratio is the TRUE binary one -- that level against
@@ -1551,7 +1564,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
     refcols <- dplyr::nth(names(cols), diff_index(ref,
                                                   num_names = nm,
                                                   pct       = pct,
-                                                  is_total  = nm == "Total"))
+                                                  is_total  = is_tot_col))
     refcols_vector <- names(cols) == refcols
 
     if (length(refcols) != 0 & !is.na(refcols)) {
@@ -1733,7 +1746,12 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
   # effective one, and it is neither coalesced nor NA'd.
   B <- tot_n * 1.0
   if (!is.null(n_eff)) { ok <- is.finite(n_eff); B[ok] <- n_eff[ok] }
-  X <- B; X[rtona, ] <- NA_real_
+  # Phase 19m-i: whether the reference cell keeps its OWN interval is ONE declared fact
+  # (CI_GEOMS$ref_cell). A `ci = "cell"` interval compares each cell to 0 %, not to a reference, so
+  # the total row's own percentage interval is exactly as descriptive as any other cell's -- this
+  # leaf used to blank it under both kinds, while num_core() blanked it only under a contrast.
+  X <- B
+  if (identical(ci_geom_ref_cell(kind_base, "pct", ci_scale[1]), "na")) X[rtona, ] <- NA_real_
 
   REF <- REF_N <- NULL
   if (identical(kind, "diff_row")) {
@@ -1997,7 +2015,7 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
   # tab_num() callers also land here.
   color <- resolve_color_auto_num(color, ref, ci, row_var, col_vars)
 
-  if (row_var == "no_row_var" | "no_col_var" %in% col_vars) color <- ""
+  if (is_placeholder_var(row_var) | any(is_placeholder_var(col_vars))) color <- ""
 
   # Phase 19c: the FIFTH copy of "a comparison colour needs a reference" -- the measure's own
   # declared `requires["ref"]`. The numeric leaf warns and repairs where tab_resolve_settings()
@@ -2404,10 +2422,12 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           ref_var = if (ci == "diff") tabs[[paste0(v, "_refv")]],
           ref_n   = if (ci == "diff") tabs[[paste0(v, "_refn")]],
           conf_level = conf_level, want_p = want_p, method = inference$method, degf = degf)
-        # A reference row has no CI/test against itself. WARNING: this leaf NAs the RESULTS, where
-        # tab_ci() NAs the BASE -- so a mean CELL reference row keeps its interval here and loses it
-        # there. A real divergence, deliberately left alone (unifying it is a behaviour change).
-        if (ci == "diff") {
+        # A reference row has no CI/test AGAINST ITSELF -- but a `ci = "cell"` interval is not a
+        # comparison, so it keeps its own. Phase 19m-i: that decision is ONE declared fact
+        # (CI_GEOMS$ref_cell), shared with leaf_ci_plain() and tab_ci(); only the MECHANISM stays
+        # local (this leaf NAs the RESULTS, the other two the BASE -- not equivalent on a mean cell).
+        if (identical(ci_geom_ref_cell(if (ci == "diff") "diff" else "cell", "mean", ci_scale[1]),
+                      "na")) {
           res$inf[refrows] <- NA_real_
           res$sup[refrows] <- NA_real_
           res$pvalue[refrows] <- NA_real_
@@ -2475,7 +2495,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # likewise be mis-parsed.
   tabs_var  <-
     data.table::setnames(tabs[, stringi::stri_detect_regex(names(tabs), "_var$") &
-                                names(tabs) != "no_row_var",
+                                !is_placeholder_var(names(tabs)),
                               with = FALSE],
                          function(.x) stringi::stri_replace_first_regex(.x, "_var$" , ""))
 

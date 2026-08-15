@@ -151,8 +151,11 @@ tx_deprecate_inert <- function(dots, fn) {
   # calibration; for those, pass a survey::svydesign as `data` and the option is not consulted.
   # SCOPE: tab() and its leaves only (ruling 1). tab_reg()'s crude Obs_* columns are ALWAYS on the
   # weighted basis, so they always match the Model_* column beside them.
-  # Renamed in Phase 18z16-i (was tabxplor.kish_neff -- never public, and Kish is now only the
-  # degenerate limit of the exact formula, not a rung).
+  # Phase 19m-i: the "renamed from tabxplor.kish_neff" note that stood here is DELETED. Unlike the
+  # three genuine renames (tab_kable_css / export_theme / console_theme, resolved by tx_getOption),
+  # the old name was read NOWHERE -- survey-design.R uses a plain getOption() -- so the claim
+  # described an alias that did not exist. It never shipped (2.0.0-internal), so there is nothing to
+  # alias: the name is simply gone.
   options("tabxplor.design_effect" = FALSE)
 
   # Phase 18z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10

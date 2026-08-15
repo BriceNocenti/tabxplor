@@ -39,6 +39,23 @@ ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
 
+# POPULATED_FIELDS -- Phase 19m-i's mode: a rule change that FILLS cells which were NA, on a declared
+# subset of rows, and must touch nothing else. Per case: which fields may move, and a predicate over
+# the REBUILT table saying which rows are allowed to (every other row must stay bit-identical, and
+# the declared ones must go from NA to finite -- both directions checked).
+#
+# Phase 19m-i (G5): `ci = "cell"` compares each cell to 0 %, not to a reference, so the reference /
+# total row keeps its OWN interval -- which the numeric leaf always did and the factor one did not.
+# `f_ci_cell` is the only golden on the factor side of that divergence.
+POPULATED_FIELDS <- list(
+  f_ci_cell = list(
+    fields = c("ci_inf", "ci_sup"),
+    rows   = function(tab) {
+      j <- names(tab)[vapply(tab, is_fmt, logical(1))][[1]]
+      is_totrow(tab[[j]])
+    })
+)
+
 # Phase 19f (KEY 1) needs TWO modes this script did not have, both declared here.
 #
 # RENAMED_FIELDS -- a field REPLACED by another that says the same thing plus more. `in_totrow`
@@ -148,8 +165,21 @@ for (nm in names(cases)) {
       issues <- c(issues, paste0(nm, " / ", col, ": field(s) REMOVED: ",
                                  paste(setdiff(names(do), names(dn)), collapse = ", ")))
     for (fd in intersect(names(do), names(dn))) {
-      if (!identical(do[[fd]], dn[[fd]]))
-        issues <- c(issues, paste0(nm, " / ", col, " / ", fd, ": field CHANGED"))
+      if (identical(do[[fd]], dn[[fd]])) next
+      # Phase 19m-i's mode: POPULATED FIELD ON A DECLARED ROW SUBSET. A rule change may fill cells
+      # that were NA and must touch nothing else -- "these cells were NA and are now finite, every
+      # other cell is bit-identical". Weaker than bit-identity, far stronger than "it changed".
+      pf <- POPULATED_FIELDS[[nm]]
+      if (!is.null(pf) && fd %in% pf$fields) {
+        keep <- !pf$rows(new)                                  # the rows that must NOT move
+        if (identical(do[[fd]][keep], dn[[fd]][keep]) &&
+            all(is.na(do[[fd]][!keep])) && all(!is.na(dn[[fd]][!keep]))) next
+        issues <- c(issues, paste0(nm, " / ", col, " / ", fd,
+                                   ": NOT the declared populate (other cells moved, or the ",
+                                   "declared rows were not NA -> finite)"))
+        next
+      }
+      issues <- c(issues, paste0(nm, " / ", col, " / ", fd, ": field CHANGED"))
     }
     for (fd in setdiff(names(dn), names(do))) {
       if (!all(is.na(dn[[fd]]) | identical(dn[[fd]], FALSE)))

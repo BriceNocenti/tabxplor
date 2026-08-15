@@ -96,7 +96,9 @@ tab_deprecate_many <- function(chi2 = NULL, totrow = NULL, totcol = NULL, compac
   }
   # A total row is always computed and exactly one total column is shown; both are cosmetic.
   if (!is.null(totrow) || !is.null(totcol)) {
-    ok_totcol <- c("last", "each", "all_col_vars", "no")
+    # 19m-i: the DECLARED vocabulary (TAB_ARG_VALUES, R/tab-resolve.R). This copy had lost "",
+    # which tab() and the classifier both accept.
+    ok_totcol <- TAB_ARG_VALUES$totcol$values
     if (!is.null(totcol) && !as.character(totcol)[1] %in% ok_totcol)
       cli::cli_abort(c("Unknown {.arg totcol} value {.val {as.character(totcol)[1]}}.",
                        "i" = "Valid: {.val {ok_totcol}} -- and {.fn tab} spells it {.arg tot}."))

@@ -397,8 +397,17 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       nm  <- names(fmt_cols)[k]
       j   <- fmt_cols[[k]]
       a   <- rd$ann[[nm]]
-      ts  <- if (!is.null(a$text_slot)) a$text_slot else integer(nrow(cell_data))
-      bs  <- if (!is.null(a$bg_slot))   a$bg_slot   else integer(nrow(cell_data))
+      # Phase 19m-i: this site had the `is.null` half of the guard and NOT the length half its two
+      # html siblings carry -- a short slot vector indexed past its end yields NA, which
+      # md_span_attr() -> tx_slot_class() absorbs into "", i.e. silently uncoloured cells rather
+      # than an error. Absent stays a real state (the neutral); short is now a producer bug.
+      slot <- function(v) {
+        if (is.null(v)) return(integer(nrow(cell_data)))
+        stopifnot(length(v) == nrow(cell_data))
+        v
+      }
+      ts  <- slot(a$text_slot)
+      bs  <- slot(a$bg_slot)
       attr_mat[, j] <- vapply(seq_len(nrow(cell_data)),
                               function(i) md_span_attr(ts[i], bs[i]),
                               character(1))

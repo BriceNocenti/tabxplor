@@ -334,8 +334,7 @@ fmt <- function(n         = integer(),
                 scale     = "level_n",
 
                 digits    = rep(0L      , length(n)),
-                display   = switch(est_var_kind(scale[1]),
-                                   mean = "mean", pct = "pct", "n"),
+                display   = est_default_display(scale[1]),   # 19m-i: ONE declared rule (EST_SCALES)
 
                 wn        = rep(NA_real_, length(n)),
                 pct       = rep(NA_real_, length(n)),
@@ -1731,17 +1730,17 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 EST_SCALES <- list(
   odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "or",    unit = "or",
+                    est_field = "or",    unit = "or",    default_display = "pct",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "ratio",
+                    est_field = "ratio", unit = "ratio", default_display = "pct",
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "rate_ratio",
+                    est_field = "ratio", unit = "rate_ratio", default_display = "mean",
                     break_key = "mean_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
@@ -1751,14 +1750,14 @@ EST_SCALES <- list(
   # knows which of the two it is building.
   raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units",
+                    est_field = "diff",  unit = "units", default_display = "n",
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
                     label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
   # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
   mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units",
+                    est_field = "diff",  unit = "units", default_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
   # measure = "log" (was exponentiate = FALSE): printed on the link scale, coloured on the logged
@@ -1766,12 +1765,12 @@ EST_SCALES <- list(
   # `is_logcoef && measure == "diff"` test that used to sit in fmt_color_plan().
   log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "log",
+                    est_field = "diff",  unit = "log",   default_display = "n",
                     break_key = "odds_ratio", gap_key = "adj_diff_log",
                     label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "diff",  unit = "points",
+                    est_field = "diff",  unit = "points", default_display = "pct",
                     break_key = "pct_diff",   gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
@@ -1782,17 +1781,17 @@ EST_SCALES <- list(
   # est_field is `pct`, and the code documented the fudge.
   level_pct  = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "pct",   unit = "pct",
+                    est_field = "pct",   unit = "pct",   default_display = "pct",
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "mean",  unit = "units",
+                    est_field = "mean",  unit = "units", default_display = "mean",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "n",     unit = "count",
+                    est_field = "n",     unit = "count", default_display = "n",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
@@ -1801,7 +1800,7 @@ EST_SCALES <- list(
   # fact to test instead of a magic string.
   mixed      = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "pct",   unit = "pct",
+                    est_field = "pct",   unit = "pct",   default_display = "n",
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL)
 )
@@ -1809,9 +1808,18 @@ EST_SCALES <- list(
 # The declared vocabularies, derived from the library so an allow-list cannot drift from it.
 #' @keywords internal
 EST_SCALE_KEYS <- names(EST_SCALES)
-# One scale KEY's var_kind (new_fmt() reads it for the `display` default, before any column exists).
+# One scale KEY's var_kind (read before any column exists).
 #' @keywords internal
 est_var_kind <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$var_kind
+# THE `display` default of a scale. Phase 19m-i: it was a rule written TWICE -- fmt()'s formal default
+# and new_fmt()'s `if (is.null(display))` block -- and the two DISAGREED for the bind neutral
+# (`mixed`): "pct" vs "n". new_fmt()'s "n" is the deliberate answer (a neutral claims no percentage)
+# and is the one declared on the row. Every other scale is unchanged.
+# WARNING: `odds_ratio` / `pct_ratio` / `points` default to "pct" and NOT to their own `est_field`.
+# That is today's behaviour, declared as it stands: changing it is a user-visible decision on an
+# exported constructor, not a refactor. Noted rather than quietly "improved".
+#' @keywords internal
+est_default_display <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$default_display
 #' @keywords internal
 PCT_BASES <- c("row", "col", "all", "all_tabs", "none")
 
@@ -2027,10 +2035,7 @@ new_fmt <- function(n         = integer(),
   size <- length(n)
   nas  <- rep(NA_real_, size)
   fls  <- rep(FALSE   , size)
-  if (is.null(display)) {
-    display <- if (identical(scale[1], "mixed")) "n"
-               else switch(est_var_kind(scale[1]), pct = "pct", mean = "mean", "n")
-  }
+  if (is.null(display)) display <- est_default_display(scale[1])  # 19m-i: ONE declared rule
   if (is.null(digits)) digits <- rep(0L, size)
   if (is.null(wn    )) wn     <- nas
   if (is.null(pct   )) pct    <- nas
@@ -2090,6 +2095,40 @@ fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "rat
 # reconstructors below (through fmt_attr_rules) and tab-test-display.R. `color` is carried WHOLE
 # (length 1 or 2).
 fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))
+
+
+# The values a `col_var` attribute takes that are NOT a variable name -- the build's placeholders:
+#   "no_col_var" / "no_row_var"  the synthetic single-level factor tab() injects when an axis is
+#                                absent (tab.R, tab_prepare); "all_col_vars" the tag of a column that
+#                                belongs to no col_var (the legacy grand total); "" / "no" / NA the
+#                                empty spellings, incl. the helper columns add_n / add_pct build.
+# `no_col_var` in particular is NOT a real variable name -- rendering it as a spanning col_var header,
+# or reporting it from tab_shape(), is noise (Phase 14p).
+#
+# Phase 19m-i: ONE declaration. Eight hand-written filters spelled between two and six of these six,
+# and exactly one spelled them all; the exported tab_shape() spelled two, so it reported the internal
+# sentinel "no_col_var" as if it were a column variable.
+#
+# TWO predicates, deliberately distinct -- they answer two questions on the same strings:
+#   is_real_col_var(x)     of a STORED col_var attribute: "does this name a column variable?"
+#   is_placeholder_var(nm) of a build-time VARIABLE NAME (a symbol, before any column exists)
+# and a THIRD question is NOT folded in: `detect_totcols()` reads `col_var == "no_col_var"` beside
+# the stored `is_totcol()` flag, which asks "is this the total column" -- a different fact that
+# happens to share a spelling. Nor is `quo_miss_na_null_empty_no()` (tab.R), which tests a DEPARSED
+# user expression, not an attribute.
+#' @keywords internal
+#' @noRd
+TAB_PLACEHOLDER_COL_VARS <- c("all_col_vars", "no_col_var", "no_row_var", "", "no", NA_character_)
+
+#' @keywords internal
+#' @noRd
+is_real_col_var <- function(x) !is.na(x) & !x %in% TAB_PLACEHOLDER_COL_VARS
+
+# ⚠ as.character(): the build passes VARIABLE NAMES as rlang symbols as often as as strings, and
+# `sym == "x"` coerces while `sym %in% "x"` errors ("'match' requires vector arguments").
+#' @keywords internal
+#' @noRd
+is_placeholder_var <- function(nm) as.character(nm) %in% c("no_row_var", "no_col_var")
 
 
 # ==============================================================================================
@@ -2719,7 +2758,10 @@ detect_totcols <- function(tabs) {
   # Total columns are identified by the `totcol` attribute (is_totcol) / the "no_col_var"
   # col_var — robust, not by hard-coded position. Each column is then mapped to the first
   # such total column at or after its own position.
-  tot <- which(is_totcol(tabs) | get_col_var(tabs) == "no_col_var")
+  # ⚠ Phase 19m-i: this "no_col_var" is NOT the placeholder question (is_real_col_var) and must not
+  # be folded into it. A table with no col_var has a single value column that BEHAVES as its own
+  # total, which is a statement about totals, not about whether the name is a variable.
+  tot <- which(is_totcol(tabs) | get_col_var(tabs) %in% "no_col_var")
 
   purrr::map(1:ncol(tabs), function(.i)
     tidyr::replace_na(names(tot[tot >= .i])[1], "")) |>
@@ -4817,9 +4859,19 @@ legend_reg_eff_word <- function(col, meta) {
   if (identical(get_scale(col), "odds_ratio")) {
     if (!identical(get_role(col), "emp") && !is.null(est$word) && est$word %in% c("RR", "IRR", "OR"))
       return(est$word)
-    # a CRUDE companion carries the model's family attribute, so its own scale names it
-    return(switch(fam, "poisson" = , "quasipoisson" = "IRR", "rr" = "RR",
-                  if (identical(est$word, "RR")) "RR" else "OR"))
+    # A CRUDE companion is on the crude scale of the FIT, which is not always the estimand's:
+    # a Poisson model asked for a marginal risk ratio still has a crude RATE ratio beside it, because
+    # its link makes exp(coef) a rate ratio. So the fit's own multiplicative word wins WHERE THE LINK
+    # MAKES ONE -- i.e. where it is something other than the odds ratio a logit would give anyway;
+    # a binomial fit (logit) has no such claim, and its crude column follows the estimand (a marginal
+    # RR beside a logistic model is legended RR, not OR).
+    # Phase 19m-i: reg_family_mult_word() is that lookup, DERIVED from REG_ESTIMANDS' own
+    # exponentiated coefficient row (R/reg-estimand.R). It replaces a `switch(fam, ...)` naming
+    # poisson / quasipoisson / rr by hand, whose default answered "OR" for every family it did not
+    # list -- including `rd` and `mr`, added a phase after it was written.
+    w <- reg_family_mult_word(fam)
+    if (!is.na(w) && !identical(w, "OR")) return(w)
+    return(if (identical(est$word, "RR")) "RR" else "OR")
   }
   if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
     if (!is.null(est$word) && est$word %in% c("AME", "MER", "RoM", "RD")) return(est$word)
@@ -4915,15 +4967,31 @@ CI_METHOD_LABELS <- list(
   ac           = function() gettext("Wald interval with Agresti-Caffo adjustment"),
   welch        = function() gettext("Welch t interval"),
   student      = function() gettext("Student t interval"),
-  # katz is handled in legend_method_name() too: on counts it is a RATE ratio. This row is the
-  # proportion default, kept so a lookup never falls through to the generic phrase.
-  katz         = function() gettext("Katz interval on the log risk-ratio"),
   woolf        = function() gettext("Wald interval on the log odds-ratio"),
   robust       = function() gettext("robust-Poisson (delta) interval"),
   quasipoisson = function() gettext("quasi-Poisson interval"),
   poisson      = function() gettext("Poisson interval"),
   profile      = function() gettext("profile-likelihood interval")
-  # `wald_log` is handled in legend_method_name(): its label needs the effect word.
+  # `katz` and `wald_log` live in CI_METHOD_WORDED below: their label needs the effect word.
+)
+
+# CI_METHOD_WORDED -- the engines whose LABEL needs a second fact. An OR, an IRR and an RR are the
+# same interval on the same log scale, and only the effect WORD tells them apart (14c: naming it
+# "log odds-ratio" unconditionally called a Poisson rate ratio an odds ratio). `woolf` needs none --
+# a 2x2 log-OR is an odds ratio by construction -- and neither does any additive method.
+#
+# Phase 19m-i: one table, same shape as CI_METHOD_LABELS, read by the same lookup. Before, the two
+# engines were TWO hand-written `switch(w, ...)` blocks inside legend_method_name(); `katz` also had
+# a CI_METHOD_LABELS row that was intercepted before it could ever be read, so the msgid
+# "Katz interval on the log risk-ratio" was written TWICE and `wald_log` had no row at all.
+#' @keywords internal
+CI_METHOD_WORDED <- list(
+  katz = list(IRR      = function() gettext("Katz interval on the log rate-ratio"),
+              .default = function() gettext("Katz interval on the log risk-ratio")),
+  wald_log = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
+                  OR       = function() gettext("Wald interval on the log odds-ratio"),
+                  RR       = function() gettext("Wald interval on the log risk-ratio"),
+                  .default = function() gettext("Wald interval on the log scale"))
 )
 # Phase 19l: the `if (FALSE) c(gettext(...))` anchor that used to sit here is DELETED. It predates
 # the closures above: potools extracts by STATIC analysis, and a literal gettext() INSIDE a closure
@@ -4950,20 +5018,12 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   # claim a method the bounds were never built with. Now: one lookup in a declared table.
   m <- spec$ci_method
   if (is.null(m) || is.na(m) || !nzchar(m)) return(NA_character_)
-  # Two labels need a second fact: an OR, an IRR and an RR are the same interval on the same log
-  # scale, and only the effect WORD tells them apart (14c: naming it "log odds-ratio" unconditionally
-  # called a Poisson rate ratio an odds ratio). `woolf` needs none -- a 2x2 log-OR is an odds ratio by
-  # construction -- and neither does any additive method.
-  if (m %in% c("wald_log", "katz")) {
+  # Phase 19m-i: the two effect-word-dependent engines are ONE declared table (CI_METHOD_WORDED),
+  # read by the same lookup as every other engine -- they were two hand-written switch() blocks.
+  wd <- CI_METHOD_WORDED[[m]]
+  if (!is.null(wd)) {
     w <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
-    if (identical(m, "katz"))
-      return(switch(w, "IRR" = gettext("Katz interval on the log rate-ratio"),
-                    gettext("Katz interval on the log risk-ratio")))
-    return(switch(w,
-                  "IRR" = gettext("Wald interval on the log rate-ratio"),
-                  "OR"  = gettext("Wald interval on the log odds-ratio"),
-                  "RR"  = gettext("Wald interval on the log risk-ratio"),
-                  gettext("Wald interval on the log scale")))
+    return((wd[[w]] %||% wd[[".default"]])())
   }
   lab <- CI_METHOD_LABELS[[m]]
   if (is.null(lab)) gettext("confidence interval") else lab()
@@ -5363,7 +5423,7 @@ legend_specs <- function(x, theme = "light") {
   if (!any(keep)) return(list())
 
   col_vars_levels <- tab_get_vars(x)$col_vars_levels
-  col_vars_levels <- col_vars_levels[!names(col_vars_levels) %in% c("all_col_vars", "")]
+  col_vars_levels <- col_vars_levels[is_real_col_var(names(col_vars_levels))]
   kept_names <- names(x)[keep]
 
   # Phase 19l: the KIND is a stored fact (meta$spec$kind, R/table-spec.R) -- ask it, not "does this
