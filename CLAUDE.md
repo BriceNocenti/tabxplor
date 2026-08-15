@@ -3706,30 +3706,145 @@ in FR -- one table, two claims, which is what editing file-by-file does.
 `dev/release_checklist.md`'s branch mechanics. Phase 19o (the Phase 19 assessment) can start on this
 commit.
 
-#### Phase 19o — assesment of what have been done in Phase 19
+#### Phase 19o — assesment of what have been done in Phase 19 and future simplifications
 
-Please, review what have been done in Phase 19 : have the code really been simplified ? Is there more simplifications possible ? Write your findings in a new file in `dev/`.
+**DONE (2026-08-15).** Analysis only — **no source file was touched**. The report is
+**`dev/tabxplor_phase19_assessment.md`** (893 lines); everything numeric in it was re-measured on
+this tree or on the named commit (`git ls-tree | git show` per phase), never copied from a phase
+summary.
+
+**The verdict, both halves true**: Phase 19 delivered the complete explicit model it promised
+(cell / column / row / table + ~15 declared fact tables, ~30 defects closed, several classes made
+*unrepresentable*) — **and grew `R/` by 11.9 %**: 39 586 → 44 278 lines, code +7.2 %, functions
+915 → 1066, exports 84 → 93, `tab()` formals 51 → **52**. Sixteen of the seventeen commits added
+lines; only 19l subtracted (−670).
+
+⚠ **The message diagnostic is corrected.** 19l reported "72 % → 46 % of messages at the argument
+boundary". Split by kind: `cli_abort` **122 → 149**, `cli_warn` **11 → 11**, `cli_inform`
+**37 → 37**. Every added message is an ABORT — so Phase 19 turned silence into refusal (its most
+user-valuable, least visible achievement) and reduced argument *negotiation* by **zero**. Counting
+every file that is a boundary today the share is **61 %**, not 46 %; the 46 % counted only the two
+original files, while the messages moved into files named "resolve".
+
+**The one-line finding: Phase 19 unified how facts are STORED and how rules are DECLARED; it did not
+unify how the package is ASKED.** `tab_counts()` shares **34 of its 40 formals** with `tab()`,
+`tab_plain()` 25/29, `tab_num()` 24/28; `@param color` is written 15× in `R/`; 9 of `tab()`'s 52
+formals are deprecated arguments still in the signature.
+
+**Six keys proposed** (§5 of the report, ordered by value ÷ effort): **α** the argument surface as
+data (`TAB_ARGS` + generated `@param` + `...` on the three superseded producers) · **β** build-time
+FOREIGN KEYS between the fact tables — ~14 cross-table keys, only 2 checked, both added *reactively*
+after one had already dangled in a shipped commit (19d's rename broke `EST_SCALES$label_meas`, and
+the fix shipped a `WARNING:` comment telling the next person to remember: hard rule 4 one level up)
+· **γ** `reg_build` still has no staged build (534 deparsed lines, THE largest function, 7 local
+closures vs 3 in the whole factor leaf, 11 unnamed phases — which is why 20f has nowhere to attach)
+· **δ** the footer/`test` subsystem is the last one with no model · **ε** six questions still asked
+twice across producers (`tab_vars`/`split_var`, `ci_method`/`method`, opposite `color` and
+`color_signif` defaults, `test` vs `stats`+`compare`+`baseline`) · **η** no single statement of the
+model.
+
+⚠ **Phase 20e is root-caused, and it is not a cache or jamovi problem.** `effect = "marginal"`
+takes **15.3 s** against 1.06 s for coefficients; `Rprof` puts **85 % in
+`marginaleffects::get_jacobian`**. `avg_comparisons(vcov = FALSE)` is **7× faster with identical
+estimates**, and tabxplor **already owns the exact analytic SE** for that quantity
+(`reg_ame_if_maker()`, pinned to marginaleffects to 10 decimals, currently used only for the gap
+test). **Do this before 20f** — parallelising a 15 s call whose 13 s is avoidable optimises the
+wrong thing.
+
+Also reported: the white-elephant list (`R/tab-steps-legacy.R` = 1433 L with **zero callers in
+`R/`**; the 9 deprecated formals; a dead `auto_or` pinned to `FALSE` and its now-unreachable
+`"or_table"` context; 6 exported setters with zero test callers; 6 documented-but-never-seeded
+options), one live doc defect (**both reg vignettes still say "`tab_reg()` has no `display`
+argument"** — 19e gave it one and 19n fixed only `?tab`), §8's direct answers to 20a–20f, a
+sequencing table, and §11's **8 questions needing a maintainer ruling** before any of it starts.
+Two proposals are marked ALREADY RULED ON so they are not re-issued (the `tab_kable_*` renames,
+dropped in 19m-iii; and the tension between deprecating the step *API* and Phase 19's
+anti-proposition about the step *computation*).
+
+#### Phase 19p — API review
+
+**DONE (2026-08-15).** Analysis only — **no source file was touched**. The report is
+**`dev/tabxplor_phase19p_api_review.md`** (757 lines); every figure was measured on this tree or on
+the named git object, never copied from a phase summary. It is the review of *the ask*, where 19o
+was the review of *what Phase 19 stored*.
+
+**The one-line finding, sharper than 19o's**: *every remaining duplication in the public surface is
+the same shape — a fact is declared once in an R table, and re-typed by hand in the place a user
+meets it* (a formal, a `@param` block, an option name, an accessor). The package has solved that
+problem four times already (`fmt_fields_rd()` · `display_tokens_rd()` ×2 · `reg_measures_rd()`) and
+has not applied the solution to the surface.
+
+**Measured**: formals `tab()` **52** / `tab_counts()` **40** / `tab_plain()` **29** / `tab_reg()`
+**29** / `tab_num()` **28**, of which **83 of the 149 crosstab formals are the same argument written
+a 2nd–4th time** (34 / 25 / 24 shared with `tab()`) · `man/` **8 930** lines, arguments **58 %** of
+`?tab` and **63 %** of `?tab_reg` · **93 exports** (`v1.2.0` = 59; +40 / −6 since; 24 new in the
+2.0.0 line; 52 named in no vignette) · **35 documented options, 34 seeded** · **~23 accessors over
+16 declared column attributes, with 6 asymmetries and 1 misnaming**.
+
+**Four keys** (lettered so they do not collide with 19o's α–η): **A** the accessor family is the
+last hand-written mirror of `fmt_col_attrs` (→ one generic `fmt_attr()` pair + `tab_columns()`;
+`set_diff_type` → `set_ref_type`; the three missing inference getters) · **B** THE RULE, *three
+tiers* — per-call argument / per-session **bundle constructor + one option** / internal knob, with
+`tab_inference(ci_method, design_effect, anova, model)` as the instance and the tier split taken
+from measured corpus frequency, not taste · **C** ~15 arguments have their value list declared in an
+R fact table and re-typed in roxygen (19o's KEY β one level up; `color_measures_rd()` is the big
+one) · **D** the superseded producers take `...`.
+
+**Rulings taken this session** (recorded so they are not re-opened): bundles for the **rare**
+clusters only, everyday arguments stay flat · `tab_reg(reference=)` → `ref =` absorbing
+`inverse_two_level_factors`, `tab(ref/ref2)` unchanged · **`tab_logit()` and `multi_logit()` are
+deleted** (523 Rd lines, 0 vignette uses, and their ~20-formal mirror is a *capability hole* —
+`effect = "marginal"`, `measure = "ratio"`, `compare`, `baseline` are unreachable through them) ·
+`tabxplor.stars` absorbs `signif_levels`+`signif_labels` **and becomes a per-call ladder** ·
+new `options(tabxplor.total_names = c(row=, col=, tab=, other=))` (the three label defaults are
+hard-coded in five signatures, in two languages, with no option twin — a real gap for the package's
+French audience) · **declined**: folding `kable_popover`/`legend_style`, deprecating
+`tabxplor.output_kable`, renaming the `xl_font_*` family.
+
+**⚠ Three corrections to 19o, measured.** (i) **`@inheritDotParams` INLINES the parent's `@param`
+blocks** — `tab_many()` already has `...` *and* that tag and its `.Rd` is **448 lines**, so KEY α's
+"448 → ~60 by adding `...`" is wrong; the mechanism is a plain `@param ... Passed to [tab()].` plus
+a dots validator, and switching that one tag is a −390 Rd line change. (ii) The option census was
+over-counted (aliases + prose artifacts): **35 documented / 34 seeded / exactly ONE
+documented-but-never-seeded** (`tabxplor.color_style_type`), not "39 / 33 / 6". (iii)
+**`tabxplor.totcol_range` is neither seeded nor read** — both lines are commented out — so it needs
+no action at all.
+
+**Estimated effect, summed per file rather than rounded**: `man/` 8 930 → **~7 300 (−18 %)** ·
+exports 93 → 89 · `tab()` 52 → **34 named + `...`** · `tab_reg()` 29 → **23 named + `...`** ·
+options 35 → ~31 · 83 mirrored formals → ~10.
+
+**Also in the report**: what must NOT change and why (no sparse record; `row_kind`/`in_tottab`/
+`in_refrow` stay fields because `fmt_color_plan()` asks them of a lone column; the four inference
+attributes stay four scalars because their merge rules differ and the index-vector reconcile is what
+made `vec_ptype2` 2× faster) · the answer to the `conf_level` question (**the storage is done; what
+is missing is the reading** — the legend names the level and the method but not the `degf` or the
+`basis`, the last stored Phase 19 fact surfaced nowhere) · the `var` field's declared overload
+(keep, state the rule not the cases) · the delete/deprecate list **with each item's released status
+checked against `git show v1.2.0:NAMESPACE`** (five of 19o's cut candidates are CRAN-released and
+need deprecation, not deletion) · a 10-row sequencing table naming two harnesses to commit
+(`dev/verify_tab_args.R`, the export-usage census) · and **six open questions** for a maintainer
+ruling before any of it starts (`tab_style()` for the exporters' 28-formal mirror · `new_lvl`/
+`is_lvl` · `tab_prepare()` · `pct`'s `"no"` default on the argument used 1 129 times · when
+`TEST_ROWS` lands · whether `fmt_attr()` may sit beside the named accessors).
+
+⚠ Two measurement traps found while writing it, both of which produced wrong censuses first:
+run every `sort`/`comm`/`uniq` census under **`LC_ALL=C`** (fr collation does not group identifiers
+containing `_`/`.`), and **never use `grep -w` on a pattern ending in `(`** (it reported nine live
+exports as having zero callers).
+
+#### Phase 19q — next phases of simplication
+
+From the two documents made in Phase 19o and Phase 19b, create a new plan of plans for Phase 20 in a new .md file in `dev/`. The current Phase 20 draft below would be improved and included. 
 
 ---
 
 
 
 
-### Phase 20 — reviews and further simplification before release
+### Phase 20 — further simplification before release
 
-#### Phase 20a — Review of vctrs fields, column attributes and table attributes
-- Giving the new framework, is there room for further simplifications and integration ? 
-- Now that conf_level has become a column-level attribute, is there additional ways to simplify and integrate the code around it ?
 
-#### Phase 20b — Review of exported functions
-- Among the new exported functions, which one are not really necessary and should not be exported (the package would be clearer and more direct without them than with them) ?
-- Among the old exported programming functions, which ones are not really necessary and should be deprecated ?
-
-#### Phase 20c — Review of all main user-facing functions arguments and global options
-- What should stay an argument, and what would be more user-friendly as a global option ? What is a global option, and would be more user-friendly as an argument (or both, an argument that default to a global option) ? What arguments should be better integrated between `tab`, `tab_reg`, etc. for clarity and consistency ? 
-- There are too many global options to teach to users, and many are new : if want to clean this before release. What could we remove ?
-- `tab` and `tab_reg` have too many arguments, specially in their roxygen documentation. Are there good candidates for removal ? Are there arguments that we could `...` on main user-facing functions so that their documentation goes to an exported subfunction, to reduce the number of arguments in their documentation ? Are there arguments that we could group together, with a concise text refering to a specific documentation file  (or to a specific part of a vignette) for some subsystems ? 
-- Give special attention to new arguments on 2.0.0, specially the new user-facing functions like `tab_reg()`, were change is free until release (and costly afterwards). 
 
 #### Phase 20d — Jamovi UIs updates
 Jamovi UIs have not been updated for a long time : add new arguments that are not in the current version of `jmvtab` and `jmvtabreg`, remove deprecated ones, etc. AskUserQuestion me when you have a doubt about what to add and what to remove.
