@@ -34,7 +34,13 @@ R/
 │                              "unknown" forward) vs get_conf_level (resolved, option fallback); stamped by
 │                              ONE tab_stamp_conf_level() sweep per build tail) (17a: moved here
 │                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
-│                              format/pillar methods, vctrs arithmetic/casting,
+│                              format/pillar methods, vctrs arithmetic/casting;
+│                              get_num()/set_num() (the read + write display maps -- 19m-iii: their
+│                              vocabulary is R/tab-display.R's DISPLAY_TOKENS, which asserts at BUILD
+│                              time that the two agree with it and with each other, after set_num
+│                              was found to be MISSING pct_ci/mean_ci/pvalue -> vec_arith wrote
+│                              nothing at all on those columns; tabxplor_display_fields and
+│                              tabxplor_display_aliases moved there too),
 │                              color engine (measure_facts = THE MEASURES accessor, folds a row's `guar`
 │                              per-policy override [z4: contrib only] + defaults its `bounds` [z8];
 │                              per-policy `guar` override + (z13) its per-SCALE `by_scale` one, folded from
@@ -564,6 +570,9 @@ R/
 │                              c("auto","no","cell","ref") anchor + its soft-deprecations);
 │                              resolve_leaf_ci() = the SAME rules for a leaf called directly AND for
 │                              the jamovi boundary (jmvtab_build's 2 hand-mirrored ci rules are gone);
+│                              display_comparison() (19m-iii: the MAPPING it reads is DISPLAY_TOKENS'
+│                              `comparison` column now -- DISPLAY_COMPARISON was the only one of the
+│                              eight display vocabularies living in a third file);
 │                              measure_geometry() = which of the 3 geometries owns the stored interval
 │                              ("or"/"ratio"/"diff"), shared with the jmvtab tier-3 cache TUPLE so the
 │                              cache and the pipeline cannot disagree (a diff<->ratio toggle changes
@@ -596,12 +605,44 @@ R/
 │                              ctr/var/pvalue) + the plain-vector contribution helpers. TWO callers,
 │                              ONE implementation: the leaf (leaf_chi2/leaf_chi2_num) and the
 │                              superseded tab_chi2() step -- so a step and a build cannot differ.
-├── tab-display.R    (~550 L) Phase 19l: THE DISPLAY GRAMMAR -- tab_apply_display(),
+├── tab-display.R    (~810 L) Phase 19l: THE DISPLAY GRAMMAR -- tab_apply_display(),
 │                              display_write_col() (THE per-column template writer, shared by
-│                              build-time tab(display=) and post-hoc set_display()), the three
-│                              DISPLAY_* vocabularies, D22's per-cell void + D23's geometry refusal,
-│                              and the add_n/add_pct materialisation (tab_add_n_pct,
-│                              tab_fold_addn_incell, tab_or_total_col, tab_apply_n_min).
+│                              build-time tab(display=) and post-hoc set_display()), D22's per-cell
+│                              void + D23's geometry refusal, and the add_n/add_pct materialisation
+│                              (tab_add_n_pct, tab_fold_addn_incell, tab_or_total_col,
+│                              tab_apply_n_min).
+│                              19m-iii: **DISPLAY_TOKENS** = THE per-token relation, 23 rows (22
+│                              tokens + the `rr` alias) x 12 declared columns, absorbing the EIGHT
+│                              vocabularies that stated one fact each in four files -- get_num()'s
+│                              read map + set_num()'s write map + tabxplor_display_fields (12) +
+│                              tabxplor_display_aliases (both OUT of fmt_class.R) + DISPLAY_BARE_TOKENS
+│                              + DISPLAY_FIELD_SOURCE + DISPLAY_TOKEN_GEOMETRY + DISPLAY_COMPARISON
+│                              (out of tab-resolve.R) + the inline value-cell gate + the footer gate
+│                              (written TWICE, with two near-miss variants). Every one of those names
+│                              SURVIVES, DERIVED from a column and keeping its contents AND ORDER
+│                              (rows 1-12 are the user fields in the order the "Valid fields" abort
+│                              prints them; rows 1-8 are additionally the bare tokens), so no consumer
+│                              moved. `footer` and `colour` are TWO columns, not one "numberless":
+│                              `pvalue` is a footer statistic that IS coloured (a significance
+│                              warning), which is exactly the disagreement the four hand-written
+│                              copies encoded three different ways.
+│                              ⚠ `OR`/`OR_pct` are ROWS, not aliases of `or`/`or_pct` -- they render
+│                              identically, but display_primary() returns a display VERBATIM and
+│                              fmt_display_shows() compares against that raw value.
+│                              ⚠ THE HOT PATH STAYS HAND-WRITTEN (the fmt_attr_rules precedent):
+│                              get_num()/set_num() are vectorised mask writes, format() is ~15
+│                              rendering-class masks crossed with the stored `scale`. Instead, a
+│                              build-time **stopifnot() at the file's TAIL** (where fmt_class.R's two
+│                              switches and this table are all in scope -- fmt_class.R sorts FIRST)
+│                              walks display_switch_tokens(get_num/set_num) for their string
+│                              constants and ties the three together BOTH ways. That is what caught
+│                              the phase's defect (get_num 22 arms vs set_num 17 -> vec_arith wrote
+│                              NOTHING on a pct_ci/mean_ci/pvalue column) and what makes it
+│                              unrepresentable. `resid`/`blank` are the only honest settable=FALSE.
+│                              **display_tokens_rd(user_only=)** = the `#' @eval` generator (the
+│                              reg_measures_rd() precedent) behind ?tab's "Display fields" and ?fmt's
+│                              "Every display token" -- ?fmt hand-listed ELEVEN of the 22 and had
+│                              drifted; ?tab hand-copied a vector from a file 1400 lines away.
 ├── tab-deprecate.R  (~310 L) Phase 19l: tab()'s 1.3.1 -> 2.0.0 translation layer -- tab_many() and
 │                              tab_deprecate_or/_many/_sup_cols/_na_drop_all, grouped so the live
 │                              build path never meets them. Each shim is LOSSLESS or it aborts.
@@ -3376,6 +3417,121 @@ defaults in `survey-variance.R`, the two genuine length guards (one of which —
 — **this phase closed**, so only `plots.R`'s remains, and it cannot be fixed by tabxplor alone), the
 four owed measurements and the JS syntax gate. 19n: `po/R-fr.po` (the four new aborts are
 untranslated), the vignettes, and `?tab_reg`'s argument prose.
+
+---
+
+#### Phase 19m-iii — Harvest 2: the display grammar
+
+**DONE (2026-08-15).** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 6528**, against the inherited
+FAIL 0 / WARN 1 / SKIP 4 / PASS 6461 — the +67 is exactly this phase's own fixture file, and the one
+warning is the same pre-existing Poisson over-dispersion advisory. Both proofs are clean with **EMPTY
+declaration sets**, which is this phase's whole contract: `dev/verify_color_attrs.R` prints
+**IDENTICAL** over its 293 cases against a baseline captured from the pre-phase tree, and
+`dev/verify_golden_field_delta.R` reports **no delta** on any of the **1788 cells of the 36 goldens**
+— no field, no column attribute, no `test` column, no `meta` sub-field. No `_snaps/*.md` and no
+`_golden/` fixture moved; the only `man/` churn is the two generated `display` sections.
+
+**THE LAST SCATTERED VOCABULARY.** The display grammar stated ONE per-token relation as **eight
+separate vocabularies in four files**, none aware of the others: `get_num()`'s read map (22 arms),
+`set_num()`'s write map (**17**), `tabxplor_display_fields` (12), `tabxplor_display_aliases`,
+`DISPLAY_BARE_TOKENS` (8), `DISPLAY_FIELD_SOURCE` (9), `DISPLAY_TOKEN_GEOMETRY` (7),
+`DISPLAY_COMPARISON` (3, in a third file), plus an inline value-cell gate and a footer gate written
+**twice with two near-miss variants**. **`DISPLAY_TOKENS`** (`R/tab-display.R`) is that relation: 23
+rows × 12 columns, details in the Repository Map. Every old name SURVIVES, derived from a column,
+keeping its contents *and its order* — so not one consumer moved, which is what made an empty
+declared delta possible.
+
+⚠ **And the split was already costing correctness.** `get_num()` had 22 arms where `set_num()` had
+17, and `vec_arith` writes through `set_num()` — so **arithmetic on a column displaying `pct_ci`,
+`mean_ci` or `pvalue` silently returned it unchanged** (`x * 2` == `x`, no warning), on a `pct_ci`
+that `?fmt` *documents* and with the README teaching `mutate()` over fmt columns. Measured on HEAD
+before touching anything. Declaring `settable` is what made two switches 50 lines apart comparable;
+the three arms are added, and `resid` (derived from p-value + `sign(ctr)`) and `blank` are now the
+only `settable = FALSE` rows — a stated fact rather than an omission indistinguishable from one.
+
+**The guard is what keeps them honest.** A build-time `stopifnot()` at the **tail of
+`R/tab-display.R`** — the first file where `DISPLAY_TOKENS` and both switches are in scope, since
+`fmt_class.R` sorts first — walks `body(get_num)` / `body(set_num)` for their string constants and
+ties all three together **both ways**: an undeclared arm, an unhandled row and a `settable` token
+with no write arm each fail the install. It was verified to FIRE, not merely to pass. ⚠ Scoped to
+those two only: they are pure per-token maps, so every character constant in them IS a token, which
+is what makes the check two-directional; `format()` is excluded (its body is full of rendering-class
+and unicode constants) with the reason written down. The hot path stays hand-written throughout, the
+`fmt_attr_rules` precedent — `display_primary()`'s in-suite micro-benchmark is unmoved (0.93 s for
+20× on 1e6 cells).
+
+**Why `footer` and `colour` are two columns and not the roadmap's one `numberless`.** The gate was
+written four times with *three* different contents. That is not sloppy copying: `pvalue` never
+carries a star but **is** coloured, deliberately, as a significance warning. Two facts, declared
+separately; the family reads as a rule instead of three exceptions.
+
+**THE DOCUMENTATION IS GENERATED**, on the `reg_measures_rd()` model (`#' @eval`, the package's only
+other one): `?tab` gains *Display fields* and `?fmt` *Every display token*. `?fmt` hand-listed
+**eleven of the twenty-two** and had drifted; `?tab` hand-copied `tabxplor_display_fields` verbatim
+from a file 1400 lines away. A `doc` column carries each token's phrase, so the prose lives with the
+fact.
+
+**THREE RULE-2 REPAIRS.**
+
+- **`R/plots.R`'s dispersion panel** joined `se` to a SECOND, independent read
+  (`names(coef(fit))`) by length coincidence. ⚠ The fix 19m-ii filed (read both from
+  `summary(fit)$coefficients`) would have been **wrong twice**: it drops aliased rows, so `se` would
+  stop indexing the influence closure, and on a quasipoisson its SEs are not `vcov()`'s — the very
+  reason `reg_check_model_se()` reads `vcov()`. The real fix is smaller: `sqrt(diag(vcov(fit)))`
+  **already carries vcov's dimnames**, so `names(se)` is the join key, same provenance, same length
+  by construction. Strictly better on `multinom`, where `coef()` is a matrix (names `NULL`) and the
+  old code fell back to `"1","2",…` while `vcov()` is properly named.
+- **The `"Total"` sentinel.** The roadmap's framing was wrong here too, and the correction is the
+  honest part: `"Total"` is the **leaf's internal pre-rename key**, not a user label — the fourth of
+  the internal names in `tab-leaf.R`'s round-trip DESIGN note, beside `"col_var"` / `"_colvarbis"` /
+  the `"n_"`-`"wn_"` prefixes — and `total_names` is applied only much later, at
+  `leaf_rename_totals()`, so substituting `total_names[1]` in the variance producers would have been
+  a **bug**. The package's own precedent for this class is a literal plus one comment naming them
+  all, so that is what it got; what genuinely went are the `tot = "Total"` / `tot_lab = "Total"`
+  **parameters no caller ever set** — a false promise of configurability, which is what the roadmap
+  actually complained about.
+- **`emp_tips`' rekey** yielded `NA` names silently for a key the wrap rename cannot follow. 19m-i
+  measured the miss unreachable; it now keeps the old name rather than blanking a tooltip.
+
+**THE THREE OWED MEASUREMENTS ARE TAKEN** — `dev/benchmarks/phase19m3_measurements.R`, results at
+`dev/benchmarks/results_2.0.0/phase19m3.txt`. (i) **19j's per-`col_var` `agg_chi2()` costs ~10 ms per
+extra col_var, and it is pure per-call FIXED overhead** — independent of cell count (16 col_vars: 140
+ms at 480 cells, 134 ms at 2400), ~9 % of an 8-col_var build. That is the **price of the
+one-aggregate-core design, quantified**: the leaf runs one `plain_core()` per col_var by
+construction, so re-batching would need the cross-leaf step 19j deleted. (ii) **19k's fit cache**: a
+reference change is 45 ms on the digest path, **396 ms under `color = "adjustment"` (×8.8)** and 108
+ms under `shape` (×2.4) — a real new live-UI cost, since neither was reachable before 19k. (iii)
+**19d's unconditional odds ratio does NOT worsen with width**: `tab_apply_reference()`'s profile
+share over 1/2/4/8 col_vars is 12.5 / 20.0 / 23.1 / 17.5 % — no trend, inside sampling noise — and
+`ci_or` never rises above the floor. 19d's "re-measure wide before release" is answered: nothing to
+do.
+
+**HONEST CONCERNS.**
+
+- **Three of the plan's items were dropped by maintainer ruling and the roadmap is amended to say
+  so**, rather than left proposing them: `tabxplor.output_kable` is **not** to be folded (it keeps
+  its build-time render), the other options folds are dropped, and the `spread_relabel()` `<br>`
+  carrier migration is deferred. The `<br>` design notes are kept, collapsed, in the roadmap.
+- **`set_num()` is still a silent no-op on `resid` and `blank`.** Correct — neither has a field to
+  write — but it is the same *shape* as the defect just fixed. A warning was rejected: `blank` cells
+  are routine (`n_min` masking), so it would fire on ordinary tables. Declared, and filed.
+- **The Rprof shares in measurement (iii) are noisy** — the platform clamps the interval to 10 ms on
+  an 80-420 ms build, and `K = 1` moved 25 % → 12.5 % between two runs. The *trend* is the claim, not
+  the digits; the file says so.
+- **The JS syntax gate was not attempted and cannot be here**: no `V8`, no `node`. ⚠ While filing it
+  I corrected the record — CLAUDE.md and the roadmap both claimed a committed JS bracket check and
+  **there is none**; `tests/` opens no `.js` file, and `test-jamovi-vocabulary.R:100` checks content
+  drift only (and is itself double-skipped). Decision filed to 19n.
+- `jamovi/js/jmvtab.js` regenerated: the **provenance comment only** (`DISPLAY_COMPARISON` moved
+  file); the emitted values are byte-identical and `dev/generate_jamovi_js.R check` is clean. No
+  `.a.yaml` / `.u.yaml` touched, so **no `jmvtools::prepare()` is needed** — 19k's maintainer rebuild
+  + live pass is still the outstanding one.
+- `po/R-fr.po` untouched; nothing here adds a translatable string (the `doc` column is Rd-only, and
+  Rd is English by design in this package). 19n still owns the i18n pass.
+
+**FOLLOW-UPS.** 19n: the `<br>` migration if it is taken at all, the JS-gate decision, `po/R-fr.po`,
+the vignettes, and the one remaining `?fmt` double-gloss (`ctr` / `obs` are now described both in
+their own `@param` and in the generated section).
 
 ---
 

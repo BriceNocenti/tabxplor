@@ -276,7 +276,15 @@ svy_key_chr <- function(x) {
 #   in_sub -- its SUBTABLE (the tab_vars keys only), the denominator domain of pct = "col" / "all"
 # plus `any_dom`, the groups that belong to at least one wide row -- i.e. the rows the displayed table
 # is actually built on, which is what pct = "all_tabs" totals over.
-svy_group_map <- function(keys, n_tab, mkeys, tot = "Total") {
+# Phase 19m-iii: `tot = "Total"` WAS a parameter here, and `tot_lab = "Total"` in svy_var_prop() --
+# neither had a caller that passed anything, so they promised a configurability that did not exist and
+# invited the reading that this is a user-facing LABEL leaking into the engine. It is not: "Total" is
+# the LEAF's internal pre-rename key (the fourth of the internal names listed in the round-trip DESIGN
+# note of R/tab-leaf.R, beside "col_var" / "_colvarbis" / the "n_"-"wn_" value prefixes), minted by
+# build_total_rows() / the leaf's total column and only swapped for the user's `total_names` much
+# later, in leaf_rename_totals(). Substituting `total_names[1]` here would therefore be a BUG, not a
+# fix -- these producers run long before that rename. Stated once, as a literal, like its siblings.
+svy_group_map <- function(keys, n_tab, mkeys) {
   nk <- length(keys)
   if (!nk || nk != length(mkeys)) return(NULL)
   R <- length(keys[[1]])
@@ -288,7 +296,7 @@ svy_group_map <- function(keys, n_tab, mkeys, tot = "Total") {
   one   <- function(idx) {
     if (!length(idx)) return(matrix(TRUE, R, length(lev)))
     Reduce(`&`, lapply(idx, function(k)
-      outer(keys[[k]], U[[k]], function(a, b) a == tot | a == b)))
+      outer(keys[[k]], U[[k]], function(a, b) a == "Total" | a == b)))
   }
   in_dom <- one(seq_len(nk))
   list(gcode = gcode, in_dom = in_dom, in_sub = one(seq_len(n_tab)),
@@ -311,17 +319,18 @@ svy_uv_v <- function(base, d, s, uj, valid) {
 # === SECTION: the two producers =====================================================================
 
 # Var_design of every cell PERCENTAGE of a wide factor table: an R x K matrix aligned to `keys` (rows)
-# and `col_names` (columns), or NULL. `mcol` is the col_var of each microdata row; a column named like
-# `tot_lab` is the table's Total column, i.e. "every level" rather than one. One svyrecvar call per
-# column level, each on a prepared-rows x R influence matrix (7 MB at 60 000 x 15).
-svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base, tot_lab = "Total") {
+# and `col_names` (columns), or NULL. `mcol` is the col_var of each microdata row; the column named
+# "Total" is the table's Total column, i.e. "every level" rather than one -- the leaf's internal
+# pre-rename key, see svy_group_map() above. One svyrecvar call per column level, each on a
+# prepared-rows x R influence matrix (7 MB at 60 000 x 15).
+svy_var_prop <- function(prep, keys, n_tab, mkeys, mcol, col_names, base) {
   s <- svy_var_setup(prep, keys, n_tab, mkeys, nfr = length(mcol), K = length(col_names))
   if (is.null(s$gm)) return(s)
   gm <- s$gm; R <- s$R; K <- s$K; nfr <- s$nfr
 
   wf     <- prep$w[prep$at]
   if (length(wf) != nfr || anyNA(wf))                           return(svy_var_out())
-  is_tot <- col_names == tot_lab
+  is_tot <- col_names == "Total"
   # rows the displayed table is built on: a key tuple that reaches some wide row, and a col_var level
   # that reaches some wide column (the NA column is dropped from the table under na = "drop", so its
   # observations must leave the row and column totals too).

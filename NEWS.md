@@ -302,6 +302,10 @@
 
 ## Bug fixes
 
+* **Arithmetic silently did nothing on a `pct_ci`, `mean_ci` or `pvalue` column.** `x * 2` returned
+  `x` unchanged, with no warning, on display values `?fmt` documents — so `mutate()` over the fmt
+  columns of a table showing confidence intervals quietly left them alone. They now write back to the
+  field they display, like every other token.
 * **The two `tab_reg()` estimands added in 2.0.0 got no model checks at all.** `measure = "difference"`
   on a binary outcome and `measure = "ratio"` on a continuous one are fitted through a different
   *link*, and the assumption checks (`stats =`, `reg_check_plots()`) were keyed on that link rather

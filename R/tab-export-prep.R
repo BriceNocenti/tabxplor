@@ -371,8 +371,14 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                          brk                = wrap$brk)
     # Phase 14v: tab_wrap_text RENAMES columns (spaces -> unbreakable U+202F, long names wrapped), so the
     # emp_tips keys (build-time column names) must follow, or the render lookup by the wrapped name fails.
-    if (!is.null(emp_tips))
-      names(emp_tips) <- stats::setNames(names(tab), pre_wrap_names)[names(emp_tips)]
+    # Phase 19m-iii: a key absent from `pre_wrap_names` used to become NA SILENTLY, which blanks that
+    # column's tooltips with no trace. 19m-i measured the miss as unreachable today (every row- and
+    # column-moving step runs strictly before the capture above), so this is not a fix but a degrade:
+    # a key the rename cannot follow keeps its OLD name, and at worst its tooltip does not attach.
+    if (!is.null(emp_tips)) {
+      renamed <- stats::setNames(names(tab), pre_wrap_names)[names(emp_tips)]
+      names(emp_tips) <- ifelse(is.na(renamed), names(emp_tips), renamed)
+    }
   }
 
   # --- role detection on the FINAL (ungrouped / dropped / wrapped) tab ---
@@ -471,7 +477,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # column's ann (font + keep_black, which the html engine reads) and mark it bold.
   footer_rows <- if (length(fmt_cols) > 0) {
     purrr::reduce(purrr::map(names(fmt_cols),
-      ~ display_primary(get_display(tab[[.x]])) %in% c("gof", "pvalue", "blank")), `&`)
+      ~ display_primary(get_display(tab[[.x]])) %in% DISPLAY_FOOTER_TOKENS), `&`)
   } else logical(nrow(tab))
   if (any(footer_rows)) {
     ann <- purrr::map(ann, function(a) {

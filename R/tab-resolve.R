@@ -352,10 +352,8 @@ ci_disable_signif <- function(ci, color_signif = "ignore", stars = FALSE) {
 # and interval. NA = the template names no comparison (or there is no template).
 # It is deliberately the PRIMARY token only: "{or} ({pct})" is an odds-ratio cell annotated with a
 # percentage, not a percentage cell.
-#' @keywords internal
-#' @noRd
-DISPLAY_COMPARISON <- c(or = "odds_ratio", ratio = "ratio", diff = "difference")
-
+# Phase 19m-iii: the mapping itself is DISPLAY_TOKENS' `comparison` column (R/tab-display.R, which
+# loads before this file) -- it was the eighth display vocabulary, and the only one in a third file.
 #' @keywords internal
 #' @noRd
 display_comparison <- function(display) {

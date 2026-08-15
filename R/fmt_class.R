@@ -106,12 +106,9 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param digits The number of digits, as an integer, or an integer vector the length
 #' of \code{n}.
 #' @param display The display type : the name of the field you want to show when printing
-#' the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
-#'  \code{"mean"}, \code{"var"}, \code{"ci"}, \code{"ratio"} (the cell-to-reference ratio;
-#'  the legacy synonym \code{"rr"} still resolves to it),
-#'  \code{"pct_ci"} (percentages with visible confidence interval),
-#'  \code{"mean_ci"} (means with visible confidence interval). As a single string, or a
-#'  character vector the length of \code{n}.
+#' the vector, as a single string or a character vector the length of \code{n}. Every accepted
+#'  value is listed in \emph{Every display token} below; a \code{\{\}} template combining several
+#'  of them (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see \code{\link{tab}}.
 #' @param wn The underlying weighted counts, as a double vector the length of
 #' \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.
 #' @param pct The percentages, as a double vector the length of \code{n}.
@@ -238,6 +235,8 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' \code{conf_level} it is a per-COLUMN fact, which is what lets a table state honestly, in its
 #' footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
 #' the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.
+#' @eval display_tokens_rd(user_only = FALSE)
+#'
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -583,15 +582,25 @@ set_num <- function(x, value) {
   nas     <- is.na(display)
   out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
   out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
-  out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
   out[!nas & display == "diff"] <- set_diff(x[!nas & display == "diff"], value[!nas & display == "diff"])
   out[!nas & display == "coef"] <- set_diff(x[!nas & display == "coef"], value[!nas & display == "coef"])  # Phase 12c
   out[!nas & display == "gof" ] <- set_diff(x[!nas & display == "gof" ], value[!nas & display == "gof" ])  # Phase 12f
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
-  out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
+  # Phase 19m-iii: `pct_ci` / `mean_ci` / `pvalue` READ their field in get_num() and had no arm here,
+  # so -- vec_arith() routing through set_num() -- ARITHMETIC on such a column silently returned it
+  # unchanged: `x * 2` == `x`, no warning, on a `pct_ci` that ?fmt documents as a display value. One
+  # mask per field, exactly as the `or` family below, so the two maps say the same thing. The tail of
+  # R/tab-display.R now asserts at BUILD time that every token DISPLAY_TOKENS declares `settable` has
+  # an arm here, so this class cannot come back.
+  pct_m <- !nas & display %in% c("pct", "pct_ci")
+  out[pct_m] <- set_pct(x[pct_m], value[pct_m])
+  mean_m <- !nas & display %in% c("mean", "mean_ci")
+  out[mean_m] <- set_mean(x[mean_m], value[mean_m])
+  out[!nas & display == "pvalue"] <- set_pvalue(x[!nas & display == "pvalue"],
+                                                value[!nas & display == "pvalue"])
   # Phase 18z9: ONE mask for target and value. The value side read only "or", so a column displaying
   # "OR" fed a length-0 value into a non-empty target. Same pass adds the or_pct/OR_pct arms get_num()
   # and format() already had -- the three maps are meant to stay in sync (see the /vctrs-field skill).
@@ -1532,18 +1541,19 @@ set_color_signif <- function(x, color_signif) {
 # `display_spec` per-column attribute (§34: add_n/add_pct are ROWS under pct="col", so the composite
 # must be per-cell, not a column attribute).
 
-# Field names accepted inside {}; mapped to the internal get_num() display token by the alias table.
-# Phase 18z4: `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back
-# from the stored p-value + the contribution's sign), exactly as `ci` is derived from its bounds. It is
-# read-only -- get_num() has an arm, set_num() deliberately does not.
-# Phase 18z5: `obs` is a real stored FIELD (the value a reg cell is compared to), so unlike `resid`
-# it is fully round-trippable -- get_num() reads it and set_num() writes it.
-tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var",
-                              "resid", "obs")
-# Phase 17d: the internal display token is now the canonical `ratio` (was `rr`). The alias table is
-# READ-SIDE ONLY -- the legacy synonym `rr` (bare stored token / a `{rr}` composite) maps to `ratio`,
-# so old objects still resolve, but nothing produces `rr` and every mask matches the single "ratio".
-tabxplor_display_aliases <- c(rr = "ratio")
+# Phase 19m-iii: the two vocabularies that lived here -- `tabxplor_display_fields` (the names accepted
+# inside {}) and `tabxplor_display_aliases` (the read-side legacy spellings) -- are now the `user` and
+# `alias` COLUMNS of the ONE per-token relation DISPLAY_TOKENS, in R/tab-display.R, as
+# DISPLAY_USER_FIELDS / DISPLAY_ALIASES. They kept their contents and their ORDER. The facts they
+# carried are unchanged and still worth stating here, where get_num()/set_num() are:
+#   - `resid` is a DERIVED field (fmt_resid(): the adjusted standardized residual, read back from the
+#     stored p-value + the contribution's sign), exactly as `ci` is derived from its bounds -- so it
+#     is read-only: get_num() has an arm, set_num() deliberately does not (`settable = FALSE`).
+#   - `obs` is a real stored FIELD (the value a reg cell is compared to), so unlike `resid` it is
+#     fully round-trippable.
+#   - the internal token is the canonical `ratio` (was `rr`, Phase 17d); the alias is READ-SIDE ONLY,
+#     so old objects still resolve but nothing produces `rr`.
+# R/tab-display.R loads AFTER this file, which is fine: every read below is at RUN time.
 
 # Resolve a display-value vector to its PRIMARY simple token: a composite ("{field} ...") -> its
 # first {field} (alias-applied); a simple token / NA -> unchanged. Gated so a column carrying no
@@ -1555,7 +1565,7 @@ display_primary <- function(display) {
   # Read-side alias (Phase 17d): a bare / composite legacy token (only `rr` today) -> its canonical
   # internal token. The `%in%` guard keeps the common canonical path free of the match() pass, so the
   # no-alias hot case stays one fixed grepl + one cheap vector `%in%` (Phase 10i-A benchmark).
-  al <- tabxplor_display_aliases
+  al <- DISPLAY_ALIASES
   if (any(display %in% names(al))) {
     hit <- match(display, names(al)); aliased <- !is.na(hit)
     display[aliased] <- unname(al[hit[aliased]])
@@ -1591,8 +1601,8 @@ parse_display_template <- function(tmpl) {
   fields <- character(0)
   if (any(is_tok)) {
     raw <- trimws(gsub("[{}]", "", pieces[is_tok]))
-    hit <- raw %in% names(tabxplor_display_aliases)
-    raw[hit] <- unname(tabxplor_display_aliases[raw[hit]])
+    hit <- raw %in% names(DISPLAY_ALIASES)
+    raw[hit] <- unname(DISPLAY_ALIASES[raw[hit]])
     fields <- raw
   }
   list(pieces = pieces, is_tok = is_tok, fields = fields)
@@ -1609,7 +1619,7 @@ validate_display_template <- function(recipe) {
   # the single-field template "{field}", so e.g. display = "ci" == display = "{ci}" (and "diff"/"pct"/...).
   # One general rule, not an ad-hoc "ci" case. A genuinely unknown bare value still hits the abort below.
   if (!grepl("[{}]", recipe) &&
-      recipe %in% c(tabxplor_display_fields, names(tabxplor_display_aliases))) {
+      recipe %in% c(DISPLAY_USER_FIELDS, names(DISPLAY_ALIASES))) {
     recipe <- paste0("{", recipe, "}")
   }
   if (!grepl("[{}]", recipe)) {
@@ -1627,10 +1637,10 @@ validate_display_template <- function(recipe) {
     cli::cli_abort(c("Malformed {.arg display} template {.val {recipe}}.",
                      "i" = "Use balanced, non-empty tokens, e.g. {.code {{pct}} (n={{n}})}."))
   }
-  unknown <- setdiff(fields_used, c(tabxplor_display_fields, names(tabxplor_display_aliases)))
+  unknown <- setdiff(fields_used, c(DISPLAY_USER_FIELDS, names(DISPLAY_ALIASES)))
   if (length(unknown)) {
     cli::cli_abort(c("Unknown field{?s} {.val {unknown}} in {.arg display} template.",
-                     "i" = "Valid fields: {.val {tabxplor_display_fields}}."))
+                     "i" = "Valid fields: {.val {DISPLAY_USER_FIELDS}}."))
   }
   recipe
 }
@@ -2435,7 +2445,7 @@ get_stars  <- function(x, p = get_pvalue(x)) {
   # `pvalue` field (honest storage), but it is NOT a "different from the reference" comparison, so it must
   # never print a star -- nor flip prep's has_stars / tab_xl's star padding. format() already excludes
   # these from the star APPEND; gating here makes every get_stars() caller agree at the source.
-  out[display_primary(get_display(x)) %in% c("gof", "pvalue", "blank")] <- ""
+  out[display_primary(get_display(x)) %in% DISPLAY_FOOTER_TOKENS] <- ""
   out
 }
 # Phase 16d: whether a column's stored pvalue drives significance STARS. A `contrib` column stores a
@@ -3439,7 +3449,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # leaves the width `w` unchanged -- the only effect is that they take no trailing pad.
   if (isTRUE(stars) && fmt_stars_applicable(x)) {
     st  <- get_stars(x)
-    val <- !is.na(out) & nzchar(out) & !(display %in% c("gof", "pvalue"))
+    # 19m-iii: the DECLARED footer tokens (DISPLAY_TOKENS' `footer`). This literal used to omit
+    # `blank` while its two siblings included it -- a no-op difference, since a blank cell's `out` is
+    # overwritten to "" twelve lines below, which is exactly why the three copies could drift unseen.
+    val <- !is.na(out) & nzchar(out) & !(display %in% DISPLAY_FOOTER_TOKENS)
     if (any(val & nzchar(st))) {
       w  <- max(nchar(st[val]))
       st_pad <- stringi::stri_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right
@@ -4042,7 +4055,10 @@ fmt_color_slots <- function(x, plan) {
   # Phase 12f: a "gof" cell (a model-fit stat: N/R2/AIC/BIC/dispersion) is never effect-coloured --
   # a large AIC in the `diff` field would otherwise score to the strongest colour slot.
   disp0 <- display_primary(get_display(x))
-  slot[disp0 %in% c("blank", "gof")] <- 0L
+  # 19m-iii: DISPLAY_TOKENS' `colour` column. It is NOT the `footer` one: `pvalue` is a footer token
+  # that IS coloured, on purpose (see just below) -- which is why the two are declared separately
+  # rather than as one "numberless" flag with a hand-written exception at each of the three sites.
+  slot[disp0 %in% DISPLAY_NO_COLOR] <- 0L
   # Phase 17c: a "pvalue" test cell colours as a SIGNIFICANCE WARNING, not as a data effect -- a
   # non-significant test (p > alpha) gets the deepest under-slot (deep red), a significant one stays
   # uncoloured. It reads the honest `pvalue` field (defect 5: this used to be steered by a fake

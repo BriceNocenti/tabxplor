@@ -4,7 +4,7 @@
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
 // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
-// Generated from R/fmt_class.R (MEASURES) and R/tab-resolve.R (DISPLAY_COMPARISON).
+// Generated from R/fmt_class.R (MEASURES) and R/tab-display.R (DISPLAY_TOKENS).
 // Re-run dev/generate_jamovi_js.R after changing them; the suite checks this block
 // (test-jamovi-vocabulary.R).
 var TABX_MEASURE_ODDS_RATIO = "odds_ratio";

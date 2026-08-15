@@ -581,12 +581,19 @@ reg_panel_dispersion <- function(ctxs, cols, opts) {
       if (is.null(d)) return(NA_real_)
       reg_if_se(d, des)
     }, numeric(1))
-    nm <- tryCatch(names(stats::coef(cx$fit)), error = function(e) NULL)
-    # ⚠ Phase 19m-i: a MISSING JOIN KEY, not a guard -- do not promote it to stopifnot(). `nm` and
-    # `se` are two independent reads off an arbitrary user fit (aliased coefficients, survey fits,
-    # polr/multinom layouts), and nothing guarantees they line up. Falling back to "1","2",... is a
-    # degraded but honest panel; aborting on a fit the rest of the plot can draw would be worse.
-    tibble::tibble(term = if (length(nm) == length(se)) nm else as.character(seq_along(se)),
+    # Phase 19m-iii: the join key comes from `se` ITSELF. 19m-i left this as a length coincidence
+    # between `se` and a SECOND, independent read (`names(coef(fit))`) -- but there was never a need
+    # for a second read: reg_check_model_se() is `sqrt(diag(vcov(fit)))`, and vcov()'s dimnames are
+    # carried straight through `diag()`, so `names(se)` names exactly the numbers in `se`, with the
+    # same provenance and by construction the same length. (Reading summary(fit)$coefficients instead
+    # would be WRONG twice over: it drops aliased rows, so it would no longer index the influence
+    # closure built above, and on a quasipoisson its SEs are not vcov()'s -- see the WHY at the
+    # head of reg_check_model_se().) Strictly better on multinom, where coef() is a MATRIX so
+    # names() was NULL and this fell back to "1","2",... while vcov() is properly named.
+    # The fallback stays for a fit whose variance matrix carries no dimnames (svy_vglm's $var), but
+    # it is keyed on the NAMES being absent, not on two lengths happening to differ.
+    nm <- names(se)
+    tibble::tibble(term = if (length(nm)) nm else as.character(seq_along(se)),
                    model_se = se, robust_se = rb, model = cx$label)
   }))
   if (is.null(rows) || !nrow(rows) || all(is.na(rows$robust_se))) return(NULL)

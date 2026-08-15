@@ -180,12 +180,9 @@ Replaces the \code{type} and \code{ci_type} arguments of tabxplor 1.x, together 
 of \code{n}.}
 
 \item{display}{The display type : the name of the field you want to show when printing
-the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
-\code{"mean"}, \code{"var"}, \code{"ci"}, \code{"ratio"} (the cell-to-reference ratio;
-the legacy synonym \code{"rr"} still resolves to it),
-\code{"pct_ci"} (percentages with visible confidence interval),
-\code{"mean_ci"} (means with visible confidence interval). As a single string, or a
-character vector the length of \code{n}.}
+the vector, as a single string or a character vector the length of \code{n}. Every accepted
+value is listed in \emph{Every display token} below; a \code{\{\}} template combining several
+of them (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see \code{\link{tab}}.}
 
 \item{wn}{The underlying weighted counts, as a double vector the length of
 \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.}
@@ -520,6 +517,38 @@ regression family, "" on crosstabs)
 \item \code{set_digits()}: set the "digits" field
 
 }}
+\section{Every display token}{
+
+Generated from the package's own display table, so it cannot drift from what
+\code{get_num()} reads. The ones below that are not in the list above are written by
+the pipeline itself and are not meant to be typed:
+\itemize{
+\item \code{pct} --- the percentage.
+\item \code{n} --- the count.
+\item \code{wn} --- the weighted count.
+\item \code{mean} --- the mean.
+\item \code{diff} --- the difference from the reference.
+\item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means).
+\item \code{ci} --- the confidence interval of whatever the column compares.
+\item \code{or} --- the odds ratio.
+\item \code{ctr} --- the cell's contribution to the chi-squared.
+\item \code{var} --- the variance.
+\item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
+\item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only.
+\item \code{pct_ci} --- the percentage, with its interval printed beside it.
+\item \code{mean_ci} --- the mean, with its interval printed beside it.
+\item \code{or_pct} --- the odds ratio, with its percentage.
+\item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
+\item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.
+\item \code{pvalue} --- a test's p-value.
+\item \code{coef} --- a regression coefficient, on its own scale.
+\item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
+\item \code{est_ci} --- the estimate with a visible interval, reading whichever field the column's scale centres on.
+\item \code{blank} --- nothing: a cell masked by \code{n_min}.
+\item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.
+}
+}
+
 \examples{
 library(dplyr)
 

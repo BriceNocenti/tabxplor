@@ -398,9 +398,7 @@ columns. Total rows/columns, the added-\code{n} row/column and the p-value line 
 value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-\code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid},
-\code{obs}; the first field is the \emph{primary}, shown alone by Excel and used for coloring.
+\code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
 \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
 standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
 \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
@@ -559,6 +557,26 @@ weighted one (6x if calibrated); the payoff needs real design information, so if
 calibrated weight and no stratum or cluster variable, \code{tabxplor.design_effect} is already all
 the correction available to you.
 }
+\section{Display fields}{
+
+The fields a \code{\{\}} template may name. The first one is the \emph{primary}:
+it is what Excel shows and what the colours read.
+\itemize{
+\item \code{pct} --- the percentage.
+\item \code{n} --- the count.
+\item \code{wn} --- the weighted count.
+\item \code{mean} --- the mean. Needs a numeric col_var.
+\item \code{diff} --- the difference from the reference. Needs a \code{ref} to compare to, and pct = "row" / "col".
+\item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means). Needs a \code{ref} to compare to, and pct = "row" / "col".
+\item \code{ci} --- the confidence interval of whatever the column compares. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
+\item \code{or} --- the odds ratio. Needs pct = "row" / "col"  (an odds ratio needs a percentage base).
+\item \code{ctr} --- the cell's contribution to the chi-squared. Needs test = TRUE  (the contributions come from the chi-squared).
+\item \code{var} --- the variance. Needs a numeric col_var.
+\item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
+\item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
+}
+}
+
 \section{Significance stars}{
 
 With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its

@@ -1,0 +1,72 @@
+tabxplor phase 19m-iii measurements -- R version 4.6.1 (2026-06-24) 
+fixture: forcats::gss_cat, 21483 rows
+
+1. THE PER-col_var agg_chi2() COST (19j)
+--------------------------------------------------------------------------------------------
+TIER 1 -- agg_chi2() alone, same total cells, batched vs one call per col_var
+
+  K    S    cells     batched     K calls       delta per call
+  1    1    30        15.0 ms     18.0 ms      3.0 ms     3.0 ms
+  1    5    150       15.0 ms     17.0 ms      2.0 ms     2.0 ms
+  2    1    60        14.0 ms     29.0 ms     15.0 ms    15.0 ms
+  2    5    300       17.0 ms     29.0 ms     12.0 ms    12.0 ms
+  4    1    120       15.0 ms     54.0 ms     39.0 ms    13.0 ms
+  4    5    600       17.0 ms     52.0 ms     35.0 ms    11.7 ms
+  8    1    240       17.0 ms     90.0 ms     73.0 ms    10.4 ms
+  8    5    1200      21.0 ms     87.0 ms     66.0 ms     9.4 ms
+  16   1    480       16.0 ms    171.0 ms    155.0 ms    10.3 ms
+  16   5    2400      16.0 ms    176.0 ms    160.0 ms    10.7 ms
+
+TIER 3 -- end-to-end tab(): test = TRUE minus test = FALSE, sweeping the col_var count
+
+  K    tabvar  test=FALSE   test=TRUE       delta   per cv
+  1    -          65.0 ms    122.0 ms     57.0 ms    57.0 ms
+  1    year       88.0 ms    187.0 ms     99.0 ms    99.0 ms
+  2    -         105.0 ms    204.0 ms     99.0 ms    49.5 ms
+  2    year      218.0 ms    413.0 ms    195.0 ms    97.5 ms
+  4    -         187.0 ms    423.0 ms    236.0 ms    59.0 ms
+  4    year      386.0 ms    935.0 ms    549.0 ms   137.3 ms
+  8    -         281.0 ms    648.0 ms    367.0 ms    45.9 ms
+  8    year      694.0 ms   1524.0 ms    830.0 ms   103.7 ms
+
+2. THE REG FIT-CACHE DIGEST PATH (19k)
+--------------------------------------------------------------------------------------------
+  case                      1st build       re-ref     vs plain
+  plain (digest path)         48.0 ms      48.0 ms           --
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+ℹ `color_signif` does not apply to an odds-ratio "adjustment" gap: part of it
+  is non-collapsibility, not confounding. Use `effect = "marginal"` or `measure
+  = "ratio"` (risk ratios), for a gap the test can read.
+  color = adjustment         279.0 ms     341.0 ms         x7.1
+  shape = quadratic          113.0 ms     103.0 ms         x2.1
+
+3. 19d's UNCONDITIONAL ODDS RATIO, ON A WIDE TABLE
+--------------------------------------------------------------------------------------------
+  K          build apply_reference  ci_or (Woolf)
+  1        78.0 ms          12.5%           0.0%
+  2       143.0 ms          20.0%           0.0%
+  4       272.0 ms          23.1%           0.0%
+  8       420.0 ms          17.5%           0.0%
+
+NOTE: Rprof samples at 10 ms over 5 builds -- read the TREND across K, not the digit.
+done.

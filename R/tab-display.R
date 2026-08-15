@@ -79,7 +79,9 @@ display_write_col <- function(col, tmpl) {
               fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
   d    <- get_display(col)
   # Only genuine value cells -- the p-value / blank / total-marker cells keep their own token.
-  elig <- d %in% c("pct", "mean", "n", "wn")
+  # ⚠ this reads the RAW display, not display_primary(): a cell already carrying a composite is
+  # deliberately not re-templatable.
+  elig <- d %in% DISPLAY_VALUE_CELLS
   if (!any(elig)) return(list(col = col, missing = character()))
   # Phase 19d (D23): the stored interval is the one this column's comparison is tested on, and a
   # `{ci}` bracket renders THAT interval. A template that prints one geometry's estimate beside
@@ -120,28 +122,230 @@ fmt_blank_fields <- function(col, pct = FALSE) {
   set_ctr(col, NA_real_) |> set_var(NA_real_)
 }
 
-# The display tokens the PIPELINE itself writes as a bare value (so a one-field template collapses
-# onto them and inherits their rendering). `resid` is derived and `obs`/`var`/`ctr` have no
-# simple-token renderer, so they stay composites.
+# =====================================================================================================
+# DISPLAY_TOKENS -- THE per-token relation of the display grammar (Phase 19m-iii).
+#
+# WHAT A DISPLAY TOKEN IS: the name of the quantity a cell PRINTS. A display is an OVERLAY -- get_num(),
+# the colour engine and the Excel bypass all keep reading the column's PRIMARY field -- so changing a
+# display never changes a number.
+#
+# WHY ONE TABLE. Every fact about a token was written down separately, in four files: which field it
+# reads (get_num's switch), whether it can be written back (set_num's), whether a user may type it
+# (tabxplor_display_fields), whether a one-field template collapses onto it (DISPLAY_BARE_TOKENS),
+# what would fill it (DISPLAY_FIELD_SOURCE), which geometry it names (DISPLAY_TOKEN_GEOMETRY), which
+# comparison (DISPLAY_COMPARISON, in a third file), whether it is a value cell (an inline
+# c("pct","mean","n","wn")) and whether it is a footer statistic (an inline c("gof","pvalue","blank"),
+# written TWICE with two near-miss variants). Eight vocabularies, none aware of the others.
+#
+# ⚠ AND THE GAP WAS NOT THEORETICAL: get_num() had 22 arms where set_num() had 17, and vec_arith goes
+# through set_num() -- so ARITHMETIC on a column displaying `pct_ci` / `mean_ci` / `pvalue` silently
+# returned it UNCHANGED (`x * 2` == `x`, no warning), on a `pct_ci` that ?fmt documents. Declaring
+# `settable` is what made two switches 50 lines apart comparable, and the build-time stopifnot() at
+# the tail of this file is what keeps them so.
+#
+# ⚠ ROW ORDER IS A CONTRACT. Rows 1-12 are the user-typeable fields in the order
+# validate_display_template()'s "Valid fields" message and ?tab print them; rows 1-8 are additionally
+# the bare tokens. Both derive by FILTERING, so the order is preserved by construction.
+#
+# ⚠ `OR` / `OR_pct` are ROWS, not aliases of `or` / `or_pct`. They are separate arms in get_num(),
+# set_num() and format(); display_primary() returns them verbatim and fmt_display_shows() compares
+# against the RAW display, so aliasing them would change what a template matches.
+#
+# THE HOT PATH STAYS HAND-WRITTEN (the fmt_attr_rules precedent): get_num()/set_num() are vectorised
+# mask writes and format() is ~15 rendering-class masks crossed with the column's stored `scale`, not
+# a per-token map. What this table drives is the small VOCABULARIES.
+#
+# COLUMNS
+#   field      the fmt field get_num() reads. NA = the token has none of its own: `resid` is DERIVED
+#              (fmt_resid(), from pvalue + sign(ctr)), `blank` prints nothing, and `est_ci` reads
+#              whichever field the COLUMN's scale centres on -- fmt_center_field(), which is
+#              EST_SCALES' vocabulary and deliberately not folded in here.
+#   settable   set_num() writes the field back. FALSE only where there is nothing to write.
+#   user       may be typed inside a {} template (and is named in the "Valid fields" message).
+#   bare       a one-field template collapses onto this token, inheriting its own rendering.
+#   value_cell display_write_col() may re-template a cell showing this -- a genuine value cell, as
+#              opposed to a p-value / blank / total-marker cell, which keeps its own token.
+#   footer     a footer STATISTIC, not data: it never carries a significance star, and a row whose
+#              every cell is one is a regression's model-fit block (read black + bold, not greyed).
+#   colour     may a cell showing this be coloured. `pvalue` is TRUE here while `footer` is also TRUE,
+#              on purpose -- it is coloured as a significance warning (fmt_color_slots()). That one
+#              disagreement is why this is two columns and not one "numberless".
+#   geometry   which effect geometry the token NAMES, for D23's mismatch refusal. NA = it names none:
+#              `ci` IS the bracket, and `ctr`/`var`/`resid`/`obs` are not estimates of a contrast.
+#   comparison the colour MEASURE the token names, for the `color` -> `display` -> difference chain.
+#   source     the argument that would fill an empty field, for D22's note. NA where the field always
+#              exists (pct / n / wn), which display_note_empty() drops.
+#   alias      this row is not a token but a legacy SPELLING of one, resolved by display_primary().
+#   doc        what the token shows, one phrase, for the GENERATED ?fmt / ?tab sections
+#              (display_tokens_rd()). ?fmt's hand-written list documented 11 of the 22 and had
+#              drifted; generating it from here is what stops that happening again.
+#
+# The defaults below are the documentation: a row states only what is unusual about it.
 #' @keywords internal
 #' @noRd
-DISPLAY_BARE_TOKENS <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or")
+.dtok <- function(field = NA_character_, settable = TRUE, user = FALSE, bare = FALSE,
+                  value_cell = FALSE, footer = FALSE, colour = TRUE, geometry = NA_character_,
+                  comparison = NA_character_, source = NA_character_, alias = NA_character_,
+                  doc = NA_character_)
+  list(field = field, settable = settable, user = user, bare = bare, value_cell = value_cell,
+       footer = footer, colour = colour, geometry = geometry, comparison = comparison,
+       source = source, alias = alias, doc = doc)
 
-# The argument that would fill each display field -- so D22's note can NAME it instead of leaving
-# the user with a blank column. One declared table, read only by display_note_empty().
 #' @keywords internal
 #' @noRd
-DISPLAY_FIELD_SOURCE <- c(
-  ci    = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
-  or    = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
-  diff  = 'a `ref` to compare to, and pct = "row" / "col"',
-  ratio = 'a `ref` to compare to, and pct = "row" / "col"',
-  ctr   = 'test = TRUE  (the contributions come from the chi-squared)',
-  resid = 'test = TRUE  (the residual comes from the chi-squared)',
-  obs   = 'tab_reg(empirical = TRUE)  (an observed effect to compare the model to)',
-  mean  = 'a numeric col_var',
-  var   = 'a numeric col_var'
+DISPLAY_TOKENS <- list(
+  # --- the twelve a user may type, IN THE ORDER THEY ARE LISTED TO THEM -------------------------
+  pct     = .dtok("pct" , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
+                  doc = 'the percentage'),
+  n       = .dtok("n"   , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
+                  doc = 'the count'),
+  wn      = .dtok("wn"  , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
+                  doc = 'the weighted count'),
+  mean    = .dtok("mean", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
+                  source = 'a numeric col_var',
+                  doc = 'the mean'),
+  diff    = .dtok("diff" , user = TRUE, bare = TRUE, geometry = "difference",
+                  comparison = "difference",
+                  source = 'a `ref` to compare to, and pct = "row" / "col"',
+                  doc = 'the difference from the reference'),
+  ratio   = .dtok("ratio", user = TRUE, bare = TRUE, geometry = "ratio", comparison = "ratio",
+                  source = 'a `ref` to compare to, and pct = "row" / "col"',
+                  doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
+  ci      = .dtok("ci"   , user = TRUE, bare = TRUE,
+                  source = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
+                  doc = 'the confidence interval of whatever the column compares'),
+  or      = .dtok("or"   , user = TRUE, bare = TRUE, geometry = "ratio", comparison = "odds_ratio",
+                  source = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
+                  doc = 'the odds ratio'),
+  ctr     = .dtok("ctr"  , user = TRUE,
+                  source = 'test = TRUE  (the contributions come from the chi-squared)',
+                  doc = "the cell's contribution to the chi-squared"),
+  var     = .dtok("var"  , user = TRUE, source = 'a numeric col_var',
+                  doc = 'the variance'),
+  resid   = .dtok(          user = TRUE, settable = FALSE,
+                  source = 'test = TRUE  (the residual comes from the chi-squared)',
+                  doc = paste('the adjusted standardized residual -- whether the cell departs from',
+                              'independence. Derived from the p-value and the sign of `ctr`, so it',
+                              'is read-only')),
+  obs     = .dtok("obs"  , user = TRUE,
+                  source = 'tab_reg(empirical = TRUE)  (an observed effect to compare the model to)',
+                  doc = paste('the OBSERVED (crude) effect a modelled one is compared to.',
+                              '`tab_reg()` tables only')),
+  # --- the ten the PIPELINE writes; never user-typed ---------------------------------------------
+  pct_ci  = .dtok("pct"   , doc = 'the percentage, with its interval printed beside it'),
+  mean_ci = .dtok("mean"  , doc = 'the mean, with its interval printed beside it'),
+  or_pct  = .dtok("or"    , doc = 'the odds ratio, with its percentage'),
+  # ⚠ `OR` / `OR_pct` render EXACTLY like `or` / `or_pct` -- every arm of get_num(), set_num() and
+  # format() matches the pair. They are rows and not `alias` entries only because display_primary()
+  # returns a display verbatim and fmt_display_shows() compares against that RAW value, so aliasing
+  # them would silently change what a stored display matches.
+  OR      = .dtok("or"    , doc = 'a legacy spelling of `or`, rendered identically'),
+  OR_pct  = .dtok("or"    , doc = 'a legacy spelling of `or_pct`, rendered identically'),
+  pvalue  = .dtok("pvalue", footer = TRUE,           # footer, yet deliberately coloured
+                  doc = "a test's p-value"),
+  coef    = .dtok("diff"  , doc = 'a regression coefficient, on its own scale'),
+  gof     = .dtok("diff"  , footer = TRUE, colour = FALSE,
+                  doc = 'a model-fit statistic (N, R2, AIC, BIC, dispersion)'),
+  est_ci  = .dtok(          doc = paste('the estimate with a visible interval, reading whichever',
+                                        'field the column\'s scale centres on')),
+  blank   = .dtok(          settable = FALSE, footer = TRUE, colour = FALSE,
+                  doc = 'nothing: a cell masked by `n_min`'),
+  # --- a legacy SPELLING, resolved to its token by display_primary() -----------------------------
+  rr      = .dtok(          settable = FALSE, alias = "ratio",
+                  doc = 'the legacy synonym of `ratio`, still accepted')
 )
+
+#' @keywords internal
+#' @noRd
+.dtok_chr <- function(field)
+  vapply(DISPLAY_TOKENS, function(r) r[[field]] %||% NA_character_, character(1))
+#' @keywords internal
+#' @noRd
+.dtok_lgl <- function(field) vapply(DISPLAY_TOKENS, function(r) isTRUE(r[[field]]), logical(1))
+# a real token, as opposed to an alias row -- every set below is of tokens
+.dtok_real <- is.na(.dtok_chr("alias"))
+#' @keywords internal
+#' @noRd
+.dtok_which <- function(field) names(DISPLAY_TOKENS)[.dtok_real & .dtok_lgl(field)]
+#' @keywords internal
+#' @noRd
+.dtok_map <- function(field) {m <- .dtok_chr(field); m[!is.na(m)]}
+
+# --- the eight vocabularies, DERIVED ------------------------------------------------------------
+# Each was a hand-written vector; each keeps its name, its shape and its order, so every consumer
+# is untouched. `resid` is derived and `obs`/`var`/`ctr` have no simple-token renderer, which is
+# why they are `user` but not `bare`.
+#' @keywords internal
+#' @noRd
+DISPLAY_USER_FIELDS    <- .dtok_which("user")        # was tabxplor_display_fields  (fmt_class.R)
+#' @keywords internal
+#' @noRd
+DISPLAY_ALIASES        <- .dtok_map("alias")         # was tabxplor_display_aliases (fmt_class.R)
+#' @keywords internal
+#' @noRd
+DISPLAY_BARE_TOKENS    <- .dtok_which("bare")
+#' @keywords internal
+#' @noRd
+DISPLAY_VALUE_CELLS    <- .dtok_which("value_cell")  # was an inline c("pct","mean","n","wn")
+#' @keywords internal
+#' @noRd
+DISPLAY_FOOTER_TOKENS  <- .dtok_which("footer")      # was an inline c("gof","pvalue","blank") x2
+#' @keywords internal
+#' @noRd
+DISPLAY_NO_COLOR       <- names(DISPLAY_TOKENS)[.dtok_real & !.dtok_lgl("colour")]
+#' @keywords internal
+#' @noRd
+DISPLAY_SETTABLE       <- .dtok_which("settable")
+#' @keywords internal
+#' @noRd
+DISPLAY_TOKEN_GEOMETRY <- .dtok_map("geometry")
+#' @keywords internal
+#' @noRd
+DISPLAY_COMPARISON     <- .dtok_map("comparison")    # was in tab-resolve.R
+# The argument that would fill each display field -- so D22's note can NAME it instead of leaving
+# the user with a blank column. Read only by display_note_empty().
+#' @keywords internal
+#' @noRd
+DISPLAY_FIELD_SOURCE   <- .dtok_map("source")
+
+
+# --- the GENERATED help section (the reg_measures_rd() precedent) -------------------------------
+# Called from a roxygen `@eval` block, so ?fmt and ?tab list the display tokens the package actually
+# has, at document() time, and cannot drift from them. They both hand-listed these before: ?fmt named
+# ELEVEN of the twenty-two (missing or/OR/or_pct/OR_pct/obs/resid/pvalue/coef/gof/est_ci/blank) and
+# ?tab hand-copied tabxplor_display_fields verbatim from a file 1400 lines away.
+#
+#   user_only = TRUE  -> ?tab: the twelve a user may type, with what fills each.
+#   user_only = FALSE -> ?fmt: every token, including the ones only the pipeline writes.
+#' @keywords internal
+#' @noRd
+display_tokens_rd <- function(user_only = TRUE) {
+  # Rd-escape: only `%` and `\` are special in the strings we emit ({} never appear in them). The
+  # `backticks` these strings use as their in-prose code marker become \code{}, which is Rd's.
+  esc <- function(s) {
+    s <- gsub("%", "\\\\%", gsub("\\", "\\\\", s, fixed = TRUE))
+    gsub("`([^`]+)`", "\\\\code{\\1}", s)
+  }
+  toks <- names(DISPLAY_TOKENS)
+  toks <- if (user_only) intersect(toks, DISPLAY_USER_FIELDS) else toks
+  line <- function(tk) {
+    r    <- DISPLAY_TOKENS[[tk]]
+    doc  <- if (is.na(r$doc)) "" else paste0(" --- ", esc(r$doc))
+    # `source` is the argument that FILLS the field; it is the single most useful thing to say
+    # about a token that renders void, and D22's runtime note says exactly the same words.
+    need <- if (!user_only || is.na(r$source)) "" else paste0(". Needs ", esc(r$source))
+    paste0("  \\item \\code{", tk, "}", doc, need, ".")
+  }
+  c(if (user_only) "@section Display fields:" else "@section Every display token:",
+    if (user_only)
+      c("The fields a \\code{\\{\\}} template may name. The first one is the \\emph{primary}:",
+        "it is what Excel shows and what the colours read.")
+    else
+      c("Generated from the package's own display table, so it cannot drift from what",
+        "\\code{get_num()} reads. The ones below that are not in the list above are written by",
+        "the pipeline itself and are not meant to be typed:"),
+    "\\itemize{", vapply(toks, line, character(1)), "}")
+}
 
 #' @keywords internal
 #' @noRd
@@ -178,17 +382,18 @@ display_refuse_mismatch <- function(col, fields, tmpl) {
   cli::cli_abort(c(
     "{.arg display} = {.val {tmpl}} prints a {.field {want}} beside a {.field {have}} interval.",
     "x" = "A cell carries ONE interval, and this column's is on the {.field {have}} scale.",
-    "i" = paste0("Ask for the matching comparison ({.code color = \"", 
-                 c(level = "no", difference = "difference", ratio = "ratio",
-                   log = "log")[have] %||% "difference",
+    "i" = paste0("Ask for the matching comparison ({.code color = \"",
+                 # 19m-iii: `measure`'s values ARE EST_SCALES' geometries (19b), so the colour to
+                 # suggest IS the geometry -- except a LEVEL, which names no comparison. The
+                 # four-entry map this replaces was that identity plus one exception, and its `log`
+                 # entry suggested `color = "log"`, which is not a MEASURES key: a log coefficient is
+                 # an additive difference on the log scale, so it falls to `difference` like anything
+                 # else this cannot name.
+                 if (identical(have, "level")) "no"
+                 else if (have %in% names(MEASURES)) have else "difference",
                  "\"} / {.code ci = }), or drop the {.code {{ci}}} bracket.")
   ))
 }
-
-#' @keywords internal
-#' @noRd
-DISPLAY_TOKEN_GEOMETRY <- c(pct = "level", mean = "level", n = "level", wn = "level",
-                            diff = "difference", ratio = "ratio", or = "ratio")
 
 
 # tab_append_pctcol_rows() -- Phase 14a. Under pct = "col" the add_n / add_pct extras are ROWS: a
@@ -557,3 +762,50 @@ tab_apply_n_min <- function(tab, n_min) {
 
   tab
 }
+
+
+# =====================================================================================================
+# BUILD-TIME EXHAUSTIVENESS -- the two switches and the table say the same thing, or the package does
+# not install (the R/reg-estimand.R precedent, whose own stopifnot() was added in 19l after an
+# estimand shipped with no model checks at all).
+#
+# This block must sit HERE and not in R/fmt_class.R: get_num()/set_num() are defined there, but
+# DISPLAY_TOKENS is defined in this file, and fmt_class.R sorts FIRST in R's C collation. This is the
+# first file where all three are in scope.
+#
+# ⚠ SCOPE. It reads get_num() and set_num() only. Those two are pure per-token maps, so every length-1
+# character constant in their bodies IS a display token, which makes the check TWO-directional: an
+# undeclared arm and an unhandled row both fail. format() is deliberately excluded -- its body is full
+# of unrelated constants (rendering classes, "excel", unicode escapes), so the same walk over it would
+# assert nothing.
+#' @keywords internal
+#' @noRd
+display_switch_tokens <- function(fn) {
+  out <- character()
+  walk <- function(e) {
+    if (is.character(e) && length(e) == 1L) out <<- c(out, e)
+    else if (is.call(e) || is.pairlist(e)) for (i in seq_along(e)) walk(e[[i]])
+  }
+  walk(body(fn))
+  unique(out)
+}
+
+local({
+  declared <- names(DISPLAY_TOKENS)[.dtok_real]
+  read     <- display_switch_tokens(get_num)
+  written  <- display_switch_tokens(set_num)
+  # `n` is get_num()'s fall-through initialiser, so it never appears as a literal there; the est_ci
+  # arm of set_num() switches on fmt_center_field(), whose values happen to be token names too --
+  # harmless, they are all declared.
+  stopifnot(
+    "every token get_num() reads must be declared in DISPLAY_TOKENS" =
+      all(read %in% declared),
+    "every declared token must be read by get_num()" =
+      all(setdiff(declared, "n") %in% read),
+    "every token set_num() writes must be declared in DISPLAY_TOKENS" =
+      all(written %in% declared),
+    # THE one that would have caught the 19m-iii arithmetic defect.
+    "every token declared `settable` must have a set_num() arm" =
+      all(DISPLAY_SETTABLE %in% written)
+  )
+})

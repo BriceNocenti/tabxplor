@@ -1308,7 +1308,78 @@ report is CLAUDE.md's `#### Phase 19m-ii` summary; the characterisation harness 
   are two independent reads off a third-party fit. The honest fix there is to read both from ONE
   accessor (e.g. `summary(fit)$coefficients`), so they share provenance.
 
-#### Phase 19m-iii — Harvest 2: open integration 3
+#### Phase 19m-iii — Harvest 2: the display grammar — ✅ DONE (2026-08-15)
+
+**`DISPLAY_TOKENS` landed** — the eight display vocabularies scattered over four files are one
+23-row relation in `R/tab-display.R`, read only through derived constants, with a build-time
+`stopifnot()` tying `get_num()`/`set_num()` back to it. It exposed and fixed a live defect
+(arithmetic silently no-opped on `pct_ci` / `mean_ci` / `pvalue`), and `?fmt` / `?tab` now GENERATE
+their display lists from it. Plus the three rule-2 repairs and the three owed measurements. The full
+report is CLAUDE.md's `#### Phase 19m-iii` summary.
+
+⚠ **Maintainer rulings taken at plan time — do not re-issue these items:**
+
+- **`tabxplor.output_kable` is NOT to be folded.** The bullet below proposing to route it into
+  `tabxplor.print` via `tx_getOption` is **withdrawn**: the option keeps its build-time render and
+  its own name. Do not "finish" it in a later phase.
+- **The other options folds are dropped too** (the tooltips/popover tri-state, the `tab_kable_*`
+  renames). Measured in 19m-i: 34 seeded options, 24 read at exactly one site, none unread. The
+  cluster is reported below for the record, not as work.
+- **The `spread_relabel()` `<br>` carrier migration is DEFERRED** (19n or later). It is atomic
+  (rule 5) and `<br>` has a SECOND producer, `tab_wrap_text(brk = "<br>")`, which the three sniff
+  sites already cannot tell apart — so a clean migration must also move the two-line span
+  composition into `tab_col_var_header()`, whose span RUNS are `rle()` over the label strings.
+  Full design in the bullet below; it is still accurate.
+
+**What 19m-iii actually took, beyond the display table:** the `plots.R` join key (`names(se)` — the
+SEs come from `sqrt(diag(vcov(fit)))`, whose dimnames name exactly those numbers, so the second read
+of `names(coef(fit))` and its length coincidence both went; ⚠ the `summary(fit)$coefficients` fix
+suggested in 19m-ii's note would have been WRONG — it drops aliased rows, so `se` would stop
+indexing the influence closure, and on a quasipoisson its SEs are not `vcov()`'s); the two
+false-promise `tot = "Total"` / `tot_lab = "Total"` parameters in `R/survey-variance.R`, dropped,
+with the convention stated once in the leaf's own internal-names DESIGN note (⚠ `"Total"` there is
+the leaf's PRE-RENAME key, the fourth of `"col_var"` / `"_colvarbis"` / the `"n_"`-`"wn_"` prefixes
+— substituting `total_names[1]` would be a BUG, those producers run long before
+`leaf_rename_totals()`); and `emp_tips`' silent-`NA` rekey, degraded to keeping the old name.
+
+**THE MEASUREMENTS ARE TAKEN** — `dev/benchmarks/phase19m3_measurements.R`, results committed at
+`dev/benchmarks/results_2.0.0/phase19m3.txt`. Do not re-take them; act on them or file them.
+
+1. **The per-`col_var` `agg_chi2()` cost (19j) is ~10 ms per extra col_var, and it is pure per-call
+   FIXED overhead** — independent of cell count (16 col_vars: 140 ms of batching overhead at 480
+   cells, 134 ms at 2400). Batched stays ~15-19 ms whatever `K`. End to end the whole test costs
+   ~40-64 ms per col_var (~110 ms with a `tab_var`), so the un-batching is roughly a quarter of it,
+   and ~9 % of an 8-col_var build. **This is the PRICE of the one-aggregate-core design, quantified**
+   — the leaf runs one `plain_core()` per col_var by construction, so re-batching would need a
+   cross-leaf step, which is exactly what 19j deleted. Not a defect; a number to decide with.
+2. **The reg fit-cache digest path (19k): a reference change costs 45 ms on the digest path, 396 ms
+   under `color = "adjustment"` (×8.8) and 108 ms under `shape` (×2.4).** Both refit, both were
+   unreachable from the UI before 19k, so this is a real new live-UI cost — nearly 0.4 s per
+   reference toggle with the adjustment colour on. Worth a look if the jamovi module feels sluggish.
+3. **19d's unconditional odds ratio does NOT get worse on a wide table.** `tab_apply_reference()`'s
+   profile share across 1/2/4/8 col_vars is 12.5 / 20.0 / 23.1 / 17.5 % — no upward trend, and well
+   inside 10 ms sampling noise on an 80-420 ms build; `ci_or` (the Woolf interval) never rises above
+   the floor. 19d's "re-measure wide before release" is answered: nothing to do.
+
+**The JS syntax gate remains infeasible here and was not attempted**: `requireNamespace("V8")` is
+`FALSE` and neither `node` nor `nodejs` is on `PATH`. It needs a new Suggest (`V8` also wants system
+`libv8-dev`) or a CI-only `node --check` — a maintainer decision, filed to **19n**. ⚠ And the record
+is wrong in two places: CLAUDE.md and this file both claim a committed JS bracket check. There is
+none — `tests/` opens no `.js` file at all, and `test-jamovi-vocabulary.R:100` checks only *content
+drift*, by shelling out to `dev/generate_jamovi_js.R check` (itself double-skipped: `skip_on_cran()`
+plus a `file.exists()` guard, because `dev/` is `.Rbuildignore`d).
+
+**Still open, for 19n or later** (the design notes below remain accurate):
+
+- the `<br>` carrier migration (deferred above);
+- `?fmt`'s `@param` glosses for `ctr` / `obs` still describe `resid` and `obs` in a second place —
+  the generated section now says it too, so one of the two can go at the 19n prose pass;
+- `set_num()` is a silent no-op on the two DECLARED read-only tokens (`resid`, `blank`). That is
+  correct — neither has a field to write — but it is still silence where a user might expect a
+  number to move. A warning was rejected here: `blank` cells are routine (`n_min` masking), so it
+  would fire constantly on ordinary tables.
+
+<details><summary>The original 19m-iii brief, kept for the design notes it carries</summary>
 
 **Handed forward BY 19m-i**, measured in that session and deliberately not built. The measurements
 are real; do not re-take them.
@@ -1398,6 +1469,8 @@ and a full table is unaffected. Worth a decision only if the degraded contract i
 or a CI-only `node --check`; there is still **no** committed bracket check, contrary to CLAUDE.md).
 
 
+</details>
+
 ---
 
 #### Phase 19n — Documentation, i18n, and release readiness
@@ -1426,6 +1499,12 @@ CRAN.
   Keep it to the Phase-y standard: **no dev detail at all**.
 - **`README.Rmd`** re-knit (it renders live coloured tables; check the hero screenshot is still
   representative).
+- **The JS syntax gate — a decision, not a task** (19m-iii): there is still NO syntax or bracket check
+  on `jamovi/js/*.js` (1610 lines), only the content-drift test. Adding one needs `V8` as a Suggest
+  (plus system `libv8-dev`) or a CI-only `node --check`; neither `V8` nor `node` exists on the dev
+  box. Follow the existing precedent if taken: `skip_on_cran()` + a `file.exists()` guard.
+- **The `<br>` carrier migration**, if it is taken at all (deferred out of 19m-iii; design in that
+  phase's collapsed brief).
 - **Release checks, in this order**: full suite in the normal locale → **the CI-locale run, once**
   (`LC_ALL=C.UTF-8 LANGUAGE=en`) → `devtools::document()` → `devtools::check()` → `pkgdown` bilingual
   build. `dev/release_checklist.md` governs the branch mechanics.

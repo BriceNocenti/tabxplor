@@ -109,7 +109,7 @@ tab_block <- function() {
                               as.list(tabxplor:::DISPLAY_COMPARISON)))
   c(
     BEGIN,
-    "// Generated from R/fmt_class.R (MEASURES) and R/tab-resolve.R (DISPLAY_COMPARISON).",
+    "// Generated from R/fmt_class.R (MEASURES) and R/tab-display.R (DISPLAY_TOKENS).",
     "// Re-run dev/generate_jamovi_js.R after changing them; the suite checks this block",
     "// (test-jamovi-vocabulary.R).",
     paste0("var TABX_MEASURE_ODDS_RATIO = ", js_str("odds_ratio"), ";"),

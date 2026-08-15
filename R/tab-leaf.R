@@ -460,6 +460,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # "<var>_colvarbis" so one column can be both an aggregation key and the spread variable.
   # The internal names ("col_var", "_colvarbis", and dcast's "n_"/"wn_" value prefixes) are
   # all stripped later (~L2317 setnames, ~L2437 prefix removal) to restore the user's names.
+  # Phase 19m-iii: **"Total" is the fourth of them** -- the pre-rename key of every total ROW
+  # (build_total_rows / finalize_total_rows), total TAB and the total COLUMN this leaf mints, read
+  # back as such by leaf_wide_pct(), num_rollup() and the survey variance producers
+  # (svy_group_map / svy_var_prop), and swapped for the user's `total_names` only at the very end,
+  # in leaf_rename_totals(). So a `total_names[1]` anywhere upstream of that rename is a BUG, and
+  # a consumer that runs AFTER it must be handed a declared vector instead (`totcol_vector` /
+  # `totrow_vector` / `tottab_vector`) -- which is exactly the 19m-i defect in tab_apply_reference().
   #If variables are in double in cols and rows, duplicate them and manage data.table
   col_var_in_row_var <- tab_row_names %in% as.character(col_var)
   if (any(col_var_in_row_var)) {

@@ -121,9 +121,7 @@ columns. Total rows/columns, the added-\code{n} row/column and the p-value line 
 value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-\code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
-\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}, \code{resid},
-\code{obs}; the first field is the \emph{primary}, shown alone by Excel and used for coloring.
+\code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
 \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
 standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
 \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
