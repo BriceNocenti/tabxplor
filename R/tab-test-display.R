@@ -418,14 +418,22 @@ test_grid_reg <- function(x, test_tbl) {
   # "<dep>: <positive_level>". So it always fell through and returned `cv` unchanged, which is what
   # the code does now, without pretending to parse.
   value_cols <- unique(reg$col)
-  deps <- if (!is.null(meta)) meta$dependent else NULL
-  # ⚠ Phase 19m-i: this length test is NOT a guard, it is a MISSING JOIN KEY standing in for one.
-  # `meta$dependent` enumerates the outcomes and `unique(reg$col)` the footer's value columns -- two
-  # different enumerations (a multinomial fit contributes several columns per outcome), paired here
-  # only when they happen to be the same length. Do NOT promote it to stopifnot(): the mismatch is a
-  # legitimate state and a degraded table must still render. The real fix is for the `test` tibble to
-  # carry which dependent each `col` belongs to -- filed to 19m-ii with reg_resolve_args().
-  value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps else value_cols
+  # Phase 19m-ii: the dependent each value column estimates, read off the ROW'S OWN KEY. 19m-i marked
+  # the length coincidence this replaces as a MISSING JOIN KEY: `meta$dependent` enumerated the
+  # OUTCOMES and `unique(reg$col)` the FITS, two different enumerations paired only when they happened
+  # to be the same length.
+  #
+  # THE RULE: a dependent names a column only when it IDENTIFIES it -- one model per outcome. A model
+  # COMPARISON gives every column the same outcome, so there the column key (the model label) is the
+  # header. That is strictly better in the one case the coincidence got wrong: a single-model
+  # comparison (1 dep, 1 col) used to be headed by the OUTCOME rather than by the model.
+  dep_col <- if ("dep" %in% names(reg)) reg$dep else rep(NA_character_, nrow(reg))
+  dep_of  <- vapply(value_cols, function(cv) {
+    d <- unique(dep_col[reg$col == cv])
+    d <- d[!is.na(d) & nzchar(d)]
+    if (length(d) == 1L) d else NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  value_headers <- if (!anyNA(dep_of) && !anyDuplicated(dep_of)) dep_of else value_cols
 
   # the ordered footer rows actually present: one per (stat, term), spec order then term order
   plan <- reg_footer_plan(reg)

@@ -105,7 +105,9 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
           effect_size = .data$effect_size, es_type = .data$es_type,
           # Phase 18z16-i (W8): `deff` -- the design effect this test corrected by. NA on the
           # classic basis (there is none), filled by tab_robust_overlay() on the others.
-          pvalue_exact = NA_real_, deff = NA_real_)
+          # Phase 19m-ii: `dep` is a REGRESSION key -- a crosstab row is about no dependent. NA, not
+          # "": `var = ""` already means "the whole table", so the empty string is a taken meaning.
+          pvalue_exact = NA_real_, deff = NA_real_, dep = NA_character_)
 
       # Phase 18j: Fisher's exact on the SMALL weak tables (smallest expected count < test_weak_min_e
       # AND a total feasible for an exact test), where the Pearson chi2 is unreliable -- stored as
@@ -159,12 +161,12 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
         baseA, .data$subtab, .data$col_var, test = "F_welch",
         statistic = .data$statistic, df1 = .data$df1, df2 = .data$df2,
         pvalue = .data$pvalue, n = as.double(.data$n), min_e = NA_real_,
-        effect_size = .data$effect_size, es_type = "eta2", deff = NA_real_)
+        effect_size = .data$effect_size, es_type = "eta2", deff = NA_real_, dep = NA_character_)
       classic <- dplyr::transmute(
         baseA, .data$subtab, .data$col_var, test = "F_classic",
         statistic = .data$statistic_classic, df1 = .data$df1_classic, df2 = .data$df2_classic,
         pvalue = .data$pvalue_classic, n = as.double(.data$n), min_e = NA_real_,
-        effect_size = .data$effect_size, es_type = "eta2", deff = NA_real_)
+        effect_size = .data$effect_size, es_type = "eta2", deff = NA_real_, dep = NA_character_)
       anova_rows <- dplyr::bind_rows(welch, classic)
     }
   }

@@ -1290,16 +1290,28 @@ belongs in a feature phase, not here.
 
 **Verification**: whatever the accepted proposals need.
 
-#### Phase 19m-ii — Harvest 2: open integration 2
+#### Phase 19m-ii — Harvest 2: `tab_reg()`'s argument boundary — ✅ DONE (2026-08-15)
+
+**`reg_resolve_args()` + `new_reg_spec()` landed**; `tab_reg()` 821 → 147 lines, 30 user messages → 1.
+Six declared stages in `R/reg-resolve.R`, a per-dependent estimand TABLE replacing nine closures, nine
+defects fixed with fixtures, the `test` tibble's `dep` key, and `sp$family` → `fit_family`. The full
+report is CLAUDE.md's `#### Phase 19m-ii` summary; the characterisation harness is
+`dev/verify_reg_specs.R` (291 cases, `save`/`check`).
+
+⚠ Two items below were **settled by measurement during that session — do not re-issue them**:
+- **There is deliberately NO `REG_ARG_VALUES` table.** `TAB_ARG_VALUES` collapsed FIVE drifted
+  producers; `tab_reg()` is ONE whose vocabularies are already declared once each, and
+  `TAB_ARG_VALUES`' own exclusion rule ("validating it means REWRITING it") disqualifies **11 of 15**
+  candidates. `reg_validate_args()` calls the existing single sources instead.
+- **`tab-test-display.R:428`'s length guard is CLOSED** (the `test` tibble carries `dep` now). Only
+  `plots.R`'s remains, and it cannot be fixed by tabxplor alone — `names(coef(fit))` and the SE vector
+  are two independent reads off a third-party fit. The honest fix there is to read both from ONE
+  accessor (e.g. `summary(fit)$coefficients`), so they share provenance.
+
+#### Phase 19m-iii — Harvest 2: open integration 3
 
 **Handed forward BY 19m-i**, measured in that session and deliberately not built. The measurements
 are real; do not re-take them.
-
-**THE structural item, unchanged: `tab_reg()` has no argument boundary.** 19l pass 2's hand-over
-stands verbatim (~550 of its 821 lines are argument resolution, 62 of the package's ~190 user
-messages, ten ad-hoc local closures, two near-identical `purrr::map2()` spec literals). The key is
-**`reg_resolve_args()` + `new_reg_spec()`** — 19i's boundary medicine and 19g's typed-record medicine,
-one layer over. A resolver redesign; it deserves its own session.
 
 **THE `display` grammar — one table, designed in full, not built (19m-i's G5, cut for scope).**
 Six declared vocabularies plus two uncounted literals are six *columns* of one per-token relation:

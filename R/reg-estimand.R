@@ -712,6 +712,57 @@ reg_normalize_color <- function(color) {
   out
 }
 
+# Phase 19m-ii: reg_color_auto_measure() / reg_color_for() -- the auto-colour sentinel, resolved.
+# They were two closures inside tab_reg() (`color_auto_measure` / `color_fill` + `color_for`) that had
+# to remember, in three extra locals, which slots WERE auto: the body filled `color` in place, so
+# `is.na()` stopped being the sentinel one line after it started being it. Keep the normalised spec
+# un-mutated and `is.na()` IS the sentinel, always -- which is also what makes them pure functions of
+# (spec, estimand row) instead of closures over a mutating frame.
+#
+# The ladder decides the CONTEXT ("reg_diff" / "reg_ratio"); WHICH measure answers it is MEASURES' own
+# `auto_for`, the same table tab()'s two auto passes read (19c). The context comes from the column's
+# own stored SCALE -- its declared geometry -- not from a re-reading of `effect` + `exponentiate`,
+# which is what made the ladder and the estimand two facts that could disagree (19e).
+#' @keywords internal
+#' @noRd
+reg_color_auto_measure <- function(est) {
+  ctx <- if (identical(EST_SCALES[[est$scale]]$geometry, "ratio")) "reg_ratio" else "reg_diff"
+  measure_auto(ctx, "text")
+}
+
+# A TRUE in the text slot of an explicit two-channel spec is the same "the column's own geometry"
+# sentinel as a bare TRUE -- resolved PER DEPENDENT, so a mixed-family table keeps one ladder per
+# family. An explicit user measure keeps its own slots; only the auto ones follow the column.
+#' @keywords internal
+#' @noRd
+reg_color_for <- function(color, est) {
+  auto <- is.na(color)
+  if (!any(auto)) return(color)
+  color[auto] <- reg_color_auto_measure(est)
+  color
+}
+
+# Phase 19m-ii: THE header word of an estimand, given the cell layout it will be rendered in.
+# Phase 14v: with an empirical companion, a prob-scale AME/MER cell folds in the model-adjusted
+# predicted % as "{diff} ({pct})"; name it in the header ("... AME (adjusted %)") so the parenthetical
+# is unambiguous next to the crude "Emp. %". It is the marginal-STANDARDISED predicted probability
+# (decisions doc S50, change A/C), hence "adjusted %" not "model %". Prob-scale families only
+# (a gaussian/poisson AME is a bare effect).
+#
+# ⚠ `empirical` is an EXPLICIT formal, and that is the point. It was a closure reading `empirical`
+# lazily from tab_reg()'s frame while two later blocks still mutated it (the `adjustment` forcing
+# turns it ON, the no-crude-companion degrade turns it OFF), so the eager `eff_word` recorded in
+# reg_call could disagree with the lazy one the specs and labels carried. A function of its arguments
+# can only be called once the caller has decided.
+#' @keywords internal
+#' @noRd
+reg_eff_word <- function(est, empirical = FALSE) {
+  w <- est$word
+  if (!identical(est$builder, "coef") && isTRUE(empirical) && reg_fam_prob(est$family))
+    w <- paste0(w, " (adjusted %)")
+  w
+}
+
 # reg_per_dep() -- THE per-dependent slicer, shared by `family`, `effect` and `measure` (and by the
 # multi-dependent recursion, which used to slice `trials` by hand and forward `family` whole -- D6).
 # A scalar applies to every outcome; a NAMED vector is keyed by dependent; a positional one is

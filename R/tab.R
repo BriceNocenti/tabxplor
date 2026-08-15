@@ -906,7 +906,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
                               user_env = rlang::caller_env(2))
     signif <- "guaranteed_effect"
   }
-  ok_signif <- c("ignore", "grey_non_signif", "guaranteed_effect")
+  ok_signif <- COLOR_SIGNIF_VALUES          # 19m-ii: the ONE vocabulary (R/fmt_class.R)
   if (!signif %in% ok_signif) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {signif}}.",
                      "i" = "Valid: {.val {ok_signif}}."))

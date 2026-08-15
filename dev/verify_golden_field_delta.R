@@ -31,10 +31,10 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 19d-tail (the green-light pass): the intended delta is EMPTY. It unifies the `ci` anchor rule,
-# gives the leaf the dichotomised level geometry its odds ratio needs, and repairs the jamovi tier-3
-# tuple -- none of which may move a per-cell field, a column attribute, a `test` column or a `meta`
-# sub-field on any golden. A single CHANGED line is a regression, not a declaration.
+# Phase 19m-ii: the intended delta is ONE `test` tibble column, `dep` (which dependent a footer row
+# is about -- 19m-i's "missing join key"). It is a REGRESSION key, so every crosstab golden gets it
+# all-NA. Nothing else may move: no per-cell field, no column attribute, no other `test` column, no
+# `meta` sub-field. A single other CHANGED line is a regression, not a declaration.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
@@ -80,7 +80,9 @@ RENAMED_TEST_COLS <- list()
 # would compare a declared column against a stripped copy of itself (the reset hazard at the top).
 DECLARE_INDEX_COLS <- FALSE
 
-ADDED_TEST_COLS <- character(0)
+# Phase 19m-ii: `dep` -- the dependent each footer row is about. NA on every crosstab row (`var = ""`
+# already means "the whole table", so "" is a taken meaning), which is what every golden case is.
+ADDED_TEST_COLS <- "dep"
 
 # Phase 18z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
 # basis). Unlike a field or a test column it has a definite VALUE, and it is stored only on the

@@ -1496,6 +1496,15 @@ set_color     <- function(x, color) {
   `attr<-`(x, "color", resolve_color_channels(color))
 }
 
+# Phase 19m-ii: THE significance-policy vocabulary. It was written twice -- here and in
+# normalize_color_spec() (R/tab.R) -- and `tab_reg()` read NEITHER: it passed `color_signif` straight
+# to fmt(), which casts without validating, so a typo was stored as the column's policy and merely
+# painted nothing. Three readers now: the storage boundary below, tab()'s spec parser, and
+# reg_validate_args() (R/reg-resolve.R).
+# ⚠ NO roxygen block here: it sits inside fmt()'s @describeIn chain, so a `#'` comment would attach
+# set_color_signif()'s documentation to this constant instead (measured: it did).
+COLOR_SIGNIF_VALUES <- c("ignore", "grey_non_signif", "guaranteed_effect")
+
 #' @describeIn fmt set the significance policy attribute of a \code{fmt} vector
 #' @export
 set_color_signif <- function(x, color_signif) {
@@ -1504,7 +1513,7 @@ set_color_signif <- function(x, color_signif) {
   # COMPAT (Phase 13a): the renamed policy value, accepted silently here (the user-facing
   # deprecation message fires once in normalize_color_spec()).
   if (identical(color_signif, "color_all_signif")) color_signif <- "guaranteed_effect"
-  ok <- c("ignore", "grey_non_signif", "guaranteed_effect")
+  ok <- COLOR_SIGNIF_VALUES
   if (!color_signif %in% ok) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {color_signif}}.",
                      "i" = "Valid: {.val {ok}}."))

@@ -44,7 +44,7 @@ fmt(
   n = integer(),
   scale = "level_n",
   digits = rep(0L, length(n)),
-  display = switch(est_var_kind(scale[1]), mean = "mean", pct = "pct", "n"),
+  display = est_default_display(scale[1]),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),

@@ -370,7 +370,47 @@ R/
 │                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
 │                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
-├── reg-estimand.R   (~735 L) Phase 19e (KEY 8b): WHAT A REGRESSION COLUMN ESTIMATES. The user's two
+├── reg-resolve.R    (~980 L) Phase 19m-ii: THE argument boundary of `tab_reg()` -- 19i's
+│                              `tab_resolve_common_args()` medicine for the producer that never got
+│                              one. **`reg_resolve_args()`** is the ONE entry point (tab_reg() calls
+│                              it once and gets **`new_reg_args()`**, new_reg_shared()'s idiom), and
+│                              it is six declared stages: **S1 `reg_validate_args()`** (the checks
+│                              that are PURE -- and four of them are new: `conf_level` had NEVER been
+│                              validated here, `stats` was SILENTLY FILTERED so a typo lost a footer
+│                              row, `color_signif` was unvalidated so an unknown policy was STORED on
+│                              every column, `baseline`'s shape) · **S2 `reg_prepare_data()`** (the
+│                              design unwrap / formula / predictors dispatch / labelled / `shape` /
+│                              predictor union / the five `split_var` refusals -- i.e. EVERY rewrite
+│                              of `data`) · **S3 `reg_resolve_estimands()`** (the per-dependent
+│                              TABLE: dep/family/rr_promoted/est/fit_family/trials/inverse/crude_key,
+│                              + `reg_resolve_trials()`) · **S4 `reg_resolve_output()`**
+│                              (display/colour/`empirical`, THE NOTES LAST) · **S5
+│                              `reg_resolve_fit_plan()`** (na / the `reref` gate / the reference
+│                              relevel / multiplier / shape terms) · **S6 `reg_resolve_specs()`**
+│                              (labels, positive levels, the ONE `new_reg_spec()` call site).
+│                              ⚠ `data` is INSIDE the boundary and a declared field of the record
+│                              (new_ctx()'s precedent), because a pure resolver is impossible without
+│                              a cycle: `family = "auto"`, `trials = TRUE` and `multiplier = "sd"` are
+│                              all ANSWERED by the data, `shape` recodes it, `reference` relevels it,
+│                              and the relevel needs the families S3 resolves. Lifting them out would
+│                              put the ORDERING in the caller.
+│                              ⚠ there is deliberately NO `REG_ARG_VALUES` table: TAB_ARG_VALUES
+│                              collapsed FIVE drifted producers, `tab_reg()` is ONE whose vocabularies
+│                              are already declared once each, and TAB_ARG_VALUES' own exclusion rule
+│                              ("validating it means REWRITING it") disqualifies 11 of 15 candidates.
+│                              THE ORDER IS THE DESIGN, and the 23 constraints are written out as
+│                              `H1`..`H23` where they bind -- three of which were VIOLATED: the
+│                              `empirical` forcing/degrade straddled the notes and the specs (so a
+│                              stored effect word could contradict its own column), the
+│                              `color_signif` default landed 22 lines after the note that reads it,
+│                              and the frozen frame was built TWICE under a comment demanding it be
+│                              one. ⚠ the `reref` clause is the one place a wrong TRUE is a wrong
+│                              NUMBER (a stale digest), and it reads 13 resolved values across eight
+│                              blocks -- its reasoning is spelled out per clause.
+│                              Characterisation harness: `dev/verify_reg_specs.R` (291 cases,
+│                              save/check, dumping the MESSAGES in order as well as the specs /
+│                              reg_call / column attributes / labels / test keys).
+├── reg-estimand.R   (~790 L) Phase 19e (KEY 8b): WHAT A REGRESSION COLUMN ESTIMATES. The user's two
 │                              questions -- `effect` (which CONTRAST: coefficient / marginal /
 │                              at_reference) x `measure` (which MEASURE: odds_ratio / ratio /
 │                              difference / log) -- resolved through ONE declared library,
@@ -754,7 +794,25 @@ R/
 │                              are the sole reason the package would depend on farver + colorspace.
 ├── tabxplor-options.R (~170 L) Doc-only page `?tabxplor-options`: every tabxplor.* global option
 │                              (defaults live in .onLoad; keep in sync). Cross-linked from ?tab.
-├── tab_reg.R       (~6125 L)  Phase 12c–12h: unified regression tables. tab_reg() over ONE engine
+├── tab_reg.R       (~5460 L)  Phase 12c–12h: unified regression tables. 19m-ii moved the ARGUMENT
+│                              BOUNDARY out to R/reg-resolve.R, so `tab_reg()` itself is 147 lines
+│                              (was 821) holding ONE user message (was 30): the retired-args guard,
+│                              three match.arg, the multi-dependent x model-list RECURSION (a
+│                              dispatch over the call SHAPE, not resolution -- moving it would make
+│                              the return type a union), one `reg_resolve_args()` call, `reg_build()`,
+│                              and a tail that READS the returned record instead of recomputing from
+│                              four closures. **`new_reg_spec()`** (beside `new_reg_shared()`) is the
+│                              typed per-model record its two hand-written 14-field literals became:
+│                              11 fields, `fit_family` renamed from `family` (it is `est$fit`, the
+│                              internal LINK key, one word from reg_call's `families` = the OUTCOME
+│                              ones), and `effect_shape` (0 readers) / `do_exp` (= `isTRUE(est$exp)`)
+│                              / `eff_word` (= `reg_eff_word(est, empirical)`, derived in reg_build
+│                              where `empirical` is FINAL) DELETED. `reg_test_row()` gained **`dep`**
+│                              -- which dependent a footer row is about, a DECLARED `new_test_tibble()`
+│                              column (an undeclared one would be read as a grouping variable), NA on
+│                              a crosstab row; it replaced the length coincidence `test_grid_reg()`
+│                              paired `meta$dependent` against `unique(test$col)` with.
+│                              tab_reg() over ONE engine
 │                              (stats::lm/glm, survey::svyglm/svyolr, svyVGAM::svy_vglm, nnet::multinom,
 │                              MASS::polr; broom::tidy). Phase 15e: `family` is resolved PER DEPENDENT
 │                              (scalar / vector / named vector; `family_for`/`do_exp_for`/`effect_shape_for`/
@@ -3138,6 +3196,186 @@ silently, by disabling the declaration and watching it report the change.
 `DISPLAY_TOKENS` design, the two options folds, `reg_resolve_args()`/`new_reg_spec()`, the three
 carrier migrations (with `emp_tips` measured **not reachable**), the two join-key guards, and the
 four still-owed measurements.
+
+---
+
+#### Phase 19m-ii — Harvest 2: `tab_reg()`'s argument boundary
+
+**DONE (2026-08-15).** THE structural item 19l pass 2 and 19m-i both handed forward, and the last one
+that moves the study's headline diagnostic. **`tab_reg()`: 821 lines → 147, and 30 of the package's
+~190 user messages → 1.** Phase 19i gave the four crosstab producers one argument boundary; the
+regression producer never got one, so 738 of its 821 lines resolved 28 arguments before a single
+`reg_build()` call, and inside them sat **twelve ad-hoc local closures** and **two near-identical
+14-field spec literals** — all there for one reason: the per-dependent facts were never materialised.
+
+**Scope (maintainer's rulings at plan time)**: this session is the reg boundary **only**. The
+`DISPLAY_TOKENS` grammar, the carrier migrations and the owed measurements go to **19m-iii**. The
+options cluster is **dropped** — no tooltips tri-state, `output_kable` left alone.
+
+**Verified.** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 6461** against the inherited FAIL 0 / WARN 1
+/ SKIP 4 / PASS 6402 — same warning count (the pre-existing Poisson over-dispersion advisory), and
+the +59 is exactly `test-reg-resolve.R`, this phase's own fixture file.
+`dev/verify_golden_field_delta.R` reports **only the declared addition**
+across all **1788 cells of the 36 goldens** — the `test` tibble's new `dep` column, all-NA on every
+crosstab case, and no per-cell field, no column attribute, no other `test` column and no `meta`
+sub-field moving. No `_snaps/*.md` moved.
+
+**THE ENABLING FACT, and why step 1 was a dev script with zero source change.** There is **no
+regression golden and no regression snapshot**: `_golden/` is 36 crosstab cases and `grep -c Model`
+on `_snaps/golden.md` / `_snaps/render-html.md` is 0. The reg producer's whole argument surface was
+asserted only by `expect_*`. So the phase opens with **`dev/verify_reg_specs.R`** (committed, on
+`dev/verify_color_attrs.R`'s model): 291 cases over 20 named axes, dumping per case the **messages in
+order** (the field `verify_color_attrs.R` lacks and this phase most needed — 30 messages live in the
+region and several deliberately move), the specs, the whole `reg_call()`, every fmt column's stored
+attributes, every non-fmt column's labels (the only cheap window on the four `data` rewrites) and the
+`test` keys. It captures through `tab_reg()` alone, because `reg_call(x)$fit_spec$specs` already
+stores the resolver's central output — so it works unchanged on both trees with no new API. ⚠ It
+`scrub()`s language and closures (`identical()` on either compares ENVIRONMENTS, and a fresh
+`load_all()` makes new ones) and normalises cli's embedded source references at COMPARISON time
+(adding a line anywhere rewrites `"Caused by error in f() at tab_reg.R:1247:9"`). It was proved
+deterministic — `check` against its own baseline on the unchanged tree printed IDENTICAL — before
+being trusted as a gate.
+
+**The eight steps, each gated on it.** Steps **5, 6b and 6c were required to be exactly IDENTICAL**
+and were (0 differing paths); the rest declared their delta and matched it exactly, verified by a
+path-level differ rather than by eyeballing case names.
+
+**THE SHAPE**: one entry point, **`reg_resolve_args()`**, six declared stages in a new
+**`R/reg-resolve.R`**, returning **`new_reg_args()`** — `new_reg_shared()`'s idiom (the FORMALS are
+the contract, the body is `as.list(environment())`, the derived `globalVariables()` mirror beneath).
+Details in the Repository Map.
+
+**⚠ `data` is INSIDE the boundary, as a declared field.** A pure resolver is impossible here without
+a cycle: `family = "auto"`, `trials = TRUE` and `multiplier = "sd"` are all ANSWERED by the data,
+`shape` recodes it, `reference` relevels it — and the relevel needs the families S3 resolves. A
+separate `reg_prepare_data()` that `tab_reg()` called itself would put the ORDERING in the caller: a
+second place it can be got wrong, i.e. the ad-hoc layer rule 1 forbids. `new_ctx()`'s `data = NULL`
+is the exact precedent.
+
+**⚠ There is deliberately NO `REG_ARG_VALUES` table** (maintainer-confirmed after measurement).
+`TAB_ARG_VALUES` exists because FIVE producers had each re-implemented the boundary and drifted
+(`tot`'s expansion four times, `na`'s allow-list three times *with three contents*). `tab_reg()` is
+ONE producer whose vocabularies are already declared once each — and `TAB_ARG_VALUES`' own exclusion
+rule (*"validating it means RESOLVING it, so it lives with its resolver"*) disqualifies **eleven of
+the fifteen** candidates. A table would have had ~4 rows, one duplicating a list that already existed
+twice. `reg_validate_args()` instead does five checks, each **calling an existing single source**.
+The one genuine table-move: **`COLOR_SIGNIF_VALUES`** extracted (it was written twice, in `tab.R` and
+`fmt_class.R`; three readers now).
+
+**THE PER-DEPENDENT TABLE is the key.** Nine of the twelve closures existed because family /
+estimand / trials / inverse / crude key were re-derived on demand from a frame later blocks kept
+mutating — `est_for` even carried its own `local()` memo cache, and `trials_for` was **defined
+twice**, an off default and an on-path redefinition nested two `if`s deep. `reg_resolve_estimands()`
+computes the rows once; the survivors are four one-line LOOKUPS, and the cache is unnecessary by
+construction. The other three became **pure package functions** — `reg_eff_word(est, empirical)`,
+`reg_trials_observed_max(x)`, `reg_color_auto_measure(est)` / `reg_color_for(color, est)`. That last
+pair also deleted `color_auto` / `color_slot_auto` / `color_spec_arg`: the body filled `color` in
+place one line after computing the sentinel from it, so three extra locals existed to remember what
+`is.na()` had meant.
+
+**THE TWO SPEC LITERALS → ONE `new_reg_spec()` CALL SITE**, with the collapse *proved*, not assumed:
+`formula_mode` is set only inside the `is_formula(dependent)` branch, which aborts if `predictors` is
+non-NULL and then assigns it a CHARACTER vector — so `is_comparison` cannot be TRUE alongside it, and
+the branch's hardcoded `compound = FALSE, formula = NULL` were the general expressions. A
+`stopifnot()` records it. Three fields left the record (`effect_shape` had **zero** readers;
+`do_exp` is one token; `eff_word` is now derived inside `reg_build()`, where `empirical` is FINAL —
+strictly better than storing it).
+
+**NINE DEFECTS, each shipping with the fixture that fails without it** (`test-reg-resolve.R`, 59
+assertions). Four were on the plan; five were found while implementing:
+
+- **`reg_per_dep()` is THE declared slicer, and the cascade was open-coded three more times with
+  DIFFERING semantics.** `family[[d]]` **errors** ("subscript out of bounds") when a named vector
+  omits a dependent, `family[[i]]` when a positional one is short, and
+  `inverse_two_level_factors[[d]]` does both — a *positional* `inverse_two_level_factors` was
+  unusable entirely, since the length>1 branch assumed names. Measured: `tab_reg(d, c("a","b"),
+  family = c(a = "binomial"))` died; it now detects `b`.
+- **`stats` was never validated.** `reg_validate_stat_keys(x, arg = "stats")` has carried that
+  default since 19g and had ONE caller, passing `arg = "check"`. `stats` was silently FILTERED, so a
+  typo produced a missing footer row with no message.
+- **`color_signif` was unvalidated on the reg path.** It went straight to `fmt()`, which casts
+  without validating, so `color_signif = "grey"` was **stored on every column**.
+- **`conf_level` was never validated here** — `conf_level = 95` produced `NaN` bounds and a table.
+- **`baseline`** was validated conditionally, late, and as a warning, so a bogus one under
+  `compare = "none"` was dropped in silence.
+- **A formula `dependent` entered the multi-dependent recursion.** `length(y ~ x)` is **3**, so every
+  two-sided formula passed `length(dependent) > 1L`; each child died on an internal `stopifnot` while
+  the teachable message written for exactly that mistake sat unreachable.
+- **`reg_color_notes()`'s `crude_keys` formal was DEAD** — the name appeared only in the signature,
+  and the caller ran a per-dependent `vapply` purely to fill it: dead work *and* a fourth encoding of
+  the crude-key cascade.
+- **The `color_signif` default landed 22 lines after the note that reads it** (H21), so
+  `tab_reg(color = "adjustment")` was silent while the identical explicit state emitted the note.
+- **A table's own record could contradict its own column header** (H22). `empirical` is written by
+  two blocks (the `adjustment` forcing turns it ON, the no-crude-companion degrade turns it OFF) and
+  read by three later ones, and the notes ran BETWEEN them. Measured on the pre-phase tree:
+  `reg_call$eff_word` said `"AME"` while the column it describes was `"Model_AME (adjusted %)"`.
+
+**THE ORDER IS THE DESIGN, and it is now written down.** Twenty-three constraints (`H1`..`H23`)
+stated where they bind rather than implied by 738 lines of sequence. Three were violated (H20/H21/H22
+above); one more was silent waste — **the frozen frame was built TWICE, verbatim, ten lines apart,
+under a comment demanding the multiplier's SD and the quadratic terms' centre come from the SAME
+measurement** (H19). And **H23**: the five `split_var` refusals ran ~500 lines late, so *"`split_var`
+is not a column of `data`"* arrived after up to eight informs about families and colours the call was
+never going to produce.
+
+**⚠ The `reref` clause is the one place a wrong `TRUE` is a wrong NUMBER, not an error** (a table
+built from a stale digest). It reads **13 resolved values spanning eight blocks**, which is the
+strongest argument that the stage order is the design; its reasoning is now spelled out per clause,
+and the harness has a `reref.*` axis toggling each one — an axis nothing covered before.
+
+**THE `test` TIBBLE'S `dep` KEY** (19m-i's "missing join key", filed here). `reg_test_row()` gains
+`dep`; **`new_test_tibble()` declares it** — it MUST be in the schema, since `test_group_cols()` is
+`setdiff(names(tt), names(new_test_tibble()))` and an undeclared column would be read as a GROUPING
+variable and split the reg footer into one block per outcome (19g's own defect). Crosstab rows carry
+`NA`, written explicitly in `tab-chi2.R`'s three `transmute()`s — NA, not `""`, because `var = ""`
+already means "the whole table". `test_grid_reg()` now states a RULE: *a dependent names a column
+only when it IDENTIFIES it — one model per outcome; a model COMPARISON gives every column the same
+outcome, so the column key is the header.* Strictly better in the one case the length coincidence got
+wrong (a single-model comparison used to be headed by the outcome).
+
+**`sp$family` → `fit_family`** (32 sites, maintainer-approved, landed last and alone). It IS
+`est$fit` — the internal LINK key, `rr`/`rd`/`mr` included — sitting one word from `reg_call$families`
+and `sp$est$family`, which both mean the OUTCOME family. A name that invited a guess about which of
+the two it was, in a phase whose rule 2 is "never guess".
+
+**HONEST CONCERNS.**
+
+- **`R/tab_reg.R` shrank 6087 → 5470 while `R/reg-resolve.R` adds 981: net +364 lines.** That is
+  the same trade every Phase 19 key made — scattered implicit rules for declared stages plus the
+  prose that explains them — and the line count is the wrong scoreboard. What moved is the
+  diagnostic: **`tab_reg()`'s body 821 → 147 lines and 30 messages → 1**, and 33 of `tab_reg.R`'s 62
+  messages are now at a boundary that says so in its name.
+- **The one message left in `tab_reg()`** is the `trials`-length abort inside the multi-dependent
+  recursion, which stays because that block is a dispatch over the call SHAPE, not resolution —
+  moving it would make `reg_resolve_args()`'s return type a union.
+- **The estimand-refusal errors lost purrr's `In index: 1. With name: … Caused by error in …`
+  wrapper** (36 harness cases), because the loop moved from `purrr::map` to `lapply`. The message
+  bodies are character-identical and already name the dependent, so the wrapper was pure noise — but
+  step 5 was declared IDENTICAL in the plan and this is the one respect in which it was not.
+- **H20's own path produced no change in the sweep.** The forcing and the degrade never both fire on
+  the 291 fixtures (the degrade needs a compound formula, where the estimand is a coefficient and the
+  parenthetical never applies). H22 IS reachable and is measured and fixtured; H20's reorder is a
+  correctness fix whose failure mode I could not construct. Said plainly rather than claimed.
+- **The `empirical` degrade now asks the SPEC's own stored `crude_key`** instead of re-deriving one
+  from the OUTCOME family — a third encoding, and one that read a different family from the one the
+  spec pairs its crude block with. Verified equivalent on the only question the degrade asks (every
+  fit key and every outcome family yields a non-NA key; only a compound formula gives NA), so the
+  sweep shows no change. It is a *unification*, not a behaviour claim.
+- **One harness run took 546 s instead of 93 s.** No orphans (`ps` checked, 0 workers); the next run
+  was 92.5 s. Transient machine contention, not a regression — recorded because the number is in the
+  logs.
+- **The `.a.yaml` / `.u.yaml` were not touched**, so **no `jmvtools::prepare()` is needed** — 19k's
+  maintainer rebuild + live pass is still the outstanding one.
+- `dev/verify_color_attrs.R` was not re-run: nothing here touches the crosstab colour vocabulary, and
+  the golden delta proof covers the stored colour attributes cell by cell.
+
+**FOLLOW-UPS.** **19m-iii** carries what this session did not take: the `DISPLAY_TOKENS` grammar
+(designed in full in the roadmap), the `spread_relabel()` `<br>` carrier, the `"Total"` sentinel
+defaults in `survey-variance.R`, the two genuine length guards (one of which — `tab-test-display.R`'s
+— **this phase closed**, so only `plots.R`'s remains, and it cannot be fixed by tabxplor alone), the
+four owed measurements and the JS syntax gate. 19n: `po/R-fr.po` (the four new aborts are
+untranslated), the vignettes, and `?tab_reg`'s argument prose.
 
 ---
 

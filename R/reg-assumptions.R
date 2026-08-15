@@ -37,7 +37,7 @@
 # "binomial", never a family of its own, so it needs no entry.
 #
 # ⚠ Phase 19l: it must name every INTERNAL LINK KEY too (`rr` / `rd` / `mr`, REG_FIT_FAMILY in
-# R/reg-estimand.R). It named only `rr`, and `reg_checks_for()` filters on `sp$family`, which IS
+# R/reg-estimand.R). It named only `rr`, and `reg_checks_for()` filters on `sp$fit_family`, which IS
 # `est$fit` -- so `tab_reg(family = "binomial", measure = "difference")` and
 # `tab_reg(family = "gaussian", measure = "ratio")`, the two estimands 19e added, got ZERO assumption
 # checks and ZERO diagnostic panels, silently. A link chosen to reach a MEASURE is still the same
@@ -331,8 +331,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
   num <- setdiff(reg_numeric_preds(data, sp$predictors), names(shared$shape_terms))
   if (length(num) == 0L) return(NULL)
   weighted <- isTRUE(shared$weighted)
-  use_f    <- reg_fam_disp_estimated(sp$family)
-  use_wald <- reg_fam_svy_fitted(sp$family, weighted)
+  use_f    <- reg_fam_disp_estimated(sp$fit_family)
+  use_wald <- reg_fam_svy_fitted(sp$fit_family, weighted)
   types    <- c(wald = "linearity_wald", f = "linearity_f", lr = "linearity_lr")
 
   purrr::flatten(purrr::map(num, function(v) {
@@ -343,7 +343,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     # over-dispersion -- all already said once by the real fit, and this runs once per numeric
     # predictor. Its only output is a p-value.
     f2 <- tryCatch(suppressWarnings(suppressMessages(
-            reg_fit(data, sp$dependent, sp$predictors, sp$family, shared$design_spec, sp$do_exp,
+            reg_fit(data, sp$dependent, sp$predictors, sp$fit_family, shared$design_spec, isTRUE(sp$est$exp),
                     if (is.null(sp$inverse)) shared$inverse_two_level_factors else sp$inverse,
                     shared$conf_level, "wald", trials = sp$trials, formula = NULL,
                     multiplier = NULL, add_terms = tm))),
@@ -360,7 +360,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     lab  <- have[length(have)]
     if (!length(lab) || is.na(lab)) return(NULL)
     got <- purrr::compact(reg_term_tests(fit2, v, lab, use_f, use_wald, types = types,
-                                         col_var = fit_first_col_i, nobs = f2$nobs))
+                                         col_var = fit_first_col_i, nobs = f2$nobs,
+                                         dep = sp$dependent))
     if (length(got)) return(got)
     # The shared dispatcher produced nothing: the engine's drop1 method has no p-value (multinomial).
     # Both fits are in hand and nested, so the likelihood ratio between them IS the same test -- but
@@ -368,7 +369,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     if (use_wald || is.null(base_fit)) return(NULL)
     lr <- reg_nested_lr(base_fit, fit2)
     if (is.null(lr)) return(NULL)
-    list(reg_test_row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs))
+    list(reg_test_row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs,
+                      dep = sp$dependent))
   }))
 }
 
@@ -379,17 +381,17 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
 reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_col,
                            grouped_by_fit) {
   weighted <- isTRUE(shared$weighted)
-  gof <- function(test, col_var, value, nobs)
+  gof <- function(test, col_var, value, nobs, dep = NA_character_)
     if (is.null(value) || is.na(value)) NULL
-    else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs)
+    else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs, dep = dep)
 
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
     f  <- fits[[i]]
     if (is.null(f)) return(NULL)
     grouped <- isTRUE(grouped_by_fit[[i]])
-    keep <- reg_footer_stats(sp$family, weighted, grouped, stats)
-    keys <- reg_checks_for(sp$family, weighted, grouped, has_fit = !is.null(f$fit))
+    keep <- reg_footer_stats(sp$fit_family, weighted, grouped, stats)
+    keys <- reg_checks_for(sp$fit_family, weighted, grouped, has_fit = !is.null(f$fit))
     keys <- keys[vapply(keys, function(k) any(names(REG_CHECKS[[k]]$types) %in% keep), logical(1))]
     if (length(keys) == 0L) return(NULL)
     cv  <- fit_first_col[[i]]
@@ -401,11 +403,11 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
       bp <- attr(fit, "brant_po")
       if (!is.null(bp) && !is.na(bp))
         out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
-                                       NA_real_, bp, f$nobs)))
+                                       NA_real_, bp, f$nobs, dep = sp$dependent)))
     }
-    if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs)))
-    if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs)))
-    if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs)))
+    if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs, sp$dependent)))
+    if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs, sp$dependent)))
+    if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs, sp$dependent)))
     out
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
@@ -875,7 +877,7 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
   # `Not married` in the data is exactly the case inverse_two_level_factors exists for, and reading the
   # level order here instead drew the curve of the COMPLEMENT -- an upside-down sparkline beside a
   # correct odds ratio, which is worse than none.
-  ly <- rd_link_y(data[[deps]], sp$family, sp$trials, positive_level)
+  ly <- rd_link_y(data[[deps]], sp$fit_family, sp$trials, positive_level)
   w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
           data[[wt]] else NULL
   # Phase 18z16-iv (W-G.4): under a survey design the bands take the DESIGN variance, reached
@@ -887,7 +889,7 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
       rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr)),
     numeric_preds))
   if (length(curves) == 0L) return(NULL)
-  list(dependent = deps, family = sp$family, link = ly$link, ylab = ly$lab, curves = curves)
+  list(dependent = deps, family = sp$fit_family, link = ly$link, ylab = ly$lab, curves = curves)
 }
 
 

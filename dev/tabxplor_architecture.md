@@ -236,6 +236,59 @@ estimate into the field its SCALE declares (`or` / `ratio` / `diff`) instead of 
 hard-coded fmt() calls, which is what made a third shape (a risk difference in percentage points, a
 ratio of means in the `ratio` field) unrepresentable.
 
+### The regression argument boundary (Phase 19m-ii --- `R/reg-resolve.R`)
+
+Phase 19i gave the four CROSSTAB producers one boundary (`tab_resolve_common_args()`). The regression
+producer never got one: **738 of `tab_reg()`'s 821 lines** resolved 28 arguments before a single
+`reg_build()` call, holding **30 of the package's ~190 user messages** in 13 % of the file. Inside
+sat twelve ad-hoc local closures and two near-identical 14-field spec literals --- all there because
+the per-dependent facts were never materialised, so each was recomputed on demand from a frame later
+blocks kept mutating.
+
+**One entry point, `reg_resolve_args()`, six declared stages, one typed return (`new_reg_args()`).**
+`tab_reg()` is **147 lines** now, with **one** message left (the `trials`-length abort inside the
+multi-dependent recursion, which is a dispatch over the call SHAPE, not resolution).
+
+| stage | what it owns |
+|---|---|
+| `reg_validate_args()` | the checks that are PURE --- and four are NEW: `conf_level` (never validated here), `stats` (silently FILTERED, so a typo lost a footer row), `color_signif` (unvalidated, so an unknown policy was STORED on every column), `baseline`'s shape |
+| `reg_prepare_data()` | the design unwrap, the formula escape hatch, the predictors dispatch, the labelled conversion, the `shape` recode, the predictor union, the five `split_var` refusals --- **every rewrite of `data`** |
+| `reg_resolve_estimands()` | **the per-dependent TABLE**: `dep` / `family` / `rr_promoted` / `est` / `fit_family` / `trials` / `inverse` / `crude_key`, one row per outcome |
+| `reg_resolve_output()` | `display`, `color`, `color_signif`, `empirical` --- and **the notes LAST** |
+| `reg_resolve_fit_plan()` | `na_shared_vars`, the `reref` gate, the `reference` relevel, the multiplier and the shape terms on ONE frozen frame |
+| `reg_resolve_specs()` | the labels, the positive levels, the ONE `new_reg_spec()` call site |
+
+**`data` is INSIDE the boundary**, as a declared field of the record. A pure resolver is impossible
+without a cycle: `family = "auto"`, `trials = TRUE` and `multiplier = "sd"` are ANSWERED by the data,
+`shape` recodes it, `reference` relevels it --- and the relevel needs the families the estimand stage
+resolves. Lifting them into a stage `tab_reg()` called itself would put the ORDERING in the caller.
+`new_ctx()`'s `data = NULL` is the precedent.
+
+**There is deliberately no `REG_ARG_VALUES`.** `TAB_ARG_VALUES` exists because FIVE producers had
+re-implemented one boundary and drifted; `tab_reg()` is ONE, its vocabularies are already declared
+once each (`REG_USER_FAMILIES` / `REG_EFFECTS_VALUES` / `REG_MEASURES_VALUES` / `REG_SHAPES` /
+`reg_stat_keys()` / `REG_MULTIPLIER_KEYWORDS`), and `TAB_ARG_VALUES`' own exclusion rule --- *validating
+it means REWRITING it, so it lives with its resolver* --- disqualifies eleven of the fifteen
+candidates. The one genuine table-move was `COLOR_SIGNIF_VALUES`, written twice before.
+
+**The per-dependent table is the key.** Nine of the twelve closures existed to re-derive one of its
+columns; `est_for` even carried a `local()` memo cache, and `trials_for` was DEFINED TWICE. The
+survivors are four one-line lookups plus four pure functions (`reg_eff_word(est, empirical)`,
+`reg_trials_observed_max()`, `reg_color_auto_measure()`, `reg_color_for()`).
+
+**THE ORDER IS THE DESIGN**, and the 23 constraints are written where they bind (`H1`..`H23`). Three
+were violated: the `empirical` forcing and degrade straddled both the notes and the specs (so a
+table's stored effect word could contradict its own column header), the `color_signif` default landed
+22 lines after the note that reads it, and the frozen frame was built twice under a comment demanding
+it be one. ⚠ The `reref` clause reads **13 resolved values across eight blocks** and is the one place
+a wrong `TRUE` returns a stale-digest number rather than an error.
+
+**Verification**: `dev/verify_reg_specs.R` --- 291 cases over 20 named axes, `save`/`check`, dumping
+the **messages in order** as well as the specs, the whole `reg_call()`, every column's stored
+attributes, every label and the `test` keys. It captures through `tab_reg()` alone (the resolver's
+output is already stored at `reg_call(x)$fit_spec$specs`), so it runs unchanged on both sides of a
+refactor.
+
 ### tabxplor_grouped_tab — Subtabled Results
 
 When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same table attributes, plus `groups` data from dplyr.

@@ -210,6 +210,11 @@
   each cell to 0 %, not to a reference, so every cell has one — including the total row, which is the
   best-estimated cell in the table. Numeric tables already printed it; percentage tables left it
   blank.
+* **`tab_reg()` now checks four arguments it never checked.** `conf_level = 95` reached the interval
+  engine as a probability, a typo in `stats` was silently dropped (so a footer row simply went
+  missing, with no message), `color_signif = "grey"` was stored on every column as a policy no
+  consumer knows, and a `baseline` given without `compare = "baseline"` was ignored in silence. Each
+  now aborts — or, for the last, says why it cannot be used.
 * **An unknown argument value now aborts instead of being silently ignored.** `totaltab`, `n_min` and
   `conf_level` were validated nowhere at all, so `tab(totaltab = "tabel")` quietly meant "no total
   table" and `conf_level = 95` reached the interval engine as a probability. Every crosstab producer
@@ -302,6 +307,16 @@
   *link*, and the assumption checks (`stats =`, `reg_check_plots()`) were keyed on that link rather
   than on the distribution behind it — so those two tables silently reported no linearity, dispersion,
   influence or collinearity row and drew no diagnostic panel.
+* **A partial per-outcome vector aborted instead of defaulting.** `tab_reg(data, c("a", "b"),
+  family = c(a = "binomial"))` — and the same shape of `inverse_two_level_factors` — died with
+  "subscript out of bounds" where the documented rule is that an unnamed outcome takes the default. A
+  *positional* `inverse_two_level_factors` was unusable for the same reason.
+* **A model formula given beside `predictors` reported the wrong error.** `tab_reg(data, y ~ x,
+  list(m1 = "a"))` died on an internal assertion instead of saying "provide either a formula in
+  `dependent` or `predictors`, not both".
+* **A `tab_reg()` table's own record could contradict its own column header.** With
+  `color = "adjustment"` (which turns `empirical` on), the stored effect word was captured before that
+  and the column header after it, so the two disagreed (`AME` vs `Model_AME (adjusted %)`).
 * **A table with no column variable could not be transposed**: `tab_html(tab(data, marital),
   transpose = TRUE)` aborted with "subscript out of bounds".
 * **A custom total-column name containing a regular-expression character** (e.g.

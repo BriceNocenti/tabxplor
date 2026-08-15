@@ -481,7 +481,14 @@ new_test_tibble <- local({
                                 pvalue_exact = double(),
                                 # Phase 18z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
                                 # mean design effect this row's test corrected by (NA on basis "n").
-                                deff       = double())
+                                deff       = double(),
+                                # Phase 19m-ii: WHICH DEPENDENT this row is about. NA on a crosstab
+                                # row (`var = ""` already means "the whole table", so "" is a taken
+                                # meaning). It MUST be declared here: test_group_cols() reads
+                                # `setdiff(names(tt), names(new_test_tibble()))` as the GROUPING
+                                # variables, so an undeclared column would split the footer into one
+                                # block per outcome (19g's own defect, one file over).
+                                dep        = character())
     }
     cached
   }

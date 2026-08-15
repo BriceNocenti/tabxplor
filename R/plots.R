@@ -405,7 +405,7 @@ reg_plot_fits <- function(x, data = NULL) {
   nobs_tab <- reg_plot_nobs(x)
   purrr::imap(fs$specs, function(sp, i) {
     f <- tryCatch(suppressMessages(suppressWarnings(reg_fit(
-      data, sp$dependent, sp$predictors, sp$family, ds, sp$do_exp,
+      data, sp$dependent, sp$predictors, sp$fit_family, ds, isTRUE(sp$est$exp),
       if (is.null(sp$inverse)) fs$inverse_two_level_factors else sp$inverse,
       fs$conf_level, fs$method, trials = sp$trials, formula = sp$formula,
       multiplier = fs$multiplier, drop_extra = fs$na_shared_vars,
@@ -421,7 +421,7 @@ reg_plot_fits <- function(x, data = NULL) {
                        "x" = "Model {.val {sp$label}} was fitted on {n_i} rows; this data gives {f$nobs}.",
                        "i" = "Pass the same data (and the same weights / design) the table was built from."))
     }
-    list(fit = f$fit, data = f$data, family = sp$family, dependent = sp$dependent,
+    list(fit = f$fit, data = f$data, family = sp$fit_family, dependent = sp$dependent,
          predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
          positive_level = f$positive_level, label = sp$label)
   }) |> purrr::compact()
