@@ -2,74 +2,26 @@
 % Please edit documentation in R/tab_classes.R
 \name{kable_tabxplor_style}
 \alias{kable_tabxplor_style}
-\title{Print a tabxplor table in html}
+\title{Print a tabxplor table in html (defunct)}
 \usage{
-kable_tabxplor_style(
-  tabs,
-  caption = knitr::opts_current$get("tab.cap"),
-  theme = c("light", "dark"),
-  total_in_bold = TRUE,
-  all_column_borders = FALSE,
-  html_font = NULL,
-  full_width = FALSE,
-  wrap_rows = 35,
-  wrap_cols = 15,
-  whitespace_only = TRUE,
-  subtext = "",
-  ...
-)
+kable_tabxplor_style(tabs, ...)
 }
 \arguments{
 \item{tabs}{A data.frame.}
 
-\item{caption}{The table caption. For formatting, you need to use a \code{css}
-with \verb{caption\{\}}in rmarkdown.}
-
-\item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
-black table with white text.}
-
-\item{total_in_bold}{Should rows and cols with "Total" string be set in bold ?}
-
-\item{all_column_borders}{Put a vertical border around each column ?}
-
-\item{html_font}{A string for HTML css font. By default, it uses
-\code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another
-default by setting \code{options("tabxplor.kable_html_font" = )}.}
-
-\item{full_width}{A TRUE or FALSE variable controlling whether the HTML table
-should have the preferable format for full_width. If not specified, a HTML
-table will have full width by default but this option will be set to FALSE for
-a LaTeX table.}
-
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
-
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
-
-\item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
-
-\item{subtext}{A character vector to print rows of legend under the table.}
-
-\item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
+\item{...}{Ignored.}
 }
 \value{
-A html table (opened in the viewer in RStudio). Differences from totals,
-confidence intervals, contribution to variance, and unweighted counts,
-are available in an html tooltip at cells hover.
+Never returns: it errors.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#defunct}{\figure{lifecycle-defunct.svg}{options: alt='[Defunct]'}}}{\strong{[Defunct]}}
 
-Superseded by \code{\link[=tab_html]{tab_html()}}, which renders any table -- \code{tabxplor_tab} or plain data.frame --
-through the shared exporter prep. This function predates it and never shared its machinery: it
-detects total rows/columns by matching the literal strings \code{"Total"}/\code{"Ensemble"} against names and
-values, so it is hardcoded to English and French, and it renders no colours, tooltips or spanning
-headers. Nothing in the package has ever called it.
+Removed in 2.0.0. Use \code{\link[=tab_html]{tab_html()}}, which renders any table -- a \code{tabxplor_tab} or a plain
+data.frame -- through the shared exporter prep, with colours, tooltips and spanning headers.
+
+\code{kable_tabxplor_style()} predated \code{tab_html()} and never shared its machinery: it found total
+rows and columns by matching the literal strings \code{"Total"} / \code{"Ensemble"}, so it was hardcoded to
+English and French. Nothing in the package ever called it.
 }
-\examples{
-\donttest{
-tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
-                       column1 = c(1, 2, 3),
-                       column2 = c(4, 5, 6)                    )
-if (requireNamespace("kableExtra", quietly = TRUE)) kable_tabxplor_style(tabs)
-}
-}
+\keyword{internal}

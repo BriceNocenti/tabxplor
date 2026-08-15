@@ -225,7 +225,7 @@ est_row_axis <- function(x) {
 #' @param columns Value columns to keep, by name. \code{NULL} (the default) keeps the model columns of
 #'   a regression table and every value column of a cross-table.
 #' @param what \code{"auto"} (the quantity the stored interval is centred on -- so a
-#'   \code{ci = "cell"} table gives percentages, a \code{ci = "diff"} table differences, an
+#'   \code{ci = "cell"} table gives percentages, a \code{ci = "ref"} table differences, an
 #'   \code{OR} table odds ratios), \code{"effect"} or \code{"level"}.
 #' @param observed \code{"auto"}, \code{"band"}, \code{"point"}, \code{"ci"} or \code{"none"} --
 #'   whether the observed (crude) counterpart of a regression estimate is included.
@@ -850,7 +850,7 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @details
 #' **What is drawn.** By default, whatever the table's own \code{ci =} produced: cell percentages with
 #' their intervals for \code{ci = "cell"}, differences from the reference with a zero line for
-#' \code{ci = "diff"}, odds ratios on a log axis for \code{OR = TRUE}, and the model's effects for a
+#' \code{ci = "ref"}, odds ratios on a log axis for \code{display = "{or}"}, and the model's effects for a
 #' \code{\link{tab_reg}} table. \code{what = "level"} / \code{"effect"} override it.
 #'
 #' **The gridlines are the table's colour ladder** (\code{\link{set_color_breaks}}), labelled with the
@@ -898,7 +898,7 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #'
 #' @examples
 #' if (requireNamespace("ggplot2", quietly = TRUE)) {
-#'   t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "diff", color = TRUE)
+#'   t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "ref", color = TRUE)
 #'   forest_plot(t)
 #' }
 forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),

@@ -7,8 +7,6 @@
 tab_plot(
   tabs,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
   lang = NULL,
@@ -17,7 +15,8 @@ tab_plot(
   var_names = NULL,
   wrap_rows = 35,
   wrap_cols = 14,
-  whitespace_only = TRUE
+  whitespace_only = TRUE,
+  ...
 )
 }
 \arguments{
@@ -29,12 +28,6 @@ black table with white text.
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 readable in a greyscale print, where the colour palette's two directions become the same shade.
 (\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)}
-
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
-
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: exports are always
-24-bit (the OKLCH palettes). Kept only so old calls do not error.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
@@ -54,6 +47,9 @@ the text palette. The colour CHANNEL is chosen by \code{color = c(text, backgrou
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}, \code{html_24_bit}).}
 }
 \value{
 A \code{\link[ggplot2]{ggplot}} object to be printed in the

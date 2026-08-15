@@ -122,7 +122,7 @@ test_that("8. a mean-DIFFERENCE bracket is exactly the two domain design varianc
   # at the flat design two DISJOINT domains share no cluster, so their estimates are INDEPENDENT and
   # Var(diff) = Var1 + Var2 exactly -- the covariance Route A discards is zero here. Welch's SE is
   # sqrt(v1/n1_eff + v2/n2_eff), i.e. that sum, so the identity is exact rather than approximate.
-  tt <- fdp_on(tab(d, grp, x, wt = w, ci = "diff", ref = "first"))$x
+  tt <- fdp_on(tab(d, grp, x, wt = w, ci = "ref", ref = "first"))$x
   v  <- fdp_se(survey::svyby(~x, ~grp, des, survey::svymean))^2
   half <- (get_ci_sup(tt) - get_ci_inf(tt)) / 2
   k    <- which(is.finite(half) & !is_totrow(tt))     # the total row's own reference is elsewhere

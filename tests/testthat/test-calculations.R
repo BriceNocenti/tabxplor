@@ -484,7 +484,7 @@ testthat::test_that("mean cell CI matches t(n-1) * sqrt(var/n) using stats::var(
 testthat::test_that("mean diff CI matches Welch-t * sqrt(var1/n1 + var2/n2) (rule B)", {
   # Rule B (14v-ii): the mean-diff interval is always Welch-t -- the df no longer flips with stars
   # (stars on/off give the same bracket now; only the pvalue is added when stars are on).
-  tabs <- tab_num(sw, sex, height, na = "drop", ci = "diff", conf_level = 0.95, stars = FALSE)
+  tabs <- tab_num(sw, sex, height, na = "drop", ci = "ref", conf_level = 0.95, stars = FALSE)
 
   # Reference: total row stats
   d_all <- sw |> dplyr::filter(!is.na(height) & !is.na(sex))
@@ -628,7 +628,7 @@ testthat::test_that("diff CI for proportions (method='ac') matches DescTools::Bi
   testthat::skip_if_not_installed("DescTools")
   # Phase 3a: AC is now the expert opt-in (default is Newcombe, tested below). get_ci() is the
   # upper arm (ci_sup - diff), matching DescTools' upr.ci - est.
-  tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95,
+  tabs <- tab(gss, race, marital, pct = "row", ci = "ref", conf_level = 0.95,
               ci_method = c(diff = "ac"), stars = FALSE)
   ct <- table(gss$race, gss$marital)
 
@@ -665,7 +665,7 @@ testthat::test_that("diff CI for proportions (method='ac') matches DescTools::Bi
 # CI-inclusion) agrees with the bracket's own 0-exclusion at each star level.
 testthat::test_that("diff CI for proportions (default) matches DescTools BinomDiffCI score", {
   testthat::skip_if_not_installed("DescTools")
-  tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95)
+  tabs <- tab(gss, race, marital, pct = "row", ci = "ref", conf_level = 0.95)
   ct <- table(gss$race, gss$marital)
   for (cell in list(c("White", "Married"), c("Black", "Never married"), c("Other", "Divorced"))) {
     r <- cell[1]; m <- cell[2]
@@ -681,7 +681,7 @@ testthat::test_that("diff CI for proportions (default) matches DescTools BinomDi
 })
 
 testthat::test_that("stars agree with the CI bracket's own 0-exclusion (universal inclusion)", {
-  cn <- tab(gss, race, marital, pct = "row", ci = "diff") |>
+  cn <- tab(gss, race, marital, pct = "row", ci = "ref") |>
     dplyr::filter(race == "White") |> dplyr::pull("Married")
   p <- get_pvalue(cn); ok <- !is.na(p)
   excl95 <- get_ci_inf(cn) > 0 | get_ci_sup(cn) < 0
@@ -690,7 +690,7 @@ testthat::test_that("stars agree with the CI bracket's own 0-exclusion (universa
 
 testthat::test_that("mean diff CI (stars on) matches Welch t.test", {
   d <- sw |> dplyr::filter(!is.na(height) & !is.na(sex))
-  tabs <- tab_num(d, sex, height, na = "drop", ci = "diff", conf_level = 0.95, stars = TRUE)
+  tabs <- tab_num(d, sex, height, na = "drop", ci = "ref", conf_level = 0.95, stars = TRUE)
   ref <- d |> dplyr::pull(height)                 # total row = reference (ref = "tot")
   for (s in levels(d$sex)) {
     col <- tabs |> dplyr::filter(sex == s) |> dplyr::pull(height)

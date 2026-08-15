@@ -43,8 +43,8 @@ testthat::test_that("the five stages compose == tab_build() (factor, numeric, mi
   # factor x factor
   testthat::expect_equal(
     run_stages(carve_ctx(gss, rlang::quo(marital), rlang::quo(race),
-                         overrides = list(pct = "row", color = "diff", ci = "diff"))),
-    tabxplor:::tab_build(gss, marital, race, pct = "row", color = "diff", ci = "diff"))
+                         overrides = list(pct = "row", color = "diff", ci = "ref"))),
+    tabxplor:::tab_build(gss, marital, race, pct = "row", color = "diff", ci = "ref"))
 
   # factor x numeric (means path)
   testthat::expect_equal(
@@ -63,7 +63,7 @@ testthat::test_that("the five stages compose == tab_build() (factor, numeric, mi
 testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam contract)", {
   gss <- carve_gss()
   ctx <- carve_ctx(gss, rlang::quo(marital), rlang::quo(race),
-                   overrides = list(pct = "row", color = "diff", ci = "diff"))
+                   overrides = list(pct = "row", color = "diff", ci = "ref"))
 
   ctx <- tabxplor:::tab_setup(ctx)
   testthat::expect_true(all(c("tot_cols_type", "settings", "cache_keys") %in% names(ctx)))

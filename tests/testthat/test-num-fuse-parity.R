@@ -56,10 +56,10 @@ testthat::test_that("tab_build numeric: default (adopt fine) == .by_table (raw s
     tabxplor:::tab_build(gss, race, c(age, tvhours), marital, ci = "cell"),
     tabxplor:::tab_build(gss, race, c(age, tvhours), marital, ci = "cell", .by_table = TRUE))
 
-  # ci = "diff" + stars, weighted (Welch-t path)
+  # ci = "ref" + stars, weighted (Welch-t path)
   testthat::expect_equal(
-    tabxplor:::tab_build(gss, race, c(age, tvhours), wt = w, ci = "diff", color = "diff"),
-    tabxplor:::tab_build(gss, race, c(age, tvhours), wt = w, ci = "diff", color = "diff",
+    tabxplor:::tab_build(gss, race, c(age, tvhours), wt = w, ci = "ref", color = "diff"),
+    tabxplor:::tab_build(gss, race, c(age, tvhours), wt = w, ci = "ref", color = "diff",
                          .by_table = TRUE))
 
   # MIXED table: factor + numeric col_vars coexist (numeric fine + factor path)

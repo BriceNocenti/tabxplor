@@ -27,7 +27,7 @@
 # `meta`    : the tab_export_prep() meta (theme_cols); currently unused beyond passthrough.
 #' @keywords internal
 #' @noRd
-tx_transpose_render <- function(rd, backend, meta = NULL) {
+tx_transpose_render <- function(rd, backend) {
   if (isTRUE(rd$vars$degrade)) return(rd)                       # a malformed table degrades unchanged
   # A real tab_vars table (sub-tabled / grouped) is out of scope -- its two-level structure has no
   # single flip. A SEVERAL-row_var (compacted) table is fine: it is the whole point of this phase.
@@ -151,7 +151,12 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
     row_var_col_name  <- "levels"
     var_name_col_name <- "row_var"
   } else {
-    cvname     <- roles$real_col_vars[[1]]
+    # ⚠ Phase 19l: length 0 lands HERE too, not only length 1 -- a table with NO col_var at all
+    # (`tab(d, marital)`, whose columns carry the "no_col_var" sentinel that roles$real_col_vars
+    # filters out). `roles$real_col_vars[[1]]` then aborted "subscript out of bounds" on any
+    # tab_html(transpose = TRUE) of such a table. There is no variable to name the level column
+    # after, so it takes the neutral internal key the compacted branch uses for the same job.
+    cvname     <- if (length(roles$real_col_vars)) roles$real_col_vars[[1]] else "levels"
     lead_names <- cvname
     lead_vals  <- list(level_vals)
     # single label column headed by the col_var name -- shown as the label (Phase k), key stays raw.

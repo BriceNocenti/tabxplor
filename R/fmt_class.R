@@ -515,24 +515,6 @@ is_fmt <- function(x) {
 }
 
 
-# #' A function to convert vectors to class fmt.
-# #' @param x A vector coercible to double, or a character vector with numbers.
-# #' @param ... The number of digits as an integer, to be passed to the method.
-# #'
-# #' @export
-# as_fmt <- function(x, ...) {
-#   UseMethod("as_fmt")
-# }
-
-# # @describeIn as_fmt
-# #' @export
-# as_fmt.default <- function(x, digits = rep(0L, length(x)), #display = rep("count", length(x)),
-#                             # n = rep(NA_integer_, length(x)), wn = rep(NA_real_, length(x)),
-#                             # var = rep(NA_real_, length(x)), ci = rep(NA_real_, length(x)),
-#                             ...) {
-#   new_fmt(vec_data(x))
-# }
-
 
 
 #' @describeIn fmt get the currently displayed field
@@ -1911,7 +1893,7 @@ fmt_scale_of <- function(x, kind = "auto") {
   }
 
   if (!is.na(s$break_key)) {
-    sc <- color_scales(x)[[s$break_key]]
+    sc <- color_scales()[[s$break_key]]
     if (identical(key, "log_coef") && !is.null(sc)) sc <- log_odds_scale(sc)
     over  <- if (is.null(sc)) numeric(0) else sc$over$breaks
     under <- if (is.null(sc)) numeric(0) else sc$under$breaks
@@ -2333,7 +2315,6 @@ get_pct    <- fmt_field_factory("pct")
 #' @keywords internal
 # @export
 get_diff   <- fmt_field_factory("diff")
-#get_pct_ci <- function(x) vctrs::field("pct")
 #' @describeIn fmt get the "digits" field
 # @keywords internal
 #' @export
@@ -2732,47 +2713,6 @@ get_ref_var <- function(x) get_ref_field(x, get_var)
 # #' @return A modified fmt vector with totcol attribute changed.
 
 
-#' @keywords internal
-detect_firstcol <- function(tabs) {
-  col_vars <- get_col_var(tabs)
-  firstcol <- which(col_vars != dplyr::lag(col_vars, default = NA_character_))
-  if (any(col_vars == "all_col_vars"))
-    firstcol <- purrr::discard(firstcol, names(firstcol) == names(col_vars)[col_vars == "all_col_vars"])
-
-  res <- purrr::map(1:ncol(tabs), function(.i)
-    tidyr::replace_na(
-      dplyr::last(names(firstcol[firstcol <= .i]) ),
-      "")) |>
-    rlang::syms() |>
-    purrr::set_names(names(tabs))
-
-  if (any(col_vars == "all_col_vars")) {
-    res[col_vars == "all_col_vars"] <- rlang::syms("")
-  }
-  res
-}
-
-# For each column, detect the REFERENCE column of its col_var group -- the one marked by the `refcol`
-# attribute (is_refcol). Falls back to detect_firstcol()'s first-column-of-group when no reference is
-# marked, so it is byte-identical to detect_firstcol() whenever the reference IS the first level (or is
-# unmarked). Phase 7g-iii: tab_ci() uses it so the diff-CI reference column matches the diff/colour
-# reference column, once a per-col_var reference can be neither the first level nor the total.
-#' @keywords internal
-detect_refcol <- function(tabs) {
-  col_vars  <- get_col_var(tabs)
-  refcol    <- is_refcol(tabs)
-  nms       <- names(tabs)
-  firstcols <- detect_firstcol(tabs)   # per-column sym of each group's first column (fallback + "" edges)
-  res <- purrr::map(seq_len(ncol(tabs)), function(.i) {
-    in_grp <- which(col_vars == col_vars[.i] & refcol)
-    if (length(in_grp) >= 1L) rlang::sym(nms[in_grp[1]]) else firstcols[[.i]]
-  }) |>
-    purrr::set_names(nms)
-  # mirror detect_firstcol: no reference column for the all_col_vars total group
-  if (any(col_vars == "all_col_vars")) res[col_vars == "all_col_vars"] <- rlang::syms("")
-  res
-}
-
 #For each column, detect which total column it depends on
 #' @keywords internal
 detect_totcols <- function(tabs) {
@@ -3075,7 +3015,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   plus_disp_ci <- (plus_ci | disp_ci)
   # plus_ci <- (ci_pct_mean | disp_ci)# & !is.na(get_ci(x))
 
-  #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & is_mean)
   pct_no_ci     <- pct_no_ci | obs_as_pct                     # Phase 18z5
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
@@ -3535,7 +3474,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # `any(!is.na())`: with nothing to split the result stays attribute-free, as before Phase 14h.
   if (!is.null(prim_nchar) && any(!is.na(prim_nchar))) attr(out, "primary_nchar") <- prim_nchar
 
-  #out <- stringi::stri_pad(out, max(stringi::stri_length(out), na.rm = TRUE))
   out
 }
 
@@ -3567,9 +3505,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   nas     <- is.na(display)
   color   <- get_color(x)
   color_bg <- get_color_bg(x)                        # Phase 5: the background channel measure
-  #totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
-  #tottabs <- is_tottab(x)
   # Phase 16f: bold reference/total (+ coloured) cells, but ONLY on a console that renders ANSI bold at
   # fixed glyph width (tabxplor.console_bold, IDE-gated at load -- Positron / VS Code, never RStudio). Off
   # everywhere by default, so this is a no-op unless opted in. Read fresh so a mid-session toggle applies.
@@ -3640,9 +3576,6 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     #                                         paste0(cli::style_underline(out), "|"),
     #                                         paste0(out, "|"))
 
-    # # - normal cells a bit grayer to see the totals better
-    # totals <- get_reference(x, mode = "all_totals")
-    # out[ok & !totals] <- fmtgrey4(out[ok & !totals])
 
     out[ok] <- out[ok] |>
       stringi::stri_replace_first_regex("^0%$|^-0%$", pillar::style_subtle("0%")) |> # 0 in gray
@@ -3716,21 +3649,9 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
 }
 
-# WARNING: do NOT add a `[[.tabxplor_fmt` method. It was tried (commented below) but broke
-# dplyr::last() on fmt vectors, which relies on the default `[[`.
-# #' Extract method for class tabxplor_fmt
-# #' @param x A tabxplor_fmt object.
-# #' @param i,j,... Indices of names of the field to extract.
-# #' @method `[[` tabxplor_fmt
-# #' @return The relevant field of the tabxplor_fmt.
-# #' @export
-# `[[.tabxplor_fmt` <- function(x, i, j, ...) {
-#  if (missing(j)) {
-#    suppressWarnings(`[[`(vctrs::vec_proxy(x), i = i, ..., exact = TRUE))
-#  } else {
-#    suppressWarnings(`[[`(vctrs::vec_proxy(x), i = i, j = j, ..., exact = TRUE))
-#  }
-# }
+# WARNING: do NOT add a `[[.tabxplor_fmt` method. It was tried -- forwarding to vec_proxy() so `[[`
+# would extract a FIELD -- and it broke dplyr::last() on fmt vectors, which relies on the default
+# `[[` returning an element. (19l deleted the commented-out attempt this warning used to carry.)
 
 
 
@@ -3753,7 +3674,7 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
 # The canonical break scales for a column (per-table override folded in at Step 4).
 #' @keywords internal
-color_scales <- function(x) {
+color_scales <- function() {
   sc <- getOption("tabxplor.color_breaks")
   if (is.null(sc) || is.null(sc$pct_diff)) return(default_color_scales())
   # Phase 18z13: fill in scales a STALE option list predates. The option is a snapshot -- a session
@@ -3856,7 +3777,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # contrib has one: `guaranteed_effect` swaps the relative contribution for the absolute residual).
   md      <- measure_facts(measure, policy)
   ci_mult <- isTRUE(scl$mult)          # the stored interval's geometry (neutral 1 vs neutral 0)
-  sc      <- color_scales(x)
+  sc      <- color_scales()
   # Phase 18z13: the selected scale as a KEY, kept on the plan -- the legend then takes its glyphs
   # and its unit from the scale actually used (D4) instead of from a static measure field.
   # Phase 19b: WHICH of a measure's three ladders a column reads is the column's declared `ladder`
@@ -4627,7 +4548,7 @@ measure_kind_keyed <- function(measure) {
 # the "that is a tab_reg measure" hint, which was a literal pair maintained beside the allow-list.
 # `color` is the already-normalised positional c(text[, bg]) vector; returns it invisibly.
 #' @keywords internal
-measure_validate <- function(color, producer = NULL, arg = "color", call = rlang::caller_env()) {
+measure_validate <- function(color, producer = NULL, call = rlang::caller_env()) {
   keys <- vapply(color, measure_key, character(1), USE.NAMES = FALSE)
   bad  <- color[is.na(keys)]
   if (length(bad)) {
@@ -4744,7 +4665,10 @@ legend_num <- function(v, lang) {
 # legend_resolve_spec from the policy-aware MEASURES row), because contrib's two readings name it
 # differently: the CONTRIBUTION is a multiple of the mean cell contribution, the RESIDUAL is a distance
 # from independence itself. Fallback keeps the pre-z4 wording for a spec built without the fact.
-legend_ref_short <- function(spec, lang) {
+# Phase 19l: `lang` LEFT this chain. with_legend_lang() sets the render locale in the calling
+# ENVIRONMENT (it wraps every legend build), so gettext() already answers in the right language
+# and threading the code through five layers changed nothing. One argument, four signatures.
+legend_ref_short <- function(spec) {
   ref <- spec$ref
   switch(ref$kind,
          "tot"      = if (!is.na(ref$label) && nzchar(ref$label)) ref$label else gettext("Total"),
@@ -4769,7 +4693,10 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
 # the coloured break tokens of one channel, split over / under (each a list of tokens). Slot 0 (a
 # scale that skips an intensity via NA) -> a plain, uncoloured token. The token carries the palette
 # slot; its colour (hex) or class is resolved per medium at render time.
-legend_break_tokens <- function(plan, is_pct, is_mean, channel, lang, theme = "light") {
+# Phase 19l: `is_mean` left this one -- it was never read (the measure's own declared facts answer
+# it). `lang` STAYS: unlike the four above, this function passes it down to legend_num(), which needs
+# it for the French decimal comma.
+legend_break_tokens <- function(plan, is_pct, channel, lang, theme = "light") {
   if (is.null(plan)) return(list(over = list(), under = list()))
   measure <- plan$measure
   # Phase 18z11: the legend must not promise a distinction the cells do not make. Typography
@@ -4953,7 +4880,7 @@ legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_re
 }
 
 # the localized reference phrase used in the lead / grey note.
-legend_ref_phrase <- function(spec, lang) {
+legend_ref_phrase <- function(spec) {
   ref <- spec$ref
   lab <- ref$label
   if (identical(ref$kind, "indep")) return(gettext("independence"))
@@ -4998,17 +4925,12 @@ CI_METHOD_LABELS <- list(
   profile      = function() gettext("profile-likelihood interval")
   # `wald_log` is handled in legend_method_name(): its label needs the effect word.
 )
-# Phase 18w: potools extracts translatable strings by STATIC analysis, and the labels above are
-# reached through a dynamic lookup. This dead-code anchor lists them so they land in the .pot; it is
-# never executed. Keep in sync with CI_METHOD_LABELS.
-if (FALSE) c(gettext("Wilson score interval"), gettext("Wald interval"),
-             gettext("Korn-Graubard (beta) interval"), gettext("Newcombe score interval"),
-             gettext("Wald interval with Agresti-Caffo adjustment"), gettext("Welch t interval"),
-             gettext("Student t interval"), gettext("Katz interval on the log risk-ratio"),
-             gettext("Wald interval on the log odds-ratio"),
-             gettext("robust-Poisson (delta) interval"), gettext("quasi-Poisson interval"),
-             gettext("Poisson interval"), gettext("profile-likelihood interval"),
-             gettext("Katz interval on the log rate-ratio"))
+# Phase 19l: the `if (FALSE) c(gettext(...))` anchor that used to sit here is DELETED. It predates
+# the closures above: potools extracts by STATIC analysis, and a literal gettext() INSIDE a closure
+# body is statically visible -- which is exactly the argument this file already makes for MEASURES'
+# `word` (see the note at legend_measure_word). Verified with potools::get_message_data(): all 14
+# msgids still extract without it. Contrast REG_CHECKS (R/reg-assumptions.R), whose nouns are BARE
+# STRINGS gettext()ed dynamically -- its anchor is load-bearing and must not be deleted.
 
 legend_method_name <- function(spec, measure = spec$measure_text) {
   # Phase 19c: a measure that does NOT read the column's own stored interval declares its own
@@ -5056,7 +4978,7 @@ legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
 
 # the measure / effect word (reg effect word takes precedence). Phase 16e: MEASURES-driven -- the only
 # non-table special-case is the sd-standardized diff wording (a spec fact, not a measure fact).
-legend_measure_word <- function(measure, is_std, eff_word, lang, policy = "ignore") {
+legend_measure_word <- function(measure, is_std, eff_word, policy = "ignore") {
   if (!is.na(eff_word) && !measure_own_ref(measure)) return(eff_word)
   if (identical(measure, "difference") && isTRUE(is_std)) return(gettext("standardized difference"))
   m <- measure_facts(measure, policy)
@@ -5105,7 +5027,7 @@ legend_resolve_spec <- function(spec, lang) {
     own_ref <- measure_own_ref(measure)
     list(subject      = subj,
          ref_lead     = if (own_ref)
-           legend_ref_phrase(list(ref = list(kind = md$ref_kind, label = NA_character_)), lang)
+           legend_ref_phrase(list(ref = list(kind = md$ref_kind, label = NA_character_)))
            else NA_character_,
          has_ref_lead = own_ref ||
            (isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)),
@@ -5125,7 +5047,7 @@ legend_resolve_spec <- function(spec, lang) {
   }
   spec$txt <- chan(spec$measure_text, spec$plan_txt$policy, spec$plan_txt$scale_key)
   spec$bg  <- chan(spec$measure_bg,   spec$plan_bg$policy,  spec$plan_bg$scale_key)
-  spec$ref_phrase       <- legend_ref_phrase(spec, lang)
+  spec$ref_phrase       <- legend_ref_phrase(spec)
   spec$method_phrase    <- legend_method_phrase(spec, lang)
   primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
   spec$threshold_phrase <- legend_threshold_phrase(primary, spec$is_pct, spec$is_std, lang)
@@ -5139,17 +5061,17 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   colon <- if (identical(lang, "fr")) " : " else ": "
   toks <- list()
   # Phase g: variable names are bold in every medium.
-  if (show_names) toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang),
+  if (show_names) toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names),
                                                       colon), bold = TRUE)))
-  rs <- legend_ref_short(spec, lang)
+  rs <- legend_ref_short(spec)
   add_channel <- function(plan, prefix, is_bg) {
     if (legend_gap_baseline(plan, spec$no_obs))
       return(list(.lg_tok(paste0(prefix,
-                                 legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang,
+                                 legend_measure_word(plan$measure, spec$is_std, spec$eff_word,
                                                      plan$policy),
                                  colon, legend_gap_baseline_word(plan)))))
-    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang, plan$policy)
-    bt <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang,
+    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, plan$policy)
+    bt <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
                              spec$theme %||% "light")
     seq_toks <- c(rev(bt$under), bt$over)
     lbl <- paste0(prefix, mw, if (!is_bg && nzchar(rs)) paste0(" (", rs, ")") else "", colon)
@@ -5196,8 +5118,8 @@ legend_tokens_prose <- function(spec, lang, show_names) {
       if (dir < 0) return(NULL)
       return(list(.lg_tok(paste0(legend_ucfirst(legend_gap_baseline_word(plan)), "."))))
     }
-    bt   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang,
-                             spec$theme %||% "light")
+    bt   <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
+                                spec$theme %||% "light")
     side <- if (dir > 0) bt$over else bt$under
     if (length(side) == 0) return(NULL)
     # Phase 16e: subject / has_ref_lead / unit are resolved per channel in legend_resolve_spec (coef / OR /
@@ -5222,7 +5144,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
   toks <- list()
   if (show_names)  # Phase g: variable names are bold in every medium.
-    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang), " \u2014 "),
+    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names), " \u2014 "),
                                  bold = TRUE)))
 
   # Phase 19c: a measure may declare ONE sentence of honesty about itself (MEASURES$<m>$caveat), fired
@@ -5241,7 +5163,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
   # a second measure on the background channel (e.g. color = c("diff","ratio")).
   if (!is.null(spec$plan_txt) && !is.null(spec$plan_bg)) {
-    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, lang, spec$policy)
+    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, spec$policy)
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Background colour (%s):", bgw)))))
     bov <- one_side(spec$plan_bg, +1L, TRUE, no_shade = TRUE)
     bun <- one_side(spec$plan_bg, -1L, TRUE, no_shade = TRUE)
@@ -5444,13 +5366,19 @@ legend_specs <- function(x, theme = "light") {
   col_vars_levels <- col_vars_levels[!names(col_vars_levels) %in% c("all_col_vars", "")]
   kept_names <- names(x)[keep]
 
+  # Phase 19l: the KIND is a stored fact (meta$spec$kind, R/table-spec.R) -- ask it, not "does this
+  # table still carry its model recipe". The two are NOT the same question: reg_spec() sets
+  # kind = "regression" with no `call`, set_reg_call() only runs at tab_reg()'s tail, and spec_bind()
+  # takes `sx$call %||% sy$call` -- so a reg table can legitimately have no `call` and would then have
+  # been legended as a crosstab (no reg adapter, no effect word, the "model" role fallback). `meta` is
+  # still read below, but for the RECORD it holds, never as the predicate.
   meta   <- reg_call(x)
-  is_reg <- !is.null(meta)                            # Phase 14w: robust, survives footer materialisation
+  is_reg <- tab_is_reg(x)
   shades <- legend_shade_names(theme)
   # Phase 16d: the mean_diff scale in force (pushed per render). Its `std` flag decides whether a numeric
   # mean / regression-coef diff is sd-standardized (SD units) or raw (custom breaks -> std FALSE). This
   # is the SAME source fmt_color_plan() reads, so the legend can never disagree with the cells.
-  mean_diff_std <- isTRUE(color_scales(NULL)$mean_diff$std)
+  mean_diff_std <- isTRUE(color_scales()$mean_diff$std)
 
   # One spec per colored column (was one per col_var), so several measures sharing a col_var -- a reg
   # table's model + empirical columns under one outcome span (Phase 14w) -- each get their own spec.
@@ -5590,7 +5518,7 @@ legend_reg_adapter <- function(specs) {
 # <br>/\n/U+202F narrow-no-break-space -> space, squish), then protects intra-name spaces with a
 # no-break space so no medium re-breaks a name mid-word (pillar's strwrap on the console, the wrapped
 # rd$tab on the kable path), joins with a breakable ", ", and caps the list at `max_n` + "... +N vars".
-legend_name_list <- function(names, max_n = 6L, lang = "en") {
+legend_name_list <- function(names, max_n = 6L) {
   norm <- vapply(names, function(nm) {
     nm <- gsub("<br>|\n|\u202f", " ", nm)                  # undo html-path wrap markers
     nm <- trimws(gsub("[[:space:]]+", " ", nm))
@@ -5685,7 +5613,7 @@ legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light
 
     spec <- specs[[1]]
     plan <- pl_of(spec)
-    tk   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, channel, lg, theme)
+    tk   <- legend_break_tokens(plan, spec$is_pct, channel, lg, theme)
     if (!length(tk$over) && !length(tk$under)) return(NULL)
     hex  <- fmt_point_palette(theme, channel)      # what the PLOT paints, not what the table prints
     side <- function(toks, glyph) {
@@ -5716,7 +5644,7 @@ legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light
     # is the legend's own namer -- an effect word (OR / IRR / AME / beta) on a regression column, the
     # measure ("difference", "ratio", "adjustment") elsewhere.
     meas <- if (identical(channel, "text")) spec$measure_text else spec$measure_bg
-    word <- legend_measure_word(meas, spec$is_std, spec$eff_word, lg, plan$policy)
+    word <- legend_measure_word(meas, spec$is_std, spec$eff_word, plan$policy)
     # the baseline this measure is read against: its OWN, when it has one (the two gap measures name
     # another column), else the column's -- the same two-step legend_tokens_prose() makes.
     rw  <- if (isTRUE(ch$has_ref_lead) && !is.na(ch$ref_lead)) ch$ref_lead else spec$ref_phrase
@@ -5756,7 +5684,7 @@ render_streams <- function(streams, medium, theme, colored, classes = FALSE) {
 #' @param colored Whether to colour the break-words.
 #' @param theme Palette theme (default from options).
 #' @param classes `medium = "html"` only: emit the break-words as CSS slot classes rather than inline
-#'   hex, because a tabxplor stylesheet ships with the output (`tab_kable(engine = "html")`). Then the
+#'   hex, because a tabxplor stylesheet ships with the output (`tab_html()`). Then the
 #'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (the kableExtra engine,
 #'   which carries no stylesheet of ours) keeps inline hex.
 #' @return A character vector (or, for "runs", a list of run-lists), or NULL when nothing is coloured.
@@ -6277,8 +6205,6 @@ vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
   #stop_incompatible_op(op, x, y)
 }
 
-# positive_double <- function(n) n * sign(n)
-# positive_integer <- function(n) as.integer(n * sign(n))
 
 # DESIGN: fmt + fmt arithmetic operates on n, wn, pct fields. For means, recalculates
 #   weighted mean. Resets diff/ci/ctr to NA (must be recomputed via tab_pct/tab_ci/tab_chi2).

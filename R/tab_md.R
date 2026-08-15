@@ -34,12 +34,9 @@
 #' @param color_legend When `TRUE` (default) and the table is coloured, prepend a colour-legend prose
 #'   line (its break-words in the same pandoc classes as the cells) above the subtext.
 #' @param lang Colour-legend language: `NULL` (auto from the R/OS locale, English fallback), `"en"` or `"fr"`.
-#' @param theme,html_24_bit Colour palette selectors (as in
-#'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
-#'   \code{\link{tab_css}}, since the span *class names* are palette- and theme-independent. `theme`
-#'   accepts `"auto"` (follow the reader's colour scheme).
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
+#' @param theme Colour palette selector (as in \code{\link{tab_html}}); it only affects the CSS
+#'   emitted by `css = TRUE` / \code{\link{tab_css}}, since the span *class names* are palette- and
+#'   theme-independent. Accepts `"auto"` (follow the reader's colour scheme).
 #' @param caption Optional table caption, rendered as a pandoc caption line `: caption` (captions only
 #'   the first table of a list).
 #' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
@@ -69,6 +66,8 @@
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
 #' @param print If `TRUE`, print via `cat()` and return invisibly. If `FALSE`,
 #'   return the character string.
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+#'   (`color_type`, `html_24_bit`): colour is a CSS class, and exports are always 24-bit.
 #'
 #' @return A character string (visible or invisible depending on `print`).
 #' @export
@@ -90,8 +89,6 @@ tab_md <- function(tabs,
                    color_legend = TRUE,
                    lang = NULL,
                    theme = NULL,
-                   color_type = lifecycle::deprecated(),
-                   html_24_bit = NULL,
                    caption = NULL,
                    transpose = FALSE,
                    var_names = NULL,
@@ -100,8 +97,10 @@ tab_md <- function(tabs,
                    file = NULL,
                    print = TRUE,
                    title = lifecycle::deprecated(),
-                   col_var_names = lifecycle::deprecated()) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_md(color_type)")
+                   col_var_names = lifecycle::deprecated(),
+                   ...) {
+  # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
+  tx_deprecate_inert(rlang::list2(...), "tab_md")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
@@ -120,7 +119,6 @@ tab_md <- function(tabs,
                    if (identical(var_names, "both")) "rows" else var_names
     }
   }
-  # `html_24_bit` is inert (Phase 13a): markdown colour spans map to CSS classes, always 24-bit.
   # Phase 13d: `allow_auto` -- markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow
   # the reader's colour scheme. The spans themselves are theme-independent (only the CSS differs).
   o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
@@ -198,7 +196,7 @@ tab_md <- function(tabs,
 #' @param ... Passed to \code{\link{tab_css}} (`theme`, `style_tag`, `file`).
 #'
 #' @return A character string of CSS (invisible when `file` is given).
-#' @seealso [tab_css()], which is the generator and also styles `tab_kable(engine = "html")`.
+#' @seealso [tab_css()], which is the generator and also styles `tab_html()`.
 #' @export
 #'
 #' @examples

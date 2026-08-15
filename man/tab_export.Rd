@@ -9,8 +9,6 @@ tab_export(
   format = c("html", "md", "xl", "plot", "forest"),
   path = NULL,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
   lang = NULL,
@@ -34,17 +32,12 @@ tab_export(
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
 and any dark-mode toggle of the host page), which needs a stylesheet: it works for
-\code{format = "html"} with \code{engine = "html"} and for \code{"md"}, and resolves to
-\code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
+\code{format = "html"} and \code{"md"}, and resolves to
+\code{"light"} for the static \code{"xl"} / \code{"plot"} backends.
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 readable in a greyscale print, where the colour palette's two directions become the same shade.
 Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
-
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
-
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0 (exports are always 24-bit).}
 
 \item{color}{Set to \code{FALSE} to render without colours (monochrome).}
 
@@ -63,7 +56,9 @@ the col-percentages-with-several-row-variables use case.}
 \code{"rows"}, \code{"cols"} or \code{"none"}. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 See \code{\link{tab_html}}.}
 
-\item{...}{Format-specific arguments passed to the underlying exporter.}
+\item{...}{Format-specific arguments passed to the underlying exporter. Retired arguments
+(\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}) are caught here, reported
+once, and not forwarded.}
 }
 \value{
 The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown

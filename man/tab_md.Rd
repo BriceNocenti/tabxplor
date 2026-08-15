@@ -14,8 +14,6 @@ tab_md(
   color_legend = TRUE,
   lang = NULL,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   caption = NULL,
   transpose = FALSE,
   var_names = NULL,
@@ -24,7 +22,8 @@ tab_md(
   file = NULL,
   print = TRUE,
   title = lifecycle::deprecated(),
-  col_var_names = lifecycle::deprecated()
+  col_var_names = lifecycle::deprecated(),
+  ...
 )
 }
 \arguments{
@@ -56,13 +55,9 @@ line (its break-words in the same pandoc classes as the cells) above the subtext
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
 
-\item{theme, html_24_bit}{Colour palette selectors (as in
-\code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
-\code{\link{tab_css}}, since the span \emph{class names} are palette- and theme-independent. \code{theme}
-accepts \code{"auto"} (follow the reader's colour scheme).}
-
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
+\item{theme}{Colour palette selector (as in \code{\link{tab_html}}); it only affects the CSS
+emitted by \code{css = TRUE} / \code{\link{tab_css}}, since the span \emph{class names} are palette- and
+theme-independent. Accepts \code{"auto"} (follow the reader's colour scheme).}
 
 \item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only
 the first table of a list).}
@@ -101,6 +96,9 @@ return the character string.}
 
 \item{col_var_names}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Replaced by \code{var_names}:
 \code{col_var_names = FALSE} is \code{var_names = "rows"} (or \code{"none"}).}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}, \code{html_24_bit}): colour is a CSS class, and exports are always 24-bit.}
 }
 \value{
 A character string (visible or invisible depending on \code{print}).

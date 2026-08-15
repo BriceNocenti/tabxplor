@@ -111,7 +111,7 @@ Les **rapports de cotes observés** `Obs_OR` sont les mêmes que ceux que que l�
 gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c("race", "age", "rincome", "relig")), ~ !is.na(.) )) |>
   tab(race, married, pct = "row", na = "drop",
-    OR = "OR", color = "OR", color_signif = "grey_non_signif"
+    display = "{or}", ref = "first", color = "OR", color_signif = "grey_non_signif"
    )
 ```
 

@@ -1,7 +1,7 @@
 # tab_kable html engine structure is stable
 
     Code
-      cat(rh_strip_style(tab_kable(counts, engine = "html")))
+      cat(rh_strip_style(tab_kable(counts)))
     Output
       <!--css-->
       <table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">marital</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">No answer</td><td class="tx-r tx-num g2">2</td><td class="tx-r tx-num g2">2</td><td class="tx-r tx-num g2">13</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">17</td></tr>
@@ -15,7 +15,7 @@
 ---
 
     Code
-      cat(rh_strip_style(tab_kable(row_diff, engine = "html")))
+      cat(rh_strip_style(tab_kable(row_diff)))
     Output
       <!--css-->
       <table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">marital</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">No answer</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.3 ; n: 2">12%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 2">12%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 13">76%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span style="font-weight:normal;"> (n=    17)</span></td></tr>
@@ -29,7 +29,7 @@
 ---
 
     Code
-      cat(rh_strip_style(tab_kable(bg, engine = "html")))
+      cat(rh_strip_style(tab_kable(bg)))
     Output
       <!--css-->
       <table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">marital</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">No answer</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.3 ; n: 2">12%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 2">12%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 13">76%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span style="font-weight:normal;"> (n=    17)</span></td></tr>
@@ -43,7 +43,7 @@
 ---
 
     Code
-      cat(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "html"))))
+      cat(rh_strip_style(suppressWarnings(tab_kable(chi2))))
     Output
       <!--css-->
       <table class="tabxplor-tab"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="3">race</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv">marital</th><th class="tx-r tx-num">Other</th><th class="tx-r tx-num">Black</th><th class="tx-r tx-num">White</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">No answer</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.3 ; n: 2">12%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.2 ; n: 2">12%</td><td class="tx-r tx-num g2" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1 ; n: 13">76%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span style="font-weight:normal;"> (n=    17)</span></td></tr>

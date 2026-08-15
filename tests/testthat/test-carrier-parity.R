@@ -24,7 +24,7 @@ testthat::test_that("fmt carrier round-trip is identical() (factor / numeric / m
     pct_color = tab(gss, marital, race, pct = "row", color = "diff"),
     test      = tab(gss, marital, race, pct = "row", color = "diff", test = TRUE),
     ci_cell   = tab(gss, marital, race, pct = "row", ci = "cell", stars = TRUE),
-    ci_diff   = tab(gss, marital, race, pct = "row", color = "diff", ci = "diff"),
+    ci_diff   = tab(gss, marital, race, pct = "row", color = "diff", ci = "ref"),
     weighted  = tab(gss, marital, race, wt = w, pct = "row", color = "diff", test = TRUE),
     numeric   = tab(gss, marital, age, pct = "row", ci = "cell", test = TRUE),
     mixed     = tab(gss, marital, c(race, age), pct = "row", test = TRUE),

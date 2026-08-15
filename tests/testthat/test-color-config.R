@@ -152,7 +152,7 @@ testthat::test_that("tab() color argument forms set the right channels + policy"
 # Phase 19c (KEY 4). The colour cascade used to resolve `color = "auto"` into the LEGACY COMBINED
 # string "after_ci" on two paths, and the unresolved "auto" sentinel could then reach set_color().
 # Both were live defects, on the DOCUMENTED string spelling of `color = TRUE`:
-#   * tab_num(color = "auto", ci = "diff") stored "after_ci" in the `color` attribute, which
+#   * tab_num(color = "auto", ci = "ref") stored "after_ci" in the `color` attribute, which
 #     fmt_color_plan() cannot match against names(MEASURES) -> the table came out UNCOLOURED;
 #   * any `color = "auto"` + a `color_signif` policy ABORTED ("Unknown color measure").
 # Every assertion below fails on the pre-19c tree.
@@ -161,7 +161,7 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
   col1 <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
 
   # (1) a numeric auto table with a difference CI stores a real measure -- and colours
-  n1 <- col1(tab_num(d, race, c(age, tvhours), ci = "diff"))
+  n1 <- col1(tab_num(d, race, c(age, tvhours), ci = "ref"))
   testthat::expect_equal(get_color(n1), "difference")
   testthat::expect_true(any(fmt_color_channels(n1)$text_slot != 0L))
 
@@ -176,8 +176,8 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
   testthat::expect_equal(get_color_bg(a), "ratio")
 
   # ... and tab_num() agrees with tab() on the same numeric request
-  n2 <- col1(tab_num(d, race, c(age, tvhours), ci = "diff", color_signif = "grey_non_signif"))
-  n3 <- col1(tab(d, race, c(age, tvhours), color = TRUE, ci = "diff",
+  n2 <- col1(tab_num(d, race, c(age, tvhours), ci = "ref", color_signif = "grey_non_signif"))
+  n3 <- col1(tab(d, race, c(age, tvhours), color = TRUE, ci = "ref",
                  color_signif = "grey_non_signif"))
   testthat::expect_equal(get_color(n2), get_color(n3))
   testthat::expect_equal(fmt_color_channels(n2)$text_slot, fmt_color_channels(n3)$text_slot)
@@ -252,7 +252,7 @@ testthat::test_that("tab() color argument errors are clear", {
 testthat::test_that("old combined colour strings are soft-deprecated but still colour", {
   d <- forcats::gss_cat
   for (m in c("diff_ci", "after_ci", "ci")) {
-    lifecycle::expect_deprecated(tab(d, marital, race, pct = "row", ci = "diff", color = m))
+    lifecycle::expect_deprecated(tab(d, marital, race, pct = "row", ci = "ref", color = m))
   }
   withr::local_options(lifecycle_verbosity = "quiet")
   t  <- tab(d, marital, race, pct = "row", color = "diff_ci")
@@ -354,7 +354,7 @@ testthat::test_that("color_type is deprecated on every exporter and does nothing
   tb <- tab(d, marital, race, pct = "row", color = TRUE)
 
   # each of the 7 public surfaces warns once when color_type is explicitly passed
-  lifecycle::expect_deprecated(tab_kable(tb, color_type = "bg", engine = "html"))
+  lifecycle::expect_deprecated(tab_kable(tb, color_type = "bg"))
   lifecycle::expect_deprecated(tab_md(tb, color_type = "bg", print = FALSE))
   lifecycle::expect_deprecated(tab_css(color_type = "bg"))
   lifecycle::expect_deprecated(tab_export(tb, "md", color_type = "bg", print = FALSE))
@@ -435,11 +435,11 @@ testthat::test_that("color = TRUE + a color_signif policy computes the differenc
 })
 
 testthat::test_that("an implicit color_signif CI == the explicit ci = 'diff' table", {
-  # the user should not have to write ci = "diff" to get what color_signif asks for
+  # the user should not have to write ci = "ref" to get what color_signif asks for
   for (pol in c("grey_non_signif", "guaranteed_effect")) {
     for (cv in list(rlang::expr(marital), rlang::expr(tvhours), rlang::expr(c(marital, tvhours)))) {
       a <- tab(forcats::gss_cat, race, !!cv, pct = "row", color = TRUE, color_signif = pol)
-      b <- tab(forcats::gss_cat, race, !!cv, pct = "row", color = TRUE, ci = "diff",
+      b <- tab(forcats::gss_cat, race, !!cv, pct = "row", color = TRUE, ci = "ref",
                color_signif = pol)
       testthat::expect_equal(a, b)
     }

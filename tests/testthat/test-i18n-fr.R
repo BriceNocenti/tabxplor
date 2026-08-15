@@ -165,7 +165,7 @@ test_that("a forest plot's axis and guide follow lang =", {
   skip_if_not_installed("ggplot2")
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   d <- gss_cat_data_formatting()
-  t <- tab(d, race, party3, pct = "row", ci = "diff", color = TRUE,
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = TRUE,
            color_signif = "grey_non_signif")
   p_en <- forest_plot(t, lang = "en")
   p_fr <- forest_plot(t, lang = "fr")

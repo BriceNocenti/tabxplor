@@ -355,7 +355,7 @@ test_that("Phase 19k: the trials picker == tab_reg(trials =), explicit and autom
   # (a) a FACTOR binomial outcome: NA resolves to no trials -> an ordinary binary logit, and the
   #     digest fast path stays available (the raw NA used to look like a grouped binomial).
   o  <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
-  expect_true(is.na(jmvtab_reg_dep_trials(list(), "married", gss)))
+  expect_true(is.na(jmvtab_reg_dep_trials(list(), "married")))
   b  <- quiet(jmvtab_reg_build(gss, o, NULL))
   expect_equal(reg_render(b$tabs),
                reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",

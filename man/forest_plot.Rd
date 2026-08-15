@@ -87,7 +87,7 @@ they are about residuals, which no table carries.)
 \details{
 \strong{What is drawn.} By default, whatever the table's own \code{ci =} produced: cell percentages with
 their intervals for \code{ci = "cell"}, differences from the reference with a zero line for
-\code{ci = "diff"}, odds ratios on a log axis for \code{OR = TRUE}, and the model's effects for a
+\code{ci = "ref"}, odds ratios on a log axis for \code{display = "{or}"}, and the model's effects for a
 \code{\link{tab_reg}} table. \code{what = "level"} / \code{"effect"} override it.
 
 \strong{The gridlines are the table's colour ladder} (\code{\link{set_color_breaks}}), labelled with the
@@ -102,7 +102,7 @@ when the estimators are correlated, which is why the crude interval is not drawn
 }
 \examples{
 if (requireNamespace("ggplot2", quietly = TRUE)) {
-  t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "diff", color = TRUE)
+  t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "ref", color = TRUE)
   forest_plot(t)
 }
 }

@@ -21,7 +21,7 @@ tab_estimates(
 a regression table and every value column of a cross-table.}
 
 \item{what}{\code{"auto"} (the quantity the stored interval is centred on -- so a
-\code{ci = "cell"} table gives percentages, a \code{ci = "diff"} table differences, an
+\code{ci = "cell"} table gives percentages, a \code{ci = "ref"} table differences, an
 \code{OR} table odds ratios), \code{"effect"} or \code{"level"}.}
 
 \item{observed}{\code{"auto"}, \code{"band"}, \code{"point"}, \code{"ci"} or \code{"none"} --

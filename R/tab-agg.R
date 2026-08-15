@@ -223,37 +223,11 @@ num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
 # aggregate normalises identically).
 tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
                               na = c("keep", "drop")) {
-  row_var_quo <- rlang::enquo(row_var)
-  if (quo_miss_na_null_empty_no(row_var_quo)) {
-    data <- data |> dplyr::mutate(no_row_var = factor("no_row_var"))
-    row_var <- rlang::sym("no_row_var")
-  } else {
-    row_var <- rlang::ensym(row_var)
-  }
-
-  col_vars <- rlang::enquo(col_vars)
-  if (quo_miss_na_null_empty_no(col_vars)) {
-    data     <- data |> dplyr::mutate(no_col_var = factor("n"))
-    col_vars <- rlang::syms("no_col_var")
-  } else {
-    pos_col_vars <- tidyselect::eval_select(col_vars, data)
-    col_vars     <- rlang::syms(names(pos_col_vars))
-  }
-
-  tab_vars <- rlang::enquo(tab_vars)
-  if (quo_miss_na_null_empty_no(tab_vars)) {
-    tab_vars <- character()
-  } else {
-    pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-    tab_vars     <- rlang::syms(names(pos_tab_vars))
-  }
-
-  wt_quo <- rlang::enquo(wt)
-  if (quo_miss_na_null_empty_no(wt_quo)) {
-    wt <- character()
-  } else {
-    wt <- rlang::ensym(wt)
-  }
+  # Phase 19l: THE shared NSE preamble (leaf_defuse_vars, R/tab-leaf.R). This producer takes no
+  # survey design (it is the tier-1 aggregate hook), hence svy = NULL.
+  .v <- leaf_defuse_vars(data, rlang::enquo(row_var), rlang::enquo(col_vars),
+                         rlang::enquo(tab_vars), rlang::enquo(wt), svy = NULL, plural = TRUE)
+  data <- .v$data ; row_var <- .v$row_var ; col_vars <- .v$col ; tab_vars <- .v$tab_vars ; wt <- .v$wt
 
   tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
   na <- na[1]

@@ -411,11 +411,15 @@ test_grid_reg <- function(x, test_tbl) {
   meta <- reg_call(x)
 
   # model columns (value cols) = the distinct fit columns, first-appearance order; headers = the
-  # dependent names when their count matches, else the column string with a "Model <eff> (dep)" strip.
+  # dependent names when their count matches, else the column key itself.
+  # Phase 19l: the `"^Model .+ \\((.+)\\)$"` strip that stood here is DELETED. It matched an English
+  # word plus a space, and NO producer has emitted that shape since Phase g -- the names are
+  # "Model_OR" / "Model_OR [married]" (reg_column) and the col_var is reg_shared_col_var()'s
+  # "<dep>: <positive_level>". So it always fell through and returned `cv` unchanged, which is what
+  # the code does now, without pretending to parse.
   value_cols <- unique(reg$col)
   deps <- if (!is.null(meta)) meta$dependent else NULL
-  value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps
-                   else vapply(value_cols, reg_strip_model_prefix, character(1))
+  value_headers <- if (!is.null(deps) && length(deps) == length(value_cols)) deps else value_cols
 
   # the ordered footer rows actually present: one per (stat, term), spec order then term order
   plan <- reg_footer_plan(reg)
@@ -465,12 +469,6 @@ test_grid_reg <- function(x, test_tbl) {
 
   list(label_headers = label_headers, stat_header = "Model fit",
        value_headers = value_headers, groups = groups)
-}
-
-# Strip a "Model OR (dependent)" fit col_var down to the dependent name; leave a bare "Model OR" as-is.
-reg_strip_model_prefix <- function(cv) {
-  m <- regmatches(cv, regexec("^Model .+ \\((.+)\\)$", cv))[[1]]
-  if (length(m) == 2) m[2] else cv
 }
 
 # Greedily pack comma-separated items into at most `n_rows` lines of <= `width` chars, for the wrapped

@@ -51,7 +51,8 @@ ROW_KINDS <- c("data", "total", "n", "pct", "pvalue", "gof", "blank")
 #            and a regression's predictor column -- which is why tab_reg() stops punning it as a
 #            fake sub-table variable)
 # "tab_var"  a sub-table variable (`tab_vars =`), which is ALSO a dplyr grouping column
-LVL_ROLES <- c("level", "var", "tab_var")
+# (Phase 19l deleted the `LVL_ROLES` vector that used to sit here: it had no reader anywhere -- the
+# three roles are compared as literals at every site -- so it was a declaration nothing consulted.)
 
 
 # --- the class ----------------------------------------------------------------------------------------

@@ -148,7 +148,7 @@ test_that("measure = 'ratio' on a continuous outcome is the ratio of adjusted me
                                  measure = "ratio", empirical = TRUE, cleannames = FALSE))
   mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
   expect_identical(get_scale(mc), "mean_ratio")        # the ratio field, not `or`
-  expect_true("Obs_MR" %in% names(t))
+  expect_true("Obs_RoM" %in% names(t))
   dd <- stats::na.omit(d[, c("tvhours", "race")])
   g  <- suppressWarnings(stats::glm(tvhours ~ race, data = dd, family = stats::quasipoisson("log")))
   i  <- which(as.character(t$var) == "race" & !is_refrow(mc))

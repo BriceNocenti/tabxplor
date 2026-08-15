@@ -115,16 +115,12 @@ testthat::test_that("a contrib table's NA-pct Total column does not crash the to
 
 # --- the shared bootstrap attribute builder ------------------------------------------------
 
-testthat::test_that("both engines emit the same tooltip attributes, reoriented on overflow", {
+testthat::test_that("tooltip attributes carry the auto placement (reoriented on overflow)", {
   t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
-  for (eng in c("kableExtra", "html")) {
-    for (pop in c(FALSE, TRUE)) {
-      h <- as.character(tab_kable(t, engine = eng, popover = pop, tooltips = TRUE, css = FALSE))
-      testthat::expect_true(grepl('data-placement="auto right"', h, fixed = TRUE),
-                            info = paste(eng, pop))
-      testthat::expect_false(grepl('data-placement="right"', h, fixed = TRUE),
-                             info = paste(eng, pop))
-    }
+  for (pop in c(FALSE, TRUE)) {
+    h <- as.character(tab_kable(t, popover = pop, tooltips = TRUE, css = FALSE))
+    testthat::expect_true(grepl('data-placement="auto right"', h, fixed = TRUE), info = pop)
+    testthat::expect_false(grepl('data-placement="right"', h, fixed = TRUE), info = pop)
   }
 })
 
@@ -132,12 +128,10 @@ testthat::test_that("a popover carries the tooltip TEXT as its content, not its 
   # regression: tab_kable_print_tooltip(popover = TRUE) used to return spec_popover()'s ATTRIBUTE
   # string, which the html engine then wrapped again -> data-content="data-toggle=&quot;popover..."
   t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
-  for (eng in c("kableExtra", "html")) {
-    h <- as.character(tab_kable(t, engine = eng, popover = TRUE, tooltips = TRUE, css = FALSE))
-    testthat::expect_false(grepl('data-content="data-toggle', h, fixed = TRUE), info = eng)
-    testthat::expect_true(grepl('data-content="diff:', h, fixed = TRUE), info = eng)
-    testthat::expect_true(grepl('data-trigger="hover"', h, fixed = TRUE), info = eng)
-  }
+  h <- as.character(tab_kable(t, popover = TRUE, tooltips = TRUE, css = FALSE))
+  testthat::expect_false(grepl('data-content="data-toggle', h, fixed = TRUE))
+  testthat::expect_true(grepl('data-content="diff:', h, fixed = TRUE))
+  testthat::expect_true(grepl('data-trigger="hover"', h, fixed = TRUE))
 })
 
 testthat::test_that("the one-line tooltip rule ships with the chrome, never with tab_md's CSS", {

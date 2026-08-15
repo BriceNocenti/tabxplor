@@ -78,15 +78,15 @@ testthat::test_that("tab_plain works with pct and diffs", {
 })
 
 testthat::test_that("tab_plain works with OR", {
-  tab_plain(data, sex, hair_color, pct = "row", OR = "OR")            |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "row", display = "{or}", ref = "first")            |> testthat::expect_s3_class("tabxplor_tab")
   tab_plain(data, sex, hair_color, pct = "col", display = "{or} ({pct})", ref = "first")        |> testthat::expect_s3_class("tabxplor_tab")
 
-  tab_plain(data, sex, hair_color, pct = "row", OR = "OR", ref = "^male")       |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "row", display = "{or}", ref = "^male")       |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, gender, pct = "row", display = "{or}", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
 
-  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = "tot",
+  tab_plain(data, sex, hair_color, gender, pct = "row", display = "{or}", ref = "tot",
             comp = "all")                                             |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 3,
+  tab_plain(data, sex, hair_color, gender, pct = "row", display = "{or}", ref = 3,
             comp = "all", totaltab = "table")                         |> testthat::expect_s3_class("tabxplor_tab")
 })
 
@@ -119,7 +119,7 @@ testthat::test_that("tab_num works with diff and ci", {
 
   tab_num(data, sex, c(height, birth_year), na = "drop", ci = "cell")        |> testthat::expect_s3_class("tabxplor_tab")
 
-  tab_num(data, sex, c(height, birth_year), na = "drop", ci = "diff")        |> testthat::expect_s3_class("tabxplor_tab")
+  tab_num(data, sex, c(height, birth_year), na = "drop", ci = "ref")        |> testthat::expect_s3_class("tabxplor_tab")
 
 })
 
@@ -354,15 +354,15 @@ testthat::test_that("tab_num works (with color)", {
   )
 })
 
-testthat::test_that("tab_many work with tribble", {
+testthat::test_that("tab() works with tribble + pmap (the batch idiom)", {
 
   tibble::tribble(
-    ~row_var, ~col_vars                           , ~tab_vars     , ~levels,
+    ~row_vars, ~col_vars                          , ~tab_vars     , ~levels,
     "sex"   , "hair_color"                        , NA_character_ , "all"  ,
     "sex"   , c("mass", "hair_color", "eye_color"), "gender"      , "first",
     "sex"   , c("hair_color", "eye_color", "mass"), "gender"      , "all"  ,
   ) |>
-    purrr::pmap(tab_many, data = data, totcol = "no", totaltab = "no") |>
+    purrr::pmap(tab, data = data, tot = "row", totaltab = "no", output_list = TRUE) |>
     testthat::expect_type("list")
 
   # not needed, since the opportunity of proceeding that way is not clear ?
@@ -642,9 +642,9 @@ testthat::test_that("single-variable frequency table keeps its n column (Phase 1
 # Phase 14p: the internal `no_col_var` sentinel must never surface as a spanning col_var name.
 testthat::test_that("no_col_var placeholder is not rendered as a col_var name (Phase 14p)", {
   gss <- forcats::gss_cat
-  k1  <- as.character(tab_kable(tab(gss, relig), engine = "html"))
+  k1  <- as.character(tab_kable(tab(gss, relig)))
   testthat::expect_false(grepl("no_col_var", k1))
-  k2  <- as.character(tab_kable(tab(gss, relig, pct = "col"), engine = "html"))
+  k2  <- as.character(tab_kable(tab(gss, relig, pct = "col")))
   testthat::expect_false(grepl("no_col_var", k2))
   m1  <- paste(tab_md(tab(gss, relig, pct = "col")), collapse = "\n")
   testthat::expect_false(grepl("no_col_var", m1))

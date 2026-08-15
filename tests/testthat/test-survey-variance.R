@@ -162,8 +162,8 @@ test_that("ci_method = c(cell = 'beta') IS svyciprop(method = 'beta') under a RE
 
 test_that("the cell-vs-reference difference and its stars use the design base", {
   d <- svv_fixture(); des <- svv_des(d)
-  dsg <- suppressMessages(tab(des, g, col, pct = "row", ci = "diff", ref = 1, stars = TRUE))
-  raw <- tab(d, g, col, wt = w, pct = "row", ci = "diff", ref = 1, stars = TRUE)
+  dsg <- suppressMessages(tab(des, g, col, pct = "row", ci = "ref", ref = 1, stars = TRUE))
+  raw <- tab(d, g, col, wt = w, pct = "row", ci = "ref", ref = 1, stars = TRUE)
   wd  <- function(t) { cl <- t[["yes"]]; (get_ci_sup(cl) - get_ci_inf(cl))[2:3] }
   expect_true(all(wd(dsg) > wd(raw)))            # a clustered design widens the difference
   # the two bases the difference combines are both the design's

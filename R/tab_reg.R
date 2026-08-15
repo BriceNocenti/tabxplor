@@ -2167,8 +2167,8 @@ REG_EMPIRICAL <- list(
   mr = list(
     method_mean_ratio = "quasipoisson", coef = "mr", coef_log = "mr_log",
     base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "student",     color = "",      link = NA_character_),
-    mr     = list(nm = "Obs_MR",       scale = "mean_ratio", display = "ratio", digits = 2L, ref = "1", pct_base = "none", ci_method = "quasipoisson", color = "ratio", link = "log"),
-    mr_log = list(nm = "Obs_log(MR)",  scale = "log_coef",   display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "quasipoisson", color = "diff",  link = "log")),
+    mr     = list(nm = "Obs_RoM",      scale = "mean_ratio", display = "ratio", digits = 2L, ref = "1", pct_base = "none", ci_method = "quasipoisson", color = "ratio", link = "log"),
+    mr_log = list(nm = "Obs_log(RoM)", scale = "log_coef",   display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "quasipoisson", color = "diff",  link = "log")),
   gaussian = list(
     method_mean_diff = "student", coef = "diff", coef_log = "diff",
     base = list(nm = "Obs_mean", scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "",     link = NA_character_),
@@ -5277,7 +5277,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   if (!is.null(svy)) {
     # Phase 18z16-i (W10): one rule across the package -- `wt` beside a design ABORTS (it used to
     # be silently ignored here with a note nothing downstream could see).
-    svy_abort_wt_design(!is.null(wt), "tab_reg")
+    svy_abort_wt_design(!is.null(wt))
     data <- svy$data
     wt   <- svy$spec$wt
   }

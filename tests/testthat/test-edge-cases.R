@@ -420,7 +420,7 @@ testthat::test_that("jmvtab_build() + tab_kable() survive 0-row data", {
                 wt = character(), color = "auto", color_signif = "ignore", ci = "auto",
                 digits = 0L, cleannames = FALSE, n_min = numeric())
   testthat::expect_no_error(built <- tabxplor:::jmvtab_build(empty, opts, NULL))
-  testthat::expect_no_error(tab_kable(built$tabs, engine = "html"))
+  testthat::expect_no_error(tab_kable(built$tabs))
 })
 
 # Fix 3: the graceful-degrade notice is batch-aware -- suppressed when a real fmt table is present.
@@ -428,9 +428,9 @@ testthat::test_that("degrade notice is suppressed when the render batch holds a 
   real  <- tab(forcats::gss_cat, marital, race)
   plain <- tibble::tibble(a = factor(c("x", "y")), b = c(1.5, 2.5))
   # a mixed list: the plain peer must NOT emit the misleading "skipped" message
-  testthat::expect_no_message(tab_kable(list(real, plain), engine = "html"), message = "skipped")
+  testthat::expect_no_message(tab_kable(list(real, plain)), message = "skipped")
   # a lone non-tabxplor frame still informs (exactly once)
-  testthat::expect_message(tab_kable(plain, engine = "html"), "skipped")
+  testthat::expect_message(tab_kable(plain), "skipped")
 })
 
 # Fix 4: a weight literally named "wt" is shadow-proof (was: garbage column + warnings, numeric means).

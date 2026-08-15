@@ -8,8 +8,6 @@
 tab_html(
   tabs,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   color = TRUE,
   tooltips = NULL,
   popover = NULL,
@@ -18,13 +16,10 @@ tab_html(
   caption = knitr::opts_current$get("tab.cap"),
   transpose = FALSE,
   var_names = NULL,
-  html_font = NULL,
   get_data = FALSE,
-  full_width = FALSE,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
-  engine = NULL,
   css = NULL,
   ...
 )
@@ -32,8 +27,6 @@ tab_html(
 tab_kable(
   tabs,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   color = TRUE,
   tooltips = NULL,
   popover = NULL,
@@ -42,13 +35,10 @@ tab_kable(
   caption = knitr::opts_current$get("tab.cap"),
   transpose = FALSE,
   var_names = NULL,
-  html_font = NULL,
   get_data = FALSE,
-  full_width = FALSE,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
-  engine = NULL,
   css = NULL,
   ...
 )
@@ -66,8 +56,7 @@ plus any dark-mode toggle of the host page (Quarto, Bootstrap 5.3, Tailwind);
 rather than the editor's colour theme, so the theme is resolved in R instead (RStudio's, or
 Positron's, best-effort).
 }
-\code{"auto"} needs \code{engine = "html"} (kableExtra's themes are baked at render time); asking it of
-the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
+Defaults to \code{getOption("tabxplor.theme")},
 i.e. \code{"light"} -- a dark table is always a deliberate choice.
 
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
@@ -78,12 +67,6 @@ typography is written as real \verb{<b>}/\verb{<i>}/\verb{<u>} markup as well as
 stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
 it: any coloured table already \strong{prints} in this scheme, see \code{\link{tab_css}}'s
 \code{print_rules}.}
-
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
-
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: exports are always
-24-bit (the OKLCH palettes). Kept only so old calls do not error.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
@@ -121,16 +104,7 @@ several \code{row_vars} uses to name each block (written once per block, vertica
 column-variable names are the spanning row above their level columns. Level headers always
 keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.}
 
-\item{html_font}{A string for HTML css font. By default, it uses
-\code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another
-default by setting \code{options("tabxplor.kable_html_font" = )}.}
-
 \item{get_data}{Get the transformed data instead of the html table.}
-
-\item{full_width}{A TRUE or FALSE variable controlling whether the HTML table
-should have the preferable format for full_width. If not specified, a HTML
-table will have full width by default but this option will be set to FALSE for
-a LaTeX table.}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 
@@ -138,19 +112,16 @@ a LaTeX table.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
 
-\item{engine}{The HTML render engine. \code{"html"} (default) is a dependency-free \verb{<table>} renderer:
-faster, and every look is a CSS class you can restyle (see \code{\link[=tab_css]{tab_css()}}), which is what makes
-\code{theme = "auto"} possible. \code{"kableExtra"} is the legacy engine (\pkg{kableExtra}); it bakes its own
-theme, so it cannot follow the reader's colour scheme. Defaults to
-\code{getOption("tabxplor.tab_kable_engine", "html")}.}
-
-\item{css}{\code{engine = "html"} only: inline the stylesheet with the table, so the output is
+\item{css}{Inline the stylesheet with the table, so the output is
 self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set \code{FALSE} in a many-table
 document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
 so one copy styles every table. With \code{FALSE} and no \code{\link{tab_css}} call, tables render
 uncoloured.}
 
-\item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
+\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}. The table is rendered by one
+dependency-free \verb{<table>} engine whose every look is a CSS class you can restyle -- font, width
+and colour are all \code{\link{tab_css}}'s business now.}
 }
 \value{
 A html table. Printing it opens it in the Viewer, on a page painted to match the table --
@@ -164,8 +135,7 @@ The HTML exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = 
 }
 \details{
 \code{tab_kable()} is a permanent alias of \code{tab_html()} -- the two are identical. \code{tab_html()}
-names the output (an HTML table), while the HTML backend \emph{engine} (home-built or \pkg{kableExtra})
-is chosen with \verb{engine =}.
+names the output (an HTML table); \code{tab_kable()} is the name it had when \pkg{kableExtra} rendered it.
 }
 \examples{
 \donttest{

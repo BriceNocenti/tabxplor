@@ -6,11 +6,11 @@
 \usage{
 tab_css(
   theme = NULL,
-  color_type = lifecycle::deprecated(),
   chrome = TRUE,
   style_tag = TRUE,
   file = NULL,
-  print_rules = NULL
+  print_rules = NULL,
+  ...
 )
 }
 \arguments{
@@ -22,11 +22,8 @@ deliberate choice. \code{"auto"} emits every rule four times (a light base, the 
 both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
 editor's theme -- see its \code{theme} argument.}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).}
-
 \item{chrome}{When \code{TRUE} (default) also style the table itself (font/background/border colours,
-the greys) -- what \code{tab_kable(engine = "html")} needs. \code{FALSE} emits the colour classes only, which
+the greys) -- what \code{\link[=tab_html]{tab_html()}} needs. \code{FALSE} emits the colour classes only, which
 is what \code{tab_md()} wants: bare selectors you can map in your own editor's CSS.}
 
 \item{style_tag}{Wrap the CSS in a \verb{<style>} tag (default \code{TRUE}).}
@@ -39,6 +36,10 @@ Defaults to \code{getOption("tabxplor.print_rules")}. Set to \code{FALSE} if you
 and the colours are the point. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and 6 KB to
 an \code{"auto"} one (where the rules must also be emitted against the page-toggle hooks, which would
 otherwise out-specify them).}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}): the text channel always uses the text palette, and the colour CHANNEL is chosen
+by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).}
 }
 \value{
 The CSS, invisibly when \code{file} is given. Printed as-is by \code{knitr} with \code{results = "asis"}.

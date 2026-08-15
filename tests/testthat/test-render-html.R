@@ -1,13 +1,12 @@
-# PURPOSE: Lock the Phase 10e tab_kable() render seam -- both engines.
-# ROLE: Guards (a) the kableExtra engine against drift from the legacy carve (structure snapshot),
-#       (b) the home-built html engine (structure snapshot + self-contained + DOM-size win),
-#       (c) cross-engine content parity (same cell text + tooltip content -> the two engines can't
-#       diverge silently). The kableExtra byte-identity vs the pre-10e code was proven by a git-stash
-#       A/B; these snapshots keep it locked going forward.
+# PURPOSE: Lock the Phase 10e tab_html() render seam and its one engine.
+# ROLE: Guards the home-built html engine (structure snapshot + self-contained + the theme cascade
+#       + the plain-input degrade). Phase 19l DELETED the legacy kableExtra engine, and with it this
+#       file's three comparative sections (structure, cross-engine content parity, DOM-size win):
+#       there is nothing left to be parallel to. What survives of kableExtra here is its PRINT
+#       method -- the Viewer route + tooltip binding, see kable_print_mode() at the end.
 # KEY CONSTRAINTS:
-#   - Must run via test_check("tabxplor"); skip_if_not_installed("kableExtra") on the kable branch.
-#   - Snapshots strip the <style> blocks (kableExtra's tab.css / the html engine's block are large,
-#     stable, and not the point) so the diff is the table STRUCTURE.
+#   - Must run via test_check("tabxplor").
+#   - Snapshots strip the <style> block (large, stable, not the point) so the diff is the STRUCTURE.
 
 gss <- forcats::gss_cat
 
@@ -29,51 +28,6 @@ rh_titles <- function(h) {                       # non-empty tooltip contents
   sort(unique(ti[ti != 'title=""']))
 }
 
-# === SECTION: kableExtra engine (legacy) -- version-robust structure assertions ==========
-# Phase 14e made "html" the DEFAULT engine, so every call here pins engine = "kableExtra"
-# explicitly -- otherwise this whole section would silently assert against the other engine.
-# WARNING: do NOT snapshot this engine's bytes. Its cells come from kableExtra::cell_spec(), whose
-# output is version-unstable -- 2.0.0 -> 1.4.1 moved the rgba alpha (255 -> 1), dropped leading
-# padding and (text_spec) leaked a stray `class="TRUE"`. Byte-snapshotting it made CI red on all 5
-# platforms for a change tabxplor did not make, and put kableExtra's release schedule in charge of
-# our test suite. We do not own that HTML, so we assert the parts we DO own -- the cells, the
-# colouring, the tooltips, the geometry -- which survived 1.4.1 untouched. The home-built engine's
-# HTML *is* ours, so it keeps its byte snapshot below.
-
-testthat::test_that("tab_kable kableExtra engine structure is stable", {
-  testthat::skip_if_not_installed("kableExtra")
-  counts   <- tab(gss, marital, race)
-  row_diff <- tab(gss, marital, race, pct = "row", color = "diff")
-  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", test = TRUE))
-
-  # geometry: exactly one <tbody>, one <tr> per row. chi2 gains ONE extra row -- the p-value row is
-  # materialised at display (Phase 10i-B), so it is not in nrow(tb).
-  for (tb in list(counts, row_diff)) {
-    h <- rh_strip_style(tab_kable(tb, engine = "kableExtra"))
-    testthat::expect_match(h, "<table")
-    body <- rh_tbody(h)
-    testthat::expect_length(body, 1L)
-    testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
-  }
-  # Phase 18m: the default "summary" test rows are p-value + effect size (2 extra; the statistic row
-  # was dropped).
-  bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "kableExtra"))))
-  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 2L)
-
-  # colouring reaches the cells, and only when asked for. kableExtra bakes colour INLINE (it carries
-  # no stylesheet of ours), which is also why its theme shows in the markup -- both are the opposite
-  # of the html engine below, and that contrast is the point of having two sections.
-  hd <- rh_strip_style(tab_kable(row_diff, engine = "kableExtra"))
-  hm <- rh_strip_style(tab_kable(row_diff, engine = "kableExtra", color = FALSE))
-  testthat::expect_match(hd, "color:")
-  testthat::expect_false(identical(hd, hm))
-  # theme is honoured
-  testthat::expect_false(identical(
-    rh_strip_style(tab_kable(row_diff, engine = "kableExtra", theme = "dark")), hd))
-  # tooltips carry the underlying fields
-  testthat::expect_true(any(grepl("^title=\"diff:", rh_titles(hd))))
-})
-
 # === SECTION: home-built html engine -- structure snapshot + self-contained ==============
 
 testthat::test_that("tab_kable html engine structure is stable", {
@@ -82,14 +36,14 @@ testthat::test_that("tab_kable html engine structure is stable", {
   bg       <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
   chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", test = TRUE))
 
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts,   engine = "html"))))
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff, engine = "html"))))
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(bg,       engine = "html"))))
-  testthat::expect_snapshot(cat(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "html")))))
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts))))
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff))))
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(bg))))
+  testthat::expect_snapshot(cat(rh_strip_style(suppressWarnings(tab_kable(chi2)))))
 })
 
 testthat::test_that("html engine output is self-contained (inline <style>, no external <link>)", {
-  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), engine = "html"))
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff")))
   testthat::expect_match(h, "<table")
   testthat::expect_match(h, "<style")
   testthat::expect_false(grepl("<link", h))
@@ -99,8 +53,7 @@ testthat::test_that("html engine output is self-contained (inline <style>, no ex
 # === SECTION: Phase 13d -- theme lives in the CSS, not the markup =========================
 
 testthat::test_that("cells carry slot classes, never inline colour", {
-  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
-                              engine = "html", tooltips = FALSE))
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), tooltips = FALSE))
   b <- rh_tbody(h)
   # THE constraint of Phase 13d: an inline `style` beats every stylesheet rule short of !important, so
   # inline colour would make theme = "auto" impossible. If this fails, dark mode is silently broken.
@@ -114,8 +67,8 @@ testthat::test_that("cells carry slot classes, never inline colour", {
 
 testthat::test_that("the MARKUP is theme-agnostic; only the stylesheet differs", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  mk <- function(th) rh_strip_style(tab_kable(tb, engine = "html", theme = th))
-  cs <- function(th) as.character(tab_kable(tb, engine = "html", theme = th))
+  mk <- function(th) rh_strip_style(tab_kable(tb, theme = th))
+  cs <- function(th) as.character(tab_kable(tb, theme = th))
   # This is the property that makes "auto" possible at all -- one DOM, three stylesheets.
   testthat::expect_identical(mk("light"), mk("dark"))
   testthat::expect_identical(mk("light"), mk("auto"))
@@ -124,7 +77,7 @@ testthat::test_that("the MARKUP is theme-agnostic; only the stylesheet differs",
 
 testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  cs <- function(th) as.character(tab_kable(tb, engine = "html", theme = th))
+  cs <- function(th) as.character(tab_kable(tb, theme = th))
 
   light <- cs("light")
   # z11: "@media" alone is no longer the marker -- every stylesheet now carries an `@media print`
@@ -190,7 +143,7 @@ testthat::test_that("the html stars legend uses &#42; entities so pandoc cannot 
   # stars vanished from every knitted page (Viewer/jamovi/standalone were fine -- no re-parse).
   # `&#42;` renders as `*` everywhere but is plain text to pandoc.
   t_stars <- tab(gss, marital, race, pct = "row", color = "diff", stars = TRUE)
-  h <- as.character(tab_kable(t_stars, engine = "html", css = FALSE, tooltips = FALSE))
+  h <- as.character(tab_kable(t_stars, css = FALSE, tooltips = FALSE))
   testthat::expect_match(h, "&#42;&#42;&#42;:", fixed = TRUE)      # the legend's *** run, entity-encoded
   foot <- regmatches(h, regexpr("<div class=\"tx-foot\">.*", h))
   testthat::expect_no_match(foot, "\\*{2,3}:")                     # no raw pairable star runs left
@@ -201,67 +154,54 @@ testthat::test_that("the auto cascade layers are ordered so a page toggle beats 
   # friends toggle a CLASS, which a media query cannot see. The hook layers must therefore come AFTER
   # the media block (they also out-specify it), and light before dark. Reordering these silently makes
   # an explicit page toggle lose to the reader's OS -- which no assertion on hex would catch.
-  auto <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
-                                 engine = "html", theme = "auto"))
+  auto <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), theme = "auto"))
   testthat::expect_lt(regexpr("@media", auto, fixed = TRUE),
                       regexpr("body.quarto-light", auto, fixed = TRUE))
   testthat::expect_lt(regexpr("body.quarto-light", auto, fixed = TRUE),
                       regexpr("body.quarto-dark", auto, fixed = TRUE))
 })
 
-testthat::test_that('theme = "auto" downgrades on the kableExtra engine, with one message', {
-  testthat::skip_if_not_installed("kableExtra")
-  tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  testthat::expect_message(tab_kable(tb, engine = "kableExtra", theme = "auto"), "auto")
-  testthat::expect_identical(
-    as.character(suppressMessages(tab_kable(tb, engine = "kableExtra", theme = "auto"))),
-    as.character(tab_kable(tb, engine = "kableExtra", theme = "light")))
-})
-
 testthat::test_that("the theme is read from options(tabxplor.theme), explicit wins", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   withr::local_options(list(tabxplor.theme = "dark"))
-  testthat::expect_identical(as.character(tab_kable(tb, engine = "html")),
-                             as.character(tab_kable(tb, engine = "html", theme = "dark")))
-  testthat::expect_identical(as.character(tab_kable(tb, engine = "html", theme = "light")),
+  testthat::expect_identical(as.character(tab_kable(tb)),
+                             as.character(tab_kable(tb, theme = "dark")))
+  testthat::expect_identical(as.character(tab_kable(tb, theme = "light")),
                              as.character(withr::with_options(list(tabxplor.theme = "light"),
-                                                              tab_kable(tb, engine = "html"))))
+                                                              tab_kable(tb))))
 })
 
 testthat::test_that("css = FALSE drops the <style> but keeps the classes", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  h  <- as.character(tab_kable(tb, engine = "html", css = FALSE))
+  h  <- as.character(tab_kable(tb, css = FALSE))
   testthat::expect_false(grepl("<style", h, fixed = TRUE))
   testthat::expect_match(rh_tbody(h), 'class="[^"]*\\b(p|m)[1-4]\\b')
   # the once-per-document workflow: options() drives it, and tab_css() supplies the stylesheet
   withr::local_options(list(tabxplor.kable_css = FALSE))
-  testthat::expect_false(grepl("<style", as.character(tab_kable(tb, engine = "html")), fixed = TRUE))
+  testthat::expect_false(grepl("<style", as.character(tab_kable(tb)), fixed = TRUE))
   testthat::expect_match(tab_css(theme = "auto"), "^<style>")
 })
 
-testthat::test_that("the colour legend uses classes on the html engine, hex on kableExtra", {
+testthat::test_that("the colour legend uses slot classes, never inline hex", {
   tb   <- tab(gss, marital, race, pct = "row", color = "diff")
   foot <- function(h) regmatches(as.character(h),
                                  regexpr("(?s)<tfoot>.*?</tfoot>", as.character(h), perl = TRUE))
   # The legend sits in the table's own <tfoot>, so inline hex would freeze it while the cells it
-  # describes follow a toggle. The discriminator is the ENGINE (does our stylesheet ship?), NOT the
-  # theme: engine = "html" + theme = "light" + css = FALSE is a real case (the document supplies
-  # tab_css("auto") itself), and inline hex would be wrong there too.
+  # describes follow a toggle. The discriminator is "does our stylesheet ship?", NOT the theme:
+  # theme = "light" + css = FALSE is a real case (the document supplies tab_css("auto") itself),
+  # and inline hex would be wrong there too. (The hex path survives for the media that carry no
+  # stylesheet -- see `classes = FALSE` in the next test, and tab_xl / tab_plot.)
   for (th in c("light", "dark", "auto")) {
-    f <- foot(tab_kable(tb, engine = "html", theme = th, color_legend = TRUE))
+    f <- foot(tab_kable(tb, theme = th, color_legend = TRUE))
     testthat::expect_false(grepl("color:#", f, fixed = TRUE))   # no inline hex ANYWHERE in the legend
     testthat::expect_match(f, '<span class="(p|m)[1-4]"')
   }
-  testthat::skip_if_not_installed("kableExtra")
-  # kableExtra carries no tabxplor stylesheet -> classes would render the legend uncoloured.
-  testthat::expect_match(foot(tab_kable(tb, engine = "kableExtra", color_legend = TRUE)),
-                         'style="[^"]*color:#')
 })
 
 testthat::test_that("legend weight: text break-words bold, background break-words plain (Phase g)", {
   tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))  # text = diff, bg = ratio
   # html: TEXT break-words are bold; BACKGROUND break-words are PLAIN (they mirror filled cells, which
-  # a fill alone does not bold). Holds on the class path AND the inline-hex (kableExtra) path.
+  # a fill alone does not bold). Holds on the class path AND the inline-hex one.
   for (cl in c(TRUE, FALSE)) {
     l     <- tab_color_legend(tb, medium = "html", classes = cl)
     spans <- unlist(regmatches(l, gregexpr("<span [^>]*>", l)))
@@ -300,86 +240,68 @@ testthat::test_that("tab_css() bolds the text slot classes, not the background o
                                                      a, fixed = TRUE))), 1L)
 })
 
-# === SECTION: cross-engine content parity ================================================
+# === SECTION: get_data + what a NON-tabxplor input renders ===============================
 
-testthat::test_that("both engines carry the same cell text and tooltip content", {
-  testthat::skip_if_not_installed("kableExtra")
-  for (tb in list(
-    tab(gss, marital, race, pct = "row", color = "diff"),
-    tab(gss, marital, race),
-    tab(gss, marital, c(race, relig), pct = "row", color = "diff"),
-    tab_num(gss, race, c(age, tvhours), marital, comp = "all")
-  )) {
-    ke <- suppressWarnings(tab_kable(tb, engine = "kableExtra"))
-    ht <- suppressWarnings(tab_kable(tb, engine = "html"))
-    testthat::expect_identical(rh_cells(ke), rh_cells(ht))   # same data
-    testthat::expect_identical(rh_titles(ke), rh_titles(ht)) # same tooltip content
-  }
-})
-
-testthat::test_that("html engine drops the per-cell <span> wrapper (DOM-size win)", {
-  testthat::skip_if_not_installed("kableExtra")
-  tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  ke <- rh_tbody(tab_kable(tb, engine = "kableExtra"))
-  ht <- rh_tbody(tab_kable(tb, engine = "html"))
-  n_ke <- lengths(gregexpr("<span", ke))
-  n_ht <- if (grepl("<span", ht)) lengths(gregexpr("<span", ht)) else 0L
-  testthat::expect_gt(n_ke, 0L)          # kableExtra wraps every cell
-  testthat::expect_lt(n_ht, n_ke)        # html has far fewer (ideally 0) tbody spans
-})
-
-# === SECTION: get_data + graceful degrade both engines ===================================
-
-testthat::test_that("get_data returns a data.frame on both engines", {
-  testthat::skip_if_not_installed("kableExtra")
+testthat::test_that("get_data returns a data.frame", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   testthat::expect_s3_class(tab_kable(tb, get_data = TRUE), "data.frame")
-  testthat::expect_s3_class(tab_kable(tb, get_data = TRUE, engine = "html"), "data.frame")
 })
 
-testthat::test_that("plain data.frame degrades gracefully on both engines", {
+# Phase 19l: this is THE contract that had to survive deleting kable_tabxplor_style(), whose one
+# selling point was "styles any data.frame". Three inputs, one renderer:
+#   (a) a plain tibble/data.frame  -> degrades (a note + a bare <table>), never an error;
+#   (b) a table that merely LOST its class, fmt columns intact -> NOT degraded, fully coloured
+#       (test-degraded-attrs.R's contract -- the colour lives on the columns);
+#   (c) a real tab                 -> the full render.
+testthat::test_that("tab_html renders a plain data.frame, a declassed tab and a real tab", {
   df <- data.frame(a = 1:3, b = letters[1:3])
-  testthat::expect_no_error(suppressMessages(tab_kable(df, engine = "html")))
-  h <- as.character(suppressMessages(tab_kable(df, engine = "html")))
-  testthat::expect_match(h, "<table")
-  testthat::skip_if_not_installed("kableExtra")
-  testthat::expect_no_error(suppressMessages(tab_kable(df)))
+  testthat::expect_message(h_df <- as.character(tab_html(df)), "not a tabxplor table")
+  testthat::expect_match(h_df, "<table")
+  testthat::expect_match(as.character(suppressMessages(tab_export(df, "html"))), "<table")
+  testthat::expect_match(as.character(suppressMessages(tab_html(tibble::as_tibble(df)))), "<table")
+
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  declassed <- tb; class(declassed) <- c("tbl_df", "tbl", "data.frame")
+  h_dc <- as.character(tab_html(declassed))
+  testthat::expect_match(h_dc, "<table")
+  testthat::expect_match(rh_tbody(h_dc), 'class="[^"]*\\b(p|m)[1-4]\\b')   # still coloured
+
+  testthat::expect_match(rh_tbody(as.character(tab_html(tb))), 'class="[^"]*\\b(p|m)[1-4]\\b')
 })
 
 testthat::test_that("tab_kable renders a non-mergeable list instead of erroring (list method)", {
-  testthat::skip_if_not_installed("kableExtra")
   # different col_vars -> not mergeable (previously an error for kable)
   lst <- list(tab(gss, marital, race,  pct = "row"),
               tab(gss, marital, relig, pct = "row"))
-  for (eng in c("kableExtra", "html")) {
-    h <- as.character(suppressWarnings(tab_kable(lst, engine = eng)))
-    testthat::expect_gte(lengths(gregexpr("<table", h)), 2L)  # both tables rendered
-  }
+  h <- as.character(suppressWarnings(tab_kable(lst)))
+  testthat::expect_gte(lengths(gregexpr("<table", h)), 2L)  # both tables rendered
 })
 
-testthat::test_that("n_min blanked cells render empty (no literal NA) on both engines", {
-  testthat::skip_if_not_installed("kableExtra")
+testthat::test_that("n_min blanked cells render empty (no literal NA)", {
   tb <- suppressWarnings(tab(gss, marital, race, pct = "row", n_min = 1000))
-  for (eng in c("kableExtra", "html")) {
-    h <- as.character(suppressWarnings(tab_kable(tb, engine = eng)))
-    testthat::expect_false(grepl(">NA<", h))       # no literal NA cell content
-    testthat::expect_match(h, "<table")
-  }
+  h <- as.character(suppressWarnings(tab_kable(tb)))
+  testthat::expect_false(grepl(">NA<", h))       # no literal NA cell content
+  testthat::expect_match(h, "<table")
 })
 
-testthat::test_that("engine is resolved from the option", {
-  testthat::skip_if_not_installed("kableExtra")
+# Phase 19l: the retired export arguments are absorbed and reported, never acted on.
+testthat::test_that("retired export arguments are inert and report once", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  withr::local_options(tabxplor.tab_kable_engine = "html")
-  h <- as.character(tab_kable(tb))
-  testthat::expect_match(h, "tabxplor-tab")   # the home-built class
+  plain <- as.character(tab_html(tb))
+  for (a in list(list(engine = "kableExtra"), list(engine = "html"), list(color_type = "text"),
+                 list(html_24_bit = TRUE), list(html_font = "serif"), list(full_width = TRUE))) {
+    lifecycle::expect_deprecated(do.call(tab_html, c(list(tb), a)))
+    h <- suppressWarnings(do.call(tab_html, c(list(tb), a)))
+    testthat::expect_identical(as.character(h), plain)               # inert: byte-identical
+  }
+  # tab_export() reports it ONCE and does not forward it to the child exporter
+  lifecycle::expect_deprecated(tab_export(tb, "html", engine = "kableExtra"))
 })
 
 
-# === SECTION: Phase 14e -- the html engine as the default renderer =========================
+# === SECTION: Phase 14e -- the html renderer's output shape ================================
 
-testthat::test_that("html is the default engine and its output is Viewer-routed / knittable", {
-  testthat::expect_equal(getOption("tabxplor.tab_kable_engine"), "html")
+testthat::test_that("the output is Viewer-routed / knittable", {
   h <- tab_kable(tab(gss, marital, race, pct = "row"))
   # the `kableExtra` class is what print.kableExtra / knit_print.kableExtra dispatch on; without it a
   # bare knitr_kable just cat()s the markup to the console instead of opening the Viewer.
@@ -390,8 +312,7 @@ testthat::test_that("html is the default engine and its output is Viewer-routed 
 })
 
 testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can win)", {
-  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
-                              engine = "html", tooltips = FALSE))
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), tooltips = FALSE))
   b <- rh_tbody(h)
   # An inline style beats any stylesheet rule short of !important, so ANY inline style on a cell is a
   # thing the user cannot restyle. The engine must emit none.
@@ -433,8 +354,8 @@ testthat::test_that("the html engine flags a starred table with tx-has-stars, a 
   plain   <- tab(gss, marital, race, pct = "row", color = "diff")
   d <- gss; d$married <- as.integer(d$marital == "Married")
   starred <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
-  hp <- as.character(tab_kable(plain,   engine = "html", css = FALSE))
-  hs <- as.character(tab_kable(starred, engine = "html", css = FALSE))
+  hp <- as.character(tab_kable(plain, css = FALSE))
+  hs <- as.character(tab_kable(starred, css = FALSE))
   testthat::expect_no_match(hp, "tx-has-stars")
   testthat::expect_match(hs, 'class="tabxplor-tab tx-has-stars"', fixed = TRUE)
 })
@@ -457,7 +378,7 @@ testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured ce
   # `tx-br` column separator meets a coloured value, which no single-col_var fixture ever produces --
   # which is exactly why this survived unseen.
   b <- rh_tbody(as.character(tab_kable(tab(gss, marital, c(race, relig), pct = "row",
-                                           color = "diff"), engine = "html", tooltips = FALSE)))
+                                           color = "diff"), tooltips = FALSE)))
   tds <- unlist(regmatches(b, gregexpr('<td class="[^"]*"', b)))
   both <- grep("\\b(p|m)[1-4]\\b", grep("tx-br|tx-bl", tds, value = TRUE), value = TRUE)
   testthat::expect_gt(length(both), 0)
@@ -469,7 +390,7 @@ testthat::test_that("the footnote does not SIZE the table", {
   # decided the table's max-content -- and a table is as wide as min(max-content, available), so it
   # took the whole pane and auto layout padded every column with the slack. `width:0` makes the cell
   # contribute 0 to max-content; `min-width:100%` refills it once the table is sized by its data.
-  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), engine = "html"))
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff")))
   testthat::expect_match(h, '<td colspan="5"><div class="tx-foot">', fixed = TRUE)
   css <- tab_css(style_tag = FALSE)
   testthat::expect_match(css, ".tx-foot{width:0;min-width:100%;}", fixed = TRUE)
@@ -483,7 +404,7 @@ testthat::test_that("the footnote does not SIZE the table", {
 testthat::test_that("a row reaches each role class once, and an unstyled row has no class attribute", {
   # `radd` appends; it is not a set union. The last row is normally also a totblock_bottom, so it
   # emitted class="tx-bb tx-bb".
-  h   <- as.character(tab_kable(tab(gss, c(marital, relig), race, pct = "row"), engine = "html"))
+  h   <- as.character(tab_kable(tab(gss, c(marital, relig), race, pct = "row")))
   trs <- unlist(regmatches(h, gregexpr("<tr[^>]*>", h)))
   cls <- gsub('.*class="([^"]*)".*', "\\1", grep("class=", trs, value = TRUE))
   testthat::expect_false(any(vapply(strsplit(cls, " +"), function(v) anyDuplicated(v) > 0, logical(1))))
@@ -496,12 +417,12 @@ testthat::test_that("a wrapped header keeps its <br>, a user's markup is still e
   # tab_wrap_text() breaks long header names on "<br>"; escaping the whole label printed a literal
   # "Some very long<br>race level name" (kableExtra never hit this -- knitr::kable(escape = FALSE)).
   d <- gss; levels(d$race)[1] <- "Some very long race level name"
-  h <- as.character(tab_kable(tab(d, marital, race, pct = "row"), engine = "html", tooltips = FALSE))
+  h <- as.character(tab_kable(tab(d, marital, race, pct = "row"), tooltips = FALSE))
   testthat::expect_match(h, "<th[^>]*>[^<]*<br>")
   testthat::expect_false(grepl("&lt;br&gt;", h, fixed = TRUE))
   # only the tag we inject ourselves is restored: a "<" in a user's own level name stays escaped
   d2 <- gss; levels(d2$race)[1] <- "a <script> b"
-  h2 <- as.character(tab_kable(tab(d2, marital, race, pct = "row"), engine = "html",
+  h2 <- as.character(tab_kable(tab(d2, marital, race, pct = "row"),
                                tooltips = FALSE))
   testthat::expect_false(grepl("<script>", h2, fixed = TRUE))
   testthat::expect_match(h2, "&lt;script&gt;", fixed = TRUE)
@@ -511,7 +432,7 @@ testthat::test_that("a background colour is a pill hugging the text, not a full-
   # a low ratio break, so a background fires on this data whatever the defaults are
   tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"),
             color_breaks = list(pct_ratio = list(over = 1.05)))
-  h  <- as.character(tab_kable(tb, engine = "html", tooltips = FALSE))
+  h  <- as.character(tab_kable(tb, tooltips = FALSE))
   b <- rh_tbody(h)
   # the bg slot class rides the span; the <td> keeps the text slot (so `.p*` still cascades)
   testthat::expect_match(b, '<span class="tx-pill [ou][1-4]">')
@@ -533,7 +454,7 @@ testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for 
   testthat::expect_identical(
     gsub(intToUtf8(160L), " ", gsub(fig_space, " ", ht, fixed = TRUE), fixed = TRUE), mt)
   # and it reaches the rendered media
-  testthat::expect_true(grepl(fig_space, as.character(tab_kable(t, engine = "html")), fixed = TRUE))
+  testthat::expect_true(grepl(fig_space, as.character(tab_kable(t)), fixed = TRUE))
 })
 
 testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cell edges with ASCII", {
@@ -557,7 +478,7 @@ testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cel
 
 testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
   h <- rh_strip_style(as.character(
-    tab_kable(tab(gss, c(race, marital), relig, pct = "row"), engine = "html", css = FALSE)))
+    tab_kable(tab(gss, c(race, marital), relig, pct = "row"), css = FALSE)))
   # one cell per block, spanning it -- not one per row. Phase 18m: common_totrow defaults FALSE, so
   # each block keeps its OWN Total row -> race spans 4 (3 data + Total), marital spans 7 (6 data + Total).
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
@@ -576,7 +497,7 @@ testthat::test_that("html engine: tx-vname only where the run is longer than one
   # DATA level for race (not its Total, which the Phase 14n collapse would drop as a duplicate).
   one <- tab(gss, c(race, marital), relig, pct = "row") |>
     dplyr::filter(!(!!rlang::sym("row_var") == "race") | !!rlang::sym("levels") == "White")
-  h <- rh_strip_style(as.character(tab_kable(one, engine = "html", css = FALSE)))
+  h <- rh_strip_style(as.character(tab_kable(one, css = FALSE)))
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="1">race</td>')
   testthat::expect_no_match(h, 'tx-vname[^"]*" rowspan="1"')
 })
@@ -584,7 +505,7 @@ testthat::test_that("html engine: tx-vname only where the run is longer than one
 testthat::test_that("html engine: var_names drops the row-name column / the col_var span", {
   merged <- tab(gss, c(race, marital), relig, pct = "row")
   h_of <- function(vn) rh_strip_style(as.character(
-    tab_kable(merged, engine = "html", css = FALSE, var_names = vn)))
+    tab_kable(merged, css = FALSE, var_names = vn)))
   testthat::expect_match(h_of("rows"), ">race</td>")
   testthat::expect_no_match(h_of("rows"), "tx-span", fixed = TRUE)
   testthat::expect_no_match(h_of("cols"), ">race</td>")
@@ -668,34 +589,21 @@ testthat::test_that("the data-theme toggle actually matches a rule in the auto c
 testthat::test_that("the page theme rides along ONLY when our stylesheet ships with the table", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   # THE RULE: we paint a page only when we styled the table sitting on it.
-  k <- tab_kable(tb, engine = "html")
+  k <- tab_kable(tb)
   testthat::expect_s3_class(k, "tabxplor_kable")
   testthat::expect_identical(attr(k, "tabxplor_theme"), "light")
-  testthat::expect_identical(attr(tab_kable(tb, engine = "html", theme = "auto"),
+  testthat::expect_identical(attr(tab_kable(tb, theme = "auto"),
                                   "tabxplor_theme"), "auto")
   # css = FALSE: the document supplies the stylesheet (or nothing does). In the Viewer there IS no
   # document, so painting the page dark would leave an unstyled black-on-#222222 table.
-  testthat::expect_null(attr(tab_kable(tb, engine = "html", css = FALSE), "tabxplor_theme"))
+  testthat::expect_null(attr(tab_kable(tb, css = FALSE), "tabxplor_theme"))
   withr::with_options(list(tabxplor.kable_css = FALSE),
-                      testthat::expect_null(attr(tab_kable(tb, engine = "html"), "tabxplor_theme")))
-})
-
-testthat::test_that("the kableExtra engine is never page-painted", {
-  testthat::skip_if_not_installed("kableExtra")
-  tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  # It bakes its own theme (kable_material_dark paints its table #363640, which would sit two-tone on
-  # our #222222 pane) and its degrade branch returns a bare kbl() with no theme at all. Same rule:
-  # our stylesheet does not ship, so the page is not ours to paint.
-  for (th in c("light", "dark")) {
-    k <- tab_kable(tb, engine = "kableExtra", theme = th)
-    testthat::expect_false(inherits(k, "tabxplor_kable"))
-    testthat::expect_null(attr(k, "tabxplor_theme"))
-  }
+                      testthat::expect_null(attr(tab_kable(tb), "tabxplor_theme")))
 })
 
 testthat::test_that("print() is byte-identical to today when it is not an interactive Viewer print", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  k  <- tab_kable(tb, engine = "html")
+  k  <- tab_kable(tb)
   testthat::expect_s3_class(k, "tabxplor_kable")
   # testthat is never interactive, so this IS the branch the suite runs: NextMethod() -> kableExtra's
   # print -> cat(). It also covers a knit (`print()` inside a chunk) and kableExtra_view_html = FALSE.
@@ -710,7 +618,7 @@ testthat::test_that("the page never leaks into the returned html, whatever the t
   # The returned object is what gets written to a file or knitted into someone else's document: it
   # must carry the table and the cascade, never a page repaint and never a resolved toggle.
   for (th in c("light", "dark", "auto")) {
-    h <- as.character(tab_kable(tb, engine = "html", theme = th))
+    h <- as.character(tab_kable(tb, theme = th))
     # tab_css() must never paint html,body -- that is the HOST's, and repainting it around the table
     # would recolour the whole document (Phase 13d). Asserted on the stylesheet itself.
     testthat::expect_no_match(h, "html,body{", fixed = TRUE)

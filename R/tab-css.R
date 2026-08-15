@@ -1,6 +1,6 @@
 # PURPOSE: The ONE CSS generator for every tabxplor stylesheet (Phase 13d).
 # ROLE: Turns (palette, theme) into CSS rules consumed by BOTH media that can carry a
-#   stylesheet: tab_kable(engine = "html") and tab_md()/tab_css(). Replaces the old per-table
+#   stylesheet: tab_html() and tab_md()/tab_css(). Replaces the old per-table
 #   md_css_rules()/md_css_block()/md_break_class()/md_slot_class_map() (tab_md.R) and the static,
 #   hard-coded html_style_block() (tab-render-html.R).
 # KEY CONSTRAINTS:
@@ -627,10 +627,11 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #'   and the colours are the point. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and 6 KB to
 #'   an `"auto"` one (where the rules must also be emitted against the page-toggle hooks, which would
 #'   otherwise out-specify them).
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see [tab()]).
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+#'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
+#'   by `color = c(text, background)` (see [tab()]).
 #' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,
-#'   the greys) -- what `tab_kable(engine = "html")` needs. `FALSE` emits the colour classes only, which
+#'   the greys) -- what [tab_html()] needs. `FALSE` emits the colour classes only, which
 #'   is what `tab_md()` wants: bare selectors you can map in your own editor's CSS.
 #' @param style_tag Wrap the CSS in a `<style>` tag (default `TRUE`).
 #' @param file Optional path to write to instead of returning.
@@ -641,9 +642,10 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' @examples
 #' cat(tab_css(theme = "auto"))
 #' cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
-tab_css <- function(theme = NULL, color_type = lifecycle::deprecated(), chrome = TRUE,
-                    style_tag = TRUE, file = NULL, print_rules = NULL) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_css(color_type)")
+tab_css <- function(theme = NULL, chrome = TRUE,
+                    style_tag = TRUE, file = NULL, print_rules = NULL, ...) {
+  # Phase 19l: the retired inert arguments (`color_type`, ...) ride `...`.
+  tx_deprecate_inert(rlang::list2(...), "tab_css")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
   # z11: NULL -> option is the package idiom (cf. engine / popover / css / tooltips), and it is why
   # tab_html()/tab_md() need NO argument of their own -- they call tab_css() internally, so a user with

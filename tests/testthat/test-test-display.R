@@ -144,7 +144,7 @@ test_that("a regression split_var renders as a merged, vertical first column in 
   # a models list keeps the STACKED form, where the split_var is the merged vertical first column.
   r <- tab_reg(gss, "married", list(m1 = c("relig", "age"), m2 = c("relig", "age")),
                split_var = "race")
-  h <- as.character(tab_html(r, engine = "html"))
+  h <- as.character(tab_html(r))
   # each split level is one rowspan cell with the vertical (tx-vname) class
   for (lv in c("White", "Black", "Other"))
     expect_match(h, sprintf('<td[^>]*tx-vname[^>]*rowspan="[0-9]+">%s', lv))

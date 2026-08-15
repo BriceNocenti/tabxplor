@@ -47,9 +47,9 @@ testthat::test_that("factor proportion cell CI: n_eff carried + interval widens 
 testthat::test_that("factor proportion diff CI widens under kish", {
   d <- kish_data()
   off <- withr::with_options(list(tabxplor.design_effect = FALSE),
-                             tab(d, g, y, wt = w, pct = "row", ci = "diff", na = "drop"))
+                             tab(d, g, y, wt = w, pct = "row", ci = "ref", na = "drop"))
   on  <- withr::with_options(list(tabxplor.design_effect = TRUE),
-                             tab(d, g, y, wt = w, pct = "row", ci = "diff", na = "drop"))
+                             tab(d, g, y, wt = w, pct = "row", ci = "ref", na = "drop"))
   hw_off <- ci_hw(off[["yes"]]); hw_on <- ci_hw(on[["yes"]])
   ok <- is.finite(hw_off) & is.finite(hw_on)
   testthat::expect_gt(sum(hw_on[ok] > hw_off[ok] + 1e-6), 0L)
@@ -86,9 +86,9 @@ testthat::test_that("mean cell CI: n_eff surfaced + interval widens under kish",
 testthat::test_that("off-kish output is byte-identical (n_eff NA, display unchanged)", {
   d <- kish_data()
   a <- withr::with_options(list(tabxplor.design_effect = FALSE),
-                           tab(d, g, y, wt = w, pct = "row", ci = "diff", na = "drop"))
+                           tab(d, g, y, wt = w, pct = "row", ci = "ref", na = "drop"))
   b <- withr::with_options(list(tabxplor.design_effect = FALSE),
-                           tab(d, g, y, wt = w, pct = "row", ci = "diff", na = "drop"))
+                           tab(d, g, y, wt = w, pct = "row", ci = "ref", na = "drop"))
   testthat::expect_identical(a[["yes"]], b[["yes"]])
   testthat::expect_true(all(is.na(get_n_eff(a[["yes"]]))))
   testthat::expect_identical(tab_md(a), tab_md(b))

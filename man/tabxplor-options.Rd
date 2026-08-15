@@ -49,7 +49,7 @@ ANSI bold at a fixed glyph width), \code{FALSE} in RStudio and unknown consoles 
 wider and would break column alignment). Override it for your own front-end / font.}
 \item{\code{tabxplor.theme} (alias \code{tabxplor.export_theme})}{the \emph{export} theme, \code{"light"} (default),
 \code{"dark"}, \code{"print"} (the black-and-white publication palette; \code{"bw"} is a synonym) or \code{"auto"}
-(follow the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = "html")},
+(follow the reader). \code{"auto"} needs a stylesheet, so only \code{tab_html()},
 \code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}. \code{"print"} reaches
 every backend, Excel included.}
 \item{\code{tabxplor.color_style_type}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} the console colour CHANNEL,
@@ -113,17 +113,12 @@ draws them (no graphics-device font has them).}
 }
 }
 
-\section{HTML / \code{tab_kable()} export}{
+\section{HTML / \code{tab_html()} export}{
 
 \describe{
-\item{\code{tabxplor.tab_kable_engine}}{\code{"html"} (default, dependency-free) or \code{"kableExtra"} (the
-legacy engine; needs the suggested \code{kableExtra} package).}
 \item{\code{tabxplor.tab_kable_css} (formerly \code{tabxplor.kable_css}, still accepted)}{\code{TRUE} (default):
-inline the stylesheet with each \code{tab_kable()} / \code{\link[=tab_md]{tab_md()}} table (self-contained). Set \code{FALSE}
+inline the stylesheet with each \code{\link[=tab_html]{tab_html()}} / \code{\link[=tab_md]{tab_md()}} table (self-contained). Set \code{FALSE}
 in a many-table document that emits \code{\link[=tab_css]{tab_css()}} once at the top.}
-\item{\code{tabxplor.always_add_css_in_tab_kable}}{\code{TRUE} (default): always include \code{tab.css} in the
-kableExtra engine's output (a legacy-engine knob).}
-\item{\code{tabxplor.kable_html_font}}{the CSS font stack for the kableExtra engine.}
 \item{\code{tabxplor.tab_kable_tooltips}}{\code{TRUE} (default): show the per-cell hover tooltips
 (counts, confidence intervals, differences...) in html tables. Set \code{FALSE} once per
 document when every table auto-prints and tooltips are unwanted. Per-call \verb{tooltips =}.}

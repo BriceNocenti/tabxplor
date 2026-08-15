@@ -24,15 +24,12 @@
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 #'   inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
 #'   and any dark-mode toggle of the host page), which needs a stylesheet: it works for
-#'   \code{format = "html"} with \code{engine = "html"} and for \code{"md"}, and resolves to
-#'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
+#'   \code{format = "html"} and \code{"md"}, and resolves to
+#'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0 (exports are always 24-bit).
 #' @param color Set to \code{FALSE} to render without colours (monochrome).
 #' @param color_legend Print the colour legend with the subtext
 #'   (\code{"html"}/\code{"md"}/\code{"xl"}/\code{"plot"}).
@@ -44,7 +41,9 @@
 #' @param var_names Which variable names to write beside the table: `"both"` (the default),
 #'   `"rows"`, `"cols"` or `"none"`. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 #'   See \code{\link{tab_html}}.
-#' @param ... Format-specific arguments passed to the underlying exporter.
+#' @param ... Format-specific arguments passed to the underlying exporter. Retired arguments
+#'   (`color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`) are caught here, reported
+#'   once, and not forwarded.
 #'
 #' @return The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 #'   string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
@@ -57,43 +56,46 @@
 #' tab_export(tabs, "md")
 #' }
 tab_export <- function(x, format = c("html", "md", "xl", "plot", "forest"), path = NULL,
-                       theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
+                       theme = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
                        caption = NULL, var_names = NULL, ...) {
   format <- match.arg(format)
-  # Phase 14l: `color_type` is deprecated -- warn ONCE here and never forward it, so the child
-  # exporter (which also has the sentinel) does not warn a second time.
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_export(color_type)")
+  # Phase 14l / 19l: a retired argument is reported ONCE here and never forwarded, so the child
+  # exporter (which would catch it too) does not report it a second time for one user mistake.
+  dots <- tx_deprecate_inert(rlang::list2(...), "tab_export")
+  # Each backend is called through do.call() so the FILTERED dots travel: `...` may still hold a
+  # retired name, which the child would report a second time (and, for `engine`, would abort on).
+  fwd <- function(f, ...) do.call(f, c(list(x), rlang::list2(...), dots))
   switch(
     format,
     html = {
       cap <- if (is.null(caption)) knitr::opts_current$get("tab.cap") else caption
-      k <- tab_html(x, theme = theme, html_24_bit = html_24_bit,
-                    color = color, color_legend = color_legend, lang = lang, caption = cap,
-                    transpose = transpose, var_names = var_names, ...)
+      k <- fwd(tab_html, theme = theme,
+               color = color, color_legend = color_legend, lang = lang, caption = cap,
+               transpose = transpose, var_names = var_names)
       if (!is.null(path)) writeLines(as.character(k), path)
       k
     },
-    md = tab_md(x, theme = theme, html_24_bit = html_24_bit,
-                color = color, color_legend = color_legend, lang = lang,
-                transpose = transpose, caption = caption, var_names = var_names,
-                file = path, ...),
-    xl = tab_xl(x, path = path, theme = theme, html_24_bit = html_24_bit,
-                color = color, color_legend = color_legend, lang = lang, transpose = transpose,
-                caption = caption, var_names = var_names, ...),
+    md = fwd(tab_md, theme = theme,
+             color = color, color_legend = color_legend, lang = lang,
+             transpose = transpose, caption = caption, var_names = var_names,
+             file = path),
+    xl = fwd(tab_xl, path = path, theme = theme,
+             color = color, color_legend = color_legend, lang = lang, transpose = transpose,
+             caption = caption, var_names = var_names),
     plot = {
       if (!is.null(path)) {
         cli::cli_warn("{.arg path} is ignored for {.code format = \"plot\"} (returns a ggplot).")
       }
-      tab_plot(x, theme = theme, html_24_bit = html_24_bit,
-               color = color, color_legend = color_legend, lang = lang, transpose = transpose,
-               caption = caption, var_names = var_names, ...)
+      fwd(tab_plot, theme = theme,
+          color = color, color_legend = color_legend, lang = lang, transpose = transpose,
+          caption = caption, var_names = var_names)
     },
     forest = {
       if (!is.null(path))
         cli::cli_warn("{.arg path} is ignored for {.code format = \"forest\"} (returns a ggplot).")
-      forest_plot(x, theme = theme, color = color, legend = color_legend, lang = lang,
-                  caption = caption, ...)
+      fwd(forest_plot, theme = theme, color = color, legend = color_legend, lang = lang,
+          caption = caption)
     }
   )
 }

@@ -118,7 +118,7 @@ The **observed odds-ratios** `Obs_OR` are the same as those you can calculate fr
 gss_simple |> 
   dplyr::filter(dplyr::if_all(all_of(c("race", "age", "rincome", "relig")), ~ !is.na(.) )) |> 
   tab(race, married, pct = "row", na = "drop", 
-    OR = "OR", color = "OR", color_signif = "grey_non_signif"
+    display = "{or}", ref = "first", color = "OR", color_signif = "grey_non_signif"
    )
 ```
 

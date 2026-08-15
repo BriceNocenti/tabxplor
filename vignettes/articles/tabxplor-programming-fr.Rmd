@@ -270,12 +270,11 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 Au-delà des réglages les plus habituels (`vignette("tabxplor")` &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la parallelisation des calculs. 
 
-HTML / `tab_kable()` :
+HTML / `tab_html()` :
 
-- `tabxplor.tab_kable_engine` — `"html"` (sans dépendance, le défaut) ou `"kableExtra"` (ancien).
 - `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; mettez `FALSE` dans un document à plusieurs tableaux et appelez `tab_css()` une seule fois à la place (comme cette page).
 - `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases (`TRUE`) ; mettez `FALSE` une fois par document pour les couper partout.
-- `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — les piles de polices CSS des nombres et du texte.
+- `tabxplor.tab_kable_num_font` — la pile de polices CSS des nombres (tout le reste relève de `tab_css()`).
 - `tabxplor.kable_popover` — des info-bulles au clic plutôt qu'au survol.
 
 Excel / `tab_export("xl")` :

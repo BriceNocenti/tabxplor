@@ -293,6 +293,16 @@
 
 ## Bug fixes
 
+* **The two `tab_reg()` estimands added in 2.0.0 got no model checks at all.** `measure = "difference"`
+  on a binary outcome and `measure = "ratio"` on a continuous one are fitted through a different
+  *link*, and the assumption checks (`stats =`, `reg_check_plots()`) were keyed on that link rather
+  than on the distribution behind it — so those two tables silently reported no linearity, dispersion,
+  influence or collinearity row and drew no diagnostic panel.
+* **A table with no column variable could not be transposed**: `tab_html(tab(data, marital),
+  transpose = TRUE)` aborted with "subscript out of bounds".
+* **A custom total-column name containing a regular-expression character** (e.g.
+  `total_names = c("Total", "Total (n)")`) was interpolated into a pattern when the lone total column
+  was renamed, so it could fail to be recognised.
 * **`options(tabxplor.stars = TRUE)` did not reach `tab_num()`**, although it reached `tab()` for the
   same table: the option was read too late to decide whether a reference interval is needed, so the
   two produced different numbers.
@@ -393,13 +403,29 @@
 
 ## Deprecations
 
+### Removed
+
+* **The `kableExtra` HTML engine is gone.** `tab_html()` / `tab_kable()` render through the
+  dependency-free engine that has been the default since the beta, whose every look is a CSS class
+  you can restyle (`tab_css()`) and which is the only one that can follow a `theme = "auto"` toggle.
+  `engine =` is accepted and ignored with a message, and the options
+  `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable` and
+  `tabxplor.kable_html_font` are removed. **kableExtra** remains an optional dependency: its print
+  method is what opens a table in the Viewer and binds the tooltips.
+* **`kable_tabxplor_style()` is defunct** — use `tab_html()`, which renders any table (a `tabxplor_tab`
+  or a plain data.frame) with colours, tooltips and spanning headers.
+* **`color_type` and `html_24_bit` are no longer arguments** of `tab_html()` / `tab_md()` /
+  `tab_xl()` / `tab_plot()` / `tab_css()` / `tab_export()`; nor are `html_font` and `full_width`.
+  They had been inert since the beta. Passing one still works and reports it once: the colour
+  *channel* is chosen by `color = c(text, background)`, and font and width are CSS rules
+  (see `tab_css()`).
+
+### Soft-deprecated
+
 * **The `in_totrow` cell field is replaced by `row_kind`**, which says what kind of row a cell sits
   in (`"data"` / `"total"` and the synthetic display rows `"n"`, `"pct"`, `"pvalue"`, `"gof"`,
   `"blank"`). `is_totrow()` and `as_totrow()` are unchanged, `x$in_totrow` still returns the logical,
   and `fmt(in_totrow = )` is soft-deprecated in favour of `fmt(row_kind = )`.
-
-Soft-deprecated (still work):
-
 * `tab_many()` — now a thin shim over `tab()`, translating the five arguments that were renamed
   (`chi2` → `test`, `totrow` / `totcol` → `tot`, `compact` → `output_list`, and
   `na_drop_all = c(a, b)` → `filter = !is.na(a) & !is.na(b)`). Only `data`, `row_vars`, `col_vars`,

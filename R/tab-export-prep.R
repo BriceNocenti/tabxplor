@@ -815,7 +815,7 @@ roles_totblock_edges <- function(in_block) {
 # DESIGN: `theme = NULL` -> options("tabxplor.theme") is the package idiom (cf. engine / popover) and
 # the only way to wire an option through match.arg().
 # WARNING (Phase 13d): "auto" (follow the reader's colour scheme) is a RENDER intent, not a palette --
-# only media that emit a stylesheet can honour it (tab_kable(engine = "html"), tab_md/tab_css). Static
+# only media that emit a stylesheet can honour it (tab_html(), tab_md/tab_css). Static
 # backends pass `allow_auto = FALSE` and get "light". Everything downstream of a palette lookup must go
 # through tx_palette_theme() (R/tab-css.R), NOT this value.
 # WARNING (Phase 14l): `color_type` is GONE. It was the 2nd positional arg, so every call site was
@@ -909,8 +909,7 @@ tab_export_prep <- function(tabs,
   # tabxplor_fmt fields (the old tab_transpose()) mis-coloured numeric cells, because a transposed
   # column is heterogeneous and one fmt column cannot carry two type/color values. See tx_transpose_render().
   if (isTRUE(transpose)) {
-    tables <- purrr::map(tables, tx_transpose_render, backend = backend,
-                         meta = list(theme_cols = theme_cols))
+    tables <- purrr::map(tables, tx_transpose_render, backend = backend)
   }
 
   # Phase 18a bug-fix: decide the graceful-degrade NOTICE once for the whole render batch. A degraded

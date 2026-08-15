@@ -24,13 +24,12 @@ tab_xl(
   text_size_headers = 9,
   text_size_subtext = 9,
   theme = NULL,
-  color_type = lifecycle::deprecated(),
-  html_24_bit = NULL,
   color = TRUE,
   transpose = FALSE,
   var_names = NULL,
   or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
-  print_color_legend = lifecycle::deprecated()
+  print_color_legend = lifecycle::deprecated(),
+  ...
 )
 }
 \arguments{
@@ -91,11 +90,6 @@ for a black table with white text (the colours follow the theme).
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 readable in a greyscale print, where the colour palette's two directions become the same shade.}
 
-\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 2.0.0: the text channel always uses
-the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
-
-\item{html_24_bit}{Kept for a uniform exporter signature; inert for Excel (always 24-bit).}
-
 \item{color}{Set to \code{FALSE} to export without colours (monochrome).}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
@@ -111,6 +105,9 @@ below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
 \code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.}
 
 \item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}, \code{html_24_bit}): colour is a channel of \verb{color =}, and Excel is always 24-bit.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.

@@ -495,7 +495,7 @@ tab(gss_simple, race, party3, pct = "row", ci = "cell") |>
   forest_plot()
 ```
 
-Il trace **ce que le tableau a calculé** — aucun argument à apprendre : avec `ci = "cell"` le pourcentage de chaque cellule et son intervalle, avec `ci = "diff"` l'écart à la référence et une ligne à zéro, avec `OR = TRUE` les rapports de cotes sur un axe logarithmique. `what = "level"` et `what = "effect"` permettent de forcer l'un ou l'autre.
+Il trace **ce que le tableau a calculé** — aucun argument à apprendre : avec `ci = "cell"` le pourcentage de chaque cellule et son intervalle, avec `ci = "ref"` l'écart à la référence et une ligne à zéro, avec `display = "{or}"` les rapports de cotes sur un axe logarithmique. `what = "level"` et `what = "effect"` permettent de forcer l'un ou l'autre.
 
 Deux choses à savoir :
 
@@ -624,7 +624,7 @@ Exemples :
 # --- facteurs : pourcentages ----------------------------------------------
 tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey_non_signif")
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
+tab(gss_simple, rincome, married, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1)
 tab(gss_simple, rincome, party3, color = "contrib")   # fonctionne aussi avec pct = "row"/"col"
 #    le même tableau lu en résidus standardisés (l'échelle +-2 / +-3), avec les nombres affichés
 tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",

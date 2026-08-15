@@ -92,7 +92,7 @@ svy_unwrap_data <- function(data, fn = "tab") {
 # carries its own weights and the `wt` column was silently thrown away. Every other collision in the
 # package aborts (a weight that is also a row_var, a row_var that is also a tab_var); this one now
 # does too, from the ONE place both are visible. `wt_given` is TRUE when the user actually passed one.
-svy_abort_wt_design <- function(wt_given, fn = "tab") {
+svy_abort_wt_design <- function(wt_given) {
   if (!isTRUE(wt_given)) return(invisible(NULL))
   cli::cli_abort(c(
     "{.arg wt} cannot be used when {.arg data} is a {.cls survey.design}.",
@@ -166,7 +166,8 @@ svy_weighted <- function(x = NULL, wt = x$wt)
 #   method      the four interval methods (see CI_METHODS / default_ci_method())
 #   agg_only    this call holds a pre-aggregate, not microdata -- so it cannot SERVE the weighted
 #               basis, which is why the resolver takes it (tab_counts declares it; see `can_serve`)
-# DESIGN: it replaced ten flat formals on plain_core() / num_core() / tab_apply_tests(), each of which
+# DESIGN: it replaced ten flat formals on plain_core() / num_core() (and on the post-join test pass
+#   19j deleted), each of which
 #   had to be threaded through five layers by hand and could be (and repeatedly was) forgotten at one
 #   of them. It is a BUILD-TIME object: what survives the build is the per-column `conf_level` / `degf`
 #   / `basis` attributes tab_stamp_inference() projects from it.

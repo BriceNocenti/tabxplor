@@ -59,13 +59,11 @@ testthat::test_that("md bolds only the primary field of a composite cell in a bo
   testthat::expect_false(grepl(paste0("\\*\\*100%", nbsp, "\\(n=[0-9 ]+\\)\\*\\*"), md))
 })
 
-testthat::test_that("both html engines bold only the primary field of a composite bold cell", {
+testthat::test_that("html bolds only the primary field of a composite bold cell", {
   t <- tab(forcats::gss_cat, marital, race, pct = "row", add_n = TRUE)
-  for (eng in c("kableExtra", "html")) {
-    h <- as.character(tab_kable(t, engine = eng))
-    # a normal-weight span wraps the "(n=...)" suffix of the bold composite cells
-    testthat::expect_true(grepl("font-weight: ?normal", h), info = eng)
-  }
+  h <- as.character(tab_kable(t))
+  # a normal-weight span wraps the "(n=...)" suffix of the bold composite cells
+  testthat::expect_true(grepl("font-weight: ?normal", h))
 })
 
 testthat::test_that("kable tooltip shows the ratio field (not OR) under a 'ratio:' label", {
@@ -101,11 +99,7 @@ testthat::test_that("md/kable/html show the col_var name spanning header (single
   testthat::expect_match(lines[3], "race")
   testthat::expect_match(lines[3], "[*]race[*]", perl = TRUE)   # italic: it reads as a sub-heading
   testthat::expect_no_match(lines[1], "race")
-  if (requireNamespace("kableExtra", quietly = TRUE)) {
-    hk <- as.character(tab_kable(t, engine = "kableExtra"))
-    testthat::expect_true(grepl("race</div>", hk))             # add_header_above cell
-  }
-  hh <- as.character(tab_kable(t, engine = "html"))
+  hh <- as.character(tab_kable(t))
   testthat::expect_match(hh, 'colspan="3"[^>]*>race<')         # html engine colspan cell
 })
 

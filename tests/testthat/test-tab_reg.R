@@ -307,7 +307,7 @@ test_that("mixed-family table exports through md / kable without error", {
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
   expect_no_error(tab_md(mix))
-  expect_no_error(tab_kable(mix, engine = "html"))
+  expect_no_error(tab_kable(mix))
 })
 
 test_that("colour: gaussian beta greys non-significant / reference, colours a large standardized beta", {

@@ -39,26 +39,26 @@ testthat::test_that("engine: all-NA and cell==reference give slot 0 (uncolored)"
 
   zero <- fmt(n = c(1L, 1L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.4), diff = c(0, 0.15),
               mean = c(1, 1), ratio = c(1, 1), color = "diff",
-              in_totrow = c(FALSE, TRUE), ref = "tot", comp_all = FALSE)
+              row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
   testthat::expect_equal(fmt_color_slots(zero, fmt_color_plan(zero, "text"))[1], 0L)  # diff == 0
 })
 
 testthat::test_that("engine: numeric diff = Glass's delta; sd_ref 0/NA -> uncolored", {
   # ref (total) var = 4 -> sd_ref = 2 ; Glass = diff/sd_ref = 2/2 = 1.0 -> |1.0| > 0.8 -> level 3
   col  <- fmt(n = c(10L, 10L), scale = "level_mean", mean = c(5, 3), diff = c(2, 0), var = c(4, 4),
-              color = "diff", in_totrow = c(FALSE, TRUE), ref = "tot", comp_all = FALSE)
+              color = "diff", row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
   plan <- fmt_color_plan(col, "text")
   os   <- plan$over_slots                            # c(0, 1, 3, 4) for the 3 default mean_diff breaks
   testthat::expect_equal(fmt_color_slots(col, plan)[1], os[4])   # level 3 -> intensity 4
 
   bad <- fmt(n = c(10L, 10L), scale = "level_mean", mean = c(5, 3), diff = c(2, 0), var = c(0, 0),
-             color = "diff", in_totrow = c(FALSE, TRUE), ref = "tot", comp_all = FALSE)
+             color = "diff", row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
   testthat::expect_equal(fmt_color_slots(bad, fmt_color_plan(bad, "text"))[1], 0L)  # sd_ref 0
 })
 
 testthat::test_that("engine: ratio with ref 0 -> Inf/NaN -> uncolored (no crash)", {
   col <- fmt(n = c(10L, 10L), scale = "level_pct", pct_base = "row", pct = c(0.5, 0), ratio = c(Inf, 1),
-             mean = c(Inf, 1), color = "ratio", in_totrow = c(FALSE, TRUE),
+             mean = c(Inf, 1), color = "ratio", row_kind = c("data", "total"),
              ref = "tot", comp_all = FALSE)
   testthat::expect_equal(fmt_color_slots(col, fmt_color_plan(col, "text"))[1], 0L)
 })
@@ -148,7 +148,7 @@ testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies
   ge <- fmt_color_plan(mk("guaranteed_effect"), "text")
   gn <- fmt_color_plan(mk("grey_non_signif"),   "text")
   ig <- fmt_color_plan(mk("ignore"),            "text")
-  sc <- color_scales(mk("ignore"))$pct_diff
+  sc <- color_scales()$pct_diff
 
   testthat::expect_equal(ge$over_breaks,  sc$over$breaks  - sc$over$breaks[1])
   testthat::expect_equal(ge$under_breaks, sc$under$breaks - sc$under$breaks[1])

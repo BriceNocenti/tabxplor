@@ -35,7 +35,7 @@ testthat::test_that("ratio prose uses the Total column and the x/1 operators", {
 testthat::test_that("the CI method + confidence level come from the column stored facts", {
   # the default diff method = newcombe
   tb1 <- tab(gss, marital, race, pct = "row", color = "diff",
-             color_signif = "grey_non_signif", ci = "diff")
+             color_signif = "grey_non_signif", ci = "ref")
   l1  <- leg_en(tb1)
   # Phase 14q: the note states the true guarantee (coloured => significant), not the false
   # "grey => non-significant" (a grey cell may be significant-but-small). Phase 14x names the first
@@ -49,7 +49,7 @@ testthat::test_that("the CI method + confidence level come from the column store
 
   # an explicit diff method + a non-default conf_level must be reflected
   tb2 <- tab(gss, marital, race, pct = "row", color = "diff",
-             color_signif = "grey_non_signif", ci = "diff",
+             color_signif = "grey_non_signif", ci = "ref",
              ci_method = c(diff = "ac"), conf_level = 0.9)
   l2  <- leg_en(tb2)
   testthat::expect_match(l2, "Wald interval with Agresti-Caffo adjustment, 90% confidence")
@@ -57,7 +57,7 @@ testthat::test_that("the CI method + confidence level come from the column store
 
 testthat::test_that("guaranteed_effect annotates the margin of error on the over sentence", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
-            color_signif = "guaranteed_effect", ci = "diff")
+            color_signif = "guaranteed_effect", ci = "ref")
   l  <- leg_en(tb)
   testthat::expect_match(l, "after subtracting the margin of error \\(Newcombe", perl = TRUE)
   testthat::expect_match(l, "Grey: not significantly different from the Total row after the margin of error")
@@ -68,7 +68,7 @@ testthat::test_that("a column with no stored method names no method (Phase 19b, 
   # `ci_method` gets the confidence text alone, where the pre-19b legend fell back to a table-wide
   # default and could name an interval the bounds were never built with.
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
-            color_signif = "grey_non_signif", ci = "diff")
+            color_signif = "grey_non_signif", ci = "ref")
   testthat::expect_match(leg_en(tb), "Newcombe score interval, 95% confidence")
   tb2 <- dplyr::mutate(tb, dplyr::across(dplyr::where(is_fmt), ~ tabxplor:::set_ci_method(., "")))
   l2  <- leg_en(tb2)
@@ -214,7 +214,7 @@ testthat::test_that("lang = 'fr' applies the French decimal comma (locale-indepe
 testthat::test_that("French catalog translates the prose when the .mo is available", {
   skip_if_no_gettext()   # helper-i18n.R: catalog compiled + NLS + LANGUAGE actually honoured here
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
-            color_signif = "grey_non_signif", ci = "diff")
+            color_signif = "grey_non_signif", ci = "ref")
   l  <- suppressWarnings(tab_color_legend(tb, medium = "plain", style = "prose", lang = "fr"))
   testthat::expect_match(l, "Nuances de bleu")
   testthat::expect_match(l, "la ligne Total")

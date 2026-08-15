@@ -48,7 +48,7 @@
 #'     wider and would break column alignment). Override it for your own front-end / font.}
 #'   \item{`tabxplor.theme` (alias `tabxplor.export_theme`)}{the *export* theme, `"light"` (default),
 #'     `"dark"`, `"print"` (the black-and-white publication palette; `"bw"` is a synonym) or `"auto"`
-#'     (follow the reader). `"auto"` needs a stylesheet, so only `tab_kable(engine = "html")`,
+#'     (follow the reader). `"auto"` needs a stylesheet, so only `tab_html()`,
 #'     [tab_md()] and [tab_css()] honour it; static backends resolve it to `"light"`. `"print"` reaches
 #'     every backend, Excel included.}
 #'   \item{`tabxplor.color_style_type`}{`r lifecycle::badge("deprecated")` the console colour CHANNEL,
@@ -109,16 +109,11 @@
 #'     draws them (no graphics-device font has them).}
 #' }
 #'
-#' @section HTML / `tab_kable()` export:
+#' @section HTML / `tab_html()` export:
 #' \describe{
-#'   \item{`tabxplor.tab_kable_engine`}{`"html"` (default, dependency-free) or `"kableExtra"` (the
-#'     legacy engine; needs the suggested `kableExtra` package).}
 #'   \item{`tabxplor.tab_kable_css` (formerly `tabxplor.kable_css`, still accepted)}{`TRUE` (default):
-#'     inline the stylesheet with each `tab_kable()` / [tab_md()] table (self-contained). Set `FALSE`
+#'     inline the stylesheet with each [tab_html()] / [tab_md()] table (self-contained). Set `FALSE`
 #'     in a many-table document that emits [tab_css()] once at the top.}
-#'   \item{`tabxplor.always_add_css_in_tab_kable`}{`TRUE` (default): always include `tab.css` in the
-#'     kableExtra engine's output (a legacy-engine knob).}
-#'   \item{`tabxplor.kable_html_font`}{the CSS font stack for the kableExtra engine.}
 #'   \item{`tabxplor.tab_kable_tooltips`}{`TRUE` (default): show the per-cell hover tooltips
 #'     (counts, confidence intervals, differences...) in html tables. Set `FALSE` once per
 #'     document when every table auto-prints and tooltips are unwanted. Per-call `tooltips =`.}

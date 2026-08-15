@@ -86,8 +86,8 @@ testthat::test_that("var_names is honoured by every exporter, and defaults to th
   merged <- tab(forcats::gss_cat, c(race, relig), marital, pct = "row")
 
   # kable (html engine) + md: the row-name column and the col_var span both answer to it
-  k_both <- as.character(tab_export(merged, "html", engine = "html", css = FALSE))
-  k_none <- as.character(tab_export(merged, "html", engine = "html", css = FALSE,
+  k_both <- as.character(tab_export(merged, "html", css = FALSE))
+  k_none <- as.character(tab_export(merged, "html", css = FALSE,
                                     var_names = "none"))
   testthat::expect_match(k_both, ">race</td>")
   testthat::expect_no_match(k_none, ">race</td>")
@@ -112,6 +112,6 @@ testthat::test_that("var_names is honoured by every exporter, and defaults to th
 
   # the option is the default
   withr::local_options(tabxplor.var_names = "none")
-  testthat::expect_no_match(as.character(tab_export(merged, "html", engine = "html", css = FALSE)),
+  testthat::expect_no_match(as.character(tab_export(merged, "html", css = FALSE)),
                             ">race</td>")
 })

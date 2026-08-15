@@ -34,11 +34,11 @@ testthat::test_that("secondary-field re-render (tooltip path) shows no stars by 
 })
 
 testthat::test_that("tab() stores no pvalue and shows no stars by default; stars = TRUE does", {
-  t0 <- tab(gss, marital, race, pct = "row", ci = "diff")
+  t0 <- tab(gss, marital, race, pct = "row", ci = "ref")
   testthat::expect_true(all(is.na(get_pvalue(t0$White))))
   testthat::expect_false(any(grepl("\\*", format(t0$White, stars = TRUE))))  # no pvalue -> none
 
-  t1 <- tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE)
+  t1 <- tab(gss, marital, race, pct = "row", ci = "ref", stars = TRUE)
   testthat::expect_true(any(!is.na(get_pvalue(t1$White))))
   testthat::expect_true(any(grepl("\\*", format(t1$White, stars = TRUE))))
 })
@@ -65,7 +65,7 @@ testthat::test_that("stars = TRUE forces ci = 'diff' when ci is unset (Phase 16f
 })
 
 testthat::test_that("star presence is the dual of the CI excluding neutral (no contradiction)", {
-  col <- tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE)$White
+  col <- tab(gss, marital, race, pct = "row", ci = "ref", stars = TRUE)$White
   st  <- get_stars(col)
   sig <- get_ci_inf(col) > 0 | get_ci_sup(col) < 0
   val <- !is.na(get_pvalue(col))
@@ -86,7 +86,7 @@ testthat::test_that("tab_reg() shows stars by default; stars = FALSE strips the 
 
 testthat::test_that("tab_kable main cells carry stars (opt-in) but tooltips do not leak them", {
   testthat::skip_if_not_installed("kableExtra")
-  t1  <- tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE)
+  t1  <- tab(gss, marital, race, pct = "row", ci = "ref", stars = TRUE)
   html <- as.character(tab_kable(t1, tooltip = TRUE))
   testthat::expect_true(grepl("\\*", html))                    # main cells show stars
   # every data-toggle tooltip title is star-free (secondary fields do not leak stars)

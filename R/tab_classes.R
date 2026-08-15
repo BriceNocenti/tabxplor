@@ -160,9 +160,10 @@ get_subtext <- purrr::attr_getter("subtext")
 # future tests) live in the `test` table attribute -- a TIDY tibble, one row per
 # (subtable x col_var x test-type). Renamed from the pre-2.0.0 `chi2` attribute (§16/§17: the old
 # `chi2` attribute is an accepted break -- 2.0.0 tabs are re-created from code, never deserialized).
-# get_chi2() is kept as a working back-compat ALIAS so pre-2.0.0 user code that CALLS it still runs.
+# (Phase 19l deleted the `get_chi2()` alias that sat here. Its comment claimed it kept pre-2.0.0 user
+# code running, but it was never in NAMESPACE and has no man page, so no user could ever call it --
+# its only callers were five lines of our own tests.)
 get_test <- function(x) attr(x, "test", exact = TRUE)
-get_chi2 <- function(x) get_test(x)
 
 # set_test() -- write the whole-table `test` tibble attribute on a built table. Used by the
 # jmvtab tier-2 cache (Phase 7e) to inject a cached chi2/ANOVA result instead of recomputing it.
@@ -546,7 +547,6 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
     ~ pillar::char(as.character(.), min_chars = min_row_var)
   ))
 
-  # out <- format(out, width = NULL)
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
@@ -750,8 +750,6 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 #' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
 #' \itemize{
@@ -761,8 +759,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'     rather than the editor's colour theme, so the theme is resolved in R instead (RStudio's, or
 #'     Positron's, best-effort).
 #' }
-#' \code{"auto"} needs `engine = "html"` (kableExtra's themes are baked at render time); asking it of
-#' the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
+#' Defaults to \code{getOption("tabxplor.theme")},
 #' i.e. \code{"light"} -- a dark table is always a deliberate choice.
 #'
 #' \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
@@ -773,9 +770,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
 #' it: any coloured table already **prints** in this scheme, see \code{\link{tab_css}}'s
 #' `print_rules`.
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0: exports are always
-#' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
-#' @param css `engine = "html"` only: inline the stylesheet with the table, so the output is
+#' @param css Inline the stylesheet with the table, so the output is
 #' self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` in a many-table
 #' document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
 #' so one copy styles every table. With `FALSE` and no \code{\link{tab_css}} call, tables render
@@ -801,13 +796,6 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
 #' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns) --
 #' the col-percentages-with-several-row-variables use case.
-#' @param full_width A TRUE or FALSE variable controlling whether the HTML table
-#' should have the preferable format for full_width. If not specified, a HTML
-#' table will have full width by default but this option will be set to FALSE for
-#' a LaTeX table.
-#' @param html_font A string for HTML css font. By default, it uses
-#'  `'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'`. Set another
-#'  default by setting `options("tabxplor.kable_html_font" = )`.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
 #' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
@@ -820,12 +808,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'  column-variable names are the spanning row above their level columns. Level headers always
 #'  keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 #' @param get_data Get the transformed data instead of the html table.
-#' @param engine The HTML render engine. `"html"` (default) is a dependency-free `<table>` renderer:
-#'  faster, and every look is a CSS class you can restyle (see [tab_css()]), which is what makes
-#'  `theme = "auto"` possible. `"kableExtra"` is the legacy engine (\pkg{kableExtra}); it bakes its own
-#'  theme, so it cannot follow the reader's colour scheme. Defaults to
-#'  \code{getOption("tabxplor.tab_kable_engine", "html")}.
-#' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
+#'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`. The table is rendered by one
+#'  dependency-free `<table>` engine whose every look is a CSS class you can restyle -- font, width
+#'  and colour are all \code{\link{tab_css}}'s business now.
 
 #' @return A html table. Printing it opens it in the Viewer, on a page painted to match the table --
 #' so a `theme = "dark"` table no longer sits in a white pane. Differences from totals, confidence
@@ -839,56 +825,32 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' tab_html(tabs, theme = "light")
 #' }
 tab_html <- function(tabs,
-                     theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
+                     theme = NULL,
                      color = TRUE, tooltips = NULL, popover = NULL, color_legend = TRUE,
                      lang = NULL,
                      caption = knitr::opts_current$get("tab.cap"),
                      transpose = FALSE,
                      var_names = NULL,
-                     html_font = NULL,
                      get_data = FALSE,
-                     full_width = FALSE,
                      wrap_rows = 35, wrap_cols = 15,
                      whitespace_only = TRUE,
-                     engine = NULL, css = NULL,
+                     css = NULL,
                      ...) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_html(color_type)")
+  # Phase 19l: `color_type` / `html_24_bit` / `engine` / `html_font` / `full_width` are retired --
+  # absorbed by `...`, warned about once, never forwarded (tx_deprecate_inert, R/utils.R).
+  tx_deprecate_inert(rlang::list2(...), "tab_html")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  # Phase 10j: the theme/color/color_legend preamble is the shared resolver. `html_24_bit` is inert
-  # (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
+  # Phase 10j: the theme/color/color_legend preamble is the shared resolver.
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE)
   theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
   if (o$color) compute <- c(compute, "colors")
-  html_font <-
-    if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
   tooltips <- if (is.null(tooltips)) {getOption("tabxplor.tab_kable_tooltips", TRUE)} else {tooltips}
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
-  engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "html")} else {engine}
-  engine  <- match.arg(engine, c("kableExtra", "html"))
   css     <- if (is.null(css)) {tx_getOption(c("tabxplor.kable_css", "tabxplor.tab_kable_css"), TRUE)} else {isTRUE(css)}
-
-  # Phase 14o: a transposed table is a render-model flip whose columns are heterogeneous character
-  # (see tx_transpose_render()); the kableExtra engine cell_spec()s each fmt column, which no longer
-  # exists here, so transpose renders through the home-built html engine.
-  if (isTRUE(o$transpose) && !identical(engine, "html")) {
-    cli::cli_inform(
-      c("!" = 'transpose = TRUE renders through {.code engine = "html"}.',
-        "i" = "The kableExtra engine styles each formatted column, which a transposed table has not."),
-      .frequency = "once", .frequency_id = "tabxplor_transpose_engine")
-    engine <- "html"
-  }
-
-  # Phase 13d: "auto" (follow the reader's colour scheme) needs a stylesheet we control. kableExtra's
-  # themes are baked at render time (kable_classic / kable_material_dark) and its HTML is not ours to
-  # restyle, so downgrade rather than pretend. Phase 19h: through THE one downgrade (R/tab-css.R).
-  theme <- tx_theme_resolve(
-    theme, allow_auto = identical(engine, "html"),
-    note = c("!" = 'theme = "auto" needs {.code engine = "html"}; rendering {.val light}.',
-             "i" = "The kableExtra engine's themes are static."))
 
   # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
   # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
@@ -903,233 +865,62 @@ tab_html <- function(tabs,
     color_legend = color_legend, what = "tab_html()"
   )
 
-  # Phase 10e: render each prepared table through the engine seam. The colour legend is CONTENT (a
+  # Phase 10e: render each prepared table through the render seam. The colour legend is CONTENT (a
   # measure summary), so it is prepended per table to `subtext` here; the seam styles everything else.
-  in_knitr <- !is.null(knitr::opts_knit$get("out.format"))
   parts <- purrr::map(prep$tables, function(rd) {
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
-      # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars -> user subtext) via the ONE
-      # shared builder. The html engine ships a tabxplor stylesheet, so its legend break-words carry slot
-      # CLASSES (theme-toggle-safe) rather than inline hex; kableExtra does not (classes = engine == "html").
+      # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars -> user subtext) via the
+      # ONE shared builder. Phase 17g: shared rd_footer(). This backend ships a tabxplor stylesheet, so
+      # its legend break-words carry slot CLASSES (theme-toggle-safe) rather than inline hex.
       src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
       want_legend <- color_legend && length(rd$roles$color_cols) != 0
-      # Phase 17g: shared rd_footer(); the html engine ships a stylesheet, so its legend break-words
-      # carry slot CLASSES (classes = engine == "html") rather than inline hex.
       subtext <- rd_footer(src, "html", theme = theme[1], want_legend = want_legend,
-                           subtext = rd$subtext, lang = lang, classes = identical(engine, "html"))
+                           subtext = rd$subtext, lang = lang, classes = TRUE)
     }
     # Phase 14w (item 1) / 17b / 17g: user caption= -> stored set_caption() -> reg_title (shared).
     cap <- rd_caption(rd, caption)
-    render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = cap,
-                      tooltips = tooltips, popover = popover, html_font = html_font,
-                      full_width = full_width, get_data = get_data, in_knitr = in_knitr, ...)
+    render_kable_html(rd, prep$meta, subtext = subtext, caption = cap,
+                      tooltips = tooltips, popover = popover, get_data = get_data)
   })
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
 
-  # Phase 13d: the html engine's cells carry slot CLASSES, so the theme lives entirely here. The
-  # stylesheet is table-independent (see tab_css()), hence built once per call -- or not at all, when a
-  # document emitted tab_css() itself (options("tabxplor.tab_kable_css" = FALSE)). kableExtra styles inline.
-  style <- if (css && identical(engine, "html")) {
-    tab_css(theme = theme, chrome = TRUE, style_tag = FALSE)
-  } else ""
+  # Phase 13d: the cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is
+  # table-independent (see tab_css()), hence built once per call -- or not at all, when a document
+  # emitted tab_css() itself (options("tabxplor.tab_kable_css" = FALSE)).
+  style <- if (css) tab_css(theme = theme, chrome = TRUE, style_tag = FALSE) else ""
   # Phase 14k: `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's
   # page to match -- and, under "auto", resolve it from the editor (the browser cannot see Positron).
-  tab_kable_join(parts, engine, css = style, theme = theme)
+  tab_kable_join(parts, css = style, theme = theme)
 }
 
 #' @rdname tab_html
 #' @details `tab_kable()` is a permanent alias of `tab_html()` -- the two are identical. `tab_html()`
-#'   names the output (an HTML table), while the HTML backend *engine* (home-built or \pkg{kableExtra})
-#'   is chosen with `engine =`.
+#'   names the output (an HTML table); `tab_kable()` is the name it had when \pkg{kableExtra} rendered it.
 #' @export
 tab_kable <- tab_html
 
 
-
-#' Print a tabxplor table in html
+#' Print a tabxplor table in html (defunct)
 #'
 #' @description
-#' `r lifecycle::badge("deprecated")`
+#' `r lifecycle::badge("defunct")`
 #'
-#' Superseded by [tab_html()], which renders any table -- `tabxplor_tab` or plain data.frame --
-#' through the shared exporter prep. This function predates it and never shared its machinery: it
-#' detects total rows/columns by matching the literal strings `"Total"`/`"Ensemble"` against names and
-#' values, so it is hardcoded to English and French, and it renders no colours, tooltips or spanning
-#' headers. Nothing in the package has ever called it.
+#' Removed in 2.0.0. Use [tab_html()], which renders any table -- a `tabxplor_tab` or a plain
+#' data.frame -- through the shared exporter prep, with colours, tooltips and spanning headers.
+#'
+#' `kable_tabxplor_style()` predated `tab_html()` and never shared its machinery: it found total
+#' rows and columns by matching the literal strings `"Total"` / `"Ensemble"`, so it was hardcoded to
+#' English and French. Nothing in the package ever called it.
 #'
 #' @param tabs A data.frame.
-#' @param theme By default, a white table with black text, Set to \code{"dark"} for a
-#' black table with white text.
-#' @param total_in_bold Should rows and cols with "Total" string be set in bold ?
-#' @param all_column_borders Put a vertical border around each column ?
-#' @param html_font A string for HTML css font. By default, it uses
-#'  `'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'`. Set another
-#'  default by setting `options("tabxplor.kable_html_font" = )`.
-#' @param caption The table caption. For formatting, you need to use a `css`
-#' with `caption{}`in rmarkdown.
-#' @param full_width A TRUE or FALSE variable controlling whether the HTML table
-#' should have the preferable format for full_width. If not specified, a HTML
-#' table will have full width by default but this option will be set to FALSE for
-#' a LaTeX table.
-#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
-#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
-#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
-# @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
-#' @param subtext A character vector to print rows of legend under the table.
-#' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
-
-
-#' @return A html table (opened in the viewer in RStudio). Differences from totals,
-#' confidence intervals, contribution to variance, and unweighted counts,
-#' are available in an html tooltip at cells hover.
+#' @param ... Ignored.
+#' @return Never returns: it errors.
+#' @keywords internal
 #' @export
-#'
-#' @examples
-#' \donttest{
-#' tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
-#'                        column1 = c(1, 2, 3),
-#'                        column2 = c(4, 5, 6)                    )
-#' if (requireNamespace("kableExtra", quietly = TRUE)) kable_tabxplor_style(tabs)
-#' }
-kable_tabxplor_style <- function(tabs,
-                                 caption = knitr::opts_current$get("tab.cap"),
-                                 theme = c("light", "dark"),
-                                 total_in_bold = TRUE, all_column_borders = FALSE,
-                                 html_font = NULL,
-                                 full_width = FALSE,
-                                 wrap_rows = 35, wrap_cols = 15,
-                                 whitespace_only = TRUE, # unbreakable_spaces = TRUE,
-                                 subtext = "",
-                                 ...) {
-  lifecycle::deprecate_soft("2.0.0", "kable_tabxplor_style()", "tab_html()")
-
-  # kableExtra is now Suggests-only; this superseded renderer is the only public entry point that
-  # still requires it (tab_html(engine = "html") does not).
-  if (!requireNamespace("kableExtra", quietly = TRUE)) {
-    cli::cli_abort(c(
-      "{.fn kable_tabxplor_style} needs the {.pkg kableExtra} package.",
-      "i" = "Install it, or use {.fn tab_html} (the default {.code engine = \"html\"} needs no extra dependency)."
-    ))
-  }
-
-  html_font <-
-    if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
-
-
-  tabs <- tabs |> dplyr::ungroup()
-
-  tabs <- tabs |>
-    tab_wrap_text(wrap_rows = wrap_rows,
-                  wrap_cols = wrap_cols,
-                  exdent = 2,
-                  whitespace_only = whitespace_only,
-                  unbreakable_spaces = TRUE,
-                  brk = "<br>")
-
-  alignement <- tabs |>
-    purrr::map_chr(
-      ~ dplyr::if_else(condition = is_fmt(.) | is.numeric(.),
-                       true      = "r",
-                       false     = "l")
-    )
-
-  out <- tabs |> knitr::kable(escape = FALSE, format = "html", align = alignement,
-                              #table.attr = "style=\"border-top: 0; border-bottom: 0; cellspacing: -10pt\"",
-                              caption = caption)
-  # table.attr changes css style of table_classic (no upper and lower big lines)
-
-  if (theme[1] == "light") {
-    out <- out |> kableExtra::kable_classic(
-      lightable_options = "hover", # "striped", ?
-      #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
-      full_width = full_width,
-      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
-      #fixed_thead = TRUE,
-      ...
-    )
-
-  } else {
-    out <- out |> kableExtra::kable_material_dark(
-      lightable_options = "hover",
-      bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
-      full_width = full_width,
-      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
-      #fixed_thead = TRUE,
-      ...
-    )
-
-  }
-
-  # `if (subtext != "")` on a length-2 subtext is an error since R 4.2 ("the condition has length > 1")
-  # -- unreachable so far only because nothing calls this. any() is what the sibling engine does.
-  if (any(nzchar(subtext))) {
-    out <- out |> kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
-  }
-
-  # Phase 19l: the stored flags, not the rendered label. The `"^Total|^Ensemble"` regexes that stood
-  # here were the last place in the package where a total was identified by an English (or French)
-  # word -- and the row one read column 1 positionally, which a declared index column now answers.
-  totcols <- which(is_totcol(tabs))
-  totrows <- which(is_totrow(tabs))
-
-  out <- out |>
-    kableExtra::row_spec(
-      0, bold = TRUE, # color = "black"
-      extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;" #
-    ) |>
-    #kableExtra::row_spec(refs2, bold = TRUE) |>
-    kableExtra::row_spec(
-      nrow(tabs), extra_css = "border-bottom: 1px solid ;"
-    ) |>
-    kableExtra::column_spec(1, width_min = 20, border_left = TRUE, border_right = TRUE) |>
-    kableExtra::column_spec(ncol(tabs), border_right = TRUE) |>
-     #kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") |>
-    #kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
-    kableExtra::row_spec(
-      1:nrow(tabs),
-      extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;white-space: nowrap;"
-    )
-
-  if (total_in_bold) {
-    out <- out |>
-      kableExtra::row_spec(
-        totrows, bold = TRUE,
-        extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
-      ) |>
-      kableExtra::column_spec(totcols, bold = TRUE, width_min = 11, border_left = TRUE)
-
-    } else {
-      out <- out |>
-        kableExtra::row_spec(
-          totrows,
-          extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
-        ) |>
-        kableExtra::column_spec(totcols, width_min = 11, border_left = TRUE)
-    }
-
-  if (all_column_borders) {
-    out <- out |> kableExtra::column_spec(1:ncol(tabs), border_left = TRUE)
-  }
-
-
-  if (getOption("tabxplor.always_add_css_in_tab_kable") | interactive()) {
-    out <- paste0(
-
-      htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
-      "\n",
-      # "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
-      # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
-      # "\n",
-      as.character(out) #|>
-      #stringi::stri_replace_all_regex("<td style", '<td class = "align-top"; style')
-    ) |>
-      vctrs::vec_restore(out)
-  }
-
-
-  out
+kable_tabxplor_style <- function(tabs, ...) {
+  lifecycle::deprecate_stop("2.0.0", "kable_tabxplor_style()", "tab_html()")
 }
 
 
@@ -1206,7 +997,7 @@ tab_stack_tables <- function(tables) {
 #' @examples
 #' \donttest{
 #' forcats::gss_cat |>
-#'   tab_many(c(race, rincome), marital, pct = "row", color = "diff") |>
+#'   tab(c(race, rincome), marital, pct = "row", color = "diff", output_list = TRUE) |>
 #'   tab_compact()
 #' }
 tab_compact <- function(tabs) { # pvalue_lines = FALSE
@@ -1291,10 +1082,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # tabs$Danser |> vctrs::vec_data()
   # tabs |> tab_kable()
 
-
-  # col_vars <- get_col_var(tabs)[ get_col_var(tabs) != "" &
-  #                                  names(get_col_var(tabs)) != "n" &
-  #                                  !str_detect(names(get_col_var(tabs)), "^Total") ]
 
   # Lone total column -> drop its "_<col_var>" qualifier. Phase 19l: found by its STORED flag, and
   # unsuffixed through its own `col_var`. The `"^Total_"` regex that stood here hardcoded the ENGLISH
@@ -1775,16 +1562,12 @@ reg_footer_lines <- function(tabs) {
 #' confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #' (\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)
-#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 2.0.0: exports are always
-#' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param color Set to \code{FALSE} to render the table without colours (monochrome).
 #' @param color_legend Print colors legend below the table ?
 #' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
@@ -1796,6 +1579,8 @@ reg_footer_lines <- function(tabs) {
 #' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
 #' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+#'   (`color_type`, `html_24_bit`).
 #' @return A \code{\link[ggplot2]{ggplot}} object to be printed in the
 #' `RStudio` Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
 #' @export
@@ -1814,12 +1599,13 @@ reg_footer_lines <- function(tabs) {
 #' }
 #'
 tab_plot <- function(tabs,
-                     theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
+                     theme = NULL,
                      color = TRUE, color_legend = TRUE, lang = NULL, caption = NULL, transpose = FALSE,
                      var_names = NULL,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
-                     whitespace_only = TRUE) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_plot(color_type)")
+                     whitespace_only = TRUE, ...) {
+  # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
+  tx_deprecate_inert(rlang::list2(...), "tab_plot")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
@@ -1853,8 +1639,7 @@ tab_plot <- function(tabs,
                       wrap_cols = wrap_cols, whitespace_only = whitespace_only))
   }
 
-  # Phase 10j: shared option resolver (theme/color/color_legend/transpose). `html_24_bit` is inert
-  # (Phase 13a).
+  # Phase 10j: shared option resolver (theme/color/color_legend/transpose).
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names)
   theme <- o$theme
@@ -2215,7 +2000,7 @@ tab_plot <- function(tabs,
 # get_reference() re-derivation.
 # Phase 14b: TEXT only -- it used to also wrap its output in kableExtra::spec_popover() when
 # `popover = TRUE`, i.e. return HTML attributes from a text builder. The html engine passed that
-# through and wrapped it AGAIN, so `tab_kable(engine = "html", popover = TRUE)` rendered the escaped
+# through and wrapped it AGAIN, so `tab_html(popover = TRUE)` rendered the escaped
 # attribute string as its own popover content. Attributes now live in tab_tooltip_attrs() alone.
 tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
@@ -2708,24 +2493,11 @@ group_by.tabxplor_tab <- function(.data,
         dplyr::select(-tidyselect::any_of(c(".totrows", ".secondary_display")))
     }
 
-
-    # out <- NextMethod()
-
     if (length(groups) > 0) out <- out |> dplyr::group_by(!!!groups)
 
     tab_restore(out, .data)
 
 }
-# tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
-# arrange(tabs, `Never married`)
-# arrange(tabs, `Never married`, .by_group = FALSE)
-# arrange(tabs, `Never married`, .by_totals = FALSE)
-# arrange(tabs, `Never married`, .by_group = FALSE, .by_totals = FALSE)
-# ungroup_tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
-# arrange(ungroup_tabs, `Never married`)
-# arrange(ungroup_tabs, `Never married`, .by_group = FALSE)
-# arrange(ungroup_tabs, `Never married`, .by_totals = FALSE)
-# arrange(ungroup_tabs, `Never married`, .by_group = FALSE, .by_totals = FALSE)
 
 #' rowwise method for class tabxplor_tab
 #' @importFrom dplyr rowwise
@@ -2779,7 +2551,6 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 # @export
 tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   out <- vctrs::tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
-  #colour <- df_colour(x) %||% df_colour(y)
   rlang::exec(new_tab, out, !!!tab_bind_attrs(x, y))
 }
 
@@ -3415,104 +3186,6 @@ default_dark_background_colors_neg <- c(
   "#720119"# # oklch(0.35 0.1401 20)   # "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
 )
 
-# ### Color palettes visual tests, with color blind mode ----
-# source("~/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
-# # Light palette
-# light_text_palette <- c(plain= "#9f9f9f", default_text_colors, default_text_colors_neg)
-# light_bg_palette   <- c(plain= "#ffffff",default_background_colors, default_background_colors_neg)
-# preview_color_grid(light_text_palette, light_bg_palette) # #show_contrast = FALSE  
-# #    Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
-
-
-# #   color blindness
-# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 1), 
-#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 1),
-#                    table_bg = lcd_simulate_oklch("#ffffff")
-#                    )
-# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 0.5), 
-#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 0.5),
-#                    table_bg = lcd_simulate_oklch("#ffffff")
-#                    )
-# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan"), 
-#                    simulate_cvd_farver(light_bg_palette, type = "protan"),
-#                    table_bg = lcd_simulate_oklch("#ffffff")
-#                    )
-# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan", severity = 0.5), 
-#                    simulate_cvd_farver(light_bg_palette, type = "protan", severity = 0.5),
-#                    table_bg = lcd_simulate_oklch("#ffffff")
-#                    )
-
-# #   bad LCD approximation
-# preview_color_grid(lcd_simulate_oklch(light_text_palette), 
-#                    lcd_simulate_oklch(light_bg_palette),
-#                    table_bg = lcd_simulate_oklch("#ffffff")
-#                    )
-
-# # default_text_colors |> farver::decode_colour(to = "oklch") # Inspect OKLCH coordinates
-
-
-
-
-# #   color blindness
-# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan", severity = 0.5), 
-#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
-#                    table_bg = lcd_simulate_oklch("#111111")
-#                    )
-# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan"), 
-#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
-#                    table_bg = lcd_simulate_oklch("#111111")
-#                    )
-
-# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "protan"), 
-#                    simulate_cvd_farver(dark_bg_palette, type = "protan"),
-#                    table_bg = lcd_simulate_oklch("#111111")
-#                    )
-
-# #   bad LCD approximation
-# preview_color_grid(lcd_simulate_oklch(dark_text_palette), 
-#                   lcd_simulate_oklch(dark_bg_palette),
-#                   table_bg = lcd_simulate_oklch("#111111")
-#                   )
-                   
-
-# # Simuler une palette normale et une palette color blind cote-à-cote
-# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 1, C=0.16) # chroma_mode = "max"
-# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 0.5, C=0.16) 
-# plot_oklch_hue_strip_cvd(L = 0.65,type = "protan", severity = 1, C=0.16)
-# plot_oklch_hue_strip_cvd(L = 0.65,type = "tritan", severity = 1, C=0.16)
-
-
-# # preview_color_grid(diff_colors, set_luminance(background_colors, 0.99)) 
-# # set_luminance(background_colors, 0.99) |> farver::get_channel("l", space = "oklch")
-# # # set_luminance(background_colors, c(0.99, 0.90, 0.85, 0.80, 0.72))
-
-# # preview_color_grid(diff_colors, set_luminance(background_colors2, 0.95)) 
-
-# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.95)) 
-# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.8) |> set_chroma(0.12)) 
-
-
-# # preview_luminance_grid("#59c5bf", "#b9c653")                  # fixed source chroma, capped to gamut
-# # preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max")  # most vivid shade at each L
-# # preview_luminance_grid("#0185e4", "#68b430", l_values = seq(0.40, 0.90, by = 0.10)) # custom lightness ramp
-# # # Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
-
-
-
-
-
-
-
-## Color functions ----
-
-
-# PURPOSE: the render-time colour palettes (Phase 13a). Ten OKLCH base palettes -- eight being one per
-# (light/dark theme x text/background channel x over-/under-represented side), plus the two Phase-14c
-# bg_legend sides (the font stand-in for the fills, light only) -- each 4 hex codes
-# (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
-# 8-element slot vectors (4 over + 4 under) and pre-built once into ANSI style functions (cli), stored
-# in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
-# integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/new_colors_UI.md.
 #' @keywords internal
 tabxplor_palette_env <- new.env(parent = emptyenv())
 

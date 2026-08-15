@@ -18,7 +18,7 @@ Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab
 \examples{
 \donttest{
 forcats::gss_cat |>
-  tab_many(c(race, rincome), marital, pct = "row", color = "diff") |>
+  tab(c(race, rincome), marital, pct = "row", color = "diff", output_list = TRUE) |>
   tab_compact()
 }
 }

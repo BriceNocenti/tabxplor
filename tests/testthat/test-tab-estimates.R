@@ -29,10 +29,10 @@ test_that("fmt_scale_of() reads every column shape", {
 
   # crosstabs: the stored interval decides
   expect_identical(key(tab(d, race, party3, pct = "row", ci = "cell"), "1-Democrat"), "level_pct")
-  expect_identical(key(tab(d, race, party3, pct = "row", ci = "diff"), "1-Democrat"), "points")
+  expect_identical(key(tab(d, race, party3, pct = "row", ci = "ref"), "1-Democrat"), "points")
   expect_identical(key(tab(d, race, tvhours, pct = "row", ci = "cell"), "tvhours"),   "level_mean")
-  expect_identical(key(tab(d, race, tvhours, pct = "row", ci = "diff"), "tvhours"),   "mean_diff")
-  or <- tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)
+  expect_identical(key(tab(d, race, tvhours, pct = "row", ci = "ref"), "tvhours"),   "mean_diff")
+  or <- tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE)
   expect_identical(key(or, "2-Independent, other"), "odds_ratio")
 
   # regressions: one key per family x effect
@@ -44,7 +44,7 @@ test_that("fmt_scale_of() reads every column shape", {
   expect_identical(key(g, mod_col(g)), "raw_diff")
 
   # the `kind` override is a filter on the SAME dispatch, never a second one
-  t <- tab(d, race, party3, pct = "row", ci = "diff")
+  t <- tab(d, race, party3, pct = "row", ci = "ref")
   expect_identical(key(t, "1-Democrat", "level"),  "level_pct")
   expect_identical(key(t, "1-Democrat", "effect"), "points")
   expect_identical(key(tab(d, race, party3, pct = "row", ci = "cell"), "1-Democrat", "effect"),
@@ -54,7 +54,7 @@ test_that("fmt_scale_of() reads every column shape", {
 test_that("the record carries the ladder, the SD and the secondary axis", {
   d <- te_data()
   s <- tabxplor:::fmt_scale_of(
-    tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)[["3-Republican"]])
+    tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE)[["3-Republican"]])
   expect_equal(s$neutral, 1); expect_identical(s$trans, "log10"); expect_true(s$mult)
   expect_true(all(c(1.2, 1.5, 2, 4) %in% s$breaks))          # the odds_ratio ladder, both sides
   expect_true(all((1 / c(1.2, 1.5, 2, 4)) %in% s$breaks))   # `%in%` binds tighter than `/`
@@ -79,7 +79,7 @@ test_that("the record carries the ladder, the SD and the secondary axis", {
   on.exit(options(tabxplor.color_breaks = old), add = TRUE)
   set_color_breaks(odds_ratio = c(1.5, 3))
   s2 <- tabxplor:::fmt_scale_of(
-    tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)[["3-Republican"]])
+    tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE)[["3-Republican"]])
   expect_true(all(c(1.5, 3) %in% s2$breaks))
   expect_false(4 %in% s2$breaks)
 })
@@ -87,10 +87,10 @@ test_that("the record carries the ladder, the SD and the secondary axis", {
 test_that("ci_center() and fmt_gap_scale_key() are the same dispatch", {
   d <- te_data()
   tabs <- list(tab(d, race, party3, pct = "row", ci = "cell"),
-               tab(d, race, party3, pct = "row", ci = "diff"),
+               tab(d, race, party3, pct = "row", ci = "ref"),
                tab(d, race, tvhours, pct = "row", ci = "cell"),
-               tab(d, race, tvhours, pct = "row", ci = "diff"),
-               tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE),
+               tab(d, race, tvhours, pct = "row", ci = "ref"),
+               tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE),
                suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                         empirical = TRUE)),
                suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian",
@@ -101,7 +101,7 @@ test_that("ci_center() and fmt_gap_scale_key() are the same dispatch", {
     s   <- tabxplor:::fmt_scale_of(col)
     # they answer the same question wherever an interval exists. Where none does, ci_center() has no
     # subject and fmt_scale_of() falls back to what the column DISPLAYS -- which is what stops
-    # `tab(OR = TRUE)`'s reference column (OR bounds NA by construction) reading as a percentage.
+    # `tab(display = "{or}", ref = "first")`'s reference column (OR bounds NA by construction) reading as a percentage.
     if (tabxplor:::fmt_has_interval(col)) {
       expect_identical(tabxplor:::ci_center(col), vctrs::field(col, s$est_field))
       n <- n + 1L
@@ -113,7 +113,7 @@ test_that("ci_center() and fmt_gap_scale_key() are the same dispatch", {
 
 test_that("with no stored interval the scale follows the display", {
   d <- te_data()
-  t <- tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)
+  t <- tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE)
   ref <- names(t)[vapply(t, function(c) is_fmt(c) && !tabxplor:::fmt_has_interval(c),
                          logical(1))]
   expect_gt(length(ref), 0L)                                  # the reference column
@@ -131,15 +131,15 @@ test_that("with no stored interval the scale follows the display", {
 
 test_that("the row axis reads all four label-block shapes", {
   d <- te_data()
-  e1 <- est(tab(d, race, party3, pct = "row", ci = "diff"))
+  e1 <- est(tab(d, race, party3, pct = "row", ci = "ref"))
   expect_identical(levels(e1$var), "race")                    # the variable names the block
   expect_setequal(as.character(unique(e1$level)), c("White", "Black", "Other"))
   expect_true(all(e1$group == ""))
 
-  e2 <- est(tab(d, c(race, relig), party3, pct = "row", ci = "diff"))   # compacted
+  e2 <- est(tab(d, c(race, relig), party3, pct = "row", ci = "ref"))   # compacted
   expect_setequal(levels(e2$var), c("race", "relig"))
 
-  e3 <- est(tab(d, race, party3, pct = "row", ci = "diff", tab_vars = black))
+  e3 <- est(tab(d, race, party3, pct = "row", ci = "ref", tab_vars = black))
   expect_true(all(nzchar(e3$group)))                          # the sub-table level
 
   e4 <- est(suppressMessages(tab_reg(d, "married", c("race", "rincome"),
@@ -153,7 +153,7 @@ test_that("the row axis reads all four label-block shapes", {
 
 test_that("totals are dropped by default and restored on request", {
   d <- te_data()
-  t <- tab(d, race, party3, pct = "row", ci = "diff")
+  t <- tab(d, race, party3, pct = "row", ci = "ref")
   expect_false(any(est(t)$is_total))
   expect_false("Total" %in% est(t)$column)
   e <- est(t, totals = TRUE)
@@ -178,7 +178,7 @@ test_that("columns are chosen by ROLE, never by name", {
 test_that("the facet key is one panel per estimate column, merging a crude twin", {
   d <- te_data()
   # a crosstab: one panel per column of the table (the maintainer's layout ruling)
-  e <- est(tab(d, race, party3, pct = "row", ci = "diff"))
+  e <- est(tab(d, race, party3, pct = "row", ci = "ref"))
   xt <- tab(d, race, party3, pct = "row")
   expect_setequal(levels(e$facet), setdiff(names(xt)[vapply(xt, is_fmt, logical(1))], "Total"))
   # a model and its crude twin share a panel (same col_var, different roles)
@@ -209,9 +209,9 @@ test_that("the plotted estimate IS the number the table stores and prints", {
              tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE))),
     mnl  = suppressMessages(tab_reg(d, "party3", "race", family = "multinomial")),
     xt_c = tab(d, race, party3, pct = "row", ci = "cell"),
-    xt_d = tab(d, race, party3, pct = "row", ci = "diff"),
-    xt_m = tab(d, race, tvhours, pct = "row", ci = "diff"),
-    xt_o = tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE))
+    xt_d = tab(d, race, party3, pct = "row", ci = "ref"),
+    xt_m = tab(d, race, tvhours, pct = "row", ci = "ref"),
+    xt_o = tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE))
   if (requireNamespace("marginaleffects", quietly = TRUE))
     tabs$ame <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                          effect = "marginal", empirical = TRUE))
@@ -270,7 +270,7 @@ test_that("z17 D2: the gap band needs no colour argument", {
 
 test_that("the colours are the table's own slots and hexes", {
   d <- te_data()
-  t <- tab(d, race, party3, pct = "row", ci = "diff", color = TRUE,
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = TRUE,
            color_signif = "grey_non_signif")
   e <- est(t, theme = "light")
   for (nm in unique(e$column)) {

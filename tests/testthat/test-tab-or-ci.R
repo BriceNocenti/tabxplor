@@ -21,7 +21,7 @@ woolf <- function(a, b, cc, dd, conf = 0.95) {
 }
 
 test_that("color_signif = 'ignore' (default) leaves the empirical OR without a CI (byte-unchanged)", {
-  t <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
+  t <- tab(or_data(), g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1)
   yes <- t[["yes"]]
   expect_false(tabxplor:::fmt_has_interval(yes))
   expect_true(all(is.na(get_ci_inf(yes))))
@@ -30,7 +30,7 @@ test_that("color_signif = 'ignore' (default) leaves the empirical OR without a C
 })
 
 test_that("a colour policy gives the empirical OR a Woolf interval (matches the closed form)", {
-  t   <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+  t   <- tab(or_data(), g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1,
              color_signif = "grey_non_signif")
   yes <- t[["yes"]]
   expect_identical(get_scale(yes), "odds_ratio")
@@ -55,7 +55,7 @@ test_that("a colour policy gives the empirical OR a Woolf interval (matches the 
 })
 
 test_that("stars = TRUE populates the CI-inversion pvalue (dual of the interval)", {
-  t   <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+  t   <- tab(or_data(), g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1,
              color_signif = "grey_non_signif", stars = TRUE)
   yes <- t[["yes"]]
   w   <- woolf(a = 60, b = 40, cc = 30, dd = 70)
@@ -72,9 +72,9 @@ test_that("color_signif actually gates the OR colour (greys a big-but-non-signif
                levels = c("no", "yes"))
   )
   slot_ignore <- fmt_color_channels(
-    tab(d, g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1)[["yes"]])[[1]][2]
+    tab(d, g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1)[["yes"]])[[1]][2]
   slot_grey <- fmt_color_channels(
-    tab(d, g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+    tab(d, g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1,
         color_signif = "grey_non_signif")[["yes"]])[[1]][2]
   expect_gt(slot_ignore, 0)   # ignore colours the big observed OR
   expect_identical(slot_grey, 0L)   # grey_non_signif greys it (CI contains 1)
@@ -89,7 +89,7 @@ test_that("3+ level factor: OR of each level vs the ref2 baseline is the conditi
                   rep(c("d1", "d2", "d3"), c(30, 40, 50))),  # group x
                 levels = c("d1", "d2", "d3"))
   )
-  t <- tab(d, g, y3, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+  t <- tab(d, g, y3, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1,
            color_signif = "grey_non_signif")
 
   # OR of d3 vs d1 (baseline), group x (row 2) vs ref row (group ref, row 1):
@@ -109,7 +109,7 @@ test_that("3+ level factor: OR of each level vs the ref2 baseline is the conditi
 # --- Phase 16c: binary-factor odds ratios + the OR total column -----------------------------------
 
 test_that("Phase 16c: a binary col_var references the complement (no column forced to '1')", {
-  t   <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+  t   <- tab(or_data(), g, y, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1,
              color_signif = "grey_non_signif")
   yes <- get_or(t[["yes"]]); no <- get_or(t[["no"]])
   # neither level column is a constant OR = 1 (the old forced-ref2 behaviour) ...
@@ -122,14 +122,14 @@ test_that("Phase 16c: a binary col_var references the complement (no column forc
 })
 
 test_that("Phase 16c: an OR table's total column shows only the base n, not 100%", {
-  t   <- tab(or_data(), g, y, pct = "row", OR = TRUE)
+  t   <- tab(or_data(), g, y, pct = "row", display = "{or}", ref = "first")
   # console/text: the Total cell folds to `n={n}` (no "100%" / "{pct}")
   mt  <- tab_materialize_extras(t, backend = "text", pvalue = FALSE)
   d   <- as.character(get_display(mt[["Total"]]))
   expect_true (all(grepl("n=",  d, fixed = TRUE)))
   expect_false(any(grepl("pct", d, fixed = TRUE)))
   # add_n = FALSE drops the meaningless % total column entirely
-  t0  <- tab(or_data(), g, y, pct = "row", OR = TRUE, add_n = FALSE)
+  t0  <- tab(or_data(), g, y, pct = "row", display = "{or}", ref = "first", add_n = FALSE)
   mt0 <- tab_materialize_extras(t0, backend = "text", pvalue = FALSE)
   expect_false("Total" %in% names(mt0))
   # Excel exports only the base-n column, no % total

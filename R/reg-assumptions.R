@@ -35,9 +35,29 @@
 
 # Every family a check can be asked about. `grouped` (a summed-score binomial) is a flag on top of
 # "binomial", never a family of its own, so it needs no entry.
+#
+# ⚠ Phase 19l: it must name every INTERNAL LINK KEY too (`rr` / `rd` / `mr`, REG_FIT_FAMILY in
+# R/reg-estimand.R). It named only `rr`, and `reg_checks_for()` filters on `sp$family`, which IS
+# `est$fit` -- so `tab_reg(family = "binomial", measure = "difference")` and
+# `tab_reg(family = "gaussian", measure = "ratio")`, the two estimands 19e added, got ZERO assumption
+# checks and ZERO diagnostic panels, silently. A link chosen to reach a MEASURE is still the same
+# distribution underneath.
+# It cannot be DERIVED here (this file loads before R/reg-estimand.R, and REG_CHECKS below consumes
+# it at build time), so the exhaustiveness is a build-time stopifnot at the end of reg-estimand.R --
+# the same idiom fmt_attr_rules and MEASURES use.
 #' @keywords internal
-REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson", "rr",
-                        "multinomial", "ordinal")
+REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson",
+                        "multinomial", "ordinal", "rr", "rd", "mr")
+
+# The DISTRIBUTION behind a fit key: `rd`/`rr` are binomial, `mr` is gaussian, everything else is
+# itself. Every check that dispatches on the family reads this, never the raw key -- otherwise a link
+# key falls through every arm and lands on whatever the last `else` happens to be (measured: `mr`
+# would have been read as an ordinal/multinomial outcome, and handed to pbinom()).
+#' @keywords internal
+reg_check_family_of <- function(f) {
+  d <- unname(REG_FIT_FAMILY[f])
+  ifelse(is.na(d), f, d)
+}
 
 # ONE row per check.
 #   noun          the assumption, as a word the reader already knows (a msgid)
@@ -619,6 +639,7 @@ rd_wquantile <- function(x, probs, w = NULL) {
 # "beyond the first category" -- stated in the axis label, never implied.
 #' @keywords internal
 rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
+  family <- reg_check_family_of(family)          # 19l: a LINK key (rd/rr/mr) reads as its distribution
   if (family == "gaussian")
     return(list(y = as.numeric(y), link = "identity", lab = gettext("mean")))
   if (reg_fam_count(family))
@@ -755,6 +776,7 @@ rd_spark <- function(y, style = TRUE) {
 # WARNING: qnorm(1) = Inf -- u must be clamped, or a single saturated fitted value returns Inf.
 #' @keywords internal
 rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
+  family <- reg_check_family_of(family)          # 19l: a LINK key (rd/rr/mr) reads as its distribution
   if (family == "multinomial") return(NULL)
   clamp <- function(u) pmin(pmax(u, 1e-10), 1 - 1e-10)
   draw  <- function(lo, hi) rd_with_seed(seed, stats::qnorm(clamp(stats::runif(length(lo), lo, hi))))

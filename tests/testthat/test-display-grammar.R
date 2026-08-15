@@ -147,8 +147,8 @@ testthat::test_that("tab(display = ) works on grouped tabs, lists and pct = 'col
 
 testthat::test_that("tab(display = 'ci') is the bare-field form of display = '{ci}' (Phase 16f)", {
   gss <- forcats::gss_cat
-  t_ci    <- tab(gss, marital, race, pct = "row", ci = "diff", display = "ci")
-  t_brace <- tab(gss, marital, race, pct = "row", ci = "diff", display = "{ci}")
+  t_ci    <- tab(gss, marital, race, pct = "row", ci = "ref", display = "ci")
+  t_brace <- tab(gss, marital, race, pct = "row", ci = "ref", display = "{ci}")
   fcol_ci    <- t_ci[[which(purrr::map_lgl(t_ci, is_fmt))[1]]]
   fcol_brace <- t_brace[[which(purrr::map_lgl(t_brace, is_fmt))[1]]]
   testthat::expect_identical(get_display(fcol_ci), get_display(fcol_brace))   # same per-cell display
@@ -162,10 +162,7 @@ testthat::test_that("every exporter renders a composite table without error", {
   t1 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{pct} ({n})")
   testthat::expect_no_error(tab_md(t1))
   testthat::expect_no_error(invisible(capture.output(print(t1))))
-  if (requireNamespace("kableExtra", quietly = TRUE)) {
-    testthat::expect_no_error(tab_kable(t1, engine = "kableExtra"))
-  }
-  testthat::expect_no_error(tab_kable(t1, engine = "html"))   # dependency-free engine
+  testthat::expect_no_error(tab_kable(t1))   # dependency-free engine
   if (requireNamespace("openxlsx2", quietly = TRUE)) {
     p <- withr::local_tempfile(fileext = ".xlsx")
     testthat::expect_no_error(tab_xl(t1, path = p, replace = TRUE))

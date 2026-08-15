@@ -49,6 +49,39 @@ tx_getOption <- function(names, default = NULL) {
   default
 }
 
+# THE retired-argument catcher for the export backends (Phase 19l).
+#
+# WHY IT EXISTS. `color_type` and `html_24_bit` were inert 1.3.1 arguments carried as real formals by
+# SIX exporters and threaded down whole call chains just to be dropped (~40 sites); `engine`,
+# `html_font` and `full_width` joined them when 19l deleted the kableExtra engine. A formal per
+# retired argument per backend is the shape this phase exists to delete -- and it is also what made
+# `tab_export()` warn once and its child warn a second time for one user mistake.
+#
+# THE RULE: a retired export argument is absorbed by `...`, named HERE, warned about ONCE per call,
+# and never forwarded. Anything else in `...` is passed on untouched, so a real typo still reaches
+# R's own "unused argument" error at the leaf. `fn` names the function in the message, so the user
+# is told where they wrote it.
+#' @keywords internal
+TX_INERT_EXPORT_ARGS <- c(
+  color_type  = "the text channel always uses the text palette; the CHANNEL is chosen by color = c(text, background)",
+  html_24_bit = "exports are always 24-bit",
+  engine      = "there is one HTML engine; restyle it with tab_css()",
+  html_font   = "the font is a CSS rule -- set it with tab_css() or your own stylesheet",
+  full_width  = "table width is a CSS rule -- set it with tab_css() or your own stylesheet"
+)
+
+#' @keywords internal
+tx_deprecate_inert <- function(dots, fn) {
+  hit <- intersect(names(dots), names(TX_INERT_EXPORT_ARGS))
+  for (nm in hit) {
+    lifecycle::deprecate_soft(
+      "2.0.0", I(paste0(fn, "(", nm, " = )")),
+      details = c("i" = paste0("Inert since 2.0.0: ", TX_INERT_EXPORT_ARGS[[nm]], "."))
+    )
+  }
+  dots[setdiff(names(dots), names(TX_INERT_EXPORT_ARGS))]
+}
+
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
   # option "tabxplor.color_style_theme" is seeded by set_color_palette() below.
@@ -81,9 +114,6 @@ tx_getOption <- function(names, default = NULL) {
   options("tabxplor.color_breaks" = default_color_scales())
 
   options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
-
-  options("tabxplor.kable_html_font" =
-            '"DejaVu Sans", "Arial", arial, helvetica, sans-serif') # Condensed ?
 
   options("tabxplor.output_kable" = FALSE)
 
@@ -155,13 +185,10 @@ tx_getOption <- function(names, default = NULL) {
   # argument of tab() (default FALSE = merge; TRUE = list). tab_many()'s deprecated `compact`
   # argument still works (mapped onto the output shape).
 
-  options("tabxplor.always_add_css_in_tab_kable" = TRUE)
-
-  # tab_kable() render engine. Phase 14e makes "html" the DEFAULT: the home-built engine is
-  # dependency-free, self-contained (<table> + one stylesheet), ~3x faster, restyleable (its geometry
-  # is CSS classes, not inline styles) and the only engine that can follow a theme = "auto" toggle.
-  # "kableExtra" keeps the legacy renderer (its own themes, baked at render time). R/tab-render-html.R.
-  options("tabxplor.tab_kable_engine" = "html")
+  # Phase 19l: `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable` and
+  # `tabxplor.kable_html_font` are GONE with the kableExtra render engine. There is one engine
+  # (home-built, dependency-free, restyleable, the only one that could follow theme = "auto"), it
+  # always ships its stylesheet, and the font is a CSS rule -- see tab_css(). R/tab-render-html.R.
 
   # The NUMBER font of each font-bearing export. Text (row labels, headers) always stays Condensed.
   # Phase g: html/md numbers are MONOSPACE by default -- one lever `tab_kable_num_font` (was: a
@@ -182,7 +209,7 @@ tx_getOption <- function(names, default = NULL) {
 
   # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour
   # scheme: their OS, plus any dark-mode toggle of the host page). "auto" needs a stylesheet, so only
-  # tab_kable(engine = "html") / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
+  # tab_html() / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
   # kableExtra engine) resolve it to "light". See R/tab-css.R.
   # WARNING: NOT `tabxplor.color_style_theme`, which is a different axis -- that one is the CONSOLE
   # palette theme, set by set_color_palette() (which auto-detects the editor's theme, Phase 14g).
@@ -199,7 +226,7 @@ tx_getOption <- function(names, default = NULL) {
   # over/under distinction entirely. FALSE for someone whose colour printer is the point.
   options("tabxplor.print_rules" = TRUE)
 
-  # Phase 13d: whether tab_kable(engine = "html") inlines the stylesheet with each table (TRUE =
+  # Phase 13d: whether tab_html() inlines the stylesheet with each table (TRUE =
   # self-contained: Viewer, jamovi, standalone .html). Set FALSE in a many-table .Rmd/.qmd that emits
   # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.
   # Phase 17j: renamed tabxplor.kable_css -> tabxplor.tab_kable_css (aligns with the tab_kable_* family).
@@ -339,13 +366,6 @@ score_from_lv1 <- function (data, name, vars_list) {
 }
 
 
-# data <- dplyr::select(forcats::gss_cat, -where(is.numeric))
-# name_in = "data"
-# name_out = "data"
-# style = "base"
-# reminder = TRUE
-# cat = TRUE
-
 
 
 
@@ -396,7 +416,6 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
   with_variable_label_as_title <- length(var_labs) > 0
 
-  # var_labs <- purrr::imap(var_labs, ~ paste0(.y, " with a lot of text"))
 
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
   
@@ -679,31 +698,6 @@ fig_space  <- stringi::stri_unescape_unicode("\\u2007")
 tx_num_font_html_stars <-
   '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'
 
-# # Not working
-# # Css link towards https://github.com/web-fonts/dejavu-sans-condensed
-# # @export
-# css_deja_vu_sans_condensed <- function() {
-#
-#   # "@font-face {
-#   #   font-family: 'DejaVu Sans Condensed';
-#   #     url('../inst/fonts/dejavu-sans-condensed-webfont.woff') format('woff'),
-#   #     url('../inst/fonts/dejavu-sans-condensed-webfont.ttf') format('truetype'),
-#   # }" |>
-#   #   stringi::stri_replace_first_regex("\n", "")
-#
-#   #"@font-face{font-family:'DejaVu Sans Condensed';src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot);src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot?#iefix) format('embedded-opentype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff2) format('woff2'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff) format('woff'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.ttf) format('truetype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.svg#dejavu_sans_condensedregular) format('svg')}"
-#
-#   "@font-face {
-#    font-family: 'DejaVu Sans Condensed';
-#     src: url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot'); /* IE9 Compat Modes */
-#       src: url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff2') format('woff2'), /* Super Modern Browsers */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff') format('woff'), /* Pretty Modern Browsers */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.ttf') format('truetype'), /* Safari, Android, iOS */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.svg#dejavu_sans_condensedregular') format('svg'); /* Legacy iOS */
-#   }"
-#
-#   }
 
 
 

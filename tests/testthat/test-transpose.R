@@ -191,12 +191,12 @@ testthat::test_that("a transposed regression's footer cells stay black in HTML (
   d <- gss_cat_data_formatting()
   r <- suppressMessages(tab_reg(d, "married", c("relig", "age"), family = "binomial",
                                 cleannames = FALSE))
-  h <- as.character(tab_html(r, engine = "html", transpose = TRUE))
+  h <- as.character(tab_html(r, transpose = TRUE))
   # the GOF footer values (N, McFadden R2 ...) are reading anchors: they must NOT carry a grey class
   greyed <- grepl('class="[^"]*\\bg[12]\\b[^"]*"[^>]*>[^<]*McFadden', h)
   testthat::expect_false(greyed)
   # non-vacuous: the untransposed render has the same footer, also un-greyed
-  testthat::expect_match(as.character(tab_html(r, engine = "html")), "McFadden")
+  testthat::expect_match(as.character(tab_html(r)), "McFadden")
 })
 
 testthat::test_that("Phase 17g: transpose carries the caption/title through the flip (drift fix)", {

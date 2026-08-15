@@ -229,7 +229,7 @@ reg_if_from_score <- function(S, bread) {
 # defence here is structural, not a comment: the columns are NAMED and every lookup goes by name, so a
 # mismatch is a NULL (the names test below), never a wrong number.
 #' @keywords internal
-reg_score_multinom <- function(fit, data = NULL) {
+reg_score_multinom <- function(fit) {
   V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
   X <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
   P <- tryCatch(stats::predict(fit, type = "probs"), error = function(e) NULL)
@@ -254,7 +254,7 @@ reg_score_multinom <- function(fit, data = NULL) {
 # double-count the design exactly as vcov(svyglm) would in the GLM path above. svyolr is unreachable
 # anyway: tab_reg() refuses a weighted 3+ level outcome with effect = "ame".)
 #' @keywords internal
-reg_score_polr <- function(fit, data = NULL) {
+reg_score_polr <- function(fit) {
   if (inherits(fit, "svyolr")) return(NULL)
   V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
   b <- tryCatch(stats::coef(fit), error = function(e) NULL)

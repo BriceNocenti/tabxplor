@@ -68,7 +68,6 @@
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
-#' @param html_24_bit Kept for a uniform exporter signature; inert for Excel (always 24-bit).
 #' @param color Set to \code{FALSE} to export without colours (monochrome).
 #' @param color_legend Should the color legends be printed with the subtexts ?
 #' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
@@ -85,8 +84,8 @@
 #'   \item \code{"auto"}: subsequent tables with the same column vars are printed on the
 #'    same sheets
 #' }
-#' @param color_type `r lifecycle::badge("deprecated")` Inert since 2.0.0: the text channel always uses
-#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+#'   (`color_type`, `html_24_bit`): colour is a channel of `color =`, and Excel is always 24-bit.
 #'
 #' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
 #'  Invisibly returns \code{tabs}.
@@ -113,10 +112,13 @@ tab_xl <-
            font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            theme = NULL,
-           color_type = lifecycle::deprecated(), html_24_bit = NULL, color = TRUE,
+           color = TRUE,
            transpose = FALSE, var_names = NULL,
            or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
-           print_color_legend = lifecycle::deprecated()) {
+           print_color_legend = lifecycle::deprecated(), ...) {
+
+    # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
+    tx_deprecate_inert(rlang::list2(...), "tab_xl")
 
     # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
     .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
@@ -139,10 +141,8 @@ tab_xl <-
       lifecycle::deprecate_soft("2.0.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
       color_legend <- print_color_legend
     }
-    if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("2.0.0", "tab_xl(color_type)")
     # Shared option resolver (theme/color/color_legend/transpose). Phase 10j makes tab_xl theme-aware:
-    # the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is inert
-    # (Phase 13a): Excel is always 24-bit.
+    # the palettes below now honour `theme` (was hardcoded "light").
     o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                              transpose = transpose, caption = caption, var_names = var_names)
     theme <- o$theme

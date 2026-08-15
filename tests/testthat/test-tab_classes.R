@@ -175,8 +175,8 @@ cov_grouped_attr <- dplyr::filter(forcats::gss_cat, year %in% c(2000, 2014)) |>
 attr(cov_grouped_attr, "subtext") <- "phase0 sentinel subtext"
 
 testthat::test_that("attr fixtures are non-trivial (guards the survival tests below)", {
-  testthat::expect_gt(nrow(get_chi2(cov_flat_attr)),    0L)
-  testthat::expect_gt(nrow(get_chi2(cov_grouped_attr)), 0L)
+  testthat::expect_gt(nrow(get_test(cov_flat_attr)),    0L)
+  testthat::expect_gt(nrow(get_test(cov_grouped_attr)), 0L)
   testthat::expect_true(any(nzchar(get_subtext(cov_flat_attr))))
   testthat::expect_true(any(nzchar(get_subtext(cov_grouped_attr))))
 })
@@ -191,7 +191,7 @@ for (cls in names(attr_fixtures)) {
       testthat::test_that(paste0("verb keeps subtext + chi2 (", klass, "): ", v), {
         out <- verb_coverage[[v]](fx)
         testthat::expect_identical(get_subtext(out), get_subtext(fx))
-        testthat::expect_identical(get_chi2(out),    get_chi2(fx))
+        testthat::expect_identical(get_test(out),    get_test(fx))
       })
     })
   }
@@ -203,7 +203,7 @@ testthat::test_that("group_by upgrades tabxplor_tab -> tabxplor_grouped_tab, kee
   gb <- dplyr::group_by(cov_flat_attr, race)
   testthat::expect_s3_class(gb, "tabxplor_grouped_tab")
   testthat::expect_identical(get_subtext(gb), get_subtext(cov_flat_attr))
-  testthat::expect_identical(get_chi2(gb),    get_chi2(cov_flat_attr))
+  testthat::expect_identical(get_test(gb),    get_test(cov_flat_attr))
 })
 
 testthat::test_that("grouped_tab auto-downgrades to plain tabxplor_tab at one group left", {
@@ -215,7 +215,7 @@ testthat::test_that("grouped_tab auto-downgrades to plain tabxplor_tab at one gr
   testthat::expect_s3_class(one, "tabxplor_tab")
   testthat::expect_false(inherits(one, "tabxplor_grouped_tab"))
   testthat::expect_identical(get_subtext(one), get_subtext(cov_grouped_attr))
-  testthat::expect_identical(get_chi2(one),    get_chi2(cov_grouped_attr))
+  testthat::expect_identical(get_test(one),    get_test(cov_grouped_attr))
 })
 
 testthat::test_that("group_split on a grouped tab returns class-preserving tabs", {

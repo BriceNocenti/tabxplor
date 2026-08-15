@@ -821,3 +821,114 @@ plot_oklch_hue_strip_cvd <- function(
     hex_cvd = hex_cvd
   ))
 }
+
+
+
+# ==================================================================================================
+# THE PALETTE REVIEW RECIPE (moved out of R/tab_classes.R by Phase 19l -- ~100 lines of commented-out
+# code sitting in the package source, which is exactly what the tools in THIS file exist for).
+# Run it after changing a palette: it previews every slot in light and dark, then under simulated
+# colour-vision deficiency and the bad-LCD approximation.
+#   source("~/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
+# The palette objects it reads (default_text_colors, default_background_colors, ...) are internal to
+# tabxplor, so load the package first (devtools::load_all()).
+# ==================================================================================================
+
+# ### Color palettes visual tests, with color blind mode ----
+# source("~/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
+# # Light palette
+# light_text_palette <- c(plain= "#9f9f9f", default_text_colors, default_text_colors_neg)
+# light_bg_palette   <- c(plain= "#ffffff",default_background_colors, default_background_colors_neg)
+# preview_color_grid(light_text_palette, light_bg_palette) # #show_contrast = FALSE  
+# #    Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
+
+
+# #   color blindness
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 1), 
+#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 1),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 0.5), 
+#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 0.5),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan"), 
+#                    simulate_cvd_farver(light_bg_palette, type = "protan"),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan", severity = 0.5), 
+#                    simulate_cvd_farver(light_bg_palette, type = "protan", severity = 0.5),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+
+# #   bad LCD approximation
+# preview_color_grid(lcd_simulate_oklch(light_text_palette), 
+#                    lcd_simulate_oklch(light_bg_palette),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+
+# # default_text_colors |> farver::decode_colour(to = "oklch") # Inspect OKLCH coordinates
+
+
+
+
+# #   color blindness
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan", severity = 0.5), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan"), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "protan"), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "protan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+
+# #   bad LCD approximation
+# preview_color_grid(lcd_simulate_oklch(dark_text_palette), 
+#                   lcd_simulate_oklch(dark_bg_palette),
+#                   table_bg = lcd_simulate_oklch("#111111")
+#                   )
+                   
+
+# # Simuler une palette normale et une palette color blind cote-à-cote
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 1, C=0.16) # chroma_mode = "max"
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 0.5, C=0.16) 
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "protan", severity = 1, C=0.16)
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "tritan", severity = 1, C=0.16)
+
+
+# # preview_color_grid(diff_colors, set_luminance(background_colors, 0.99)) 
+# # set_luminance(background_colors, 0.99) |> farver::get_channel("l", space = "oklch")
+# # # set_luminance(background_colors, c(0.99, 0.90, 0.85, 0.80, 0.72))
+
+# # preview_color_grid(diff_colors, set_luminance(background_colors2, 0.95)) 
+
+# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.95)) 
+# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.8) |> set_chroma(0.12)) 
+
+
+# # preview_luminance_grid("#59c5bf", "#b9c653")                  # fixed source chroma, capped to gamut
+# # preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max")  # most vivid shade at each L
+# # preview_luminance_grid("#0185e4", "#68b430", l_values = seq(0.40, 0.90, by = 0.10)) # custom lightness ramp
+# # # Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
+
+
+
+
+
+
+
+## Color functions ----
+
+
+# PURPOSE: the render-time colour palettes (Phase 13a). Ten OKLCH base palettes -- eight being one per
+# (light/dark theme x text/background channel x over-/under-represented side), plus the two Phase-14c
+# bg_legend sides (the font stand-in for the fills, light only) -- each 4 hex codes
+# (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
+# 8-element slot vectors (4 over + 4 under) and pre-built once into ANSI style functions (cli), stored
+# in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
+# integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/new_colors_UI.md.

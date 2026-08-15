@@ -1197,6 +1197,66 @@ tests >1 col_var *with* a test; the reg fit-cache digest path now unreachable fo
 
 ---
 
+##### Handed forward BY 19l PASS 2 (measurements in CLAUDE.md's DONE summary)
+
+**THE structural item, and the one that did not move: `tab_reg()` has no argument boundary.** 19i gave
+the four crosstab producers `tab_resolve_common_args()`. The regression producer never got one: of its
+821 lines **~550 are argument resolution** before a single `reg_build()` call, and **62 of the
+package's 192 user messages live there** -- the number pass 2 could not move, and the only one left
+that would shift the study's "72 % -> 46 % of messages at the argument boundary" diagnostic again.
+Inside it: ten ad-hoc local closures (`family_for`, `est_for`, `do_exp_for`, `effect_shape_for`,
+`eff_word_for`, `trials_for`, `trials_auto`, `inverse_for`, `color_for`, `eff_word_of`) and TWO
+near-identical `specs <- purrr::map2()` literals differing only in per-model vs per-dependent. The code
+names its own debt: the spec's `do_exp` / `effect_shape` / `eff_word` are commented *"views of `est`,
+kept as fields because ~15 build sites read them by those names"*. **The key is `reg_resolve_args()` +
+a `new_reg_spec()` constructor** -- 19g's `new_reg_shared()` medicine and 19i's boundary medicine, one
+layer over. A resolver redesign, not a deletion; it deserves its own session.
+
+**Declared-vocabulary single-sourcing (Track 5, measured, not built):**
+
+- **`REG_FAMILIES`** -- `reg_family_display_name()` (a switch), `reg_family_short()` (a switch) and
+  `REG_FAMILY_UI_LABEL` / `_BINARY` (vectors) are three per-family name tables that **already
+  disagree**: the vectors omit `quasipoisson` / `rr` / `rd` / `mr`. One table, four columns. Add
+  `said` to `REG_OUTCOME_KINDS` while there (`tab_reg.R:498`, a fourth switch on its own keys).
+- **`TAB_PLACEHOLDER_COL_VARS`** -- the `all_col_vars` / `no_col_var` / `no_row_var` / `""` / `"no"` /
+  `NA` sentinel set is filtered by hand at **8 sites with 4 different contents** (`tab-shape.R:102`,
+  `tab-export-prep.R:32,240,397`, `tab.R:3506`, `fmt_class.R:5444`, `tab_xl.R:986`,
+  `tab-steps-legacy.R:1197`); `fmt_class.R:2782` even ORs a stored flag with a sentinel string.
+  Declaring one vector is byte-identical EXCEPT at the already-drifted sites -- say which.
+- **`EST_SCALES$default_display`** -- `fmt()` (`fmt_class.R:337`) and `new_fmt()` (`:2049`) are two
+  copies of one rule and **already disagree**: for `scale = "mixed"` one defaults `display` to `"pct"`,
+  the other to `"n"`. Declare it on the row (the `new_fmt()` answer: a bind neutral should claim no
+  percentage) and note the change.
+- **The effect-word / CI-method switches** (`fmt_class.R:4894`, `:5035`) re-derive from a RENDERED word
+  what `REG_ESTIMANDS$word` and `EST_SCALES$unit` declare -- and `:4894` silently falls to `"OR"` for
+  any family added to `REG_ESTIMANDS` but not to it.
+- **`totcol`'s vocabulary, three copies** (`tab.R:948`, `:2260`, `tab-resolve.R:509`); the declared one
+  is `TAB_ARG_VALUES$totcol`, and `tab.R:948` has already lost `""`.
+- **The fmt field-blanking chain** (`set_diff |> set_ci |> set_mean |> set_pct |> set_ctr |> set_var`,
+  4x in `tab-display.R`, where the `pct` variant is already inconsistent) -> `fmt_blank_fields()`;
+  `calculate_refrows()`'s 7 identical arguments spelled 3x; the verbatim `regTermTest` block twice
+  inside one function (`tab_reg.R:3141`, `:3158`).
+
+**The 12 silent length-fallback guards (Track 6, not built).** `if (length(v) == n) v else <neutral>`
+degrades instead of erroring -- the class that hid D1's greyed footer for two phases, as
+`tab-render-html.R:434` itself records. Every one is length-`n` BY CONSTRUCTION (the annotation is
+built per column from the same table). Promote to `stopifnot()`: `tab-render-html.R:429,430,438,193` ·
+`tab-transpose-render.R:95,101,107` · `tab-test-display.R:417` · `plots.R:578` · `tab_md.R:335,375`
+and `tab_md.R:402` (which has **no length check at all** -- a short vector yields `NA` into
+`md_span_attr()`).
+
+**~20 dead formals NOT removed**, deliberately: `build_total_rows(totvars)`, `agg_anova(group_id)`,
+`reg_color_notes(crude_keys)`, `reg_apply_display(numeric_preds)`, `reg_marginal_column(nobs)`,
+`reg_columns_multinom(eff_word)`, `reg_compare_rows(conf_level)`, `reg_reref_fit_res(reference, sp)`,
+`reg_estimand_abort(arg)`, `prep_one_table(backend)`, `tab_append_footer(K)`, `md_render_one(lang)`,
+`jmv_store_fetch(cfg)`. They sit at POSITIONAL slots in long calls, and pass 2 made exactly that
+mistake once (dropping `legend_break_tokens(lang)`, caught by the i18n tests). Each needs a
+call-site-by-call-site read; the safe subset (13) is done.
+
+**Also filed:** `_pkgdown.yml` still lists the now-defunct `kable_tabxplor_style` (19n release
+review); `dev/verify_no_ghost_functions.R` is committed and reports 149 comment sites naming a
+function defined nowhere -- all read once in pass 2, worth re-running after any deletion phase.
+
 #### Phase 19m — Harvest 2: open integration
 
 **Goal**: **think out of the box.** With rows and columns both self-describing, one vocabulary end to

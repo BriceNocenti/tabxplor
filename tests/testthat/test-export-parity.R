@@ -83,9 +83,9 @@ testthat::test_that("format path matches tab_xl path for a contrib table", {
 })
 
 testthat::test_that("format path matches tab_xl path for an empirical OR table", {
-  testthat::skip_if(inherits(try(tab(gss, marital, race, pct = "row", OR = TRUE),
+  testthat::skip_if(inherits(try(tab(gss, marital, race, pct = "row", display = "{or}", ref = "first"),
                                  silent = TRUE), "try-error"))
-  expect_export_parity(tab(gss, marital, race, pct = "row", OR = TRUE))
+  expect_export_parity(tab(gss, marital, race, pct = "row", display = "{or}", ref = "first"))
 })
 
 # Phase 10g: lock the Excel number-format codes format(syntax = "excel") emits (the fold's anchor,

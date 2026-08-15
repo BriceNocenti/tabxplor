@@ -22,5 +22,5 @@ document. (Phase 19h dropped the inert \code{tabs} argument, which was documente
 cat(tab_md_css())
 }
 \seealso{
-\code{\link[=tab_css]{tab_css()}}, which is the generator and also styles \code{tab_kable(engine = "html")}.
+\code{\link[=tab_css]{tab_css()}}, which is the generator and also styles \code{tab_html()}.
 }

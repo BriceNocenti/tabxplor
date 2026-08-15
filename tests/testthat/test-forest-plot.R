@@ -31,12 +31,12 @@ test_that("every table shape draws one ggplot", {
   d <- fp_data()
   q <- function(e) suppressWarnings(suppressMessages(e))
   shapes <- list(
-    xt_diff  = tab(d, race, party3, pct = "row", ci = "diff", color = TRUE),
+    xt_diff  = tab(d, race, party3, pct = "row", ci = "ref", color = TRUE),
     xt_cell  = tab(d, race, party3, pct = "row", ci = "cell"),
-    xt_or    = tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE),
-    xt_mean  = tab(d, race, tvhours, pct = "row", ci = "diff", color = TRUE),
-    xt_many  = tab(d, c(race, relig), party3, pct = "row", ci = "diff", color = TRUE),
-    xt_subs  = tab(d, race, party3, pct = "row", ci = "diff", tab_vars = black),
+    xt_or    = tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE),
+    xt_mean  = tab(d, race, tvhours, pct = "row", ci = "ref", color = TRUE),
+    xt_many  = tab(d, c(race, relig), party3, pct = "row", ci = "ref", color = TRUE),
+    xt_subs  = tab(d, race, party3, pct = "row", ci = "ref", tab_vars = black),
     reg_or   = q(tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)),
     reg_beta = q(tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE)),
     reg_log  = q(tab_reg(d, "married", "race", family = "binomial", measure = "log")),
@@ -60,7 +60,7 @@ test_that("the gridlines ARE the table's colour ladder", {
   skip_if_not_installed("ggplot2")
   fp_dev()
   d <- fp_data()
-  t <- tab(d, race, party3, pct = "row", OR = TRUE, color = "OR", stars = TRUE)
+  t <- tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE)
   b <- fp_build(forest_plot(t, lang = "en"))
   # a log10 axis reports its breaks TRANSFORMED, so they come back to the data scale first
   br <- 10^stats::na.omit(b$layout$panel_params[[1]]$x$get_breaks())
@@ -87,7 +87,7 @@ test_that("the points are painted the cell's own colour", {
   skip_if_not_installed("ggplot2")
   fp_dev()
   d <- fp_data()
-  t <- tab(d, race, party3, pct = "row", ci = "diff", color = TRUE,
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = TRUE,
            color_signif = "grey_non_signif")
   e <- forest_plot(t, theme = "light", return_data = TRUE)
   b <- fp_build(forest_plot(t, theme = "light"))
@@ -119,7 +119,7 @@ test_that("the colour legend is the guide, and never printed twice", {
   skip_if_not_installed("ggplot2")
   fp_dev()
   d <- fp_data()
-  t <- tab(d, race, party3, pct = "row", ci = "diff", color = TRUE,
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = TRUE,
            color_signif = "grey_non_signif")
   p <- forest_plot(t, lang = "en")
   sc <- Filter(function(s) !inherits(s$name, "waiver") && !is.null(s$name), p$scales$scales)
@@ -153,12 +153,12 @@ test_that("forest_plot maps a list of tables and returns its data", {
   skip_if_not_installed("ggplot2")
   fp_dev()
   d <- fp_data()
-  l <- list(tab(d, race, party3, pct = "row", ci = "diff"),
-            tab(d, relig, party3, pct = "row", ci = "diff"))
+  l <- list(tab(d, race, party3, pct = "row", ci = "ref"),
+            tab(d, relig, party3, pct = "row", ci = "ref"))
   p <- forest_plot(l)
   expect_true(is.list(p) && !inherits(p, "ggplot"))
   expect_s3_class(p[[1]], "ggplot")
-  e <- forest_plot(tab(d, race, party3, pct = "row", ci = "diff"), return_data = TRUE)
+  e <- forest_plot(tab(d, race, party3, pct = "row", ci = "ref"), return_data = TRUE)
   expect_s3_class(e, "tbl_df")
   expect_true(all(c("estimate", "ci_inf", "scale_key", "point_hex") %in% names(e)))
 })

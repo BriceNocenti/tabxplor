@@ -17,7 +17,7 @@ test_that("meta gathers the attrs and every legacy getter reads into it", {
   # column carries no interval, so it names none -- which is the point: the method describes THIS
   # column's bounds, not a table-wide setting the legend then indexes by measure (D8).
   expect_true(all(get_ci_method(t)[purrr::map_lgl(t, is_fmt)] == ""))
-  tp <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "diff")
+  tp <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "ref")
   expect_true(all(get_ci_method(tp)[purrr::map_lgl(tp, is_fmt)] == "newcombe"))
 })
 
@@ -88,9 +88,8 @@ test_that("a stored caption precedes reg_title in the markdown export", {
   expect_true(grepl("STORED CAP", md1, fixed = TRUE))     # rendered as a pandoc caption line
 })
 
-test_that("get_chi2 / get_test back-compat still read the top-level test attr", {
+test_that("get_test reads the top-level test attr", {
   t <- tab(forcats::gss_cat, marital, race)
-  expect_identical(get_chi2(t), get_test(t))
   expect_s3_class(get_test(t), "tbl_df")
 })
 

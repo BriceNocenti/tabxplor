@@ -235,7 +235,7 @@ jmvtab_reg_dep_modelled_first <- function(depModelLevel, dep) {
 # the jamovi one could not be reproduced from the R API.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_dep_trials <- function(depTrials, dep, data) {
+jmvtab_reg_dep_trials <- function(depTrials, dep) {
   if (length(depTrials)) for (e in depTrials) {
     if (identical(as.character(e$var), dep) && length(e$n) && nzchar(as.character(e$n))) {
       n <- suppressWarnings(as.integer(round(as.numeric(e$n))))
@@ -289,7 +289,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   invs <- vapply(dep, function(d) jmvtab_reg_dep_modelled_first(opts$depModelLevel, d), logical(1))
   # trials are binomial-only (grouped / summed-score); non-binomial outcomes never carry one.
   tris <- vapply(seq_along(dep), function(i) {
-    if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i], data)
+    if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i])
     else NA_integer_
   }, integer(1))
 

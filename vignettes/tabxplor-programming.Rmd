@@ -260,7 +260,7 @@ The score ranges from 0 to the number of factors (missing values never count). S
 
 ## Building many tables at once
 
-`tab_many()` — the engine behind `tab()` — accepts **lists of arguments** to build several differently-shaped tables in one call. For a fully data-driven batch, `purrr::pmap()` over a small specification table is the idiom — one row per table, one column per argument:
+`tab()` accepts **vectors of arguments** to build several differently-shaped tables in one call (`output_list = TRUE` keeps them as a list rather than merging them). For a fully data-driven batch, `purrr::pmap()` over a small specification table is the idiom — one row per table, one column per argument:
 
 ```{r, eval = FALSE}
 specs <- tibble::tribble(
@@ -275,12 +275,11 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 ## Advanced options
 
-Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Session options*), these `options()` tune the exporters and the build. HTML / `tab_kable()`:
+Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Session options*), these `options()` tune the exporters and the build. HTML / `tab_html()`:
 
-- `tabxplor.tab_kable_engine` — `"html"` (dependency-free, the default) or `"kableExtra"` (legacy).
 - `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does).
 - `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`); set `FALSE` once per document to switch them off everywhere.
-- `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — the number and text CSS font stacks.
+- `tabxplor.tab_kable_num_font` — the number CSS font stack (everything else is `tab_css()`'s business).
 - `tabxplor.kable_popover` — click popovers instead of hover tooltips.
 
 Excel / `tab_export("xl")`:

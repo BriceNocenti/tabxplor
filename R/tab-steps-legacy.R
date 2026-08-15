@@ -6,9 +6,11 @@
 #   With 19j the WHOLE pre-2.0.0 chain lives here: nothing in tab.R's build calls a step any more.
 # KEY CONSTRAINTS:
 #   - Exports unchanged (the @export roxygen travels with the functions; document() keeps NAMESPACE).
-#   - These call INTO shared helpers that stay in tab.R (tab_match_groups_and_totrows,
-#     tab_add_totcol_if_no, tab_validate_comp, tab_match_comp_and_tottab, chi2_compute_test,
-#     chi2_write_contrib, var_contrib_ctr_signed, contrib_pvalue); nothing here is called BY the core.
+#   - They call INTO the shared ARITHMETIC, which stays where the build uses it (chi2_compute_test,
+#     chi2_write_contrib, var_contrib_ctr_signed, contrib_pvalue in R/tab-chi2.R; ci_dispatch() /
+#     CI_GEOMS in R/tab-agg.R; detect_totcols() in R/fmt_class.R, which the exporters read too).
+#     Their own MACHINERY -- the six helpers with no caller outside this file -- moved in here in
+#     Phase 19l; see the section at the bottom. Nothing here is called BY the core.
 #   - WHAT A WRAPPER IS: a step here RECONSTRUCTS a plan from the table's own fmt markers, because it
 #     runs on a table it did not build (tab_get_vars / detect_totcols / detect_refcol /
 #     detect_firstcol, the eight-branch ci case_when, the second `ci = "ratio"` fold, the
@@ -206,7 +208,6 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
   get_vars        <- tab_get_vars(tabs)
   row_var         <- rlang::sym(get_vars$row_var)
-  #col_vars        <- rlang::sym(get_vars$col_vars)
   col_vars_levels_mean <- purrr::map(get_vars$col_vars_levels, rlang::syms)
   mean_vars <- fmt_var_kind(tabs) == "mean"
   col_vars_levels <- purrr::discard(col_vars_levels_mean, names(col_vars_levels_mean) %in% names(mean_vars))
@@ -444,11 +445,9 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 
   #stopifnot(pct[1] %in% c("row", "col", "all", "all_tabs", "no"))
   get_vars         <- tab_get_vars(tabs)
-  #row_var         <- rlang::sym(get_vars$row_var) #col_var ??
   col_vars_with_all<- rlang::syms(get_vars$col_vars)
   col_vars_no_all  <- col_vars_with_all |> purrr::discard(\(s) as.character(s) == "all_col_vars")
   col_means  <- (fmt_var_kind(tabs) == "mean") |> purrr::keep(\(x) x) |> names()
-  # col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
   tab_vars         <- rlang::syms(get_vars$tab_vars)
 
   groups  <- dplyr::group_vars(tabs)
@@ -584,21 +583,6 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
   type <- fmt_kind_label(tabs)
   #Calculate diffs (used to color pct depending on spread from row or col mean)
   if (ref[1] != "no" & any(type %in% c("row", "col", "mean")) ) {
-    # diff_formula <- function(x, type, dif, refer) {
-    #   switch(
-    #     ref, #ref[1] before
-    #     "tot"   = switch(type,
-    #                      "row"     =  get_pct(x)  - get_pct(dplyr::last(x  )),
-    #                      "col"     =  get_pct(x)  - get_pct(refer             ),
-    #                      "mean"    =  get_mean(x) / get_mean(dplyr::last(x) ),
-    #                      NA_real_),
-    #     "first" = switch(type,
-    #                      "row"     =  get_pct(x)  - get_pct(dplyr::first(x  )),
-    #                      "col"     =  get_pct(x)  - get_pct(refer              ),
-    #                      "mean"    =  get_mean(x) / get_mean(dplyr::first(x) ),
-    #                      NA_real_)
-    #   )
-    # }
 
     if (ref[1] == "tot"  ) reference <- detect_totcols(tabs)
     if (ref[1] == "first") {
@@ -1187,7 +1171,6 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 ) {
   get_vars        <- tab_get_vars(tabs)
   row_var         <- get_vars$row_var
-  #col_vars        <- rlang::sym(get_vars$col_vars)
   col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
 
   stopifnot(all(calc %in% c("all", "ctr", "p", "var", "counts")))
@@ -1252,4 +1235,192 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 
   # Phase 19a: tab_restore(), carrying `meta` explicitly -- see the twin tail in tab_ci().
   tab_restore(tabs, tabs, attrs = list(subtext = subtext, test = test_tbl, meta = get_meta(tabs)))
+}
+
+
+
+# === SECTION: the wrappers' own machinery (Phase 19l) =============================================
+# These six helpers have NO caller outside this file. Four of them (tab_match_groups_and_totrows /
+# tab_add_totcol_if_no / tab_validate_comp / tab_match_comp_and_tottab) MUTATE the table to make a
+# step's preconditions true; two (detect_refcol / detect_firstcol) RECONSTRUCT, from the fmt markers,
+# which column of each col_var group a step should compare against. Both jobs exist only because a
+# step runs on a table it did not build -- the build knows all of it -- so 19l moved them out of
+# R/tab.R and R/fmt_class.R and in here, where the reader meets them beside the only functions that
+# call them. Nothing in the live pipeline meets them at all now.
+# ⚠ detect_totcols() did NOT come with them: it has one live caller, tab_add_n_pct() on the
+# EXPORTER path (R/tab.R), so it stays in R/fmt_class.R beside the other fmt-marker readers.
+
+#' @keywords internal
+tab_match_groups_and_totrows <- function(tabs) {
+  #chi2 : not to match groups and totrows with alltabs ? ----
+
+  groups   <- dplyr::group_vars(tabs)
+
+  #If there is a total_row at the end of each group, keep (un)grouping as is
+  ind <- dplyr::group_indices(tabs) # 1 1 1 if data isn't grouped
+  end_groups <- append(ind[-length(ind)] != ind[-1], FALSE)
+  if (any(is_totrow(tabs)) & all(is_totrow(tabs)[end_groups]) ) {return(tabs)}
+
+  #If there isn't any total row, keep actual (un)grouping and add some
+  if ( !any(is_totrow(tabs))) {
+
+
+    if (length(groups) != 0) {
+      #if ( !identical(tab_vars, groups) ) {
+      warning("no total row(s) found. Some added based on actual grouping variables : ",
+              paste(groups, collapse = ", "))
+      return(dplyr::group_by(tabs, !!!rlang::syms(groups)) |> tab_tot("row"))
+    } else if ( !any(is_tottab(tabs)) ) { #If there are no groups
+      warning("no groups nor total row(s) found. One added for the whole table")
+      return(tab_tot(tabs, "row"))
+    } else {
+      warning("no groups nor total row(s), but total table found. ",
+              "Grouped upon tab_vars and total rows added")
+      tab_vars <- rlang::syms(tab_get_vars(tabs)$tab_vars)
+      return(dplyr::group_by(tabs, !!!tab_vars) |> tab_tot("row"))
+    }
+
+    #If there is at least one total row, calculate new groups based on them
+  } else {
+    if (utils::tail(is_totrow(tabs), 1L)) return(dplyr::ungroup(tabs))
+
+
+    tabs_totrow_groups <- tabs |> dplyr::ungroup() |>
+      (\(d) tibble::add_column(d, totrow_groups = as.integer(is_totrow(d))))() |>
+      dplyr::mutate(totrow_groups = 1 + cumsum(.data$totrow_groups) - .data$totrow_groups)
+    totrow_indices <- tabs_totrow_groups$totrow_groups
+
+    #Control if totrows groups match tab_vars, collectively or individualy, if yes group
+    tab_vars <- rlang::syms(tab_get_vars(tabs)$tab_vars)
+    if ( !identical(tab_vars, groups) ) {
+      tabs_tab_vars_groups <- tabs |> dplyr::group_by(!!!tab_vars)
+      tab_vars_indices <- dplyr::group_indices(tabs_tab_vars_groups)
+
+      if (all(totrow_indices == tab_vars_indices)) return(tabs_tab_vars_groups)
+    }
+
+    each_tab_var_indices <-
+      tabs |> dplyr::ungroup() |> dplyr::select(!!!tab_vars) |>
+      dplyr::transmute(dplyr::across(dplyr::everything(), as.integer)) |>
+      purrr::map(~ .)
+
+    each_tab_var_totrow_comp <-
+      purrr::map_lgl(each_tab_var_indices, ~ all(. == totrow_indices))
+
+    if (any(each_tab_var_totrow_comp)) {
+      group_var_name <- names(each_tab_var_totrow_comp[each_tab_var_totrow_comp])[1]
+      return(dplyr::group_by(tabs, !!rlang::sym(group_var_name)))
+    }
+
+    # Otherwise return a df grouped with the total rows groups, in a new variable
+    warning("grouping variable(s) not corresponding to total_rows, ",
+            "new groups calculated, based on actual total_rows")
+    return(dplyr::relocate(tabs_totrow_groups, .data$totrow_groups, .before = 1) |>
+             dplyr::group_by(.data$totrow_groups)
+    )
+
+  }
+
+}
+
+
+
+#' @keywords internal
+tab_add_totcol_if_no <- function(tabs) {
+  if (!any(is_totcol(tabs)) & ! all(fmt_var_kind(tabs) == "mean")) { # & !only_one_column
+    only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
+    tabs <- tabs |> tab_tot("col", totcol = "last")
+    if (!only_one_column) warning("no total column, one was added (from the last non-mean column)")
+  }
+  tabs
+}
+
+
+
+
+
+#' @keywords internal
+tab_validate_comp <- function(tabs, comp) {
+  comp_all        <- purrr::map_lgl(tabs[purrr::map_lgl(tabs, is_fmt)],
+                                    ~ get_comp_all(., replace_na = FALSE))
+  comp_all_no_na  <- comp_all[!is.na(comp_all)]
+
+  if (!all(is.na(comp_all))) {
+    if(comp == "tab" & any(comp_all_no_na) ) {
+      warning("since at least one column already have an element calculated ",
+              "with comparison to the total row of the total table (pct or means ",
+              "diffs from total, chi2 variances or confidence intervals), ",
+              "comp were set to 'all'")
+      comp <- "all"
+    }
+    if (comp == "all" & all(!comp_all_no_na) ) {
+      warning("since at least one column already have an element calculated ",
+              "with comparison to the total row of each tab_var (pct or means ",
+              "diffs from total, chi2 variances or confidence intervals), ",
+              "comp were set to 'tab'")
+      comp <- "tab"
+    }
+  }
+  if (comp == "null") {
+    if ( all(is.na(comp_all)) ) {
+      comp <- "tab"
+    } else {
+      comp <- ifelse(any(comp_all_no_na), "all", "tab")
+    }
+  }
+  comp
+}
+
+
+
+#' @keywords internal
+tab_match_comp_and_tottab <- function(tabs, comp) {
+  if(comp == "all" & !any(is_tottab(tabs) & is_totrow(tabs)) ) {
+    warning("since 'comp' is 'all', a total table with a ",
+            "total row was added")
+    tabs <- tabs |> tab_totaltab('line')
+  }
+  tabs
+}
+
+
+#' @keywords internal
+detect_firstcol <- function(tabs) {
+  col_vars <- get_col_var(tabs)
+  firstcol <- which(col_vars != dplyr::lag(col_vars, default = NA_character_))
+  if (any(col_vars == "all_col_vars"))
+    firstcol <- purrr::discard(firstcol, names(firstcol) == names(col_vars)[col_vars == "all_col_vars"])
+
+  res <- purrr::map(1:ncol(tabs), function(.i)
+    tidyr::replace_na(
+      dplyr::last(names(firstcol[firstcol <= .i]) ),
+      "")) |>
+    rlang::syms() |>
+    purrr::set_names(names(tabs))
+
+  if (any(col_vars == "all_col_vars")) {
+    res[col_vars == "all_col_vars"] <- rlang::syms("")
+  }
+  res
+}
+
+# For each column, detect the REFERENCE column of its col_var group -- the one marked by the `refcol`
+# attribute (is_refcol). Falls back to detect_firstcol()'s first-column-of-group when no reference is
+# marked, so it is byte-identical to detect_firstcol() whenever the reference IS the first level (or is
+# unmarked). Phase 7g-iii: tab_ci() uses it so the diff-CI reference column matches the diff/colour
+# reference column, once a per-col_var reference can be neither the first level nor the total.
+#' @keywords internal
+detect_refcol <- function(tabs) {
+  col_vars  <- get_col_var(tabs)
+  refcol    <- is_refcol(tabs)
+  nms       <- names(tabs)
+  firstcols <- detect_firstcol(tabs)   # per-column sym of each group's first column (fallback + "" edges)
+  res <- purrr::map(seq_len(ncol(tabs)), function(.i) {
+    in_grp <- which(col_vars == col_vars[.i] & refcol)
+    if (length(in_grp) >= 1L) rlang::sym(nms[in_grp[1]]) else firstcols[[.i]]
+  }) |>
+    purrr::set_names(nms)
+  # mirror detect_firstcol: no reference column for the all_col_vars total group
+  if (any(col_vars == "all_col_vars")) res[col_vars == "all_col_vars"] <- rlang::syms("")
+  res
 }

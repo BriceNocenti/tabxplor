@@ -503,7 +503,7 @@ tab(gss_simple, race, party3, pct = "row", ci = "cell") |>
   forest_plot()
 ```
 
-It draws **whatever the table computed** — no argument to learn: with `ci = "cell"` each cell's percentage with its interval, with `ci = "diff"` the difference from the reference with a zero line, with `OR = TRUE` the odds ratios on a log axis. `what = "level"` and `what = "effect"` override it.
+It draws **whatever the table computed** — no argument to learn: with `ci = "cell"` each cell's percentage with its interval, with `ci = "ref"` the difference from the reference with a zero line, with `display = "{or}"` the odds ratios on a log axis. `what = "level"` and `what = "effect"` override it.
 
 Two things are worth knowing:
 
@@ -626,7 +626,7 @@ Examples :
 # --- factors: percentages -------------------------------------------------
 tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey_non_signif")
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
+tab(gss_simple, rincome, married, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1)
 tab(gss_simple, rincome, party3, color = "contrib")   # works with pct = "row"/"col" too
 #    the same table read as standardized residuals (the +-2 / +-3 scale), with the numbers shown
 tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",

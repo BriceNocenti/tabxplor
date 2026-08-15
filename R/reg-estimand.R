@@ -719,3 +719,12 @@ reg_measures_rd <- function() {
     "table with its per-cell status.",
     "\\itemize{", vapply(fams, line, character(1)), "}")
 }
+
+
+# Build-time exhaustiveness: every internal LINK key must be answerable by the assumption checks.
+# R/reg-assumptions.R cannot derive REG_CHECK_FAMILIES from REG_FIT_FAMILY (it loads first, and its
+# REG_CHECKS table consumes the vector at build time), so the two are tied here instead -- adding a
+# link key to REG_FIT_FAMILY without teaching the checks about it now fails to load, rather than
+# silently giving that estimand no diagnostics (the Phase 19l defect).
+stopifnot(all(names(REG_FIT_FAMILY) %in% REG_CHECK_FAMILIES))
+

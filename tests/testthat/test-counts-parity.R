@@ -20,8 +20,8 @@ testthat::test_that("long counts == microdata across pct / chi2 / ci configs", {
   cu  <- dplyr::count(gss, marital, race)                                  # unweighted long counts
 
   grid <- expand.grid(pct = c("no", "row", "col"), chi2 = c(FALSE, TRUE),
-                      ci = c("no", "cell", "diff"), stringsAsFactors = FALSE)
-  grid <- grid[!(grid$pct == "no" & grid$ci == "diff"), ]                  # diff CI needs a reference
+                      ci = c("no", "cell", "ref"), stringsAsFactors = FALSE)
+  grid <- grid[!(grid$pct == "no" & grid$ci == "ref"), ]                   # a reference CI needs one
 
   for (i in seq_len(nrow(grid))) {
     p <- grid$pct[i]; k <- grid$chi2[i]; cc <- grid$ci[i]
@@ -73,7 +73,7 @@ testthat::test_that("weighted counts (real n + weighted wn) == weighted microdat
   # count column "wn" -- while the NUMBERS are identical. Strip that footer-only detail before comparing.
   # Phase 17b: `vars` now lives in the `meta` list -- strip via the getter/setter, not attr("vars").
   strip_wt <- function(t) { v <- get_vars_attr(t); v$wt <- NULL; set_vars_attr(t, v) }
-  for (cc in c("no", "cell", "diff")) {
+  for (cc in c("no", "cell", "ref")) {
     testthat::expect_equal(
       strip_wt(tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, test = TRUE)),
       strip_wt(tab(gss, marital, race, wt = w, pct = "row", ci = cc, test = TRUE)),
@@ -197,8 +197,8 @@ testthat::test_that("modern color forms == microdata (TRUE / two-channel / per-t
   for (pol in c("grey_non_signif", "guaranteed_effect")) {
     testthat::expect_equal(
       tab_counts(cu, marital, race, counts = n, pct = "row",
-                 color = "diff", color_signif = pol, ci = "diff", test = TRUE),
-      tab(gss, marital, race, pct = "row", color = "diff", color_signif = pol, ci = "diff", test = TRUE),
+                 color = "diff", color_signif = pol, ci = "ref", test = TRUE),
+      tab(gss, marital, race, pct = "row", color = "diff", color_signif = pol, ci = "ref", test = TRUE),
       info = pol)
   }
 })

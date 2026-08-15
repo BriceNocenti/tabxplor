@@ -1,25 +1,24 @@
-# PURPOSE: The final-HTML render seam for tab_kable() + a dependency-free home-built <table> engine.
-# ROLE: Phase 10e. tab_kable() = option resolution + tab_export_prep() + map(render_kable_html) + join.
+# PURPOSE: The final-HTML render seam for tab_html() + the dependency-free <table> engine it drives.
+# ROLE: Phase 10e. tab_html() = option resolution + tab_export_prep() + map(render_kable_html) + join.
 #       render_kable_html() isolates the engine so the render-model (rd, meta) stays engine-agnostic.
 # KEY CONSTRAINTS:
-#   - engine = "html" is the DEFAULT since Phase 14e (options("tabxplor.tab_kable_engine")): the
-#     home-built renderer. Geometry and colour are role CLASSES resolved by tab_css() -- it emits NO
-#     inline style at all -- assembled in ~O(n_col+n_row) paste0 calls (Phase 9 idiom: base masks,
-#     vectorised assembly, NO case_when/if_else over fmt). It reproduces the kableExtra visual
-#     (content-identical -- same cell text, colours, tooltips), not byte-identical DOM.
-#   - engine = "kableExtra" is the LEGACY path and reproduces the pre-10e output BYTE-IDENTICALLY (the
-#     row_spec()/column_spec() pipeline, just carved out of tab_kable() and reading the prep's
-#     derive-once roles instead of recomputing them). It bakes its own theme, so it cannot do
-#     theme = "auto", and its cell_spec() HTML is version-unstable -- which is why its tests assert
-#     invariants and never snapshot bytes (test-render-html.R).
+#   - ONE engine since Phase 19l: the home-built renderer. Geometry and colour are role CLASSES
+#     resolved by tab_css() -- it emits NO inline style at all -- assembled in ~O(n_col+n_row) paste0
+#     calls (Phase 9 idiom: base masks, vectorised assembly, NO case_when/if_else over fmt).
+#     The legacy `engine = "kableExtra"` (its row_spec()/column_spec() pipeline, the pre-10e output)
+#     is DELETED: it baked its own theme, so it could not do theme = "auto", it could not render a
+#     transposed model at all, and by 19l it was reachable only by naming it. `engine =` is accepted
+#     and ignored for one release (tx_deprecate_inert, R/utils.R).
 #   - Phase 13d: this engine is THEME-AGNOSTIC. Colour lives in classes (tx_slot_class) resolved by the
 #     stylesheet tab_css() builds, which is what makes theme = "auto" possible: an inline `style` beats
 #     every stylesheet rule short of `!important`, so inline hex could never follow a dark-mode toggle.
 #     Do not reintroduce inline colour here. The <style> is hoisted ONCE by tab_kable_join(); it works
 #     in jamovi (its results view injects our HTML through jQuery .html(), which applies <style> nodes,
 #     and it has no sanitizer on that path -- what jamovi ignores is htmlDependency, not <style>).
-#   - The two engines wire the SAME 10e features (spanning header, [min;max] total column, NA="") off
-#     the shared render-model, so they cannot drift.
+#   - WARNING: \pkg{kableExtra} is still a Suggests, and the CLASS on our output is load-bearing --
+#     tab_kable_join() stamps `kableExtra` so print.kableExtra()/knit_print.kableExtra() route the
+#     fragment to the Viewer and bind the bootstrap tooltips. We produce what they expect (an HTML
+#     fragment); do not "clean up" that class because the engine is gone.
 #   - Phase 14k: the html result is classed `tabxplor_kable` and carries the render intent in a
 #     `tabxplor_theme` attribute -- but ONLY when our stylesheet ships with it (tab_kable_join()).
 #     print.tabxplor_kable() is the one place a theme is resolved in R rather than by the browser: the
@@ -30,17 +29,18 @@
 
 # === SECTION: tooltips =================================================================
 
-# Phase 14b: ONE builder for the bootstrap tooltip/popover attribute string, shared by both engines --
-# the kableExtra path hands it to cell_spec() pre-classed, the home-built path pastes it into the <td>.
-# They used to construct it separately ("match kableExtra's attributes so the JS binds identically"),
-# which had already drifted: the home-built popover omitted data-trigger, so it needed a CLICK where
-# kableExtra's opened on HOVER. One builder, one placement, no drift.
+# Phase 14b: ONE builder for the bootstrap tooltip/popover attribute string. It was shared by the two
+# engines, which had built it separately ("match kableExtra's attributes so the JS binds identically")
+# and already drifted: the home-built popover omitted data-trigger, so it needed a CLICK where
+# kableExtra's opened on HOVER.
 #
-# WARNING: kableExtra::spec_tooltip()/spec_popover() CANNOT emit this placement -- their match.arg()
-# takes tokens from c("right","bottom","top","left","auto"), so "auto right" errors outright and
-# c("auto", "right") silently yields a length-2 attribute that recycles into the title. The string is
-# therefore built here and passed through the `ke_tooltip`/`ke_popover` class cell_spec() honours (it
-# pastes such an object into the <span> verbatim, without re-calling spec_*()).
+# WARNING: do NOT replace this with a library call. kableExtra::spec_tooltip()/spec_popover() CANNOT
+# emit this placement -- their match.arg() takes tokens from c("right","bottom","top","left","auto"),
+# so "auto right" errors outright and c("auto", "right") silently yields a length-2 attribute that
+# recycles into the title. (19l dropped the `ke_tooltip`/`ke_popover` class the string used to carry:
+# it existed so cell_spec() would paste the object verbatim instead of re-calling spec_*(), and
+# cell_spec() went with the engine. The tooltips are still BOUND by kableExtra's print method -- see
+# the file header -- but it never inspects them.)
 #' @keywords internal
 tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
   esc <- if (escape) htmltools::htmlEscape(text, attribute = TRUE) else text
@@ -55,7 +55,6 @@ tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
     paste0('data-toggle="tooltip" data-container="body"',
            ' data-placement="auto right" title="', esc, '"')
   }
-  class(out) <- if (popover) "ke_popover" else "ke_tooltip"
   out
 }
 
@@ -79,50 +78,27 @@ reg_append_empirical_tip <- function(tp, rd, col_name) {
 # list method maps it over prep$tables and joins with tab_kable_join().
 #' @keywords internal
 render_kable_html <- function(rd, meta,
-                              engine   = c("kableExtra", "html"),
                               subtext  = character(0),
                               caption  = NULL,
                               tooltips = TRUE, popover = FALSE,
-                              html_font = NULL, full_width = FALSE,
-                              get_data = FALSE, in_knitr = FALSE, ...) {
-  engine <- match.arg(engine)
-
-  # Phase "Last b": kableExtra moved Imports -> Suggests (the default "html" engine is dependency-free).
-  # Guard the one legacy path that still needs it; the html engine never reaches a kableExtra:: call.
-  if (engine == "kableExtra" && !requireNamespace("kableExtra", quietly = TRUE)) {
-    cli::cli_abort(c(
-      "The {.val kableExtra} table engine needs the {.pkg kableExtra} package.",
-      "i" = "Install it, or use the default {.code engine = \"html\"} (no extra dependency)."
-    ))
-  }
-
-  # per-table graceful degrade (mirrors md_render_one(): a list may hold a malformed table)
+                              get_data = FALSE) {
+  # per-table graceful degrade (mirrors md_render_one(): a list may hold a malformed table).
+  # It is also the whole plain-data.frame path: tab_export_prep() flags any non-tabxplor input
+  # `degrade`, so tab_html() / tab_export("html") answer a bare tibble with a bare <table> rather
+  # than an error. A table that merely LOST its class keeps its fmt columns and is not degraded --
+  # it renders fully coloured (test-degraded-attrs.R).
   if (isTRUE(rd$vars$degrade)) {
     if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
-    if (engine == "html") return(render_html_degrade(rd$tab))
-    return(kableExtra::kbl(tibble::as_tibble(rd$tab)))
+    return(render_html_degrade(rd$tab))
   }
 
-  if (engine == "html") {
-    return(render_html_engine(rd, meta, subtext = subtext, caption = caption,
-                              tooltips = tooltips, popover = popover, get_data = get_data))
-  }
-
-  render_kableExtra_engine(rd, meta, subtext = subtext, caption = caption,
-                           tooltips = tooltips, popover = popover, html_font = html_font,
-                           full_width = full_width, get_data = get_data, in_knitr = in_knitr, ...)
+  render_html_engine(rd, meta, subtext = subtext, caption = caption,
+                     tooltips = tooltips, popover = popover, get_data = get_data)
 }
 
 
-# === SECTION: the legacy kableExtra engine (byte-identical carve of tab_kable() 536-708) ==========
+# === SECTION: markup helpers (escaping, partial bold, typography) =================================
 
-#' @keywords internal
-# Phase 13c-ii: build one HTML cell string, keeping only the PRIMARY field of a composite bold cell
-# bold. A bold composite cell (`pn` = primary-field width) gets its escaped suffix wrapped in a
-# normal-weight <span> so the "(n=...)" part overrides the inherited row/cell bold; each part is
-# escaped separately so the offset can't drift. Non-composite / non-bold cells are just escaped.
-# `esc`: the HTML-escape fn -- htmltools::htmlEscape for the cell_spec path (escape = FALSE downstream,
-# byte-identical to escape = TRUE), identity for the home-built engine (which places cells raw).
 #' @keywords internal
 # Escape a label, then put back the ONE tag the package itself injects: tab_wrap_text() wraps long
 # header names on "<br>". Escaping the whole string rendered it literally ("Tele:<br>occasionnel");
@@ -166,6 +142,13 @@ tx_spark_svg <- function(x, h = 12L, dx = 3L) {
   x
 }
 
+# Phase 13c-ii: build one HTML cell string, keeping only the PRIMARY field of a composite bold cell
+# bold. A bold composite cell (`pn` = primary-field width) gets its escaped suffix wrapped in a
+# normal-weight <span> so the "(n=...)" part overrides the inherited row/cell bold; each part is
+# escaped separately so the offset can't drift. Non-composite / non-bold cells are just escaped.
+# `esc`: the HTML-escape fn -- identity for the engine, which places cells raw and has already
+# escaped them; a caller that has not may pass htmltools::htmlEscape.
+#' @keywords internal
 html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
   out <- esc(raw)
   if (is.null(pn)) return(out)
@@ -197,160 +180,6 @@ html_face_wrap <- function(html, bold, italic, underline) {
   if (any(italic))    html[italic]    <- paste0("<i>", html[italic],    "</i>")
   if (any(bold))      html[bold]      <- paste0("<b>", html[bold],      "</b>")
   html
-}
-
-render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popover,
-                                     html_font, full_width, get_data, in_knitr, ...) {
-  tabs  <- rd$tab
-  # Phase 13d: only ever "light"/"dark" here -- tab_kable() downgrades "auto" before the prep, because
-  # kableExtra bakes its theme at render time (kable_classic / kable_material_dark) and its HTML is not
-  # ours to restyle. Auto dark mode is an engine = "html" feature.
-  theme <- meta$theme
-  cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
-
-  # kableExtra-only: escape markdown stars in knitr contexts, else the significance `*` become markdown
-  # (byte-identical to the old in-tab_kable escape). NOT done for the html engine (raw HTML fragment).
-  if (in_knitr) {
-    tabs <- tabs |>
-      dplyr::mutate(dplyr::across(dplyr::where(is.character),
-                                  ~ stringi::stri_replace_all_regex(., "\\*", "\\\\*")))
-  }
-
-  new_group   <- rd$roles$new_group
-  row_var     <- rd$roles$row_var_col
-  fmt_cols    <- rd$roles$fmt_cols
-  other_cols  <- rd$roles$other_cols
-  totcols     <- rd$roles$totcols
-  new_col_var <- rd$roles$new_col_var
-  any_bg      <- rd$roles$any_bg
-
-  text_color <- meta$theme_cols$text
-
-  # Per-fmt-column colour vectors (derive-once) from the prep's `ann`.
-  color_font <- purrr::map(rd$ann, "font")
-  color_back <- purrr::map(rd$ann, "back")
-  color_bold <- purrr::map(rd$ann, "bold")
-  # z11: the palette's typography beyond weight. All-FALSE under the colour palettes, and cell_spec()
-  # pastes "" for a FALSE italic/underline (its own defaults), so those stay byte-identical.
-  color_ital <- purrr::map(rd$ann, "face_italic")
-  color_und  <- purrr::map(rd$ann, "face_underline")
-
-  # Unified fmt-across (was two any_bg branches): background = NULL when the table has no bg channel is
-  # identical to omitting it (cell_spec default), so ONE branch reproduces both byte-for-byte.
-  # Phase 13c-ii: partial-bold composite cells -- format(bold_split = TRUE) marks the primary-field
-  # width; html_cell_text() escapes the value AND wraps a bold cell's composite suffix in a normal
-  # <span>, then cell_spec(escape = FALSE) (byte-identical to escape = TRUE for non-composite cells).
-  out <- tabs |>
-    dplyr::mutate(dplyr::across(
-      where(is_fmt),
-      ~ {
-        col   <- .
-        colnm <- dplyr::cur_column()
-        raw   <- format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
-                        bold_split = TRUE, .ref = ann_ref(rd$ann[[colnm]]))
-        boldc <- color_bold[[colnm]]
-        txt   <- html_cell_text(raw, attr(raw, "primary_nchar"),
-                                (seq_along(raw) %in% rd$bold_rows) | boldc)
-        kableExtra::cell_spec(
-          txt, escape = FALSE,
-          bold       = boldc,
-          italic     = color_ital[[colnm]] %||% FALSE,
-          underline  = color_und[[colnm]]  %||% FALSE,
-          color      = color_font[[colnm]],
-          background = if (any_bg) color_back[[colnm]] else NULL,
-          # Phase 14b: pre-built (tab_tooltip_attrs) so both engines share one placement; cell_spec()
-          # passes a `ke_tooltip`/`ke_popover` through untouched.
-          tooltip = if (!popover & tooltips) {
-            tab_tooltip_attrs(reg_append_empirical_tip(
-              tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells), rd, colnm))
-          } else {NULL},
-          popover = if (popover & tooltips) {
-            tab_tooltip_attrs(reg_append_empirical_tip(
-              tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells), rd, colnm),
-              popover = TRUE)
-          } else {NULL}
-        )
-      }
-    ))
-
-  if (get_data) return(out)
-
-  alignement <- rd$roles$align
-
-  # Phase 13c-iii: level headers use the suffix-stripped labels (the col_var name is written in the
-  # spanning header row added below).
-  out <- knitr::kable(out, escape = FALSE, format = "html", align = alignement,
-                      caption = caption, col.names = cvh$clean)
-
-  # Phase 13c-iii: the col_var spanning-name header row above the level names -- each variable name
-  # merged (colspan) over its contiguous level columns; blank (" ") over the row var / total / count
-  # columns. Applied on the plain kable (before the theme) so kableExtra emits a clean <div> style.
-  runs <- tab_header_runs(cvh$label)
-  if (any(nzchar(runs$labels))) {
-    header_above <- stats::setNames(runs$spans, ifelse(nzchar(runs$labels), runs$labels, " "))
-    out <- kableExtra::add_header_above(out, header_above)
-  }
-
-  # Phase 19h (D2): only a DARK request gets the dark lightable theme. The branch used to be
-  # `theme == "light"` against everything else, so `theme = "print"` -- the black-and-white
-  # PUBLICATION palette, which z11 added and which reaches every static backend -- rendered
-  # kable_material_dark: a black table for a greyscale-print request. "auto" never arrives here
-  # (tx_theme_resolve() downgrades it: kableExtra's themes are baked at render time).
-  if (identical(theme, "dark")) {
-    out <- out |> kableExtra::kable_material_dark(
-      lightable_options = "hover",
-      bootstrap_options = c("hover", "condensed", "responsive"),
-      full_width = full_width,
-      html_font = html_font,
-      ...
-    )
-  } else {
-    out <- out |> kableExtra::kable_classic(
-      lightable_options = "hover",
-      full_width = full_width,
-      html_font = html_font,
-      ...
-    )
-  }
-
-  # Bold reference/total rows + total-block borders -- from the prep's derive-once sets (block D).
-  tot_or_ref    <- rd$bold_rows
-  tot_rows_1    <- rd$roles$totblock_top
-  tot_rows_last <- rd$roles$totblock_bottom
-
-  if (length(subtext) != 0) {
-    out <- out |> kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
-  }
-
-  out <- out |>
-    kableExtra::row_spec(
-      0, color = text_color, bold = TRUE,
-      extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;"
-    ) |>
-    kableExtra::row_spec(tot_or_ref, bold = TRUE) |>
-    kableExtra::row_spec(tot_rows_1, extra_css = "border-top: 1px solid ;") |>
-    kableExtra::row_spec(tot_rows_last, extra_css = "border-bottom: 1px solid ;") |>
-    kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
-    kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) |>
-    kableExtra::column_spec(other_cols, border_left = TRUE) |>
-    kableExtra::column_spec(totcols, border_left = TRUE, width_min = 11) |>
-    kableExtra::column_spec(row_var, width_min = 20) |>
-    kableExtra::row_spec(new_group, extra_css = "border-bottom: 2px solid;") |>
-    kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
-    kableExtra::row_spec(1:nrow(tabs), extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;")
-
-  # Phase 10e: NA cells now render "" at source (format(na="")), so the old post-hoc
-  # str_replace_all(">NA</span>", …) is retired; only the tab.css include remains.
-  if (getOption("tabxplor.always_add_css_in_tab_kable") | interactive()) {
-    out <- paste0(
-      htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
-      "\n",
-      as.character(out)
-    ) |>
-      vctrs::vec_restore(out)
-  }
-
-  out
 }
 
 
@@ -615,37 +444,27 @@ render_html_degrade <- function(tab) {
 # Phase 14k: `theme` is the render INTENT ("light"/"dark"/"auto"), carried to print.tabxplor_kable() so
 # the standalone page it opens in the Viewer can paint itself to match. See the attr rule below.
 #' @keywords internal
-tab_kable_join <- function(parts, engine, css = "", theme = NULL) {
-  if (length(parts) == 1L && engine == "kableExtra") return(parts[[1]])
-
-  if (engine == "html") {
-    body <- paste(unlist(parts), collapse = "\n<br>\n")
-    out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
-    # Phase 14e: the `kableExtra` class is what routes an HTML table to the Viewer (print.kableExtra)
-    # and knits it (knit_print.kableExtra). Without it this was a bare `knitr_kable`, whose print just
-    # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
-    # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
-    # class rather than duplicate its two methods. (kableExtra is Suggests, not Imports -- when it is
-    # absent, print.tabxplor_kable's interactive Viewer path degrades gracefully: no page, tooltips off,
-    # a one-time note, fall through to knitr's print -- Phase 17g.)
-    # Phase 14k prepends `tabxplor_kable`, whose print() paints the Viewer's page (below).
-    out <- structure(out, format = "html",
-                     class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
-    # THE RULE: tabxplor paints a page only when tabxplor's own stylesheet ships with the table -- the
-    # same discriminator Phase 13d/14j use for the colour legend ("does our stylesheet ship?"). With
-    # css = "" the document supplies it (options("tabxplor.tab_kable_css" = FALSE) + tab_css()) or nothing
-    # does, and in the Viewer there is no document: painting the page #222222 around a table we did not
-    # style would leave it black-on-#222222, i.e. unreadable. No attr => print does nothing new.
-    if (nzchar(css)) attr(out, "tabxplor_theme") <- theme
-    return(out)
-  }
-
-  # kableExtra list: stack the rendered tables one-after-another. Phase 13c-iv: give the joined HTML
-  # the `kableExtra` class so print.kableExtra routes it to the Viewer (like a single table does),
-  # instead of the bare `knitr_kable` that just cat()s to the console.
-  chr <- vapply(parts, as.character, character(1))
-  structure(paste(chr, collapse = "\n<br>\n"), format = "html",
-            class = c("kableExtra", "knitr_kable"))
+tab_kable_join <- function(parts, css = "", theme = NULL) {
+  body <- paste(unlist(parts), collapse = "\n<br>\n")
+  out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
+  # Phase 14e: the `kableExtra` class is what routes an HTML table to the Viewer (print.kableExtra)
+  # and knits it (knit_print.kableExtra). Without it this was a bare `knitr_kable`, whose print just
+  # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
+  # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
+  # class rather than duplicate its two methods. (kableExtra is Suggests, not Imports -- when it is
+  # absent, print.tabxplor_kable's interactive Viewer path degrades gracefully: no page, tooltips off,
+  # a one-time note, fall through to knitr's print -- Phase 17g.) 19l deleted the kableExtra render
+  # ENGINE; this class is the reason kableExtra remains a Suggests, and it is not the engine's.
+  # Phase 14k prepends `tabxplor_kable`, whose print() paints the Viewer's page (below).
+  out <- structure(out, format = "html",
+                   class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
+  # THE RULE: tabxplor paints a page only when tabxplor's own stylesheet ships with the table -- the
+  # same discriminator Phase 13d/14j use for the colour legend ("does our stylesheet ship?"). With
+  # css = "" the document supplies it (options("tabxplor.tab_kable_css" = FALSE) + tab_css()) or nothing
+  # does, and in the Viewer there is no document: painting the page #222222 around a table we did not
+  # style would leave it black-on-#222222, i.e. unreadable. No attr => print does nothing new.
+  if (nzchar(css)) attr(out, "tabxplor_theme") <- theme
+  out
 }
 
 

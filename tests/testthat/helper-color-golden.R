@@ -77,7 +77,7 @@ color_golden_syn_diff_fmt <- function() {
     ref       = "tot",
     comp_all  = FALSE,
     color     = "diff",
-    in_totrow = c(rep(FALSE, length(diff)), TRUE)
+    row_kind = c(rep("data", length(diff)), "total")
   )
 }
 
@@ -96,11 +96,11 @@ color_golden_cases <- function() {
     # c_diff_ci / c_after_ci / c_ci lock the soft-deprecated combined color strings; wrap the
     # build in suppressWarnings() so the deprecation nudge stays out of the captured output.
     c_diff_ci        = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "diff_ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "diff_ci"))),
     c_after_ci       = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "after_ci"))),
     c_ci             = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "ci"))),
     c_contrib        = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib")),
     # contrib + comp = "all": the whole-table mean-contribution colour. WITH tab_vars the seed lives
@@ -139,10 +139,10 @@ color_golden_cases <- function() {
     c_mean_diff      = function() color_golden_capture_tab(
       tab_num(gss, race, c(age, tvhours), comp = "all", color = "diff", digits = 1L)),
     c_mean_diff_ci   = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "diff",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "ref",
               color = "diff_ci", digits = 1L))),
     c_mean_after_ci  = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "diff",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "ref",
               color = "after_ci", digits = 1L)))
   )
 }
