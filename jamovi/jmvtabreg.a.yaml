@@ -104,48 +104,56 @@ options:
               - name: n
                 type: String
 
-    - name: exponentiate
-      title: exponentiate
-      type: Bool
-      default: true
-      description:
-          R: >
-           Exponentiate the coefficients into ratios (odds ratios / incidence-rate ratios),
-           automatically leaving gaussian linear coefficients on their raw scale. Uncheck to
-           keep every coefficient on the coefficient (log / linear) scale.
-
     - name: effect
       title: effect
       type: List
       options:
-        - title: "coefficient (per-family effect)"
+        - title: "coefficient <i>(the model's own effect)</i>"
           name:  coefficient
-        - title: "AME (average marginal effect)"
-          name:  ame
-        - title: "RR (marginal risk ratio)"
-          name:  ame_ratio
+        - title: "marginal <i>(average marginal effect)</i>"
+          name:  marginal
+        - title: "at the reference profile"
+          name:  at_reference
       default: coefficient
       description:
           R: >
-           "coefficient" is the native per-family effect (beta / OR / IRR).
-           "AME" is the average marginal effect on the response scale, a difference in
-           percentage points. "RR" is the same quantity as a RATIO -- the marginal risk
-           ratio (the ratio of adjusted predicted probabilities), for binomial /
-           multinomial / ordinal outcomes only. Both need the marginaleffects package.
+           WHICH CONTRAST the table reports.
+            \itemize{
+             \item \code{"coefficient"}: the model's native per-family effect.
+             \item \code{"marginal"}: the average marginal effect on the response scale, averaged
+             over the sample (needs the marginaleffects package).
+             \item \code{"at_reference"}: the same, evaluated at the reference profile (other
+             predictors at their reference level / mean).
+            }
 
-    - name: at
-      title: at
+    - name: measure
+      title: measure
       type: List
       options:
-        - title: "average (over the sample)"
-          name:  average
-        - title: "at the reference profile"
-          name:  reference
-      default: average
+        - title: "auto <i>(the family's usual measure)</i>"
+          name:  auto
+        - title: "odds ratio (OR)"
+          name:  odds_ratio
+        - title: "ratio (RR / IRR / MR)"
+          name:  ratio
+        - title: "difference (RD / AME / beta)"
+          name:  difference
+        - title: "log <i>(un-exponentiated coefficient)</i>"
+          name:  log
+      default: auto
       description:
           R: >
-           Where marginal effects are evaluated: averaged over the sample, or at the
-           reference profile (other predictors at their reference level / mean).
+           WHICH MEASURE the contrast is expressed in -- the second half of the estimand, and the
+            only argument that changes the MODEL (a risk ratio, a risk difference and an odds ratio
+            are three fits, not three displays of one).
+            \itemize{
+             \item \code{"auto"}: the usual measure of the outcome's family (OR for binomial /
+             ordinal / multinomial, IRR for poisson, beta for gaussian).
+             \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the named measure,
+             when the outcome offers it. A combination the outcome does not offer says so, and lists
+             what it does offer.
+             \item \code{"log"}: the family's usual estimand, left un-exponentiated.
+            }
 
     - name: empirical
       title: empirical
@@ -234,6 +242,19 @@ options:
               - name: ref
                 type: String
 
+    - name: shapes
+      title: "Predictor functional form (per numeric predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: shape
+                type: String
+
     - name: multiplicator
       title: "Predictor scaling (per k units)"
       type: Array
@@ -283,33 +304,51 @@ options:
 
     - name: color
       title: color
-      type: Bool
-      default: true
+      type: List
+      options:
+        - title: "auto <i>(the column's own effect size)</i>"
+          name:  auto
+        - title: "no <i>(no colors)</i>"
+          name:  "no"
+        - title: "adjustment <i>(the gap between the model and the crude effect)</i>"
+          name:  adjustment
+        - title: "between_groups <i>(the gap between the split groups)</i>"
+          name:  between_groups
+      default: auto
       description:
           R: >
-           Colour the effect cells with the sensible per-family colour helper (OR magnitude
-           for ratios, standardized difference for gaussian betas). Uncheck for no colours.
+           WHAT the effect cells are coloured by. The colour LADDER always comes from what the
+            column estimates (an odds ratio is read on the odds-ratio scale, a beta on the
+            standardized-difference one), so what is left to choose is what the estimate is compared
+            TO.
+            \itemize{
+             \item \code{"auto"}: the effect's own size (compared to no effect).
+             \item \code{"no"}: no colours.
+             \item \code{"adjustment"}: how far the ADJUSTED effect moved from the crude one --
+             needs \code{empirical}.
+             \item \code{"between_groups"}: how far each group's effect is from the first group's
+             -- needs \code{split_var}.
+            }
 
     - name: color_signif
       title: color_signif
       type: List
       options:
+        - title: "ignore <i>(color effect size only, ignore significance)</i>"
+          name:  ignore
         - title: "grey_non_signif <i>(color effect size + uncolor non-significant)</i>"
-        #####    "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
           name:  grey_non_signif
         - title: "guaranteed_effect <i>(color all CI-floor, ideal for small sample)</i>"
           name:  guaranteed_effect
-        - title: "ignore <i>(color effect size only, ignore significance)</i>"
-          name:  ignore
       default: grey_non_signif
       description:
           R: >
-           How significance interacts with the colours: observed size + grey out non-significant 
+           How significance interacts with the colours: observed size + grey out non-significant
            cells, colour only the guaranteed (error-adjusted) effect, ignore significance.
 
 # ==================== Missing values and display ====================
-    - name: estimate_display
-      title: estimate_display
+    - name: display
+      title: display
       type: List
       options:
         - title: "value (plain estimate)"
@@ -323,9 +362,11 @@ options:
       default: value
       description:
           R: >
-           The estimate-cell layout. "ci" shows a visible interval; "prob" / "ame"
+           The estimate-cell LAYOUT (never the estimand: a display may fold in another quantity of
+           the SAME fit, it can never change the fit). "ci" shows a visible interval; "prob" / "ame"
            fold the adjusted predicted probability / marginal effect into the OR cell
-           (binomial coefficient models only).
+           (binomial coefficient models only). These four are shorthands over \code{tab_reg()}'s
+           \code{\{\}} display grammar.
 
     - name: cleannames
       title: cleannames

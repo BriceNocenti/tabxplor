@@ -1087,7 +1087,23 @@ This is a *deliberately open* phase. It has a method, not a checklist.
    and some must stay for the degraded contract (`test-degraded-attrs.R`). Tell them apart by
    *reading the contract*, not by guessing.
 4. **Report what did not shrink**, and why. A key that did not pay for itself is a finding worth
-   recording, not something to hide.
+   recording, not something to hide. If an additional step is needed to reap the harvest, tell it.
+
+**Handed over by 19k**:
+
+- **D22's "renders void" note is PER COLUMN but reads as PER TABLE.** Measured:
+  `tab(display = "num_ci")` on a table that *does* have intervals still emits the note, because the
+  `add_n` total column carries none. Correct by D22's own rule ("a field empty in the whole
+  column"), misleading as a message. Either scope the note to columns the template actually
+  *changes*, or word it per column.
+- **`jamovi/js/*.js` has no syntax check in this repo** (no node/V8 on the box; the `node` R package
+  ships a Windows binary). The suite balance-checks brackets only. A real `node --check` in CI, or a
+  V8-based test, would close the last gap in "the JS is generated but not verified".
+- **The reg fit-cache digest path is now unreachable for `color = "adjustment"` and for any
+  `shape`** — both correct (they need the fitted object / a different model), but both are now
+  reachable FROM THE UI, so the live panel refits where it used to serve a digest. Measure it before
+  assuming it is fine; `dev/model_vs_observed_gap_test.md` §6 has the recipe for a digest-based
+  adjustment arm.
 
 **Handed over by 19j** (each stated in the code where it lives, none half-done):
 

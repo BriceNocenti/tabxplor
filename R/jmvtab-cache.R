@@ -5,7 +5,11 @@
 #       injected via `.cache`; the aggregate stage's hook (tab_aggregate, R/tab.R) delegates here to
 #       jmv_cache_aggregate(), which builds per-(row_var x col_var) count aggregates + per-row_var
 #       moment aggregates + tier-2 test keys with content-addressed reuse, mutating cache_env$store.
-#       NO math is forked -- the leaves (tab_plain/tab_num/tab_chi2/tab_ci) are reused verbatim.
+#       NO math is forked -- the leaves (tab_plain/tab_num) are reused verbatim, and since Phase 19k
+#       NO RULE is mirrored either: the population descriptor is tab_cache_keys(), the digits floor
+#       num_digits_floor(), the display writer tab_apply_display(), the `ci` anchor
+#       resolve_leaf_ci(). The option NAMES and VALUES are tab()'s own (test / display / ref2 / ci /
+#       the full-word colour measures), so nothing is translated at this boundary any more.
 # KEY CONSTRAINTS:
 #   - Persist tiers 1 (aggregates) + 2 (omnibus tests) + 3 (Phase 7f built ARMED tables, stored since
 #     Phase 9b-7 as the CARRIER = plain field-frames, re-painted / re-ref'd on read, NOT a live tab).
@@ -16,8 +20,12 @@
 #   - Level reordering (Phase 7g-ii): the STORED aggregate blob stays at RAW level order; a reorder
 #     relevels only the in-memory aggregate + ctx$data POST-fetch (jmv_relevel_cols), so it is a
 #     tier-3 input (tiers 1-2 reused). Never bake a reorder into the persisted blob.
+#   - Tier-4 (always re-applied, never baked into the carrier): digits, colour, display, cleannames,
+#     n_min and -- since 19k -- `anova`, because both one-way F rows are stored in `test` and the
+#     p-value line is materialised at DISPLAY. What the RE-REF recomputes may differ between two
+#     tuples (ref / ref2 / the interval geometry / the CI method); what it copies must not.
 #   - Byte-identical to tab(cleannames = FALSE, levels via defer_level_merge) -- locked by
-#     test-jmvtab-cache.R. First cut: exact-grain keying (grain-superset rollup deferred), simple
+#     test-jmvtab-cache.R; the option VOCABULARY is locked by test-jamovi-vocabulary.R. First cut: exact-grain keying (grain-superset rollup deferred), simple
 #     byte-bounded LRU (byte-precise accounting deferred).
 # See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 2.0.0 roadmap > Phase 7e.
 
@@ -160,7 +168,10 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 16L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 17L   # bump on any store-shape change -> discard stale stores
+# 17 (Phase 19k): the option vocabulary itself moved (`chi2` -> `test`, `OR` retired onto display /
+#   ref2, `anova` re-applied at tier 4, the four method_* keys re-applied instead of structural), so
+#   a stale entry's base key describes a different question.
                             # 16 = Phase 19d-tail: the tier-3 TUPLE replaces `display` + `or` with the
                             #     one `comparison` they both encoded. A stale tuple has the old keys,
                             #     so every comparison would read as a mismatch (or, worse, match).
@@ -520,29 +531,15 @@ jmvtab_cleannames_display <- function(tabs) {
 }
 
 
-# === Display-field overrides (moved out of jmvtab.b.R, so jmvtab_build is engine-free) ====
-
-# The jamovi `display` ComboBox + the ci="cell" pct_ci convenience, applied to a tab or list of tabs.
-#' @keywords internal
-#' @noRd
-jmv_apply_display <- function(tabs, opts) {
-  one <- function(tb) {
-    # ONE writer, tab()'s own: it normalises a one-field template back to its bare token (so the
-    # retired `OR` option's "{or}" renders as the pipeline's `or`, 1/x form and reference annotation
-    # included -- this used to stamp the literal "{or}") and it writes only on genuine value cells,
-    # leaving the p-value / blank / total-marker rows their own token. "auto" is a no-op there too.
-    tb <- tab_apply_display(tb, opts$display)
-    if (opts$ci == "cell" && opts$pct %in% c("row", "col")) {
-      tb <- dplyr::mutate(tb, dplyr::across(
-        dplyr::where(is_fmt) &
-          -(tidyselect::any_of(c("n", "wn")) & dplyr::where(~ fmt_var_kind(.) == "count")),
-        ~ set_display(., "pct_ci")
-      ))
-    }
-    tb
-  }
-  if (is.list(tabs) && !is.data.frame(tabs)) purrr::map(tabs, one) else one(tabs)
-}
+# (The jamovi `display` ComboBox is applied by tab_apply_display() -- tab()'s own writer, which takes
+#  a tab OR a list of tabs, normalises a one-field template back to its bare token and writes only on
+#  genuine value cells. Phase 19k deleted the jmv_apply_display() wrapper that used to hold it, and
+#  with it the `ci == "cell"` -> set_display("pct_ci") convenience that followed: since 19j the LEAF
+#  stamps that display where it builds the cell interval (plain_core's `isTRUE(ci_res$visible) ~
+#  "pct_ci"`, num_core's `if (ci_visible) "mean_ci"`), so the block was redundant -- and harmful
+#  twice over. It wrote `pct_ci` onto MEAN columns, whose `pct` field is NA on the numeric leaf, so
+#  the cell rendered EMPTY (D11); and, running after the writer, it silently overrode whatever the
+#  user had picked in the display ComboBox.)
 
 
 # Coerce numeric-valued col_vars back to numeric so they become MEAN columns, matching plain R
@@ -642,21 +639,6 @@ jmv_relevel_cols <- function(x, spec, cols) {
 
 # === Tier 3: built-table cache (display / colour / reference re-use) =======================
 
-# The persisted population descriptor for the tier-3 base key. Mirrors tab_cache_keys() (R/tab-resolve.R)
-# so the base fields the cached armed table holds are content-addressed exactly like the tier-1
-# aggregate they derive from. na keep/drop -> "full"; drop_all / common_base carry their vars.
-#' @keywords internal
-#' @noRd
-jmv_population_descriptor <- function(na, row_vars, col_vars, tab_vars) {
-  if (na %in% c("keep", "drop")) return("full")
-  if (na == "drop_all")
-    return(list(mode = "drop_all", vars = sort(unique(c(row_vars, col_vars, tab_vars)))))
-  if (na == "common_base")
-    return(list(mode = "common_base",
-                vars = c(row_vars, if (length(col_vars) != 0L) col_vars[1] else NULL, tab_vars)))
-  "full"
-}
-
 # The tier-3 BASE key: identifies the ref-INDEPENDENT base fields {n, wn, pct, tot_n, mean, var}. It
 # hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt + other) plus
 # every remaining opt EXCEPT the ones re-applied post-cache (the tier-4 paint: digits/display/
@@ -667,7 +649,11 @@ jmv_population_descriptor <- function(na, row_vars, col_vars, tab_vars) {
 jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   fp   <- ce$fp_map
   used <- sort(unique(c(row_vars, col_vars, tab_vars, if (nzchar(wt_chr)) wt_chr)))
-  pop  <- jmv_population_descriptor(opts$na, row_vars, col_vars, tab_vars)
+  # Phase 19k: THE population descriptor, from tab_cache_keys() itself (R/tab-resolve.R) -- the same
+  # function tab_setup() calls to key tier 0/1. It used to be re-implemented here, line for line, in
+  # the file that ALSO reads the real one (jmv_cache_aggregate reads ctx$cache_keys$tier0$population).
+  pop  <- tab_cache_keys(na = opts$na, row_vars = row_vars, col_vars = col_vars,
+                         tab_vars = tab_vars)$tier0$population
   agg_id <- list(
     pop   = jmv_pop_tag(pop, fp, ce$nrow),
     vars  = lapply(used, function(v) list(v, fp[[v]])),
@@ -675,9 +661,19 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
     grain = sort(tab_vars),
     other = opts$other_if_less_than
   )
+  # Phase 19k (D12): the four interval-method keys are named by their REAL option names. The list
+  # used to say `"ci_method"`, which is not a key of `opts` (the UI keeps one ComboBox per interval
+  # kind, folded by jmv_ci_method()), so all four landed in `structural` -- every method toggle
+  # forced a full tier-3 rebuild and the cheap re-ref path could never be reached. They are in the
+  # TRANSFORM TUPLE, which is where a value that changes the BOUNDS belongs, and jmv_tab3_reref()
+  # rebuilds those bounds from the carrier's ref-independent base.
+  # Phase 19k: `anova` joins them. It is display intent now (tab()'s own argument, stored in
+  # render_extras and read back at render from the `test` attribute, which holds BOTH F rows), so it
+  # is re-applied at tier 4 -- it used to sit in `structural` and rebuild the whole table.
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
                   "ref", "ref2", "comp", "OR", "ci", "conf_level",
-                  "ci_method", "stars", "n_min")
+                  "method_cell", "method_diff", "method_mean_diff", "method_mean_ratio",
+                  "stars", "n_min", "anova")
   # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
   # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
   # 1-2 hit (design 4e). The rebuild also recomputes the reorder-driven ref shift (ref="first" /
@@ -719,26 +715,22 @@ jmv_ci_method <- function(opts) {
 
 #' @keywords internal
 #' @noRd
-jmv_tab3_tuple <- function(opts, ci_resolved, arming, geom, or_route) {
+jmv_tab3_tuple <- function(opts, ci_resolved, arming, geom) {
   # Phase 19d/19e: `geom` -- which GEOMETRY owns the stored interval -- is part of the tuple, because
   # since 19d the interval follows the comparison: a difference table stores percentage-POINT bounds,
   # a ratio table Katz log-RR ones. `arming` cannot answer it (diff and ratio share one build class),
   # so a diff <-> ratio toggle used to be an exact tuple HIT and re-painted a ratio over the
   # difference interval -- measured against a plain tab() as a wholly different set of bounds.
-  # Phase 19e: keyed on the RESOLVED route (display / ref / ref2), never on the retired `OR` option.
-  # `OR` is a shim that rewrites all three, so two different `OR` values could share a tuple while the
-  # armed build used different ones -- measured as a cached table displaying "{or}" where a rebuild
-  # displayed the percentage.
+  # (Since 19k it is not a rebuild either: the re-ref recomputes the bounds on the other scale.)
   # Phase 19d-tail: what the tuple needs from `display` is the COMPARISON it names, not the string.
   # `.return_armed = TRUE` returns before tab_apply_display(), so the armed carrier never carries a
   # display -- it is re-applied at tier 4 on every build. The only way `display` reaches the carrier
   # is by naming the comparison the table is built on (the 19d chain), which is a four-value fact.
   # Keying the raw string made every display toggle -- the second most frequent jamovi interaction --
-  # rebuild the whole table, and it also duplicated the `or` flag, which was that same fact tested
-  # for one of its values. One key, and the display combobox is a re-paint again.
+  # rebuild the whole table. One key, and the display combobox is a re-paint again.
   list(arming = arming, geom = geom,
-       comparison = display_comparison(or_route$display),
-       ref = or_route$ref, ref2 = or_route$ref2,
+       comparison = display_comparison(opts$display),
+       ref = opts$ref, ref2 = opts$ref2,
        comp = opts$comp, ci = ci_resolved, conf_level = opts$conf_level,
        ci_method = jmv_ci_method(opts), stars = opts$stars)
 }
@@ -757,27 +749,29 @@ jmv_tab3_measure <- function(color) {
   if (is.na(k) || !nzchar(k)) "no" else k
 }
 
-# Whether a cached armed CARRIER can be RE-REFERENCED (Phase 9b-7): only ref/ref2 changed and the
-# shape jmv_tab3_reref() reproduces byte-identically (diff-armed, no OR). The full structural gate
-# (pct="row", single row_var, no numeric cols, levels="all"...) is jmv_reref_shape_ok(), checked in
-# jmvtab_build alongside this. Everything else -> the always-correct rebuild (fast: tiers 1-2 hit).
+# Whether a cached armed CARRIER can be RE-REFERENCED (Phase 9b-7): everything jmv_tab3_reref()
+# RECOMPUTES may differ; everything it copies from the carrier must be identical. The full structural
+# gate (pct="row", single row_var, no numeric cols, levels="all"...) is jmv_reref_shape_ok(), checked
+# in jmvtab_build alongside this. Everything else -> the always-correct rebuild (fast: tiers 1-2 hit).
 # NOTE the frequent color-driven `color_signif` toggle is NOT a reref: it is a pure re-paint
 # (finalize_color_spec) that never enters this branch (same tuple -> exact-hit re-paint).
+#
+# Phase 19k: the tuple entries the re-ref RECOMPUTES are `ref` / `ref2` (tab_apply_reference) and,
+# through leaf_ci_plain(), `geom` -> ci_scale and `ci_method` -> the engine. So they leave the
+# identity set: a diff <-> ratio toggle and a CI-method toggle are re-refs now, not rebuilds. Both
+# were vestigial restrictions -- 19e's because the re-ref used tab_ci() (the DIFFERENCE engine) and
+# 19j replaced it with the leaf's own producer, which takes `ci_scale`; D12's because the four
+# method options never reached the tuple at all (they were mis-named in `reapplied`).
 #' @keywords internal
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys <- c("arming", "geom", "comparison", "comp", "ci", "conf_level", "ci_method", "stars")
-  identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
-    !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
-    identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
-    # Phase 19e: the reref rebuilt the interval with tab_ci(), the DIFFERENCE engine, so a ratio (Katz)
-    # comparison could not be re-ref'd.
-    # Phase 19j (KEY 5): that reason is GONE -- the reref now builds it with leaf_ci_plain(), which
-    # takes `ci_scale`, so a ratio interval is one argument away. What is left is purely the PATH
-    # decision (rebuild vs re-ref) and the four assertions in test-jmvtab-cache.R that state the
-    # rebuild explicitly. Lift it in 19k, with the cold/warm/reref lock and the live pass.
-    # `geom` is in the tuple, so this also guarantees old and new agree.
-    identical(new_tuple$geom, "diff") &&
+  # what the re-ref does NOT recompute: the arming class (which measure FIELDS the armed build
+  # populated), the comparison, the sub-population, the interval anchor, the level and the stars.
+  keys    <- c("arming", "comparison", "comp", "ci", "conf_level", "stars")
+  recomp  <- c("ref", "ref2", "geom", "ci_method")
+  identical(old_tuple[keys], new_tuple[keys]) &&
+    !identical(old_tuple[recomp], new_tuple[recomp]) &&   # ... and at least one of them DID change
+    identical(new_tuple$arming, "diff") &&                # diff/ratio/auto colour (not OR/contrib)
     # an odds-ratio table -> rebuild (its `or` sweep and its Woolf interval are not the re-ref's)
     !identical(new_tuple$comparison, "odds_ratio")
 }
@@ -800,23 +794,20 @@ jmv_reref_shape_ok <- function(opts, has_num_col) {
     # comp = "all" pools the total table and gives tab() a ref-DEPENDENT assembled shape (row count
     # differs by ref: e.g. 55 vs 61) -- so the base is not ref-invariant and cannot be re-ref'd. Only
     # comp = "tab" (the default, ref-invariant) is rerefable.
-    identical(opts$comp, "tab") &&
-    # tab_ci gets color = "no" in the rebuild for every reref-eligible case EXCEPT color = "auto"
-    # with an explicit ci = "diff" (which resolved to "after_ci" -> a ref-dependent CI colour the reref
-    # would not reproduce). Exclude it -> rebuild.
-    # Phase 19c: that resolution is GONE -- the pipeline hands tab_ci `color = "no"` unconditionally
-    # now, so this exclusion is vestigial and the case is in fact rerefable. Kept as is deliberately:
-    # lifting it changes which cache PATH a live jamovi toggle takes (rebuild -> re-ref), which is the
-    # delicate seam this phase was told not to move. Lift it in 19k, with the cold/warm/reref lock.
-    !(identical(opts$color, "auto") && identical(opts$ci, "diff"))
+    identical(opts$comp, "tab")
+  # (Phase 19k: the former `!(color == "auto" && ci == "diff")` exclusion is GONE. It existed because
+  #  that pair once resolved to the composite "after_ci" -> a ref-DEPENDENT colour stamped by the CI
+  #  step, which the re-ref could not reproduce. 19c deleted that resolution and 19j deleted the step;
+  #  the colour is a tier-4 re-paint on every path now, and `ci = "diff"` is not even a spelling `ci`
+  #  accepts since 19d.)
 }
 
 # Re-reference a cached armed CARRIER (Phase 9b-7): recompute the ref-DEPENDENT fields (diff/ratio +
 # in_refrow + the diff-CI ci_inf/ci_sup/pvalue + the `ref` attr) from the ref-INDEPENDENT base fields
 # (pct / n / wn / tot_n, all present in the cached carrier), for a new ref -- WITHOUT the O(cells)
 # rebuild. Byte-identical to jmv_tab3_build_armed() with the new ref because it reuses the SAME shared
-# math: tab_apply_reference() for diff/ratio (proven), tab_ci() for the CI (the diff CI depends on the
-# reference). Phase 10i-B: the armed carrier is the "core" table -- post-compact / grouping but WITHOUT
+# math: tab_apply_reference() for diff/ratio (proven) and leaf_ci_plain() for the interval, which is
+# the leaf's own producer (19j). Phase 10i-B: the armed carrier is the "core" table -- post-compact / grouping but WITHOUT
 # p-value rows (materialised at display), so the recompute runs on the whole carrier and the former
 # p-value-line exclusion (reconstruct + re-CI on data rows only) is gone. Precondition
 # (jmv_reref_shape_ok + jmv_tab3_rerefable): pct="row", one factor row_var, diff arming, no OR.
@@ -832,9 +823,9 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   tab_vars <- as.character(opts$tab_vars)
   comp     <- tuple$comp
 
-  # Resolve the new reference exactly as the factor leaf would (OR off -> "auto" resolves to "tot").
-  # Phase 19e: from the TUPLE's resolved route, not the raw option -- the `OR` shim rewrites `ref`
-  # and `ref2`, so reading `opts` here re-referenced against a different baseline than the build did.
+  # Resolve the new reference exactly as the factor leaf would ("auto" -> "tot"). From the TUPLE,
+  # which is what the armed build was keyed on, so the re-ref and the build cannot read two
+  # different baselines.
   ref_v <- resolve_ref_vector(tuple$ref, row_var)
   if (identical(ref_v, "auto")) ref_v <- "tot"
 
@@ -918,10 +909,19 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
         totcol  = vapply(grp, function(nm) isTRUE(carrier$fmt[[nm]]$meta$totcol), logical(1)),
         conf_level = tuple$conf_level, stars = tuple$stars,
         ci_method = tuple$ci_method, degf = degf_r)
+      # Phase 19k: the interval's two COLUMN facts travel with its bounds -- what the column
+      # estimates (`scale`) and which engine built them (`ci_method`), exactly as plain_core() stamps
+      # them from this same CI_GEOMS row. They had to be restamped before a geometry or a method
+      # change could take the re-ref path: a ratio interval on a column still saying `points` is
+      # 19b's D8/D19 class, and it is what fmt_scale_of()/ci_center()/the legend read.
+      # (A NA scale_key is a cell interval, where the LEVEL scale stands -- the same fallback the
+      # leaf applies. `pct_base` is "row" throughout here, so `level_pct` is that level.)
       for (j in seq_along(grp)) {
         carrier$fmt[[grp[[j]]]]$frame$ci_inf <- ci_res$inf[, j]
         carrier$fmt[[grp[[j]]]]$frame$ci_sup <- ci_res$sup[, j]
         carrier$fmt[[grp[[j]]]]$frame$pvalue <- ci_res$pvalue[, j]
+        carrier$fmt[[grp[[j]]]]$meta$scale     <- if (is.na(ci_res$scale)) "level_pct" else ci_res$scale
+        carrier$fmt[[grp[[j]]]]$meta$ci_method <- ci_res$method
       }
     }
   }
@@ -937,13 +937,8 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
 # live cache injected and `.return_armed` so finalize_color_spec() is applied later (as a re-paint).
 #' @keywords internal
 #' @noRd
-jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym, or_route = NULL,
+jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
                                  row_vars, col_vars, tab_vars, ce) {
-  # Phase 19d: route the (still-named) jamovi `OR` option onto display / ref2 / ref HERE, silently --
-  # a UI toggle must never emit tab()'s lifecycle warning into the results panel. 19k carries the new
-  # vocabulary into the .a.yaml; until then the option keeps its name and this is its one translator.
-  if (is.null(or_route))
-    or_route <- suppressWarnings(tab_deprecate_or(opts$OR, opts$display, opts$ref2, opts$ref))
   rlang::inject(tab(
     data,
     row_vars     = tidyselect::all_of(row_vars),
@@ -953,23 +948,24 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym, or
     pct          = opts$pct,
     color        = color,
     color_signif = color_signif,
-    # Phase 19d: the jamovi `OR` option is routed at THIS boundary rather than through tab()'s
-    # soft-deprecation, so a UI toggle never emits a lifecycle warning into the results panel.
-    # 19k carries the new vocabulary into the .a.yaml; until then the option keeps its name.
-    display      = or_route$display,
-    ref2         = or_route$ref2,
-    # Phase 14a: tab()'s `chi2` is renamed `test`. The jamovi OPTION keeps the name `chi2` (its
-    # .a.yaml/.h.R surface is compiled and regenerated by the maintainer, not renamed here).
+    # Phase 19k: the UI names the odds ratio the way tab() does -- `display` says which quantity the
+    # cell shows and `ref2` picks its 2x2. The retired `OR` option and the tab_deprecate_or() shim
+    # 19d put here (so a UI toggle would not emit a lifecycle warning into the results panel) are
+    # BOTH gone: there is no second vocabulary left to translate.
+    display      = opts$display,
+    ref2         = opts$ref2,
     # Phase 18z14-i / z16-iii: `test` is a plain boolean. Phase 19a (D15) corrects what followed: the
     # jamovi `design_effect` checkbox does NOT ride a global option. z16-iiiii made it tab()'s own
-    # `design_effect` argument, passed 12 lines below as `design_effect = opts$design_effect` (and
-    # jmvtab.b.R's .run() has no options()/on.exit dance for it -- only `anova` still travels that
-    # way, which is 19k's item). The inference BASIS is therefore derived exactly as in an R session,
-    # and the checkbox never has to be translated into a second vocabulary here.
-    test         = opts$chi2,
+    # `design_effect` argument, passed 12 lines below as `design_effect = opts$design_effect`.
+    # Phase 19k: `anova` was the last option that DID travel as a global (options() + on.exit around
+    # the build in .run()); it is tab()'s own argument now -- and it is deliberately NOT passed here,
+    # because it is display intent re-applied at tier 4 (jmv_reapply_anova), which is what makes a
+    # welch <-> classic toggle a re-derive instead of a rebuild. So NO option reaches the build
+    # through a second vocabulary any more.
+    test         = opts$test,
     na           = opts$na,
     levels       = opts$levels,
-    ref          = or_route$ref,
+    ref          = opts$ref,
     comp         = opts$comp,
     ci           = ci,
     conf_level   = opts$conf_level,
@@ -1030,9 +1026,9 @@ jmv_reapply_digits <- function(carrier, digits) {
   one <- function(cr) {
     for (nm in names(cr$fmt)) {
       frame  <- cr$fmt[[nm]]$frame
+      # Phase 19k: THE floor, num_core()'s own (R/tab.R) -- it was byte-duplicated here.
       base_d <- if (identical(est_var_kind(cr$fmt[[nm]]$meta$scale), "mean")) {
-        m <- suppressWarnings(max(frame$mean, na.rm = TRUE))
-        if (m <= 1) max(digits, 2L) else if (m <= 10) max(digits, 1L) else digits
+        num_digits_floor(digits, frame$mean)
       } else as.integer(digits)
       new_d    <- frame$digits
       new_d[]  <- base_d
@@ -1041,6 +1037,23 @@ jmv_reapply_digits <- function(carrier, digits) {
     cr
   }
   if (!is.null(carrier$is_fmt)) one(carrier) else purrr::map(carrier, one)
+}
+
+# Re-apply the jamovi `anova` option (WHICH stored one-way F the p-value line shows) to the BUILT
+# table -- tier 4, pure display. The `test` attribute holds BOTH F rows and tab_anova() reads this
+# intent back at render, so a welch <-> classic toggle never touches a cell. It runs on every path
+# (re-paint / re-ref / rebuild), which is what lets `anova` sit in the tier-3 `reapplied` set: it
+# used to be baked into the base key and rebuild the whole table.
+#' @keywords internal
+#' @noRd
+jmv_reapply_anova <- function(tabs, anova) {
+  if (is.null(anova) || !nzchar(as.character(anova)[[1]])) return(tabs)
+  one <- function(tb) {
+    re <- get_render_extras(tb)
+    re[["anova"]] <- as.character(anova)[[1]]
+    set_render_extras(tb, re)
+  }
+  if (is.data.frame(tabs)) one(tabs) else purrr::map(tabs, one)
 }
 
 
@@ -1092,8 +1105,9 @@ jmvtab_build <- function(data, opts, store) {
   # nudge + 16f's stars forcing) and they had fallen behind 19d: a factor table with `stars = FALSE`
   # and no policy gets NO interval now, so the reref recomputed a CI the fresh rebuild leaves NA --
   # a cached table that disagreed with a rebuilt one. One call to the shared resolver instead.
-  # (19k carries the new `ci` vocabulary into the .a.yaml; until then the UI may still send the
-  # deprecated spelling, whose lifecycle warning has no business in the results panel.)
+  # 19k: the .a.yaml speaks the anchor vocabulary now -- but a SAVED analysis (or a run in the window
+  # before the maintainer's next prepare()) can still carry a retired spelling, and a lifecycle
+  # warning has no business in the results panel. It resolves silently.
   r_ci <- withr::with_options(
     list(lifecycle_verbosity = "quiet"),
     resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), color_signif, opts$stars,
@@ -1112,8 +1126,7 @@ jmvtab_build <- function(data, opts, store) {
   # --- Tier 3: reuse the built ARMED table when only display / colour / reference changed ---------
   base_key <- jmv_tab3_base_key(opts, ce, row_vars, col_vars, tab_vars, wt_chr)
   arming   <- jmv_tab3_arming(color)
-  or_route <- suppressWarnings(tab_deprecate_or(opts$OR, opts$display, opts$ref2, opts$ref))
-  tuple    <- jmv_tab3_tuple(opts, ci, arming, measure_geometry(jmv_tab3_measure(color)), or_route)
+  tuple    <- jmv_tab3_tuple(opts, ci, arming, measure_geometry(jmv_tab3_measure(color)))
   got      <- jmv_cache_fetch(ce$store, "tab3", base_key)
   ce$store <- got$store
 
@@ -1131,7 +1144,7 @@ jmvtab_build <- function(data, opts, store) {
     ce$store <- jmv_cache_put(ce$store, "tab3", base_key,                # store under the NEW tuple, so a
                               list(carrier = carrier, tuple = tuple))    #   second identical ref is a re-paint hit
   } else {
-    armed   <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym, or_route,
+    armed   <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym,
                                     row_vars, col_vars, tab_vars, ce)    # canonical armed (see above)
     carrier <- jmv_carrier_unwrap(armed)
     reused  <- FALSE
@@ -1143,12 +1156,19 @@ jmvtab_build <- function(data, opts, store) {
 
   # Tier-4 re-paint: digits on the plain carrier -> materialize ONCE -> colour/display on the record.
   # Order is byte-identical to the former finalize->digits->display (colour attrs / digits fields /
-  # display fields are independent slots); finalize_color_spec (shared, attr-only) + jmv_apply_display
+  # display fields are independent slots); finalize_color_spec (shared, attr-only) + tab_apply_display
   # (its mutate handles the grouped-class downgrade) stay on the record.
   carrier <- jmv_reapply_digits(carrier, opts$digits)  # digits (proportion + mean magnitude floor)
   tabs <- jmv_carrier_wrap(carrier)                    # materialize the fmt records ONCE
   tabs <- finalize_color_spec(tabs, spec)              # colour / policy (measure diff<->ratio, grey<->all)
-  tabs <- jmv_apply_display(tabs, opts)                # display combobox + ci="cell" pct_ci
+  tabs <- jmv_reapply_anova(tabs, opts$anova)          # which stored F the p-value line shows
+  # display combobox -- tab()'s own writer. WARNING (19k): a SAVED analysis, or one running against a
+  # `.h.R` older than the `.a.yaml`, can still carry a display value tab() retired (`pct_ci`,
+  # `OR_pct`...), and validate_display_template() ABORTS on those. A generated layer that lags is a
+  # fact of this module (see .opts()'s `%||%` discipline), so an unusable value degrades to "the
+  # display the table was built with" instead of blanking the results panel. This is robustness
+  # about a stale artefact, NOT a second vocabulary: nothing is translated, the value is dropped.
+  tabs <- tryCatch(tab_apply_display(tabs, opts$display), error = function(e) tabs)
   if (isTRUE(opts$cleannames)) tabs <- jmvtab_cleannames_display(tabs)
   # Phase 7g: n_min small-base filter -- tier 4, applied to the RETURNED copy only (never the
   # cached `armed` table), so toggling n_min is a cheap re-derive from the full armed table.

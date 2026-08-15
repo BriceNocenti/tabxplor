@@ -507,7 +507,10 @@ TAB_ARG_VALUES <- list(
   tot      = list(values = c("row", "col", "both", "no", ""),          leaf = NULL, size = NA,  na_ok = FALSE),
   totaltab = list(values = c("line", "table", "no", ""),               leaf = NULL, size = 1L,  na_ok = FALSE),
   totcol   = list(values = c("last", "each", "all_col_vars", "no", ""), leaf = NULL, size = 1L, na_ok = FALSE),
-  output   = list(values = c("single", "list"),                        leaf = NULL, size = 1L,  na_ok = FALSE)
+  output   = list(values = c("single", "list"),                        leaf = NULL, size = 1L,  na_ok = FALSE),
+  # Phase 19k: `anova` -- which one-way F a mean col_var's p-value line shows. NULL never reaches
+  # here (an unsupplied argument is not checked), and NULL is what means "the global option".
+  anova    = list(values = c("welch", "classic"),                      leaf = NULL, size = 1L,  na_ok = FALSE)
 )
 
 # tab_validate_args() -- check the supplied arguments against TAB_ARG_VALUES, aborting on the first
@@ -585,7 +588,7 @@ tab_resolve_common_args <- function(fn = "tab",
                                     test, chi2, color, color_signif, ci, stars, conf_level,
                                     ci_method, method_cell, method_diff, cleannames,
                                     OR, display, ref, ref2, tot, total_names,
-                                    na, levels, pct, comp, totaltab, totcol, output, n_min,
+                                    na, levels, pct, comp, totaltab, totcol, output, n_min, anova,
                                     user_env = rlang::caller_env()) {
   out <- list()
 
@@ -609,6 +612,7 @@ tab_resolve_common_args <- function(fn = "tab",
     totaltab = if (missing(totaltab)) NULL else totaltab,
     totcol   = if (missing(totcol))   NULL else totcol,
     output   = if (missing(output))   NULL else output,
+    anova    = if (missing(anova))    NULL else anova,
     conf_level = if (missing(conf_level)) NULL else conf_level,
     n_min      = if (missing(n_min))      NULL else n_min
   )

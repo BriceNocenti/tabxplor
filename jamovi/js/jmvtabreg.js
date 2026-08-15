@@ -2,6 +2,19 @@
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
+// --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
+// Generated from R/tab_reg.R (REG_OUTCOME_KINDS, REG_FAMILY_UI_LABEL), R/reg-estimand.R
+// (REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after
+// changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
+var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial (nominal)", "ordinal": "ordinal (ordered)" };
+var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)", "poisson": "poisson (risk ratio)" };
+var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
+var TABX_OUTCOME_OFFERS = { "binary": ["binomial", "poisson"], "ordered": ["ordinal", "multinomial"], "nominal": ["multinomial", "ordinal"], "numeric": ["gaussian", "binomial", "poisson"] };
+var TABX_ESTIMANDS = { "gaussian": { "coefficient": ["auto", "ratio", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "binomial": { "coefficient": ["auto", "odds_ratio", "ratio", "difference", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "poisson": { "coefficient": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "multinomial": { "coefficient": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "ordinal": { "coefficient": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] } };
+var TABX_DEFAULT_MEASURE = { "gaussian": { "coefficient": "difference", "marginal": "difference", "at_reference": "difference" }, "binomial": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "difference" }, "poisson": { "coefficient": "ratio", "marginal": "difference", "at_reference": "difference" }, "multinomial": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "odds_ratio" }, "ordinal": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "difference" } };
+var TABX_SHAPES = ["linear", "quadratic", "log", "sqrt", "quartiles", "quintiles"];
+// --- END GENERATED ---
+
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
 // into the tiny `extCtrl` CustomControl (.u.yaml) on create, on format change, and on each onUpdate.
 // The Export button keeps its static "Export" label (set in .u.yaml) -- no dynamic rename, no fixed width.
@@ -56,17 +69,10 @@ var renderSubtext = function(ui) {
     }
 };
 
-// Grey the survey-design controls (cluster ids / strata / fpc / nest), which are only used with a
-// weight. `wt` is a Variables slot, so its emptiness cannot be expressed in the declarative `enable:`
-// DSL -> imperative setEnabled, re-run from onUpdate + onChange_vars. Values are preserved (the
-// backend ignores them without a weight anyway).
-var applyWtEnables = function(ui) {
-    var w = ui.wt ? ui.wt.value() : null;
-    var hasWt = !!(w && w.length > 0);
-    ["ids", "strata", "fpc", "nest"].forEach(function(nm) {
-        if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(hasWt);
-    });
-};
+// (Phase 19k: applyWtEnables() was DELETED. It greyed `ids` / `strata` / `fpc` / `nest`, the survey
+//  -design controls REMOVED in z14-i -- four options that exist in neither .a.yaml nor .h.R, so the
+//  function had been a no-op running on every update. A prebuilt survey::svydesign is the R-side
+//  route for anything richer than a weight; the module offers `wt` only.)
 
 // WHY the path boxes ignored their stretch: jamovi compiles every grid cell to
 // `minmax(max-content, <stretch>fr)`, so a control claims its min-content width BEFORE the stretch
@@ -145,7 +151,6 @@ var bottomAlignInRow = function(ui, name) {
 
 var onUpdate = function(ui) {
     injectTabxCss();
-    applyWtEnables(ui);
     renderSubtext(ui);
     renderExt(ui);
     styleResetBtn(ui);
@@ -159,14 +164,17 @@ var onUpdate = function(ui) {
     applyCompareEnables(ui);
 };
 
-// Phase 15d: a valid model-comparison test needs every model fit on the SAME cases. Choosing a
-// comparison forces `na = "drop_all_models"` (the shared complete-case population); the user may switch
-// back to per-model dropping afterwards (re-opt-in). Guarded setValue -> idempotent, no update loop.
+// Phase 15d: a valid model-comparison test needs every model fit on the SAME cases -- so only
+// `drop_by_model` (each model on its own complete cases) breaks it, and choosing a comparison pushes
+// back to the default `drop_by_outcome`, which already fits every model of ONE outcome on one
+// population (a comparison has a single dependent). Guarded setValue -> idempotent, no update loop.
+// Phase 19k: this used to write `na = "drop_all_models"`, a value REMOVED from the vocabulary in
+// z13 -- so every `compare` change fired a setValue the List option rejects.
 var forceNaForCompare = function(ui) {
     if (!ui.compare || !ui.na) return;
     var c = ui.compare.value();
-    if ((c === "baseline" || c === "sequential") && ui.na.value() !== "drop_all_models")
-        ui.na.setValue("drop_all_models");
+    if ((c === "baseline" || c === "sequential") && ui.na.value() === "drop_by_model")
+        ui.na.setValue("drop_by_outcome");
 };
 
 // ---- Reference-level picker CustomControl (refPickerCtrl) ---------------------------------
@@ -275,6 +283,35 @@ var reconcileMult = function(ui, preds) {
     if (kept.length !== cur.length) ui.multiplicator.setValue(kept);
 };
 
+// Phase 19k: the per-numeric-predictor SHAPE, stored in the hidden `shapes` Array and read by
+// jmvtab_reg_shape_vector() -> tab_reg(shape =). Same get / write / reconcile idiom as the scaling
+// input above -- it sits on the same numeric row, because "how is this predictor entered" and "in
+// what unit is its effect reported" are the two questions a continuous predictor raises. "linear"
+// is the default and is stored as NO entry, so an untouched picker changes nothing.
+var shapeGet = function(ui) {
+    return ui.shapes ? utils.clone(ui.shapes.value(), []) : [];
+};
+var shapeSelected = function(ui, v) {
+    var arr = shapeGet(ui);
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v) return (arr[i].shape == null ? "" : String(arr[i].shape));
+    return "";
+};
+var writeShape = function(ui, v, sval) {
+    if (!ui.shapes) return;
+    var arr = shapeGet(ui), kept = [];
+    for (var i = 0; i < arr.length; i++) if (arr[i].var !== v) kept.push(arr[i]);
+    if (sval && sval !== "linear") kept.push({ var: v, shape: String(sval) });
+    ui.shapes.setValue(kept);
+};
+var reconcileShapes = function(ui, preds) {
+    if (!ui.shapes) return;
+    var cur = shapeGet(ui), kept = [];
+    for (var i = 0; i < cur.length; i++)
+        if (preds.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
+    if (kept.length !== cur.length) ui.shapes.setValue(kept);
+};
+
 var refLineControl = function(nameText, levels, selectedRef, onPick) {
     var row = document.createElement("div"); row.style.cssText = TABX.refRow;
     var lab = document.createElement("b"); lab.style.cssText = TABX.refName; lab.textContent = nameText;
@@ -331,6 +368,19 @@ var renderRefVarCard = function(ui, frag, v) {
         suf.textContent = " per sd / 2sd / n units";
         wrap.appendChild(pre); wrap.appendChild(inp); wrap.appendChild(suf);
         row.appendChild(wrap);
+        // Phase 19k: the functional form. A shape either RECODES the predictor (log / sqrt /
+        // quantile groups) or ADDS one term (quadratic) -- tab_reg() owns which; the picker only
+        // states the intent.
+        var shSel = document.createElement("select"); shSel.style.cssText = TABX.refSel;
+        var shCur = shapeSelected(ui, v) || "linear";
+        TABX_SHAPES.forEach(function(sh) {
+            var o = document.createElement("option");
+            o.value = sh; o.textContent = sh;
+            if (sh === shCur) o.selected = true;
+            shSel.appendChild(o);
+        });
+        shSel.addEventListener("change", function() { writeShape(ui, v, shSel.value); });
+        row.appendChild(shSel);
         frag.appendChild(row);
         return;
     }
@@ -346,6 +396,7 @@ var renderRefPicker = function(ui) {
     var preds = utils.clone(ui.predictors.value(), []);
     reconcileRefLevels(ui, preds);
     reconcileMult(ui, preds);
+    reconcileShapes(ui, preds);
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-refpick", "1");
@@ -372,36 +423,23 @@ var renderRefPicker = function(ui) {
 var mtCache = {};          // var -> {mt: measureType, dataType, levels: [labels]|null} | FETCHING
 var lastModelSig = null;
 
-// Phase h: no "auto (detected)" row -- the family is detected client-side and pre-selected as a
-// CONCRETE choice; and no "quasipoisson" (an unweighted poisson already scales its SEs for
-// over-dispersion, and it shortens the longest dropdown item). quasipoisson stays available in the R
-// API only. Integer numeric outcomes default to poisson (counts), decimals to gaussian.
-var FAMILY_LABEL = {
-    gaussian: "gaussian (linear)", binomial: "binomial (logistic)", poisson: "poisson (counts)",
-    multinomial: "multinomial (nominal)", ordinal: "ordinal (ordered)"
-};
-// Phase 18z3: on a BINARY outcome, family = "poisson" is not a count model -- R resolves it to the
-// modified Poisson (Zou 2004), whose exp(coef) is a RISK ratio. Same stored value ("poisson"), different
-// label, so the dropdown never says "counts" next to a yes/no variable.
-var FAMILY_LABEL_BINARY = {
-    binomial: "binomial (logistic)", poisson: "poisson (risk ratio)"
-};
+// The picker rules, READ off the generated tables above -- no rule is written twice. No "auto
+// (detected)" row: the family is detected client-side and pre-selected as a CONCRETE choice, so the
+// backend never re-detects. quasipoisson is deliberately not offered (an unweighted poisson already
+// scales its SEs for over-dispersion); it stays available in the R API.
 var familyLabelsFor = function(c) {
-    return (c && c.levels !== null && c.levels.length === 2) ? FAMILY_LABEL_BINARY : FAMILY_LABEL;
+    return (c && c.levels !== null && c.levels.length === 2) ? TABX_FAMILY_LABEL_BINARY : TABX_FAMILY_LABEL;
 };
 
-// The family detected from the outcome's R type (mirrors reg_detect_family, but resolves the integer
-// count -> poisson that the R side leaves to an explicit pick). Stored explicitly so the backend never
-// re-detects (and never aborts on an integer count).
-var detectFamily = function(c) {
-    // Phase 18z13 (D10): ANY numeric detects as gaussian, integer-valued included -- age in years, a
-    // summed score and income in whole units are all integers, and a linear model always fits. Matches
-    // reg_detect_family() on the R side exactly; poisson stays one click away in familyOptionsFor().
-    if (!c || c.levels === null) return "gaussian";
-    if (c.levels.length === 2) return "binomial";
-    if (c.mt === "ordinal")    return "ordinal";
-    return "multinomial";
+// The outcome KIND, the one fact both sides can compute from a column alone (reg_outcome_kind).
+var outcomeKind = function(c) {
+    if (!c || c.levels === null)   return "numeric";
+    if (c.levels.length === 2)     return "binary";
+    if (c.mt === "ordinal")        return "ordered";
+    return "nominal";
 };
+var detectFamily     = function(c) { return TABX_OUTCOME_DETECT[outcomeKind(c)]; };
+var familyOptionsFor = function(c) { return TABX_OUTCOME_OFFERS[outcomeKind(c)]; };
 
 var modelTableSig = function(ui) {
     var deps = utils.clone(ui.dependent.value(), []);
@@ -411,16 +449,6 @@ var modelTableSig = function(ui) {
 
 var afterFetchMT = function(ui) {
     if (ui.modelTableCtrl && ui.modelTableCtrl.$el) renderModelTable(ui);
-};
-
-// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). Concrete only.
-// Phase 18z3: a 2-level factor now offers poisson too -- the OPT-IN modified Poisson / risk-ratio
-// path. binomial stays first, so it remains the detected default (detectFamily is unchanged).
-var familyOptionsFor = function(c) {
-    if (!c || c.levels === null) return ["gaussian", "binomial", "poisson"];
-    if (c.levels.length === 2) return ["binomial", "poisson"];
-    if (c.mt === "ordinal")    return ["ordinal", "multinomial"];
-    return ["multinomial", "ordinal"];
 };
 
 // stored per-dependent value from a {var, <key>} array ("" if unset).
@@ -554,44 +582,56 @@ var renderModelTable = function(ui) {
     applyModelEnables(ui);
 };
 
-// Phase h: `effect` (AME) is meaningless for a pure-gaussian selection (AME == the coefficient), and
-// `exponentiate` (odds/rate ratios) only bites on binomial / poisson / multinomial / ordinal. Both
-// therefore enable exactly when SOME selected outcome is non-gaussian. The family is computed, not a
-// declarative option, so grey imperatively (mirrors applyWtEnables); families come from mtCache, filled
-// async -> re-run from renderModelTable / afterFetchMT as columns resolve.
-var anyNonGaussian = function(ui) {
-    if (!ui.dependent) return false;
+// The families of the currently selected outcomes (skipping the ones whose metadata is still being
+// fetched). Everything the Model box greys out is a question about THESE.
+var selectedFamilies = function(ui) {
+    var out = [];
+    if (!ui.dependent) return out;
     var deps = utils.clone(ui.dependent.value(), []);
     for (var i = 0; i < deps.length; i++) {
         var c = mtCache[deps[i]];
         if (!c || c === FETCHING) continue;
         var storedF = arrGet(ui, "depFamily", deps[i], "family");
-        var fam = (storedF && FAMILY_LABEL[storedF]) ? storedF : detectFamily(c);
-        if (fam !== "gaussian") return true;
+        out.push((storedF && TABX_FAMILY_LABEL[storedF]) ? storedF : detectFamily(c));
     }
-    return false;
+    return out;
 };
-// Phase 18z3: `ame_ratio` (a marginal RISK RATIO) needs a PROBABILITY to take a ratio of, so it is
-// defined only for binomial / multinomial / ordinal outcomes -- the R side aborts otherwise. Grey it on
-// the same imperative pass rather than letting the user pick a combination that cannot run.
-var anyProbScale = function(ui) {
-    if (!ui.dependent) return false;
-    var deps = utils.clone(ui.dependent.value(), []);
-    for (var i = 0; i < deps.length; i++) {
-        var c = mtCache[deps[i]];
-        if (!c || c === FETCHING) continue;
-        var storedF = arrGet(ui, "depFamily", deps[i], "family");
-        var fam = (storedF && FAMILY_LABEL[storedF]) ? storedF : detectFamily(c);
-        if (fam === "binomial" || fam === "multinomial" || fam === "ordinal") return true;
+
+// Phase 19k: WHICH (effect x measure) combinations the selected outcomes offer, straight off the
+// generated grid -- so the UI cannot claim a combination tab_reg() refuses, nor grey one it accepts.
+// It replaces `anyNonGaussian` + `anyProbScale`, two hand-written predicates: the first greyed the
+// whole estimand row for a gaussian outcome (an AME on a linear model is a real, if equal, estimand)
+// and the second encoded "a marginal ratio needs a probability scale", which 19e made false when it
+// opened `measure = "ratio"` to every family.
+var measureOffered = function(ui, effect, measure) {
+    var fams = selectedFamilies(ui);
+    if (fams.length === 0) return true;                      // nothing selected yet -> leave enabled
+    for (var i = 0; i < fams.length; i++) {
+        var g = TABX_ESTIMANDS[fams[i]];
+        if (!g || !g[effect]) return false;
+        if (g[effect].indexOf(measure) < 0) return false;     // every outcome must offer it
     }
-    return false;
+    return true;
 };
+
+var EFFECT_OF_RADIO  = { effect_1: "coefficient", effect_2: "marginal", effect_3: "at_reference" };
+var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "odds_ratio", measure_3: "ratio",
+                         measure_4: "difference", measure_5: "log" };
+
 var applyModelEnables = function(ui) {
-    var on = anyNonGaussian(ui);
-    ["effect_1", "effect_2", "exponentiate"].forEach(function(nm) {
-        if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(on);
+    var eff = ui.effect ? ui.effect.value() : "coefficient";
+    // an effect is offered when SOME measure of it is
+    Object.keys(EFFECT_OF_RADIO).forEach(function(nm) {
+        if (!ui[nm] || !ui[nm].setEnabled) return;
+        var e = EFFECT_OF_RADIO[nm];
+        ui[nm].setEnabled(Object.keys(MEASURE_OF_RADIO).some(function(mn) {
+            return measureOffered(ui, e, MEASURE_OF_RADIO[mn]);
+        }));
     });
-    if (ui.effect_3 && ui.effect_3.setEnabled) ui.effect_3.setEnabled(on && anyProbScale(ui));
+    Object.keys(MEASURE_OF_RADIO).forEach(function(nm) {
+        if (ui[nm] && ui[nm].setEnabled)
+            ui[nm].setEnabled(measureOffered(ui, eff, MEASURE_OF_RADIO[nm]));
+    });
 };
 
 // ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------
@@ -668,7 +708,7 @@ var reconcileBaseline = function(ui) {
 };
 
 // `compare` needs >=2 models; the card COUNT is invisible to the declarative enable: DSL, so grey
-// it imperatively (mirrors applyWtEnables).
+// it imperatively.
 var applyCompareEnables = function(ui) {
     var n = (ui.models ? utils.clone(ui.models.value(), []) : []).length;
     if (ui.compare && ui.compare.setEnabled) ui.compare.setEnabled(n >= 2);
@@ -766,9 +806,8 @@ module.exports = {
     view_updated: onUpdate,
 
     // A variable box changed: re-render the reference picker + the model builder (the predictor pool
-    // may have changed -> reconcile cards / scaling) + re-apply the survey greying.
+    // may have changed -> reconcile cards / scaling).
     onChange_vars: function(ui) {
-        applyWtEnables(ui);
         renderModelTable(ui);
         renderRefPicker(ui);
         renderModelBuilder(ui);
@@ -863,7 +902,7 @@ module.exports = {
     resetPath_changed: function(ui) {
         if (ui.resetPath && ui.resetPath.value()) {
             if (ui.export_dir)      ui.export_dir.setValue("~/Documents");
-            if (ui.export_filename) ui.export_filename.setValue("Regression");
+            if (ui.export_filename) ui.export_filename.setValue("Reg_model");   // == the .a.yaml default
             ui.resetPath.setValue(false);
         }
     }

@@ -12,9 +12,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             wt = NULL,
             pct = "no",
             color = "no",
-            OR = "no",
             color_signif = "ignore",
-            chi2 = FALSE,
+            test = FALSE,
             anova = "welch",
             design_effect = FALSE,
             na = "keep",
@@ -110,18 +109,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "no",
                     "auto",
-                    "diff",
+                    "difference",
                     "ratio",
-                    "contrib",
-                    "OR"),
-                default="no")
-            private$..OR <- jmvcore::OptionList$new(
-                "OR",
-                OR,
-                options=list(
-                    "no",
-                    "OR",
-                    "OR_pct"),
+                    "odds_ratio",
+                    "contrib"),
                 default="no")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
@@ -131,9 +122,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "grey_non_signif",
                     "guaranteed_effect"),
                 default="ignore")
-            private$..chi2 <- jmvcore::OptionBool$new(
-                "chi2",
-                chi2,
+            private$..test <- jmvcore::OptionBool$new(
+                "test",
+                test,
                 default=FALSE)
             private$..anova <- jmvcore::OptionList$new(
                 "anova",
@@ -227,9 +218,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 ci,
                 options=list(
                     "auto",
+                    "no",
                     "cell",
-                    "diff",
-                    "ratio"),
+                    "ref"),
                 default="auto")
             private$..conf_level <- jmvcore::OptionNumber$new(
                 "conf_level",
@@ -253,7 +244,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 method_cell,
                 options=list(
                     "wilson",
-                    "wald"),
+                    "wald",
+                    "beta"),
                 default="wilson")
             private$..method_diff <- jmvcore::OptionList$new(
                 "method_diff",
@@ -304,15 +296,15 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "n",
                     "wn",
                     "pct",
+                    "num_ci",
+                    "ci",
                     "diff",
+                    "ratio",
+                    "or",
+                    "{or} ({pct})",
                     "ctr",
                     "mean",
-                    "var",
-                    "ci",
-                    "pct_ci",
-                    "mean_ci",
-                    "OR",
-                    "OR_pct"),
+                    "var"),
                 default="auto")
             private$..add_n <- jmvcore::OptionBool$new(
                 "add_n",
@@ -377,9 +369,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..wt)
             self$.addOption(private$..pct)
             self$.addOption(private$..color)
-            self$.addOption(private$..OR)
             self$.addOption(private$..color_signif)
-            self$.addOption(private$..chi2)
+            self$.addOption(private$..test)
             self$.addOption(private$..anova)
             self$.addOption(private$..design_effect)
             self$.addOption(private$..na)
@@ -422,9 +413,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         wt = function() private$..wt$value,
         pct = function() private$..pct$value,
         color = function() private$..color$value,
-        OR = function() private$..OR$value,
         color_signif = function() private$..color_signif$value,
-        chi2 = function() private$..chi2$value,
+        test = function() private$..test$value,
         anova = function() private$..anova$value,
         design_effect = function() private$..design_effect$value,
         na = function() private$..na$value,
@@ -466,9 +456,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..wt = NA,
         ..pct = NA,
         ..color = NA,
-        ..OR = NA,
         ..color_signif = NA,
-        ..chi2 = NA,
+        ..test = NA,
         ..anova = NA,
         ..design_effect = NA,
         ..na = NA,
@@ -571,24 +560,22 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{tab_vars}.    \item \code{"all_tabs"}: frequencies for the whole (set
 #'   of) table(s).  }
 #' @param color Which measure to use for color helpers, as a single string.
-#'   \itemize{    \item \code{"no"}: by default, no colors are printed.    \item
+#'   The values are the measure  names \code{tab()} itself takes (the short
+#'   spellings \code{"diff"} / \code{"OR"} stay  valid aliases in R).  \itemize{
+#'   \item \code{"no"}: by default, no colors are printed.    \item
 #'   \code{"auto"}: a smart per-column-type default (percentage-point difference
 #'   on    the text plus a relative-risk highlight on the background for
-#'   factors, mean ratio for    numeric columns).    \item \code{"diff"}: color
-#'   the difference of each cell from its total (or reference    cell). For
-#'   factors this is a percentage-point difference; for numeric columns the
-#'   standardized (SD-scaled) mean difference.    \item \code{"ratio"}: color
-#'   the relative risk (factors) or mean ratio (numeric).    \item
-#'   \code{"contrib"}: color cells based on their contribution to variance
-#'   (factor columns only).    \item \code{"OR"}: for \code{pct == "col"} or
-#'   \code{pct == "row"}, color based on odds ratios.  } How significance gates
-#'   these colors is set separately by \code{color_signif}.
-#' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
-#'   print odds ratios  (for binary variables) or relative risks ratios (for
-#'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
-#'   default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
-#'   percentages).  \item \code{"OR_pct"}: print OR, with percentages in
-#'   bracket. }
+#'   factors, mean ratio for    numeric columns).    \item \code{"difference"}:
+#'   color the difference of each cell from its total (or    reference cell).
+#'   For factors this is a percentage-point difference; for numeric columns
+#'   the standardized (SD-scaled) mean difference.    \item \code{"ratio"}:
+#'   color the relative risk (factors) or mean ratio (numeric).    \item
+#'   \code{"odds_ratio"}: for \code{pct == "col"} or \code{pct == "row"}, color
+#'   based on odds    ratios. To PRINT them, set \code{display} (the colour and
+#'   the printed quantity are two    questions).    \item \code{"contrib"}:
+#'   color cells based on their contribution to variance    (factor columns
+#'   only).  } How significance gates these colors is set separately by
+#'   \code{color_signif}.
 #' @param color_signif How statistical significance gates the colors, as a
 #'   single string.  \itemize{    \item \code{"ignore"}: by default, color every
 #'   deviation by its observed size.    \item \code{"grey_non_signif"}: color by
@@ -597,7 +584,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
 #'   (confidence-bound) effect --    all cells whose interval clears the
 #'   threshold show, with dimmer colors.  }
-#' @param chi2 Set to \code{TRUE} to add a test p-value row: a Chi-square test
+#' @param test Set to \code{TRUE} to add a test p-value row: a Chi-square test
 #'   for categorical column variables and an ANOVA F-test for numeric ones
 #'   (chosen automatically per column type). Also enables colouring cells by
 #'   their contribution to variance.
@@ -651,16 +638,18 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   cell by default.
 #' @param comp The comparison level : by subtables/groups, or for the whole
 #'   table.
-#' @param ci The type of confidence intervals to calculate, passed to
-#'   \code{\link{tab_ci}}.     \itemize{      \item \code{"cell"}: absolute
-#'   confidence intervals of cells percentages.      \item \code{"diff"}:
-#'   confidence intervals of the difference between a cell and the      relative
-#'   total cell (or relative first cell when \code{ref = "first"}).      \item
-#'   \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'   \code{ci = "cell"} for frequencies ("all", "all_tabs").     } By default,
-#'   for percentages, with \code{ci = "cell"} Wilson's method is used, and with
-#'   \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'   Means use classic method.
+#' @param ci <b>What the confidence interval is anchored on</b> -- one
+#'   question, four answers. The  GEOMETRY of the interval is not asked here: it
+#'   follows the comparison the table makes  (set by \code{color} /
+#'   \code{display}), so a difference table gets a difference  interval and a
+#'   ratio table a ratio one.  \itemize{   \item \code{"auto"}: build the
+#'   comparison interval when something reads it   (\code{stars}, or a
+#'   \code{color_signif} policy), and none otherwise.   \item \code{"no"}: no
+#'   interval at all.   \item \code{"cell"}: each cell's own interval (a
+#'   percentage / a mean with its own   bounds). It anchors nothing to compare,
+#'   so \code{stars} and \code{color_signif} are   informed and switched off.
+#'   \item \code{"ref"}: the interval of the comparison with the reference cell
+#'   -- what   \code{stars} and \code{color_signif} read.  }
 #' @param conf_level The confidence level, as a single numeric between 0 and
 #'   1. Default to 0.95 (95\%).
 #' @param ci_print By default confidence interval are printed with the
@@ -690,7 +679,12 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   characters.
 #' @param wrap_cols By default, colnames are wrapped when larger than 12
 #'   characters.
-#' @param display The information to display in the table.
+#' @param display What each cell shows. Every value here is a
+#'   \code{tab(display =)} value: a bare field  name, the type-adaptive
+#'   \code{"num_ci"} (a percentage or a mean, with its interval), or  a
+#'   \code{\{\}} template combining fields. \code{"auto"} keeps whatever the
+#'   table was  built with. A template naming a field the table does not carry
+#'   renders empty and says  which argument would fill it.
 #' @param add_n For \code{pct = "row"} or \code{pct = "col"}, set to
 #'   \code{FALSE} not to add another column or row with unweighted counts
 #'   (\code{n}).
@@ -735,9 +729,8 @@ jmvtab <- function(
     wt = NULL,
     pct = "no",
     color = "no",
-    OR = "no",
     color_signif = "ignore",
-    chi2 = FALSE,
+    test = FALSE,
     anova = "welch",
     design_effect = FALSE,
     na = "keep",
@@ -797,9 +790,8 @@ jmvtab <- function(
         wt = wt,
         pct = pct,
         color = color,
-        OR = OR,
         color_signif = color_signif,
-        chi2 = chi2,
+        test = test,
         anova = anova,
         design_effect = design_effect,
         na = na,

@@ -342,3 +342,72 @@ test_that("jmvtab_reg_mult_vector() keeps sd / 2sd as text and numbers as number
                    c(age = "2sd", tv = "5"))
   expect_null(jmvtab_reg_mult_vector(list(mk(var = "age", k = "nonsense"))))
 })
+
+
+# --- Phase 19k: the boundary speaks tab_reg()'s own vocabulary -----------------------------
+
+# `trials`: ONE rule, R's. The module used to take the observed max() ITSELF for any integer
+# outcome -- the same rule as `trials = TRUE`, but silently and on a different trigger, so the
+# jamovi behaviour was not reproducible from the R API. Now it sends the typed count, or NA =
+# "take the observed maximum", which tab_reg() resolves -- and only where there IS one.
+test_that("Phase 19k: the trials picker == tab_reg(trials =), explicit and automatic", {
+  gss <- gss_reg()
+  # (a) a FACTOR binomial outcome: NA resolves to no trials -> an ordinary binary logit, and the
+  #     digest fast path stays available (the raw NA used to look like a grouped binomial).
+  o  <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
+  expect_true(is.na(jmvtab_reg_dep_trials(list(), "married", gss)))
+  b  <- quiet(jmvtab_reg_build(gss, o, NULL))
+  expect_equal(reg_render(b$tabs),
+               reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                                        cleannames = TRUE, color_signif = "grey_non_signif"))))
+  # (b) a numeric SCORE outcome: TRUE / NA / the observed max are the same table.
+  d  <- gss
+  d$score <- as.integer(pmin(pmax(round(d$tvhours), 0), 8))
+  mx <- max(d$score, na.rm = TRUE)
+  auto <- quiet(tab_reg(d, "score", "race", family = "binomial", trials = TRUE,
+                        cleannames = TRUE, color_signif = "grey_non_signif"))
+  na_v <- quiet(tab_reg(d, "score", "race", family = "binomial", trials = c(score = NA),
+                        cleannames = TRUE, color_signif = "grey_non_signif"))
+  expl <- quiet(tab_reg(d, "score", "race", family = "binomial", trials = mx,
+                        cleannames = TRUE, color_signif = "grey_non_signif"))
+  expect_equal(reg_render(auto), reg_render(expl))
+  expect_equal(reg_render(na_v), reg_render(expl))
+  # (c) `trials = TRUE` no longer errors when SOME outcome has no maximum to take (it used to run
+  #     max() on a factor).
+  expect_no_error(quiet(tab_reg(d, c("score", "married"), "race", family = "binomial",
+                                trials = TRUE, cleannames = TRUE)))
+})
+
+# `shape`: the per-predictor functional-form picker folds into tab_reg(shape =).
+test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
+  expect_null(jmvtab_reg_shape_vector(list()))
+  expect_null(jmvtab_reg_shape_vector(list(list(var = "age", shape = "linear"))))  # the default
+  expect_identical(jmvtab_reg_shape_vector(list(list(var = "age", shape = "quadratic"),
+                                                list(var = "tvhours", shape = ""),
+                                                list(var = "educ", shape = "log"))),
+                   c(age = "quadratic", educ = "log"))
+  gss <- gss_reg()
+  o <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
+  o$shapes <- list(list(var = "age", shape = "quadratic"))
+  expect_equal(
+    reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
+    reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                             shape = c(age = "quadratic"), cleannames = TRUE,
+                             color_signif = "grey_non_signif"))))
+})
+
+# the estimand pair reaches tab_reg() untranslated (jmv_reg_estimand_opts() is deleted)
+test_that("Phase 19k: effect x measure x display pass straight through", {
+  gss <- gss_reg()
+  o <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial",
+                effect = "coefficient", measure = "log", display = "value")
+  expect_equal(
+    reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
+    reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                             effect = "coefficient", measure = "log",
+                             cleannames = TRUE, color_signif = "grey_non_signif"))))
+  # a reg colour MEASURE (D25's surviving allow-list), not a checkbox
+  o2 <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial",
+                 empirical = TRUE, color = "adjustment")
+  expect_no_error(quiet(jmvtab_reg_build(gss, o2, NULL)))
+})

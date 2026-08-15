@@ -271,6 +271,11 @@ NULL
 #' because its crude companions are \emph{always} on the weighted basis, beside a model column that
 #' always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
 #' \code{wt} beside a design is an error (a design already carries its own weights).
+#' @param anova Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
+#' \code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
+#' F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
+#' computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
+#' it changes which row is shown, never a number.
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0: the test is a
 #' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 #' misleading. Still works.
@@ -594,7 +599,7 @@ NULL
 #'   (\url{https://cran.r-project.org/package=logmult}), which also supports complex survey designs.
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
-                OR = "no", test = FALSE,
+                OR = "no", test = FALSE, anova = NULL,
                 na = "keep", levels = "all",
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
@@ -628,7 +633,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     ci_method = ci_method, method_cell = method_cell, method_diff = method_diff,
     cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
     tot = tot, total_names = total_names, na = na, levels = levels, pct = pct,
-    comp = comp, totaltab = totaltab, n_min = n_min,
+    comp = comp, totaltab = totaltab, n_min = n_min, anova = anova,
     user_env = rlang::caller_env())
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars ; ci_method <- .a$ci_method
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
@@ -805,6 +810,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            # boolean; `design_spec` carries the design, from which tab_setup() derives the
            # INFERENCE BASIS (R/survey-design.R).
            chi2 = test_on,
+           # Phase 19k: WHICH stored one-way F the p-value line shows (display intent, NULL = the
+           # global option) -- see tab_anova().
+           anova = anova,
            design_spec = design_spec,
            ci = ci,
            conf_level = conf_level,
@@ -1684,11 +1692,18 @@ ctx_settings_locals <- function(ctx) {
 new_ctx <- function(...) {
   defaults <- list(
     # NSE carriers (defused by the caller; a plain default is never consumed on a real path)
-    data = NULL, with_filter = FALSE,
+    # Phase 19k (D13): `filter_expr` is the filter as a SYMBOLIC string (NA = none), and it is the
+    # only carrier -- "is there a filter" is derived from it. It exists because the cache keys need
+    # to discriminate two calls that differ only by their filter: tab_setup() used to hand
+    # tab_cache_keys() a hardcoded NA_character_, so `tier0$filter` was constant and a filter change
+    # never invalidated the jamovi tier-0/tier-1 entries.
+    data = NULL, filter_expr = NA_character_,
     row_vars_quo = NULL, col_vars_quo = NULL, tab_vars_quo = NULL,
     wt_quo = NULL, na_drop_all_quo = NULL,
     # inputs (= each formal's current default)
     pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
+    # Phase 19k: WHICH one-way F a mean col_var's p-value line shows. NULL = the global option.
+    anova = NULL,
     # Phase 19d: `display` is a ctx INPUT now -- not to be applied in the build (it stays the tail's
     # job) but because it is the SECOND link of the comparison chain, which tab_setup() resolves.
     display = NULL, chi2 = FALSE, design_spec = NULL,
@@ -1810,7 +1825,7 @@ conf_level_default <- function() getOption("tabxplor.conf_level", 0.95)
 tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       pct = "no", color = "no", color_signif = "ignore",
                       color_ratio_ci = FALSE,
-                      display = NULL, chi2 = FALSE, design_spec = NULL,
+                      display = NULL, chi2 = FALSE, anova = NULL, design_spec = NULL,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
                       other_if_less_than = 0, other_level = "Others",
@@ -1838,7 +1853,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   # -> aggregate (tier 1) -> transform (tier 3 + the tier-2 test) -> assemble (tier 4).
 
   # Allow to type expression as string in filter (to work with tibble::tribble)
-  with_filter <- FALSE
+  filter_expr <- NA_character_
   # WARNING (Phase 19h): `filter` reaches this INTERNAL engine already DEFUSED -- a quosure, a plain
   # character string, or NULL -- it is not an NSE argument here. It used to be, and the caller wrote
   # `filter = if (missing(filter)) NULL else {{ filter }}`, which defuses the whole `if` CALL: a bare
@@ -1861,19 +1876,23 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
       filter <- rlang::new_quosure(str2lang(filter), rlang::caller_env())
     }
     data <- data |> dplyr::mutate(.filter = !!filter)
-    with_filter <- TRUE
+    # Phase 19k (D13): the filter's SYMBOLIC form, carried to tab_cache_keys() via the ctx. It is
+    # also the "is there a filter" flag (tab_prepare_pop reads !is.na(ctx$filter_expr)) -- one fact,
+    # one carrier. The environment is deliberately NOT hashed: two identical expressions evaluated in
+    # different scopes are a case no cache consumer can produce (jamovi never sets `filter`).
+    filter_expr <- paste(rlang::as_label(filter), collapse = "")
   }
 
   # Phase 17e: the entry ctx is built by the typed new_ctx() constructor (defaults in ONE place),
   # not a hand-written list literal. `parallel` gates tab_pmap() (Phase 8); `cache_env`/
   # `defer_level_merge`/`levels_order` are the jmvtab cache seams (Phase 7e/7g-ii), NULL/FALSE here.
   ctx <- new_ctx(
-    data = data, with_filter = with_filter,
+    data = data, filter_expr = filter_expr,
     row_vars_quo = rlang::enquo(row_vars), col_vars_quo = rlang::enquo(col_vars),
     tab_vars_quo = rlang::enquo(tab_vars), wt_quo = rlang::enquo(wt),
     na_drop_all_quo = rlang::enquo(na_drop_all),
     pct = pct, color = color, color_signif = color_signif,
-    color_ratio_ci = color_ratio_ci, display = display, chi2 = chi2,
+    color_ratio_ci = color_ratio_ci, display = display, chi2 = chi2, anova = anova,
     design_spec = design_spec,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
@@ -2350,7 +2369,11 @@ tab_setup <- function(ctx) {
                                          tab_vars = as.character(tab_vars),
                                          row_vars = as.character(row_vars),
                                          col_vars = as.character(col_vars),
-                                         filter_expr = NA_character_)
+                                         # Phase 19k (D13): the REAL filter, not a hardcoded NA --
+                                         # two calls differing only by `filter` used to hash to the
+                                         # same tier-0/tier-1 key, so a filter change never
+                                         # invalidated the jamovi aggregate cache.
+                                         filter_expr = filter_expr)
   color         <- .settings$color         # Phase 19c: ONE resolved measure (was + 4 sub-passes)
   chi2          <- .settings$chi2
   ci            <- .settings$ci
@@ -2475,7 +2498,8 @@ tab_prepare_pop <- function(ctx) {
   # - na = "drop" : NA in factors and numeric will be removed in each tab_plain/tab_num
   # - na = "keep" : NA in factors (not numeric) will be made explicit in each tab_plain/tab_num
 
-  if (with_filter == TRUE) data <- data |> dplyr::filter(.data$.filter) |>
+  # Phase 19k (D13): "is there a filter" is DERIVED from the one carrier, `filter_expr`.
+  if (!is.na(filter_expr)) data <- data |> dplyr::filter(.data$.filter) |>
     dplyr::select(-".filter")
 
   #If all variables on a subtable are "drop_all", then put na = "keep" to gain time
@@ -3034,6 +3058,11 @@ tab_assemble_tables <- function(ctx) {
     render_extras$common_totrow     <- TRUE
     render_extras$common_totrow_ref <- any(ref == "tot")
   }
+  # Phase 19k: `anova` -- WHICH one-way F this table shows for its mean col_vars. Both F rows are
+  # computed and stored in `test`, so the choice is display-only and belongs here beside add_n /
+  # add_pct; tab_anova() reads it back at render, falling back to the option. Stored only when the
+  # user stated it (NULL = "the option decides"), so nothing moves by default.
+  if (!is.null(anova)) render_extras$anova <- as.character(anova)[[1]]
   # Phase 14d: record the variable ROLES here, where they are known. Recovering them from the finished
   # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
   # Phase 16d: also record the weight column NAME (character(0) when unweighted) -> the footer "Weighted
@@ -5105,7 +5134,7 @@ leaf_chi2_num <- function(tabs, comp, row_var, col_vars, tab_vars) {
 #' @noRd
 leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
                         unserved = FALSE, degraded = FALSE, df = FALSE, num = FALSE,
-                        test = NULL) {
+                        test = NULL, anova = NULL) {
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ length(unique(.)) == 1))
 
@@ -5123,6 +5152,9 @@ leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
   # after 19f that is the weight name (and the variable labels, added at assemble).
   meta <- list(spec = new_spec("crosstab", vars = new_vars_attr(
     wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])))
+  # Phase 19k: `anova` is display intent (which of the two stored F rows the p-value line shows), so
+  # it rides render_extras -- stored only when the caller stated it, else the option decides.
+  if (!is.null(anova)) meta$render_extras <- list(anova = as.character(anova)[[1]])
 
   # WARNING: `test` defaults to new_test_tibble() in new_tab(), never NULL -- so a leaf with no test
   # must let the default stand, not pass NULL (that would DROP the empty-tibble attribute every table
@@ -5849,6 +5881,7 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' }
 tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", display = NULL, color_signif = "ignore",
+                    anova = NULL,
                     na = c("keep", "drop"),
                     ref = "tot", comp = c("tab", "all"),
                     ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
@@ -5872,7 +5905,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     "tab_num", color = color, color_signif = color_signif, ci = ci, stars = stars,
     conf_level = conf_level, ci_method = ci_method, display = display, ref = ref,
     tot = tot, total_names = total_names, na = na[1], comp = comp[1], totaltab = totaltab,
-    user_env = rlang::caller_env())
+    anova = anova, user_env = rlang::caller_env())
   ci_method <- .a$ci_method ; stars <- .a$stars ; display <- .a$display ; ref <- .a$ref
   total_names <- .a$total_names ; na <- .a$na ; comp <- .a$comp
   color_spec <- .a$color_spec ; color <- .a$color
@@ -5949,7 +5982,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     digits = digits, num = num, df = df, .fine = .fine, .by_table = .by_table,
     # Phase 18z14-ii: tab_num(design, ...) gets the design-based mean intervals too; through the
     # same inference object tab_setup() builds for the pipeline.
-    inference = new_inference(wt, svy$spec, conf_level, ci_method, design_effect = design_effect)
+    inference = new_inference(wt, svy$spec, conf_level, ci_method, design_effect = design_effect),
+    anova = anova
   )
 
   # Phase 17f: df/num returns plain numbers (no fmt), so skip the colour finalise entirely.
@@ -6044,6 +6078,27 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 }
 
 
+# num_digits_floor() -- THE mean-magnitude digits floor: a column of small means needs more decimals
+# than the user's `digits` asks for, or it prints as a wall of zeroes. ONE rule, two callers -- the
+# numeric leaf (num_core, where the column is built) and the jamovi tier-4 re-paint
+# (jmv_reapply_digits, which rewrites `digits` on a cached carrier and must reproduce the leaf
+# exactly). Phase 19k: it was byte-duplicated in the two places.
+# Phase 18p bug-fix: an all-NA numeric col_var makes every mean NA, so max(., na.rm = TRUE) leaks a
+# base "no non-missing arguments to max" warning and returns -Inf -> coerce to 0 (the m <= 1 branch,
+# which keeps the digits sane).
+# @param digits The requested digits (a scalar).
+# @param means  The column's mean cells (any length), or the already-computed max as a scalar.
+#' @keywords internal
+#' @noRd
+num_digits_floor <- function(digits, means) {
+  m <- suppressWarnings(max(means, na.rm = TRUE))
+  if (!is.finite(m)) m <- 0
+  if      (m <= 1 ) max(digits, 2L)
+  else if (m <= 10) max(digits, 1L)
+  else              digits
+}
+
+
 # num_core() -- Phase 17f: the numeric leaf's compute core. Consumes ALREADY-RESOLVED scalar settings
 # (from num_resolve) + the resolved NSE syms; does the moment aggregate + mean/diff/ratio/CI + fmt build
 # + totals + the tab_var_1lv wrap, and RETURNS THE PRE-FINALISE table. Colour is finalised ONCE by the
@@ -6054,7 +6109,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
                      color, na, ref, comp, ci, ci_visible, stars, ci_scale,
                      totaltab, totaltab_name, tot, total_names,
                      subtext, digits, num, df, .fine, .by_table,
-                     inference) {                          # REQUIRED -- see plain_core()
+                     inference,                            # REQUIRED -- see plain_core()
+                     anova = NULL) {
 
   # Phase 18z16-iiiii: ONE resolved inference object -- see plain_core().
   # Phase 19i: the six statements both leaves share are leaf_inference_setup() (which see: it also
@@ -6514,15 +6570,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # per-cell significance (mean CIs symmetric around the estimate, stored as absolute bounds).
     purrr::pmap_dfc(function(...) {
       a <- list(...)
-      # Phase 18p bug-fix: an all-NA numeric col_var makes every mean NA, so max(., na.rm=TRUE)
-      # leaks a base "no non-missing arguments to max" warning and returns -Inf. Suppress + coerce a
-      # non-finite result to 0 (-> the m<=1 branch keeps the digits sane).
-      m <- suppressWarnings(max(a[[3]], na.rm = TRUE))
-      if (!is.finite(m)) m <- 0
-      digits_col <-
-        if      (m <= 1 ) vec_recycle(max(a[[8]], 2L), length(a[[1]]))
-        else if (m <= 10) vec_recycle(max(a[[8]], 1L), length(a[[1]]))
-        else              vec_recycle(a[[8]],          length(a[[1]]))
+      digits_col <- vec_recycle(num_digits_floor(a[[8]], a[[3]]), length(a[[1]]))
       fmt_materialize_col(
         frame = list(
           n         = a[[1]], display = display_1, digits = digits_col,
@@ -6561,7 +6609,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # (the assembler no longer overwrites the leaves' basis), so a factor block whose design variance
   # succeeded keeps "design" beside a numeric block that fell back -- the table-level answer being
   # the weakest of its columns (tab_inference_basis()).
-  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num)
+  leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num,
+              anova = anova)
 }
 
 

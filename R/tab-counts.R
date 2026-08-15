@@ -360,7 +360,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   # the significance policy, and color_pct_text_is_ratio() (whether the reader's pct channel IS the
   # ratio measure -> it owns the stored interval).
   ctx <- new_ctx(
-    data = data_skel, with_filter = FALSE,
+    data = data_skel,   # (no `filter` here -- the ctx default NA_character_ says so)
     row_vars_quo = rlang::quo(!!row_var), col_vars_quo = rlang::quo(!!col_var),
     tab_vars_quo = if (length(tab_vars) == 0) rlang::quo(NULL)
                    else rlang::quo(c(!!!rlang::syms(tab_vars))),

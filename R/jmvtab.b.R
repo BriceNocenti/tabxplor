@@ -4,7 +4,12 @@
 #       jmvtab_build() (R/jmvtab-cache.R -- which drives the SAME tab() pipeline with the cache
 #       injected), persists the updated store, and renders the table as HTML via tab_kable().
 # KEY CONSTRAINTS:
-#   - jmvtab.h.R is GENERATED from jmvtab.a.yaml (jmvtools::prepare()); never hand-edit it.
+#   - jmvtab.h.R is GENERATED from jmvtab.a.yaml (jmvtools::prepare()); never hand-edit it -- and it
+#     LAGS: a newly declared option reads back NULL until the next prepare(), so `.opts()` gives each
+#     one an explicit `%||%` fallback (the module runs on defaults in that window, never aborts).
+#   - Phase 19k: `.run()` is weights -> build -> render. NO option travels as a global around the
+#     build any more (`anova` was the last; it is tab()'s own argument now). `ci_print` keeps its
+#     options()/on.exit, deliberately: it is read inside format(), i.e. around the RENDER.
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
 #   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
@@ -29,16 +34,14 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # --- Build the table through the cached pipeline ---------------------------------------
       opts  <- private$.opts(wt)
 
-      # Phase 7g: the ANOVA F displayed for numeric col_vars (Welch vs classic) is a global option
-      # read while BUILDING the p-value line, so set it before the build and restore it afterwards.
-      anova_option <- getOption("tabxplor.anova")
-      options("tabxplor.anova" = if (identical(self$options$anova, "classic")) "classic" else "welch")
-      on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
-
       # Phase 18z16-iii (W11): ONE honest checkbox. It was labelled "Type of p-value" but has moved
       # every confidence interval, star and colour threshold in the table since Phase 18s.
       # z16-iiiii: it rides `opts$design_effect` into tab()'s own argument -- no global option, no
       # on.exit dance (it is in the tier-3 base key, so a toggle rebuilds with it).
+      # Phase 19k: `anova` rides `opts$anova` the same way -- it was the LAST option travelling as a
+      # global here (options() + on.exit around the build), which also made it a stale-cache hazard.
+      # It is tab()'s own argument now, stored as display intent and read back at render, so a
+      # toggle is a tier-4 re-derive rather than a rebuild.
 
       store <- self$results$cache_state$state          # NULL on the first run
       # DESIGN (Phase h): flush queued option changes before building so a newer edit supersedes this
@@ -65,7 +68,12 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     # build core stays engine-free (testable without a live jamovi session).
     .opts = function(wt) {
       # NULL (an empty variable slot) flows through: jmvtab_build() treats length-0 as "inject a
-      # placeholder", so NULL and character() are equivalent here (avoids base-R-4.4-only `%||%`).
+      # placeholder", so NULL and character() are equivalent here.
+      # WARNING (Phase 19k): every option this list reads must tolerate NULL. `R/jmvtab.h.R` is a
+      # GENERATED artefact that only a maintainer `jmvtools::prepare()` can rebuild, so between a
+      # `.a.yaml` edit and that step `self$options$<new option>` is NULL -- the module must then run
+      # on defaults, never abort. Hence the `%||%` fallbacks below (`%||%` is defined by the package,
+      # R/tab-test-display.R, so it does not need base R >= 4.4).
       # Phase 7g-iii: filter the reference picker to the active axis (see `ref` below).
       active_vars <- as.character(
         if (identical(self$options$pct, "col")) self$options$col_vars else self$options$row_vars
@@ -82,12 +90,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         pct          = self$options$pct,
         color        = self$options$color,          # "no"/"auto"/measure -> mapped in jmvtab_build
         color_signif = self$options$color_signif,
-        OR           = self$options$OR,
-        chi2         = self$options$chi2,
-        # Phase 7g: `anova` selects the displayed F (welch/classic). It is baked into the p-value
-        # line at build time, so it must sit in the tier-3 base-key (not `reapplied`) -> a toggle
-        # rebuilds. The global option is set from it around the build in .run().
-        anova        = self$options$anova,
+        # Phase 19k: `test`, not `chi2` -- the option is renamed after tab()'s own argument (the test
+        # is a Chi-squared only for factors; a numeric col_var gets an F). The retired `OR` option is
+        # gone: what prints an odds ratio is `display`, and which 2x2 it uses is `ref2`.
+        test         = self$options$test %||% FALSE,
+        # `anova` selects the displayed F (welch/classic). Phase 19k: it is tab()'s own argument,
+        # stored as display intent -- so it sits in the tier-3 `reapplied` set and a toggle is a
+        # cheap re-derive (the p-value line is materialised at DISPLAY, from the `test` attribute,
+        # which holds BOTH F rows).
+        anova        = self$options$anova %||% "welch",
         # Phase 18j / z16-iii: the inference basis checkbox. It lands in the tier-3 base key
         # (structural, not `reapplied`) -> a toggle rebuilds; the robust overlay recomputes the
         # omnibus p on the flat design, and every cell interval moves with it.
@@ -105,14 +116,13 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # levels; applied post-aggregate in jmv_cache_aggregate() (tier-3 rebuild, tiers 1-2 reused).
         levels_order = jmvtab_levels_order(self$options$levelOrder),
         comp         = self$options$comp,
-        ci           = self$options$ci,
+        ci           = self$options$ci %||% "auto",
         conf_level   = self$options$conf_level,
         stars        = self$options$stars,
         method_cell       = self$options$method_cell,   # folded into ONE ci_method vector by
         method_diff       = self$options$method_diff,   # jmv_ci_method() -- the UI keeps one
         method_mean_diff  = self$options$method_mean_diff,  # ComboBox per interval kind
         method_mean_ratio = self$options$method_mean_ratio,
-        design_effect     = isTRUE(self$options$design_effect),
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
         totaltab     = self$options$totaltab,
         digits       = as.integer(self$options$digits),  # `digits` is a List -> a "0".."6" string
@@ -121,7 +131,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         add_pct      = self$options$add_pct,
         subtext      = self$options$subtext,
         n_min        = self$options$n_min,           # Phase 7g: small-base display filter (tier 4)
-        display      = self$options$display,
+        display      = self$options$display %||% "auto",
         output_list  = FALSE,
         totaltab_name = gettext("Ensemble", domain = "R-tabxplor"),
         total_names   = gettext("Total",    domain = "R-tabxplor"),

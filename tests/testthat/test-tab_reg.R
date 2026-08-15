@@ -398,8 +398,11 @@ test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Phase 18z
   # used to die inside glm() with "contrasts can be applied only to factors with 2 or more levels"
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = "q"),
                "not a column name")
+  # Phase 19k: a named vector may LEAVE a dependent out (that entry falls back to its observed
+  # maximum, which is what lets explicit and automatic counts mix), but a name matching NO dependent
+  # is a typo and says so.
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = c(other = 10)),
-               "positive item count")
+               "not a dependent")
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = 0),
                "positive item count")
   # FALSE is the off switch, symmetric with TRUE -> the same abort as no `trials` at all

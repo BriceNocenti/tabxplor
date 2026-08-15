@@ -34,8 +34,10 @@
   / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read
   the same interval. One named vector, `ci_method = c(cell =, diff =, mean_diff =, mean_ratio =)`,
   chooses each interval's method.
-* **Mean columns get a whole-table test** — a one-way ANOVA (Welch or classic, `options(tabxplor.anova)`),
-  the counterpart of the chi-squared for factor columns.
+* **Mean columns get a whole-table test** — a one-way ANOVA, the counterpart of the chi-squared for
+  factor columns. New `tab(anova = "welch" | "classic")` chooses which F is *shown*
+  (`options(tabxplor.anova)` remains the default): both are always computed and stored, so this
+  changes a display, never a number.
 * **`tab_plain()` gains `ci =` and `ci_method =`**, so it builds its own intervals like `tab_num()`
   does, instead of needing `|> tab_ci()`. It resolves them exactly as `tab()` does, so
   `tab_plain(ci = "cell")` and `tab(ci = "cell")` agree cell for cell.

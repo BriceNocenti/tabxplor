@@ -1506,3 +1506,71 @@ The cache is worthless in comparison mode anyway (every Run recomputes); a singl
   button + a blank line below.
 - No `.a.yaml` change → `.h.R` untouched, no cache-schema bump. The collapse-box-body and export-block
   ancestor selectors are best-guess and need a live-DOM confirmation on rebuild.
+
+---
+
+## Phase 19k — the boundary stops re-implementing R (2026-08-15)
+
+**The rule this phase installs**: *the module states an intent; R resolves it.* Nothing between a
+control and the argument it names, and nothing computed twice.
+
+### The option vocabularies ARE tabxplor's
+
+Both `.a.yaml` files now spell their List values exactly as the R argument does. What moved:
+
+| analysis  | option              | before                                    | after                                                                         |
+|-----------|---------------------|-------------------------------------------|-------------------------------------------------------------------------------|
+| jmvtab    | `chi2`              | Bool                                      | **renamed `test`** (the test is a Chi-squared only for factors)               |
+| jmvtab    | `OR`                | no / OR / OR_pct                          | **deleted** — `display` prints the odds ratio, `ref2` picks its 2×2           |
+| jmvtab    | `color`             | no/auto/diff/ratio/contrib/OR             | the full-word measures (`names(MEASURES)`) + no/auto                          |
+| jmvtab    | `ci`                | auto/cell/diff/ratio                      | the ANCHOR vocabulary: auto / no / cell / ref                                 |
+| jmvtab    | `display`           | 13 values, **4 of them tab() refuses**    | presets that are real `tab(display =)` values, incl. `num_ci`, `{or} ({pct})` |
+| jmvtab    | `method_cell`       | wilson/wald                               | + `beta` (the third `CI_METHODS$cell`)                                        |
+| jmvtabreg | `exponentiate`,`at` | a checkbox + two radios                   | **deleted** — folded into `effect` × `measure`                                |
+| jmvtabreg | `effect`            | coefficient/ame/ame_ratio                 | coefficient / marginal / at_reference                                         |
+| jmvtabreg | `measure`           | —                                         | **new**: auto / odds_ratio / ratio / difference / log                         |
+| jmvtabreg | `estimate_display`  | —                                         | **renamed `display`**                                                         |
+| jmvtabreg | `color`             | Bool                                      | a MEASURE: auto / no / adjustment / between_groups (19e's D25 allow-list)     |
+| jmvtabreg | `shapes`            | —                                         | **new** hidden Array: the per-numeric-predictor functional form               |
+
+⚠ **Renaming an option loses its value in saved `.omv` files** (jamovi keys analysis options by
+name). Accepted — the module carries no back-compat promise — but it is data loss, not a rename.
+
+⚠ Quote `no` (and `n`) in the yaml. YAML 1.1 reads a bare `no` as the boolean *false*; the previous
+files relied on jmvtools coping with that.
+
+### The JS rules are GENERATED
+
+`dev/generate_jamovi_js.R` rewrites, in place, the block between
+`// --- BEGIN GENERATED … ---` / `// --- END GENERATED ---` in each `jamovi/js/*.js`. It emits the
+family-detection rule + offered families (`REG_OUTCOME_KINDS`), the family labels
+(`REG_FAMILY_UI_LABEL`), the three-state estimand grid (`REG_ESTIMANDS`), the default measure per
+(family × effect), `REG_SHAPES`, and the odds-ratio display tokens (`DISPLAY_COMPARISON`).
+`Rscript dev/generate_jamovi_js.R check` fails when a block is stale, and `test-jamovi-vocabulary.R`
+runs it as an assertion. A **marker block, not a second file**: whether jamovi's bundler would
+resolve a `require()` of another module is not testable here.
+
+Deleted from the JS with it: `detectFamily` / `familyOptionsFor` / the two label maps (hand-mirrors,
+one already stale since 18z13), `anyNonGaussian` + `anyProbScale` (`applyModelEnables` reads the
+grid instead), `applyWtEnables` (greying four options that no longer exist), and
+`forceNaForCompare`'s `na = "drop_all_models"` — a value removed in z13, so every `compare` change
+fired a `setValue` the List rejects.
+
+### `.run()` is weights → build → render
+
+`anova` was the last option travelling as a global (`options()` + `on.exit` around the build, which
+also baked it into the tier-3 base key although the p-value line is materialised at DISPLAY). It is
+`tab(anova =)` now, stored as display intent in `meta$render_extras` and read back by `tab_anova()`.
+`ci_print` keeps its `on.exit` on purpose: it is read inside `format()`, i.e. around the *render*.
+
+### The generated `.h.R` LAGS — design for it
+
+Every `self$options$x` in both `.opts()` takes a `%||%` fallback. Between a `.a.yaml` edit and the
+maintainer's next `jmvtools::prepare()`, a newly declared option reads back `NULL`; the module must
+then run on defaults, never abort. **The new controls do nothing until that rebuild.**
+
+### Maintainer step
+
+`jmvtools::prepare()` + `jmvtools::install(home = "flatpak")`, then a live pass: the collapse boxes
+of both analyses, the reference / model / **shape** pickers (the shape select is a best guess against
+a DOM only the running app has), the `display` ComboBox in its new home beside `color`, and export.

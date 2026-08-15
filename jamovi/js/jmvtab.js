@@ -3,6 +3,14 @@
 // it lean. See dev/tabxplor_2.0.0_jamovi_dev.md (§12 ref picker, §14 export) for the events API.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
+// --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
+// Generated from R/fmt_class.R (MEASURES) and R/tab-resolve.R (DISPLAY_COMPARISON).
+// Re-run dev/generate_jamovi_js.R after changing them; the suite checks this block
+// (test-jamovi-vocabulary.R).
+var TABX_MEASURE_ODDS_RATIO = "odds_ratio";
+var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
+// --- END GENERATED ---
+
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
 // into the tiny `extCtrl` CustomControl (.u.yaml) on create, on format change, and on each onUpdate.
 // The Export button keeps its static "Export" label (set in .u.yaml) -- no dynamic rename, no fixed width.
@@ -423,15 +431,24 @@ var refSig = function(ui) {
     var tabV = ui.tab_vars ? utils.clone(ui.tab_vars.value(), []) : [];
     var pct    = ui.pct   ? ui.pct.value()   : "no";
     var colorV = ui.color ? ui.color.value() : "no";
-    var ORv    = ui.OR    ? ui.OR.value()    : "no";
+    var dispV  = ui.display ? ui.display.value() : "auto";
     var lo     = ui.levelOrder ? utils.clone(ui.levelOrder.value(), []) : [];
-    return JSON.stringify([rowV, colV, tabV, pct, colorV, ORv, lo]);
+    return JSON.stringify([rowV, colV, tabV, pct, colorV, dispV, lo]);
 };
 
+// Is an ODDS RATIO the comparison this table makes? That is what switches the reference picker to a
+// first-level default and shows its ref2 section. Phase 19k: the retired `OR` option is gone -- the
+// comparison is named by the COLOUR measure or by the DISPLAY, exactly as tab()'s own resolver reads
+// it (the 19d chain), and both halves come from the generated tables above.
 var orIsActive = function(ui) {
-    var colorV = ui.color ? ui.color.value() : "no";
-    var ORv    = ui.OR    ? ui.OR.value()    : "no";
-    return colorV === "OR" || ORv === "OR" || ORv === "OR_pct";
+    var colorV = ui.color   ? ui.color.value()   : "no";
+    var dispV  = ui.display ? String(ui.display.value() || "auto") : "auto";
+    if (colorV === TABX_MEASURE_ODDS_RATIO) return true;
+    for (var i = 0; i < TABX_DISPLAY_ODDS_RATIO_FIELDS.length; i++) {
+        var f = TABX_DISPLAY_ODDS_RATIO_FIELDS[i];
+        if (dispV === f || dispV.indexOf("{" + f + "}") === 0) return true;   // the PRIMARY token
+    }
+    return false;
 };
 
 // The stored reference for variable `v` in refLevels ("" if the user has not picked one).

@@ -393,13 +393,18 @@ reg_predictor_sd <- function(x, w = NULL) {
 # (`reg_shape_term()` -- the extra TERM a non-linear `shape` emits -- lives in R/reg-assumptions.R,
 # beside the Linearity check that emits the same term: the check and its cure are one object.)
 
+# THE multiplier keywords: the per-SD spellings `multiplier` accepts beside a plain number. Read by
+# the parser below AND by the jamovi picker (jmvtab_reg_mult_vector), which used to copy the set.
+#' @keywords internal
+REG_MULTIPLIER_KEYWORDS <- c("sd", "1sd", "2sd")
+
 # Parse ONE multiplier value ("sd" / "2sd" / a number) against a predictor's frozen SD.
 # Returns list(k = <numeric>, label = <character or NA>); k = NA drops the entry.
 #' @keywords internal
 reg_multiplier_value <- function(value, sd, digits = 3L) {
   v <- if (is.character(value)) trimws(tolower(value)) else value
   if (length(v) != 1L || is.na(v)) return(list(k = NA_real_, label = NA_character_))
-  if (is.character(v) && v %in% c("sd", "1sd", "2sd")) {
+  if (is.character(v) && v %in% REG_MULTIPLIER_KEYWORDS) {
     if (!is.finite(sd) || sd <= 0) return(list(k = NA_real_, label = NA_character_))
     mult <- if (identical(v, "2sd")) 2 else 1
     lab  <- if (mult == 1) "1 SD" else "2 SD"
@@ -445,45 +450,63 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
 # the R side disagree with the jamovi selector, which had to pick something. Both now answer gaussian
 # and name `family = "poisson"` for a genuine count: gaussian always fits (poisson refuses negatives),
 # and reading an integer outcome as a count is the rarer intent, not the safer default.
-reg_detect_family <- function(data, dependent) {
-  y <- data[[dependent]]
+# REG_OUTCOME_KINDS -- Phase 19k: THE outcome-kind table. One row per kind of dependent variable the
+# module and the R side can see, carrying the family DETECTED for it and the families OFFERED beside
+# that one. It exists because this rule was written THREE times: here, in the jamovi R fallback, and
+# in `detectFamily()` / `familyOptionsFor()` in JavaScript, whose own comment claimed it "matches the
+# R side exactly" (it had not, since 18z13). The JS block is GENERATED from this table now
+# (dev/generate_jamovi_js.R), so the claim is checked by a test instead of by a comment.
+#
+# `kind` is what BOTH sides can compute from a column alone: whether it has levels, and how many.
+# `offers` is ordered, first = the detected default; a 2-level outcome offers poisson because that is
+# the opt-in modified-Poisson (risk-ratio) route (18z3), not a count model.
+#' @keywords internal
+REG_OUTCOME_KINDS <- list(
+  binary   = list(detect = "binomial",    offers = c("binomial", "poisson")),
+  ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial")),
+  nominal  = list(detect = "multinomial", offers = c("multinomial", "ordinal")),
+  # Phase 18z13 (D10): ANY numeric is gaussian, integer-valued included -- age in years, a summed
+  # score and income in whole units are all integers, and a linear model always fits. poisson stays
+  # one click away in `offers`.
+  numeric  = list(detect = "gaussian",    offers = c("gaussian", "binomial", "poisson"))
+)
+
+# The KIND of one outcome column ("" = none of them -> no family can be detected).
+#' @keywords internal
+reg_outcome_kind <- function(y) {
   u <- unique(stats::na.omit(y))
-  if (reg_is_binary_outcome(y)) {
-    cli::cli_inform(c("i" = paste0(
-      "{.val {dependent}}: binary outcome detected -> {.code family = \"binomial\"} (logistic)."
-    )))
-    return("binomial")
-  }
-  if (is.ordered(y) && length(u) >= 3L) {
-    cli::cli_inform(c("i" = paste0(
-      "{.val {dependent}}: ordered outcome detected -> {.code family = \"ordinal\"} ",
-      "(proportional-odds)."
-    )))
-    return("ordinal")
-  }
-  if ((is.factor(y) || is.character(y)) && length(u) >= 3L) {
-    cli::cli_inform(c("i" = paste0(
-      "{.val {dependent}}: nominal outcome detected -> {.code family = \"multinomial\"} (multinomial ",
-      "logistic)."
-    )))
-    return("multinomial")
-  }
-  if (is.numeric(y)) {
-    cli::cli_inform(c("i" = paste0(
-      "{.val {dependent}}: continuous outcome detected -> {.code family = \"gaussian\"} (linear)",
-      if (!any(y %% 1 != 0, na.rm = TRUE))
-        "; it is integer-valued, so {.code family = \"poisson\"} if it is a count" else "",
-      "."
-    )))
-    return("gaussian")
-  }
-  cli::cli_abort(c(
-    "Cannot auto-detect the model family for {.val {dependent}}.",
-    "i" = paste0("Set {.arg family} explicitly: {.val gaussian} (linear), {.val poisson} (counts), ",
-                 "{.val binomial} (logistic), {.val multinomial} / {.val ordinal} (3+ level).")
-  ))
+  if (reg_is_binary_outcome(y))                                return("binary")
+  if (is.ordered(y) && length(u) >= 3L)                        return("ordered")
+  if ((is.factor(y) || is.character(y)) && length(u) >= 3L)    return("nominal")
+  if (is.numeric(y))                                           return("numeric")
+  ""
 }
 
+reg_detect_family <- function(data, dependent) {
+  y    <- data[[dependent]]
+  kind <- reg_outcome_kind(y)
+  if (!nzchar(kind)) {
+    cli::cli_abort(c(
+      "Cannot auto-detect the model family for {.val {dependent}}.",
+      "i" = paste0("Set {.arg family} explicitly: {.val gaussian} (linear), {.val poisson} (counts), ",
+                   "{.val binomial} (logistic), {.val multinomial} / {.val ordinal} (3+ level).")
+    ))
+  }
+  fam  <- REG_OUTCOME_KINDS[[kind]]$detect
+  said <- switch(kind,
+    binary  = "binary outcome detected",
+    ordered = "ordered outcome detected",
+    nominal = "nominal outcome detected",
+    numeric = "continuous outcome detected")
+  cli::cli_inform(c("i" = paste0(
+    "{.val {dependent}}: ", said, " -> {.code family = \"", fam, "\"} (",
+    reg_family_short(fam), ")",
+    if (identical(kind, "numeric") && !any(y %% 1 != 0, na.rm = TRUE))
+      "; it is integer-valued, so {.code family = \"poisson\"} if it is a count" else "",
+    "."
+  )))
+  fam
+}
 
 # Phase 14w: the human name of the model family, shared by the reg title/caption and the "Model:" footer
 # line (reg_model_line). do_exp/effect do not change the NAME (the estimand phrase carries that detail).
@@ -502,6 +525,27 @@ reg_family_display_name <- function(family) {
     "ordinal"      = gettext("ordinal logistic regression"),
     gettext("regression"))
 }
+
+# REG_FAMILY_UI_LABEL -- Phase 19k: the short family label a PICKER shows ("what kind of model is
+# this", in three words). Distinct from reg_family_display_name() (a full sentence, for the footer)
+# and from reg_family_short() (a filename tag). Generated into the jamovi model-table dropdown by
+# dev/generate_jamovi_js.R, where it used to be typed a second time.
+# `_BINARY` overrides the label on a 2-LEVEL outcome, where family = "poisson" is not a count model:
+# R resolves it to the modified Poisson (Zou 2004), whose exp(coef) is a RISK ratio (18z3). Same
+# stored value, different words -- so the dropdown never says "counts" next to a yes/no variable.
+#' @keywords internal
+REG_FAMILY_UI_LABEL <- c(
+  gaussian    = "gaussian (linear)",
+  binomial    = "binomial (logistic)",
+  poisson     = "poisson (counts)",
+  multinomial = "multinomial (nominal)",
+  ordinal     = "ordinal (ordered)"
+)
+#' @keywords internal
+REG_FAMILY_UI_LABEL_BINARY <- c(
+  binomial = "binomial (logistic)",
+  poisson  = "poisson (risk ratio)"
+)
 
 # Phase 14w: the short model tag used for Excel sheet names ("logit_<dep>_<pred>...").
 reg_family_short <- function(family) {
@@ -4699,10 +4743,12 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   `avg_comparisons()`.
 #' @param trials Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 #'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
-#'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE` uses each
-#'   dependent's observed maximum score. Requires `family = "binomial"`. It is one count per
-#'   *dependent*, never a column name --- a per-row item count is not supported; write the model with
-#'   `cbind()` in a compound `formula` instead.
+#'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE`, or an `NA`
+#'   entry in a named vector, uses that outcome's **observed maximum** score --- so explicit and
+#'   automatic counts can be mixed, and an outcome with no score to take a maximum of (a factor, a
+#'   0/1 numeric) simply stays an ordinary binary logit. Requires `family = "binomial"`. It is one
+#'   count per *dependent*, never a column name --- a per-row item count is not supported; write the
+#'   model with `cbind()` in a compound `formula` instead.
 #' @param conf_level Confidence level for the intervals. Default `0.95`. It drives every interval in
 #'   the table, the significance stars, and the greying under `color_signif` --- including the
 #'   model-vs-observed gap interval, which is computed at print time from the stored standard error and
@@ -5449,7 +5495,19 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # trials -> grouped binomial (D2): a summed-score outcome fit as cbind(score, trials-score). NULL =
   # off (binary logit). TRUE = observed max per dependent. Numeric / named vector = the item count.
   # Phase 15e: applied per BINOMIAL outcome only (a non-binomial dependent ignores it).
+  # Phase 19k: `TRUE` and `NA` both mean "the observed maximum", and BOTH are outcome-aware -- an
+  # outcome that is not a numeric score has no maximum to take, so it stays an ordinary binary logit
+  # (max() on a factor is an error, which is why `trials = TRUE` used to be unusable as soon as one
+  # dependent was a factor). `NA` inside a named vector is what lets a caller mix explicit counts
+  # with automatic ones, which is the shape the jamovi Model table produces -- it used to apply the
+  # rule ITSELF, silently, for any integer outcome: one rule written twice, with a semantic shift.
   trials_for <- function(d) NULL
+  trials_auto <- function(d) {                    # the observed max, or NA where there is none
+    x <- data[[d]]
+    if (!is.numeric(x) || is.factor(x)) return(NA_real_)
+    m <- suppressWarnings(max(x, na.rm = TRUE))
+    if (is.finite(m) && m > 1) m else NA_real_
+  }
   if (isFALSE(trials)) trials <- NULL            # the natural off switch, symmetric with TRUE
   if (!is.null(trials)) {
     # Phase 18z16-iv (S6): validate HERE. A column name -- the shape a reader naturally reaches for,
@@ -5464,7 +5522,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
         "i" = paste("Pass the number of ITEMS behind the summed score: an integer, a vector named by",
                     "dependent, or {.code TRUE} to use each dependent's observed maximum."),
         "i" = "Per-row item counts are not supported; write the model formula with {.code cbind()}."))
-    if (!is.numeric(trials) && !isTRUE(trials))
+    # (an all-NA logical vector is the "take the observed maximum for these outcomes" spelling)
+    if (!is.numeric(trials) && !isTRUE(trials) && !(is.logical(trials) && all(is.na(trials))))
       cli::cli_abort(c(
         "{.arg trials} must be a number, a vector named by dependent, or {.code TRUE}.",
         "x" = "Got {.cls {class(trials)[[1]]}}."))
@@ -5474,18 +5533,35 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     if (formula_mode) {
       cli::cli_warn("{.arg trials} is ignored with a compound formula; write {.code cbind()} in it instead.")
     } else {
-      tv <- if (isTRUE(trials))              purrr::map_dbl(dependent, ~ max(data[[.x]], na.rm = TRUE))
-            else if (!is.null(names(trials))) unname(trials[dependent])
+      if (!isTRUE(trials) && !is.null(names(trials))) {
+        # a name that matches no dependent is a typo, not a mixing request -- say so, rather than
+        # silently auto-resolving the outcome the user meant to pin.
+        unknown <- setdiff(names(trials), dependent)
+        if (length(unknown))
+          cli::cli_abort(c("{.arg trials} names {.val {unknown}}, which is not a dependent.",
+                           "i" = "Dependents: {.val {dependent}}."))
+      }
+      tv <- if (isTRUE(trials))               rep(NA_real_, length(dependent))
+            else if (!is.null(names(trials))) unname(as.numeric(trials[dependent]))
             else                              rep_len(as.numeric(trials), length(dependent))
+      tv <- stats::setNames(tv, dependent)
+      # NA = "take this outcome's observed maximum" -- from `TRUE` (all of them), from an NA entry, or
+      # from a named vector that simply does not name this dependent.
+      auto <- is.na(tv)
+      if (any(auto)) tv[auto] <- vapply(dependent[auto], trials_auto, double(1))
       tv <- stats::setNames(as.integer(round(tv)), dependent)
-      # a named vector that does not name every dependent gives NA here, which used to reach glm()
-      bad <- names(tv)[is.na(tv) | tv < 1L]
+      # An outcome with no observed maximum (a factor, or a 0/1 numeric) keeps NA and is fit as an
+      # ordinary binary logit -- there is nothing to abort about. Only an EXPLICIT bad count is an
+      # error, and it names itself.
+      bad <- names(tv)[!auto & (is.na(tv) | tv < 1L)]
       if (length(bad))
         cli::cli_abort(c(
-          "{.arg trials} must be a positive item count for every dependent.",
+          "{.arg trials} must be a positive item count.",
           "x" = "Missing or invalid for {.val {bad}}.",
-          "i" = "A named vector must name every dependent; {.code TRUE} takes the observed maximum."))
-      trials_for <- function(d) if (identical(family_for(d), "binomial")) tv[[d]] else NULL
+          "i" = paste("Give an item count, or {.code NA} / {.code TRUE} to take each outcome's",
+                      "observed maximum.")))
+      trials_for <- function(d)
+        if (identical(family_for(d), "binomial") && !is.na(tv[[d]])) tv[[d]] else NULL
     }
   }
 
@@ -5622,19 +5698,28 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # digest); any multinomial/ordinal outcome degrades the whole table to the cached raw-fit path.
   # Phase 18z8-B: `color = "adjustment"`'s gap test needs the FITTED object (influence functions),
   # which the digest deliberately discards -- so asking for it takes the refit path rather than getting
-  # a silently untested colour. One clause, not a rebuild-from-coef arm: jamovi's reg `color` is a
-  # checkbox (jamovi/jmvtabreg.a.yaml), so no live-UI call can reach here with the measure today, and
-  # building the arm would mean a second encoding of reg_fit()'s model frame for no caller. The recipe
-  # is in dev/model_vs_observed_gap_test.md SS6 if the option ever becomes a list.
+  # a silently untested colour. One clause, not a rebuild-from-coef arm: building that arm would mean
+  # a second encoding of reg_fit()'s model frame. Phase 19k made the jamovi reg `color` a MEASURE
+  # list, so a live-UI call CAN now reach here with "adjustment" -- it takes the (correct, heavier)
+  # refit path. The recipe for a digest-based arm is in dev/model_vs_observed_gap_test.md SS6.
   reref <- !is.null(.fit_cache) &&
     all(vapply(est_vec, function(e) identical(e$builder, "coef"), logical(1))) && !mnl_vsrest &&
     display %in% c("value", "est_ci") && method == "wald" &&
     all(reg_fam_glm(families_vec)) &&
-    !formula_mode && is.null(split_var) && is.null(trials) &&
+    # Phase 19k: the gate is the RESOLVED trials, not the raw argument. `trials` may now carry NA =
+    # "take the observed maximum", which resolves to NULL on an outcome that has none (a factor, a
+    # 0/1 numeric) -- and the jamovi Model table sends exactly that for every binomial outcome. Read
+    # raw, a table of ordinary binary logits looked like a grouped-binomial one and lost the digest
+    # fast path entirely (measured: every reference toggle refitted).
+    !formula_mode && is.null(split_var) &&
+    all(vapply(dependent, function(d) is.null(trials_for(d)), logical(1))) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
     # Phase 18z15: a `shape` is a DIFFERENT MODEL, not a reparametrization of the canonical one, so
     # the digest cannot serve it (unlike `reference` / `multiplier`, which are exact transforms of it).
-    # `shape` is not reachable from the jamovi UI, so this closes the path rather than narrowing it.
+    # Phase 19k: `shape` IS reachable from the jamovi UI now (the per-predictor picker), so this is a
+    # live narrowing -- a shaped model takes the raw-fit tier, where its `shape_terms` are part of
+    # the key. A quadratic shape adds a TERM without changing the data, so that key entry is what
+    # keeps it from colliding with the linear fit of the same predictors.
     length(reg_shapes) == 0L
 
   if (!is.null(reference) && !reref) {

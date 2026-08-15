@@ -437,7 +437,7 @@ R/
 │                              true of THIS producer: the design refusal, the microdata-only `na`
 │                              refusal (it says WHY) and counts_refuse_mean_methods() (the ci_method
 │                              mean slots are inert here -- accepted-and-ignored before)
-├── tab-resolve.R    (~430 L) THE argument boundary + the arg-overwrite cascade.
+├── tab-resolve.R    (~440 L) THE argument boundary + the arg-overwrite cascade.
 │                              19i: **tab_resolve_common_args()** = what every crosstab producer
 │                              must do to its arguments, run once, by tab() / tab_plain() / tab_num()
 │                              / tab_counts() (5 hand-written copies that had drifted -> 1): the
@@ -449,6 +449,9 @@ R/
 │                              (totrow, totcol), total_names. ⚠ `ci` is deliberately NOT in
 │                              TAB_ARG_VALUES: its vocabulary carries a soft-deprecation, so
 │                              validating it means REWRITING it -- resolve_ci_value()'s job.
+                              19k: TAB_ARG_VALUES gains `anova` (welch/classic), and
+                              tab_cache_keys() finally receives a REAL `filter_expr` (D13: it was a
+                              hardcoded NA_character_, so a filter change never invalidated a key).
 │                              TAB_CI_STEP_VALUES = tab_ci()'s own STEP vocabulary, declared beside
 │                              it, in which "diff" is native (the pipeline calls the step that way)
 │                              and carries no deprecation. Then tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -905,8 +908,16 @@ R/
 │                             to fmt_wrap -> tab_ci -> fmt_unwrap a whole record -- the study's own
 │                             example of a cache path shaped by a pipeline defect. ⚠ it must pass
 │                             `degf` explicitly: tab_ci() derived it from the columns because this
-│                             caller passed none. The `geom == "diff"` restriction in
-│                             jmv_tab3_rerefable() is now only a PATH decision, liftable in 19k)
+│                             caller passed none. 19k: **jmv_tab3_rerefable() is now stated as
+│                             "everything the re-ref RECOMPUTES may differ; everything it copies must
+│                             not"** -- so `ref`/`ref2`/`geom`/`ci_method` LEFT the identity set and a
+│                             diff<->ratio or a CI-method toggle is a re-ref, not a rebuild. Both
+│                             restrictions were vestigial (19e's engine reason died with tab_ci();
+│                             D12's four method_* keys never reached the tuple at all, being misnamed
+│                             `"ci_method"` in `reapplied`). The re-ref restamps `meta$scale` and
+│                             `meta$ci_method` from the SAME ci_res the bounds come from, which is
+│                             what makes a geometry change safe. jmv_reref_shape_ok()'s
+│                             `color=="auto" && ci=="diff"` exclusion is GONE too)
 │                             -- ONE SWEEP PER
 │                             col_var there, as the build runs one leaf per col_var: `or`'s 2x2 is
 │                             (this level) x (the ref2 level OF THE SAME VARIABLE), so a pooled sweep
@@ -917,7 +928,17 @@ R/
 │                             separate `or` flag) + jmvtab_build
 │                             (engine-free core; reuses tab() via .cache) + jmvtab_ref_vector (ref-picker)
 │                             + jmvtab_levels_order/jmv_relevel_cols (7g-ii level-reorder,
-│                             post-aggregate; .levels_order arg on tab())
+│                             post-aggregate; .levels_order arg on tab()).
+│                             19k: **NO rule is mirrored here any more** -- jmv_population_descriptor
+│                             (a line-for-line copy of tab_cache_keys(), in the file that also read
+│                             the real one) and jmv_apply_display (D11: its `ci == "cell"` block wrote
+│                             `pct_ci` onto MEAN columns, whose `pct` is NA -> an EMPTY cell, and it
+│                             ran after the ComboBox so it overrode the user; since 19j the leaf
+│                             stamps that display itself) are DELETED, the digits floor is
+│                             num_digits_floor() and the display writer tab_apply_display(). The
+│                             option NAMES are tab()'s (`test` not `chi2`; `OR` retired onto
+│                             display/ref2, so tab_deprecate_or() has no caller here). New
+│                             jmv_reapply_anova = the tier-4 stamp that makes `anova` a re-derive
 ├── jmvtab-export.R  (~160 L)  jmvtab export helpers (Phase 7g; 15c robustness): resolveExportPath now
 │                             takes (dir, filename, ext) -- fs::path_home Documents default + fs::
 │                             path_sanitize filename + quote/bracket strip + format-driven extension
@@ -928,8 +949,14 @@ R/
 │                             conditionMessage() surfaces the real cause (not "In index: 1."). 17i: also
 │                             the SHARED R6 backend helpers jmv_backend_weights/_notice/_export/
 │                             _render_html (the 4 verbatim blocks both .b.R files now delegate to)
-├── jmvtab.b.R       (~140 L)  Jamovi module backend (R6): thin orchestrator over jmvtab_build + $state;
-│                             17i: weights/export/notice/render delegate to jmv_backend_* (export helpers)
+├── jmvtab.b.R       (~150 L)  Jamovi module backend (R6): thin orchestrator over jmvtab_build + $state;
+│                             17i: weights/export/notice/render delegate to jmv_backend_* (export
+│                             helpers). 19k: `.run()` is weights -> build -> render -- NO option
+│                             travels as a global around the BUILD (`anova` was the last; `ci_print`
+│                             keeps its on.exit around the RENDER, where it is read). ⚠ every
+│                             `self$options$x` read in `.opts()` takes a `%||%` fallback: the .h.R is
+│                             GENERATED and LAGS a .a.yaml edit, so a new option reads NULL until the
+│                             maintainer's next prepare()
 ├── jmvtab.h.R       (605 L)  Jamovi module UI (auto-generated, do not edit)
 ├── jmvtabreg-cache.R (~270 L) Phase 15b: the jmvtabreg (Regressions) live-UI fit cache +
 │                              jmvtab_reg_build() engine-free core (drives tab_reg(.fit_cache=)). 17i:
@@ -938,16 +965,27 @@ R/
 │                              wrappers stay; jmvreg_fit_key (ref-INDEPENDENT digest key -> a reference
 │                              change is a HIT) + the picker folders jmvtab_reg_ref_vector (reference),
 │                              jmvtab_reg_models (15b-ii "+" builder -> `predictors` list / flat pool),
-│                              jmvtab_reg_mult_vector (numeric scaling -> `multiplier`). 15b-ii raised
+│                              jmvtab_reg_mult_vector (numeric scaling -> `multiplier`),
+│                              19k's jmvtab_reg_shape_vector (functional form -> `shape`). 15b-ii raised
 │                              the raw-fit ceilings (fit 4->24MB, store 16->96MB) so comparison fits (a
 │                              raw reg_fit ~9-11MB) cache instead of graceful-skipping. 15d: the
 │                              per-dependent Model table (depFamily/depModelLevel/depTrials) ->
 │                              jmvtab_reg_dep_family/_dep_modelled_first/_dep_trials. 15e: jmvtab_reg_build
 │                              calls tab_reg() ONCE with per-dependent family/inverse/trials VECTORS -> one
-│                              mixed-family table (no more group-by-family / tabxplor_tabs stacking)
-├── jmvtabreg.b.R   (~110 L)  Phase 15b: jmvtabreg R6 backend (thin orchestrator, sibling of jmvtab.b.R;
+│                              mixed-family table (no more group-by-family / tabxplor_tabs stacking).
+│                              19k: jmv_reg_estimand_opts() (19e's translator for the retired
+│                              exponentiate/at/estimate_display) is DELETED -- the UI sends
+│                              effect/measure/display straight through; `stats = opts$stats` (a key
+│                              .opts() never set) is dropped for tab_reg()'s own default GOF set;
+│                              `trials` sends the typed count or NA = "take the observed maximum",
+│                              which is tab_reg()'s OWN rule, instead of taking max() here silently
+│                              for any integer outcome (one rule, two semantics)
+├── jmvtabreg.b.R   (~170 L)  Phase 15b: jmvtabreg R6 backend (thin orchestrator, sibling of jmvtab.b.R;
 │                              .h.R generated by prepare() -- inherit is lazy so it loads before then;
-│                              17i: weights/export/notice/render delegate to jmv_backend_*, keeps .hint)
+│                              17i: weights/export/notice/render delegate to jmv_backend_*, keeps .hint;
+│                              19k: the staged-comparison gate calls jmvtab_reg_staged() -- which
+│                              existed for exactly that and whose own caller inlined the predicate
+│                              instead -- and `.opts()` speaks tab_reg()'s vocabulary, `%||%`-guarded)
 └── jmvtabreg.h.R   (~670 L)  Jamovi Regressions UI header (auto-generated by prepare(), do not edit)
 ```
 
@@ -2428,6 +2466,127 @@ saw a settings spine), so:
 
 **FOLLOW-UPS.** 19k can start on this commit. 19l: `measure_stage()`'s naming, the per-col_var
 `agg_chi2` cost, and the two refused items above.
+
+---
+
+#### Phase 19k — The jamovi boundary
+
+**DONE (2026-08-15).** Full suite **FAIL 0, WARN 133, SKIP 4, PASS 6292**, against the inherited
+FAIL 0 / WARN 133 / PASS 6042 — same warning count, +250 assertions, nothing red. The delta is
+*proved*: `dev/verify_golden_field_delta.R` reports **no change** on any of the **1788 cells of the
+36 goldens** (no field, no column attribute, no `test` column, no `meta` sub-field), and
+`dev/verify_color_attrs.R` prints **IDENTICAL** over its 293 cases — checked against a baseline
+saved from a `git worktree` of the pre-phase HEAD, so the "before" is the real one. No `_snaps/*.md`
+and no `_golden/` fixture moved.
+
+**The rule this phase installs: the module states an intent, R resolves it.** Nothing between a
+control and the argument it names, and no rule computed twice.
+
+**The seven hand-mirrored rules are gone.** `jmv_population_descriptor()` was a line-for-line copy of
+`tab_cache_keys()` — *in the file that also reads the real one* — and is now that call. The digits
+magnitude floor is **`num_digits_floor()`** (`R/tab.R`), shared by `num_core()` (where the column is
+built) and the tier-4 re-paint (which must reproduce it exactly). The multiplier keywords are
+**`REG_MULTIPLIER_KEYWORDS`**. The staged-comparison predicate is `jmvtab_reg_staged()` — which
+existed for exactly that and whose own caller inlined it instead, so only the tests reached it.
+And **`jmv_apply_display()` is deleted**: it was `tab_apply_display()` plus one block, and that block
+was **D11**.
+
+**The vocabularies are tabxplor's, both ways.** Both `.a.yaml` files spell every List value the way
+the R argument does: `chi2` → **`test`**; `OR` **deleted** (`display` prints the odds ratio, `ref2`
+picks its 2×2); `color` → the full measure words; `ci` → the four anchor values; `display` → presets
+that are all legal `tab(display =)` values (`num_ci` collapses `pct_ci` + `mean_ci`; `{or} ({pct})`
+replaces `OR_pct` and teaches the `{}` grammar); `method_cell` gains `beta`. On the reg side
+`exponentiate` / `at` / `estimate_display` are **deleted** for `effect` × `measure` × `display`, and
+**`jmv_reg_estimand_opts()` — 19e's translator, written to be deleted here — is gone**. `color`
+becomes a MEASURE (D25's derived allow-list: `auto` / `no` / `adjustment` / `between_groups`), which
+makes differentiator #3, the crude-vs-model comparison, reachable from the UI at all. New per-numeric
+-predictor **`shapes`** picker → `tab_reg(shape =)`. `stats = opts$stats` — a key `.opts()` never set
+— is dropped for `tab_reg()`'s own default GOF set.
+
+**The JS rules are GENERATED.** `dev/generate_jamovi_js.R` rewrites a marker block in each
+`jamovi/js/*.js` from `REG_OUTCOME_KINDS` / `REG_FAMILY_UI_LABEL` / `REG_ESTIMANDS` / `REG_SHAPES` /
+`DISPLAY_COMPARISON`; `check` mode fails on a stale block and `test-jamovi-vocabulary.R` runs it as
+an assertion. `reg_detect_family()` now READS `REG_OUTCOME_KINDS`, so the JS is generated from the
+same rule rather than claiming in a comment to match it. That deleted `detectFamily` /
+`familyOptionsFor` / the two label maps, and **`anyProbScale()`**, whose whole content — "a marginal
+ratio needs a probability scale" — 19e made false. A marker block, not a second `.js` file:
+whether jamovi's bundler resolves a `require()` is not testable here.
+
+**`.run()` is weights → build → render.** `anova` was the last option travelling as a global
+(`options()` + `on.exit`), which also baked it into the tier-3 base key although the p-value line is
+materialised at DISPLAY. It is **`tab(anova =)`** now — a real argument on `tab()` / `tab_num()`,
+stored in `meta$render_extras` only when stated (so no golden moves) and read back by `tab_anova()`,
+which both `test_display_rows()` callers pass. A welch↔classic toggle became a tier-4 re-derive.
+
+**The tier-3 cache: `jmv_tab3_rerefable()` is now a stated rule, not a list.** *Everything the re-ref
+RECOMPUTES may differ; everything it copies must not.* So `ref` / `ref2` / `geom` / `ci_method` left
+the identity set: a **diff ↔ ratio** toggle and a **CI-method** toggle are re-refs, not rebuilds.
+Both restrictions were vestigial — 19e's because the re-ref went through `tab_ci()` (the DIFFERENCE
+engine) until 19j replaced it with `leaf_ci_plain()`, which takes `ci_scale`; and **D12**'s because
+the four `method_*` keys never reached the tuple at all, `reapplied` naming a `"ci_method"` that is
+not a key of `opts`. The re-ref restamps `meta$scale` and `meta$ci_method` from the same `ci_res` the
+bounds come from, which is what makes a geometry change safe (19b's D8/D19 class). The
+`color == "auto" && ci == "diff"` exclusion in `jmv_reref_shape_ok()` is gone with them.
+
+**D13** — `tab_cache_keys()` gets a real `filter_expr`. It was a hardcoded `NA_character_`, so two
+calls differing only by their filter shared every tier-0/tier-1 key. The ctx carries `filter_expr`
+(NA = none) and `with_filter` is **derived** from it — one fact, one carrier.
+
+**`trials`: one rule, R's.** The module took `max()` **itself** for any integer outcome — the same
+rule as `trials = TRUE`, but silently and on a different trigger, so the jamovi behaviour was not
+reproducible from the R API. `trials` accepts **`NA` per dependent = "take the observed maximum"**,
+applied only where there IS one (a factor / 0-1 outcome stays an ordinary binary logit, where
+`trials = TRUE` used to run `max()` on a factor and error). Explicit and automatic counts can now
+mix; a name matching NO dependent aborts, because that is a typo, not a mixing request.
+⚠ Found by the fixture: the reref gate read the RAW `trials`, so a table of ordinary binary logits
+carrying `c(dep = NA)` looked grouped-binomial and lost the digest fast path entirely. It reads the
+RESOLVED `trials_for(d)` now.
+
+**Three measured live JS bugs, fixed**: `forceNaForCompare()` wrote `na = "drop_all_models"`, a value
+removed in z13, on every `compare` change (it pushes back to `drop_by_outcome`, which is what makes a
+comparison valid); `applyWtEnables()` greyed `ids`/`strata`/`fpc`/`nest`, four options deleted in
+z14-i; `resetPath_changed` disagreed with the `.a.yaml` about the default filename.
+
+**New `test-jamovi-vocabulary.R`** is the enforcement, not a convention: every List option's value
+set must EQUAL the R vocabulary it names (`names(MEASURES)` filtered by `producers`/`channels`,
+`CI_METHODS` slot by slot with its default, `TAB_ARG_VALUES`, `REG_EFFECTS_VALUES`,
+`REG_MEASURES_VALUES`, the `measure_own_ref()` allow-list), every `display` value must be one
+`tab_apply_display()` accepts, every `.u.yaml` `optionPart` must be a value its option declares, and
+the generated JS must be what the R tables would write today.
+
+**HONEST CONCERNS.**
+
+- **The module is INERT until the maintainer runs `jmvtools::prepare()` + rebuild.** `measure`,
+  `shapes` and the renamed `test` do not exist in the generated `.h.R`, so `self$options$…` reads
+  NULL. Every read in both `.opts()` carries a `%||%` fallback, so the module *runs on defaults*
+  rather than aborting — but the new controls do nothing until the rebuild, and the live pass
+  (collapse boxes, the shape select, the moved `display` ComboBox, export) is the maintainer's. Do
+  not read this summary as "the UI changed".
+- **Renaming `chi2` → `test` and deleting `OR` lose those settings in saved `.omv` files** — jamovi
+  keys analysis options by name. Accepted per the standing no-back-compat ruling for the module;
+  recorded because it is data loss, not a rename. Two guards soften the window: a retired `ci`
+  spelling resolves silently (no lifecycle warning into the results panel) and a retired `display`
+  value **degrades to "the display the table was built with"** instead of aborting the render — a
+  `tryCatch` on a GENERATED-artefact-lags hazard, the same discipline as the `%||%` defaults. It
+  translates nothing; the value is dropped.
+- **The `shape` select is a best guess against a DOM only the running app has.** Same class as the
+  existing pickers (it reuses their get/write/reconcile idiom on the same numeric row), but it is
+  asserted by construction, not seen.
+- **`jamovi/js/*.js` has no syntax check here** — no node/V8 on this box (the `node` R package ships
+  a Windows binary). The suite balance-checks brackets and the generator diff; that is all. → 19l.
+- **The digest fast path is now unreachable from the UI for `color = "adjustment"` and for any
+  `shape`.** Both correct (they need the fitted object / a different model) and both were previously
+  unreachable *because the options did not exist*, so this is a real new refit cost on those two
+  paths. Unmeasured. → 19l.
+- **D22's "renders void" note is per COLUMN but reads as per TABLE**: `display = "num_ci"` on a table
+  that does have intervals still notes it, because the `add_n` total column carries none. 19d's own
+  rule, not a regression — recorded in the 19l hand-over.
+- The 133 warnings are unchanged deprecation nudges from the test corpus (`ci = "diff"` / `OR = TRUE`
+  / short colour names). The corpus migration is still 19l's.
+
+**FOLLOW-UPS.** 19l can start on this commit. Maintainer: `jmvtools::prepare()` +
+`jmvtools::install(home = "flatpak")` + the live pass. 19l: a real JS syntax/lint gate, the two
+refit-cost measurements, D22's note scope, and the deprecation-warning corpus migration.
 
 ---
 

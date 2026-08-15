@@ -13,6 +13,7 @@ tab_num(
   color = "auto",
   display = NULL,
   color_signif = "ignore",
+  anova = NULL,
   na = c("keep", "drop"),
   ref = "tot",
   comp = c("tab", "all"),
@@ -62,6 +63,12 @@ or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what 
 
 \item{color_signif}{How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
 / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.}
+
+\item{anova}{Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
+\code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
+F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
+computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
+it changes which row is shown, never a number.}
 
 \item{na}{The policy to adopt for missing values in row and tab variables (factors),
 as a single string.

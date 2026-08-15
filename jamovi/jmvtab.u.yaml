@@ -115,7 +115,7 @@ children:
                   - type: RadioButton
                     name: color_3
                     optionName: color
-                    optionPart: diff
+                    optionPart: difference
                     enable: (pct:row || pct:col)
                     events:
                       change: ./jmvtab::onChange_refopts
@@ -129,14 +129,14 @@ children:
                   - type: RadioButton
                     name: color_5
                     optionName: color
-                    optionPart: contrib
+                    optionPart: odds_ratio
+                    enable: (pct:row || pct:col)
                     events:
                       change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_6
                     optionName: color
-                    optionPart: OR
-                    enable: (pct:row || pct:col)
+                    optionPart: contrib
                     events:
                       change: ./jmvtab::onChange_refopts
           - type: LayoutBox
@@ -146,27 +146,10 @@ children:
             stretchFactor: 2
             children:
               - type: Label
-                label: OR = <i>(Odds Ratio)</i>
+                label: display = <i>(what each cell shows)</i>
                 children:
-                  - type: RadioButton
-                    name: OR_1
-                    optionName: OR
-                    optionPart: 'no'
-                    enable: (pct:row || pct:col)
-                    events:
-                      change: ./jmvtab::onChange_refopts
-                  - type: RadioButton
-                    name: OR_2
-                    optionName: OR
-                    optionPart: OR
-                    enable: (pct:row || pct:col)
-                    events:
-                      change: ./jmvtab::onChange_refopts
-                  - type: RadioButton
-                    name: OR_3
-                    optionName: OR
-                    optionPart: OR_pct
-                    enable: (pct:row || pct:col)
+                  - type: ComboBox
+                    name: display
                     events:
                       change: ./jmvtab::onChange_refopts
           - type: LayoutBox
@@ -210,7 +193,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: CheckBox
-                    name: chi2
+                    name: test
               - type: LayoutBox
                 cell:
                   column: 1
@@ -220,7 +203,7 @@ children:
                   - type: ComboBox
                     name: anova
                     label: ANOVA F
-                    enable: (chi2)
+                    enable: (test)
               - type: LayoutBox
                 cell:
                   column: 0
@@ -378,17 +361,17 @@ children:
                   - type: RadioButton
                     name: ci_2
                     optionName: ci
-                    optionPart: cell
+                    optionPart: 'no'
                     enable: (pct:row || pct:col || pct:all || pct:all_tabs)
                   - type: RadioButton
                     name: ci_3
                     optionName: ci
-                    optionPart: diff
+                    optionPart: cell
                     enable: (pct:row || pct:col || pct:all || pct:all_tabs)
                   - type: RadioButton
                     name: ci_4
                     optionName: ci
-                    optionPart: ratio
+                    optionPart: ref
                     enable: (pct:row || pct:col || pct:all || pct:all_tabs)
           - type: LayoutBox
             margin: none
@@ -436,7 +419,7 @@ children:
                 children:
                   - type: CheckBox
                     name: stars
-                    enable: (ci:diff || ci:auto || ci:ratio)
+                    enable: (ci:ref || ci:auto)
       - type: CollapseBox
         label: <b>Confidence-interval methods (advanced)</b>
         stretchFactor: 1
@@ -482,7 +465,7 @@ children:
                 children:
                   - type: ComboBox
                     name: method_diff
-                    enable: (ci:diff || ci:auto)
+                    enable: (ci:ref || ci:auto)
               - type: LayoutBox
                 margin: none
                 cell:
@@ -501,7 +484,7 @@ children:
                 children:
                   - type: ComboBox
                     name: method_mean_diff
-                    enable: (ci:diff || ci:auto)
+                    enable: (ci:ref || ci:auto)
               - type: LayoutBox
                 margin: none
                 cell:
@@ -520,7 +503,7 @@ children:
                 children:
                   - type: ComboBox
                     name: method_mean_ratio
-                    enable: (ci:ratio)
+                    enable: (ci:ref || ci:auto)
   - type: CollapseBox
     label: <b>Other formatting</b>
     stretchFactor: 1
@@ -574,18 +557,6 @@ children:
               - type: TextBox
                 name: wrap_cols
                 format: number
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 2
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: display = <i>(which information to display in the table ?)</i>
-            children:
-              - type: ComboBox
-                name: display
       - type: LayoutBox
         margin: none
         cell:

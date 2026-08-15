@@ -8,6 +8,11 @@
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it. The
 #     R6Class `inherit = jmvtabregBase` is evaluated LAZILY (at instantiation, in the running app), so
 #     this file loads / checks fine before the .h.R exists.
+#   - ...and it LAGS: between a `.a.yaml` edit and the maintainer's next prepare(), a newly declared
+#     option reads back NULL. So every option below carries an explicit `%||%` fallback -- the module
+#     must run on defaults in that window, never abort.
+#   - Phase 19k: `.opts()` speaks tab_reg()'s OWN vocabulary end to end (effect / measure / display /
+#     shape / a measure-valued colour). No translator sits between a control and its argument.
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals.
 #   - Export (Excel / HTML / Markdown) reuses R/jmvtab-export.R (resolveExportPath / jmvtab_export).
@@ -35,7 +40,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # on the Run button (or an Export, which needs the result): between clicks a changed signature
       # marks the shown table outdated; an unchanged one (incl. the run_compare auto-reset run) re-serves
       # the last render. Single-model use stays fully live. compare_state persists sig + HTML across resets.
-      staged  <- is.list(opts$predictors) && length(opts$predictors) >= 2L
+      # Phase 19k: THE predicate, jmvtab_reg_staged() -- which exists for exactly this and whose own
+      # caller inlined it instead, so only the tests reached it and the two copies could drift.
+      staged  <- jmvtab_reg_staged(self$options$models, self$options$predictors)
       trigger <- isTRUE(self$options$run_compare) || isTRUE(self$options$exportExcel)
       cur_sig <- jmvtab_reg_compare_sig(opts)
       cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
@@ -100,20 +107,28 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # groups so a family switch never aborts tab_reg()). NB the jamovi option key is still
         # `multiplicator` (unchanged so no prepare() regen); only the R-facing arg is renamed.
         multiplicator = self$options$multiplicator,
+        # Phase 19k: the per-numeric-predictor SHAPE picker (linear / quadratic / log / sqrt /
+        # quartiles / quintiles) -> tab_reg()'s `shape`.
+        shapes       = self$options$shapes,
         wt           = wt,
         split_var    = self$options$split_var,
-        # exponentiate / color are now logical checkboxes (TRUE = ratios-when-sensible / colour on).
-        exponentiate = isTRUE(self$options$exponentiate),
-        effect       = self$options$effect,
-        at           = self$options$at,
-        estimate_display = self$options$estimate_display,
+        # Phase 19k: tab_reg()'s OWN estimand pair -- `effect` names the CONTRAST, `measure` the
+        # MEASURE. The retired `exponentiate` / `at` / `estimate_display` options (and the
+        # jmv_reg_estimand_opts() translator that mapped them) are gone.
+        effect       = self$options$effect  %||% "coefficient",
+        measure      = self$options$measure %||% "auto",
+        display      = self$options$display %||% "value",
         empirical    = self$options$empirical,
         # the reference-level picker (refLevels) -> tab_reg's `reference` named vector (NULL = default)
         reference    = jmvtab_reg_ref_vector(self$options$refLevels),
         conf_level   = self$options$conf_level,
         method       = self$options$method,
         stars        = self$options$stars,
-        color        = isTRUE(self$options$color),
+        # Phase 19k: `color` is a MEASURE now, not a checkbox -- 19e's D25 left exactly four
+        # meaningful values, derived from measure_own_ref(): off, the column's own geometry, the
+        # model-vs-crude gap, and the between-group one. "auto" is tab_reg()'s TRUE.
+        color        = switch(self$options$color %||% "auto", "no" = FALSE, "auto" = TRUE,
+                              self$options$color),
         color_signif = self$options$color_signif,
         na           = self$options$na,
         cleannames   = self$options$cleannames,

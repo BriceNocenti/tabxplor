@@ -99,8 +99,21 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 # === SECTION: displayed-row selection, cell builders, reg footer spec ===============================
 # (Phase 16a moved these here from R/tab_classes.R so all `test`-attribute display lives in one module.)
 
+# tab_anova() -- WHICH one-way ANOVA F a table displays for its mean col_vars. Both F rows are
+# computed and stored in the `test` attribute, so this is a pure DISPLAY choice: the table's own
+# stated intent (`tab(anova =)` -> meta$render_extras$anova) if it has one, else the global option.
+# Phase 19k: it exists so `anova` can stop travelling as a global set around a build -- the jamovi
+# backend's last options()/on.exit dance, and a stale-cache hazard (the choice was baked into the
+# tier-3 base key although the p-value line is materialised at DISPLAY).
+#' @keywords internal
+#' @noRd
+tab_anova <- function(x) {
+  a <- get_render_extras(x)[["anova"]]
+  if (is.null(a) || !nzchar(a[[1]])) getOption("tabxplor.anova", "welch") else a[[1]]
+}
+
 # Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
-# col_vars the option-selected ANOVA F (Welch by default). Both F rows are stored; this chooses one.
+# col_vars the chosen ANOVA F (Welch by default) -- see tab_anova(), which both callers pass.
 # Phase 18j: a weak chi2 (min_e < 5) carries a `pvalue_exact` column = the Fisher-exact p on that
 # same row; the p-value cell shows that reliable exact p (labelled "Fisher") instead of the flagged
 # chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
@@ -323,7 +336,7 @@ test_summary_grid <- function(x) {
 
 # --- crosstab arm: chi2 / ANOVA-F, one row-group per (`var` x tab_var level) ------------------------
 test_grid_crosstab <- function(x, test_tbl) {
-  disp <- test_display_rows(test_tbl)               # chi2 + the option-chosen F, one per (subtab, cv)
+  disp <- test_display_rows(test_tbl, tab_anova(x))  # chi2 + the chosen F, one per (subtab, cv)
   disp <- disp[!is.na(disp$pvalue), , drop = FALSE]
   if (nrow(disp) == 0) return(NULL)
 

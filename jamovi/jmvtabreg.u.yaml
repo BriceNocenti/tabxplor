@@ -64,10 +64,9 @@ children:
       - type: LayoutBox
         margin: large
         children:
-          - type: CheckBox
-            name: exponentiate
-            label: exponentiate = <i>(odds / rate ratios when it makes sense)</i>
-          # effect and at on one row (two columns).
+          # Phase 19k: the estimand is TWO questions -- which contrast, and in which measure. The
+          # retired `exponentiate` checkbox and `at` radios are folded into them (`at = "reference"`
+          # is the third `effect`; un-exponentiated is `measure = "log"`).
           - type: LayoutBox
             margin: none
             children:
@@ -75,7 +74,7 @@ children:
                 cell: { column: 0, row: 0 }
                 children:
                   - type: Label
-                    label: effect = <i>(estimand)</i>
+                    label: effect = <i>(which contrast)</i>
                     children:
                       - type: RadioButton
                         name: effect_1
@@ -84,27 +83,37 @@ children:
                       - type: RadioButton
                         name: effect_2
                         optionName: effect
-                        optionPart: ame
+                        optionPart: marginal
                       - type: RadioButton
                         name: effect_3
                         optionName: effect
-                        optionPart: ame_ratio
+                        optionPart: at_reference
               - type: LayoutBox
                 cell: { column: 1, row: 0 }
                 children:
                   - type: Label
-                    label: at = <i>(profile, marginal effects)</i>
+                    label: measure = <i>(which measure)</i>
                     children:
                       - type: RadioButton
-                        name: at_1
-                        optionName: at
-                        optionPart: average
-                        enable: (effect_2 || effect_3)
+                        name: measure_1
+                        optionName: measure
+                        optionPart: auto
                       - type: RadioButton
-                        name: at_2
-                        optionName: at
-                        optionPart: reference
-                        enable: (effect_2 || effect_3)
+                        name: measure_2
+                        optionName: measure
+                        optionPart: odds_ratio
+                      - type: RadioButton
+                        name: measure_3
+                        optionName: measure
+                        optionPart: ratio
+                      - type: RadioButton
+                        name: measure_4
+                        optionName: measure
+                        optionPart: difference
+                      - type: RadioButton
+                        name: measure_5
+                        optionName: measure
+                        optionPart: log
           - type: CheckBox
             name: empirical
             label: empirical = <i>(compare model estimates with observed values)</i>
@@ -201,9 +210,9 @@ children:
             cell: { column: 1, row: 0 }
             stretchFactor: 1
             children:
-              - type: CheckBox
+              - type: ComboBox
                 name: color
-                label: color = <i>(colour helpers)</i>
+                label: color =
           - type: LayoutBox
             cell: { column: 2, row: 0 }
             stretchFactor: 1
@@ -254,24 +263,24 @@ children:
                 name: color_signif_1
                 optionName: color_signif
                 optionPart: ignore
-                enable: (color)
+                enable: (!(color:no))
               - type: RadioButton
                 name: color_signif_2
                 optionName: color_signif
                 optionPart: grey_non_signif
-                enable: (color)
+                enable: (!(color:no))
               - type: RadioButton
                 name: color_signif_3
                 optionName: color_signif
                 optionPart: guaranteed_effect
-                enable: (color)
+                enable: (!(color:no))
 
   - type: CollapseBox
     label: <b>Display</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # Row 1: estimate_display (left half) | one common title over wrap_rows / wrap_cols / cleannames
+      # Row 1: display (left half) | one common title over wrap_rows / wrap_cols / cleannames
       # (right half) -- one bold group title instead of a legend repeated on every control.
       - type: LayoutBox
         margin: large
@@ -281,24 +290,24 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: estimate_display = <i>(cell layout)</i>
+                label: display = <i>(cell layout)</i>
                 children:
                   - type: RadioButton
-                    name: estimate_display_1
-                    optionName: estimate_display
+                    name: display_1
+                    optionName: display
                     optionPart: value
                   - type: RadioButton
-                    name: estimate_display_2
-                    optionName: estimate_display
+                    name: display_2
+                    optionName: display
                     optionPart: ci
                   - type: RadioButton
-                    name: estimate_display_3
-                    optionName: estimate_display
+                    name: display_3
+                    optionName: display
                     optionPart: prob
                     enable: (effect_1)
                   - type: RadioButton
-                    name: estimate_display_4
-                    optionName: estimate_display
+                    name: display_4
+                    optionName: display
                     optionPart: ame
                     enable: (effect_1)
           - type: LayoutBox

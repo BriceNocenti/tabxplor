@@ -11,7 +11,8 @@
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
 #       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
 #       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
-#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`).
+#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`),
+#       jmvtab_reg_shape_vector() (per-predictor functional form -> `shape`).
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
@@ -30,7 +31,9 @@
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 4L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 5L   # bump on any store-shape change -> discard stale stores
+# 5 (Phase 19k): `shape` and the measure-valued `color` reach the build from the UI, so a stale store
+#   could serve a fit made under a different model.
 # 4 (Phase 19e): the raw-fit key's `extra` carries the ESTIMAND (effect, measure, display) instead of
 # (effect, at, estimate_display) -- a stale store would key a different estimand to the same digest.
   #   history: 2 = Phase 17b table attrs merged into one `meta` list
@@ -165,28 +168,20 @@ jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 # A character vector is returned as soon as one entry is a keyword -- tab_reg() parses both.
 #' @keywords internal
 #' @noRd
-# jmv_reg_estimand_opts() -- Phase 19e: the jamovi UI's retired estimand options -> the (effect,
-# measure, display) triple tab_reg() takes. The UI is a generated layer this phase cannot rebuild
-# (see jmvtab_reg_build), so the translation lives here and is DELETED in Phase 19k, when the
-# `.a.yaml` gains `measure` and the `.h.R` is regenerated. Every mapping below is exact:
-#   exponentiate = FALSE  ->  measure = "log"
-#   effect = "ame"        ->  effect  = "marginal"
-#   effect = "ame_ratio"  ->  effect  = "marginal", measure = "ratio"
-#   at     = "reference"  ->  effect  = "at_reference"
-#   estimate_display      ->  display (same four shorthands)
+# Fold the per-numeric-predictor shape picker (the jamovi `shapes` Array of Group{var, shape}) into
+# tab_reg()'s `shape`. Blank / "linear" entries are dropped (linear is the default and needs no
+# entry); NULL when nothing was picked. Values come from REG_SHAPES (R/reg-assumptions.R), which is
+# also what the .a.yaml offers -- one vocabulary, checked by test-jamovi-vocabulary.R.
 #' @keywords internal
-jmv_reg_estimand_opts <- function(opts) {
-  eff <- opts$effect %||% "coefficient"
-  at  <- opts$at     %||% "average"
-  measure <- if (identical(eff, "ame_ratio")) "ratio"
-             else if (identical(opts$exponentiate, FALSE)) "log"
-             else "auto"
-  effect  <- if (eff %in% c("ame", "ame_ratio"))
-               (if (identical(at, "reference")) "at_reference" else "marginal")
-             else if (identical(at, "reference")) "at_reference"
-             else "coefficient"
-  list(effect = effect, measure = measure,
-       display = opts$estimate_display %||% "value")
+#' @noRd
+jmvtab_reg_shape_vector <- function(shapes) {
+  if (length(shapes) == 0L) return(NULL)
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
+  vars <- vapply(shapes, get1, character(1), k = "var")
+  shp  <- vapply(shapes, get1, character(1), k = "shape")
+  keep <- !is.na(vars) & nzchar(vars) & !is.na(shp) & nzchar(shp) & shp != "linear"
+  if (!any(keep)) return(NULL)
+  stats::setNames(shp[keep], vars[keep])
 }
 
 jmvtab_reg_mult_vector <- function(multiplicator) {
@@ -194,7 +189,7 @@ jmvtab_reg_mult_vector <- function(multiplicator) {
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
   vars <- vapply(multiplicator, get1, character(1), k = "var")
   raw  <- trimws(vapply(multiplicator, get1, character(1), k = "k"))
-  kw   <- tolower(raw) %in% c("sd", "1sd", "2sd")
+  kw   <- tolower(raw) %in% REG_MULTIPLIER_KEYWORDS   # Phase 19k: THE set, R/tab_reg.R's own
   num  <- suppressWarnings(as.numeric(raw))
   keep <- !is.na(vars) & nzchar(vars) & (kw | !is.na(num))
   if (!any(keep)) return(NULL)
@@ -233,8 +228,11 @@ jmvtab_reg_dep_modelled_first <- function(depModelLevel, dep) {
   TRUE
 }
 
-# The number of trials for a numeric binomial outcome: an explicit entry, else the observed max when the
-# outcome is a >1 integer count (a summed score). NA -> ordinary binary logit (a factor, or a 0/1 numeric).
+# The number of trials the user typed for a binomial outcome, or NA = "take the observed maximum".
+# Phase 19k: NA is now tab_reg()'s OWN spelling of that rule (`trials` accepts NA per dependent), so
+# this helper stops applying it. It used to take max() itself for any integer outcome -- the same
+# rule as R's `trials = TRUE`, but SILENTLY and on a different trigger: one rule, two semantics, and
+# the jamovi one could not be reproduced from the R API.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_dep_trials <- function(depTrials, dep, data) {
@@ -243,11 +241,6 @@ jmvtab_reg_dep_trials <- function(depTrials, dep, data) {
       n <- suppressWarnings(as.integer(round(as.numeric(e$n))))
       if (!is.na(n) && n >= 1L) return(n)
     }
-  }
-  x <- data[[dep]]
-  if (is.numeric(x) && !is.factor(x)) {
-    m <- suppressWarnings(max(x, na.rm = TRUE))
-    if (is.finite(m) && m > 1) return(as.integer(round(m)))
   }
   NA_integer_
 }
@@ -302,31 +295,35 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
 
   fam_arg <- stats::setNames(fams, dep)
   inv_arg <- if (all(invs)) TRUE else stats::setNames(invs, dep)   # scalar unless a pick overrode it
-  tri_arg <- if (all(is.na(tris))) NULL else stats::setNames(as.integer(tris), dep)
+  # Phase 19k: every BINOMIAL outcome gets an entry -- the typed count, or NA = "take the observed
+  # maximum", which is tab_reg()'s own rule and which it applies only where there IS one (a factor
+  # or a 0/1 numeric outcome stays an ordinary binary logit). So the module states an intent and R
+  # owns the resolution; it used to resolve the same rule here, silently and on a different trigger.
+  tri_arg <- if (!any(fams == "binomial")) NULL else stats::setNames(as.integer(tris), dep)
 
-  # Phase 19e: the jamovi UI still speaks the RETIRED estimand vocabulary (`exponentiate` / `effect`
-  # with its `ame_ratio` value / `at` / `estimate_display`), because its generated `.h.R` can only be
-  # rebuilt by a maintainer `jmvtools::prepare()` -- which Phase 19k owns, together with carrying the
-  # new words into the `.a.yaml` / `.u.yaml` / `.js`. So the options are TRANSLATED here, silently:
-  # the same move Phase 19d made for the retired `tab(OR =)` at jmv_tab3_build_armed(). One function,
-  # jmv_reg_estimand_opts(), so the mapping is stated once and dies in one edit when 19k lands.
-  est_opts <- jmv_reg_estimand_opts(opts)
+  # Phase 19k: the UI speaks tab_reg()'s OWN estimand vocabulary -- `effect` (which contrast) x
+  # `measure` (which measure) x `display` (the cell layout). The jmv_reg_estimand_opts() translator
+  # 19e put here for the retired `exponentiate` / `at` / `estimate_display` options is DELETED with
+  # them: no argument reaches tab_reg() through a second vocabulary any more.
   tabs <- tab_reg(
     data,
     dependent    = dep,
     predictors   = preds,
     family       = fam_arg,
     wt           = nz(opts$wt),
-    effect       = est_opts$effect,
-    measure      = est_opts$measure,
+    effect       = opts$effect  %||% "coefficient",
+    measure      = opts$measure %||% "auto",
     conf_level   = opts$conf_level,
     method       = opts$method,
     reference    = opts$reference,
     inverse_two_level_factors = inv_arg,
     split_var    = nz(opts$split_var),
     empirical    = isTRUE(opts$empirical),
-    stats        = opts$stats,
-    display      = est_opts$display,
+    # `stats` is deliberately NOT passed: NULL is "the model-fit statistics that make sense for this
+    # family", which is what the module wants and what tab_reg() computes by default. It used to be
+    # passed as `opts$stats`, a key `.opts()` never set -- a dangling argument, not a control.
+    display      = opts$display %||% "value",
+    shape        = jmvtab_reg_shape_vector(opts$shapes),
     color        = opts$color,
     color_signif = opts$color_signif,
     stars        = isTRUE(opts$stars),

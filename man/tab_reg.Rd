@@ -175,10 +175,12 @@ subpopulation.
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
-logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE} uses each
-dependent's observed maximum score. Requires \code{family = "binomial"}. It is one count per
-\emph{dependent}, never a column name --- a per-row item count is not supported; write the model with
-\code{cbind()} in a compound \code{formula} instead.}
+logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE}, or an \code{NA}
+entry in a named vector, uses that outcome's \strong{observed maximum} score --- so explicit and
+automatic counts can be mixed, and an outcome with no score to take a maximum of (a factor, a
+0/1 numeric) simply stays an ordinary binary logit. Requires \code{family = "binomial"}. It is one
+count per \emph{dependent}, never a column name --- a per-row item count is not supported; write the
+model with \code{cbind()} in a compound \code{formula} instead.}
 
 \item{empirical}{Logical. If \code{TRUE}, adds the \strong{observed, unadjusted (univariable)} companion of
 each model effect: with a categorical predictor that is exactly the observed contrast between

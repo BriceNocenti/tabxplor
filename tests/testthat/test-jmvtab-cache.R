@@ -6,8 +6,10 @@
 
 # --- helpers ------------------------------------------------------------------------------
 jmv_opts <- function(...) {
+  # Phase 19k: the option names + values are tab()'s own -- `chi2` is `test`, the retired `OR` is a
+  # `display` + `ref2` route, `ci` speaks the anchor vocabulary, `color` the full measure words.
   o <- list(row_vars = character(), col_vars = character(), tab_vars = character(), wt = character(),
-            pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
+            pct = "no", color = "no", color_signif = "ignore", test = FALSE,
             na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
             conf_level = 0.95, stars = TRUE,   # design_effect: absent -> the global option decides
             # the jamovi UI keeps one ComboBox per interval kind; jmv_ci_method() folds them
@@ -15,11 +17,11 @@ jmv_opts <- function(...) {
             method_mean_diff = "welch", method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
             subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
-            output_list = FALSE, cleannames = FALSE, display = "auto")
+            output_list = FALSE, cleannames = FALSE, display = "auto", anova = "welch")
   # WARNING: `modifyList()` keeps the FIRST of two same-named entries, and every `o0(...)`/`mk(...)`
   # wrapper below splices its own defaults beside the caller's `...` -- so a later override was
   # silently swallowed. Measured on the pre-fix tree: `o0(color = "ratio")` at L318 built with
-  # `color = "diff"`, and the trailing `ref = "1"` at L381 was dead, making case `b` identical to
+  # `color = "difference"`, and the trailing `ref = "1"` at L381 was dead, making case `b` identical to
   # case `a`. Keep the LAST, which is R's ordinary override semantic.
   args <- list(...)
   if (length(args)) args <- args[!duplicated(names(args), fromLast = TRUE)]
@@ -33,24 +35,17 @@ jmv_oracle <- function(opts, data) {
   color <- switch(opts$color, "no" = FALSE, "auto" = TRUE, opts$color)
   # The RESOLVED anchor, from the same shared resolver jmvtab_build() calls -- not a hand-mirrored
   # `if (a policy) ci <- "diff"`, which was one more copy of a rule that has moved twice since it was
-  # written (and was still spelling it in the vocabulary 19d retired, so the oracle emitted a
-  # lifecycle warning on every case that used it).
-  ci <- withr::with_options(
-    list(lifecycle_verbosity = "quiet"),
-    resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), opts$color_signif, opts$stars,
-                    if (length(opts$ref)) opts$ref else "auto"))$ci
+  # written.
+  ci <- resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), opts$color_signif, opts$stars,
+                        if (length(opts$ref)) opts$ref else "auto")$ci
   wt_sym <- if (length(opts$wt)) rlang::sym(opts$wt) else NULL
-  # Phase 19d retired `OR` onto display / ref2 / ref, and jmv_tab3_build_armed() routes the (still
-  # UI-named) option through tab_deprecate_or() before calling tab(). The oracle calls the SAME
-  # translator rather than re-stating the mapping, so it cannot drift from the engine -- it used to
-  # pass the retired `OR` and no `display` at all, so a `display = "{or}"` case could never match.
-  route <- suppressWarnings(tab_deprecate_or(opts$OR, opts$display, opts$ref2, opts$ref))
+  # Phase 19k: no translation left -- every option is passed under the name tab() gives it.
   rlang::inject(tab(
     data, row_vars = tidyselect::all_of(opts$row_vars), col_vars = tidyselect::all_of(opts$col_vars),
     tab_vars = tidyselect::all_of(opts$tab_vars), wt = !!wt_sym, pct = opts$pct, color = color,
-    color_signif = opts$color_signif, display = route$display, test = opts$chi2, na = opts$na,
-    levels = opts$levels, ref = route$ref, ref2 = route$ref2, comp = opts$comp, ci = ci,
-    conf_level = opts$conf_level, stars = opts$stars,
+    color_signif = opts$color_signif, display = opts$display, test = opts$test, na = opts$na,
+    levels = opts$levels, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp, ci = ci,
+    conf_level = opts$conf_level, stars = opts$stars, anova = opts$anova,
     ci_method = c(cell = opts$method_cell, diff = opts$method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
     other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
@@ -97,9 +92,9 @@ test_that("store: per-entry byte ceiling skips oversized entries", {
 # --- byte-identity to tab() ---------------------------------------------------------------
 test_that("cold build == tab(cleannames = FALSE); warm == cold", {
   cases <- list(
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE),
-    jmv_opts(row_vars = "marital", col_vars = "tvhours", chi2 = TRUE),
-    jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), pct = "row", chi2 = TRUE),
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE),
+    jmv_opts(row_vars = "marital", col_vars = "tvhours", test = TRUE),
+    jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), pct = "row", test = TRUE),
     jmv_opts(row_vars = "relig", col_vars = "race", tab_vars = "marital", pct = "row"),
     jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", na = "drop"),
     jmv_opts()  # bare table
@@ -121,7 +116,7 @@ test_that("the weighted basis reaches the cached FACTOR aggregate too (design_ef
   # Failing-first: without the `w2` column and its rollup, `n_eff` is all-NA on the cache path.
   withr::local_options(tabxplor.design_effect = TRUE)
   o <- jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), wt = "w",
-                pct = "row", chi2 = TRUE, na = "drop")
+                pct = "row", test = TRUE, na = "drop")
   cold <- jmvtab_build(gssw, o, NULL)
   warm <- jmvtab_build(gssw, o, cold$store)
   expect_equal(cold$tabs, jmv_oracle(o, gssw))    # the cache path IS the oracle, correction included
@@ -180,25 +175,25 @@ test_that("factor keep <-> drop SHARE the aggregate; numeric keep <-> drop DO NO
 
 # --- tier-2 reuse -------------------------------------------------------------------------
 test_that("tier-2 test is reused across pct/ref toggles and matches a fresh chi2", {
-  r1 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE), NULL)
+  r1 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE), NULL)
   expect_equal(sum(r1$hits$test), 0)                       # cold: computed
   # stored test is populated (real chi2, not an empty placeholder)
   expect_equal(nrow(r1$store$test[[1]]$value), 1L)
   expect_identical(r1$store$test[[1]]$value$test, "chi2")
 
-  r2 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", chi2 = TRUE), r1$store)
+  r2 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", test = TRUE), r1$store)
   expect_equal(sum(r2$hits$test), 1)                       # pct change reuses the test
   r3 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                   ref = "1", chi2 = TRUE), r2$store)
+                                   ref = "1", test = TRUE), r2$store)
   expect_equal(sum(r3$hits$test), 1)                       # ref change reuses the test
   # a cached-test run is byte-identical to a fresh chi2 run (jmv_opts sets stars = TRUE, so the
   # expected tab() must too -- stars are opt-in / storage-driven since the bug-fix)
   expect_equal(r3$tabs, tab(gss, marital, race, pct = "row", ref = "1", test = TRUE, ci = "auto",
-                            stars = TRUE, cleannames = FALSE))
+                            stars = TRUE, cleannames = FALSE, anova = "welch"))
 })
 
 test_that("contrib coloring does NOT use the tier-2 cache (recomputes per-cell fields)", {
-  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE, color = "contrib")
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE, color = "contrib")
   r1 <- jmvtab_build(gss, o, NULL)
   r2 <- jmvtab_build(gss, o, r1$store)
   expect_equal(sum(r2$hits$test), 0)                       # never a test hit under contrib
@@ -254,7 +249,7 @@ test_that("cleannames at display preserves the tab class on grouped/compacted ta
 test_that("defer_level_merge: levels = 'first' tests FULL levels", {
   d <- dplyr::filter(gss, !is.na(marital), !is.na(race))
   jf <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                 levels = "first", chi2 = TRUE), NULL)
+                                 levels = "first", test = TRUE), NULL)
   # race has 3 levels -> full-level df = (nlevels(marital)-1)*(3-1) = 10. tab(levels="first") would
   # give (nlevels(marital)-1)*(2-1) = 5. The cached test carries the FULL-level df.
   expect_equal(jf$store$test[[1]]$value$df1, 10)   # full 3-level race x 6-level marital
@@ -274,15 +269,15 @@ test_that("Phase 7f: display / colour toggles re-use the armed table (warm == co
   # means no O(cells) rebuild. (display / cleannames are modelled by the full jmvtab pipeline, not by
   # jmv_oracle = tab(), so they are locked warm==cold; the fresh-tab() lock is the next test.)
   o0   <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                 color = "diff", chi2 = TRUE, ...)
+                                 color = "difference", test = TRUE, ...)
   st   <- jmvtab_build(gss, o0(), NULL)$store
-  # Phase 19d-tail: `ratio` is NOT a re-paint any more, and must not be. Since 19d the stored interval
-  # follows the comparison -- a difference table holds percentage-POINT bounds, a ratio table Katz
-  # log-RR ones -- so re-painting a ratio over a difference carrier would show the wrong bracket and
-  # the wrong stars. The tuple carries `geom` for exactly this, and the rebuild is cheap: tiers 1-2
-  # still hit, only the O(cells) fmt is redone. Recovering it would mean recomputing the interval on
-  # the other scale, which the re-ref could do and an exact re-paint could not -> 19k.
-  reference <- c(same = TRUE, digits = TRUE, display = TRUE, ratio = FALSE, auto = TRUE,
+  # Phase 19d-tail: `ratio` is not an exact RE-PAINT -- since 19d the stored interval follows the
+  # comparison (percentage-POINT bounds vs Katz log-RR), so painting a ratio over a difference
+  # carrier would show the wrong bracket and the wrong stars. Phase 19k: it is a tier-3 HIT again,
+  # by the other route -- the RE-REF recomputes the bounds on the other scale (leaf_ci_plain takes
+  # `ci_scale`) and restamps the column's `scale` / `ci_method` with them. The gate is the same one
+  # every other case has: warm == cold.
+  reference <- c(same = TRUE, digits = TRUE, display = TRUE, ratio = TRUE, auto = TRUE,
                  grey = TRUE, color_all = TRUE, cleannames = TRUE)
   toggles <- list(
     "same"       = o0(),
@@ -304,7 +299,7 @@ test_that("Phase 7f: display / colour toggles re-use the armed table (warm == co
 
 test_that("Phase 7f: colour / digits toggles are byte-identical to a fresh tab()", {
   o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                               color = "diff", chi2 = TRUE, ...)
+                               color = "difference", test = TRUE, ...)
   for (o in list(o0(digits = 2), o0(color = "ratio"), o0(color = "auto"),
                  o0(color_signif = "grey_non_signif"), o0(color_signif = "guaranteed_effect"))) {
     expect_equal(jmvtab_build(gss, o, NULL)$tabs, jmv_oracle(o, gss))
@@ -317,11 +312,11 @@ test_that("Phase 7f: colour / digits toggles are byte-identical to a fresh tab()
 })
 
 test_that("Phase 7f: a base change rebuilds (tier-3 miss) but stays byte-identical", {
-  base <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff")
+  base <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "difference")
   st   <- jmvtab_build(gss, base, NULL)$store
   for (o in list(
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", color = "diff"),               # pct
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", na = "drop")   # na
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", color = "difference"),               # pct
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "difference", na = "drop")   # na
   )) {
     r <- jmvtab_build(gss, o, st)
     expect_false(isTRUE(r$hits$tab3))
@@ -329,10 +324,10 @@ test_that("Phase 7f: a base change rebuilds (tier-3 miss) but stays byte-identic
   }
   # Phase 9b-7: a REFERENCE change is now a tier-3 RE-REF (hit), not a rebuild -- still byte-identical.
   r <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                  color = "diff", ref = "1"), st)
+                                  color = "difference", ref = "1"), st)
   expect_true(isTRUE(r$hits$tab3))
   expect_equal(r$tabs, jmv_oracle(jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                           color = "diff", ref = "1"), gss))
+                                           color = "difference", ref = "1"), gss))
 })
 
 # --- Phase 9b-7: instant reference re-ref (jmv_tab3_reref on the raw carrier) --------------
@@ -342,17 +337,17 @@ test_that("Phase 7f: a base change rebuilds (tier-3 miss) but stays byte-identic
 # incl. ci = "cell" where jmv_apply_display diverges from a plain tab()). warm A -> B.
 test_that("Phase 9b-7: a reference change re-refs (tier-3 hit) and equals the rebuild", {
   o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                               color = "diff", chi2 = TRUE, ...)
+                               color = "difference", test = TRUE, ...)
   cases <- list(
     list(d = "gss",  a = o0(),                b = o0(ref = "1")),                  # tot -> first
     list(d = "gss",  a = o0(ref = "1"),       b = o0(ref = "3")),                  # index -> index
     list(d = "gss",  a = o0(),                b = o0(ref = "Divorced")),           # tot -> label
-    # Phase 19d-tail: a RATIO comparison is not re-ref-eligible -- the re-ref rebuilds the interval
-    # with tab_ci(), which is the DIFFERENCE engine, and since 19d a ratio table's bounds are the Katz
-    # log-RR ones. It falls through to the always-correct rebuild (tiers 1-2 still hit); teaching the
-    # re-ref the other scale is 19k's, with the cold/warm/re-ref lock.
-    list(d = "gss",  a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2"),
-         hit = FALSE),                                                             # ratio colour
+    # Phase 19k: a RATIO comparison IS re-ref-eligible. The re-ref builds the interval with
+    # leaf_ci_plain(), the leaf's own producer, which takes `ci_scale` -- so it rebuilds the Katz
+    # log-RR bounds and restamps the column's `scale` / `ci_method` from the same CI_GEOMS row the
+    # leaf reads. (19d/19j had left it a rebuild because the re-ref still went through tab_ci(), the
+    # DIFFERENCE engine.)
+    list(d = "gss",  a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2")), # ratio colour
     list(d = "gss",  a = o0(color = "auto"),  b = o0(color = "auto", ref = "1")),  # auto colour
     list(d = "gss",  a = o0(color_signif = "grey_non_signif"),
                      b = o0(color_signif = "grey_non_signif", ref = "1")),         # significance policy
@@ -376,15 +371,41 @@ test_that("Phase 9b-7: a reference change re-refs (tier-3 hit) and equals the re
   }
 })
 
+# Phase 19k: `color = "auto"` beside an explicit `ci = "ref"` IS re-ref-eligible. It used to be
+# excluded because that pair resolved to the composite "after_ci" -- a ref-DEPENDENT colour stamped
+# by the CI step, which the re-ref could not reproduce. 19c deleted the resolution, 19j the step.
+test_that("Phase 19k: color = auto + an explicit ci re-refs (and equals the rebuild)", {
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                               color = "auto", ci = "ref", test = TRUE, ...)
+  st <- suppressMessages(jmvtab_build(gss, o0(), NULL))$store
+  r  <- suppressMessages(jmvtab_build(gss, o0(ref = "1"), st))
+  expect_true(isTRUE(r$hits$tab3))
+  expect_equal(r$tabs, suppressMessages(jmvtab_build(gss, o0(ref = "1"), NULL))$tabs)
+})
+
+# Phase 19k (D12): the four interval-method options are re-applied, not structural, and a method
+# change is served by the RE-REF -- leaf_ci_plain() rebuilds the bounds with the new engine and
+# restamps the column's `ci_method`. They used to land in the base key under a name that is not an
+# option key at all, so every toggle rebuilt and the cheap path was unreachable.
+test_that("Phase 19k: a CI-method change re-refs (and equals the rebuild)", {
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                               color = "difference", ci = "ref", test = TRUE, ...)
+  st <- suppressMessages(jmvtab_build(gss, o0(), NULL))$store
+  r  <- suppressMessages(jmvtab_build(gss, o0(method_diff = "ac"), st))
+  expect_true(isTRUE(r$hits$tab3))
+  expect_equal(r$tabs, suppressMessages(jmvtab_build(gss, o0(method_diff = "ac"), NULL))$tabs)
+  expect_equal(r$tabs, jmv_oracle(o0(method_diff = "ac"), gss))
+})
+
 test_that("Phase 9b-7: a re-ref'd table equals a plain tab() (independent anchor)", {
   # jmv_oracle = a plain tab(); valid where jmvtab_build == tab() (display = auto, ci = auto).
-  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE, ...)
-  # `hit` = whether the tier-3 carrier serves it. FALSE for the ratio comparison since 19d gave it its
-  # own (Katz) interval -- see the re-ref block above. The equality below is the real lock either way.
-  for (cs in list(list(a = o0(color = "diff"),  b = o0(color = "diff",  ref = "1")),
-                  list(a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2"), hit = FALSE),
-                  list(a = o0(color = "diff", tab_vars = "year"),
-                       b = o0(color = "diff", tab_vars = "year", ref = "1")))) {
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE, ...)
+  # Phase 19k: the ratio comparison is served by the carrier too (the re-ref recomputes its Katz
+  # interval). The equality below is the real lock either way.
+  for (cs in list(list(a = o0(color = "difference"),  b = o0(color = "difference",  ref = "1")),
+                  list(a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2")),
+                  list(a = o0(color = "difference", tab_vars = "year"),
+                       b = o0(color = "difference", tab_vars = "year", ref = "1")))) {
     st <- suppressMessages(jmvtab_build(gss, cs$a, NULL))$store
     r  <- suppressMessages(jmvtab_build(gss, cs$b, st))
     expect_equal(isTRUE(r$hits$tab3), cs$hit %||% TRUE)
@@ -393,7 +414,7 @@ test_that("Phase 9b-7: a re-ref'd table equals a plain tab() (independent anchor
 })
 
 test_that("Phase 9b-7: a second identical reference is an exact re-paint hit", {
-  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", chi2 = TRUE)
+  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "difference", test = TRUE)
   oB <- utils::modifyList(oA, list(ref = "1"))
   s  <- suppressMessages(jmvtab_build(gss, oA, NULL))$store
   r1 <- suppressMessages(jmvtab_build(gss, oB, s))          # reref, stored under the new tuple
@@ -405,16 +426,15 @@ test_that("Phase 9b-7: a second identical reference is an exact re-paint hit", {
 test_that("Phase 9b-7: non-rerefable ref changes rebuild but stay byte-identical", {
   mk <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", ...)
   cases <- list(
-    list(a = mk(pct = "col", color = "diff"),                      b = mk(pct = "col", color = "diff", ref = "Black")),
+    list(a = mk(pct = "col", color = "difference"),                      b = mk(pct = "col", color = "difference", ref = "Black")),
     list(a = jmv_opts(row_vars = "marital", col_vars = "tvhours", pct = "row", color = "auto"),
          b = jmv_opts(row_vars = "marital", col_vars = "tvhours", pct = "row", color = "auto", ref = "1")),  # numeric
-    list(a = mk(pct = "row", color = "diff", levels = "first"),    b = mk(pct = "row", color = "diff", levels = "first", ref = "1")),
-    list(a = mk(pct = "row", color = "diff", add_pct = TRUE),      b = mk(pct = "row", color = "diff", add_pct = TRUE, ref = "1")),
-    list(a = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE),
-         b = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE, ref = "1")),                          # auto + ci=diff
-    list(a = mk(pct = "row", display = "{or}", ref = "first", color = "OR"),             b = mk(pct = "row", display = "{or}", ref = "first", color = "OR", ref = "1")),
-    list(a = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all"),
-         b = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all", ref = "1"))
+    list(a = mk(pct = "row", color = "difference", levels = "first"),    b = mk(pct = "row", color = "difference", levels = "first", ref = "1")),
+    list(a = mk(pct = "row", color = "difference", add_pct = TRUE),      b = mk(pct = "row", color = "difference", add_pct = TRUE, ref = "1")),
+    list(a = mk(pct = "row", display = "or", color = "odds_ratio"),
+         b = mk(pct = "row", display = "or", color = "odds_ratio", ref = "1")),   # odds ratio
+    list(a = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "difference", test = TRUE, comp = "all"),
+         b = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "difference", test = TRUE, comp = "all", ref = "1"))
   )
   # suppressWarnings: some cases deliberately warn (comp = "all" announces the added total table;
   # ref = "1" matches no row label and falls back). Both are correct behaviour and asserted in
@@ -429,7 +449,7 @@ test_that("Phase 9b-7: non-rerefable ref changes rebuild but stay byte-identical
 })
 
 test_that("Phase 9b-7: re-ref works off a $state-restored carrier", {
-  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", chi2 = TRUE)
+  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "difference", test = TRUE)
   oB <- utils::modifyList(oA, list(ref = "1"))
   st   <- suppressMessages(jmvtab_build(gss, oA, NULL))$store
   back <- unserialize(serialize(st, connection = NULL))       # jamovi $state gzip-RDS round-trip
@@ -440,7 +460,7 @@ test_that("Phase 9b-7: re-ref works off a $state-restored carrier", {
 
 test_that("Phase 7f: tier-3 armed table survives the $state round-trip and is size-bounded", {
   st   <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                                     color = "diff", chi2 = TRUE), NULL)$store
+                                     color = "difference", test = TRUE), NULL)$store
   expect_length(st$tab3, 1L)
   expect_lt(st$tab3[[1]]$bytes, JMVTAB_CFG$entry_bytes[["tab3"]]) # a real survey table fits the ceiling
   back <- unserialize(serialize(st, connection = NULL))          # jamovi $state gzip-RDS round-trip
@@ -448,7 +468,7 @@ test_that("Phase 7f: tier-3 armed table survives the $state round-trip and is si
   # is "the RESTORED carrier serves a re-paint", and since 19d a diff -> ratio toggle changes the
   # stored interval (Katz vs percentage points), so it rebuilds by design and would prove nothing here.
   o2 <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                 color = "diff", color_signif = "guaranteed_effect", chi2 = TRUE)
+                 color = "difference", color_signif = "guaranteed_effect", test = TRUE)
   r <- suppressMessages(jmvtab_build(gss, o2, back))
   expect_true(isTRUE(r$hits$tab3))                               # re-paint from the RESTORED armed table
   expect_equal(r$tabs, suppressMessages(jmv_oracle(o2, gss)))
@@ -476,11 +496,22 @@ test_that("Phase 7g: n_min is a tier-4 re-derive that never corrupts the cached 
   expect_equal(back$tabs, full$tabs)
 })
 
-test_that("Phase 7g: anova sits in the tier-3 base-key (welch <-> classic rebuilds)", {
-  base <- jmv_opts(row_vars = "marital", col_vars = "tvhours", chi2 = TRUE)
-  s <- jmvtab_build(gss, utils::modifyList(base, list(anova = "welch")), NULL)$store
-  r <- jmvtab_build(gss, utils::modifyList(base, list(anova = "classic")), s)
-  expect_false(isTRUE(r$hits$tab3))    # anova changed -> different base-key -> rebuild
+# Phase 19k: `anova` is display INTENT (which of the two stored F rows the p-value line shows), so
+# it is re-applied at tier 4 and a toggle is a cheap re-derive -- it used to sit in the base key and
+# rebuild the whole table. The lock is the usual one: the re-derive must equal a cold build, and the
+# displayed test must really follow the option.
+test_that("Phase 19k: anova is a tier-4 re-derive (welch <-> classic re-paints)", {
+  base <- jmv_opts(row_vars = "marital", col_vars = "tvhours", test = TRUE)
+  oW <- utils::modifyList(base, list(anova = "welch"))
+  oC <- utils::modifyList(base, list(anova = "classic"))
+  s <- jmvtab_build(gss, oW, NULL)$store
+  r <- jmvtab_build(gss, oC, s)
+  expect_true(isTRUE(r$hits$tab3))                       # no O(cells) rebuild
+  expect_equal(r$tabs, jmvtab_build(gss, oC, NULL)$tabs) # ... and identical to a cold build
+  expect_identical(tab_anova(r$tabs), "classic")
+  # the DISPLAYED test row follows it (both F rows are stored either way)
+  expect_true(all(c("F_welch", "F_classic") %in% get_test(r$tabs)$test))
+  expect_identical(test_display_rows(get_test(r$tabs), tab_anova(r$tabs))$test, "F_classic")
 })
 
 test_that("Phase 7g: the reference-level picker vector drives the cache like any ref change", {
@@ -522,7 +553,7 @@ test_that("jmvtab_levels_order(): picker Array -> named ordered list, empties dr
 
 test_that("reorder is byte-identical to tab() on pre-releveled microdata", {
   cases <- list(
-    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE),
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE),
          spec = list(marital = mar_ord, race = race_ord)),
     list(o = jmv_opts(row_vars = "marital", col_vars = "tvhours"),                 # factor x numeric
          spec = list(marital = mar_ord)),
@@ -548,7 +579,7 @@ test_that("reorder + levels = 'first' keeps the reordered-first level", {
 })
 
 test_that("a reorder reuses tiers 1-2 (only the tier-3 armed table rebuilds)", {
-  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE)
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE)
   s <- jmvtab_build(gss, o, NULL)$store
   r <- jmvtab_build(gss, utils::modifyList(o, list(levels_order = list(marital = mar_ord))), s)
   expect_true(r$hits$agg[["marital\rrace"]])       # aggregate reused (raw fingerprint unchanged)
@@ -556,7 +587,48 @@ test_that("a reorder reuses tiers 1-2 (only the tier-3 armed table rebuilds)", {
 })
 
 test_that("levels_order = NULL leaves the build byte-identical (no-op)", {
-  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE)
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE)
   expect_equal(jmvtab_build(gss, utils::modifyList(o, list(levels_order = NULL)), NULL)$tabs,
                jmvtab_build(gss, o, NULL)$tabs)
+})
+
+
+# --- Phase 19k: the boundary defects, each with the fixture that fails without the fix ------
+
+# D11: a MEAN column under `ci = "cell"` rendered EMPTY. jmv_apply_display() forced every non-count
+# fmt column to the `pct_ci` display, whose `pct` field is NA on the numeric leaf -- and it ran AFTER
+# the display ComboBox, so it also overrode what the user picked. Since 19j the LEAF stamps the right
+# display where it builds the cell interval, so the whole block was deletable.
+test_that("Phase 19k (D11): ci = 'cell' on a numeric col_var renders the mean, not an empty cell", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "tvhours", ci = "cell", conf_level = 0.95)
+  tb <- suppressMessages(jmvtab_build(gss, o, NULL))$tabs
+  num <- names(tb)[vapply(tb, function(x) is_fmt(x) && est_var_kind(get_scale(x)) == "mean",
+                          logical(1))]
+  expect_gt(length(num), 0L)
+  cells <- format(tb[[num[[1]]]])
+  expect_true(all(nzchar(trimws(cells))))          # nothing renders void
+  expect_true(any(grepl("[;\u00b1]", cells)))     # ... and the interval is visible
+  # ... and the module now agrees with tab() cell for cell, which the forced pct_ci made impossible
+  # (a plain tab() has never had that block).
+  expect_equal(tb, jmv_oracle(o, gss))
+  # the display ComboBox behaves exactly as tab(display =) does on the same table -- whatever that
+  # is. (It is `tab()`'s own eligibility rule: a cell already showing a composite keeps it. What the
+  # defect was is that jamovi applied a SECOND, different rule on top.)
+  o2 <- utils::modifyList(o, list(display = "n"))
+  expect_equal(suppressMessages(jmvtab_build(gss, o2, NULL))$tabs, jmv_oracle(o2, gss))
+})
+
+# D13: `filter` was hashed as a hardcoded NA_character_, so two calls differing only by their filter
+# produced the SAME tier-0 / tier-1 keys -- a filter change never invalidated the aggregate cache.
+test_that("Phase 19k (D13): the filter reaches the cache keys", {
+  k1 <- tab_cache_keys(row_vars = "marital", col_vars = "race", filter_expr = "year == 2000")
+  k2 <- tab_cache_keys(row_vars = "marital", col_vars = "race", filter_expr = "year == 2006")
+  k0 <- tab_cache_keys(row_vars = "marital", col_vars = "race")
+  expect_false(identical(k1$tier0, k2$tier0))
+  expect_false(identical(k1$tier0, k0$tier0))
+  # ... and tab() really passes its own filter down (it used to hand tab_cache_keys() a literal NA
+  # whatever the user wrote, so the two builds below shared every tier-0/tier-1 key).
+  n_of <- function(x) sum(as.numeric(get_n(x[[2]])), na.rm = TRUE)
+  expect_false(identical(n_of(tab(gss, marital, race, filter = year == 2000)),
+                         n_of(tab(gss, marital, race, filter = year == 2006))))
 })

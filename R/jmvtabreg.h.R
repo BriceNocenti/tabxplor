@@ -13,9 +13,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             depFamily = NULL,
             depModelLevel = NULL,
             depTrials = NULL,
-            exponentiate = TRUE,
             effect = "coefficient",
-            at = "average",
+            measure = "auto",
             empirical = FALSE,
             models = NULL,
             baseline = 1,
@@ -23,13 +22,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             na = "drop_by_outcome",
             run_compare = FALSE,
             refLevels = NULL,
+            shapes = NULL,
             multiplicator = NULL,
             conf_level = 0.95,
             method = "wald",
             stars = TRUE,
-            color = TRUE,
+            color = "auto",
             color_signif = "grey_non_signif",
-            estimate_display = "value",
+            display = "value",
             cleannames = TRUE,
             subtext = "",
             wrap_rows = 35,
@@ -123,25 +123,24 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "n",
                             NULL))))
-            private$..exponentiate <- jmvcore::OptionBool$new(
-                "exponentiate",
-                exponentiate,
-                default=TRUE)
             private$..effect <- jmvcore::OptionList$new(
                 "effect",
                 effect,
                 options=list(
                     "coefficient",
-                    "ame",
-                    "ame_ratio"),
+                    "marginal",
+                    "at_reference"),
                 default="coefficient")
-            private$..at <- jmvcore::OptionList$new(
-                "at",
-                at,
+            private$..measure <- jmvcore::OptionList$new(
+                "measure",
+                measure,
                 options=list(
-                    "average",
-                    "reference"),
-                default="average")
+                    "auto",
+                    "odds_ratio",
+                    "ratio",
+                    "difference",
+                    "log"),
+                default="auto")
             private$..empirical <- jmvcore::OptionBool$new(
                 "empirical",
                 empirical,
@@ -204,6 +203,21 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "ref",
                             NULL))))
+            private$..shapes <- jmvcore::OptionArray$new(
+                "shapes",
+                shapes,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "shapes",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "shape",
+                            NULL))))
             private$..multiplicator <- jmvcore::OptionArray$new(
                 "multiplicator",
                 multiplicator,
@@ -236,21 +250,26 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "stars",
                 stars,
                 default=TRUE)
-            private$..color <- jmvcore::OptionBool$new(
+            private$..color <- jmvcore::OptionList$new(
                 "color",
                 color,
-                default=TRUE)
+                options=list(
+                    "auto",
+                    "no",
+                    "adjustment",
+                    "between_groups"),
+                default="auto")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
                 color_signif,
                 options=list(
+                    "ignore",
                     "grey_non_signif",
-                    "guaranteed_effect",
-                    "ignore"),
+                    "guaranteed_effect"),
                 default="grey_non_signif")
-            private$..estimate_display <- jmvcore::OptionList$new(
-                "estimate_display",
-                estimate_display,
+            private$..display <- jmvcore::OptionList$new(
+                "display",
+                display,
                 options=list(
                     "value",
                     "ci",
@@ -310,9 +329,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..depFamily)
             self$.addOption(private$..depModelLevel)
             self$.addOption(private$..depTrials)
-            self$.addOption(private$..exponentiate)
             self$.addOption(private$..effect)
-            self$.addOption(private$..at)
+            self$.addOption(private$..measure)
             self$.addOption(private$..empirical)
             self$.addOption(private$..models)
             self$.addOption(private$..baseline)
@@ -320,13 +338,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
             self$.addOption(private$..refLevels)
+            self$.addOption(private$..shapes)
             self$.addOption(private$..multiplicator)
             self$.addOption(private$..conf_level)
             self$.addOption(private$..method)
             self$.addOption(private$..stars)
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
-            self$.addOption(private$..estimate_display)
+            self$.addOption(private$..display)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
             self$.addOption(private$..wrap_rows)
@@ -346,9 +365,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         depFamily = function() private$..depFamily$value,
         depModelLevel = function() private$..depModelLevel$value,
         depTrials = function() private$..depTrials$value,
-        exponentiate = function() private$..exponentiate$value,
         effect = function() private$..effect$value,
-        at = function() private$..at$value,
+        measure = function() private$..measure$value,
         empirical = function() private$..empirical$value,
         models = function() private$..models$value,
         baseline = function() private$..baseline$value,
@@ -356,13 +374,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
         refLevels = function() private$..refLevels$value,
+        shapes = function() private$..shapes$value,
         multiplicator = function() private$..multiplicator$value,
         conf_level = function() private$..conf_level$value,
         method = function() private$..method$value,
         stars = function() private$..stars$value,
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
-        estimate_display = function() private$..estimate_display$value,
+        display = function() private$..display$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
         wrap_rows = function() private$..wrap_rows$value,
@@ -381,9 +400,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..depFamily = NA,
         ..depModelLevel = NA,
         ..depTrials = NA,
-        ..exponentiate = NA,
         ..effect = NA,
-        ..at = NA,
+        ..measure = NA,
         ..empirical = NA,
         ..models = NA,
         ..baseline = NA,
@@ -391,13 +409,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..na = NA,
         ..run_compare = NA,
         ..refLevels = NA,
+        ..shapes = NA,
         ..multiplicator = NA,
         ..conf_level = NA,
         ..method = NA,
         ..stars = NA,
         ..color = NA,
         ..color_signif = NA,
-        ..estimate_display = NA,
+        ..display = NA,
         ..cleannames = NA,
         ..subtext = NA,
         ..wrap_rows = NA,
@@ -482,19 +501,22 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param depFamily .
 #' @param depModelLevel .
 #' @param depTrials .
-#' @param exponentiate Exponentiate the coefficients into ratios (odds ratios
-#'   / incidence-rate ratios), automatically leaving gaussian linear
-#'   coefficients on their raw scale. Uncheck to keep every coefficient on the
-#'   coefficient (log / linear) scale.
-#' @param effect "coefficient" is the native per-family effect (beta / OR /
-#'   IRR). "AME" is the average marginal effect on the response scale, a
-#'   difference in percentage points. "RR" is the same quantity as a RATIO --
-#'   the marginal risk ratio (the ratio of adjusted predicted probabilities),
-#'   for binomial / multinomial / ordinal outcomes only. Both need the
-#'   marginaleffects package.
-#' @param at Where marginal effects are evaluated: averaged over the sample,
-#'   or at the reference profile (other predictors at their reference level /
-#'   mean).
+#' @param effect WHICH CONTRAST the table reports.  \itemize{   \item
+#'   \code{"coefficient"}: the model's native per-family effect.   \item
+#'   \code{"marginal"}: the average marginal effect on the response scale,
+#'   averaged   over the sample (needs the marginaleffects package).   \item
+#'   \code{"at_reference"}: the same, evaluated at the reference profile (other
+#'   predictors at their reference level / mean).  }
+#' @param measure WHICH MEASURE the contrast is expressed in -- the second
+#'   half of the estimand, and the  only argument that changes the MODEL (a risk
+#'   ratio, a risk difference and an odds ratio  are three fits, not three
+#'   displays of one).  \itemize{   \item \code{"auto"}: the usual measure of
+#'   the outcome's family (OR for binomial /   ordinal / multinomial, IRR for
+#'   poisson, beta for gaussian).   \item \code{"odds_ratio"} / \code{"ratio"} /
+#'   \code{"difference"}: the named measure,   when the outcome offers it. A
+#'   combination the outcome does not offer says so, and lists   what it does
+#'   offer.   \item \code{"log"}: the family's usual estimand, left
+#'   un-exponentiated.  }
 #' @param empirical Add the crude, unadjusted, single-predictor companion
 #'   columns beside the model effect (the bivariate association that IS the
 #'   modelised quantity with a single predictor). Binomial / gaussian / poisson
@@ -513,6 +535,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   shares one population across every outcome as well.
 #' @param run_compare .
 #' @param refLevels .
+#' @param shapes .
 #' @param multiplicator .
 #' @param conf_level The confidence level for intervals and the significance
 #'   stars.
@@ -521,15 +544,24 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   MASS).
 #' @param stars Show per-cell significance stars (the colours read the
 #'   confidence interval either way).
-#' @param color Colour the effect cells with the sensible per-family colour
-#'   helper (OR magnitude for ratios, standardized difference for gaussian
-#'   betas). Uncheck for no colours.
+#' @param color WHAT the effect cells are coloured by. The colour LADDER
+#'   always comes from what the  column estimates (an odds ratio is read on the
+#'   odds-ratio scale, a beta on the  standardized-difference one), so what is
+#'   left to choose is what the estimate is compared  TO.  \itemize{   \item
+#'   \code{"auto"}: the effect's own size (compared to no effect).   \item
+#'   \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
+#'   effect moved from the crude one --   needs \code{empirical}.   \item
+#'   \code{"between_groups"}: how far each group's effect is from the first
+#'   group's   -- needs \code{split_var}.  }
 #' @param color_signif How significance interacts with the colours: observed
-#'   size + grey out non-significant  cells, colour only the guaranteed
+#'   size + grey out non-significant cells, colour only the guaranteed
 #'   (error-adjusted) effect, ignore significance.
-#' @param estimate_display The estimate-cell layout. "ci" shows a visible
-#'   interval; "prob" / "ame" fold the adjusted predicted probability / marginal
-#'   effect into the OR cell (binomial coefficient models only).
+#' @param display The estimate-cell LAYOUT (never the estimand: a display may
+#'   fold in another quantity of the SAME fit, it can never change the fit).
+#'   "ci" shows a visible interval; "prob" / "ame" fold the adjusted predicted
+#'   probability / marginal effect into the OR cell (binomial coefficient models
+#'   only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
+#'   display grammar.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
 #' @param wrap_rows .
@@ -563,9 +595,8 @@ jmvtabreg <- function(
     depFamily = NULL,
     depModelLevel = NULL,
     depTrials = NULL,
-    exponentiate = TRUE,
     effect = "coefficient",
-    at = "average",
+    measure = "auto",
     empirical = FALSE,
     models = NULL,
     baseline = 1,
@@ -573,13 +604,14 @@ jmvtabreg <- function(
     na = "drop_by_outcome",
     run_compare = FALSE,
     refLevels = NULL,
+    shapes = NULL,
     multiplicator = NULL,
     conf_level = 0.95,
     method = "wald",
     stars = TRUE,
-    color = TRUE,
+    color = "auto",
     color_signif = "grey_non_signif",
-    estimate_display = "value",
+    display = "value",
     cleannames = TRUE,
     subtext = "",
     wrap_rows = 35,
@@ -616,9 +648,8 @@ jmvtabreg <- function(
         depFamily = depFamily,
         depModelLevel = depModelLevel,
         depTrials = depTrials,
-        exponentiate = exponentiate,
         effect = effect,
-        at = at,
+        measure = measure,
         empirical = empirical,
         models = models,
         baseline = baseline,
@@ -626,13 +657,14 @@ jmvtabreg <- function(
         na = na,
         run_compare = run_compare,
         refLevels = refLevels,
+        shapes = shapes,
         multiplicator = multiplicator,
         conf_level = conf_level,
         method = method,
         stars = stars,
         color = color,
         color_signif = color_signif,
-        estimate_display = estimate_display,
+        display = display,
         cleannames = cleannames,
         subtext = subtext,
         wrap_rows = wrap_rows,

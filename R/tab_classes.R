@@ -1604,7 +1604,7 @@ tab_pvalue_lines <- function(tabs) {
   col_to_cv <- purrr::set_names(names(cv_to_col), unname(cv_to_col))
 
   # one displayed test per (subtable x col_var): chi2 (factors) / chosen F (means)
-  disp <- test_display_rows(test_tbl)
+  disp <- test_display_rows(test_tbl, tab_anova(tabs))
   disp <- dplyr::filter(disp, .data$col %in% names(cv_to_col), !is.na(.data$pvalue))
   if (nrow(disp) == 0) return(tabs)
 

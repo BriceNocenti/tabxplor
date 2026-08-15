@@ -248,6 +248,11 @@ Turn the option on when you want a \code{tab()} percentage interval to be compar
 because its crude companions are \emph{always} on the weighted basis, beside a model column that
 always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
 \code{wt} beside a design is an error (a design already carries its own weights).}
+    \item{\code{anova}}{Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
+\code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
+F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
+computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
+it changes which row is shown, never a number.}
     \item{\code{ci}}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
 \emph{geometry} of the interval is not asked here: it follows the comparison the table makes
 (\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
