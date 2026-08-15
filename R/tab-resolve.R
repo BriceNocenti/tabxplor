@@ -15,7 +15,7 @@
 #   pipeline: it routed WHICH step stamped the colour attribute, in four hand-written recodes over
 #   measure literals, one of which (color_ci) existed only to receive a legacy combined string the
 #   cascade manufactured one step after 17d had decoded such strings away. Each consumer now asks
-#   the measure what it needs -- measure_stage() for the leaf/test split, measure_applies() for the
+#   the measure what it needs -- measure_builds() for the contribution pass, measure_applies() for the
 #   numeric one -- so adding a measure touches no step.
 # KEY CONSTRAINTS:
 #   - Pure function of (argument values, column CLASS metadata) -> settings. It never reads

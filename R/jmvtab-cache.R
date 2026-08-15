@@ -405,11 +405,11 @@ jmv_cache_aggregate <- function(ctx) {
   cached_tests <- stats::setNames(vector("list", length(row_vars)), row_vars)
   for (i in seq_along(row_vars)) {
     rv <- row_vars[[i]]
-    # Skip when the colour makes the test step write per-cell fields (contrib -- not in the test
+    # Skip when the colour makes the leaf write per-cell contribution fields (not in the test
     # tibble, so it must recompute), and when the colour is still the unresolved "auto" sentinel: that
     # is a numeric-only table, whose test is the ANOVA computed outside this path.
     if (!isTRUE(chi2[[i]]) || identical(color[[i]], "auto") ||
-        identical(measure_stage(color[[i]]), "chi2")) next
+        identical(measure_builds(color[[i]]), "contrib")) next
     tkey <- jmv_hash(list("test", comp[[i]], na_scalar,
                           sort(unlist(fct_keys_by_rv[[rv]])), num_keys_by_rv[[rv]]))
     tier2_keys[[rv]] <- tkey
@@ -1108,10 +1108,14 @@ jmvtab_build <- function(data, opts, store) {
   # 19k: the .a.yaml speaks the anchor vocabulary now -- but a SAVED analysis (or a run in the window
   # before the maintainer's next prepare()) can still carry a retired spelling, and a lifecycle
   # warning has no business in the results panel. It resolves silently.
-  r_ci <- withr::with_options(
-    list(lifecycle_verbosity = "quiet"),
+  # WARNING (19l): base R, not withr::with_options() -- withr is Suggests-only, so calling it from
+  # live package code is a hard failure on a machine that does not have it (reg-assumptions.R states
+  # the same rule and hand-rolls the seed save/restore for it).
+  old_lv <- options(lifecycle_verbosity = "quiet")
+  r_ci   <- tryCatch(
     resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), color_signif, opts$stars,
-                    if (length(opts$ref)) opts$ref else "auto"))
+                    if (length(opts$ref)) opts$ref else "auto"),
+    finally = options(old_lv))
   ci <- r_ci$ci
 
   ce <- new.env(parent = emptyenv())

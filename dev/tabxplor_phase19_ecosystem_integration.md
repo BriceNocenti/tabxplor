@@ -1126,6 +1126,73 @@ This is a *deliberately open* phase. It has a method, not a checklist.
 **Verification**: targeted per deletion. Zero golden churn is the expectation — if a deletion moves
 output, it was not dead.
 
+##### Handed forward BY 19l (see CLAUDE.md's DONE summary for the measurements)
+
+**One hand-over 19l declined, with its reason — do not re-issue it as written.** 19j asked that
+`plain_core`'s `if (!all(is.na(a[[11]]))) "woolf"` (`R/tab.R`) read the plan (`or_ci`) instead.
+Measured: **the hand-over is wrong.** `ci_method` is a column-SCALAR, and the reference column, the
+total column and any degenerate 2×2 carry all-NA bounds *by construction* (the two masks in
+`tab_apply_reference`). Reading `or_ci` would stamp `"woolf"` on columns whose bounds were never
+computed, and `legend_method_name()` would then print *"Wald interval on the log odds-ratio"* for
+them — the exact **D8** failure the surrounding comment cites as its reason to exist. A real fix
+threads the `CI_GEOMS` row per column; that is a different, larger change.
+
+**Behaviour decisions, each needing its own fixture (→ 19m):**
+
+- **`tab_ci()` NAs the reference cell's BASE; `num_core()` NAs its RESULTS.** Re-measured: a
+  `ci = "cell"` mean keeps its reference-row interval through `tab_num()` and loses it through the
+  step path — and `leaf_ci_plain()` sides with `tab_ci()`, so it is **`num_core` alone vs the other
+  two**, not legacy vs modern. Either unification changes real cells.
+- **D22's "renders void" note is per COLUMN but reads as per TABLE** (19k's hand-over, unchanged).
+
+**Newly found in the sweep (→ 19m):**
+
+- **`emp_tips` is a positional per-row vector** (`tab-export-prep.R`, `prep_one_table`), carried
+  through `ungroup → drop_tab_vars → wrap` on the strength of a comment saying those three never
+  reorder. The same shape as the `row_roles` vector 19f deleted, one layer down. (19l fixed its
+  *key* — it sniffed for a column named `"var"` — but not its carrier.)
+- **`spread_relabel()` welds two facts into one string with an HTML tag** (`tab.R`:
+  `paste0(g, "<br>", get_col_var(...))`), which three downstream sites then sniff for
+  (`tab_xl.R` ×2, `fmt_class.R`). A magic in-band separator carrying a fact that wants its own
+  attribute.
+- **`grp_col[1]` in `tab_collapse_total_rows()`** (`tab_classes.R`) assumes the first grouping
+  variable is the merge's variable column, but `tab_compact()` groups by
+  `c(merge_tab_vars, "row_var")` — so on a compacted **+ `tab_vars`** table (a shape 19f newly made
+  possible) it keys on the tab_var. `tab_declared_vars(tab)$var_col` is already called in the same
+  function. **Suspected live, not reproduced** — needs a fixture first. Opt-in path
+  (`common_totrow`), so not on the default one.
+- **`is_reg` names two different questions**: `tab_is_reg()` (the stored kind) vs `fmt_class.R`'s
+  `!is.null(reg_call(x))` ("does it still carry the recipe"). They diverge on a `meta`-stripped reg
+  table, which `test-degraded-attrs.R` deliberately locks — a **rename**, not a merge, and the
+  comment calling the second "robust" is misleading.
+- **The `"Total"` build-time sentinel family** (`tab.R`: `leaf_totrow_tottab`, the `totcol_vector`,
+  the total-row scans) matches the literal the leaf itself minted before `leaf_rename_totals()`.
+  Not a rendered label, but the last place "is this the total" is a string, and a source level
+  genuinely named `"Total"` is indistinguishable. Lower priority than it looks.
+- **The silent length-fallback guards** (`tab-render-html.R` ×2, `tab_md.R`, transpose ×3) — the
+  class that masked D1's greyed footer for two phases. Delete-or-promote-to-`stopifnot`, consciously.
+- **`reg_crude_key()` returns `"binomial"` for an `rd` fit with `trials`**, where a grouped binomial
+  would get `"grouped_binomial"`. Harmless today (`reg_fit()` does not fit `rd` as grouped either),
+  but the two now disagree in one stated place instead of three unstated ones.
+
+**Corrections to the record — both overstate what exists:**
+
+- **There is no committed JS bracket-balance check.** CLAUDE.md and §19k both say *"the suite
+  balance-checks brackets"*; `tests/` opens no `.js` file. `test-jamovi-vocabulary.R` verifies only
+  the **generated blocks** — a few dozen lines out of `jamovi/js/`'s 1610. The three live JS bugs 19k
+  fixed were found by hand, which is the class an unverified 1560 lines produces. A real gate needs
+  `V8` (Suggests + `skip_if_not_installed`) or a CI-only `node --check`.
+- **The deprecation corpus is ~136 sites, not 385.** Of the raw grep hits, **177 are permanent silent
+  aliases** (`color = "diff"` 156, `color = "OR"` 21 — `COLOR_ALIASES`, never deprecated by design).
+  The genuine migration is `ci = "diff"` 70, `OR =` 35, `tab_many()` 22, `chi2 =` 17, `sup_cols` 12.
+  ⚠ `tests/testthat/setup.R` records that `options(lifecycle_verbosity = "quiet")` **does not work**
+  (`local_reproducible_output()` resets it per `test_that()`), so the only levers are migrating the
+  call or `suppressWarnings()` where the deprecated form *is* the subject.
+
+**Measurements still owed** (19j/19k asked, 19l did not run them): the per-`col_var` `agg_chi2` cost
+— which needs a **new op** in `benchmark_small_ops()`, not a new harness, since nothing in-suite
+tests >1 col_var *with* a test; the reg fit-cache digest path now unreachable for
+`color = "adjustment"` / any `shape`; and 19d's odds-ratio cost on a wide table.
 
 
 ---

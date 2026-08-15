@@ -174,7 +174,9 @@ test_that("measure = log colours the log-RR coefficient on the log scale (is_log
                                 empirical = TRUE, cleannames = FALSE))
   cf <- t[[grep("^Model", names(t), value = TRUE)[1]]]
   expect_equal(get_model_family(cf), "rr")
-  expect_true(reg_fam_logscale("rr"))
+  # 19l: reg_fam_logscale() is gone -- "this coefficient lives on a log scale" is the column's own
+  # STORED scale, which is what the colour engine and the legend have read since 19b.
+  expect_equal(get_scale(cf), "log_coef")
   # the crude twin is the LOGGED risk ratio, matching the model's link scale
   expect_true("Obs_log(RR)" %in% names(t))
   expect_equal(get_diff(t[["Obs_log(RR)"]])[3:4],

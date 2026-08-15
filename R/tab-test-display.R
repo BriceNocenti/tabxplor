@@ -235,10 +235,6 @@ reg_footer_spec <- function() c(list(
   reg_check_spec_entries()
 )
 reg_footer_test_types <- function() names(reg_footer_spec())
-reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))
-# The discriminators whose row is about ONE PREDICTOR (`term`) rather than the whole model, so
-# reg_footer_plan() renders them "<label>: <term>" and emits one row per predictor present.
-reg_footer_per_term <- function() c(reg_global_types(), reg_check_types())
 # Phase 18z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
 # table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
 # (stats = FALSE) is still a reg table, so tab_kind()'s DEGRADED fallback must know them.

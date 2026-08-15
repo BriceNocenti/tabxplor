@@ -11,7 +11,10 @@ allowed-tools: Read, Grep, Edit
 - **FIELDS**: per-cell, length = `length(x)`, accessed via `vctrs::field()`. Currently **21**, listed
   verbatim in `fmt_field_names` (~L1524):
   `n, display, digits, wn, pct, mean, diff, ratio, ctr, var, ci_inf, ci_sup, pvalue, or, tot_n,`
-  `n_eff, obs, gap_se, in_totrow, in_tottab, in_refrow`.
+  `n_eff, obs, gap_se, row_kind, in_tottab, in_refrow`.
+  - `row_kind` (Phase 19f) REPLACED the logical `in_totrow`: `data`/`total`/ the five synthetic
+    display kinds `n`/`pct`/`pvalue`/`gof`/`blank`. `is_totrow()` is the derived read `== "total"`,
+    `fmt(in_totrow =)` a soft-deprecated spelling and `$in_totrow` a read alias.
   - `ci` is **not** a field — `get_ci()` derives the half-width from `ci_inf`/`ci_sup` (the Phase 1a
     bounds-shim); the public `fmt(ci=)` arg and `$ci` still work.
   - `resid` is **not** a field either — `fmt_resid()` derives the adjusted standardized residual from
@@ -19,7 +22,7 @@ allowed-tools: Read, Grep, Edit
     `set_num()` one. **Prefer deriving over adding a field** when the value is a pure function of
     existing ones.
   - `rr` was renamed `ratio` (read-side alias only).
-- **ATTRIBUTES**: scalar per column, accessed via `attr()`. Currently **11**, and the list is
+- **ATTRIBUTES**: scalar per column, accessed via `attr()`. Currently **15**, and the list is
   **DERIVED**, never hand-written: `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names,
   "...", "class"))` = `scale, comp_all, ref, pct_base, col_var, totcol, refcol, color, color_signif,`
   `model_family, role, conf_level, degf, basis, ci_method` (**15** since Phase 19b). Adding an attribute

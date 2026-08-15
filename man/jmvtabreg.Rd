@@ -13,9 +13,8 @@ jmvtabreg(
   depFamily = NULL,
   depModelLevel = NULL,
   depTrials = NULL,
-  exponentiate = TRUE,
   effect = "coefficient",
-  at = "average",
+  measure = "auto",
   empirical = FALSE,
   models = NULL,
   baseline = 1,
@@ -23,13 +22,14 @@ jmvtabreg(
   na = "drop_by_outcome",
   run_compare = FALSE,
   refLevels = NULL,
+  shapes = NULL,
   multiplicator = NULL,
   conf_level = 0.95,
   method = "wald",
   stars = TRUE,
-  color = TRUE,
+  color = "auto",
   color_signif = "grey_non_signif",
-  estimate_display = "value",
+  display = "value",
   cleannames = TRUE,
   subtext = "",
   wrap_rows = 35,
@@ -66,21 +66,23 @@ results.}
 
 \item{depTrials}{.}
 
-\item{exponentiate}{Exponentiate the coefficients into ratios (odds ratios
-/ incidence-rate ratios), automatically leaving gaussian linear
-coefficients on their raw scale. Uncheck to keep every coefficient on the
-coefficient (log / linear) scale.}
+\item{effect}{WHICH CONTRAST the table reports.  \itemize{   \item
+\code{"coefficient"}: the model's native per-family effect.   \item
+\code{"marginal"}: the average marginal effect on the response scale,
+averaged   over the sample (needs the marginaleffects package).   \item
+\code{"at_reference"}: the same, evaluated at the reference profile (other
+predictors at their reference level / mean).  }}
 
-\item{effect}{"coefficient" is the native per-family effect (beta / OR /
-IRR). "AME" is the average marginal effect on the response scale, a
-difference in percentage points. "RR" is the same quantity as a RATIO --
-the marginal risk ratio (the ratio of adjusted predicted probabilities),
-for binomial / multinomial / ordinal outcomes only. Both need the
-marginaleffects package.}
-
-\item{at}{Where marginal effects are evaluated: averaged over the sample,
-or at the reference profile (other predictors at their reference level /
-mean).}
+\item{measure}{WHICH MEASURE the contrast is expressed in -- the second
+half of the estimand, and the  only argument that changes the MODEL (a risk
+ratio, a risk difference and an odds ratio  are three fits, not three
+displays of one).  \itemize{   \item \code{"auto"}: the usual measure of
+the outcome's family (OR for binomial /   ordinal / multinomial, IRR for
+poisson, beta for gaussian).   \item \code{"odds_ratio"} / \code{"ratio"} /
+\code{"difference"}: the named measure,   when the outcome offers it. A
+combination the outcome does not offer says so, and lists   what it does
+offer.   \item \code{"log"}: the family's usual estimand, left
+un-exponentiated.  }}
 
 \item{empirical}{Add the crude, unadjusted, single-predictor companion
 columns beside the model effect (the bivariate association that IS the
@@ -107,6 +109,8 @@ shares one population across every outcome as well.}
 
 \item{refLevels}{.}
 
+\item{shapes}{.}
+
 \item{multiplicator}{.}
 
 \item{conf_level}{The confidence level for intervals and the significance
@@ -119,17 +123,26 @@ MASS).}
 \item{stars}{Show per-cell significance stars (the colours read the
 confidence interval either way).}
 
-\item{color}{Colour the effect cells with the sensible per-family colour
-helper (OR magnitude for ratios, standardized difference for gaussian
-betas). Uncheck for no colours.}
+\item{color}{WHAT the effect cells are coloured by. The colour LADDER
+always comes from what the  column estimates (an odds ratio is read on the
+odds-ratio scale, a beta on the  standardized-difference one), so what is
+left to choose is what the estimate is compared  TO.  \itemize{   \item
+\code{"auto"}: the effect's own size (compared to no effect).   \item
+\code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
+effect moved from the crude one --   needs \code{empirical}.   \item
+\code{"between_groups"}: how far each group's effect is from the first
+group's   -- needs \code{split_var}.  }}
 
 \item{color_signif}{How significance interacts with the colours: observed
-size + grey out non-significant  cells, colour only the guaranteed
+size + grey out non-significant cells, colour only the guaranteed
 (error-adjusted) effect, ignore significance.}
 
-\item{estimate_display}{The estimate-cell layout. "ci" shows a visible
-interval; "prob" / "ame" fold the adjusted predicted probability / marginal
-effect into the OR cell (binomial coefficient models only).}
+\item{display}{The estimate-cell LAYOUT (never the estimand: a display may
+fold in another quantity of the SAME fit, it can never change the fit).
+"ci" shows a visible interval; "prob" / "ame" fold the adjusted predicted
+probability / marginal effect into the OR cell (binomial coefficient models
+only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
+display grammar.}
 
 \item{cleannames}{Strip numeric prefixes from factor level labels.}
 

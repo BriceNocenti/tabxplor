@@ -510,16 +510,6 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
       all_tabs_pct <- names(pct)[pct == "all_tabs"]
 
 
-      #Calculate percentages
-      # pct_formula <- function(x, pct, tot) {
-      #   switch(pct,
-      #          "row"     =  get_wn(x) / get_wn(tot             ),
-      #          "col"     =  get_wn(x) / get_wn(dplyr::last(x)  ),
-      #          "all"     =  get_wn(x) / get_wn(dplyr::last(tot)),
-      #          "all_tabs"=  get_wn(x) / get_wn(dplyr::last(tot)),
-      #          NA_real_)
-      # }
-      #For each var, the first total column at the right is taken
       tot_cols <- detect_totcols(tabs)
 
 
@@ -884,13 +874,6 @@ tab_ci <- function(tabs,
   subtext <- get_subtext(tabs)
   test    <- get_test(tabs)
 
-  # no_col_var <- get_col_var(tabs) == "no_col_var"
-  # no_col_var <- no_col_var[no_col_var]
-  # tabs <- tabs |> mutate(across(
-  #   all_of(no_col_var),
-  #   as_totcol,
-  #   .names = "{.col}_Total"
-  # ))
 
   get_vars          <- tab_get_vars(tabs)
 

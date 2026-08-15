@@ -203,8 +203,9 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   # the build classes: diff and ratio share one (the leaf computes both fields together)
   testthat::expect_equal(measure_builds("ratio"), measure_builds("difference"))
   testthat::expect_equal(measure_builds("contrib"), "contrib")
-  testthat::expect_equal(measure_stage("contrib"), "chi2")   # only the test step stamps it
-  testthat::expect_equal(measure_stage("difference"), "leaf")
+  # 19l: measure_stage() is gone -- it wrapped exactly this test and named its answer after the
+  # chi2 STEP that 19j deleted. The contribution pass is still a separate computation in the leaf.
+  testthat::expect_false(identical(measure_builds("difference"), "contrib"))
 
   # what each measure declares it needs
   testthat::expect_true(measure_forces("contrib", "chi2"))

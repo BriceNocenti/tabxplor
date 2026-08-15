@@ -344,3 +344,33 @@ testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext 
   # cannot lose it. The fallback fires only for a frame with no fmt columns at all.
   testthat::expect_true(all(tabxplor:::tab_row_roles(tibble::tibble(a = 1:3)) == "data"))
 })
+
+# --- Phase 19l: the helper columns DECLARE what they are --------------------------------------
+# Before 19l the add_n `n` column and the add_pct `col_pct` column both carried the string
+# "all_col_vars" as their `col_var` -- a tag that lies (they belong to NO col_var, not to all of
+# them) and whose other, opposite meaning is the legacy tab_tot() grand-total column. Nothing
+# asserted it either way: no `_golden/` fixture uses add_n at all. They declare a `role` now.
+testthat::test_that("add_n / add_pct helper columns declare a role and carry no col_var", {
+  t  <- tab(gss, marital, race, pct = "row", add_n = TRUE, add_pct = TRUE)
+  mt <- tab_materialize_extras(t, backend = "xl")
+
+  testthat::expect_true(all(c("n", "col_pct") %in% names(mt)))
+  testthat::expect_identical(get_role(mt$n), "n")
+  testthat::expect_identical(get_role(mt$col_pct), "pct")
+  # they belong to no col_var -- and never again to the string the grand total uses
+  testthat::expect_identical(unname(get_col_var(mt$n)), "")
+  testthat::expect_identical(unname(get_col_var(mt$col_pct)), "")
+  testthat::expect_false(any(get_col_var(mt) == "all_col_vars"))
+
+  # the ONE predicate every consumer reads, and it must not sweep up a real level column
+  testthat::expect_identical(names(mt)[fmt_is_helper_col(mt)], c("col_pct", "n"))
+  testthat::expect_false(fmt_is_helper_col(mt[["Total"]]))
+
+  # no extras asked for -> no helper column at all
+  t0 <- tab(gss, marital, race, pct = "row", add_n = FALSE)
+  testthat::expect_false(any(fmt_is_helper_col(tab_materialize_extras(t0, backend = "xl"))))
+  # and the `n` one is xl-only: 17g folds the base into the Total cell on the text backends instead
+  # of building a column to throw away, so only the add_pct helper survives there
+  mtxt <- tab_materialize_extras(t, backend = "text")
+  testthat::expect_identical(names(mtxt)[fmt_is_helper_col(mtxt)], "col_pct")
+})

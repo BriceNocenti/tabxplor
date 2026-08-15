@@ -29,8 +29,8 @@ Set to \code{FALSE} to avoid this behaviour.}
 \item{.only_main_display}{By default, only the rows with the same display
 than the first row are arranged : if the first row of the group displays
 percentages, rows with n or pvalues are kept at the same place
-(typically, at the end of the group). Rows with the text \code{"row_pct"}, \code{"n"}
-or \code{"pvalue"} in the \code{row_var} name are also kept at the same place.
+(typically, at the end of the group). The synthetic \code{n} / percentage / p-value
+rows are found by their stored row kind, so they are kept at the same place too.
 Set to \code{FALSE} to avoid this behaviour.}
 
 \item{.locale}{The locale to sort character vectors in.}

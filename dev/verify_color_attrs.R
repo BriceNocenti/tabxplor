@@ -214,7 +214,6 @@ probe_resolver <- function() {
                    # Phase 19c: the four per-step sub-passes are gone; what each consumer derives
                    # from the ONE resolved measure is recorded instead, so the probe still shows the
                    # routing (and a pre-19c run of this script can be diffed against it).
-                   out_stage = measure_stage(s$color),
                    out_builds = measure_builds(s$color),
                    out_num_ok = identical(s$color, "auto") || measure_applies(s$color, "num"))
   })
@@ -230,7 +229,6 @@ if (identical(mode, "probe")) {
   p <- probe_resolver()
   cat("resolver probe:", nrow(p), "rows\n")
   cat("resolved color:", paste(sort(unique(p$out_color)), collapse = " | "), "\n")
-  cat("stamping stage:", paste(sort(unique(p$out_stage)), collapse = " | "), "\n")
   cat("build class   :", paste(sort(unique(p$out_builds)), collapse = " | "), "\n")
   saveRDS(p, sub("[.]rds$", "_probe.rds", path), version = 2)
   quit(save = "no")

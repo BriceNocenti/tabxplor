@@ -2070,9 +2070,6 @@ tab_setup <- function(ctx) {
     pos_row_vars <- tidyselect::eval_select(row_vars, data)
     row_vars     <- rlang::syms(names(pos_row_vars))
   }
-  # row_vars_num  <- purrr::map_lgl(data[pos_row_vars], is.numeric)
-  # row_vars_text <- purrr::map_lgl(data[pos_row_vars],
-  #                                 ~ is.factor(.) | is.character(.))
 
   col_vars <- col_vars_quo
   if (quo_miss_na_null_empty_no(col_vars)) {
@@ -2352,7 +2349,7 @@ tab_setup <- function(ctx) {
   # Phase 7b: the whole colour cascade -- color = "auto" resolution and the measure's declared
   # forcing of totrow / chi2 / ci / ref -- lives in ONE pure resolver,
   # tab_resolve_settings() (R/tab-resolve.R), shared with tab_counts(). Phase 19c: it returns ONE
-  # resolved measure; each consumer derives its own need from it (measure_stage / measure_applies)
+  # resolved measure; each consumer derives its own need from it (measure_builds / measure_applies)
   # instead of reading one of four precomputed per-step sub-passes. It is a data-free
   # function of the arguments + column classes: the exact boundary the Jamovi `.js` mirrors and
   # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
@@ -2853,7 +2850,7 @@ tab_transform <- function(ctx) {
     # Phase 19j (KEY 5): WHICH test each leaf must compute. "ctr" also writes the per-cell contribution
     # FIELDS (which are not in the `test` tibble, so a tier-2 cache HIT cannot serve it); "no" covers
     # both `test = FALSE` and a hit, whose cached tibble is injected below instead.
-    want_ctr  <- identical(measure_stage(color), "chi2")
+    want_ctr  <- identical(measure_builds(color), "contrib")
     test_leaf <- if (!isTRUE(chi2)) "no"
                  else if (!is.null(cached_test) && !want_ctr) "no"
                  else if (want_ctr) "ctr" else "p"
@@ -2866,14 +2863,13 @@ tab_transform <- function(ctx) {
            # realisation applies, so the fact travels instead of being re-derived from the level count.
            lv1[col_vars_text]),
       function(.col_var, .digits, .na, .pct, .ref, .ref2, .lv1) {
-        # Phase 19c: the LEAF is the stamping stage for every measure but contrib, whose per-cell
-        # contributions only the test step can compute (measure_stage()). That single question
-        # replaced the `color_diff_OR` recode; passing the measure straight through would make the
-        # leaf stamp "diff" on a contrib table (its `color_1` fall-through).
-        # Phase 19j (KEY 5): the test step IS the leaf now, so the two halves of that question are one
-        # call -- `color_leaf` stays "no" for contrib (chi2_write_contrib stamps it), and `test_leaf`
-        # says which of the two the leaf must compute.
-        color_leaf <- if (identical(measure_stage(color), "chi2")) "no" else color
+        # Phase 19c: the leaf stamps every measure but contrib, whose per-cell contributions are a
+        # SEPARATE computation (chi2_write_contrib). That single question replaced the
+        # `color_diff_OR` recode; passing the measure straight through would make the leaf stamp
+        # "diff" on a contrib table (its `color_1` fall-through). 19l: it is `measure_builds()`
+        # directly -- `measure_stage()` wrapped exactly this test and named the answer after a step
+        # 19j deleted. `want_ctr` above is the same question, computed once.
+        color_leaf <- if (want_ctr) "no" else color
         r_pl <- plain_resolve(.pct, .ref, .ref2, .na, totaltab_name, total_names,
                               c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms,
                               comparison = comparison)
@@ -3071,7 +3067,10 @@ tab_assemble_tables <- function(ctx) {
   # leaves, read back by tab_declared_vars()); what is recorded here is what no column can carry.
   vars_attr <- new_vars_attr(
     wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
-    var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
+    # 19l: no exists() guard -- `var_labels` is a DECLARED ctx field (new_ctx(), default character()),
+    # so list2env() above always creates the binding. This was the last of the guards 19i's
+    # declaration was meant to retire; it could never be FALSE.
+    var_labels = var_labels)
   # Phase 17b: the two 2.0.0-new attrs left here are ONE `meta` list (drop-NULL happens in new_tab()).
   # Phase 19g (KEY 6): the table STATES its identity -- kind + what no column can carry.
   meta <- list(render_extras = render_extras, spec = new_spec("crosstab", vars = vars_attr))
@@ -3276,27 +3275,6 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     new_levels <- purrr::set_names(as.character(dplyr::pull(new_levels, row_var)),
                                    new_levels$new_levels)
 
-    # if (length(groups) - 1 != 0) {
-    #   group_vars_totals <-
-    #     dplyr::group_keys(dplyr::filter(tabs, !tottab_line)) |> #dplyr::mutate(bis = PR0) |>
-    #     dplyr::select(-tidyselect::all_of(spread_vars)) |>
-    #     tidyr::unite(!!row_var, sep = " / ") |>
-    #     dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ paste(totname, .))) |>
-    #     tibble::deframe() |>
-    #     stringi::stri_trans_toupper() |> forcats::as_factor()
-    # } else {
-    #   group_vars_totals <- factor(totname)
-    # }
-    #
-    # former_levels <-
-    #   tibble::add_column(tabs, totrows = is_totrow(tabs),
-    #                      tottab = is_tottab(tabs)) |>
-    #   dplyr::filter(.data$totrows & !.data$tottab) |> dplyr::pull(row_var)
-    #
-    # group_vars_totals <- vctrs::vec_recycle(group_vars_totals, length(former_levels))
-    #
-    # new_levels <- former_levels |> as.character() |>
-    #   purrr::set_names(group_vars_totals)
 
     tabs <- tabs |> dplyr::mutate(
       !!rlang::sym(row_var) := forcats::fct_recode(!!rlang::sym(row_var),
@@ -3480,10 +3458,14 @@ tab_transpose <- function(tabs, name = NULL) {
   # The level names are suffixed `_<var>` ONLY where two row_vars share one, mirroring the convention
   # tab() itself uses for colliding col_var levels (`Other_race`) -- and the exporters' suffix
   # stripping (tab_col_var_header) reverses it.
-  merged      <- isTRUE(tab_declared_vars(tabs)$compacted)
+  # 19l: the variable column is the DECLARED one, not a column that happens to be named "row_var".
+  dvars       <- tab_declared_vars(tabs)
+  merged      <- isTRUE(dvars$compacted)
+  var_col_nm  <- intersect(dvars$var_col, names(tabs))
+  src_of      <- function() as.character(tabs[[var_col_nm[[1]]]])
   src_row_var <- NULL
   if (merged) {
-    src   <- as.character(tabs[["row_var"]])
+    src   <- src_of()
     lvl   <- as.character(tabs[[row_var]])
     dup   <- lvl %in% names(which(tapply(src, lvl, function(s) length(unique(s))) > 1))
     key   <- ifelse(dup, paste0(lvl, "_", src), lvl)
@@ -3510,7 +3492,7 @@ tab_transpose <- function(tabs, name = NULL) {
   refrow_labels <- labels[refrow_lgl]
   # One total row per SUB-TABLE (a merged table legitimately has one per row_var); each becomes its
   # own total column. Only a single sub-table with two total rows is ambiguous.
-  max_per_sub <- function(x) if (merged) max(c(0L, table(as.character(tabs[["row_var"]])[x])))
+  max_per_sub <- function(x) if (merged) max(c(0L, table(src_of()[x])))
                              else sum(x)
   if (max_per_sub(totrow_lgl) > 1) {
     cli::cli_abort("{.fn tab_transpose} does not work (yet) with more than one total row.")
@@ -3909,12 +3891,6 @@ tab_prepare <-
       dplyr::select(data[pos_variables], where(~ !is.numeric(.))) |>
       colnames() #|> rlang::syms()                # is.integer(.) | is.double()
 
-    #Transform characters to factors first ? Time taker.
-    # data <- data |>
-    #   dplyr::mutate(dplyr::across(
-    #     tidyselect::all_of(vars_not_numeric) & where(~ !is.factor(.)),
-    #     as.factor
-    #   ))
 
     # Phase 18z10: the blanket `ordered`-strip that used to live here is GONE. Its FIXME guessed at
     # MCA; the real cause, measured, was two vctrs bind sites in the TOTALS machinery, both reachable
@@ -3925,10 +3901,6 @@ tab_prepare <-
     # WARNING (public surface): a table's grouping columns now come back `ordered`, with "NA" and
     # "Total"/"Ensemble" appended as the GREATEST levels -- they are labels, not scale points.
 
-    # Remove unused levels : time taker
-    # data <- data |>  #Remove unused levels anyway
-    #   dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
-    #                               forcats::fct_drop))
 
     # Phase 7d-ii: rare-level lump + cleannames relabel are now standalone helpers (callable by the
     # jmvtab cache); tab_prepare composes them here in the same lump-then-clean order (byte-identical).
@@ -4201,23 +4173,6 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     tab_vars     <- rlang::syms(names(pos_tab_vars))
   }
 
-  # if (missing(...)) {
-  #   #data <- data |> dplyr::mutate(no_tab_vars = factor(" "))
-  #   tab_vars <- character() #rlang::syms("no_tab_vars")
-  # } else {
-  #   tab_vars_quo <- rlang::enquos(...)
-  #   NA_tab_vars  <- purrr::map(tab_vars_quo,
-  #                              ~ is.na(as.character(rlang::get_expr(.)))) |>
-  #     purrr::flatten_lgl()
-  #   if (all(NA_tab_vars) ) {
-  #     #data <- data |> dplyr::mutate(no_tab_vars = factor(" "))
-  #     tab_vars <- character() #rlang::syms("no_tab_vars")
-  #   } else {
-  #     tab_vars     <- rlang::expr(c(...))
-  #     pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-  #     tab_vars     <- rlang::syms(names(pos_tab_vars))
-  #   }
-  # }
 
   wt_quo <- rlang::enquo(wt)
   if (quo_miss_na_null_empty_no(wt_quo)) {
@@ -4658,6 +4613,18 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
 
+  # THE OPTIONAL LEAF TABLES. Each is produced only on some paths (weighted / percentage / reference
+  # / OR-interval / design-based), so the twelve reads below have to ask "was this one produced?".
+  # Phase 19l declares them ONCE instead: they were bare locals, and every read asked the ENVIRONMENT
+  # through `exists(<name>, rlang::current_env(), inherits = FALSE)` -- 29 of them, four of which
+  # spelled the call differently. That is the same disease `new_ctx()` cured for the build context in
+  # 19i: an undeclared name is indistinguishable from a mistyped one, and a typo reads as "absent"
+  # instead of erroring. This list IS the documentation of what the leaf may or may not compute.
+  tabs_wn <- tabs_w2 <- tabs_pct <- tabs_totn <- tabs_neff <- NULL
+  tabs_diff <- tabs_mean <- tabs_rr <- tabs_or <- NULL
+  tabs_or_ci_inf <- tabs_or_ci_sup <- tabs_or_pvalue <- NULL
+  refcols_vector <- refrows <- NULL
+
   # Phase 17f: df/num build the normal table like any other and extract get_num() at the very end
   # (leaf_extract_raw), so this is now the SINGLE aggregation-shaping path (the former df/num early
   # return + count-only branch are gone).
@@ -4792,8 +4759,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     if (ref != "no" & pct %in% c("row", "col")) {
       # Phase 7f: the reference step is the shared tab_apply_reference() (used verbatim here and by the
       # jmvtab tier-3 re-ref). It returns diff / ratio(=tabs_mean) and, when OR/color needs them, rr /
-      # or + the ref-col vector; refrows is the ref-row marker. Assign each only when produced so the
-      # downstream exists() guards behave exactly as with the former inline locals.
+      # or + the ref-col vector; refrows is the ref-row marker. Assign each only when produced; the
+      # optional-table declaration at the top of this function leaves the rest NULL.
       # 14z: compute the OR interval only when a colour policy or stars needs it (else a NULL tabs_totn
       # skips it in tab_apply_reference -> no ci_type/bounds change, so existing ignore-OR tables stay
       # byte-identical). color_signif reads the bounds; stars read the (want_p-gated) pvalue.
@@ -4809,7 +4776,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         # significance/stars on a weighted crosstab widen consistently with the % CI brackets.
         # z14-ii: keyed on the object existing rather than on the basis, since it also carries the
         # DESIGN base -- byte-identical, `tabs_neff` having only ever existed under one of the two.
-        tabs_neff = if (or_want_ci && exists("tabs_neff", inherits = FALSE)) tabs_neff else NULL,
+        tabs_neff = if (or_want_ci && !is.null(tabs_neff)) tabs_neff else NULL,
         conf_level = conf_level, stars = stars, degf = inference$degf,
         dichotomise = dichotomise
       )
@@ -4830,17 +4797,17 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   #Make the final table with fmt vectors
   # remove(list = c("tabs_n", "tabs_wn", "tabs_pct", "tabs_diff", "tabs_ci", "refcols_vector", "refrows"))
   tabs_n [, names(text_vars) := NULL]
-  if (exists("tabs_wn"  , rlang::current_env(), inherits = F)) tabs_wn  [, names(text_vars) := NULL]
-  if (exists("tabs_pct" , rlang::current_env(), inherits = F)) tabs_pct [, names(text_vars) := NULL]
-  if (exists("tabs_diff", rlang::current_env(), inherits = F)) tabs_diff[, names(text_vars) := NULL]
-  if (exists("tabs_mean", rlang::current_env(), inherits = F)) tabs_mean[, names(text_vars) := NULL]
-  if (exists("tabs_rr"  , rlang::current_env(), inherits = F)) tabs_rr  [, names(text_vars) := NULL]
-  if (exists("tabs_or"  , rlang::current_env(), inherits = F)) tabs_or  [, names(text_vars) := NULL]
-  if (exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)) tabs_or_ci_inf[, names(text_vars) := NULL]
-  if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) tabs_or_ci_sup[, names(text_vars) := NULL]
-  if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) tabs_or_pvalue[, names(text_vars) := NULL]
-  if (exists("tabs_totn", rlang::current_env(), inherits = F)) tabs_totn[, names(text_vars) := NULL]
-  if (exists("tabs_neff", rlang::current_env(), inherits = F)) tabs_neff[, names(text_vars) := NULL]
+  if (!is.null(tabs_wn)) tabs_wn  [, names(text_vars) := NULL]
+  if (!is.null(tabs_pct)) tabs_pct [, names(text_vars) := NULL]
+  if (!is.null(tabs_diff)) tabs_diff[, names(text_vars) := NULL]
+  if (!is.null(tabs_mean)) tabs_mean[, names(text_vars) := NULL]
+  if (!is.null(tabs_rr)) tabs_rr  [, names(text_vars) := NULL]
+  if (!is.null(tabs_or)) tabs_or  [, names(text_vars) := NULL]
+  if (!is.null(tabs_or_ci_inf)) tabs_or_ci_inf[, names(text_vars) := NULL]
+  if (!is.null(tabs_or_ci_sup)) tabs_or_ci_sup[, names(text_vars) := NULL]
+  if (!is.null(tabs_or_pvalue)) tabs_or_pvalue[, names(text_vars) := NULL]
+  if (!is.null(tabs_totn)) tabs_totn[, names(text_vars) := NULL]
+  if (!is.null(tabs_neff)) tabs_neff[, names(text_vars) := NULL]
   #if (exists("tabs_ci"  , rlang::current_env(), inherits = F)) tabs_ci  [, names(text_vars) := NULL]
 
   totcol_vector <- names(tabs_n) == "Total"
@@ -4848,11 +4815,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   if (ref == "tot") refrows <- rep(FALSE, nrow(tabs_n))
 
-  refrows <- if (exists("refrows", rlang::current_env(), inherits = F)) {
-    refrows
-  } else {
-    rep(FALSE, nrow(tabs_n))
-  }
+  if (is.null(refrows)) refrows <- rep(FALSE, nrow(tabs_n))
 
   # Phase 19j (KEY 5): THE cell / contrast interval, computed here -- where the plan is -- instead of
   # 1 500 lines later by tab_ci() from reconstructed markers. Everything it needs is a clean matrix at
@@ -4860,11 +4823,11 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # `ref = "tot"` zeroes `refrows` above (the total row is not a "reference row" marker), which is
   # exactly the distinction tab_ci()'s ref_mask() drew by reading `ref` back off the column.
   ci_res <- leaf_ci_plain(
-    P     = if (exists("tabs_pct" , rlang::current_env(), inherits = F))
+    P     = if (!is.null(tabs_pct))
               as.matrix(tabs_pct)  * 1.0 else matrix(NA_real_, nrow(tabs_n), ncol(tabs_n)),
-    tot_n = if (exists("tabs_totn", rlang::current_env(), inherits = F))
+    tot_n = if (!is.null(tabs_totn))
               as.matrix(tabs_totn) * 1.0 else matrix(NA_real_, nrow(tabs_n), ncol(tabs_n)),
-    n_eff = if (exists("tabs_neff", rlang::current_env(), inherits = F))
+    n_eff = if (!is.null(tabs_neff))
               as.matrix(tabs_neff) * 1.0 else NULL,
     ci = ci, pct = pct, ci_scale = ci_scale,
     # tab_ci() ungroups for a ROW contrast under comp = "all" and for nothing else -- so a column
@@ -4874,7 +4837,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
                        sep = "\r")),
     ref_row = if (identical(as.character(ref), "tot")) totrow_vector else refrows,
     totrow  = totrow_vector,
-    refcol  = if (exists("refcols_vector", rlang::current_env(), inherits = F) &&
+    refcol  = if (!is.null(refcols_vector) &&
                   any(refcols_vector)) which(refcols_vector)[1] else NA_integer_,
     totcol  = totcol_vector,
     conf_level = conf_level, stars = stars,
@@ -4932,7 +4895,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # mutually exclusive, which is the whole reason the geometry had to be settled before either was
   # asked for. `or_from_leaf` also keeps the ci_method stamp honest: under `or_ci` a column whose own
   # 2x2 was degenerate carries all-NA bounds and therefore names no method (D19).
-  or_from_leaf <- exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)
+  or_from_leaf <- !is.null(tabs_or_ci_inf)
   mat_cols     <- function(M) lapply(seq_len(ncol(M)), function(j) M[, j])
   ci_inf_1     <- if (or_from_leaf) tabs_or_ci_inf else
                   if (!is.null(ci_res$inf))    mat_cols(ci_res$inf)    else list(NA_reals)
@@ -4943,19 +4906,19 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   tabs <-
     list(tabs_n,
-         if (exists("tabs_wn"  , rlang::current_env(), inherits = F)) { tabs_wn   } else { list(NA_reals) },
-         if (exists("tabs_pct" , rlang::current_env(), inherits = F)) { tabs_pct  } else { list(NA_reals) },
-         if (exists("tabs_diff", rlang::current_env(), inherits = F)) { tabs_diff } else { list(NA_reals) },
-         if (exists("tabs_mean", rlang::current_env(), inherits = F)) { tabs_mean } else { list(NA_reals) },
-         if (exists("tabs_rr"  , rlang::current_env(), inherits = F)) { tabs_rr   } else { list(NA_reals) },
-         if (exists("tabs_or"  , rlang::current_env(), inherits = F)) { tabs_or   } else { list(NA_reals) },
+         if (!is.null(tabs_wn)) { tabs_wn   } else { list(NA_reals) },
+         if (!is.null(tabs_pct)) { tabs_pct  } else { list(NA_reals) },
+         if (!is.null(tabs_diff)) { tabs_diff } else { list(NA_reals) },
+         if (!is.null(tabs_mean)) { tabs_mean } else { list(NA_reals) },
+         if (!is.null(tabs_rr)) { tabs_rr   } else { list(NA_reals) },
+         if (!is.null(tabs_or)) { tabs_or   } else { list(NA_reals) },
 
          totcol_vector,
-         if (exists("refcols_vector", rlang::current_env(), inherits = F)) { refcols_vector } else {
+         if (!is.null(refcols_vector)) { refcols_vector } else {
            rep(FALSE, length(cols)) },
-         if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) },
+         if (!is.null(tabs_totn)) { tabs_totn } else { list(NA_reals) },
          ci_inf_1, ci_sup_1, ci_pvalue_1,
-         if (exists("tabs_neff", rlang::current_env(), inherits = F)) { tabs_neff } else { list(NA_reals) }
+         if (!is.null(tabs_neff)) { tabs_neff } else { list(NA_reals) }
     ) |>
     # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
     # fmt_materialize_col() (== the former inline new_fmt, byte-identical). pmap_dfc is KEPT so the
@@ -5392,7 +5355,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
   # Phase 18z16-iv (W-G.5): the OR-branch locals are DECLARED here, absent = NULL, so the guards
   # below read `is.null()` -- the Phase 17e typed-default idiom -- instead of `exists(inherits =
   # FALSE)`, which asks the environment a question the function can simply answer.
-  tabs_rr <- NULL; tabs_or <- NULL; or_cells <- NULL; refcols_vector <- NULL
+  # 19l: `or_refrows` joins them -- it was the one local of this block still asked for with exists().
+  tabs_rr <- NULL; tabs_or <- NULL; or_cells <- NULL; refcols_vector <- NULL; or_refrows <- NULL
 
   # write a derived matrix M2 (columns aligned to `nm`) into a data.table's value columns in place
   set_cols <- function(dt, M2) dt[, (nm) := lapply(seq_len(k), function(j) M2[, j])]
@@ -5611,7 +5575,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
   or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
   # Phase 19d: `or_refrows` is the odds ratio's OWN row baseline -- `refrows` on the pct = "row" path
   # (the same row), the ref2 row on the pct = "col" one, where the exported `refrows` may be NULL.
-  or_refrows <- if (exists("or_refrows", inherits = FALSE)) or_refrows else refrows
+  # 19l: the branch above declares it (NULL when it did not run), so this reads a value, not an env.
+  if (is.null(or_refrows)) or_refrows <- refrows
   if (!is.null(tabs_totn) && !is.null(tabs_or) && !is.null(or_cells) && !is.null(or_refrows)) {
     N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
     # Phase 18s: swap in the effective base (n_eff) where it is finite (opt-in); on basis "n"
@@ -6618,24 +6583,6 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-# ci_formula_factory <- function(y) {
-#   function(x, y, zscore) zscore *
-#     sqrt( get_pct(x) * (1 - get_pct(x)) / get_n(x)   +   get_pct(y) * (1 - get_pct(y)) / get_n(y) )
-# }
-#
-# ci_formula_gen <- function(ci) {
-#   switch(
-#     ci,
-#     "col"      = ci_formula_factory(tot),
-#     "row"      = ci_formula_factory( dplyr::last(x) ),
-#     "cell"      = ci_formula_factory(fmt0(pct)),
-#     #"totaltab" = function(x, tot, zscore) ,
-#     # "r_to_r"   = function(x, nx, y, ny, zscore) ,
-#     # "c_to_c"   = function(x, nx, y, ny, zscore) ,
-#     # "tab_to_t" = function(x, nx, y, ny, zscore) ,
-#     "no"       = function(x, tot, zscore) NA_real_
-#   )
-# }
 
 
 
@@ -7121,10 +7068,6 @@ tab_match_groups_and_totrows <- function(tabs) {
       warning("no total row(s) found. Some added based on actual grouping variables : ",
               paste(groups, collapse = ", "))
       return(dplyr::group_by(tabs, !!!rlang::syms(groups)) |> tab_tot("row"))
-      # } else {
-      #   tabs <- tabs |> tab_tot("row")
-      #   warning("no total row(s) found. One added for the whole table")
-      # }
     } else if ( !any(is_tottab(tabs)) ) { #If there are no groups
       warning("no groups nor total row(s) found. One added for the whole table")
       return(tab_tot(tabs, "row"))
@@ -7261,15 +7204,6 @@ quo_miss_na_null_empty_no <- function(quo) {
   quo <- rlang::get_expr(quo) |> as.character()
   # message(paste0(quo, collapse = ", "))
 
-  # if (quo[1] %in% c("all_of", "any_of") & exists(quo[2])) {
-  #   if (is.character(rlang::eval_tidy(rlang::sym(quo[2])))) {
-  #     if (all(rlang::eval_tidy(rlang::sym(quo[2])) %in% c("", "no",
-  #                                                         "no_row_var",
-  #                                                         "no_col_var"))) {
-  #       return(TRUE)
-  #     }
-  #   }
-  # }
 
   all(is.na(quo) | quo %in% c("", "no")) |
     (quo[1] %in% c("all_of", "any_of") &
@@ -7657,12 +7591,6 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
           purrr::set_names(.y)
       )
 
-    # last_totcols_pct_rows <- tabs_text |>
-    #   purrr::map(~ dplyr::mutate(., across(where(is_fmt), ~ set_type(., "col")))) |>
-    #   purrr::imap_chr(~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row"]) |>
-    #                 purrr::set_names(.y)
-    #
-    #   )
     last_totcols_pct_rows <- last_totcols_pct_rows[!is.na(last_totcols_pct_rows)]
 
     if (length(last_totcols_pct_rows) > 0) {
@@ -7681,7 +7609,9 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
               ) |>
                 set_scale("level_pct") |> set_pct_base("col") |>
                 as_totcol(FALSE) |> set_color("no") |>
-                set_col_var("all_col_vars") |>
+                # 19l: DECLARED as a whole-table helper (role), with no col_var -- it used to borrow
+                # the "all_col_vars" tag, whose other, opposite meaning is the legacy grand total.
+                set_col_var("") |> set_role("pct") |>
                 set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
                 set_ctr(NA_real_) |> set_var(NA_real_)
             )
@@ -7697,7 +7627,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
               .x, # !!rlang::sym(paste0(names(.y), "_n"))
               n = set_display(!!rlang::sym(.y), "n") |>
                 set_count_col() |> as_totcol(FALSE) |> set_color("no") |>
-                set_col_var("all_col_vars") |>
+                set_col_var("") |> set_role("n") |>
                 set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
                 set_pct(NA_real_) |> set_ctr(NA_real_) |> set_var(NA_real_)
             )

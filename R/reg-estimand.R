@@ -57,14 +57,14 @@
 # estimand on its link scale; the precise spellings `log_odds` / `log_risk` / `log_rate` additionally
 # PIN which base, so a modified-Poisson fit can be shown logged without a second argument.
 # The acronyms are permanent aliases, never deprecated: the argument teaches the concept word
-# ("ratio"), the column header keeps the discipline's ("RR" / "IRR" / "MR"), so the table prints the
+# ("ratio"), the column header keeps the discipline's ("RR" / "IRR" / "RoM"), so the table prints the
 # mapping between the two every time it renders.
 #' @keywords internal
 #' @noRd
 REG_MEASURE_ALIASES <- c(
   odds_ratio = "odds_ratio", or = "odds_ratio", OR = "odds_ratio",
   ratio = "ratio", rr = "ratio", RR = "ratio", irr = "ratio", IRR = "ratio",
-  mr = "ratio", MR = "ratio", risk_ratio = "ratio", rate_ratio = "ratio",
+  mr = "ratio", MR = "ratio", RoM = "ratio", risk_ratio = "ratio", rate_ratio = "ratio",
   difference = "difference", diff = "difference", rd = "difference", RD = "difference",
   log = "log", log_odds = "log", log_risk = "log", log_rate = "log", log_ratio = "log",
   auto = "auto"
@@ -110,7 +110,7 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #                different MODEL: "rr" = modified Poisson (a conditional risk ratio), "rd" =
 #                identity link (a risk difference), "mr" = log-link pseudo-ML (a ratio of means).
 #   exp          exponentiate the tidy estimate (the old `exponentiate`, now derived).
-#   word         the column header's effect word -- "OR" / "IRR" / "RR" / "MR" / "RD" / beta /
+#   word         the column header's effect word -- "OR" / "IRR" / "RR" / "RoM" / "RD" / beta /
 #                "AME" / "MER". `reg_effect_word()`'s four-argument nested switch IS this column.
 #   scale        the EST_SCALES key stamped on the column (KEY 2). Its `est_field` says which fmt
 #                field the estimate is written into, so a scale change needs no builder change.
@@ -184,7 +184,7 @@ REG_ESTIMANDS <- list(
       # family over: a deliberately misspecified log-link likelihood whose sandwich variance is the
       # honest one. tabxplor already owned the mean_ratio scale, its ladder and three ci_mean_ratio
       # engines -- only tab_reg() refused.
-      est_row("coefficient", "ratio", "coef", "mr", TRUE, "MR", "mean_ratio", "ratio",
+      est_row("coefficient", "ratio", "coef", "mr", TRUE, "RoM", "mean_ratio", "ratio",
               crude_fam = "mr", crude_shape = "mr",
               note = function() gettext("ratios of adjusted means (vs the reference category)")),
       est_row("coefficient", "log", "coef", "mr", FALSE, "\u03b2", "log_coef", "coef",
@@ -196,13 +196,13 @@ REG_ESTIMANDS <- list(
       est_row("marginal", "difference", "ame", "gaussian", FALSE, "AME", "raw_diff", "coef",
               crude_shape = "diff", needs = "marginaleffects",
               note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "gaussian", TRUE, "MR", "mean_ratio", "ratio",
+      est_row("marginal", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio", "ratio",
               crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
               needs = "marginaleffects", note = est_note_marginal("raw", ratio = TRUE)),
       est_row("at_reference", "difference", "ame", "gaussian", FALSE, "MER", "raw_diff", "coef",
               crude_shape = "diff", needs = "marginaleffects", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "MR", "mean_ratio", "ratio",
+      est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio", "ratio",
               crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
               needs = "marginaleffects", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
@@ -260,13 +260,13 @@ REG_ESTIMANDS <- list(
       # them. That fall-through used to live inside reg_crude_shape(); it is data now.
       est_row("marginal", "difference", "ame", "poisson", FALSE, "AME", "raw_diff", "coef",
               crude_shape = "irr", needs = "marginaleffects", note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "poisson", TRUE, "MR", "mean_ratio", "ratio",
+      est_row("marginal", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio", "ratio",
               crude_shape = "irr", comparison = "lnratioavg", needs = "marginaleffects",
               note = est_note_marginal("raw", ratio = TRUE)),
       est_row("at_reference", "difference", "ame", "poisson", FALSE, "MER", "raw_diff", "coef",
               crude_shape = "irr", needs = "marginaleffects", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "MR", "mean_ratio", "ratio",
+      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio", "ratio",
               crude_shape = "irr", comparison = "lnratioavg", needs = "marginaleffects", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
     )),
@@ -342,6 +342,14 @@ REG_FIT_FAMILY <- c(rr = "binomial", rd = "binomial", mr = "gaussian")
 #' @keywords internal
 #' @noRd
 REG_FIT_ONLY_FAMILIES <- names(REG_FIT_FAMILY)
+
+# The PUBLIC family vocabulary -- what `tab_reg(family =)` accepts and what auto-detection may
+# return. Phase 19l promoted it out of a local in tab_reg(): it is the complement of
+# REG_FIT_ONLY_FAMILIES over the library, and stating that here is what keeps the two in step. The
+# internal link keys (rr / rd / mr) are deliberately absent: a user reaches them by naming a MEASURE.
+#' @keywords internal
+#' @noRd
+REG_USER_FAMILIES <- setdiff(names(REG_ESTIMANDS), REG_FIT_ONLY_FAMILIES)
 
 # Build-time integrity: the library can only be wrong at load time, so it is checked there.
 local({

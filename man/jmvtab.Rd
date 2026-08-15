@@ -12,9 +12,8 @@ jmvtab(
   wt = NULL,
   pct = "no",
   color = "no",
-  OR = "no",
   color_signif = "ignore",
-  chi2 = FALSE,
+  test = FALSE,
   anova = "welch",
   design_effect = FALSE,
   na = "keep",
@@ -75,25 +74,22 @@ results.}
 of) table(s).  }}
 
 \item{color}{Which measure to use for color helpers, as a single string.
-\itemize{    \item \code{"no"}: by default, no colors are printed.    \item
+The values are the measure  names \code{tab()} itself takes (the short
+spellings \code{"diff"} / \code{"OR"} stay  valid aliases in R).  \itemize{
+\item \code{"no"}: by default, no colors are printed.    \item
 \code{"auto"}: a smart per-column-type default (percentage-point difference
 on    the text plus a relative-risk highlight on the background for
-factors, mean ratio for    numeric columns).    \item \code{"diff"}: color
-the difference of each cell from its total (or reference    cell). For
-factors this is a percentage-point difference; for numeric columns the
-standardized (SD-scaled) mean difference.    \item \code{"ratio"}: color
-the relative risk (factors) or mean ratio (numeric).    \item
-\code{"contrib"}: color cells based on their contribution to variance
-(factor columns only).    \item \code{"OR"}: for \code{pct == "col"} or
-\code{pct == "row"}, color based on odds ratios.  } How significance gates
-these colors is set separately by \code{color_signif}.}
-
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and
-print odds ratios  (for binary variables) or relative risks ratios (for
-variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
-default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
-percentages).  \item \code{"OR_pct"}: print OR, with percentages in
-bracket. }}
+factors, mean ratio for    numeric columns).    \item \code{"difference"}:
+color the difference of each cell from its total (or    reference cell).
+For factors this is a percentage-point difference; for numeric columns
+the standardized (SD-scaled) mean difference.    \item \code{"ratio"}:
+color the relative risk (factors) or mean ratio (numeric).    \item
+\code{"odds_ratio"}: for \code{pct == "col"} or \code{pct == "row"}, color
+based on odds    ratios. To PRINT them, set \code{display} (the colour and
+the printed quantity are two    questions).    \item \code{"contrib"}:
+color cells based on their contribution to variance    (factor columns
+only).  } How significance gates these colors is set separately by
+\code{color_signif}.}
 
 \item{color_signif}{How statistical significance gates the colors, as a
 single string.  \itemize{    \item \code{"ignore"}: by default, color every
@@ -104,7 +100,7 @@ automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
 (confidence-bound) effect --    all cells whose interval clears the
 threshold show, with dimmer colors.  }}
 
-\item{chi2}{Set to \code{TRUE} to add a test p-value row: a Chi-square test
+\item{test}{Set to \code{TRUE} to add a test p-value row: a Chi-square test
 for categorical column variables and an ANOVA F-test for numeric ones
 (chosen automatically per column type). Also enables colouring cells by
 their contribution to variance.}
@@ -170,16 +166,18 @@ cell by default.}
 \item{comp}{The comparison level : by subtables/groups, or for the whole
 table.}
 
-\item{ci}{The type of confidence intervals to calculate, passed to
-\code{\link{tab_ci}}.     \itemize{      \item \code{"cell"}: absolute
-confidence intervals of cells percentages.      \item \code{"diff"}:
-confidence intervals of the difference between a cell and the      relative
-total cell (or relative first cell when \code{ref = "first"}).      \item
-\code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-\code{ci = "cell"} for frequencies ("all", "all_tabs").     } By default,
-for percentages, with \code{ci = "cell"} Wilson's method is used, and with
-\code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-Means use classic method.}
+\item{ci}{\if{html}{\out{<b>}}What the confidence interval is anchored on\if{html}{\out{</b>}} -- one
+question, four answers. The  GEOMETRY of the interval is not asked here: it
+follows the comparison the table makes  (set by \code{color} /
+\code{display}), so a difference table gets a difference  interval and a
+ratio table a ratio one.  \itemize{   \item \code{"auto"}: build the
+comparison interval when something reads it   (\code{stars}, or a
+\code{color_signif} policy), and none otherwise.   \item \code{"no"}: no
+interval at all.   \item \code{"cell"}: each cell's own interval (a
+percentage / a mean with its own   bounds). It anchors nothing to compare,
+so \code{stars} and \code{color_signif} are   informed and switched off.
+\item \code{"ref"}: the interval of the comparison with the reference cell
+-- what   \code{stars} and \code{color_signif} read.  }}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and
 \enumerate{
@@ -222,7 +220,12 @@ characters.}
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12
 characters.}
 
-\item{display}{The information to display in the table.}
+\item{display}{What each cell shows. Every value here is a
+\code{tab(display =)} value: a bare field  name, the type-adaptive
+\code{"num_ci"} (a percentage or a mean, with its interval), or  a
+\code{\{\}} template combining fields. \code{"auto"} keeps whatever the
+table was  built with. A template naming a field the table does not carry
+renders empty and says  which argument would fill it.}
 
 \item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to
 \code{FALSE} not to add another column or row with unweighted counts

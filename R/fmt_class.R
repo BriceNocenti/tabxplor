@@ -1183,6 +1183,29 @@ get_role <- function(x, ...) {
   if (is.null(r)) "" else r
 }
 
+# Phase 19l: the reg builders write `role` through fmt()'s formal, but a column built by COPYING
+# another (the Excel sd twin, mat_sd_twin) needs to restate it afterwards -- so the attribute gets the
+# setter every other one already has.
+#' @keywords internal
+#' @noRd
+set_role <- function(x, role) {
+  vctrs::vec_assert(role, character(), size = 1)
+  `attr<-`(x, "role", role)
+}
+
+# Phase 19l: the add_n / add_pct HELPER columns -- a whole-table count or column percentage that
+# belongs to NO col_var. They used to borrow the string "all_col_vars" as their `col_var`, a name
+# that lies (they belong to none, not to all) and that the legacy tab_tot() grand-total column uses
+# for its own, opposite meaning. They declare a `role` now ("n" / "pct" -- the same values a
+# tab_reg() count column already carries) and their `col_var` is "", like every other column that
+# has none, so every "not a real col_var" filter keeps working unchanged.
+#' @keywords internal
+#' @noRd
+fmt_is_helper_col <- function(x) {
+  if (is.data.frame(x)) return(purrr::map_lgl(x, fmt_is_helper_col))
+  is_fmt(x) && get_role(x) %in% c("n", "pct")
+}
+
 # Phase 18z13 (D3): the per-column `conf_level` attribute -- the level this column's stored interval
 # and its significance thresholds were computed at.
 #
@@ -1999,9 +2022,6 @@ new_fmt <- function(n         = integer(),
   #   type %in% c("row", "col", "all", "all_tabs", "mixed", NA_character_)
   # )
 
-  # list(display, n, wn, pct, digits, ctr, mean, var, ci, col_var, totcol, type) |>
-  #   purrr::map(print)
-  # cat("\n")
 
   # list(n = n, display = display, digits = digits,
   #      wn = wn, pct = pct, mean = mean,
@@ -2051,24 +2071,6 @@ new_fmt <- function(n         = integer(),
 
   #vctrs::vec_assert(display, character()) #check display or size
   display <- vctrs::vec_recycle(display, size = size)
-  # vctrs::vec_assert(n     , integer()) #, size = length(n)
-  # vctrs::vec_assert(wn    , double() ) #, size = length(n)
-  # vctrs::vec_assert(pct   , double() ) #, size = length(n)
-  # vctrs::vec_assert(digits, integer()) #, size = length(n)
-  # vctrs::vec_assert(ctr   , double() ) #, size = length(n)
-  # vctrs::vec_assert(mean  , double() ) #, size = length(n)
-  # vctrs::vec_assert(var   , double() ) #, size = length(n)
-  # vctrs::vec_assert(ci    , double() ) #, size = length(n)
-  #
-  # vctrs::vec_assert(in_totrow, logical())
-  # vctrs::vec_assert(in_tottab, logical())
-  #
-  # vctrs::vec_assert(scale   , character(), size = 1)
-  # vctrs::vec_assert(comp_all, logical()  , size = 1)
-  # vctrs::vec_assert(pct_base, character(), size = 1)
-  # vctrs::vec_assert(col_var , character(), size = 1)
-  # vctrs::vec_assert(totcol  , logical()  , size = 1)
-  # vctrs::vec_assert(color   , character(), size = 1)
 
   vctrs::new_rcrd(
     list(n = n, display = display, digits = digits,
@@ -2745,10 +2747,6 @@ detect_firstcol <- function(tabs) {
     purrr::set_names(names(tabs))
 
   if (any(col_vars == "all_col_vars")) {
-    #   res_all_col <- tabs[as.character(res[col_vars == "all_col_vars"])]
-    #
-    # if (get_type(res_all_col) == "mean") res[col_vars == "all_col_vars"] <-
-    #     rlang::syms("")
     res[col_vars == "all_col_vars"] <- rlang::syms("")
   }
   res
@@ -3129,9 +3127,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       }
 
 
-      # ci_print_pad <- function(x) {
-      #   stringi::stri_pad(x, max(stringi::stri_length(x)))
-      # }
 
       out_ci <-
         paste0(print_num(out[plus_ci], digits[plus_ci]),
@@ -4557,15 +4552,12 @@ measure_of_build <- function(build) {
   if (!length(k)) "" else k[[1]]
 }
 
-# WHICH PASS stamps the measure. Derived from `builds`, not declared.
-# Phase 19j (KEY 5): the test step is gone -- everything happens in the leaf now -- but the
-# distinction did NOT become a constant, because the contributions are still a SEPARATE computation
-# there (leaf_chi2 -> chi2_write_contrib), which a tier-2 cache hit cannot serve and which needs the
-# col_var's total column. So the two values are still real; only the name of the second is stale
-# ("chi2" now means "the contribution pass"). Renaming it is a 19l item -- see the roadmap.
-#' @keywords internal
-measure_stage <- function(measure)
-  if (identical(measure_builds(measure), "contrib")) "chi2" else "leaf"
+# (no measure_stage(): Phase 19l DELETED it. It answered "which PASS stamps this measure" with the
+# strings "chi2" / "leaf" -- but 19j removed the chi2 STEP, all three callers only ever asked
+# `== "chi2"`, and the body was literally `identical(measure_builds(m), "contrib")`. A two-valued
+# predicate wearing a string's clothes, whose second value named a step that no longer exists. The
+# distinction it drew is still real -- the contributions ARE a separate computation inside the leaf
+# (chi2_write_contrib), which a tier-2 cache hit cannot serve -- so the callers ask `builds` directly.
 
 # What asking for this measure FORCES on the build. `gated` = the policy reads an interval, so the
 # requirement fires only when one is in force. Returns a named character vector of the keys that
@@ -4903,7 +4895,7 @@ legend_reg_eff_word <- function(col, meta) {
                   if (identical(est$word, "RR")) "RR" else "OR"))
   }
   if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
-    if (!is.null(est$word) && est$word %in% c("AME", "MER", "MR", "RD")) return(est$word)
+    if (!is.null(est$word) && est$word %in% c("AME", "MER", "RoM", "RD")) return(est$word)
     if (identical(fmt_var_kind(col), "coef")) return(.lg_beta)   # gaussian beta
   }
   NA_character_
@@ -5449,7 +5441,7 @@ legend_specs <- function(x, theme = "light") {
   if (!any(keep)) return(list())
 
   col_vars_levels <- tab_get_vars(x)$col_vars_levels
-  col_vars_levels <- col_vars_levels[names(col_vars_levels) != "all_col_vars"]
+  col_vars_levels <- col_vars_levels[!names(col_vars_levels) %in% c("all_col_vars", "")]
   kept_names <- names(x)[keep]
 
   meta   <- reg_call(x)
@@ -6048,20 +6040,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 
 
-# is_RStudio <- function() Sys.getenv("RSTUDIO") == "1"
-# #.Platform$GUI == "RStudio"
-#
-# is_dark <- ifelse(is_RStudio(), rstudioapi::getThemeInfo()$dark, FALSE)
 
-# format.pillar_shaft_fmt <- function(x, width, ...) {
-#   if (get_max_extent(x$deg_min) <= width) {
-#     ornament <- x$deg_min
-#   } else {
-#     ornament <- x$deg
-#   }
-#
-#   pillar::new_ornament(ornament, align = "right")
-# }
 
 
 
@@ -6117,9 +6096,6 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   fmt_ptype_label(x, prefix = "fmt-", pct_pvalue_collapse = FALSE)
 }
-# x <- fmt(7, "row", pct = 0.6)
-# x |> vec_data()
-# x |> attributes()
 
 #Coertion and convertion methods for formatted numbers -------------------------
 

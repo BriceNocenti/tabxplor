@@ -230,12 +230,10 @@ set_vars_attr <- function(x, vars) set_spec_field(x, "vars", vars)
 
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
-set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
 
 # Phase 18z15: `assumptions` -- the observed curve of each continuous predictor (see new_tab()),
 # the data behind the row sparklines and behind reg_check_plots()' linearity panel.
 get_assumptions <- function(x) get_meta(x)[["assumptions"]]
-set_assumptions <- function(x, assumptions) set_meta_field(x, "assumptions", assumptions)
 
 # Phase 14w: a regression table's model record. Phase 19g (KEY 6): it IS the producer's `call`
 # recipe -- `meta$spec$call`, read through reg_call() (R/table-spec.R), which is gated on the kind so
@@ -1070,8 +1068,11 @@ kable_tabxplor_style <- function(tabs,
     out <- out |> kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
   }
 
-  totcols <- which(stringi::stri_detect_regex(names(tabs), "^Total|^Ensemble"))
-  totrows <- which(stringi::stri_detect_regex(tabs[[1]], "^Total|^Ensemble"))
+  # Phase 19l: the stored flags, not the rendered label. The `"^Total|^Ensemble"` regexes that stood
+  # here were the last place in the package where a total was identified by an English (or French)
+  # word -- and the row one read column 1 positionally, which a declared index column now answers.
+  totcols <- which(is_totcol(tabs))
+  totrows <- which(is_totrow(tabs))
 
   out <- out |>
     kableExtra::row_spec(
@@ -1082,9 +1083,6 @@ kable_tabxplor_style <- function(tabs,
     kableExtra::row_spec(
       nrow(tabs), extra_css = "border-bottom: 1px solid ;"
     ) |>
-     #kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
-    #kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) |>
-    #kableExtra::column_spec(other_cols, border_left = TRUE) |>
     kableExtra::column_spec(1, width_min = 20, border_left = TRUE, border_right = TRUE) |>
     kableExtra::column_spec(ncol(tabs), border_right = TRUE) |>
      #kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") |>
@@ -1256,11 +1254,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
   tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )
 
-  # var_type <- first(unique(type[!type %in% c("", "n")]))
-  #
-  # color_type <- tabs |> map(get_color) |> first()
-  # color_type <- first(unique(color_type[!color_type %in% c("", "no") &
-  #                                         !names(color_type) %in% ("n")]))
 
 
 
@@ -1303,9 +1296,16 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   #                                  names(get_col_var(tabs)) != "n" &
   #                                  !str_detect(names(get_col_var(tabs)), "^Total") ]
 
-  if (sum(stringi::stri_detect_regex(names(tabs), "^Total_")) == 1) {
-    tabs <- tabs |>
-      dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
+  # Lone total column -> drop its "_<col_var>" qualifier. Phase 19l: found by its STORED flag, and
+  # unsuffixed through its own `col_var`. The `"^Total_"` regex that stood here hardcoded the ENGLISH
+  # default, so a table built with `total_names = "Ensemble"` silently kept the qualified name --
+  # while tab.R's sibling site (leaf_rename_totals) does the same job through `total_names[2]`.
+  tot_i <- which(is_totcol(tabs))
+  if (length(tot_i) == 1L) {
+    nm <- names(tabs)[[tot_i]]
+    cv <- get_col_var(tabs[[tot_i]])
+    base <- if (length(cv) && nzchar(cv)) sub(paste0("_", cv, "$"), "", nm) else nm
+    if (!identical(base, nm) && !base %in% names(tabs)) names(tabs)[[tot_i]] <- base
   }
 
   # Phase 18z16-iv (W-A): CARRY the merged tables' whole `meta` (tab_meta_merge = reduce through
@@ -1326,9 +1326,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
                                     call = tab_call(tabs[[1]])))) |>
     dplyr::group_by(dplyr::across(tidyselect::all_of(c(merge_tab_vars, "row_var"))))
 
-  # if (pvalue_lines) {
-  #   tabs <- tabs |> tab_pvalue_lines()
-  # }
 
   tabs
 }
@@ -1446,8 +1443,12 @@ mat_sd_twin <- function(tab) {
   means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
   for (nm in means) {
     sdc <- tab[[nm]]
+    # Phase 19l: the twin DECLARES itself (role "sd"). The prep and the col_var header used to find
+    # it by parsing its own name back apart ("<col_var>_sd"), a convention minted here and read three
+    # functions away -- the name is a layout detail, the role is the fact.
     tab[[paste0(nm, "_sd")]] <-
-      set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"), "no")
+      set_role(set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"),
+                         "no"), "sd")
   }
   if (length(means) > 0) {                       # place each _sd directly after its mean column
     ord <- names(tab)
@@ -1995,11 +1996,6 @@ tab_plot <- function(tabs,
                              tbody.style = do.call(ggpubr::tbody_style, tbody_args)),
     )
 
-  # tabs |>
-  #   dplyr::mutate(dplyr::across(where(is_fmt), format)) |>
-  #   ggpubr::ggtexttable(
-  #     rows = NULL, theme = ggpubr::ttheme("blank"),
-  #   )
 
   # c("default", "blank", "classic", "minimal", "light",
   #   "lBlack", "lBlue", "lRed", "lGreen", "lViolet", "lCyan", "lOrange", "lBlackWhite", "lBlueWhite", "lRedWhite", "lGreenWhite", "lVioletWhite", "lCyanWhite", "lOrangeWhite",
@@ -2040,10 +2036,6 @@ tab_plot <- function(tabs,
       at.row = unique(c(1, totrows, totrows + 1, new_group)), row.side = "bottom",
       linetype = 1, linewidth = 2, linecolor = "black",
     ) |>
-    # ggpubr::tab_add_hline(
-    #   at.row = totrows, row.side = "top",
-    #   linetype = 1, linewidth = 2, linecolor = "black",
-    # ) |>
     ggpubr::tab_add_vline(
       at.column = unique(c(new_col_var, totcols - 1)), column.side = "right",
       linetype = 1, linewidth = 2, linecolor = "black",
@@ -2622,8 +2614,8 @@ group_by.tabxplor_tab <- function(.data,
 #' @param .only_main_display By default, only the rows with the same display
 #'   than the first row are arranged : if the first row of the group displays
 #'   percentages, rows with n or pvalues are kept at the same place
-#'   (typically, at the end of the group). Rows with the text `"row_pct"`, `"n"`
-#'   or `"pvalue"` in the `row_var` name are also kept at the same place.
+#'   (typically, at the end of the group). The synthetic `n` / percentage / p-value
+#'   rows are found by their stored row kind, so they are kept at the same place too.
 #'   Set to `FALSE` to avoid this behaviour.
 #' @param .locale The locale to sort character vectors in.
 #' @method arrange tabxplor_tab
@@ -2647,8 +2639,8 @@ group_by.tabxplor_tab <- function(.data,
     }
 
     if (.only_main_display) {
-      row_var <- tab_get_vars(.data)$row_var
-
+      # (19l: the `row_var <- tab_get_vars(.data)$row_var` that stood here was never read -- the row
+      #  match it once fed became tab_row_roles() below, a stored fact needing no variable name.)
       several_displays <- purrr::map_lgl(
         dplyr::select(dplyr::ungroup(.data), dplyr::where(is_fmt)),
         ~ length(unique(get_display(.))) > 1
@@ -2899,10 +2891,6 @@ lv1_group_vars <- function(tabs) {
   # n_groups()<=1 (simple); the commented alternative counted single-level group vars.
   dplyr::n_groups(tabs) <= 1
 
-  #groupvars <- dplyr::group_vars(tabs)
-  # all(purrr::map_lgl(groupvars,
-  #                ~ nlevels(forcats::fct_drop(dplyr::pull(tabs, .))) == 1)) |
-  #   length(groupvars) == 0
 }
 
 
@@ -3464,10 +3452,6 @@ default_dark_background_colors_neg <- c(
 
 
 
-# # Dark palette
-# dark_text_palette <- c(plain= "#707070", default_dark_text_colors, default_dark_text_colors_neg)
-# dark_bg_palette   <- c(plain= "#111111", default_dark_background_colors, default_dark_background_colors_neg)
-# preview_color_grid(dark_text_palette, dark_bg_palette,  table_bg = "#111111")
 
 # #   color blindness
 # preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan", severity = 0.5), 
@@ -4210,30 +4194,6 @@ pop_color_breaks <- function(state) {
 
 #calculate pct breaks based on the number of levels ? ----
 
-# pct_breaks      <- c(0.05, 0.1, 0.2, 0.3)
-# mean_breaks     <- c(1.15, 1.5, 2, 4)
-# contrib_breaks  <- c(1, 2, 5, 10)
-#
-# pct_ci_breaks   <- pct_breaks - pct_breaks[1]
-# mean_ci_breaks  <- mean_breaks / mean_breaks[1]
-#
-# pct_brksup      <- c(pct_breaks    [2:length(pct_breaks)    ], Inf)
-# mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
-# contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
-# pct_ci_brksup   <- c(pct_ci_breaks [2:length(pct_ci_breaks) ], Inf)
-# mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-#
-# pct_breaks         <- pct_breaks     |> c(., -.)
-# mean_breaks        <- mean_breaks    |> c(., 1/.)
-# contrib_breaks     <- contrib_breaks |> c(., -.)
-# pct_ci_breaks      <- pct_ci_breaks  |> c(., -.)
-# mean_ci_breaks     <- mean_ci_breaks |> c(., -.) #then - again
-#
-# pct_brksup      <- pct_brksup     |> c(., -.)
-# mean_brksup     <- mean_brksup    |> c(., 1/.)
-# contrib_brksup  <- contrib_brksup |> c(., -.)
-# pct_ci_brksup   <- pct_ci_brksup  |> c(., -.)
-# mean_ci_brksup  <- mean_ci_brksup |> c(., -.) #then - again
 
 
 #' Get the breaks currently used to print colors

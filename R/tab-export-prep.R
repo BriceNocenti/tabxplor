@@ -321,7 +321,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   et_raw   <- get_empirical_tips(tab)
   if (!is.null(et_raw)) {
     lvl0 <- as.character(tab[[rv$row_var]])
-    var0 <- if ("var" %in% names(tab)) as.character(tab[["var"]]) else rep(NA_character_, nrow(tab))
+    # 19l: the variable column is the DECLARED one (rv$var_col, used again at the label runs below),
+    # not a column that happens to be named "var" -- this was the last consumer sniffing for the name.
+    vcol <- intersect(rv$var_col, names(tab))
+    var0 <- if (length(vcol)) as.character(tab[[vcol[[1]]]]) else rep(NA_character_, nrow(tab))
     key0 <- paste(var0, lvl0, sep = "\r")
     emp_tips <- lapply(split(et_raw, et_raw$col), function(sub)
       sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])
@@ -426,10 +429,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # Naturally integer(0) for every other backend: nothing else creates those columns.
   # WARNING: ungated by `var_names`, unlike the header rewrite. A width is not a naming decision, so
   # `var_names = "none"` must still get a narrow sd column.
-  sd_cols <- fmt_cols[vapply(names(fmt_cols), function(nm) {
-    cv <- col_var_map[[nm]]
-    !is.na(cv) && nzchar(cv) && identical(nm, paste0(cv, "_sd"))
-  }, logical(1))]
+  sd_cols <- fmt_cols[vapply(tab[fmt_cols], \(col) identical(get_role(col), "sd"), logical(1))]
 
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
   # both render engines). A "total block" is a maximal run of total rows OR the synthetic n / pvalue /
@@ -605,6 +605,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   cvm   <- roles$col_var_map
   real  <- roles$real_col_vars
   totc  <- seq_along(nms) %in% roles$totcols
+  # Phase 19l: which col_vars have an Excel sd twin beside their mean, read off the twins' DECLARED
+  # role (roles$sd_cols) rather than by re-minting their "<col_var>_sd" name below.
+  sd_of <- unname(cvm[roles$sd_cols])
   # a real col_var LEVEL column: not the row var / all_col_vars / "" (no span name), and not a total
   # column (the marginal, not a level). Kept separate from `label` because the rewrites below must run
   # even when nothing is NAMED -- a "_race" suffix is noise whatever `var_names` says.
@@ -629,7 +632,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       # off a "<var>_sd" sibling. The span says which variable; the level header says which STATISTIC.
       # NB a different question from `j %in% roles$sd_cols` below: this asks whether THIS mean has an
       # sd sibling to hand its "(sd)" tail to, not whether j is one.
-      clean[j] <- if (paste0(cvm[[j]], "_sd") %in% nms) {
+      clean[j] <- if (cvm[[j]] %in% sd_of) {
         "mean"                       # Excel: the sd is its own column, headed "sd" below
       } else if (mean_shows_sd(tab[[j]])) {
         "mean (sd)"                  # text backends: format() folds the sd into the cell, "1.7 (s2.1)"

@@ -783,51 +783,9 @@ justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
 
 
 
-# translation functions ----
-
-#' @keywords internal
-tr_ <- function(...) {
-  enc2utf8(gettext(paste0(...), domain = "R-tabxplor"))
-}
-
-#' @keywords internal
-po_to_dt <- function(file) {
-  po_base <- readLines(file, encoding = "UTF-8")
-  po_meta <- po_base[!dplyr::cumany(po_base == "")]
-
-  po <- tibble::tibble(base = po_base[dplyr::cumany(po_base == "")])
-
-
-  po <- po |>
-    dplyr::filter(.data$base != "") |>
-    dplyr::mutate(
-      ok = stringi::stri_detect_regex(.data$base, "#:|msgid|msgstr"),
-      ok = cumsum(as.integer(.data$ok))
-    ) |>
-    dplyr::group_by(!!rlang::sym("ok")) |>
-    dplyr::group_split() |>
-    purrr::map(
-      ~ paste0(.$base, collapse = "") |>
-        stringi::stri_replace_all_regex("\"", "")
-    ) |>
-    purrr::flatten_chr()
-
-  po <- tibble::tibble(text = po) |>
-    dplyr::mutate(
-      type  = stringi::stri_extract_first_regex(.data$text, "^[^ ]+ ") |> stringi::stri_trim(),
-      group = cumsum(as.integer(.data$type == "#:")),
-      .before = 1
-    ) |>
-    dplyr::mutate(
-      text = stringi::stri_replace_first_regex(.data$text, "^[^ ]+ ", ""),
-    ) |>
-    tidyr::pivot_wider(id_cols  = "group", names_from = "type", values_from = "text") |>
-    dplyr::select(-"group") |>
-    `attr<-`("meta", po_meta)
-
-  return(po)
-}
-
+# Phase 19l: `tr_()` (a gettext wrapper) and `po_to_dt()` (a 40-line .po parser) are DELETED.
+# They were kept for "the upcoming French translation phase"; that phase shipped using potools
+# and gettext() directly, and neither function ever acquired a caller.
 
 # path_sanitize() (a vendored copy of fs::path_sanitize) was removed in Phase 17a: it had no callers.
 # jmvtab-export.R is self-contained -- it uses fs::path_sanitize() with its own base-R fallback.

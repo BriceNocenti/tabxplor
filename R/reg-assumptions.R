@@ -621,7 +621,7 @@ rd_wquantile <- function(x, probs, w = NULL) {
 rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
   if (family == "gaussian")
     return(list(y = as.numeric(y), link = "identity", lab = gettext("mean")))
-  if (family %in% c("poisson", "quasipoisson"))
+  if (reg_fam_count(family))
     return(list(y = as.numeric(y), link = "log", lab = gettext("log(mean)")))
   if (reg_fam_binary(family) && !is.null(trials))
     return(list(y = as.numeric(y) / trials, link = "logit", lab = gettext("empirical logit")))
@@ -771,7 +771,7 @@ rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
       hi <- cp[cbind(seq_along(k), k)]
       lo <- ifelse(k > 1L, cp[cbind(seq_along(k), pmax(k - 1L, 1L))], 0)
       draw(lo, hi)
-    } else if (family %in% c("poisson", "quasipoisson")) {
+    } else if (reg_fam_count(family)) {
       mu <- as.numeric(stats::fitted(fit)); yy <- as.numeric(y)
       draw(stats::ppois(yy - 1, mu), stats::ppois(yy, mu))
     } else {                                          # binomial / rr / grouped binomial

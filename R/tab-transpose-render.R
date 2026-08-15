@@ -49,7 +49,7 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   # the review asks: factor col_var levels, then Total, then n, then numeric means.
   data_i  <- setdiff(unname(roles$fmt_cols), unname(roles$sd_cols))
   is_tot  <- data_i %in% roles$totcols
-  is_n    <- unname(cvm[data_i]) %in% "all_col_vars"
+  is_n    <- fmt_is_helper_col(tab[data_i])
   types   <- vapply(data_i, function(j) fmt_var_kind(tab[[j]]), character(1))
   is_mean <- types %in% "mean" & !is_tot & !is_n
   is_fac  <- !is_tot & !is_n & !is_mean
@@ -187,11 +187,11 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   # so a single-col_var transpose matches a native pct = "col" table (n right after Total, no rule),
   # while a several-col_var one keeps a rule before each new block (e.g. before the numeric means).
   # Phase 17c: the absorbed synthetic columns-turned-rows are the total (roles$totcols) + the add_n /
-  # add_pct columns (col_var "all_col_vars") -- both STRUCTURAL. The old `level_vals %in% c("pvalue",
-  # "row_pct")` clause was dead here (level_vals is a COLUMN header, never an original row label) and
-  # missed col_pct; `row_grp == "all_col_vars"` covers n AND col_pct.
+  # add_pct columns -- both STRUCTURAL. The old `level_vals %in% c("pvalue", "row_pct")` clause was
+  # dead here (level_vals is a COLUMN header, never an original row label) and missed col_pct.
+  # Phase 19l: those two are found by their DECLARED role, not by the col_var tag they borrowed.
   col_of  <- unname(cvm[order_i])                  # each row's source col_var (STABLE; row_grp is mutated)
-  is_addn <- col_of == "all_col_vars"              # the add_n / add_pct columns-turned-rows
+  is_addn <- fmt_is_helper_col(tab[order_i])       # the add_n / add_pct columns-turned-rows
   row_grp <- col_of
   absorb  <- (order_i %in% roles$totcols) | is_addn
   row_grp[absorb] <- NA
