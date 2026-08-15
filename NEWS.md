@@ -206,6 +206,12 @@
 
 ## Changes that may affect existing code
 
+* **`fmt` columns carry a 16th attribute, `col_group`** --- which sub-population a column's block
+  belongs to, after `tab(spread_vars =)` / `tab_spread()` or `tab_reg(split_var =)` (`""` otherwise).
+  Read it with `get_col_group()`. Those columns used to fold the level into their `col_var` as
+  `"{level}<br>{variable}"`; `get_col_var()` returns the plain variable name now, and the two facts
+  together identify a column *block*. Rendered output is unchanged. Only code reading `col_var` off a
+  *spread* table is affected.
 * **`ci = "cell"` now shows the total (reference) row's own interval too.** A cell interval compares
   each cell to 0 %, not to a reference, so every cell has one — including the total row, which is the
   best-estimated cell in the table. Numeric tables already printed it; percentage tables left it

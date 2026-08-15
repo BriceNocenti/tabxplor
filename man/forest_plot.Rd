@@ -27,7 +27,7 @@ forest_plot(
 )
 }
 \arguments{
-\item{x}{A table from \code{\link{tab}} / \code{\link{tab_many}} / \code{\link{tab_reg}} (or a list
+\item{x}{A table from \code{\link{tab}} or \code{\link{tab_reg}} (or a list
 of them, giving a list of plots).}
 
 \item{columns}{Value columns to draw, by name. \code{NULL} (the default) draws the model columns of
@@ -35,7 +35,7 @@ a regression table and every value column of a cross-table.}
 
 \item{what}{\code{"auto"} (the quantity the table's own interval is centred on), \code{"effect"}
 (the contrast: difference, ratio or odds ratio) or \code{"level"} (the percentage or mean --
-for a regression table this needs \code{effect = "ame"}).}
+for a regression table this needs \code{effect = "marginal"}).}
 
 \item{observed}{For a regression table with \code{empirical = TRUE}: \code{"auto"}, \code{"band"}
 (the observed value with the margin of error of the gap), \code{"point"}, \code{"ci"} (the classic

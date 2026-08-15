@@ -222,10 +222,10 @@ tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 
 ## Couleurs : des repères de lecture
 
-L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration de données. `color = "diff"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne (le pourcentage moyen pour toute la population). Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.
+L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration de données. `color = "difference"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne (le pourcentage moyen pour toute la population). Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "diff")
+tab(gss_simple, race, party3, pct = "row", color = "difference")
 ```
 
 `color = TRUE` choisit automatiquement un schéma sensé pour chaque type de colonne (différences + ratio pour les pourcentages ; seulement les ratio pour les tableaux de moyennes ; …) ; la légende permet de savoir lequel :
@@ -237,7 +237,7 @@ tab(gss_simple, rincome, c(party3, marital), pct = "row", color = TRUE)
 Les colonnes numériques sont colorées de la même façon, sur leurs **moyennes** (ici, les heures de télévision par jour selon le revenu) :
 
 ```{r, echo = TRUE}
-tab(gss_simple, rincome, tvhours, color = "diff")
+tab(gss_simple, rincome, tvhours, color = "difference")
 ```
 
 **Quelle case sert-elle de référence pour la comparaison ?** Par défaut, chaque case est comparée au Total pertinent (ligne Total pour les pourcentages en ligne, colonne Total pour les pourcentages en colonne) : la couleur met en évidence sur-représentations et sous-représentations. Deux variantes utiles :
@@ -246,7 +246,7 @@ tab(gss_simple, rincome, tvhours, color = "diff")
 - avec des sous-tableaux (`tab_vars`), `comp = "all"` compare au Total **d'ensemble** plutôt qu'au Total de chaque sous-tableau.
 
 ```{r, echo = TRUE}
-tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
+tab(gss_simple, year, marital, pct = "row", color = "difference", ref = 1)
 ```
 
 ```{r, echo = TRUE}
@@ -258,14 +258,14 @@ tab(gss_simple, rincome, party3, race, na = "drop", pct = "row",
 **Une référence différente pour chaque variable.** Il est possible de choisir une `ref` pour chaque variable concernée. Pour des pourcentages en **ligne** (ou des moyennes), il est possible de choisir une réference différente pour chaque variable de ligne (ici `race` est lu par rapport à sa première ligne, `relig` par rapport à son Total) :
 
 ```{r, echo = TRUE}
-tab(gss_simple, c(race, relig), party3, pct = "row", color = "diff",
+tab(gss_simple, c(race, relig), party3, pct = "row", color = "difference",
     ref = c(race = "1", relig = "tot"), na = "drop")
 ```
 
 Pour des pourcentages en **colonne**, il est possible de choisir une réference différente pour chaque variable de colonne : 
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, c(party3, marital), pct = "col", color = "diff",
+tab(gss_simple, race, c(party3, marital), pct = "col", color = "difference",
     ref = c("first", "tot"), na = "drop")
 ```
 
@@ -280,13 +280,13 @@ Les couleurs ci-dessus montrent la *taille* d'un écart, mais ne disent pas s'il
 - `"guaranteed_effect"` : ne colore que la part de l'effet dont on peut être certain au seuil de confiance choisi (la borne inférieure de l’intervalle), avec des couleurs moins fortes et plus prudentes. À utiliser sur de **petits échantillons** pour **mettre en évidence toutes les différences qu'on a le droit d'interpréter**. Tout ce qui est coloré est significatif ; rien de ce qui est gris ne l'est.
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "diff", color_signif = "grey_non_signif")
+tab(gss_simple, race, party3, pct = "row", color = "difference", color_signif = "grey_non_signif")
 ```
 
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
+  tab(race, party3, pct = "row", color = "difference", color_signif = "guaranteed_effect")
 ```
 
 Sur de **petits échantillons**, un pourcentage qui semble marqué peut reposer sur très peu de répondants. `n_min =` est un filtre purement visuel, appliqué en dernier : il masque les cases dont la base (non pondérée) est sous le seuil, et retire entièrement une ligne quand sa plus grande base est trop faible. Ici, les religions les plus rares disparaissent :
@@ -333,7 +333,7 @@ gss_simple |>
 **Afficher deux nombres dans une même case.** `display` ne sert pas qu'aux intervalles de confiance : il accepte un **gabarit `{}`** qui combine n'importe quels champs de la case. Par exemple, `display = "{pct} ({diff})"` imprime chaque pourcentage suivi de sa différence à la référence entre parenthèse, et `"{pct} (n={n})"` le fait suivre de l'effectif non pondéré :
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({diff})")
+tab(gss_simple, race, party3, pct = "row", color = "difference", display = "{pct} ({diff})")
 ```
 
 Le premier champ du gabarit est le champ *primaire* — la valeur que garde Excel et celle que lisent les couleurs. `vignette("tabxplor-programming")` détaille toute la grammaire et liste tous les champs possibles.
@@ -434,7 +434,7 @@ une correction de Bonferroni à cette taille).
 Chaque tableau html porte des **infobulles** au survol des cases, avec les principaux champs utilisés : l'effectif non pondéré, la différence par rapport à la référence, le ratio, l'intervalle de confiance, etc. Elles sont actives par défaut dans le Viewer de RStudio/Positron et dans les fichiers `.Rmd` ou `.qmd`. Voila le résultat en les réactivant ici :
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+tab(gss_simple, race, party3, pct = "row", color = "difference") |>
   tab_html(tooltips = TRUE)
 ```
 
@@ -443,7 +443,7 @@ tab(gss_simple, race, party3, pct = "row", color = "diff") |>
 Il est possible d’exporter un tableau, avec ses repères de couleur, vers Excel, HTML ou Markdown :
 
 ```{r, echo = TRUE, eval = FALSE}
-tabs <- tab(gss_simple, race, party3, pct = "row", color = "diff")
+tabs <- tab(gss_simple, race, party3, pct = "row", color = "difference")
 tab_export(tabs) # par défaut : tableau html (Viewer de RStudio, .Rmd/.qmd, etc.)
 tab_export(tabs, format = "xl", path = "table") # export Excel
 tab_export(tabs, format = "md", path = "table") # fichier markdown plat (tableaux à barres verticales)
@@ -478,7 +478,7 @@ Tous les styles sont ensuite modifiables via du CSS ordinaire (largeurs de colon
 Les couleurs servent à explorer. Pour une revue, `theme = "print"` restitue la même lecture en noir et blanc : **les cases sur-représentées en gras**, *les sous-représentées en italique*, un soulignement pour le seuil le plus fort, et un aplat de gris pour une seconde mesure. La légende nomme alors la typographie, et non plus les teintes.
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "diff") |>
+tab(gss_simple, race, party3, pct = "row", color = "difference") |>
   tab_html(theme = "print")
 ```
 
@@ -622,9 +622,9 @@ Exemples :
 
 ```{r, echo=TRUE, eval=FALSE}
 # --- facteurs : pourcentages ----------------------------------------------
-tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey_non_signif")
+tab(gss_simple, race, party3, pct = "row", color = "difference",  color_signif = "grey_non_signif")
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, married, pct = "row", color = "OR", display = "{or}", ref = "first", ref2 = 1)
+tab(gss_simple, rincome, married, pct = "row", color = "odds_ratio", display = "{or}", ref = "first", ref2 = 1)
 tab(gss_simple, rincome, party3, color = "contrib")   # fonctionne aussi avec pct = "row"/"col"
 #    le même tableau lu en résidus standardisés (l'échelle +-2 / +-3), avec les nombres affichés
 tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
@@ -634,11 +634,11 @@ tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_e
     color_breaks = list(zscore = conf_level_to_z(c(0.99, 0.999, 0.9999))))
 
 # --- numériques : moyennes ------------------------------------------------
-tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")
+tab(gss_simple, rincome, tvhours, color = "difference",  color_signif = "guaranteed_effect")
 tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_signif")
 
 #    une échelle personnalisée pour les différences de moyennes, et une référence "première ligne"
-tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signif",
+tab(gss_simple, rincome, tvhours, color = "difference", color_signif = "grey_non_signif",
     color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
 ```
 

@@ -14,7 +14,7 @@
 #' @description
 #' The Markdown exporter behind \code{\link{tab_export}}: `tab_export(x, format = "md")` calls this.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a `list` of tab.
+#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a `list` of tab.
 #'   A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any other
 #'   list --- several `row_vars` and/or `tab_vars` (e.g. `tab()` with several row variables and a
 #'   `tab_vars`) --- is rendered one table after another, each keeping its own sub-tables.
@@ -27,7 +27,7 @@
 #'   hold a raw newline, so md "wrapping" means "do not truncate".
 #' @param subtext Print chi2/footnotes below the table.
 #' @param color When `TRUE` (default) and the table carries colours (e.g. built with
-#'   `tab(..., color = "diff")`), each fmt cell is wrapped in a short pandoc bracketed span
+#'   `tab(..., color = "difference")`), each fmt cell is wrapped in a short pandoc bracketed span
 #'   `[value]{.class}` so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
 #'   companion \code{\link{tab_md_css}} styles the classes). `FALSE` produces plain monochrome
 #'   markdown. Uncoloured tables never get spans.
@@ -75,8 +75,8 @@
 #' @examples
 #' \donttest{
 #' tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
-#' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
-#' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+#' tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |> tab_md()
+#' tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
 #'   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
 #'   tab_md()
 #' }
@@ -525,13 +525,17 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     # run, nbsp-padded blanks elsewhere), then route it through md_insert_col_sep(sep_after) exactly like
     # the body -- so the spacer columns (col_var groups + the interior levels/Total boundaries) line up
     # across every row. (Was a hand-assembled line that only knew the col_var-group spacers.)
-    runs <- tab_header_runs(cvh$label)
+    # Phase 19n: a span belonging to a SUB-POPULATION carries it beside the variable. md is the one
+    # backend that cannot draw two lines in a cell (a pipe row IS one line), so it composes on ONE:
+    # "*2000 marital*" -- the same one-line form fmt_col_block()$label gives the console.
+    runs <- tab_header_runs(cvh$label, cvh$group)
     span_cells <- md_pad_blank(col_width, styled)
     col_start  <- 1L
     for (r in seq_along(runs$labels)) {
       if (nzchar(runs$labels[r]))
-        span_cells[col_start] <- stringi::stri_pad(paste0(" *", runs$labels[r], "*"),
-                                                   col_width[col_start], side = "right")
+        span_cells[col_start] <- stringi::stri_pad(
+          paste0(" *", fmt_col_block(runs$labels[r], runs$groups[r])$label, "*"),
+          col_width[col_start], side = "right")
       col_start <- col_start + runs$spans[r]
     }
     col_var_header_line <- md_insert_col_sep(span_cells, sep_after, n_cols, has_sep)

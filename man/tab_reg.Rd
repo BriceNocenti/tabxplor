@@ -236,7 +236,7 @@ Each table's footer says which it used --- so the same weight can legitimately g
 wider interval here than in a crosstab beside it, and \code{tab(design_effect = TRUE)} is what brings
 the two into line. Second, the crude percentage \emph{difference} here uses the
 \strong{Wald} interval, matching the model AME so one legend can name one method, where
-\code{tab(ci = "diff")} uses Newcombe; on a real table they differ by a few tenths of a percent.
+\code{tab(ci = "ref")} uses Newcombe; on a real table they differ by a few tenths of a percent.
 
 \strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
 \code{survey::svyglm}; the crude ones through an effective sample size derived from the design
@@ -492,6 +492,11 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 (see \code{jmvreg_cache_env()}) that memoizes fitted models so display / colour / reference toggles
 avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is
 reparametrized from the cached fit (no refit). \code{NULL} (the default) leaves ordinary calls unchanged.}
+
+\item{...}{Not used. It exists only so that the arguments removed while \code{tab_reg()} was in
+development (\code{exponentiate}, \code{at}, \code{estimate_display}, and the \code{effect} values \code{"ame"} /
+\code{"ame_ratio"}) get an error naming their replacement, at the moment of the mistake, rather than
+R's bare "unused argument".}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / dependent.

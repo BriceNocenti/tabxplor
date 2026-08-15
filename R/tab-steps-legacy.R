@@ -33,7 +33,7 @@
 #' [tab()] / [tab_plain()] / [tab_num()]. `tab_totaltab()` still works on an existing tab.
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
+#' \code{\link{tab}}.
 #' @param totaltab If there are subtables, corresponding to the levels of tab_vars,
 #' \code{totaltab = "table"} add a complete total table.
 #' \code{totaltab = "line"} add a total table of only one row with the general total.
@@ -175,7 +175,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #' existing tab.
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
+#' \code{\link{tab}}.
 #' @param tot \code{c("col", "row")} and \code{"both"} print total rows and total columns.
 #'  Set to \code{"row"} or \code{"col"} to print only one type.
 #'  Set to \code{"no"} to remove all totals.
@@ -396,7 +396,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' existing tab.
 #'
 #' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
+#' \code{\link{tab}}.
 #' @param pct The type of percentages to calculate. \code{"row"} draw row percentages.
 #' Set to \code{"col"} for column percentages. Set to \code{"all"} for frequencies
 #' (based on each subtable/group if \code{tab_vars} is provided).
@@ -708,7 +708,7 @@ diff_formula <- function(x, type, ref, refer) {
 #' existing tab, reconstructing that plan from the table's own markers.
 #'
 #' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
+#' \code{\link{tab}}.
 #' @param ci What the interval is anchored on -- \code{"ref"} (the comparison with the reference
 #'  cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
 #'  \code{\link{tab}}, which is where this is normally set: \code{"auto"} gives a comparison
@@ -744,26 +744,26 @@ diff_formula <- function(x, type, ref, refer) {
 #' built from a \code{survey::svydesign}; \code{Inf} is the large-sample normal pivot.
 #' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
 #' \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{ci_method["diff"]}
-#' methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
-#' centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
+#' methods), or \code{"ratio"} for a ratio interval (neutral 1), stored on the column's own
+#' \code{scale} attribute (\code{"pct_ratio"} / \code{"mean_ratio"}) and centred on the
+#' cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
 #' ratio method), or a ratio-of-means interval for numeric means (\code{ci_method["mean_ratio"]}).
 #' \code{tab()} sets it from
 #' the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
 #' \code{c("ratio", "diff")}) asks for the ratio one.
-#' @param color The type of colors to print, as a single string.
-#' \itemize{
-#'   \item \code{"no"}: by default, no colors are printed
-#'   \item \code{"diff_ci"}: color pct and means based on cells differences from totals
-#'   or first cells, removing coloring when the confidence interval of this difference
-#'   is higher than the difference itself
-#'   \item \code{"after_ci"}: idem, but cut off the confidence interval from the
-#'   difference
-#' }
+#' @param color The type of colors to print, as a single string: \code{"no"} (the default),
+#' \code{"diff_ci"} (colour percentages and means by their difference from the total or first cell,
+#' dropping the colour when the interval of that difference is wider than the difference itself) or
+#' \code{"after_ci"} (idem, but cutting the interval off the difference first). Those two combined
+#' strings are the 1.x spelling of \code{\link{tab}}'s \code{color = "difference"} plus
+#' \code{color_signif = "grey_non_signif"} / \code{"guaranteed_effect"}, which is what a table
+#' built by \code{tab()} stores and its legend names.
 #' @param visible By default confidence intervals are calculated and used to set colors,
 #' but not printed. Set to \code{TRUE} to print them in the result.
 #'
 #' @section Significance stars:
-#' With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+#' With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
+#' shows how sure we can be that its
 #' difference from the reference is real and not just sampling noise: \code{*} means significant at
 #' the 10\% level (p < 0.10), \code{**} at 5\% (p < 0.05), \code{***} at 1\% (p < 0.01). The exact
 #' p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
@@ -1132,7 +1132,7 @@ tab_ci <- function(tabs,
 #' plan from the table's own markers.
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-#' \code{\link{tab_many}}.
+#' \code{\link{tab}}.
 #' @param calc By default all elements of the Chi2 summary are calculated :
 #' contributions to variance, pvalue, variance and unweighted count. You can choose which
 #' are computed by selecting elements in the vector \code{c("ctr", "p", "var", "counts")}.

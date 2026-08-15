@@ -15,14 +15,14 @@ tab_estimates(
 )
 }
 \arguments{
-\item{x}{A table from \code{\link{tab}} / \code{\link{tab_many}} / \code{\link{tab_reg}}.}
+\item{x}{A table from \code{\link{tab}} or \code{\link{tab_reg}}.}
 
 \item{columns}{Value columns to keep, by name. \code{NULL} (the default) keeps the model columns of
 a regression table and every value column of a cross-table.}
 
 \item{what}{\code{"auto"} (the quantity the stored interval is centred on -- so a
 \code{ci = "cell"} table gives percentages, a \code{ci = "ref"} table differences, an
-\code{OR} table odds ratios), \code{"effect"} or \code{"level"}.}
+odds-ratio table odds ratios), \code{"effect"} or \code{"level"}.}
 
 \item{observed}{\code{"auto"}, \code{"band"}, \code{"point"}, \code{"ci"} or \code{"none"} --
 whether the observed (crude) counterpart of a regression estimate is included.}

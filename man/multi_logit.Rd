@@ -137,7 +137,7 @@ Each table's footer says which it used --- so the same weight can legitimately g
 wider interval here than in a crosstab beside it, and \code{tab(design_effect = TRUE)} is what brings
 the two into line. Second, the crude percentage \emph{difference} here uses the
 \strong{Wald} interval, matching the model AME so one legend can name one method, where
-\code{tab(ci = "diff")} uses Newcombe; on a real table they differ by a few tenths of a percent.
+\code{tab(ci = "ref")} uses Newcombe; on a real table they differ by a few tenths of a percent.
 
 \strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
 \code{survey::svyglm}; the crude ones through an effective sample size derived from the design

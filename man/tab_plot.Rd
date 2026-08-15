@@ -20,7 +20,7 @@ tab_plot(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}.}
 
 \item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
 black table with white text.
@@ -74,7 +74,7 @@ confidence interval, its significance and its colour -- see \code{\link{forest_p
 if (requireNamespace("ggpubr", quietly = TRUE) &&
     requireNamespace("gtable", quietly = TRUE) &&
     requireNamespace("ggplot2", quietly = TRUE)) {
-  tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+  tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
     tab_plot()
 }
 }

@@ -66,13 +66,18 @@ test_that("a spread crosstab keeps its per-group test summary, keyed on the new 
   sp <- tab_spread(t, year)
 
   tt <- tabxplor:::get_test(sp)
-  # each chi2 row follows its col_var through the fold, and stops claiming a row group
-  expect_setequal(tt$col[tt$test == "chi2"], c("2000<br>marital", "2014<br>marital"))
+  # Phase 19n: a chi2 row keeps naming its col_var and gains the spread level BESIDE it, in the
+  # declared `col_group` column -- the `test` twin of the fmt columns' own attribute. `col` alone
+  # identified a block only while the two were welded; the grid keys on the pair now.
+  chi2 <- tt$test == "chi2"
+  expect_setequal(tt$col[chi2], "marital")
+  expect_setequal(tt$col_group[chi2], c("2000", "2014"))
   expect_true(all(tt$year == ""))
-  # ... so the summary still renders, one value column per spread level
+  # ... so the summary still renders TWO value columns, one per spread level -- which is the whole
+  # point of keying on the pair: on `col` alone both blocks would collapse into one.
   g <- test_summary_grid(sp)
   expect_false(is.null(g))
-  expect_setequal(g$value_headers, c("2000<br>marital", "2014<br>marital"))
+  expect_setequal(g$value_headers, c("2000 marital", "2014 marital"))
 })
 
 test_that("reg grid: split_var levels become the row groups", {

@@ -24,7 +24,7 @@ Get HTML Color Code of a fmt vector
 }
 \examples{
 \donttest{
-tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
 dplyr::mutate(tabs, across(where(is_fmt), fmt_get_color_code))
 }
 }

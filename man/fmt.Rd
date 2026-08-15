@@ -26,6 +26,7 @@
 \alias{set_diff_type}
 \alias{get_col_var}
 \alias{set_col_var}
+\alias{get_col_group}
 \alias{get_model_family}
 \alias{set_model_family}
 \alias{get_ci_method}
@@ -69,6 +70,7 @@ fmt(
   ref = "",
   pct_base = "none",
   col_var = "",
+  col_group = "",
   totcol = FALSE,
   refcol = FALSE,
   color = "",
@@ -129,6 +131,8 @@ set_diff_type(x, ref)
 get_col_var(x, ...)
 
 set_col_var(x, col_var)
+
+get_col_group(x, ...)
 
 get_model_family(x, ...)
 
@@ -209,7 +213,7 @@ field of its own: it is recovered from \code{pvalue} and this field's sign, and 
 \code{display = "resid"} (see \code{\link{tab}}).}
 
 \item{var}{The cells variances, as a double vector the length of \code{n}.
-Used with \code{type = "mean"} to calculate confidence intervals.
+Used with \code{scale = "level_mean"} to calculate confidence intervals.
 Calculate with \code{tab_plain}.}
 
 \item{ci}{The confidence interval half-width (margin of error), as a double vector the
@@ -285,6 +289,12 @@ the whole table), or \code{"none"} (counts, means, coefficients).}
 
 \item{col_var}{The name of the \code{col_var} used to calculate the vector}
 
+\item{col_group}{The sub-population this column's block belongs to: a level of a
+\code{spread_vars} variable (\code{\link{tab_spread}}), or a \code{\link{tab_reg}}
+\code{split_var} group. \code{""} (the default) when the table was never spread. Together with
+\code{col_var} it identifies a column BLOCK: two blocks may show the same variable for two
+sub-populations, and exports head them on two lines.}
+
 \item{totcol}{\code{TRUE} when the vector is a total column}
 
 \item{refcol}{\code{TRUE} when the vector is a reference column}
@@ -337,7 +347,17 @@ design was given but its variance could not be computed). Default \code{"n"}. Li
 footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
 the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.}
 
-\item{...}{Used in methods to add arguments in the future.}
+\item{ci_method}{Which interval ENGINE built this column's bounds --- \code{"wilson"},
+\code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
+proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"} (a
+difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
+means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (the default) when the
+column carries no interval. Stamped where the interval is computed, and read back by the colour
+legend, so the method it names is always the one the bounds were built with.}
+
+\item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
+2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
+methods below, to add arguments in the future.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 
@@ -397,6 +417,9 @@ A logical vector with the fmt vectors col_var attributes
 
 A modified fmt vector.
 
+A character vector with the vectors' col_group attributes (\code{""} when the table was
+never spread). On a data.frame, one value per column.
+
 A character vector with the fmt vectors' model_family attributes (\code{""} when unset,
 e.g. on cross-tables). On a data.frame, one value per column.
 
@@ -421,14 +444,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 21 fields :
-\code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-\code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-\code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs}, \code{gap_se},
-\code{in_totrow},  \code{in_tottab},
-\code{in_refrow}. Other arguments are attributes, attached not to each value, but to
-the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
-with \code{\link[base:attr]{attr}} and modify them with
+\code{\link[vctrs:field]{vctrs:field<-}}. Its per-cell \strong{fields} are listed below.
+The other arguments are \strong{attributes}, attached not to each value but to
+the whole vector, like \code{scale}, \code{col_var}, \code{totcol} or \code{color}. You can get
+them with \code{\link[base:attr]{attr}} and modify them with
 \code{\link[base:attr]{attr<-}}. Special functions listed below are made to
 facilitate programming with with \pkg{tabxplor} formatted numbers.
 \code{taxplfmt} vectors can use all standard operations, like +, -, sum(), or c(),
@@ -491,6 +510,8 @@ all of them in the whole tibble.
 
 \item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
 
+\item \code{get_col_group()}: get the sub-population of fmt columns (at \code{fmt} level or \code{tab} level)
+
 \item \code{get_model_family()}: get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
 
 \item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (Phase 15e: the per-column
@@ -517,6 +538,36 @@ regression family, "" on crosstabs)
 \item \code{set_digits()}: set the "digits" field
 
 }}
+\section{The fields of a cell}{
+
+A \code{fmt} cell carries 21 fields. Many are \code{NA} when the quantity was not requested; read one with \code{x$field} or
+\code{\link[vctrs:field]{vctrs::field()}}, and see them all with
+\code{\link[vctrs:vec_data]{vctrs::vec_data()}}:
+\itemize{
+\item \code{n} --- the unweighted count.
+\item \code{display} --- which field this cell shows (a bare name, or a \code{{}} template).
+\item \code{digits} --- how many decimals this cell prints.
+\item \code{wn} --- the weighted count.
+\item \code{pct} --- the percentage.
+\item \code{mean} --- the mean, on a numeric column variable.
+\item \code{diff} --- the difference from the reference cell (percentage points, or the outcome's own units).
+\item \code{ratio} --- the ratio to the reference cell (a relative risk, or a ratio of means).
+\item \code{ctr} --- the cell's contribution to the table's Chi-2.
+\item \code{var} --- the variance (of a mean; the Chi-2 variance on a percentage).
+\item \code{ci_inf} --- the lower bound of the confidence interval.
+\item \code{ci_sup} --- the upper bound of the confidence interval.
+\item \code{pvalue} --- the cell's own significance p-value, which the stars read.
+\item \code{or} --- the odds ratio against the \code{ref2} level.
+\item \code{tot_n} --- the cell's own base --- the count its percentage is computed on.
+\item \code{n_eff} --- the effective sample size its interval was computed on (weights or a survey design).
+\item \code{obs} --- \code{tab_reg()} only: the observed (crude) effect the modelled one is compared to.
+\item \code{gap_se} --- \code{tab_reg()} only: the standard error of the gap between the estimate and \code{obs}.
+\item \code{row_kind} --- what kind of row the cell sits in --- see \code{\link[=get_row_kind]{get_row_kind()}}.
+\item \code{in_tottab} --- is the cell in a total table (logical).
+\item \code{in_refrow} --- is the cell in a reference row (logical).
+}
+}
+
 \section{Every display token}{
 
 Generated from the package's own display table, so it cannot drift from what
@@ -552,7 +603,8 @@ the pipeline itself and are not meant to be typed:
 \examples{
 library(dplyr)
 
-f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
+f <- fmt(n = c(7, 19, 2), pct = c(0.25, 0.679, 0.07),
+         scale = "level_pct", pct_base = "row")
 f
 
 # To get the currently displayed field :
@@ -586,8 +638,8 @@ mutate(f, pct = c(1, 0, 0))
 # See all the attributes of a fmt vector :
 attributes(f)
 
-# To modify the "type" attribute of a fmt vector :
-set_type(f, "col")
+# To modify the "pct_base" attribute of a fmt vector (what the percentage is a percentage OF) :
+set_pct_base(f, "col")
 
 # To modify the "color" attribute of a fmt vector :
 set_color(f, "contrib")

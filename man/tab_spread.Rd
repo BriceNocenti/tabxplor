@@ -14,7 +14,7 @@ tab_spread(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-\code{\link{tab_many}} or \code{\link{tab_plain}}.}
+\code{\link{tab_reg}} or \code{\link{tab_plain}}.}
 
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>  The tab variables
 to pass to column, with a syntax of type \code{c(var1, var2, ...)}.}
@@ -38,7 +38,7 @@ Spread a tab, passing a tab variable to column
 
 tabs <-
   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no",
-      color = "diff", tot = "row", other_if_less_than = 30)
+      color = "difference", tot = "row", other_if_less_than = 30)
 
 tabs |>
   dplyr::select(year, race, relig, Married) |>

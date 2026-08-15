@@ -19,7 +19,7 @@ tab_export(
 )
 }
 \arguments{
-\item{x}{A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.}
+\item{x}{A table (or list of tables) made with \code{\link{tab}} or \code{\link{tab_reg}}.}
 
 \item{format}{One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel),
 \code{"plot"} (an image OF THE TABLE) or \code{"forest"} (a forest plot of its estimates, see
@@ -74,7 +74,7 @@ them and passes any format-specific argument through \code{...}.
 }
 \examples{
 \donttest{
-tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
 tab_export(tabs, "md")
 }
 }

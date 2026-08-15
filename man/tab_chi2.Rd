@@ -14,7 +14,7 @@ tab_chi2(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-\code{\link{tab_many}}.}
+\code{\link{tab}}.}
 
 \item{calc}{By default all elements of the Chi2 summary are calculated :
 contributions to variance, pvalue, variance and unweighted count. You can choose which

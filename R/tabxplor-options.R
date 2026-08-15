@@ -71,7 +71,7 @@
 #'     whose variance has a closed form in the per-cell `sum(w^2)` the aggregate already computes, so
 #'     the base becomes `n_eff = p(1-p) / Var_design(p)` in \strong{every weighted descriptive
 #'     confidence interval} --- factor proportions \emph{and} means (cell, difference, ratio and the
-#'     `color = "OR"` significance) --- and the whole-table tests (`test = TRUE`) become
+#'     `color = "odds_ratio"` significance) --- and the whole-table tests (`test = TRUE`) become
 #'     \code{survey::svychisq} / a \code{svyglm} Wald F on that flat design. It reproduces `survey` to
 #'     the last digit, Kish's `(sum w)^2 / sum(w^2)` being that same formula with each cell's own
 #'     `sum(w^2)` discarded. Being exact rather than a bound, it can make an interval \emph{narrower}
@@ -85,7 +85,7 @@
 #'     reads it --- its crude `empirical =` companions are always on the weighted basis, beside a model
 #'     column (\code{survey::svyglm}) that always was. For the full design effect --- strata, clusters,
 #'     `fpc`, calibration --- pass a \code{survey::svydesign} as `data`; the option is then not
-#'     consulted at all. The per-call `design_effect =` argument of [tab()], [tab_many()], [tab_num()]
+#'     consulted at all. The per-call `design_effect =` argument of [tab()], [tab_num()]
 #'     and [tab_plain()] overrides it (`NULL`, the default, means "use this option").}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]

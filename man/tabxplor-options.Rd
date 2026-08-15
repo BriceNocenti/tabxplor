@@ -74,7 +74,7 @@ the unequal weighting, exactly}: a weight column IS a survey design (the flat on
 whose variance has a closed form in the per-cell \code{sum(w^2)} the aggregate already computes, so
 the base becomes \code{n_eff = p(1-p) / Var_design(p)} in \strong{every weighted descriptive
 confidence interval} --- factor proportions \emph{and} means (cell, difference, ratio and the
-\code{color = "OR"} significance) --- and the whole-table tests (\code{test = TRUE}) become
+\code{color = "odds_ratio"} significance) --- and the whole-table tests (\code{test = TRUE}) become
 \code{survey::svychisq} / a \code{svyglm} Wald F on that flat design. It reproduces \code{survey} to
 the last digit, Kish's \verb{(sum w)^2 / sum(w^2)} being that same formula with each cell's own
 \code{sum(w^2)} discarded. Being exact rather than a bound, it can make an interval \emph{narrower}
@@ -88,7 +88,7 @@ correction it does not have). \strong{Scope: \code{\link[=tab]{tab()}} and its l
 reads it --- its crude \verb{empirical =} companions are always on the weighted basis, beside a model
 column (\code{survey::svyglm}) that always was. For the full design effect --- strata, clusters,
 \code{fpc}, calibration --- pass a \code{survey::svydesign} as \code{data}; the option is then not
-consulted at all. The per-call \verb{design_effect =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_many]{tab_many()}}, \code{\link[=tab_num]{tab_num()}}
+consulted at all. The per-call \verb{design_effect =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}
 and \code{\link[=tab_plain]{tab_plain()}} overrides it (\code{NULL}, the default, means "use this option").}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}

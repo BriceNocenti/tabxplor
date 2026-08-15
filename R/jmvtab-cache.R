@@ -168,7 +168,10 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 17L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 18L   # bump on any store-shape change -> discard stale stores
+# 18 (Phase 19n): a tier-3 carrier stores a built table, and both its per-column attributes and its
+#   `test` tibble gained `col_group` -- so a stale entry would deserialize a column whose block
+#   identity is only half there.
 # 17 (Phase 19k): the option vocabulary itself moved (`chi2` -> `test`, `OR` retired onto display /
 #   ref2, `anova` re-applied at tier 4, the four method_* keys re-applied instead of structural), so
 #   a stale entry's base key describes a different question.

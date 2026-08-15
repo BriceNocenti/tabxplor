@@ -167,7 +167,8 @@ rows and cols.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{digits}{The number of digits to print, as a single integer.}
+\item{digits}{The number of digits to print, as a single integer, or an integer vector the
+same length as \code{col_vars}.}
 
 \item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).}
 
@@ -202,10 +203,11 @@ also pins the ratio scale -- say \code{color = "ratio"} instead).}
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "ref"}, print
 significance stars for each cell's difference from its reference, read from the displayed interval
 itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
-\code{FALSE}). See \code{\link{tab_many}}.}
+\code{FALSE}). \code{ci = "cell"} and \code{ci = "no"} anchor nothing to compare, so asking for
+stars alongside them informs you once and disables them.}
 
 \item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector --
 partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
@@ -214,7 +216,7 @@ partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
 (default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
 degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
 the effective base, referred to a survey design's own degrees of freedom).
-\item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+\item \code{diff}: a proportion minus its reference (\code{ci = "ref"}) -- \code{"newcombe"}
 (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
 (Agresti-Caffo) or \code{"wald"}.
 \item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
@@ -251,7 +253,13 @@ considered as a \code{tab_vars} and used for grouping. To add text columns witho
 using them in calculations, be sure they are of class \code{character}.
 }
 \description{
-Plain single cross-table
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+One bare cross-table of counts or percentages, from ONE row variable and ONE column variable.
+Superseded by \code{\link[=tab]{tab()}}, which does the same and everything around it (several variables, colours,
+totals, tests) -- but it stays the smallest entry point into the aggregate core, and takes the
+same \code{ci} / \code{ci_method} / \code{conf_level} / \code{stars} / \code{display} arguments, resolved by the same
+rules, so its numbers agree with \code{tab()}'s cell for cell.
 }
 \examples{
 \donttest{

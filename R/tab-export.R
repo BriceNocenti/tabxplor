@@ -14,7 +14,7 @@
 #' estimates). They share one set of display-option names and defaults; \code{tab_export()} forwards
 #' them and passes any format-specific argument through \code{...}.
 #'
-#' @param x A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.
+#' @param x A table (or list of tables) made with \code{\link{tab}} or \code{\link{tab_reg}}.
 #' @param format One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel),
 #'   \code{"plot"} (an image OF THE TABLE) or \code{"forest"} (a forest plot of its estimates, see
 #'   \code{\link{forest_plot}}). The HTML backend engine (home-built or kableExtra) is chosen with
@@ -52,7 +52,7 @@
 #'
 #' @examples
 #' \donttest{
-#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
 #' tab_export(tabs, "md")
 #' }
 tab_export <- function(x, format = c("html", "md", "xl", "plot", "forest"), path = NULL,

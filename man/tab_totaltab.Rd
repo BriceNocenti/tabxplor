@@ -13,7 +13,7 @@ tab_totaltab(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-\code{\link{tab_many}}.}
+\code{\link{tab}}.}
 
 \item{totaltab}{If there are subtables, corresponding to the levels of tab_vars,
 \code{totaltab = "table"} add a complete total table.

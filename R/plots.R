@@ -221,12 +221,12 @@ est_row_axis <- function(x) {
 #' Nothing is computed and no model is re-fitted, so it agrees with what the table shows by
 #' construction. Reachable as \code{forest_plot(x, return_data = TRUE)}.
 #'
-#' @param x A table from \code{\link{tab}} / \code{\link{tab_many}} / \code{\link{tab_reg}}.
+#' @param x A table from \code{\link{tab}} or \code{\link{tab_reg}}.
 #' @param columns Value columns to keep, by name. \code{NULL} (the default) keeps the model columns of
 #'   a regression table and every value column of a cross-table.
 #' @param what \code{"auto"} (the quantity the stored interval is centred on -- so a
 #'   \code{ci = "cell"} table gives percentages, a \code{ci = "ref"} table differences, an
-#'   \code{OR} table odds ratios), \code{"effect"} or \code{"level"}.
+#'   odds-ratio table odds ratios), \code{"effect"} or \code{"level"}.
 #' @param observed \code{"auto"}, \code{"band"}, \code{"point"}, \code{"ci"} or \code{"none"} --
 #'   whether the observed (crude) counterpart of a regression estimate is included.
 #' @param intercept Keep the regression \code{Constant} row.
@@ -881,13 +881,13 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' when the estimators are correlated, which is why the crude interval is not drawn by default;
 #' \code{observed = "ci"} restores that classic figure if you want it.
 #'
-#' @param x A table from \code{\link{tab}} / \code{\link{tab_many}} / \code{\link{tab_reg}} (or a list
+#' @param x A table from \code{\link{tab}} or \code{\link{tab_reg}} (or a list
 #'   of them, giving a list of plots).
 #' @param columns Value columns to draw, by name. \code{NULL} (the default) draws the model columns of
 #'   a regression table and every value column of a cross-table.
 #' @param what \code{"auto"} (the quantity the table's own interval is centred on), \code{"effect"}
 #'   (the contrast: difference, ratio or odds ratio) or \code{"level"} (the percentage or mean --
-#'   for a regression table this needs \code{effect = "ame"}).
+#'   for a regression table this needs \code{effect = "marginal"}).
 #' @param observed For a regression table with \code{empirical = TRUE}: \code{"auto"}, \code{"band"}
 #'   (the observed value with the margin of error of the gap), \code{"point"}, \code{"ci"} (the classic
 #'   two-interval figure) or \code{"none"}.

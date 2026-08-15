@@ -21,7 +21,7 @@ tab_ci(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
-\code{\link{tab_many}}.}
+\code{\link{tab}}.}
 
 \item{ci}{What the interval is anchored on -- \code{"ref"} (the comparison with the reference
 cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
@@ -41,15 +41,13 @@ contributions to variance be calculated for each subtable/group (by default,
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{color}{The type of colors to print, as a single string.
-\itemize{
-\item \code{"no"}: by default, no colors are printed
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference
-}}
+\item{color}{The type of colors to print, as a single string: \code{"no"} (the default),
+\code{"diff_ci"} (colour percentages and means by their difference from the total or first cell,
+dropping the colour when the interval of that difference is wider than the difference itself) or
+\code{"after_ci"} (idem, but cutting the interval off the difference first). Those two combined
+strings are the 1.x spelling of \code{\link{tab}}'s \code{color = "difference"} plus
+\code{color_signif = "grey_non_signif"} / \code{"guaranteed_effect"}, which is what a table
+built by \code{tab()} stores and its legend names.}
 
 \item{visible}{By default confidence intervals are calculated and used to set colors,
 but not printed. Set to \code{TRUE} to print them in the result.}
@@ -74,8 +72,9 @@ interval here).}
 
 \item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
 \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{ci_method["diff"]}
-methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
-centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
+methods), or \code{"ratio"} for a ratio interval (neutral 1), stored on the column's own
+\code{scale} attribute (\code{"pct_ratio"} / \code{"mean_ratio"}) and centred on the
+cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
 ratio method), or a ratio-of-means interval for numeric means (\code{ci_method["mean_ratio"]}).
 \code{tab()} sets it from
 the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
@@ -99,7 +98,8 @@ existing tab, reconstructing that plan from the table's own markers.
 }
 \section{Significance stars}{
 
-With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
+shows how sure we can be that its
 difference from the reference is real and not just sampling noise: \code{*} means significant at
 the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
 p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with

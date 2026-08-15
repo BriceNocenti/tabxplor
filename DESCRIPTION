@@ -49,6 +49,7 @@ Suggests:
     VGAM (>= 1.1.0),
     marginaleffects (>= 0.20.0),
     withr (>= 3.0.0),
+    yaml,
     gridExtra (>= 2.3.0),
     clipr
 Config/testthat/edition: 3

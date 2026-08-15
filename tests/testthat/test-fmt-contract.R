@@ -47,7 +47,7 @@ fmt_contract_field_types <- c(
 # Net 14 -> 15 attributes.
 fmt_contract_attr_defaults <- list(
   scale = "level_n", comp_all = NA, ref = "", pct_base = "none",
-  col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
+  col_var = "", col_group = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
   model_family = "", role = "",
   # Phase 18z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
   # colour engine falls back to options(tabxplor.conf_level), i.e. the pre-z13 behaviour.
@@ -59,6 +59,9 @@ fmt_contract_attr_defaults <- list(
   # Phase 19b: the 15th -- WHICH interval engine built this column's bounds ("" = none). It was
   # meta$ci_settings, a table-wide vector the legend indexed BY MEASURE (D8).
   ci_method = ""
+  # Phase 19n added the 16th, `col_group` (declared beside `col_var` above): WHICH SUB-POPULATION
+  # this column's block belongs to. It was WELDED into `col_var` as "{level}<br>{col_var}", so three
+  # backends sniffed an html tag out of a variable name to recover it.
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

@@ -48,7 +48,7 @@ Chaque colonne de nombres d'un tableau `tabxplor` est un unique vecteur de class
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
-tabs <- tab(gss_simple, race, marital, pct = "row", color = "diff")
+tabs <- tab(gss_simple, race, marital, pct = "row", color = "difference")
 ```
 
 ## Récupérer les nombres bruts
@@ -73,7 +73,7 @@ tabs$Married$pct
 
 ## Les champs d'une case
 
-Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la quantité correspondante n'a pas été demandée). Les champs destinés à l'utilisateur sont :
+Une case `tabxplor_fmt` porte **21 champs** (beaucoup valent `NA` lorsque la quantité correspondante n'a pas été demandée). Les champs destinés à l'utilisateur sont :
 
 | Champ | Signification |
 |:------|:--------|
@@ -92,9 +92,13 @@ Une case `tabxplor_fmt` porte **19 champs** (beaucoup valent `NA` lorsque la qua
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
 | `n_eff`     | taille d'échantillon effective utilisée pour l'intervalle de confiance, avec `options(tabxplor.design_effect = TRUE)` ou un plan `survey` |
 | `obs`       | `tab_reg()` seulement : l'effet observé (brut) auquel l'effet modélisé est comparé |
+| `gap_se`    | `tab_reg()` seulement : l'erreur-type de l'écart entre l'estimation et `obs` |
 | `digits`    | nombre de décimales à afficher (par case) |
 | `display`   | quel champ est affiché (par case) |
-| `in_totrow`, `in_tottab`, `in_refrow` | la case est-elle dans une ligne de total / un tableau de total / une ligne de référence (logique) |
+| `row_kind`  | le type de ligne où se trouve la case : `"data"`, `"total"`, ou l'une des lignes d'affichage synthétiques `"n"` / `"pct"` / `"pvalue"` / `"gof"` / `"blank"` |
+| `in_tottab`, `in_refrow` | la case est-elle dans un tableau de total / une ligne de référence (logique) |
+
+(`row_kind` a remplacé un champ logique `in_totrow` en 2.0.0. `x$in_totrow` renvoie toujours ce logique, et `is_totrow()` / `as_totrow()` sont inchangés.)
 
 Il est possible de visualiser l'ensemble du data frame sous-jacent d'une colonne avec `vctrs::vec_data()` :
 
@@ -157,7 +161,7 @@ Les règles :
 - Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs`.
 - Le **premier** `{}` est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
 - Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
-- Il s’agit simplement d’un affichage pour les sorties (la console, `tab_kable()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.
+- Il s’agit simplement d’un affichage pour les sorties (la console, `tab_html()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.
 - Le champ `{ci}` imprime déjà ses propres crochets `[…;…]` ; écrire `"{pct} {ci}"` et **non** `"{pct} [{ci}]"`.
 
 ## Créer une colonne à partir d'un autre champ
@@ -191,7 +195,8 @@ Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs
 - `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable expliquée), un rapport (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
 - `pct_base` — `get_pct_base()` / `set_pct_base()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
 - `ci_method` — `get_ci_method()` : quelle méthode a calculé les bornes de cette colonne (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`…; `""` si la colonne ne porte pas d’intervalle).
-- `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
+- `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne — `""`, `"no"`, ou l'un des noms de mesure `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` sur un tableau `tab_reg()`). Les acronymes de la discipline (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) restent des raccourcis permanents que l'on peut *écrire*, mais un tableau construit stocke toujours — et sa légende nomme toujours — le mot complet.
+- `col_group` — `get_col_group()` : la sous-population à laquelle appartient le bloc de la colonne, après un pivot `spread_vars` / `tab_spread()` ou une partition `tab_reg(split_var =)` (`""` sinon). Avec `col_var`, il identifie un *bloc* de colonnes : deux blocs peuvent montrer la même variable pour deux sous-populations, et les exports les titrent sur deux lignes.
 - `col_var` — `get_col_var()` : le nom de la variable en colonne (un tableau peut en contenir plusieurs, un nom différent ajoute une bordure verticale entre les différences variables de colonne).
 - `comp_all` — `get_comp_all()` : avec des `tab_vars`, la référence de comparaison est-elle le sous-tableau (`FALSE`) ou le tableau entier (`TRUE`) ?
 - `totcol` / `refcol` — `is_totcol()` / `is_refcol()` : est-ce une colonne de total / une colonne de référence ?
@@ -213,17 +218,17 @@ L'entrée la plus courante est un data frame d'**effectifs au format long** (une
 ```{r}
 counts <- dplyr::count(gss_simple, marital, race)
 tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
-# identique à tab(gss_simple, marital, race, pct = "row", color = "diff")
+# identique à tab(gss_simple, marital, race, pct = "row", color = "difference")
 ```
 
 L’entrée peut aussi être une `table()` / `xtabs()` / matrice, et lit un dataframe au format **large** (une colonne par modalité de la variable en colonne) via `cols =` / `col_name =` :
 
 ```{r, eval = FALSE}
-tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "diff")
+tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "difference")
 
 wide <- tidyr::pivot_wider(counts, names_from = race, values_from = n)
 tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
-           col_name = "race", pct = "row", color = "diff")
+           col_name = "race", pct = "row", color = "difference")
 ```
 
 La pondération fonctionne comme dans `tab()` : passer l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (`options(tabxplor.design_effect = TRUE)` a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus : elle ne s'applique donc pas ici — les intervalles de confiance utilisent le N non pondéré, et la note de bas de page le dit plutôt que de revendiquer une correction absente.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.

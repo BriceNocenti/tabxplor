@@ -29,7 +29,8 @@ options(tabxplor.tab_kable_tooltips = FALSE)
 #   - options(tabxplor.lang) drives the colour legend / footer / reg caption;
 #   - the test-summary and model-fit row labels (reg_footer_spec / test_pvalue_descriptor /
 #     test_es_measure, R/tab-test-display.R) resolve through gettext on the AMBIENT locale, which
-#     only LANGUAGE reaches. Without it, "LR vs null" knits as "RV vs nul".
+#     only LANGUAGE reaches. Without it a model-check row heads "Linéarité", not "Linearity".
+#     (Notation is deliberately NOT translated -- "LR vs null", OR/IRR/beta stay as they are.)
 # Same discipline as set_color_palette(theme=) below and tests/testthat/setup.R.
 options(tabxplor.lang = "en")
 Sys.setenv(LANGUAGE = "en")
@@ -77,14 +78,14 @@ A simple cross-table with row percentages: shades of blue mean the cell is over-
 ```{r quick-look}
 gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
 
-tab(gss, race, party3, pct = "row", color = "diff")
+tab(gss, race, party3, pct = "row", color = "difference")
 ```
 
 Several column variables can be crossed at once — handy for series of survey questions, keeping only the level of interest. With `color_signif = "grey_non_signif"`, cells that are *not* significantly different from the total are greyed out, so every colored (or black) figure is a solid one. Use `wt =` for weighted or survey data.
 
 ```{r quick-look-signif}
 tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
-    color = "diff", color_signif = "grey_non_signif")
+    color = "difference", color_signif = "grey_non_signif")
 ```
 
 The same visual language extends to regression models: `tab_reg()` detects a binary outcome and fits a logistic regression, coloring odds ratios by strength and greying the non-significant ones, with a possible comparison between modelised quantities and their crude observed empirical counterparts.
@@ -98,9 +99,9 @@ tab_reg(gss, dependent = "married", predictors = c("race", "age", "rincome"), em
 Any table exports with its colors to Excel, html or markdown, and can be drawn as a plot:
 
 ``` r
-tab(gss, marital, race, pct = "row", color = "diff") |> tab_export()  # "html"
-tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl()      # Excel
-tab(gss, marital, race, pct = "row", color = "diff") |> tab_xl(theme = "print")  # black & white
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_export()  # "html"
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()      # Excel
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print")  # black & white
 ```
 
 A colored html table also *prints*, or saves to PDF, in that black-and-white scheme on its own.

@@ -14,13 +14,20 @@ library(dplyr)
 # Comme dans la vignette d'introduction, les tableaux sont rendus comme les vrais tableaux html
 # de tabxplor (le reglage recommande au quotidien) ; la feuille de style partagee est emise une
 # fois par tab_css() ci-dessous, et les infobulles restent coupees.
-# options(tabxplor.lang = "fr") met les legendes et notes en francais.
+# Fixer la langue des DEUX manieres, comme les cinq autres documents : options(tabxplor.lang)
+# pilote la legende des couleurs, la note de bas de tableau et le titre de regression, mais les
+# libelles du resume de tests et des lignes d'ajustement du modele (reg_footer_spec /
+# test_pvalue_descriptor / test_es_measure) passent par gettext, que seul LANGUAGE atteint. Sans
+# lui, une ligne de diagnostic s'intitule "Linearity" et non "Linearite" des que le document est
+# construit sur une machine anglaise. (La notation n'est deliberement PAS traduite : "LR vs null",
+# OR/IRR/beta restent tels quels.)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
 
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
+Sys.setenv(LANGUAGE = "fr")
 set_color_palette(theme = "light")
 ```
 
@@ -111,7 +118,7 @@ Les **rapports de cotes observés** `Obs_OR` sont les mêmes que ceux que que l�
 gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c("race", "age", "rincome", "relig")), ~ !is.na(.) )) |>
   tab(race, married, pct = "row", na = "drop",
-    display = "{or}", ref = "first", color = "OR", color_signif = "grey_non_signif"
+    display = "{or}", ref = "first", color = "odds_ratio", color_signif = "grey_non_signif"
    )
 ```
 
@@ -145,7 +152,7 @@ factor_predictors <- c("race", "rincome", "relig")
 gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |>
   tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop",
-      color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE,
+      color = "difference", ref = 1, color_signif = "grey_non_signif", stars = TRUE,
       ci_method = c(diff = "wald")
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
@@ -495,8 +502,8 @@ La couleur `"adjustment"` montre toujours la **taille** de l'écart. Qu'elle le 
 
 | ce que vous avez demandé | effet observé | écart testé ? |
 |---|---|---|
-| `effect = "marginal"` / `"ame_ratio"`, toute famille | oui | **oui** |
-| `family = "poisson"` sur une variable binaire (rapports de risques) | oui | **oui** |
+| `effect = "marginal"`, toute famille et toute mesure | oui | **oui** |
+| `measure = "ratio"` sur une variable binaire (rapports de risques) | oui | **oui** |
 | rapports de taux d'incidence de Poisson, bêta linéaire | oui | **oui** |
 | rapports de cotes — binomial, multinomial, ordinal cumulé | oui | non (non collapsible) |
 | une `formula =` composée | non | non |
@@ -528,7 +535,7 @@ Les âges moyens empiriques, et les différences d'âge moyen par rapport à la 
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "diff", ref = 1, ci_method = c(mean_diff = "student")
+    color = "difference", ref = 1, ci_method = c(mean_diff = "student")
 ) |>
   mutate(diff = set_display(age, "diff"))
 # student : intervalles de confiance a variance commune, 

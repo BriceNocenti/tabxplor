@@ -83,7 +83,7 @@ NULL
 #'     `filter`.
 #' }
 #' The package-wide display, color and statistics defaults are `options()`, listed at
-#' [tabxplor-options]. `tab()` is a friendly wrapper around the more powerful [tab_many()].
+#' [tabxplor-options].
 #'
 #' @param data A data frame.
 #' @param row_vars,col_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
@@ -140,14 +140,12 @@ NULL
 #'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 #'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 #'   \code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
-#'   \code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
-#'   standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
-#'   \code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
-#'   whether it departs from independence -- the SPSS cell layout. \code{obs} is
-#'   \code{\link{tab_reg}}-only: the OBSERVED (crude) effect beside the modelled one, so
-#'   \code{\link{set_display}(t, "\{or\} (obs \{obs\})")} on a regression table prints each
-#'   adjusted odds ratio next to the unadjusted one it is compared to (\code{tab_reg} has no
-#'   \code{display} argument of its own; see \code{color = "adjustment"} in \code{?tab_reg}). A bare field name is also accepted as a
+#'   Two of them are worth a worked example. \code{display = "\{pct\} (\{resid\})"} prints each
+#'   percentage with the adjusted standardized residual that says whether it departs from
+#'   independence -- the SPSS cell layout. And on a regression table
+#'   \code{\link{tab_reg}(..., display = "\{or\} (obs \{obs\})")} prints each adjusted odds ratio
+#'   next to the unadjusted one it is compared to (see \code{color = "adjustment"} in
+#'   \code{?tab_reg}). A bare field name is also accepted as a
 #'   shorthand for its single-field template, so \code{display = "ci"} is the same as
 #'   \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 #'   \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
@@ -178,7 +176,8 @@ NULL
 #' @param total_names The names of the totals, as a character vector of length one or two.
 #' Use syntax of type \code{c("Total row", "Total column")} to set different names for
 #' rows and cols.
-#' @param pct The type of percentages to calculate :
+#' @param pct The type of percentages to calculate, as a single string or a vector the same length
+#' as \code{col_vars} (like \code{levels} and \code{digits}) :
 #'  \itemize{
 #'   \item \code{"row"}: row percentages.
 #'   \item \code{"col"}: column percentages.
@@ -190,8 +189,7 @@ NULL
 #'  \itemize{
 #'   \item \code{"auto"}: by default, cell difference from the corresponding total
 #'   (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-#'   used for `diff` ; cell ratio from the first line (or col) is use for `OR`
-#'   (odds ratio/relative risks ratio).
+#'   used for `diff`; the first line (or col) is used for the odds ratio.
 #'   \item \code{"tot"}: totals are always used.
 #'   \item \code{"first"}: calculate cell difference or ratio from the first cell
 #' of the row or column (useful to color temporal developments).
@@ -204,6 +202,9 @@ NULL
 #'   column or row, otherwise you get a warning message.
 #'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 #' }
+#' A (named) vector gives one reference per \code{row_vars} --- \code{ref = c(race = "first")}
+#' names the row variable it applies to, an unnamed vector goes by position, and any variable it
+#' does not mention keeps \code{"auto"}.
 #' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
 #' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
 #' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
@@ -297,10 +298,11 @@ NULL
 #'  also pins the ratio scale -- say \code{color = "ratio"} instead).
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param stars Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+#' @param stars Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "ref"}, print
 #' significance stars for each cell's difference from its reference, read from the displayed interval
 #' itself (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")` (default
-#' \code{FALSE}). See \code{\link{tab_many}}.
+#' \code{FALSE}). \code{ci = "cell"} and \code{ci = "no"} anchor nothing to compare, so asking for
+#' stars alongside them informs you once and disables them.
 #' @param ci_method The confidence-interval method of each kind of interval, as ONE named vector --
 #' partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
 #' \itemize{
@@ -308,7 +310,7 @@ NULL
 #'     (default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
 #'     degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
 #'     the effective base, referred to a survey design's own degrees of freedom).
-#'   \item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+#'   \item \code{diff}: a proportion minus its reference (\code{ci = "ref"}) -- \code{"newcombe"}
 #'     (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
 #'     (Agresti-Caffo) or \code{"wald"}.
 #'   \item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
@@ -451,7 +453,7 @@ NULL
 #'
 #' @details
 #' \strong{Ordered factors.} Since v2.0.0 the \code{ordered} class survives the whole pipeline (it
-#' used to be stripped at preparation), which is what lets \code{OR = "cumOR"} pick its col_vars by
+#' used to be stripped at preparation), which is what lets \code{ref2 = "cumulative"} pick its col_vars by
 #' class. One consequence worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
 #' levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as the
 #' greatest levels. They are labels, not points on the scale.
@@ -468,7 +470,7 @@ NULL
 #' \code{sum(w^2)} the aggregate already computes, so the base becomes
 #' \code{n_eff = p(1-p) / Var_design(p)} (or \code{s^2 / Var_design(mean)}) in \strong{every}
 #' descriptive interval --- proportions and means alike (cell, difference, ratio, and the
-#' \code{color = "OR"} significance). Because it is the exact variance and not an upper bound, it can
+#' \code{color = "odds_ratio"} significance). Because it is the exact variance and not an upper bound, it can
 #' also make an interval \emph{narrower}: where the weights line up with what is being tabulated,
 #' \code{n_eff} comes out above the cell's own \code{n}, which is correct and not a bug. It reproduces
 #' \code{survey} to the last digit, including \code{survey}'s own finite-sample factor --- so a table
@@ -536,12 +538,12 @@ NULL
 #'
 #' # Differences between the cell and it's subtable's total cell:
 #' \donttest{
-#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
+#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference")
 #' }
 #'
 #' # Differences between the cell and the whole table's general total cell:
 #' \donttest{
-#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
+#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference",
 #'   comp = "all")
 #' }
 #'
@@ -549,14 +551,16 @@ NULL
 #' \donttest{
 #' data2 <- data |> dplyr::mutate(year = as.factor(year))
 #' tab(data2, year, marital, race, subtext = gss2, pct = "row",
-#'     color = "diff", ref = "first", tot = "col")
+#'     color = "difference", ref = "first", tot = "col")
 #'
 #'
 #' # Differences with the total, except if their confidences intervals are superior to them:
-#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
+#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
+#'     color = "difference", color_signif = "grey_non_signif")
 #'
 #' # Same differences, minus their confidence intervals:
-#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
+#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
+#'     color = "difference", color_signif = "guaranteed_effect")
 #'
 #' # Contribution of cells to table's variance, like in a correspondence analysis:
 #' tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
@@ -578,10 +582,10 @@ NULL
 #'   }
 #'
 #' @seealso
-#'   [tab_many()] (the full-featured engine behind `tab()`) and [tab_reg()] (regression tables).
-#'   Go further with the helper functions: [tab_ci()] (confidence intervals and their methods),
-#'   [set_color_breaks()] / [set_color_palette()] / [set_color_style()] (colors),
-#'   [tab_chi2()] (statistical tests), [tab_pct()] / [tab_tot()] (percentages and totals).
+#'   [tab_reg()] (regression tables), and the variants [tab_num()] (numeric variables),
+#'   [tab_counts()] (pre-aggregated counts) and [tab_plain()] (one bare cross-table).
+#'   [set_color_breaks()] / [set_color_palette()] customise the colours,
+#'   [tab_shape()] reports what a finished table is and what accepts it.
 #'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
 #'   [tab_plot()], and CHART it with [forest_plot()] (every cell's estimate, interval and colour --
 #'   `tab_plot()` renders the table as an image, `forest_plot()` is the real chart).
@@ -2718,7 +2722,7 @@ tab_assemble_output <- function(ctx) {
 #' Spread a tab, passing a tab variable to column
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-#' \code{\link{tab_many}} or \code{\link{tab_plain}}.
+#' \code{\link{tab_reg}} or \code{\link{tab_plain}}.
 #' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>  The tab variables
 #' to pass to column, with a syntax of type \code{c(var1, var2, ...)}.
 #' @param names_prefix String added to the start of every variable name.
@@ -2739,7 +2743,7 @@ tab_assemble_output <- function(ctx) {
 #'
 #' tabs <-
 #'   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no",
-#'       color = "diff", tot = "row", other_if_less_than = 30)
+#'       color = "difference", tot = "row", other_if_less_than = 30)
 #'
 #' tabs |>
 #'   dplyr::select(year, race, relig, Married) |>
@@ -2872,9 +2876,14 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 # tidyr::pivot_wider() moves the data and nothing else, so after a spread two facts are stale:
 #
 #   1. every new column's stored `col_var` still names the ORIGINAL column variable, with nothing to
-#      say which level of the spread variable the block belongs to. Folding the level in as
-#      "{level}<br>{col_var}" is what makes the exported span header read on two lines and what puts
-#      a border between the blocks -- and what lets the legend tell two sub-populations apart.
+#      say which level of the spread variable the block belongs to. Phase 19n: that level is STORED,
+#      in the `col_group` column attribute, and the pair (col_var, col_group) is the block identity
+#      -- which is what makes the exported span header read on two lines, what puts a border between
+#      the blocks, and what lets the legend tell two sub-populations apart. Until 19n the two facts
+#      were WELDED into `col_var` as "{level}<br>{col_var}", so three sites had to sniff for an html
+#      tag to recover them and a fourth un-escaped it back after htmlEscape() -- while
+#      `tab_wrap_text(brk = "<br>")` produces the very same tag for an unrelated reason (a long level
+#      label), which none of them could tell apart.
 #   2. every `test` row keyed on the spread variable points at a sub-population that is no longer a
 #      ROW group but a set of COLUMNS, so its `col` key must be re-pointed at what the spread made of
 #      what it named, and its group key cleared. This ran for a regression's split groups only; a
@@ -2898,7 +2907,7 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
                                  function(g) nm == g || endsWith(nm, paste0("_", g)), logical(1))]
     if (!length(hits)) next
     g <- hits[which.max(nchar(hits))]
-    tabs[[nm]] <- set_col_var(tabs[[nm]], paste0(g, "<br>", get_col_var(tabs[[nm]])))
+    tabs[[nm]] <- set_col_group(tabs[[nm]], g)
     # the `n` column comes FIRST but is a row descriptor, never a model column, so keying a group's
     # footer block under it would put every statistic beneath its counts. Its stored role says so.
     if (identical(get_role(tabs[[nm]]), "n")) next
@@ -2914,12 +2923,17 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
       if (!length(known)) next
       lv   <- key[known]
       old  <- test_key_col(test, "col")[known]
-      newc <- ifelse(old %in% col_vars,
-                     paste0(lv, "<br>", old),          # a col_var: it was folded, follow the fold
-                     unname(col_of_group[lv]))         # a column: this group's first real column
+      is_cv <- old %in% col_vars
+      # a col_var row keeps naming its variable and gains the group beside it (the fmt columns' own
+      # (col_var, col_group) pair, 19n); a column row is re-pointed at this group's first real
+      # column, which already carries the group itself.
+      newc <- ifelse(is_cv, old, unname(col_of_group[lv]))
+      newg <- ifelse(is_cv, lv,  "")
       # a group that produced no column of its own has nowhere to sit: drop those rows rather than
       # leave them pointing at something that no longer exists.
       test$col[known[!is.na(newc)]] <- newc[!is.na(newc)]
+      test$col_group <- test_key_col(test, "col_group")
+      test$col_group[known[!is.na(newc)]] <- newg[!is.na(newc)]
       # WARNING: a tab_var key column is a FACTOR, and `[<-` on a factor with an unknown level gives
       # NA plus a warning. Blank it as character.
       test[[sv]] <- test_key_col(test, sv)
@@ -3140,13 +3154,20 @@ tab_transpose <- function(tabs, name = NULL) {
 
 
 
-#' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
+#' The variables of a tabxplor table
+#' @description
+#' Which variable plays which role in a finished table: the row variable, the column variable(s) and
+#' the sub-table variable(s). Read off the table's own declared model (the index columns' stored
+#' roles and the `fmt` columns' `col_var`), never guessed from a column name --- so it survives
+#' renaming, `dplyr` verbs and a merge of several row variables.
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-#' \code{\link{tab_many}} or \code{\link{tab_plain}}.
-#' @param vars In `tab_get_vars`, a character vector containing the wanted vars names:
+#' \code{\link{tab_reg}} or \code{\link{tab_plain}}.
+#' @param vars A character vector naming the roles you want:
 #' \code{"row_var"}, \code{"col_vars"} or \code{"tab_vars"}.
 #'
 #' @return A list with the variables names.
+#' @seealso [tab_shape()], which reports the table's SHAPE (merged / grouped / list) and which
+#'   operations accept it.
 #' @export
 #'
 # @examples

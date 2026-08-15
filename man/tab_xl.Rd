@@ -33,7 +33,7 @@ tab_xl(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_many}} or
+\item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_reg}} or
 \code{\link{tab_plain}}, or a list of such tables.}
 
 \item{path, replace, open}{The name, and possibly the path, of the Excel file to
@@ -124,7 +124,7 @@ global options with \code{\link{set_color_style}} and \code{\link{set_color_brea
 # does NOT exempt it from R CMD check --as-cran, which CRAN also runs without Suggests.
 if (requireNamespace("openxlsx2", quietly = TRUE)) {
   forcats::gss_cat |>
-    tab(marital, race, pct = "row", color = "diff") |>
+    tab(marital, race, pct = "row", color = "difference") |>
     tab_xl()
 }
 }

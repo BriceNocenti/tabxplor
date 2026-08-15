@@ -620,6 +620,15 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # Phase k: the spanning col_var name shows the variable LABEL when tabxplor.var_labels is on (display
   # only -- `cvm` stays the raw name for the suffix-strip + dedup logic below, which is structural).
   label    <- ifelse(is_level & isTRUE(name_cols), var_label_display(unname(cvm), tab), "")
+  # Phase 19n: the SUB-POPULATION each level column belongs to, beside the variable it shows. The two
+  # travel apart (the fmt columns' `col_var` / `col_group`) and are composed by whichever backend can
+  # draw two lines -- html a `<br>`, Excel a newline + wrap, markdown neither. They used to arrive
+  # already welded into `col_var` as "{level}<br>{col_var}", so those backends had to SNIFF an html
+  # tag out of a name -- a tag `tab_wrap_text()` also produces, for a different reason.
+  grp <- rep("", length(nms))
+  gvec <- vapply(seq_along(nms), function(j) if (is_fmt(tab[[j]])) get_col_group(tab[[j]]) else "",
+                 character(1))
+  grp[is_level] <- gvec[is_level]
   clean <- nms
   # Phase 14i: the merged table's name column is headed by the literal "row_var" -- an internal name,
   # never informative, and the loop below never reaches it (it only visits LEVEL columns). Blanked
@@ -665,7 +674,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # dropped; a crosstab (level "Black" != col_var "race") is never affected.
   lvl <- which(is_level)
   if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
-  list(label = label, clean = clean)
+  # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
+  grp[!nzchar(label)] <- ""
+  list(label = label, group = grp, clean = clean)
 }
 
 # Does this mean column actually render a "(sigma sd)" tail? THE SAME predicate format() uses for its
@@ -678,10 +689,17 @@ mean_shows_sd <- function(col) {
 
 # Phase 13c-iii: run-length-encode the header `label` vector into (label, span) runs for the spanning
 # header row -- blank runs keep the label "" (each exporter maps it to its own empty-cell form).
+# Phase 19n: it encodes the PAIR (group, label), because a spread table has two adjacent runs of the
+# same variable for two sub-populations, and RLE-ing the label alone would merge them into one span.
+# `groups` is returned beside `labels`, "" where there is no sub-population; a backend that can draw
+# two lines composes them, one that cannot ignores `groups`. `label` may be given alone (every
+# caller that has no col_var header model, e.g. a transposed render).
 #' @keywords internal
-tab_header_runs <- function(label) {
-  r <- rle(label)
-  list(labels = r$values, spans = r$lengths)
+tab_header_runs <- function(label, group = NULL) {
+  if (is.null(group)) group <- rep("", length(label))
+  r <- rle(paste0(group, "\r", label))
+  ends <- cumsum(r$lengths)
+  list(labels = label[ends], groups = group[ends], spans = r$lengths)
 }
 
 # Phase 17g: the ONE footer invocation. Every backend built its footer with the identical

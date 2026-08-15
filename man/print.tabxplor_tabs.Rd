@@ -8,7 +8,7 @@
 }
 \arguments{
 \item{x}{A \code{tabxplor_tabs} object (the list returned by \code{\link{tab}} /
-\code{\link{tab_many}} for a multi-table result).}
+\code{\link{tab}} with \code{output_list = TRUE} for a multi-table result).}
 
 \item{...}{Passed to the per-table print method.}
 }

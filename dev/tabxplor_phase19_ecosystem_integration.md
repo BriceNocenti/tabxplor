@@ -1473,6 +1473,37 @@ or a CI-only `node --check`; there is still **no** committed bracket check, cont
 
 ---
 
+#### Phase 19n — Documentation, i18n, and release readiness — ✅ DONE (2026-08-15)
+
+**The taught surface now matches the shipped one, in both languages.** Full report: CLAUDE.md's
+`#### Phase 19n` summary. Headline: TWO release gates were RED on arrival (`?fmt`'s examples called
+`fmt(type =)` and `set_type()`, both deleted in 19b -- an R CMD check example FAILURE; and
+`check_pkgdown()` errored on three missing topics), so neither `check()` nor `check_pkgdown()` had
+run since 19b. Both closed. Plus: the `<br>` carrier migration taken in full (`col_group`, the 16th
+column attribute -- ⚠ the weld had **three** carriers, not the one this brief describes: the `test`
+tibble keys on `col` too, and without a declared `col_group` beside it a spread table's two blocks
+collapse into ONE p-value column); ONE colours page (⚠ which was silently shadowing `theme` and
+`type` -- three `@param type` tags, roxygen keeps one, so two functions were documented with a
+third's definition); the full-word colour values everywhere; `?fmt`'s field roll-call GENERATED; 22
+French entries (⚠ six fuzzy carry-overs were WRONG, e.g. "Wilson score interval" ->
+*"intervalle de Newcombe"*); `inst/po/en@quot` was rotten at 136 of 235 msgids and is DERIVED now.
+
+⚠ **Settled here — do not re-issue:**
+- **The JS syntax gate is DECLINED** (maintainer's ruling). No `node`, no `V8` on this box, so
+  nothing written here could be *run*. ⚠ And CLAUDE.md's 19k summary carried the same false claim
+  19l corrected twice and missed once: there is **no** committed bracket check.
+- **`devtools::build_readme()` must not be used on this package** -- it renders `github_document`,
+  stripping the YAML header and hard-wrapping every paragraph. The committed README is
+  `knitr::knit("README.Rmd", "README.md")` with the package loaded first.
+
+**Still owed at release (maintainer's, not a phase's):** `jmvtools::prepare()` + rebuild + the live
+jamovi pass (19k's debt -- ⚠ `R/jmvtab.h.R` is not `.Rbuildignore`d, so `man/jmvtab.Rd` ships stale
+until it runs, even though `jamovi/jmvtab.a.yaml`'s prose is fixed); re-shooting
+`man/figures/README-hero.jpg` (Jul 27, pre-2.0.0 palette); `cran-comments.md` / `CRAN-SUBMISSION`,
+both still dated Jul 27; and `dev/release_checklist.md`'s branch mechanics.
+
+<details><summary>The original 19n brief, kept for the record</summary>
+
 #### Phase 19n — Documentation, i18n, and release readiness
 
 **Goal**: the taught surface matches the shipped one, in both languages, and the package is ready for
@@ -1512,6 +1543,8 @@ CRAN.
 **Verification**: this phase *is* the verification.
 
 
+
+</details>
 
 ---
 

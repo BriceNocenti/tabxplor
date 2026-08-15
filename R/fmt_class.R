@@ -33,8 +33,11 @@ NULL
 # binding for global variables not found by R CMD check
 . = NULL
 utils::globalVariables(c(":=", ".SD", ".N"))
-# data.table NSE column symbols used in tab_plain()'s aggregation j-expressions:
-utils::globalVariables(c("n", "wn"))
+# data.table NSE column symbols used in tab_plain()'s aggregation j-expressions.
+# Phase 19n: `w2` (the per-cell sum of squared weights, which the flat-design variance reads) joins
+# its siblings -- it was added to the rollup and never declared, so R CMD check reported it as an
+# undefined global. Caught by the first check() run since 19b.
+utils::globalVariables(c("n", "wn", "w2"))
 # Phase 3b test engine (R/tab-agg.R) data.table NSE column symbols:
 utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
                   "grandtot", "nr", "nc", "e", "contrib", "signed_contrib", "contrib_unc",
@@ -67,14 +70,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 21 fields :
-#' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-#' \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-#' \code{pvalue}, \code{or}, \code{tot_n}, \code{n_eff}, \code{obs}, \code{gap_se},
-#' \code{in_totrow},  \code{in_tottab},
-#' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
-#' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
-#' with \code{\link[base:attr]{attr}} and modify them with
+#' \code{\link[vctrs:field]{vctrs:field<-}}. Its per-cell \strong{fields} are listed below.
+#' The other arguments are \strong{attributes}, attached not to each value but to
+#' the whole vector, like \code{scale}, \code{col_var}, \code{totcol} or \code{color}. You can get
+#' them with \code{\link[base:attr]{attr}} and modify them with
 #' \code{\link[base:attr]{attr<-}}. Special functions listed below are made to
 #' facilitate programming with with \pkg{tabxplor} formatted numbers.
 #' \code{taxplfmt} vectors can use all standard operations, like +, -, sum(), or c(),
@@ -128,7 +127,7 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' field of its own: it is recovered from \code{pvalue} and this field's sign, and readable with
 #' \code{display = "resid"} (see \code{\link{tab}}).
 #' @param var The cells variances, as a double vector the length of \code{n}.
-#' Used with \code{type = "mean"} to calculate confidence intervals.
+#' Used with \code{scale = "level_mean"} to calculate confidence intervals.
 #' Calculate with \code{tab_plain}.
 #' @param ci The confidence interval half-width (margin of error), as a double vector the
 #' length of \code{n}. Kept for backward compatibility: it is stored as the symmetric
@@ -186,14 +185,19 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param comp_all  \code{FALSE} when the comparison level is the subtable/group,
 #' \code{TRUE} when it is the whole table
 #' @param ref The type of difference of the vector. Cf. \code{\link{tab}}.
-#' @param ... Not used. It exists only so that the arguments removed in tabxplor 2.0.0
-#' (\code{type}, \code{ci_type}) get an error naming their replacement.
 #' @param col_var The name of the \code{col_var} used to calculate the vector
+#' @param col_group The sub-population this column's block belongs to: a level of a
+#'   \code{spread_vars} variable (\code{\link{tab_spread}}), or a \code{\link{tab_reg}}
+#'   \code{split_var} group. \code{""} (the default) when the table was never spread. Together with
+#'   \code{col_var} it identifies a column BLOCK: two blocks may show the same variable for two
+#'   sub-populations, and exports head them on two lines.
 #' @param totcol \code{TRUE} when the vector is a total column
 #' @param refcol \code{TRUE} when the vector is a reference column
 # @param fmt A fmt vector to test or to modify fields.
 #' @param x The object to test, to get a field in, or to modify.
-#' @param ... Used in methods to add arguments in the future.
+#' @param ... In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
+#'   2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
+#'   methods below, to add arguments in the future.
 #' @param color The type of color to print :
 #' \itemize{
 #'   \item \code{"no"}: no colors are printed.
@@ -235,6 +239,14 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' \code{conf_level} it is a per-COLUMN fact, which is what lets a table state honestly, in its
 #' footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
 #' the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.
+#' @param ci_method Which interval ENGINE built this column's bounds --- \code{"wilson"},
+#' \code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
+#' proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"} (a
+#' difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
+#' means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (the default) when the
+#' column carries no interval. Stamped where the interval is computed, and read back by the colour
+#' legend, so the method it names is always the one the bounds were built with.
+#' @eval fmt_fields_rd()
 #' @eval display_tokens_rd(user_only = FALSE)
 #'
 #' @return A vector of class \code{tabxplor_fmt}.
@@ -243,7 +255,8 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @examples
 #' library(dplyr)
 #'
-#' f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
+#' f <- fmt(n = c(7, 19, 2), pct = c(0.25, 0.679, 0.07),
+#'          scale = "level_pct", pct_base = "row")
 #' f
 #'
 #' # To get the currently displayed field :
@@ -277,8 +290,8 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' # See all the attributes of a fmt vector :
 #' attributes(f)
 #'
-#' # To modify the "type" attribute of a fmt vector :
-#' set_type(f, "col")
+#' # To modify the "pct_base" attribute of a fmt vector (what the percentage is a percentage OF) :
+#' set_pct_base(f, "col")
 #'
 #' # To modify the "color" attribute of a fmt vector :
 #' set_color(f, "contrib")
@@ -362,6 +375,7 @@ fmt <- function(n         = integer(),
                 ref = ""   ,
                 pct_base  = "none",
                 col_var   = ""   ,
+                col_group = ""   ,   # Phase 19n: the sub-population this column's block belongs to
                 totcol    = FALSE,
                 refcol    = FALSE,
                 color     = ""    ,
@@ -474,7 +488,8 @@ fmt <- function(n         = integer(),
           n_eff = n_eff, obs = obs, gap_se = gap_se,
           row_kind = row_kind, in_tottab = in_tottab, in_refrow = in_refrow,
           scale = scale, comp_all = comp_all,  ref = ref,
-          pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
+          pct_base = pct_base, col_var = col_var, col_group = col_group,
+          totcol = totcol, refcol = refcol,
           color = color, color_signif = color_signif, model_family = model_family,
           role = role, conf_level = conf_level, degf = degf, basis = basis,
           ci_method = ci_method)
@@ -619,8 +634,6 @@ set_num <- function(x, value) {
 }
 
 #' @describeIn fmt get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @param x The object to test, to get a field in, or to modify.
-#' @param ... Used in methods to add arguments in the future.
 #' @return A character vector with the vectors scale.
 #' @export
 get_scale <- function(x, ...) UseMethod("get_scale")
@@ -1139,6 +1152,61 @@ get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 set_col_var   <- function(x, col_var) {
   vctrs::vec_assert(col_var, character(), size = 1)
   `attr<-`(x ,"col_var" , col_var)
+}
+
+#' @describeIn fmt get the sub-population of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @return A character vector with the vectors' col_group attributes (\code{""} when the table was
+#'   never spread). On a data.frame, one value per column.
+#' @export
+get_col_group <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, get_col_group))
+  g <- attr(x, "col_group", exact = TRUE)
+  if (is.null(g) || is.na(g)) "" else g
+}
+
+# Phase 19n: writing is the PIPELINE's job (spread_relabel / reg_build's split branch), so the setter
+# stays internal -- the get_ci_method()/set_ci_method() split, for the same reason.
+#' @keywords internal
+#' @noRd
+set_col_group <- function(x, col_group) {
+  col_group <- vctrs::vec_recycle(vctrs::vec_cast(col_group, character()), size = 1)
+  if (is.na(col_group)) col_group <- ""
+  `attr<-`(x, "col_group", col_group)
+}
+
+# THE column-block identity, and the ONE place it is composed. A block is a (col_var, col_group)
+# PAIR: before 19n the pair was welded into `col_var`, so `unique(get_col_var(...))` happened to
+# identify a block; once the two are stored apart, every consumer that used to read that one string
+# must read the pair, or two spread blocks of the same variable silently collapse into one.
+#   `key`   an internal, never-rendered identifier (the "\r" separator idiom reg_skel_key uses).
+#   `label` what a reader sees when the two must appear as one string on ONE line (the legend).
+#' @keywords internal
+#' @noRd
+fmt_col_block <- function(col_var, col_group = "") {
+  col_group <- ifelse(is.na(col_group), "", col_group)
+  list(key   = ifelse(nzchar(col_group), paste0(col_group, "\r", col_var), col_var),
+       label = ifelse(nzchar(col_group), paste0(col_group, " ", col_var),  col_var))
+}
+
+# The distinct column BLOCKS of a table, in table order: one row per (col_var, col_group) pair, with
+# the key and the one-line label fmt_col_block() composes. `tab_render_vars()$col_vars` is the same
+# thing PROJECTED onto its first component, which is all a table without sub-populations needs.
+#' @keywords internal
+#' @noRd
+tab_col_blocks <- function(x) {
+  fm <- vapply(x, is_fmt, logical(1))
+  if (!any(fm)) return(data.frame(col = character(), col_group = character(),
+                                  key = character(), label = character(),
+                                  stringsAsFactors = FALSE))
+  cv <- unname(get_col_var(x[fm]))
+  cg <- unname(get_col_group(x[fm]))
+  keep <- !is.na(cv)
+  d <- data.frame(col = cv[keep], col_group = cg[keep], stringsAsFactors = FALSE)
+  d <- d[!duplicated(d), , drop = FALSE]
+  b <- fmt_col_block(d$col, d$col_group)
+  d$key   <- b$key
+  d$label <- b$label
+  d
 }
 
 
@@ -1661,7 +1729,7 @@ validate_display_template <- function(recipe) {
 #'
 #' @examples
 #' \donttest{
-#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
 #' dplyr::mutate(tabs, across(where(is_fmt), fmt_get_color_code))
 #'}
 
@@ -1950,11 +2018,10 @@ fmt_scale_of <- function(x, kind = "auto") {
 #   are SCALAR per-column, not per-cell. Fields (n, pct, diff, etc.) are per-cell vectors.
 #   This distinction is fundamental: attributes describe column semantics,
 #   fields carry individual cell data. See vctrs::new_rcrd().
-# @describeIn
-#' fmt a constructor for class fmt.
-#' @param class Subclasses to assign to the new object, default: none.
-#' @keywords internal
-# @export
+# The internal constructor: no validation, no recycling -- fmt() does both and calls this. It is not
+# exported and not documented as its own topic (roxygen would produce a page with 38 undocumented
+# formals); `?fmt` is the documentation of the whole type, fields and attributes alike.
+#' @noRd
 new_fmt <- function(n         = integer(),
                     scale     = "level_n"    ,
 
@@ -1989,6 +2056,16 @@ new_fmt <- function(n         = integer(),
                     ref = ""   ,
                     pct_base  = "none",
                     col_var   = ""   ,
+                    # Phase 19n: WHICH SUB-POPULATION this column's block belongs to -- a level of a
+                    # `spread_vars` variable, or a `tab_reg(split_var =)` group; "" when the table was
+                    # never spread. Both producers used to WELD it into `col_var` as
+                    # "{level}<br>{col_var}", which three sites then sniffed for `<br>` (Excel's
+                    # two-line span + its wrap flag, the legend's name normaliser) while a fourth
+                    # un-escaped it back after htmlEscape() -- and `tab_wrap_text(brk = "<br>")` is a
+                    # SECOND, unrelated producer of that tag, which none of them could tell apart.
+                    # Stored, the two facts compose where a two-line header is actually wanted, and
+                    # `<br>` in a header now means exactly one thing.
+                    col_group = ""   ,
                     totcol    = FALSE,
                     refcol    = FALSE,
                     color     = ""   ,
@@ -2087,7 +2164,8 @@ new_fmt <- function(n         = integer(),
          row_kind = row_kind, in_tottab = in_tottab,
          in_refrow = in_refrow),
     scale = scale, comp_all = comp_all, ref = ref,
-    pct_base = pct_base, col_var = col_var, totcol = totcol, refcol = refcol,
+    pct_base = pct_base, col_var = col_var, col_group = col_group[1],
+    totcol = totcol, refcol = refcol,
     color = color, color_signif = color_signif[1], model_family = model_family[1],
     role = role[1], conf_level = conf_level[1],
     degf = degf[1], basis = basis[1], ci_method = ci_method[1],
@@ -2105,6 +2183,60 @@ new_fmt <- function(n         = integer(),
 fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
                      "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "n_eff", "obs", "gap_se",
                      "row_kind", "in_tottab", "in_refrow")
+
+# Phase 19n: one gloss per FIELD, so `?fmt`'s roll-call and the programming vignette's table stop
+# being two hand-kept copies of one list -- the `?fmt` copy had drifted (it still named `in_totrow`,
+# deleted in 19f, and omitted its replacement `row_kind`). Exhaustive by build-time assertion, the
+# fmt_attr_rules precedent: adding a field without a gloss breaks the install.
+#' @keywords internal
+#' @noRd
+FMT_FIELD_DOC <- c(
+  n         = "the unweighted count",
+  display   = "which field this cell shows (a bare name, or a `{}` template)",
+  digits    = "how many decimals this cell prints",
+  wn        = "the weighted count",
+  pct       = "the percentage",
+  mean      = "the mean, on a numeric column variable",
+  diff      = "the difference from the reference cell (percentage points, or the outcome's own units)",
+  ratio     = "the ratio to the reference cell (a relative risk, or a ratio of means)",
+  ctr       = "the cell's contribution to the table's Chi-2",
+  var       = "the variance (of a mean; the Chi-2 variance on a percentage)",
+  ci_inf    = "the lower bound of the confidence interval",
+  ci_sup    = "the upper bound of the confidence interval",
+  pvalue    = "the cell's own significance p-value, which the stars read",
+  or        = "the odds ratio against the `ref2` level",
+  tot_n     = "the cell's own base --- the count its percentage is computed on",
+  n_eff     = "the effective sample size its interval was computed on (weights or a survey design)",
+  obs       = "`tab_reg()` only: the observed (crude) effect the modelled one is compared to",
+  gap_se    = "`tab_reg()` only: the standard error of the gap between the estimate and `obs`",
+  row_kind  = "what kind of row the cell sits in --- see [get_row_kind()]",
+  in_tottab = "is the cell in a total table (logical)",
+  in_refrow = "is the cell in a reference row (logical)"
+)
+stopifnot(setequal(names(FMT_FIELD_DOC), fmt_field_names))
+FMT_FIELD_DOC <- FMT_FIELD_DOC[fmt_field_names]   # lock new_fmt()'s own order
+
+# The `#' @eval` generator behind ?fmt's field roll-call (the display_tokens_rd() / reg_measures_rd()
+# precedent). Same escaping job: backticks -> \code{}, and `%`/`\` are Rd-special.
+#' @keywords internal
+#' @noRd
+fmt_fields_rd <- function() {
+  esc <- function(s) {
+    s <- gsub("%", "\\\\%", gsub("\\", "\\\\", s, fixed = TRUE))
+    s <- gsub("\\[([^]]+)\\]\\(\\)", "\\\\code{\\1}", s)
+    gsub("`([^`]+)`", "\\\\code{\\1}", s)
+  }
+  c("@section The fields of a cell:",
+    paste0("A \\code{fmt} cell carries ", length(fmt_field_names), " fields. Many are \\code{NA} ",
+           "when the quantity was not requested; read one with \\code{x$field} or"),
+    "\\code{\\link[vctrs:field]{vctrs::field()}}, and see them all with",
+    "\\code{\\link[vctrs:vec_data]{vctrs::vec_data()}}:",
+    "\\itemize{",
+    vapply(fmt_field_names,
+           function(f) paste0("  \\item \\code{", f, "} --- ", esc(unname(FMT_FIELD_DOC[[f]])), "."),
+           character(1)),
+    "}")
+}
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
 # formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
@@ -2195,6 +2327,10 @@ fmt_attr_rules <- list(
   ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
   pct_base     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE ),
   col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE ),
+  # Phase 19n: like `col_var` in every respect -- binding two sub-populations loses the distinction,
+  # and the neutral is "no sub-population" rather than a "several_" word, because an unspread column
+  # and a spread one differ by PRESENCE, not by which group they name.
+  col_group    = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
   totcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
   refcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
   color        = list(neutral = "",             merge = "elementwise", arith = "x",       scalar = FALSE),
@@ -5536,7 +5672,13 @@ legend_specs <- function(x, theme = "light") {
     partial_test <- !identical(policy, "ignore") &&
       any(vapply(gap_chans, measure_own_ref, logical(1))) &&
       any(is.na(gse)) && any(!is.na(gse))
-    list(col_var = cv, col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
+    # Phase 19n: a legend line names the column BLOCK, not the bare variable -- after a spread two
+    # blocks share one `col_var` and differ only by sub-population, so a bare name would say
+    # "marital" twice. fmt_col_block()'s one-line label is what the welded `col_var` used to render
+    # as once legend_name_list() had turned its "<br>" into a space, so an unspread table is
+    # byte-identical (an empty `col_group` composes to the variable name alone).
+    list(col_var = fmt_col_block(cv, get_col_group(col))$label,
+         col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
          partial_test = partial_test, no_obs = no_obs,
          measure_text = m_txt, measure_bg = m_bg,
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
@@ -5603,6 +5745,9 @@ legend_reg_adapter <- function(specs) {
 # <br>/\n/U+202F narrow-no-break-space -> space, squish), then protects intra-name spaces with a
 # no-break space so no medium re-breaks a name mid-word (pillar's strwrap on the console, the wrapped
 # rd$tab on the kable path), joins with a breakable ", ", and caps the list at `max_n` + "... +N vars".
+# Phase 19n: the `<br>` it undoes is now ONLY tab_wrap_text()'s, which wraps a long COLUMN name. The
+# spread weld that used to arrive here too is a stored `col_group`, composed into the block label by
+# legend_specs() before this is called.
 legend_name_list <- function(names, max_n = 6L) {
   norm <- vapply(names, function(nm) {
     nm <- gsub("<br>|\n|\u202f", " ", nm)                  # undo html-path wrap markers

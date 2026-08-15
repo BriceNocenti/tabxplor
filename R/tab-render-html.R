@@ -391,10 +391,16 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 
   # Phase 13c-iii: the col_var spanning-name header row -- each variable name centred (colspan) over its
   # contiguous level columns; an empty cell over the row var / total / count columns.
-  cvh_runs <- tab_header_runs(cvh$label)
+  # Phase 19n: a span belonging to a SUB-POPULATION (a spread level, a split-model group) puts it on
+  # its own line above the variable. The `<br>` is COMPOSED here, from two stored facts, instead of
+  # arriving welded into the name -- which is why the escape below is now unambiguous: every `<br>`
+  # in `cvh$label` is one tab_wrap_text() injected.
+  cvh_runs <- tab_header_runs(cvh$label, cvh$group)
   span_thead <- if (any(nzchar(cvh_runs$labels))) {
-    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '">',
-                         ifelse(nzchar(cvh_runs$labels), html_escape_br(cvh_runs$labels), ""),
+    span_txt <- ifelse(nzchar(cvh_runs$labels), html_escape_br(cvh_runs$labels), "")
+    span_txt <- ifelse(nzchar(cvh_runs$groups) & nzchar(span_txt),
+                       paste0(html_escape_br(cvh_runs$groups), "<br>", span_txt), span_txt)
+    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '">', span_txt,
                          '</th>')
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""

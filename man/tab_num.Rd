@@ -81,7 +81,7 @@ are printed as an explicit \code{"NA"} level.
 the \code{n} field of each resulting \code{\link{fmt}} column, used to calculate confidence
 intervals, only takes into account the complete observations (without \code{NA}).
 To drop all rows with \code{NA} in any numeric variable first, use \code{\link{tab_prepare}}
-or \code{\link{tab_many}} with the \code{na_drop_all} argument.}
+or the superseded \code{\link{tab_many}}'s \code{na_drop_all} argument.}
 
 \item{ref}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
@@ -171,7 +171,8 @@ rows and cols.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{digits}{The number of digits to print, as a single integer.}
+\item{digits}{The number of digits to print, as a single integer, or an integer vector the
+same length as \code{col_vars}.}
 
 \item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not \code{fmt}).}
 
@@ -201,6 +202,7 @@ of means and standard deviations.
 \examples{
 \donttest{
 data <- dplyr::storms |> tab_prepare(category, wind, na_drop_all = wind)
-tab_num(data, category, wind, tot = "row", color = "after_ci")
+tab_num(data, category, wind, tot = "row",
+        color = "difference", color_signif = "guaranteed_effect")
 }
 }

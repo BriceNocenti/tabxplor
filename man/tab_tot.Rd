@@ -14,7 +14,7 @@ tab_tot(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
-\code{\link{tab_many}}.}
+\code{\link{tab}}.}
 
 \item{tot}{\code{c("col", "row")} and \code{"both"} print total rows and total columns.
 Set to \code{"row"} or \code{"col"} to print only one type.

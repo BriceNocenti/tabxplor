@@ -337,11 +337,21 @@ test_grid_crosstab <- function(x, test_tbl) {
   if (nrow(disp) == 0) return(NULL)
 
   rv <- tab_render_vars(x)
-  # canonical col_var order from the table; fall back to first appearance in the test tibble
-  value_cols <- if (isFALSE(rv$degrade)) intersect(rv$col_vars, unique(disp$col))
-                else                     unique(disp$col)
-  value_cols <- value_cols[value_cols %in% disp$col]
-  if (length(value_cols) == 0) return(NULL)
+  # Phase 19n: a value column of this grid is a column BLOCK -- the (col_var, col_group) pair, not
+  # the col_var alone. After a spread two blocks show the SAME variable for two sub-populations, so
+  # keying on `col` alone would match both to one and emit a single p-value column for a table that
+  # has two. The key is composed by fmt_col_block(); the header is its one-line label.
+  disp$.key <- fmt_col_block(disp$col, test_key_col(disp, "col_group"))$key
+  blocks <- if (isFALSE(rv$degrade)) tab_col_blocks(x) else NULL
+  value_keys <- if (!is.null(blocks) && nrow(blocks)) intersect(blocks$key, unique(disp$.key))
+                else                                  unique(disp$.key)
+  value_keys <- value_keys[value_keys %in% disp$.key]
+  if (length(value_keys) == 0) return(NULL)
+  # the header of each block: the table's own label when it is known, else recompose from the test
+  # row (a degraded table has no columns left to ask).
+  value_cols <- if (!is.null(blocks) && nrow(blocks)) blocks$label[match(value_keys, blocks$key)]
+                else fmt_col_block(disp$col, test_key_col(disp, "col_group"))$label[
+                       match(value_keys, disp$.key)]
 
   # tab_vars present in the test tibble = comp = "tab" (a per-subtable column); their absence with
   # tab_vars on the table = comp = "all" (one whole-table p-value, the group named "<var> x tab_vars").
@@ -371,7 +381,7 @@ test_grid_crosstab <- function(x, test_tbl) {
     }
 
     # per value col: the source test row (there is exactly one displayed test per col_var here)
-    idx  <- match(value_cols, sub$col)
+    idx  <- match(value_keys, sub$.key)
     n    <- vapply(sub$n[idx], test_fmt_num, character(1), digits = 0L)
     # effect size: columns may be absent on a degraded / older `test` attribute -> NA vector.
     es_v  <- if (!is.null(sub[["effect_size"]])) sub$effect_size[idx] else rep(NA_real_, length(idx))

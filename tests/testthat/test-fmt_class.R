@@ -226,7 +226,8 @@ test_that("model_family is carried through the fmt carrier round-trip (Defect 1,
   expect_true("degf"  %in% fmt_col_attrs)                  # Phase 18z16-iiiii: the 13th
   expect_true("basis" %in% fmt_col_attrs)                  #                       and the 14th
   expect_true("ci_method" %in% fmt_col_attrs)              # Phase 19b: the 15th
-  expect_length(fmt_col_attrs, 15L)
+  expect_true("col_group" %in% fmt_col_attrs)              # Phase 19n: the 16th
+  expect_length(fmt_col_attrs, 16L)
 
   tb <- tab(forcats::gss_cat, marital, race)
   tb[["Black"]] <- set_model_family(tb[["Black"]], "binomial")
@@ -272,16 +273,16 @@ test_that("every fmt column attribute is DECLARED, and a bind yields its neutral
                    attributes(tabxplor:::new_fmt())[fmt_col_attrs])
 
   a <- fmt(1:2, "level_pct", pct_base = "row", pct = c(.1, .2), ref = "tot", col_var = "v1",
-           totcol = TRUE,  refcol = TRUE,  color = c("diff", "ratio"),
+           col_group = "g1", totcol = TRUE,  refcol = TRUE,  color = c("diff", "ratio"),
            color_signif = "grey_non_signif", model_family = "binomial", role = "model",
            conf_level = 0.99, degf = 30, basis = "design", ci_method = "newcombe",
            comp_all = TRUE)
   b <- fmt(1:2, "points", pct_base = "col", pct = c(.3, .4), ref = "first", col_var = "v2",
-           totcol = FALSE, refcol = FALSE, color = c("contrib", "OR"),
+           col_group = "g2", totcol = FALSE, refcol = FALSE, color = c("contrib", "OR"),
            color_signif = "ignore", model_family = "poisson", role = "emp",
            conf_level = 0.90, degf = 12, basis = "weights", ci_method = "wilson",
            comp_all = FALSE)
-  # NON-VACUOUS: all 15 must really differ, else every assertion below proves nothing.
+  # NON-VACUOUS: all 16 must really differ, else every assertion below proves nothing.
   expect_true(all(!mapply(identical, tabxplor:::fmt_attrs_of(a), tabxplor:::fmt_attrs_of(b))))
 
   got <- tabxplor:::fmt_attrs_of(suppressWarnings(vctrs::vec_c(a, b)))

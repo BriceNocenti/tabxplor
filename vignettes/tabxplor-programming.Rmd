@@ -54,7 +54,7 @@ Every numeric column of a `tabxplor` table is a single vector of class **`tabxpl
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
-tabs <- tab(gss_simple, race, marital, pct = "row", color = "diff")
+tabs <- tab(gss_simple, race, marital, pct = "row", color = "difference")
 ```
 
 ## Getting the plain numbers out
@@ -79,7 +79,7 @@ tabs$Married$pct
 
 ## The fields of a cell
 
-A `tabxplor_fmt` cell carries **19 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:
+A `tabxplor_fmt` cell carries **21 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:
 
 | Field | Meaning |
 |:------|:--------|
@@ -98,9 +98,13 @@ A `tabxplor_fmt` cell carries **19 fields** (many are `NA` when the relevant qua
 | `tot_n`     | the cell's own base — the count its percentage is computed on |
 | `n_eff`     | effective sample size used for the CI, with `options(tabxplor.design_effect = TRUE)` or a `survey` design |
 | `obs`       | `tab_reg()` only: the observed (crude) effect the modelled one is compared to |
+| `gap_se`    | `tab_reg()` only: the standard error of the gap between the estimate and `obs` |
 | `digits`    | number of decimals to display (per cell) |
 | `display`   | which field is shown (per cell) |
-| `in_totrow`, `in_tottab`, `in_refrow` | is the cell in a total row / total table / reference row (logical) |
+| `row_kind`  | what kind of row the cell sits in: `"data"`, `"total"`, or one of the synthetic display rows `"n"` / `"pct"` / `"pvalue"` / `"gof"` / `"blank"` |
+| `in_tottab`, `in_refrow` | is the cell in a total table / a reference row (logical) |
+
+(`row_kind` replaced a logical `in_totrow` field in 2.0.0. `x$in_totrow` still returns that logical, and `is_totrow()` / `as_totrow()` are unchanged.)
 
 See the whole underlying data frame of a column with `vctrs::vec_data()`:
 
@@ -163,7 +167,7 @@ The rules:
 - **Valid fields** are `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs` — the same set as the single-field displays.
 - The **first** token is the *primary* field: it is what `get_num()` returns, the value Excel keeps (Excel shows the primary only), and the field the colours read.
 - A **bare field name** is shorthand for its own template, so `set_display("ci")` is exactly `set_display("{ci}")`.
-- It is a **display overlay** for text output (the console, `tab_kable()`, `tab_md()`): the stored fields are untouched, so you can switch back at any time.
+- It is a **display overlay** for text output (the console, `tab_html()`, `tab_md()`): the stored fields are untouched, so you can switch back at any time.
 - The `{ci}` field already prints its own `[…;…]` brackets, so write `"{pct} {ci}"` — **not** `"{pct} [{ci}]"`, which would double them.
 
 ## Creating a column from another field
@@ -175,7 +179,7 @@ tab(gss_simple, race, marital, pct = "row") |>
   mutate(across(where(is_fmt), ~ set_display(., "diff"), .names = "{.col}_diff"))
 ```
 
-`.names = "{.col}_diff"` keeps the original percentage columns and adds a `<name>_diff` twin next to each. (If a `diff` column comes out empty, the source table had no reference cell — build it with `ref =` / `comp =`, or with `color = "diff"`.)
+`.names = "{.col}_diff"` keeps the original percentage columns and adds a `<name>_diff` twin next to each. (If a `diff` column comes out empty, the source table had no reference cell — build it with `ref =` / `comp =`, or with `color = "difference"`.)
 
 ## Total rows, reference rows and columns
 
@@ -197,8 +201,9 @@ Besides its per-cell fields, each `fmt` column carries a few **column-level attr
 - `scale` — `get_scale()` / `set_scale()`: **what the column estimates**. A level (`"level_n"`, `"level_pct"`, `"level_mean"`), a difference (`"points"` for percentage points, `"mean_diff"`, `"raw_diff"` for a regression coefficient in the outcome's own units), a ratio (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) or a link-scale coefficient (`"log_coef"`). It says which field holds the estimate, what its null value is, and which colour ladder it is read on.
 - `pct_base` — `get_pct_base()` / `set_pct_base()`: for a percentage, what it is a percentage *of* — `"row"`, `"col"`, `"all"`, `"all_tabs"`, or `"none"` for counts, means and coefficients.
 - `ci_method` — `get_ci_method()`: which interval engine built this column's bounds (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`, …; `""` when the column carries no interval).
-- `color` — `get_color()` / `set_color()`: the colour measure of the column (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
+- `color` — `get_color()` / `set_color()`: the colour measure of the column — `""`, `"no"`, or one of the measure names `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` on a `tab_reg()` table). The discipline's acronyms (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) are permanent shorthands you may *type*, but a built table always stores — and its legend always names — the full word.
 - `col_var` — `get_col_var()`: the name of the column variable (a table can hold several).
+- `col_group` — `get_col_group()`: which sub-population the column's block belongs to, after a `spread_vars` / `tab_spread()` pivot or a `tab_reg(split_var =)` split (`""` otherwise). Together with `col_var` it identifies a column *block*: two blocks can show the same variable for two sub-populations, and exports head them on two lines.
 - `comp_all` — `get_comp_all()`: with `tab_vars`, is the comparison reference the sub-table (`FALSE`) or the whole table (`TRUE`)?
 - `totcol` / `refcol` — `is_totcol()` / `is_refcol()`: is this a total column / a reference column?
 
@@ -219,17 +224,17 @@ The commonest input is a **tidy counts** data frame (one row per combination, th
 ```{r}
 counts <- dplyr::count(gss_simple, marital, race)
 tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
-# identical to tab(gss_simple, marital, race, pct = "row", color = "diff")
+# identical to tab(gss_simple, marital, race, pct = "row", color = "difference")
 ```
 
 It also melts a `table()` / `xtabs()` / matrix automatically, and reads a **wide** frame (one column per column-variable level) via `cols =` / `col_name =`:
 
 ```{r, eval = FALSE}
-tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "diff")
+tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "difference")
 
 wide <- tidyr::pivot_wider(counts, names_from = race, values_from = n)
 tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
-           col_name = "race", pct = "row", color = "diff")
+           col_name = "race", pct = "row", color = "difference")
 ```
 
 Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. (`options(tabxplor.design_effect = TRUE)` needs the individual weights, which pre-aggregated counts no longer carry, so it does not apply here — the CIs use the unweighted N, and the table's footer says so rather than claiming a correction it does not have.) When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.

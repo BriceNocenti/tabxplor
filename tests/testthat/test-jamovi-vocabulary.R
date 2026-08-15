@@ -9,9 +9,15 @@
 # It is why "keep the UI in sync" is a checked property here and not a convention. When a vocabulary
 # legitimately moves, the yaml moves with it in the same commit -- that is the whole point.
 
+# ⚠ `jamovi/` is .Rbuildignore'd, so NONE of these files exists inside a built package -- this whole
+# file is a source-tree check. Guard on the FILE, exactly as the generated-block test below guards on
+# `dev/`: without it `R CMD check` errors on the tarball (found by Phase 19n's check(), the first one
+# run since 19b, i.e. since this file was written).
 yaml_opts <- function(file) {
   skip_if_not_installed("yaml")
-  y <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", file))
+  path <- testthat::test_path("..", "..", "jamovi", file)
+  skip_if_not(file.exists(path), "jamovi/ is not shipped in a built package")
+  y <- yaml::read_yaml(path)
   stats::setNames(y$options, vapply(y$options, function(o) o$name, character(1)))
 }
 # The declared value set of one List option, in declaration order.

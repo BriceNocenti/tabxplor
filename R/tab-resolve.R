@@ -39,8 +39,9 @@
 # alone lived in four places. Consolidating it here is what lets jmvtab drive the identical
 # rules from `.js` and lets the cache invalidate on a single, well-defined settings object.
 #
-# @param color         The pipeline text-channel MEASURE, recycled over row_vars
-#   ("no"/"auto"/"diff"/"contrib"/"OR"). `normalize_color_spec()` has already collapsed the
+# @param color         The pipeline text-channel MEASURE, recycled over row_vars -- "no", "auto",
+#   or one of names(MEASURES) ("difference"/"ratio"/"odds_ratio"/"contrib"), the acronyms having
+#   been resolved by measure_key(). `normalize_color_spec()` has already collapsed the
 #   two-channel `color` spec into this before we run -- and, since 17d, decoded the legacy combined
 #   strings into a clean measure plus `color_signif`, so no composite can arrive here.
 # @param color_signif  The NORMALIZED significance policy ("ignore"/"grey_non_signif"/

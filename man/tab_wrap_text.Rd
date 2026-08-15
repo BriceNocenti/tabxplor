@@ -37,7 +37,7 @@ Wrap column names and character/factor variables.
 }
 \examples{
 \donttest{
-tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
   tab_wrap_text(wrap_rows = 5L, wrap_cols = 8L)
 }
 

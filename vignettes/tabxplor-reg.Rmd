@@ -118,7 +118,7 @@ The **observed odds-ratios** `Obs_OR` are the same as those you can calculate fr
 gss_simple |> 
   dplyr::filter(dplyr::if_all(all_of(c("race", "age", "rincome", "relig")), ~ !is.na(.) )) |> 
   tab(race, married, pct = "row", na = "drop", 
-    display = "{or}", ref = "first", color = "OR", color_signif = "grey_non_signif"
+    display = "{or}", ref = "first", color = "odds_ratio", color_signif = "grey_non_signif"
    )
 ```
 
@@ -152,7 +152,7 @@ factor_predictors <- c("race", "rincome", "relig")
 gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |> 
   tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop", 
-      color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE, 
+      color = "difference", ref = 1, color_signif = "grey_non_signif", stars = TRUE, 
       ci_method = c(diff = "wald")
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
@@ -484,7 +484,7 @@ The `"adjustment"` colour always shows the **size** of the gap. Whether it also 
 
 | what you asked for | observed effect | gap tested? |
 |---|---|---|
-| `effect = "marginal"` / `"ame_ratio"`, any family | yes | **yes** |
+| `effect = "marginal"`, any family and any measure | yes | **yes** |
 | `measure = "ratio"` on a binary outcome (risk ratios) | yes | **yes** |
 | Poisson incidence-rate ratios, linear β | yes | **yes** |
 | odds ratios — binomial, multinomial, ordinal cumulative | yes | no (non-collapsible) |
@@ -515,7 +515,7 @@ The empirical mean ages, and differences of mean ages from reference, can be com
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "diff", ref = 1,  ci_method = c(mean_diff = "student")
+    color = "difference", ref = 1,  ci_method = c(mean_diff = "student")
 ) |> 
   mutate(diff = set_display(age, "diff"))
 # student : confidence intervals with pooled variance, to match those computed by linear regression

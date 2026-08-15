@@ -27,7 +27,7 @@ tab_md(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a \code{list} of tab.
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
 A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any other
 list --- several \code{row_vars} and/or \code{tab_vars} (e.g. \code{tab()} with several row variables and a
 \code{tab_vars}) --- is rendered one table after another, each keeping its own sub-tables.}
@@ -45,7 +45,7 @@ hold a raw newline, so md "wrapping" means "do not truncate".}
 \item{subtext}{Print chi2/footnotes below the table.}
 
 \item{color}{When \code{TRUE} (default) and the table carries colours (e.g. built with
-\code{tab(..., color = "diff")}), each fmt cell is wrapped in a short pandoc bracketed span
+\code{tab(..., color = "difference")}), each fmt cell is wrapped in a short pandoc bracketed span
 \verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
 companion \code{\link{tab_md_css}} styles the classes). \code{FALSE} produces plain monochrome
 markdown. Uncoloured tables never get spans.}
@@ -109,8 +109,8 @@ The Markdown exporter behind \code{\link{tab_export}}: \code{tab_export(x, forma
 \examples{
 \donttest{
 tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
-tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
-tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |> tab_md()
+tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
   tab_md()
 }

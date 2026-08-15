@@ -24,7 +24,14 @@
 #   3. Add total rows/cols, then chain to tab_pct/tab_ci/tab_chi2 as requested
 #   Column names are temporarily prefixed to avoid DT reserved name conflicts.
 #' Plain single cross-table
-# @description
+#' @description
+#' `r lifecycle::badge("superseded")`
+#'
+#' One bare cross-table of counts or percentages, from ONE row variable and ONE column variable.
+#' Superseded by [tab()], which does the same and everything around it (several variables, colours,
+#' totals, tests) -- but it stays the smallest entry point into the aggregate core, and takes the
+#' same `ci` / `ci_method` / `conf_level` / `stars` / `display` arguments, resolved by the same
+#' rules, so its numbers agree with `tab()`'s cell for cell.
 #' @param data A data frame.
 #' @param row_var,col_var The row variable, which will be printed with one level per line,
 #'  and the column variable, which will be printed with one level per column. Numeric
@@ -34,7 +41,8 @@
 #' selected variables. Leave empty to make a simple cross-table. All tab variables
 #' are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param digits The number of digits to print, as a single integer.
+#' @param digits The number of digits to print, as a single integer, or an integer vector the
+#' same length as \code{col_vars}.
 #' @param na The policy to adopt with missing values, as a single string.
 #'  \itemize{
 #'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
@@ -1818,7 +1826,8 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' selected variables. Leave empty to make a simple cross-table. All tab variables
 #' are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param digits The number of digits to print, as a single integer.
+#' @param digits The number of digits to print, as a single integer, or an integer vector the
+#' same length as \code{col_vars}.
 #' @param na The policy to adopt for missing values in row and tab variables (factors),
 #' as a single string.
 #'  \itemize{
@@ -1830,7 +1839,7 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' the `n` field of each resulting \code{\link{fmt}} column, used to calculate confidence
 #' intervals, only takes into account the complete observations (without `NA`).
 #' To drop all rows with `NA` in any numeric variable first, use \code{\link{tab_prepare}}
-#' or \code{\link{tab_many}} with the `na_drop_all` argument.
+#' or the superseded \code{\link{tab_many}}'s `na_drop_all` argument.
 #' @param totaltab The total table,
 #' if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -1918,7 +1927,8 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' @examples
 #' \donttest{
 #' data <- dplyr::storms |> tab_prepare(category, wind, na_drop_all = wind)
-#' tab_num(data, category, wind, tot = "row", color = "after_ci")
+#' tab_num(data, category, wind, tot = "row",
+#'         color = "difference", color_signif = "guaranteed_effect")
 #' }
 tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", display = NULL, color_signif = "ignore",

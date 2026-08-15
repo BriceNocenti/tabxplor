@@ -16,7 +16,7 @@ tab_pct(
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
-\code{\link{tab_many}}.}
+\code{\link{tab}}.}
 
 \item{pct}{The type of percentages to calculate. \code{"row"} draw row percentages.
 Set to \code{"col"} for column percentages. Set to \code{"all"} for frequencies

@@ -78,7 +78,8 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
 set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).}
 
-\item{pct}{The type of percentages to calculate :
+\item{pct}{The type of percentages to calculate, as a single string or a vector the same length
+as \code{col_vars} (like \code{levels} and \code{digits}) :
 \itemize{
 \item \code{"row"}: row percentages.
 \item \code{"col"}: column percentages.
@@ -251,8 +252,7 @@ than it will be merged into an "Others" level.}
 \itemize{
 \item \code{"auto"}: by default, cell difference from the corresponding total
 (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
-(odds ratio/relative risks ratio).
+used for \code{diff}; the first line (or col) is used for the odds ratio.
 \item \code{"tot"}: totals are always used.
 \item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
@@ -264,7 +264,10 @@ Resolved inside each subtable when there are \code{tab_vars}.
 to match with the names of the rows (or columns). Be precise enough to match only one
 column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-}}
+}
+A (named) vector gives one reference per \code{row_vars} --- \code{ref = c(race = "first")}
+names the row variable it applies to, an unnamed vector goes by position, and any variable it
+does not mention keeps \code{"auto"}.}
 
 \item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
 only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
@@ -309,10 +312,11 @@ also pins the ratio scale -- say \code{color = "ratio"} instead).}
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "ref"}, print
 significance stars for each cell's difference from its reference, read from the displayed interval
 itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
-\code{FALSE}). See \code{\link{tab_many}}.}
+\code{FALSE}). \code{ci = "cell"} and \code{ci = "no"} anchor nothing to compare, so asking for
+stars alongside them informs you once and disables them.}
 
 \item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector --
 partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
@@ -321,7 +325,7 @@ partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
 (default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
 degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
 the effective base, referred to a survey design's own degrees of freedom).
-\item \code{diff}: a proportion minus its reference (\code{ci = "diff"}) -- \code{"newcombe"}
+\item \code{diff}: a proportion minus its reference (\code{ci = "ref"}) -- \code{"newcombe"}
 (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
 (Agresti-Caffo) or \code{"wald"}.
 \item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
@@ -399,14 +403,12 @@ value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 \code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
-\code{ctr} is the cell's contribution to the chi-squared and \code{resid} its adjusted
-standardized residual (both need \code{color = "contrib"} or \code{test = TRUE}), so
-\code{display = "\{pct\} (\{resid\})"} prints each percentage with the residual that says
-whether it departs from independence -- the SPSS cell layout. \code{obs} is
-\code{\link{tab_reg}}-only: the OBSERVED (crude) effect beside the modelled one, so
-\code{\link{set_display}(t, "\{or\} (obs \{obs\})")} on a regression table prints each
-adjusted odds ratio next to the unadjusted one it is compared to (\code{tab_reg} has no
-\code{display} argument of its own; see \code{color = "adjustment"} in \code{?tab_reg}). A bare field name is also accepted as a
+Two of them are worth a worked example. \code{display = "\{pct\} (\{resid\})"} prints each
+percentage with the adjusted standardized residual that says whether it departs from
+independence -- the SPSS cell layout. And on a regression table
+\code{\link{tab_reg}(..., display = "\{or\} (obs \{obs\})")} prints each adjusted odds ratio
+next to the unadjusted one it is compared to (see \code{color = "adjustment"} in
+\code{?tab_reg}). A bare field name is also accepted as a
 shorthand for its single-field template, so \code{display = "ci"} is the same as
 \code{display = "\{ci\}"} (it shows the confidence interval). The special value
 \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
@@ -506,10 +508,10 @@ documented on \code{\link[=tab_ci]{tab_ci()}}.
 \code{filter}.
 }
 The package-wide display, color and statistics defaults are \code{options()}, listed at
-\link{tabxplor-options}. \code{tab()} is a friendly wrapper around the more powerful \code{\link[=tab_many]{tab_many()}}.
+\link{tabxplor-options}.
 
 \strong{Ordered factors.} Since v2.0.0 the \code{ordered} class survives the whole pipeline (it
-used to be stripped at preparation), which is what lets \code{OR = "cumOR"} pick its col_vars by
+used to be stripped at preparation), which is what lets \code{ref2 = "cumulative"} pick its col_vars by
 class. One consequence worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
 levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as the
 greatest levels. They are labels, not points on the scale.
@@ -526,7 +528,7 @@ flat survey design \code{ids = ~1}, whose variance has a closed form in the per-
 \code{sum(w^2)} the aggregate already computes, so the base becomes
 \code{n_eff = p(1-p) / Var_design(p)} (or \code{s^2 / Var_design(mean)}) in \strong{every}
 descriptive interval --- proportions and means alike (cell, difference, ratio, and the
-\code{color = "OR"} significance). Because it is the exact variance and not an upper bound, it can
+\code{color = "odds_ratio"} significance). Because it is the exact variance and not an upper bound, it can
 also make an interval \emph{narrower}: where the weights line up with what is being tabulated,
 \code{n_eff} comes out above the cell's own \code{n}, which is correct and not a bug. It reproduces
 \code{survey} to the last digit, including \code{survey}'s own finite-sample factor --- so a table
@@ -579,7 +581,8 @@ it is what Excel shows and what the colours read.
 
 \section{Significance stars}{
 
-With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
+shows how sure we can be that its
 difference from the reference is real and not just sampling noise: \code{*} means significant at
 the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
 p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
@@ -630,12 +633,12 @@ gss2 <- "Source: General social survey 2000, 2006 and 2012"
 
 # Differences between the cell and it's subtable's total cell:
 \donttest{
-tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
+tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference")
 }
 
 # Differences between the cell and the whole table's general total cell:
 \donttest{
-tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
+tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference",
   comp = "all")
 }
 
@@ -643,14 +646,16 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
 \donttest{
 data2 <- data |> dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
-    color = "diff", ref = "first", tot = "col")
+    color = "difference", ref = "first", tot = "col")
 
 
 # Differences with the total, except if their confidences intervals are superior to them:
-tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
+tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
+    color = "difference", color_signif = "grey_non_signif")
 
 # Same differences, minus their confidence intervals:
-tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
+tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
+    color = "difference", color_signif = "guaranteed_effect")
 
 # Contribution of cells to table's variance, like in a correspondence analysis:
 tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
@@ -673,10 +678,10 @@ tab(data, race, marital, year, pct = "row") |>
 
 }
 \seealso{
-\code{\link[=tab_many]{tab_many()}} (the full-featured engine behind \code{tab()}) and \code{\link[=tab_reg]{tab_reg()}} (regression tables).
-Go further with the helper functions: \code{\link[=tab_ci]{tab_ci()}} (confidence intervals and their methods),
-\code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} / \code{\link[=set_color_style]{set_color_style()}} (colors),
-\code{\link[=tab_chi2]{tab_chi2()}} (statistical tests), \code{\link[=tab_pct]{tab_pct()}} / \code{\link[=tab_tot]{tab_tot()}} (percentages and totals).
+\code{\link[=tab_reg]{tab_reg()}} (regression tables), and the variants \code{\link[=tab_num]{tab_num()}} (numeric variables),
+\code{\link[=tab_counts]{tab_counts()}} (pre-aggregated counts) and \code{\link[=tab_plain]{tab_plain()}} (one bare cross-table).
+\code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} customise the colours,
+\code{\link[=tab_shape]{tab_shape()}} reports what a finished table is and what accepts it.
 Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
 \code{\link[=tab_plot]{tab_plot()}}, and CHART it with \code{\link[=forest_plot]{forest_plot()}} (every cell's estimate, interval and colour --
 \code{tab_plot()} renders the table as an image, \code{forest_plot()} is the real chart).

@@ -4896,7 +4896,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   wider interval here than in a crosstab beside it, and `tab(design_effect = TRUE)` is what brings
 #'   the two into line. Second, the crude percentage *difference* here uses the
 #'   **Wald** interval, matching the model AME so one legend can name one method, where
-#'   `tab(ci = "diff")` uses Newcombe; on a real table they differ by a few tenths of a percent.
+#'   `tab(ci = "ref")` uses Newcombe; on a real table they differ by a few tenths of a percent.
 #'
 #'   **Under a `survey::svydesign`** every column is design-based. The `Model_*` ones through
 #'   `survey::svyglm`; the crude ones through an effective sample size derived from the design
@@ -5211,6 +5211,10 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' Santos Silva, J. M. C. & Tenreyro, S. (2006). The log of gravity. *The Review of Economics and
 #' Statistics*, 88(4), 641-658. --- `measure = "ratio"` on a continuous outcome.
 #'
+#' @param ... Not used. It exists only so that the arguments removed while `tab_reg()` was in
+#'   development (`exponentiate`, `at`, `estimate_display`, and the `effect` values `"ame"` /
+#'   `"ame_ratio"`) get an error naming their replacement, at the moment of the mistake, rather than
+#'   R's bare "unused argument".
 #' @eval reg_measures_rd()
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = NULL,

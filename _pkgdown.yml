@@ -36,7 +36,7 @@ navbar:
 # The reference is ordered by priority: the two headline functions first, then everything an ordinary
 # user needs, then (clearly separated) the functions for programming with tabxplor. The S3 methods and
 # internal helpers carry `@keywords internal`, so pkgdown drops them from the index entirely -- users
-# call the generics (`get_type()`, `mutate()`, …), never the dotted methods.
+# call the generics (`get_scale()`, `mutate()`, …), never the dotted methods.
 reference:
 
 # ===================================  Everyday use  ===================================
@@ -70,9 +70,11 @@ reference:
 - title: Regression shortcuts
   desc: >
     `tab_logit()` and `multi_logit()` are thin wrappers around `tab_reg()` for logistic models.
+    `reg_measures()` lists which effect x measure combinations an outcome can be modelled as.
   contents:
   - tab_logit
   - multi_logit
+  - reg_measures
 
 - title: Export a finished table
   desc: >
@@ -88,14 +90,21 @@ reference:
   - tab_css
   - tab_md_css
 
+- title: Colours
+  desc: >
+    What a coloured cell looks like, and at which value it changes shade. `set_color_palette()` sets
+    the hues and the console's light/dark theme; `set_color_breaks()` sets the thresholds each
+    measure is read on; `conf_level_to_z()` writes one of those thresholds as a confidence level.
+  contents:
+  - set_color_palette
+  - set_color_breaks
+  - conf_level_to_z
+
 - title: Captions, options and data
   desc: >
-    Colour scales and palettes are customised with `set_color_breaks()`, `set_color_palette()` and
-    `set_color_style()` (documented on the `tab_many()` page); `conf_level_to_z()` writes a colour
-    threshold as a confidence level.
+    A caption travels with the table into every export; every default lives in a `tabxplor.*` option.
   contents:
   - set_caption
-  - conf_level_to_z
   - tabxplor-options
   - gss_cat_data_formatting
 
@@ -112,17 +121,26 @@ reference:
 # ==============================  Programming with tabxplor  ==============================
 # For writing your own helpers and pipelines. Everyday use never needs the functions below.
 
-- title: The engine, reshaping and combining
+- title: Reshaping and combining
   desc: >
-    `tab_many()` is the vectorised engine behind `tab()` (and the home of the colour helpers
-    `set_color_breaks()` / `set_color_palette()` / `set_color_style()`). The rest reshape and
-    combine finished tables.
+    Reshape and combine finished tables: pivot a sub-table variable into columns, merge several
+    tables into one, swap rows and columns.
   contents:
-  - tab_many
   - tab_spread
   - tab_compact
   - tab_transpose
   - complete_partial_totals
+
+- title: Inspect a table
+  desc: >
+    What have I got, and what can I do with it? `tab_shape()` reports the shape (merged, grouped, a
+    list) and `tab_supports()` which operations accept it; `tab_get_vars()` names the variables and
+    `is_tab()` tests the class.
+  contents:
+  - tab_shape
+  - tab_supports
+  - tab_get_vars
+  - is_tab
 
 - title: The fmt cell type
   desc: The `tabxplor_fmt` vctrs record behind every numeric cell, and its constructors.
@@ -131,11 +149,13 @@ reference:
   - new_tab
   - fmt_get_color_code
 
-- title: The step-by-step pipeline (superseded)
+- title: Superseded entry points and steps
   desc: >
-    The individual steps `tab_many()` now fuses into one. Each is still exported and usable on its
-    own, but `tab()` / `tab_num()` supersede them.
+    `tab_many()` is now a thin shim over `tab()`, which absorbed it. The individual steps below are
+    what the build fuses into one pass; each is still exported and works on an existing table, but
+    `tab()` / `tab_num()` supersede them.
   contents:
+  - tab_many
   - tab_prepare
   - tab_pct
   - tab_tot
@@ -151,7 +171,6 @@ reference:
   - tab_wrap_text
   - tab_get_wrapped_dimensions
   - tab_parallel_stop
-  - kable_tabxplor_style
 
 # An incomplete `articles:` index is a hard pkgdown error, so all six articles are listed here.
 # The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.

@@ -59,7 +59,7 @@
 #' A constructor for class tabxplor_tab
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
-#' It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
+#' It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
 #' or \code{\link{tab_plain}}.
 #' @param subtext A character vector to print legend lines under the table.
 #' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
@@ -146,9 +146,15 @@ new_grouped_tab <-
 # Functions to work with class tabxplor_tab ----------------------------------------------
 
 # Useful test fonction :
-#' @describeIn tab_many a test function for class tabxplor_tab
-#' @param x A object to test with \code{\link{is_tab}}.
+#' Is this a tabxplor table?
+#' @description
+#' \code{TRUE} for a table built by \code{\link{tab}}, \code{\link{tab_reg}} or any of their
+#' variants --- i.e. for a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with `tab_vars`).
+#' \code{\link{tab_shape}} answers the fuller question: what shape is it, and what can be done
+#' with it.
+#' @param x An object to test.
 #' @return A single logical.
+#' @seealso [tab_shape()], [tab_get_vars()].
 #' @export
 is_tab <- function(x) {
   inherits(x, "tabxplor_tab")
@@ -488,7 +494,14 @@ new_test_tibble <- local({
                                 # `setdiff(names(tt), names(new_test_tibble()))` as the GROUPING
                                 # variables, so an undeclared column would split the footer into one
                                 # block per outcome (19g's own defect, one file over).
-                                dep        = character())
+                                dep        = character(),
+                                # Phase 19n: WHICH SUB-POPULATION BLOCK this row keys under, after a
+                                # spread -- the twin of the fmt columns' own `col_group`. `col` alone
+                                # identified a block only while the level was WELDED into `col_var`;
+                                # once the two are stored apart, two spread blocks of one variable
+                                # share a `col` and the grid would emit ONE p-value column for both.
+                                # Declared for the same reason `dep` is (test_group_cols()).
+                                col_group  = character())
     }
     cached
   }
@@ -625,7 +638,7 @@ as_tabxplor_tabs <- function(x) {
 #' Printing method for a list of tabxplor tables
 #'
 #' @param x A \code{tabxplor_tabs} object (the list returned by \code{\link{tab}} /
-#'   \code{\link{tab_many}} for a multi-table result).
+#'   \code{\link{tab}} with \code{output_list = TRUE} for a multi-table result).
 #' @param ... Passed to the per-table print method.
 #' @return \code{x}, invisibly.
 #' @export
@@ -755,7 +768,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' The HTML exporter behind \code{\link{tab_export}}: `tab_export(x, format = "html")` calls this, and
 #' `tab_kable()` is a permanent alias of `tab_html()`. Use it directly for HTML-specific arguments.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
+#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}},
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 #' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
@@ -828,7 +841,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 #' @examples
 #' \donttest{
-#' tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
+#' tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "difference")
 #' tab_html(tabs, theme = "light")
 #' }
 tab_html <- function(tabs,
@@ -1018,7 +1031,7 @@ tab_stack_tables <- function(tables) {
 #' @examples
 #' \donttest{
 #' forcats::gss_cat |>
-#'   tab(c(race, rincome), marital, pct = "row", color = "diff", output_list = TRUE) |>
+#'   tab(c(race, rincome), marital, pct = "row", color = "difference", output_list = TRUE) |>
 #'   tab_compact()
 #' }
 tab_compact <- function(tabs) { # pvalue_lines = FALSE
@@ -1605,7 +1618,7 @@ reg_footer_lines <- function(tabs) {
 #' It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
 #' confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
+#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
@@ -1637,7 +1650,7 @@ reg_footer_lines <- function(tabs) {
 #' if (requireNamespace("ggpubr", quietly = TRUE) &&
 #'     requireNamespace("gtable", quietly = TRUE) &&
 #'     requireNamespace("ggplot2", quietly = TRUE)) {
-#'   tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+#'   tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
 #'     tab_plot()
 #' }
 #' }
@@ -2280,7 +2293,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
 #'
 #' @examples
 #' \donttest{
-#' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+#' tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
 #'   tab_wrap_text(wrap_rows = 5L, wrap_cols = 8L)
 #' }
 #'
@@ -3366,10 +3379,18 @@ build_palettes <- function() {
   invisible()
 }
 
-#' Define the color palette used to print \code{\link{tab}}
-#' @describeIn tab_many customise the color palette used to print \code{\link{tab}}. Each palette
-#' is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
-#' defaults are used otherwise. The ANSI styles are (re)built once, not per cell.
+#' Colours: palettes, styles and breaks
+#' @description
+#' Everything that decides what a coloured cell LOOKS like, and at which value it changes shade.
+#' [set_color_palette()] sets the hues (and the console's light/dark theme); [set_color_breaks()]
+#' sets the thresholds each measure is read on; [get_color_style()] and [get_color_breaks()] read
+#' them back. All of them act globally, through `options()`, so one call at the top of a script
+#' restyles every table it builds --- see [tabxplor-options]. A single table can override the
+#' thresholds with `tab(color_breaks =)`.
+#'
+#' @details `set_color_palette()` customises the palette used to print \code{\link{tab}}. Each
+#' palette is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the
+#' OKLCH defaults are used otherwise. The ANSI styles are (re)built once, not per cell.
 #' @param text_colors,text_colors_neg,background_colors,background_colors_neg Light-theme palettes
 #' (4 hex each): the text (font) and background (fill) colours for the over- (\code{*_colors}) and
 #' under-represented (\code{*_colors_neg}) sides.
@@ -3381,12 +3402,15 @@ build_palettes <- function() {
 #' \code{background_colors} without these makes them follow it unchanged (readable only if your fills
 #' already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
 #' theme, and the dark fills read there as-is.
-#' @param theme \code{"light"} or \code{"dark"} for the console / exports, or \code{"auto"} to detect
-#' the console's colour scheme now (the RStudio theme, the Positron theme, or \code{COLORFGBG};
-#' \code{"light"} when it cannot be told). Defaults to the current setting. Detection is best-effort
-#' and resolved ONCE: call again after changing your editor's theme. (This is the console only ---
-#' \code{\link{tab_css}} / \code{\link{tab_kable}} take their own \code{theme = "auto"}, which follows
-#' the reader's browser.)
+#' @param theme Which palette theme. In \code{set_color_palette()}: \code{"light"} or
+#' \code{"dark"} for the console / exports, or \code{"auto"} to detect the console's colour scheme
+#' now (the RStudio theme, the Positron theme, or \code{COLORFGBG}; \code{"light"} when it cannot be
+#' told). Detection is best-effort and resolved ONCE: call again after changing your editor's theme.
+#' (This is the console only --- \code{\link{tab_css}} / \code{\link{tab_html}} take their own
+#' \code{theme = "auto"}, which follows the reader's browser.) In \code{get_color_style()}:
+#' \code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication palette); the
+#' export theme \code{"auto"} resolves to \code{"light"} there, a palette being always one definite
+#' thing. Both default to the current setting.
 #' @return Sets the internal color palettes (invisibly) and the option
 #' \code{"tabxplor.color_style_theme"}.
 #' @export
@@ -3449,7 +3473,7 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
 # new grammar, each with lifecycle::deprecate_soft(). Grep "COMPAT (Phase 13a)" to find/remove them.
 
 #' Set the color style (deprecated)
-#' @describeIn tab_many `r lifecycle::badge("deprecated")` Superseded by \code{set_color_palette()}.
+#' @describeIn set_color_palette `r lifecycle::badge("deprecated")` Superseded by \code{set_color_palette()}.
 #' Kept as a back-compat shim: \code{type}/\code{theme} still take effect (as options);
 #' \code{custom_palette} maps its over/under colours onto the new 4+4 palette; \code{html_24_bit}
 #' is inert (exports are always 24-bit).
@@ -3478,7 +3502,7 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 }
 # === end COMPAT (Phase 13a) ======================================================================
 
-#' @describeIn tab_many get the color palette as terminal (ANSI) style functions or html codes: an
+#' @describeIn set_color_palette get the color palette as terminal (ANSI) style functions or html codes: an
 #' 8-element vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 #' @param mode By default, \code{get_color_style} returns a list of terminal (ANSI) coloring
 #' functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
@@ -3487,12 +3511,16 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' \code{semantic} flag), which is how \code{theme = "print"} says "over-represented cells are bold,
 #' under-represented ones italic". The colour palettes report bold on every text slot and nothing on
 #' the background ones, i.e. exactly how they have always been drawn.
-#' @param type \code{"text"} (font colour), \code{"bg"} (background fill), or \code{"bg_legend"}
-#' (\code{mode = "color_code"} only): the darker FONT stand-in for the background palette, for the
-#' media that cannot fill (an Excel rich-text run, a \pkg{ggpubr} text label) -- see the colour legend.
-#' @param theme \code{"light"}, \code{"dark"}, or \code{"print"} (the black-and-white publication
-#' palette); defaults to the current setting. The export theme \code{"auto"} resolves to
-#' \code{"light"} here, a palette being always one definite thing.
+#' @param type Which palette, or which half of a break scale --- the word means one thing per
+#' function, and both are given here because they share this page. In \code{get_color_style()} and
+#' the deprecated \code{set_color_style()}: \code{"text"} (font colour), \code{"bg"} (background
+#' fill), or \code{"bg_legend"} (\code{mode = "color_code"} only), the darker FONT stand-in for the
+#' background palette, for media that cannot fill a run (an Excel rich-text run, a \pkg{ggpubr} text
+#' label) -- see the colour legend. In \code{get_color_breaks()}: \code{"positive"} (the default)
+#' returns a readable form -- a plain vector of magnitudes when the scale is symmetric, a
+#' \code{list(over =, under =)} otherwise -- and \code{"all"} the signed / reciprocal thresholds
+#' the engine actually compares against (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for
+#' multiplicative ones).
 #' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
 #' @return A list of 8 terminal (ANSI) color-style functions, a vector of 8 color html codes, or
 #' (\code{mode = "face"}) the palette's typography record.
@@ -3768,7 +3796,7 @@ default_color_scales <- function() {
 
 
 #' Set the breaks used to print colors
-#' @describeIn tab_many set the breaks used to print colors.
+#' @describeIn set_color_palette set the breaks used to print colors.
 #' @description Color breaks are a named list of the ten measure scales \code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
 #' \code{zscore}, \code{adj_ratio}, \code{adj_diff} and \code{adj_diff_std}. Each is
@@ -3914,17 +3942,12 @@ pop_color_breaks <- function(state) {
 
 
 #' Get the breaks currently used to print colors
-#' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
+#' @describeIn set_color_palette get the color breaks currently in use, in the canonical Phase-5 shape.
 #' @param brk When missing, return the full named list of break scales (\code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{zscore}) -- the same shape
 #' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 #' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 #' \code{mean_ratio}) are still accepted.
-#' @param type Default \code{"positive"} returns a readable form: a plain vector of magnitudes
-#' when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to
-#' \code{"all"} to get the signed / reciprocal thresholds the engine compares against
-#' (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for multiplicative ones).
-#'
 #' @return The color breaks as a double vector or a \code{list(over =, under =)}, or a named list
 #' of these.
 #' @export

@@ -29,7 +29,7 @@
 #' @description The Excel exporter behind \code{\link{tab_export}}: `tab_export(x, format = "xl")`
 #' calls this. To modify the colors used into the Excel table, you can change the
 #' global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
-#' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
+#' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_reg}} or
 #' \code{\link{tab_plain}}, or a list of such tables.
 #' @param path,replace,open The name, and possibly the path, of the Excel file to
 #' create (possibly without the .xlsx extension). Default path to temporary directory.
@@ -97,7 +97,7 @@
 #' # does NOT exempt it from R CMD check --as-cran, which CRAN also runs without Suggests.
 #' if (requireNamespace("openxlsx2", quietly = TRUE)) {
 #'   forcats::gss_cat |>
-#'     tab(marital, race, pct = "row", color = "diff") |>
+#'     tab(marital, race, pct = "row", color = "difference") |>
 #'     tab_xl()
 #' }
 #' }
@@ -641,7 +641,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # cells with them and (when has_span) writes the merged col_var spanning-name row above.
     clean_names = if (!is.null(cvh)) cvh$clean else names(tab),
     span_row = if (has_span) span_row else NA_integer_,
-    header_runs = if (has_span) tab_header_runs(cvh$label) else NULL,
+    header_runs = if (has_span) tab_header_runs(cvh$label, cvh$group) else NULL,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
     # Phase 14l: the Excel-only "<var>_sd" siblings (roles$sd_cols, the ONE definition of the rule).
     # They hold "s2.1" under a header of "sd", so the standard numeric width is wasted on them.
@@ -886,9 +886,13 @@ xl_write_table <- function(wb, plan, o, reg) {
     for (k in seq_along(runs$labels)) {
       c1 <- col0; c2 <- col0 + runs$spans[k] - 1L
       if (nzchar(runs$labels[k])) {
-        # Phase g: a split-model span carries a "<br>" (e.g. "White<br>married: Married") -> an in-cell
-        # newline so Excel shows the split level over the outcome (wrap_text set on the span row below).
-        xlb_write_cell(wb, s, xl_cell(plan$span_row, c1), gsub("<br>", "\n", runs$labels[k], fixed = TRUE))
+        # Phase 19n: a span belonging to a SUB-POPULATION (a spread level, a split-model group) puts
+        # it on its own line above the variable -- an in-cell newline, with wrap_text set on the span
+        # row below. The two facts arrive stored and apart (`col_group` / `col_var`); before 19n they
+        # arrived welded as "White<br>married" and this line had to gsub an html tag out of a name.
+        xlb_write_cell(wb, s, xl_cell(plan$span_row, c1),
+                       if (nzchar(runs$groups[k])) paste0(runs$groups[k], "\n", runs$labels[k])
+                       else runs$labels[k])
         if (c2 > c1)
           xlb_merge(wb, s, paste0(xl_cell(plan$span_row, c1), ":", xl_cell(plan$span_row, c2)))
       }
@@ -911,9 +915,9 @@ xl_write_table <- function(wb, plan, o, reg) {
   xl_apply_styles(wb, s, plan$styles, reg)
 
   # Phase 13c-iii: style the col_var spanning-name row (bold + centred, like the level header).
-  # Phase g: wrap_text when a span carries a "<br>" split-model line, so the two lines show.
+  # Phase 19n: wrap_text when any span carries a sub-population line, so the two lines show.
   if (!is.na(plan$span_row)) {
-    span_wrap <- if (any(grepl("<br>", plan$header_runs$labels, fixed = TRUE))) "1" else ""
+    span_wrap <- if (any(nzchar(plan$header_runs$groups))) "1" else ""
     xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
                     0L, 0L, 0L, 0L, "center", "", span_wrap, "")
     xlb_set_cell_style(wb, s, paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)), xf)

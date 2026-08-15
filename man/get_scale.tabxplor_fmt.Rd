@@ -9,7 +9,9 @@
 \arguments{
 \item{x}{The object to test, to get a field in, or to modify.}
 
-\item{...}{Used in methods to add arguments in the future.}
+\item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
+2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
+methods below, to add arguments in the future.}
 }
 \value{
 A single string with the vector's scale.

@@ -11,7 +11,15 @@
 ```
 R/
 ├── fmt_class.R     (~6425 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
-│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + DERIVED fmt_col_attrs (14 attrs)
+│                              fmt_field_names (the 21 fields; s +n_eff, z5 +obs, z8 +gap_se) + FMT_FIELD_DOC
+│                              (one gloss each, build-time-exhaustive, behind `?fmt`'s @eval'd roll-call --
+│                              the hand-written one still named `in_totrow`, deleted in 19f)
+│                              + DERIVED fmt_col_attrs (16 attrs; 19n +col_group = WHICH SUB-POPULATION a
+│                              column's block belongs to -- a spread level or a split_var group, "" otherwise.
+│                              Both producers WELDED it into `col_var` as "{level}<br>{col_var}", which three
+│                              backends recovered by sniffing for an html tag `tab_wrap_text(brk="<br>")` also
+│                              emits; stored, it composes only where two lines are wanted. fmt_col_block() /
+│                              tab_col_blocks() = THE (col_var, col_group) identity, key + one-line label)
 │                              + 19m-i's **TAB_PLACEHOLDER_COL_VARS** = the six `col_var` values that
 │                              are NOT a variable name (all_col_vars / no_col_var / no_row_var / "" /
 │                              "no" / NA), behind TWO deliberately distinct predicates:
@@ -647,6 +655,12 @@ R/
 │                              tab_deprecate_or/_many/_sup_cols/_na_drop_all, grouped so the live
 │                              build path never meets them. Each shim is LOSSLESS or it aborts.
 ├── tab-test-display.R (~685 L) Phase 16a: THE shared framework rendering the `test` attribute as an
+│                              (19n: test_grid_crosstab() keys its value columns on the (col,
+│                              col_group) BLOCK, via tab_col_blocks() -- `col` alone identified a
+│                              block only while the spread level was welded into `col_var`, so two
+│                              spread blocks of one variable would collapse into a single p-value
+│                              column; `col_group` is a DECLARED new_test_tibble() column, since
+│                              test_group_cols() reads every undeclared one as a grouping variable)
 │                              aligned summary -- the console GFM block AND the inline export rows,
 │                              which were four ad-hoc renderers split by (crosstab vs reg) x (console
 │                              vs export). Three layers: CONTENT (test_display_rows / the formatters /
@@ -698,7 +712,10 @@ R/
 │                              "kable" synonym) -> print + knit_print.tabxplor_tab/_grouped_tab render
 │                              tab_html() (bare tab() chunks knit as live html tables; tooltips option
 │                              tabxplor.tab_kable_tooltips). pkgdown = ONE English site (_pkgdown.fr.yml
-│                              + docs/fr + the toggle removed; FR vignette-articles stay in Articles)
+│                              + docs/fr + the toggle removed; FR vignette-articles stay in Articles;
+│                              19n regrouped its reference index -- a real `Colours` section in
+│                              Everyday use instead of five helpers hidden on the superseded
+│                              `tab_many()` page, an `Inspect a table` one, and check_pkgdown() green)
 ├── tab_xl.R        (~1015 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
 │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
 │                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid
@@ -764,6 +781,9 @@ R/
 │                              collapse :empty spacer cells. Tames finding 9/10 (host draws black per-row
 │                              borders + ugly spacers). chrome-only; tab_md_css() omits them.
 ├── tab-export-prep.R (~940 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
+│                              (19n: tab_col_var_header() returns `group` beside `label` and
+│                              tab_header_runs() RLEs the PAIR -- RLE-ing the label alone merges two
+│                              adjacent blocks of ONE variable into a single span);
 │                              model (roles/ann/bold/range), consumed by kable/md/plot/xl;
 │                              17g: rd_footer()/rd_caption() (the ONE footer sandwich + caption fallback
 │                              every backend shares) + roles_totblock_edges() (border formula shared w/
@@ -3533,7 +3553,235 @@ do.
 the vignettes, and the one remaining `?fmt` double-gloss (`ctr` / `obs` are now described both in
 their own `@param` and in the generated section).
 
+#### Phase 19n — Documentation, i18n, and release readiness
+
+**DONE (2026-08-15).** The last phase before the 2.0.0 release: *the taught surface matches the
+shipped one, in both languages, and the package passes its release gates.* Full suite
+**FAIL 0, WARN 1, SKIP 4, PASS 6560** against the inherited FAIL 0 / WARN 1 / SKIP 4 / PASS 6528 --
+same warning count (the pre-existing Poisson over-dispersion advisory), and the +32 is exactly this
+phase's own fixture file. `dev/verify_golden_field_delta.R` reports **only the declared addition**
+across all **1788 cells of the 36 goldens**, and the only `_snaps/` churn is `fmt-contract.md`'s
+attribute list, one line.
+
+**The gates, all green, all run on the final tree**: full suite (normal locale) · the CI-locale run
+(`LC_ALL=C.UTF-8 LANGUAGE=en`) **FAIL 0 / SKIP 17** -- the French blocks *skipping* as designed, not
+failing, which is the CRAN-farm property that run exists to prove · `verify_golden_field_delta.R`
+(only the declared addition, 1788 cells) · `verify_color_attrs.R` (**IDENTICAL**, 293 cases) ·
+`document()` **idempotent** · **`devtools::check()` Status OK, 0 errors / 0 warnings / 0 notes** ·
+`pkgdown::build_site()` (the only gate on the three FR articles).
+
+⚠ **Two release gates were RED on arrival, which means neither `devtools::check()` nor
+`pkgdown::check_pkgdown()` had run since 19b.** `?fmt`'s `@examples` called `fmt(n = …, type = "row")`
+and `set_type(f, "col")` -- an argument and a function both **deleted in 19b** -- so the first is an
+abort and the second does not exist: an **R CMD check example failure**, i.e. a hard blocker, sitting
+in the package's flagship type documentation. And `check_pkgdown()` errored on three exported topics
+missing from the index (`reg_measures`, `tab_shape`, `tab_supports`) while still publishing the
+defunct `kable_tabxplor_style`. Both are closed; `tools::checkDocFiles()` and `check_pkgdown()` are
+silent.
+
+**THE `<br>` CARRIER MIGRATION** *(maintainer's ruling: take it, in full)*. The last welded fact in
+the package. `tab(spread_vars =)` / `tab_spread()` and `tab_reg(split_var =)` both folded the
+sub-population into the column's `col_var` as `"{level}<br>{col_var}"`; three backends recovered it
+by **sniffing for that html tag** (Excel's two-line span and its wrap flag, the legend's name
+normaliser) and a fourth un-escaped it after `htmlEscape()` -- while `tab_wrap_text(brk = "<br>")`
+emits the same tag for an unrelated reason, which none of them could tell apart. It is the 16th
+column attribute **`col_group`** now (`get_col_group()` exported, the setter internal: writing is the
+pipeline's job), composed only where two lines are actually wanted -- html a `<br>`, Excel a newline
++ wrap, markdown the one-line form it can draw. `<br>` in a header means exactly one thing.
+
+⚠ **The roadmap's brief ("2 lines + move the span composition") understated it: the weld had THREE
+carriers, and the third is the one that bites.** The `test` tibble keys its rows on `col`, and
+`test_grid_crosstab()` matches that against `unique(get_col_var(...))` -- so with the level removed
+from `col_var`, a spread table's two blocks collapse to one key and the grid emits **one p-value
+column for a table that has two**. `test` carries a **declared** `col_group` column too (declared,
+because `test_group_cols()` reads every undeclared column as a *grouping* variable -- 19g's own
+defect), and both the grid and the span header key on the pair through the one
+`fmt_col_block()` / `tab_col_blocks()` rule. `tab_header_runs()` RLEs the **pair** for the same
+reason: on the label alone, two adjacent blocks of one variable merge into a single span.
+New fixture `test-col-group.R` (11 tests) is the migration's proof -- the stored pair, the two-line
+span in html and md, the legend prefix, the header runs, and the p-value column count; the two
+assertions that tested the weld (`test-test-display.R`, `test-tab_reg-survey.R`) are migrated with
+their reason. jamovi cache schema **17 -> 18**.
+
+**ONE COLOURS PAGE** *(maintainer's ruling)*. `?set_color_breaks` opened a page titled *"Many
+cross-tables as one, with color helpers"* whose first line was a **superseded badge for
+`tab_many()`** -- five live, everyday functions documented on a shim's page, which `_pkgdown.yml`
+pointed at twice. They are `?set_color_palette` now, retitled *"Colours: palettes, styles and
+breaks"* with a real description; `is_tab` and `tab_get_vars` (a different concern) got their own
+pages, and `tab_many.Rd` keeps only itself.
+
+⚠ **That page was silently shadowing two `@param`s, and the fix needed two passes.** `theme` was
+documented twice and `type` **three** times; roxygen keeps one, so `set_color_palette(theme =)` and
+`set_color_style(type =)` were documented with *another function's* definition. One
+per-function-disambiguated tag each -- and the first attempt still lost, because the third `type`
+lived on `get_color_breaks`'s own block, 400 lines away. `checkDocFiles()` cannot see this class
+(the param IS documented, just wrongly), so the only thing that caught it was reading the generated
+`\arguments{}` by eye, which is why the plan required it.
+
+**THE TAUGHT SURFACE.** The colour values are the full words everywhere *(maintainer's ruling:
+migrate everything)* -- 16 roxygen sites, 52 vignette/README sites -- so what a user types matches
+what the table stores and what its legend prints, with the acronyms noted as permanent shorthands.
+**18 roxygen cross-references stopped naming `tab_many()` as a way to build a table** (`grep -l
+tab_many man/*.Rd`: 20 files -> 2, the second being the deliberate `na_drop_all` history), and the
+two claims that were outright FALSE since 19h went: *"`tab()` is a friendly wrapper around the more
+powerful `tab_many()`"* at the top of `?tab`, and its `@seealso` twin. Other repairs: `ci = "diff"`
+-> `"ref"` where the page speaks `tab()`'s vocabulary (⚠ **not** in `tab_ci()`, whose step
+vocabulary owns that word natively -- instead the `@section Significance stars` those two pages
+SHARE through `@inheritSection` stopped naming a value at all, since it means different things on
+each); `tab_ci(ci_scale =)` stopped documenting storage as `ci_type = "ratio"`, an attribute deleted
+in 19b; `effect = "ame"` -> `"marginal"` in `?forest_plot` (a value that now **aborts**);
+`OR = "cumOR"` -> `ref2 = "cumulative"`; `tab_plain()` got the `@description` that was commented
+out; the four soft-deprecated composite-colour examples were rewritten so `check()` runs clean; and
+`?tab` now documents `pct`'s per-`col_var` and `ref`'s per-`row_var` vector forms, neither of which
+appeared anywhere. ⚠ Found in passing and fixed: `?tab`'s `display` prose asserted *"`tab_reg` has
+no `display` argument of its own"* -- **19e gave it one**.
+
+**`?fmt`'s field roll-call is GENERATED** (`FMT_FIELD_DOC` + `fmt_fields_rd()`, a fourth `@eval` on
+the `display_tokens_rd()` / `reg_measures_rd()` model, exhaustive by build-time `stopifnot`): the
+hand-written list still named `in_totrow`, **deleted in 19f**, and omitted its replacement
+`row_kind`. The same list in both programming vignettes said *"19 fields"* for 21 and contradicted
+the `vec_data()` output printed two lines below it.
+
+**i18n.** `po/R-fr.po` was 22 entries behind: **235 translated, 0 fuzzy, 0 untranslated** now.
+⚠ `po_update()` carried six near-matches over as FUZZY and several were **wrong** -- "Wilson score
+interval" had inherited *"intervalle de Newcombe"* -- so every one was rewritten rather than
+accepted. ⚠ **`inst/po/en@quot` had rotted to 136 of 235 msgids** and nothing in the repo
+regenerated it: it has no translator catalogue, and potools only compiles `po/*.po`. It is
+**DERIVED** now, step 5 of `dev/update_translations.R` (`tools:::en_quote()` on the `.pot`), with its
+`.po` deliberately not kept in `po/` -- `po_update()` would otherwise merge it as a translation.
+That script's NOTE also named an extraction anchor `19l` deleted; it names the one that survives
+(`reg_check_msgid_anchor()`) and says why it cannot go.
+
+**Also**: the FR regression article was the only one of the seven documents missing
+`Sys.setenv(LANGUAGE = "fr")` beside `options(tabxplor.lang = "fr")`, so its GOF / model-fit /
+test-summary rows knit in the *builder's* language; both `ame_ratio` capability rows taught a
+spelling that **aborts**; and the same row said `measure = "ratio"` in EN and `family = "poisson"`
+in FR -- one table, two claims, which is what editing file-by-file does.
+
+**HONEST CONCERNS.**
+
+- **`man/figures/README-hero.jpg` is handed over** (maintainer's ruling: flag it). It is a console
+  screenshot dated Jul 27, before the 2.0.0 OKLCH palettes; I cannot re-shoot one. The re-knit
+  refreshed everything *around* it -- including real 2.0.0 features the Aug 10 render predates (the
+  `n` column, the variable-name column, the sparkline, the five model-check footer rows) -- which
+  sharpens the mismatch rather than hiding it. Reproduce it with the first `tab()` call in
+  `README.Rmd` under `set_color_palette(theme = "light")`.
+- ⚠ **`devtools::build_readme()` is NOT the right tool here** and its output must not be committed:
+  it renders `github_document`, which strips the YAML header and hard-wraps every paragraph
+  (+1329 lines of pure churn). The committed README is `knitr::knit("README.Rmd", "README.md")`,
+  which needs the package *loaded* first. Recorded because I made that mistake once.
+- **The JS gate is DECLINED** (maintainer's ruling), and the record corrected: there is no `node`
+  and no `V8` on this box, so nothing added here could be *run*. ⚠ CLAUDE.md's 19k summary still
+  claimed *"The suite balance-checks brackets and the generator diff"* -- there is **no** such
+  check; `tests/` opens no `.js` file, and `test-jamovi-vocabulary.R` compares only the generated
+  marker blocks (itself double-skipped). 19l corrected this in two places and missed the third.
+- **`jamovi/jmvtab.a.yaml`'s prose is fixed but the shipped `man/jmvtab.Rd` stays stale** until the
+  maintainer runs `jmvtools::prepare()` -- which **19k already owes before release**. ⚠ Note
+  `R/jmvtab.h.R` is NOT `.Rbuildignore`d, so its roxygen ships to CRAN; the yaml is the source and
+  must never be worked around by hand-editing the `.h.R`.
+- **The FR articles are covered only by the pkgdown build**, never by `check()`
+  (`^vignettes/articles$` is `.Rbuildignore`d). The build ran here and they render French
+  ("Linéarité", "rapports de cotes"), which is also the end-to-end proof the recompiled catalogue
+  landed.
+- ⚠ **`check()` found THREE more failures of its own, all pre-existing and all invisible until it
+  ran.** (i) **`test-jamovi-vocabulary.R` ERRORED inside the tarball**: it reads `jamovi/*.a.yaml`,
+  and `jamovi/` is `.Rbuildignore`d -- so those files do not exist in a built package. The
+  generated-block test in the SAME file already had the right guard for `dev/`; `yaml_opts()` now
+  has it too. (ii) `yaml` was used via `::` in tests without being declared -- it is a Suggest now.
+  (iii) `w2`, the per-cell sum of squared weights the flat-design variance reads, was a data.table
+  NSE symbol never declared beside its siblings `n` / `wn`. Plus a stray `Rplots.pdf` (a README-knit
+  artefact, git-ignored but not build-ignored) which was the third NOTE.
+- ⚠ **The README's own language-pin comment cited a stale example** -- *"Without it, `LR vs null`
+  knits as `RV vs nul`"*. The catalogue deliberately keeps `LR` as **notation** (like OR/IRR/β), so
+  that string is translated to itself; the comment's *reason* is right and the built FR article
+  proves it ("Linéarité"), only its example was wrong. Fixed in both mirrored copies.
+- **`_pkgdown.fr.yml` is still in `.Rbuildignore` and does not exist**, a leftover of the bilingual
+  site the maintainer collapsed to one. Harmless (an ignore entry for a missing file), left alone
+  because deleting it is the kind of change that looks like a mistake in a release diff.
+- The one WARN in the suite is the pre-existing Poisson over-dispersion advisory, unrelated.
+
+**FOLLOW-UPS.** Maintainer, before the release: `jmvtools::prepare()` + `jmvtools::install(home =
+"flatpak")` + the live jamovi pass (19k's standing debt, and the only thing that un-stales
+`man/jmvtab.Rd`); the README hero screenshot; `cran-comments.md` / `CRAN-SUBMISSION`; then
+`dev/release_checklist.md`'s branch mechanics. Phase 19o (the Phase 19 assessment) can start on this
+commit.
+
+#### Phase 19o — assesment of what have been done in Phase 19
+
+Please, review what have been done in Phase 19 : have the code really been simplified ? Is there more simplifications possible ? Write your findings in a new file in `dev/`.
+
 ---
+
+
+
+
+### Phase 20 — reviews and further simplification before release
+
+#### Phase 20a — Review of vctrs fields, column attributes and table attributes
+- Giving the new framework, is there room for further simplifications and integration ? 
+- Now that conf_level has become a column-level attribute, is there additional ways to simplify and integrate the code around it ?
+
+#### Phase 20b — Review of exported functions
+- Among the new exported functions, which one are not really necessary and should not be exported (the package would be clearer and more direct without them than with them) ?
+- Among the old exported programming functions, which ones are not really necessary and should be deprecated ?
+
+#### Phase 20c — Review of all main user-facing functions arguments and global options
+- What should stay an argument, and what would be more user-friendly as a global option ? What is a global option, and would be more user-friendly as an argument (or both, an argument that default to a global option) ? What arguments should be better integrated between `tab`, `tab_reg`, etc. for clarity and consistency ? 
+- There are too many global options to teach to users, and many are new : if want to clean this before release. What could we remove ?
+- `tab` and `tab_reg` have too many arguments, specially in their roxygen documentation. Are there good candidates for removal ? Are there arguments that we could `...` on main user-facing functions so that their documentation goes to an exported subfunction, to reduce the number of arguments in their documentation ? Are there arguments that we could group together, with a concise text refering to a specific documentation file  (or to a specific part of a vignette) for some subsystems ? 
+- Give special attention to new arguments on 2.0.0, specially the new user-facing functions like `tab_reg()`, were change is free until release (and costly afterwards). 
+
+#### Phase 20d — Jamovi UIs updates
+Jamovi UIs have not been updated for a long time : add new arguments that are not in the current version of `jmvtab` and `jmvtabreg`, remove deprecated ones, etc. AskUserQuestion me when you have a doubt about what to add and what to remove.
+- Levels reordering in jamovi UI : add a tick box (nothing ticked by default ; no tick box for the first level of each variable) to collapse a level with the former level (possibly in chain to collapse many levels together ; the chain must respect the order of levels chosen by the user), in which case a text box should appear taking all the vertical width of the levels that would be collapsed together to choose the new name. To get enough horizontal space for this, in the general case, row_vars, col_vars, tab_vars, etc. should each be on it’s own row of the layout (not two panes side-by-side). Are there caveats ? Are there better ways to do it ?
+- `jmvtabreg` : add the same level reordering UI than `jmvtab` for predictors here too. They should be the same for UI consistency and ease-of-learning. If you can avoid code duplication, it’s better.
+- For export folder, the ~ syntax is ok for expert users, but difficult for normal users and literary students. Is there a possibility to do the opposite : jamovi search the Documents folder at load like now (we fixed that), it writes the actual documents folder path in the folder text box, so the user sees it and can figure where the exports will go (and the default path button redo exactly that). ~ should continue to work and to mean home. When there are network disks, it would be preferable to refer to them in the readable way (`S:/...`) rather than the unreadable network path.
+
+On the jamovi cache path a table built with `ci = "cell"` and MIXED col_vars renders its numeric column with the `pct_ci` display token where plain `tab()` renders `mean_ci`. A display-resolution divergence in `jmvtab_build`, not a weightsissue.
+
+#### Phase 20e — Resolve jamovi freeze problems
+- Even going marginal effects for a logit regression (one outcome) is neverending, but if I check "coefficient" again it’s working.
+
+
+#### Phase 20f — `tab_reg()` parallelisation
+
+`tab()` has had a parallel row-axis since Phase 8/9a (`R/tab-parallel.R`: `tab_pmap()` + trampoline,
+the named `"tabxplor"` mirai pool, `tab_build_one()` as the per-row_var worker, Suggests-only).
+`tab_reg()` has nothing, and the work it does is increasingly fit-bound. Research and design it **as a
+whole** — pick the right level(s) of parallelisation after real measurement, rather than bolting a pool onto
+whichever producer happened to get slow. Write the study in a new `dev/*.md`, pause ; then only plan and implement.
+
+**Candidate payloads** (measure each; they have very different granularity and shipping cost):
+- **Per-predictor crude fits.** z9's numeric `Obs_*` (univariable `glm` ~10.4 ms each, but
+  `marginaleffects` AME **229 ms** each) and z10's ordinal `Obs_cumOR` (univariable `polr`: **794 ms**
+  for 4 predictors, against 323 ms for the full model — 2.5x the model's own cost, on every
+  interactive jamovi round-trip). Embarrassingly parallel, independent, small inputs.
+- **Per-fit**: model comparison (`predictors = list(...)`), several dependents, `split_var` groups.
+- **Per-contrast**: AME / `ame_ratio` calls, and z10's AME influence-function jacobians.
+- The z8 `stats = "interaction"` pooled fits.
+
+- **Shipping cost is the known hazard, already measured.** Phase o root-caused the jamovi
+  model-comparison freeze to ~10 MB per raw fit and ~41.5 MB serialized per round-trip. A worker that
+  returns a *fit* repeats that; one that returns only the tidy/digest does not. Design the worker
+  boundary around what crosses it.
+- **The `.fit_cache` seam.** `jmvtab_reg_build()` threads a cache **env**, which cannot cross a process
+  boundary. Decide how parallel and cached interact (and note Phase o already disables the cache in
+  comparison mode). `jmvreg_fit_key`'s reference-independence and `reg_reref_fit_res`' byte-identity
+  (locked by `test-jmvtabreg-cache.R`) must survive untouched.
+- **Byte-identity.** Every reg path is value-asserted, not snapshotted; results must be identical
+  serially and in parallel, and stable in ORDER (`vec_rbind` of split parts, `fit_first_idx`/`fit_ncol`
+  column mapping).
+- **jamovi.** mirai's dispatcher needs sockets — `test-parallel-parity.R` already fails under the bwrap
+  sandbox (`--unshare-net`) for this reason. Confirm a pool is viable inside flatpak Electron at all
+  before assuming it; if not, the feature is R-session-only and jamovi keeps the serial path.
+- **When NOT to parallelise.** `tab()`'s own answer (Phase 9c) was that scan fusion was a net negative
+  once the build went O(cells); the honest outcome here may be "only above N fits / N ms", or a
+  `tabxplor.reg_parallel_min` threshold. Do not ship a pool that costs more than it saves on the
+  common one-model call.
+
+**Reuse, don't duplicate**: the pool lifecycle (`tab_pool_ensure`/`tab_parallel_workers`/
+`tab_parallel_stop`) and the `tab_pmap()` trampoline are the existing infrastructure; a second pool or
+a second Suggests-guard idiom would be exactly the ad-hoc layer Phase 17 removed.
 
 
 

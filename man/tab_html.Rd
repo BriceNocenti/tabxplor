@@ -44,7 +44,7 @@ tab_kable(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}},
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}},
 or a \code{list} of tab with the same \code{col_vars} and no \code{tab_vars}.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
@@ -139,7 +139,7 @@ names the output (an HTML table); \code{tab_kable()} is the name it had when \pk
 }
 \examples{
 \donttest{
-tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
+tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "difference")
 tab_html(tabs, theme = "light")
 }
 }

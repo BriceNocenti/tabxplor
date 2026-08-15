@@ -187,11 +187,16 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
   # default spread_models = TRUE: the sub-models sit side by side (no stacked `g` row-column)
   t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g")
   expect_false("g" %in% names(t))
-  # each split level's column carries a "{level}<br>{outcome}" col_var -> borders + a two-line span
+  # Phase 19n: each split level's column carries its sub-population in `col_group`, BESIDE the
+  # outcome its `col_var` names -- the pair is the block identity, and it is what gives the export a
+  # two-line span and a border between the blocks. Until 19n the two were welded into `col_var` as
+  # "{level}<br>{outcome}", so the backends recovered them by sniffing for an html tag.
   fc <- names(t)[vapply(t, is_fmt, logical(1))]
   cv <- vapply(fc, function(nm) tabxplor:::get_col_var(t[[nm]]), character(1))
-  expect_true(all(grepl("<br>", cv)))
-  expect_true(any(grepl("^north<br>", cv)) && any(grepl("^south<br>", cv)))
+  cg <- vapply(fc, function(nm) get_col_group(t[[nm]]), character(1))
+  expect_false(any(grepl("<br>", cv)))          # the weld is gone from the stored name
+  expect_true(all(nzchar(cg)))
+  expect_setequal(unique(cg), c("north", "south"))
   # works with empirical = TRUE (crude companions spread too, level-suffixed)
   te <- suppressWarnings(tab_logit(d, "y", "x1", split_var = "g", empirical = TRUE))
   expect_true(any(grepl("^Obs_", names(te))))
