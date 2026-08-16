@@ -222,6 +222,16 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_OUTCOME_KINDS$offers", function() tx_fk_all(REG_OUTCOME_KINDS, "offers"),
         function() names(REG_FAMILIES)),
 
+  # --- into the two vocabularies reg_build() dispatches on -----------------------------------
+  # A declared `builder` must name one reg_build() implements. The other direction is reg_build()'s own
+  # `switch()`, whose arms are all NAMED and whose default aborts -- it used to fall through to the
+  # coefficient builder, so a typo built the wrong column in silence.
+  tx_fk("REG_ESTIMANDS$rows$builder", function() tx_fk_scalar(tx_fk_reg_rows(), "builder"),
+        function() REG_BUILDERS),
+  # ⚠ "auto" is the sentinel for reg_marginal_engine()'s rule, resolved per row at run time.
+  tx_fk("REG_ESTIMANDS$rows$engine", function() tx_fk_scalar(tx_fk_reg_rows(), "engine"),
+        function() REG_MARGINAL_ENGINES, allow = "auto"),
+
   # --- into REG_EMPIRICAL (which crude column pairs with which estimand) ----------------------
   # ⚠ "auto" is the sentinel for "the outcome's own family", resolved at run time.
   tx_fk("REG_ESTIMANDS$rows$crude_fam", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_fam"),

@@ -1586,8 +1586,11 @@ reg_apply_display <- function(col, display, skeleton, f, sp, family, design_spec
 
   fields   <- parse_display_template(display)$fields
   want_pct <- "pct" %in% fields
+  # `want_se = FALSE`: this fold pokes `pct` / `diff` into a column that keeps its OWN interval, so
+  # nothing here reads the marginal effect's.
   marg     <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                           at = "average", want_pred = want_pct, multiplier = multiplier)
+                           at = "average", want_pred = want_pct, multiplier = multiplier,
+                           engine = reg_marginal_engine(sp$est), want_se = FALSE)
   in_model <- skeleton$var %in% c("Constant", model_predictors)
   is_const <- skeleton$var == "Constant"
   is_ref   <- skeleton$is_ref & !is_const & in_model
@@ -2060,7 +2063,9 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       m <- tryCatch(suppressMessages(reg_marginal(
         f$fit, f$data, v, conf_level, wt, at = "average",
         comparison = if (ratio) "lnratioavg" else NULL, want_pred = FALSE,
-        multiplier = multiplier)), error = function(e) NULL)
+        multiplier = multiplier,
+        engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est))),
+        error = function(e) NULL)
       if (is.null(m) || !nrow(m$ame)) next
       a <- m$ame[m$ame$var == v, , drop = FALSE]
       if (!nrow(a)) next
@@ -2068,13 +2073,16 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       ok  <- !is.na(idx)
       if (!any(ok)) next
       a <- a[ok, , drop = FALSE]; idx <- idx[ok]
-      est <- a$ame; lo <- a$ame_lo; hi <- a$ame_hi
+      # ⚠ NOT `est`: that is this function's ESTIMAND-ROW argument, read again on the next predictor
+      # (reg_marginal_engine(est)). Clobbering it made every predictor after the first abort inside the
+      # tryCatch above and silently lose its crude column -- latent until something read `est` twice.
+      e_v <- a$ame; lo <- a$ame_lo; hi <- a$ame_hi
       # reg_marginal() exp()s a log-ratio before returning, so log it back: this function's contract is
       # the NATIVE (link) scale, and reg_fit_overlay() re-exponentiates per the shape's own scale.
-      if (ratio) { est <- log(est); lo <- log(lo); hi <- log(hi) }
+      if (ratio) { e_v <- log(e_v); lo <- log(lo); hi <- log(hi) }
       rows[[length(rows) + 1L]] <- tibble::tibble(
         category = ifelse(is.na(a$group), "", a$group), row = idx,
-        est = est, lo = lo, hi = hi, p = a$ame_p)
+        est = e_v, lo = lo, hi = hi, p = a$ame_p)
     }
   }
   if (!length(rows)) return(list(est = list(), fits = fits))
@@ -2821,9 +2829,107 @@ reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
   isTRUE(abs(unname(est[[1]]) - truth) <= 0.02 * abs(truth) + 1e-10)
 }
 
+# reg_marginal() -- THE dispatcher between the two engines (Phase 20d). `engine` is the estimand row's
+# own declaration, resolved by reg_marginal_engine(); the fast route returns NULL rather than a wrong
+# number, and the fallback then runs for the WHOLE call, so one column always carries one convention.
+# The basis-expansion guard is applied to whichever engine answered: both build the counterfactual by
+# re-evaluating the formula, so both can be silently wrong on a poly() / ns() term.
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
-                         multiplier = NULL) {
+                         multiplier = NULL, engine = "marginaleffects", want_se = TRUE) {
+  do_exp <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  out <- NULL
+  # "lnor" is the MNL j-vs-rest contrast, which only ever comes with at = "reference".
+  if (identical(engine, "gcomp") && identical(at, "average") && !identical(comparison, "lnor"))
+    out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = do_exp,
+                              want_pred = want_pred, want_se = want_se, multiplier = multiplier)
+  if (is.null(out))
+    out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
+                           want_pred = want_pred, multiplier = multiplier, want_se = want_se)
+  if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
+                                                        out$ame, do_exp)
+  out
+}
+
+# reg_marginal_gcomp() -- the ANALYTIC engine: one counterfactual sweep per (predictor, level) giving
+# the estimate, the adjusted prediction and the delta-method interval, from R/reg-influence.R's
+# reg_gcomp_maker() / reg_gcomp_cat_maker(). Returns reg_marginal_me()'s exact shape, or NULL if any
+# piece refuses -- measured 0.40 s against 9.92 s for the marginaleffects route on 13 000 rows.
+#' @keywords internal
+reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, ratio = FALSE,
+                               want_pred = TRUE, want_se = TRUE, multiplier = NULL) {
+  # A predictor absent from the model has no counterfactual to build (the compound-formula path):
+  # refuse the whole call rather than return a zero effect the other engine would have errored on.
+  tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
+  if (is.null(tvars) || !all(predictors %in% tvars)) return(NULL)
+  V <- if (want_se) tryCatch(stats::vcov(fit), error = function(e) NULL) else NULL
+  if (want_se && (is.null(V) || !is.matrix(V))) return(NULL)
+  per_cat <- inherits(fit, "multinom") || inherits(fit, "polr")
+  g <- if (per_cat) reg_gcomp_cat_maker(fit, data, wt, ratio)
+       else         reg_gcomp_maker(fit, data, wt, ratio)
+  if (is.null(g)) return(NULL)
+  crit <- stats::qnorm(1 - (1 - conf_level) / 2)
+  amel <- list(); predl <- list()
+  for (v in predictors) {
+    is_fac <- reg_is_factor_var(data[[v]])
+    if (is_fac) {
+      lv <- levels(forcats::fct_drop(as.factor(data[[v]])))
+      if (length(lv) < 2L) return(NULL)
+      # marginaleffects' own factor contrast set: every non-reference level against the first.
+      cls <- lapply(lv[-1], function(l) list(level = l, at = l, ref = lv[[1]]))
+    } else {
+      k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else 1
+      if (!is.finite(k) || k == 0) k <- 1
+      cls <- list(list(level = v, at = k, ref = 0))   # a k-unit FORWARD DIFFERENCE, as `variables=list(v=k)`
+    }
+    for (ct in cls) {
+      p <- g(v, ct$at, ct$ref)
+      if (is.null(p)) return(NULL)
+      # The 3+ level producer answers for every outcome category at once, so its `est` / `G` / means
+      # are K-long and `group` names them; a single-equation one is scalar with no group. That is the
+      # ONLY difference between the two, hence one loop.
+      grp <- if (per_cat) as.character(p$levels) else NA_character_
+      se  <- if (per_cat) vapply(p$G, function(gj) reg_delta_se(gj, V), numeric(1))
+             else         reg_delta_se(p$G, V)
+      res <- reg_wald_finalize(p$est, ratio, se = se, crit = crit)
+      amel[[length(amel) + 1L]] <- tibble::tibble(
+        var = v, level = as.character(ct$level), group = grp,
+        ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value)
+      if (want_pred && is_fac) {
+        add_pred <- function(l, val) predl[[length(predl) + 1L]] <<-
+          tibble::tibble(var = v, level = l, group = grp, pred = val)
+        add_pred(as.character(ct$level), p$mean1)
+        if (identical(ct$level, lv[[2]])) add_pred(lv[[1]], p$mean0)  # the reference's own, once
+      }
+    }
+  }
+  list(ame = dplyr::bind_rows(amel), pred = dplyr::bind_rows(predl))
+}
+
+# reg_marginal_basis_warn() -- Phase 18z15's guard, hoisted out of the per-predictor loop so it runs
+# once per call whichever engine answered.
+#' @keywords internal
+reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, ratio) {
+  bv <- reg_basis_vars(fit, predictors)
+  if (!length(bv) || is.null(ame) || !nrow(ame)) return(invisible(NULL))
+  for (v in bv) {
+    if (reg_is_factor_var(data[[v]])) next
+    est <- ame$ame[ame$var == v]
+    if (length(est) != 1L) next
+    k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else 1
+    if (reg_marginal_basis_ok(fit, data, v, k, est, ratio)) next
+    cli::cli_warn(c(
+      "!" = paste0("The marginal effect of {.val {v}} is not trustworthy: it is fitted through a ",
+                   "basis expansion ({.code poly()} / {.code ns()}), which the marginal-effects ",
+                   "engine re-evaluates on perturbed data."),
+      "i" = 'Fit it with {.code shape = c({v} = "quadratic")} instead of a formula basis.'))
+  }
+  invisible(NULL)
+}
+
+reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
+                            at = "average", comparison = NULL, want_pred = TRUE,
+                            multiplier = NULL, want_se = TRUE) {
   ref_vals <- if (at == "reference") reg_reference_grid_values(data, predictors) else NULL
   ref_grid <- if (at == "reference")
     do.call(marginaleffects::datagrid, c(list(model = fit), ref_vals)) else NULL
@@ -2846,14 +2952,19 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else NA_real_
     if (is.finite(k) && k != 1 && !reg_is_factor_var(data[[v]])) stats::setNames(list(k), v) else v
   }
-  basis_vars <- reg_basis_vars(fit, predictors)
+  # Phase 20d: the delta-method jacobian is one full re-prediction PER COEFFICIENT (measured 7x the
+  # whole estimate), so it is not paid where the caller discards the interval -- reg_apply_display()'s
+  # fold pokes `pct`/`diff` into a column that keeps its own CI.
+  se_arg <- if (want_se) list() else list(vcov = FALSE)
   amelist <- purrr::map(predictors, function(v) {
     ac <- if (at == "reference")
       as.data.frame(do.call(marginaleffects::comparisons, c(
-        list(fit, variables = var_arg(v), newdata = ref_grid, conf_level = conf_level), cmp_arg)))
+        list(fit, variables = var_arg(v), newdata = ref_grid, conf_level = conf_level),
+        cmp_arg, se_arg)))
     else
       as.data.frame(do.call(marginaleffects::avg_comparisons, c(
-        list(fit, variables = var_arg(v), newdata = data, conf_level = conf_level), wts_arg, cmp_arg)))
+        list(fit, variables = var_arg(v), newdata = data, conf_level = conf_level),
+        wts_arg, cmp_arg, se_arg)))
     is_fac <- reg_is_factor_var(data[[v]])
     # The factor contrast label is "<Level> - <Reference>" (difference) or
     # "ln(odds(<Level>) / odds(<Reference>))" (comparison = "lnor"). Phase 14r: strip the KNOWN prefix +
@@ -2871,30 +2982,25 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
       substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
     }
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
-    est <- ac$estimate; lo <- ac$conf.low; hi <- ac$conf.high
+    est <- ac$estimate
+    # `vcov = FALSE` drops conf.low / conf.high / p.value from the result entirely.
+    lo <- ac$conf.low %||% rep(NA_real_, length(est))
+    hi <- ac$conf.high %||% rep(NA_real_, length(est))
+    pv <- ac$p.value %||% rep(NA_real_, length(est))
     if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # log-ratio -> OR / RR (and its CI)
-    # the basis-expansion guard, paid only where a basis exists (see reg_marginal_basis_ok)
-    if (!is_fac && at == "average" && length(est) == 1L && v %in% basis_vars &&
-        !reg_marginal_basis_ok(fit, data, v,
-                               if (!is.null(multiplier) && v %in% names(multiplier))
-                                 as.numeric(multiplier[[v]]) else 1, est, do_exp)) {
-      cli::cli_warn(c(
-        "!" = paste0("The marginal effect of {.val {v}} is not trustworthy: it is fitted through a ",
-                     "basis expansion ({.code poly()} / {.code ns()}), which the marginal-effects ",
-                     "engine re-evaluates on perturbed data."),
-        "i" = 'Fit it with {.code shape = c({v} = "quadratic")} instead of a formula basis.'))
-    }
     tibble::tibble(var = v, level = as.character(level), group = grp,
-                   ame = est, ame_lo = lo, ame_hi = hi, ame_p = ac$p.value)
+                   ame = est, ame_lo = lo, ame_hi = hi, ame_p = pv)
   })
   ame <- dplyr::bind_rows(amelist)
 
   predlist <- if (want_pred) purrr::map(predictors, function(v) {
     if (!reg_is_factor_var(data[[v]])) return(NULL)      # no per-level prediction for numerics
+    # Phase 20d: `vcov = FALSE` throughout -- only `$estimate` is ever read below, and the interval
+    # marginaleffects would build for it costs one re-prediction per coefficient (measured 4x).
     ap <- if (at == "reference") {
       grid_v <- do.call(marginaleffects::datagrid, c(list(model = fit),
         utils::modifyList(ref_vals, stats::setNames(list(levels(as.factor(data[[v]]))), v))))
-      as.data.frame(marginaleffects::predictions(fit, newdata = grid_v, conf_level = conf_level))
+      as.data.frame(marginaleffects::predictions(fit, newdata = grid_v, vcov = FALSE))
     } else {
       # Change A (decisions doc S50): the adjusted % is the marginal-STANDARDIZED prediction --
       # `variables = v` sets v to each level for the WHOLE sample (keeping every other covariate as
@@ -2903,7 +3009,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
       # would instead reproduce the estimation-sample OBSERVED rate (score-equation identity) and is not
       # adjusted. `by = v` would instead reproduce the estimation-sample OBSERVED rate.
       as.data.frame(do.call(marginaleffects::avg_predictions, c(
-        list(fit, variables = v, newdata = data, conf_level = conf_level), wts_arg)))
+        list(fit, variables = v, newdata = data, vcov = FALSE), wts_arg)))
     }
     grp <- if ("group" %in% names(ap)) as.character(ap$group) else NA_character_
     tibble::tibble(var = v, level = as.character(ap[[v]]), group = grp, pred = ap$estimate)
@@ -4165,7 +4271,7 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
                           at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
                           want_pred = prob_scale,
                           comparison = if (ratio_ame) "lnratioavg" else NULL,
-                          multiplier = multiplier)
+                          multiplier = multiplier, engine = reg_marginal_engine(sp_est))
     var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$outcome]])))
              else NA_real_
     if (per_category) {                            # one AME column per OUTCOME category (all levels)
@@ -4208,7 +4314,8 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
     sp_fam <- sp$fit_family
     sp_col <- sp$color
     marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                           at = "reference", comparison = "lnor", want_pred = FALSE)
+                           at = "reference", comparison = "lnor", want_pred = FALSE,
+                           engine = reg_marginal_engine(sp$est))
     groups <- levels(as.factor(f$data[[sp$outcome]]))
     purrr::map(groups, function(g) {
       jc  <- reg_cleanup(g, cleannames)
@@ -4251,11 +4358,15 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
                 col = col))
     }
   }
+  # ⚠ every arm is NAMED and an unknown value aborts: this used to fall through to the coefficient
+  # builder, so a typo'd `builder` silently built the wrong column. REG_BUILDERS is the vocabulary and
+  # a foreign key ties the two together in both directions (R/zzz-fact-keys.R).
   built_per_fit <- purrr::map2(fits, specs, function(f, sp)
     switch(sp$est$builder %||% "coef",
+           coef   = cols_coef(f, sp),
            ame    = cols_ame(f, sp),
            vsrest = cols_vsrest(f, sp),
-           cols_coef(f, sp)))
+           cli::cli_abort("Internal: unknown estimand builder {.val {sp$est$builder}}.")))
 
   built  <- purrr::flatten(built_per_fit)
   labels <- make.unique(purrr::map_chr(built, "label"))

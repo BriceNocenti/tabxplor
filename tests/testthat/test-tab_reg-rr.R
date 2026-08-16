@@ -209,7 +209,10 @@ test_that("ame_ratio == marginaleffects' lnratioavg contrast, exponentiated", {
   r  <- as.data.frame(marginaleffects::avg_comparisons(
     lg, variables = "race", comparison = "lnratioavg", newdata = d))
   expect_equal(unname(get_or(t[[nm]])[3:4]), unname(exp(r$estimate)),  tolerance = 1e-10)
-  expect_equal(unname(get_ci_inf(t[[nm]])[3:4]), unname(exp(r$conf.low)), tolerance = 1e-10)
+  # Phase 20d: the BOUND is looser than the estimate on purpose. Ours comes from an analytic jacobian,
+  # marginaleffects' from a finite-difference one, and its own step-size choice (fdforward vs fdcenter)
+  # moves this bound by ~4e-9 -- more than we differ from it. The oracle is the approximation here.
+  expect_equal(unname(get_ci_inf(t[[nm]])[3:4]), unname(exp(r$conf.low)), tolerance = 1e-7)
 })
 
 test_that("the ame_ratio cell is coherent: adjusted%(ref) * RR == adjusted%(level)", {

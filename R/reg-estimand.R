@@ -129,6 +129,18 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #                cross-family borrow (a binary marginal RATIO reuses REG_EMPIRICAL$rr$rr) -- IS
 #                these two columns.
 #   comparison   the marginaleffects `comparison =` value (NA = the additive default).
+#   engine       WHICH ENGINE computes this row's marginal quantities (Phase 20d):
+#                "gcomp"          -- tabxplor's own g-computation: one counterfactual sweep giving the
+#                                    estimate, the adjusted predictions and an ANALYTIC jacobian, whose
+#                                    delta-method interval reproduces marginaleffects to 1e-8 (measured,
+#                                    glm and weighted svyglm alike) at ~25x the speed;
+#                "marginaleffects"-- the numerical-jacobian route;
+#                "auto"           -- resolve by the rule below (the `crude_fam = "auto"` idiom).
+#                THE RULE, stated once in reg_marginal_engine(): everything but `at_reference`, whose
+#                contrast lives on a one-row profile grid that g-computation does not build (and which
+#                costs 2.4 s, not 45). It is a PERMISSION, not a promise: the producer returns NULL
+#                rather than a wrong number, and reg_marginal() then falls back for the WHOLE call --
+#                never a per-contrast mix, so one column always carries one convention.
 #   needs        a Suggests package this cell requires ("" = none).
 #   obs          may an `obs` (crude) value be attached cell by cell? FALSE at the reference profile,
 #                where the model is conditional and the observed columns stay marginal.
@@ -142,14 +154,38 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 # WARNING: the msgids in `why` / `note` are the ones `po/R-fr.po` already carries wherever the
 # phrase existed before -- do not re-word them in passing, or the French legend silently reverts to
 # English.
+# The two vocabularies the columns above are keyed on. `builder` names one of reg_build()'s three
+# column builders -- declared here, beside the column that chooses it, and policed BOTH ways by a
+# foreign key (R/zzz-fact-keys.R): tab_reg.R's dispatch had a silent fall-through arm, so a typo'd
+# builder quietly built a coefficient column.
+#' @keywords internal
+#' @noRd
+REG_BUILDERS <- c("coef", "ame", "vsrest")
+
+#' @keywords internal
+#' @noRd
+REG_MARGINAL_ENGINES <- c("gcomp", "marginaleffects")
+
+# ⚠ a new column goes in the DEFAULTED TAIL: the first eight arguments are passed positionally at
+# every one of the 36 call sites below, so a column inserted earlier shifts all of them in silence.
 #' @keywords internal
 #' @noRd
 est_row <- function(effect, measure, builder, fit, exp, word, scale, display,
                     crude_fam = "auto", crude_shape = NA_character_, comparison = NA_character_,
-                    needs = "", obs = TRUE, status = "ok", why = NULL, note = NULL) {
+                    needs = "", obs = TRUE, engine = "auto", status = "ok", why = NULL, note = NULL) {
   list(effect = effect, measure = measure, builder = builder, fit = fit, exp = exp, word = word,
        scale = scale, display = display, crude_fam = crude_fam, crude_shape = crude_shape,
-       comparison = comparison, needs = needs, obs = obs, status = status, why = why, note = note)
+       comparison = comparison, needs = needs, obs = obs, engine = engine,
+       status = status, why = why, note = note)
+}
+
+# reg_marginal_engine() -- THE rule `engine = "auto"` resolves to, and the ONE reader of the column.
+#' @keywords internal
+#' @noRd
+reg_marginal_engine <- function(est) {
+  e <- est$engine %||% "auto"
+  if (!identical(e, "auto")) return(e)
+  if (identical(est$effect, "at_reference")) "marginaleffects" else "gcomp"
 }
 
 # The three phrases the MARGINAL rows share, keyed by what the response scale is. Written once here
@@ -570,6 +606,9 @@ local({
       "no (effect, measure) cell is declared twice" = !anyDuplicated(keys),
       "every row's effect is a declared value"      =
         all(vapply(fr$rows, function(r) r$effect %in% REG_EFFECTS_VALUES, logical(1))),
+      "every row's engine is a declared value or auto" =
+        all(vapply(fr$rows, function(r)
+          (r$engine %||% "auto") %in% c(REG_MARGINAL_ENGINES, "auto"), logical(1))),
       "every impossible row says why"               =
         all(vapply(fr$rows, function(r) r$status == "ok" || is.function(r$why), logical(1))),
       "every buildable row has an estimand phrase"  =

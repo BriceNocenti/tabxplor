@@ -207,12 +207,16 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
       marginaleffects::avg_comparisons(g, variables = "age", comparison = "lnratioavg")
     else marginaleffects::avg_comparisons(g, variables = "age")
 
+    # Phase 20d: the ESTIMATE is exact (analytic g-computation, rel diff 0); the BOUND is looser on
+    # purpose -- ours comes from an analytic jacobian and marginaleffects' from a finite-difference
+    # one, whose own step-size choice (fdforward vs fdcenter) moves it by ~4e-9, more than we differ
+    # from it. The oracle is the approximation here.
     if (eff == "ratio") {
       expect_equal(get_or(t[["Obs_RR"]])[i],     exp(m$estimate), tolerance = 1e-10)
-      expect_equal(get_ci_inf(t[["Obs_RR"]])[i], exp(m$conf.low), tolerance = 1e-10)
+      expect_equal(get_ci_inf(t[["Obs_RR"]])[i], exp(m$conf.low), tolerance = 1e-7)
     } else {
       expect_equal(get_diff(t[["Obs_diff"]])[i],  m$estimate, tolerance = 1e-10)
-      expect_equal(get_ci_inf(t[["Obs_diff"]])[i], m$conf.low, tolerance = 1e-10)
+      expect_equal(get_ci_inf(t[["Obs_diff"]])[i], m$conf.low, tolerance = 1e-7)
     }
     # and it reaches the model column's `obs`, so `adjustment` can score it
     model_col <- names(t)[purrr::map_lgl(t, is_fmt)]

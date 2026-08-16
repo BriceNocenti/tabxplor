@@ -275,9 +275,12 @@ builders runs --- the table-scalar `if` is gone), `fit` (the internal family key
 Poisson, `"rd"` = identity link, `"mr"` = log-link pseudo-ML --- each a LINK chosen to reach a
 measure, never a distribution a user should name), `exp`, `word` (the column header), `scale` (the
 `EST_SCALES` key stamped on the column), `display`, `crude_fam` / `crude_shape` (which `REG_EMPIRICAL`
-row pairs with it), `comparison` (the `marginaleffects` contrast), `status` and two closures `why` /
-`note`. Read ONLY through `reg_measure_key()` / `reg_estimand()` / `reg_estimands_for()` /
-`reg_estimand_abort()`, with a build-time `stopifnot` keeping it coherent with `EST_SCALES`.
+row pairs with it), `comparison` (the marginal contrast), `engine` (WHICH engine computes this row's
+marginal quantities --- tabxplor's own g-computation or `marginaleffects`; `"auto"` resolves the rule
+once, in `reg_marginal_engine()`), `status` and two closures `why` / `note`. Read ONLY through
+`reg_measure_key()` / `reg_estimand()` / `reg_estimands_for()` / `reg_estimand_abort()`, with a
+build-time `stopifnot` keeping it coherent with `EST_SCALES`. ⚠ a new column goes in `est_row()`'s
+DEFAULTED TAIL: the first eight arguments are positional at all 36 call sites.
 
 **The vocabulary is `tab()`'s.** `measure`'s values ARE `EST_SCALES$geometry`, which is what
 `tab(color =)` resolves into --- *the argument names the geometry; the attribute names the row*. So
@@ -1769,12 +1772,30 @@ comment: `vcov(multinom)` is CATEGORY-MAJOR while `as.vector(coef())` is categor
 wrong SE), so the score columns are NAMED and a mismatch returns NULL; and `polr`'s bread is
 `vcov(fit)`, never `solve(fit$Hessian)` — `polr` optimises over `(β, ζ₁, log Δζ)`, and substituting the
 Hessian was measured up to 2× wrong here. `reg_ame_if_cat_maker()` adds the marginal IF per outcome
-category, its jacobian by central differences of a LOCAL predicted-probability function
-(`reg_prob_engine()`: softmax / cumulative logit). That local predictor is not a second implementation —
-it is the same arithmetic the score functions already need, one producer with two consumers — and it is
-policed the way `reg_crude_if_maker()` is: a test pins it to `marginaleffects::avg_comparisons()`, which
-it reproduces to 10 decimals. `svyolr` is refused (its `fit$var` is the design-based sandwich, not the
-bread), which is moot: `tab_reg()` already aborts a weighted 3+ level outcome with `effect = "ame"`.
+category, its jacobian from a LOCAL predicted-probability function (`reg_prob_engine()`: softmax /
+cumulative logit). That local predictor is not a second implementation — it is the same arithmetic the
+score functions already need, one producer with three consumers — and it is policed the way
+`reg_crude_if_maker()` is: a test pins it to `marginaleffects::avg_comparisons()`, which it reproduces
+to 10 decimals. `svyolr` is refused (its `fit$var` is the design-based sandwich, not the bread), which
+is moot: `tab_reg()` already aborts a weighted 3+ level outcome with `effect = "ame"`.
+
+**Phase 20d — the marginal effect is computed once.** An average marginal effect and both of its
+variances are ONE counterfactual sweep read three ways, so the sweep became its own producer:
+**`reg_gcomp_maker()`** (lm/glm/svyglm) and **`reg_gcomp_cat_maker()`** (multinom/polr, answering for
+every outcome category at once) return `est` / an ANALYTIC `G` / the empirical term `emp` / the adjusted
+means, and the two influence makers above are now their four-line wrappers — the 3+ level jacobian
+stops being central differences (`reg_prob_engine()` gained `dmean()`, the derivative of its own
+`probs()`), which is a ~1e-9 change in MNL/ordinal `gap_se` and a 2.4 s → 0.01 s change per contrast.
+The second consumer is new: **`reg_marginal_gcomp()`** (`R/tab_reg.R`) prints `est ± crit·`
+**`reg_delta_se(G, vcov(fit))`** through `reg_wald_finalize()`, replacing `marginaleffects`' numerical
+jacobian — one full re-prediction per coefficient, 71 % of a 10 s call. ⚠ **The two standard errors are
+different quantities and must not be swapped**: `reg_if_se()` is a sandwich variance *plus* the
+empirical-averaging term (measured up to 3.6 % away) and answers *is this effect different from its
+crude twin*; `reg_delta_se()` is what the interval PRINTS and reproduces `marginaleffects` to 1e-8 on
+glm and weighted svyglm alike. Which engine runs is declared per estimand row (`REG_ESTIMANDS$engine`,
+`"auto"` → everything but `at_reference`), the producer returns NULL rather than a wrong number, and
+`reg_marginal()` then falls back for the WHOLE call so one column carries one convention. Measured:
+binomial marginal 10.0 s → 1.2 s, multinomial marginal 45.2 s → 5.2 s.
 
 **`tab(OR = "cumOR")` and the `ordered` un-block.** The descriptive twin: for an ORDERED col_var with 3+
 levels under `pct = "row"`, cell *(i, j)* is the odds of falling at or below level *j* for row *i*

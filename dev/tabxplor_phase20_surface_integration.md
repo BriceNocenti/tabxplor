@@ -856,7 +856,7 @@ the influence function. **Declare where it applies as a `REG_ESTIMANDS` column**
 (`se = "analytic" | "numeric"`) rather than as an `if` — that is what makes this a key and not a
 patch.
 
-**Part 2 — the research question: can `marginaleffects` leave the hot path entirely?**
+**Part 2 — the research question: can `marginaleffects` leave the hot path entirely? Are there, at least, performance improvements to be done, closed-forms to be founds, etc. ?**
 ⚠ **This half is research first, implementation second. Use web searches — they are expected here,
 not a fallback.** The remaining 0.85 s is *not* arithmetic: an AME over n rows is a mean of a
 difference of two `plogis()` calls, which is milliseconds. Find out where the rest goes (`newdata`

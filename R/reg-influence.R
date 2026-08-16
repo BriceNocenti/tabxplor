@@ -14,14 +14,23 @@
 # dev/model_vs_observed_gap_test.md SS2-SS4.
 #
 # WHAT IS HERE. Pure matrix math over `stats` + `survey` -- no fmt types, no tabxplor classes. The
-# orchestration (which cells get a gap SE at all) lives in R/tab_reg.R's reg_gap_se_columns(), the only
-# caller. This is the ONE place in the package that calls survey::svyrecvar().
+# orchestration (which cells get a gap SE at all) lives in R/tab_reg.R's reg_gap_se_columns(); the
+# printed marginal effects are R/tab_reg.R's reg_marginal_gcomp(). This is the ONE place in the package
+# that calls survey::svyrecvar().
 #
 #   reg_if_from_parts(X, W, r)  the ONE formula, as a closure over a contrast
 #   reg_coef_if_maker(fit)      its fit adapter -- lm / glm / svyglm alike
 #   reg_crude_if_maker(...)     the observed side of a FACTOR row, in closed form (no fit at all)
+#   reg_counterfactual(...)     "the sample with `var` set to this level", shared by the two below
+#   reg_gcomp_maker(...)        THE marginal sweep: estimate + analytic jacobian + empirical term
+#   reg_gcomp_cat_maker(...)    its 3+ level twin, answering for every outcome category at once
 #   reg_ame_if_maker(...)       effect = "ame" / "ame_ratio" (the two-term marginal influence function)
 #   reg_if_se(d, design)        design-based when a design exists, IID otherwise
+#
+# Phase 20d -- the g-computation makers are the PRODUCERS and the influence makers their consumers,
+# because one sweep answers two questions: what does this marginal effect print (delta method, the
+# printed interval) and is it different from its crude twin (influence function, the colour). See
+# reg_gcomp_maker()'s own note for why those two variances differ and must not be swapped.
 #
 # Phase 18z9 -- TWO crude paths, by predictor kind. A factor's crude effect is a saturated one-factor
 # GLM, hence the closed form above; a CONTINUOUS predictor has no cells, so its crude leg is
@@ -167,29 +176,127 @@ reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, lin
   }
 }
 
-# reg_ame_if_maker() -- the marginal (g-computation) side. An average marginal effect is not a
-# coefficient: it depends on the empirical covariate distribution as well as on beta, so its influence
-# function has TWO terms (dev/model_vs_observed_gap_test.md SS3.4):
+# === G-COMPUTATION: THE MARGINAL SIDE ===========================================================
 #
-#   additive (effect = "ame"):     IF_i = wt_i (g_i - AME)      + IF^beta_i %*% G
-#   ratio    (effect = "ame_ratio"): IF_i = wt_i (mu1_i - M1)/M1 - wt_i (mu0_i - M0)/M0
-#                                          + IF^beta_i %*% (G1/M1 - G0/M0)
+# reg_counterfactual(data, var, lv) -- "what the sample would look like with `var` set to lv", the ONE
+# rule the two g-computation makers share.
 #
-# with g_i = mu1_i - mu0_i, wt_i = w_i / sum(w), and G the jacobian d(estimand)/d(beta). Verified: the
-# delta term alone reproduces marginaleffects' own standard error (it reports the delta method with the
-# covariates held fixed), and the full influence function adds the empirical-averaging term worth
-# ~0.1 % -- a real difference in the right direction, not a discrepancy.
-#
-# The counterfactual design matrices are built and released ONE LEVEL AT A TIME: `G` is a p-vector and
-# `g_i` a length-n vector, so peak memory stays X + one counterfactual.
-#
-# CONTRACT of the returned closure `(var, level, ref)`:
+# CONTRACT, shared by every closure built on it, `(var, level, ref)`:
 #   * `var` is a FACTOR  -- `level` / `ref` are level LABELS, and the counterfactual sets the whole
 #     column to that level (the classic "everyone at level j vs everyone at the reference").
 #   * `var` is NUMERIC   -- Phase 18z9: `level` / `ref` are SHIFTS added to the observed x, so the
 #     caller passes (k, 0) for a k-unit contrast. That is marginaleffects' own forward difference
-#     `variables = list(v = k)`, which is what the numeric AME column shows. The old code path assigned
-#     `as.character(lv)` unconditionally, turning a numeric column into character -- model.matrix() then
+#     `variables = list(v = k)`, which is what the numeric AME column shows. Assigning
+#     `as.character(lv)` unconditionally turned a numeric column into character -- model.matrix() then
+#     either errored (caught -> NULL, i.e. no test) or built the wrong contrast width.
+#
+# WARNING -- assign through `[<-`, never through a fresh factor(). `factor(lv, levels = levels(x))`
+# drops the `ordered` class, and an ordered predictor then gets TREATMENT contrasts where the fit used
+# polynomial ones: measured on gss `rincome`, an AME of 0.1038 instead of 0.0302, silently. It cannot
+# bite through tab_reg() -- Phase 14r's reg_fit() de-orders every factor predictor before fitting -- but
+# this function's argument is "a level label", and it must be right for one.
+#' @keywords internal
+reg_counterfactual <- function(data, var, lv) {
+  x <- data[[var]]
+  if (is.factor(x)) {
+    if (!as.character(lv) %in% levels(x)) return(NULL)   # an absent level is no answer, not an NA column
+    data[[var]][] <- as.character(lv)
+  } else if (is.numeric(x)) {
+    data[[var]] <- x + as.numeric(lv)
+  } else {
+    data[[var]] <- as.character(lv)
+  }
+  data
+}
+
+# reg_gcomp_maker() -- G-COMPUTATION for a single-equation fit (lm / glm / svyglm). An average marginal
+# effect and its two variances are the same sweep read three ways, so ONE producer computes all of it:
+#
+#   est   = mean_i w_i (mu1_i - mu0_i)   (or log(M1/M0))   the printed estimate
+#   G     = d(est)/d(beta)                                 the delta method's jacobian, ANALYTIC
+#   emp   = the empirical-averaging influence term
+#   mean1 / mean0                                          the counterfactual adjusted means (`pct`)
+#
+# TWO CONSUMERS, TWO VARIANCES, AND THEY MUST NOT BE SWAPPED (Phase 20d):
+#
+#   * the PRINTED interval is  est +- crit * sqrt(G' vcov(fit) G)  -- exactly marginaleffects' own
+#     quantity, which it reaches by a NUMERICAL derivative costing one full re-prediction per
+#     coefficient (measured: 5.9 s, against 0.8 s with vcov = FALSE, on 13 000 rows x 14 coefficients).
+#     Ours agrees with it to 1e-8 on estimate, standard error, both bounds and the p-value, on glm and
+#     weighted svyglm alike.
+#   * the GAP test needs the INFLUENCE FUNCTION, `emp + IF^beta %*% G` (reg_ame_if_maker below), because
+#     only an influence function carries the covariance between the model effect and its crude twin:
+#
+#       additive (effect = "ame"):       IF_i = wt_i (g_i - AME)       + IF^beta_i %*% G
+#       ratio    (effect = "ame_ratio"): IF_i = wt_i (mu1_i - M1)/M1 - wt_i (mu0_i - M0)/M0
+#                                              + IF^beta_i %*% (G1/M1 - G0/M0)
+#
+#     with g_i = mu1_i - mu0_i and wt_i = w_i / sum(w) (dev/model_vs_observed_gap_test.md SS3.4).
+#
+# That influence-function standard error is a SANDWICH variance and adds the empirical-averaging term;
+# measured against marginaleffects it differs by up to 3.6 % on a rare level. It is the better answer to
+# "is this effect different from that one" and the wrong answer to "what interval does this AME print".
+#
+# The counterfactual design matrices are built and released ONE LEVEL AT A TIME: `G` is a p-vector and
+# `g_i` a length-n vector, so peak memory stays X + one counterfactual.
+#' @keywords internal
+reg_gcomp_maker <- function(fit, data, wt, ratio) {
+  tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
+  fam <- tryCatch(stats::family(fit), error = function(e) NULL)
+  if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
+  b    <- stats::coef(fit)
+  keep <- !is.na(b)
+  bk   <- b[keep]
+  w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
+  sw <- sum(w)
+  cf <- function(lv, var) {                       # the counterfactual model matrix at one level/shift
+    d <- reg_counterfactual(data, var, lv)
+    if (is.null(d)) return(NULL)
+    X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
+    if (is.null(X) || ncol(X) != length(b)) return(NULL)
+    X[, keep, drop = FALSE]
+  }
+  function(var, level, ref) {
+    X1 <- cf(level, var); X0 <- cf(ref, var)
+    if (is.null(X1) || is.null(X0)) return(NULL)
+    e1 <- as.vector(X1 %*% bk);  e0 <- as.vector(X0 %*% bk)
+    m1 <- fam$linkinv(e1);       m0 <- fam$linkinv(e0)
+    d1 <- fam$mu.eta(e1);        d0 <- fam$mu.eta(e0)
+    if (!all(is.finite(m1)) || !all(is.finite(m0))) return(NULL)
+    M1 <- sum(w * m1) / sw; M0 <- sum(w * m0) / sw
+    if (ratio) {
+      if (!isTRUE(M1 > 0) || !isTRUE(M0 > 0)) return(NULL)
+      est <- log(M1 / M0)
+      emp <- w * (m1 - M1) / (sw * M1) - w * (m0 - M0) / (sw * M0)
+      G   <- colSums(w * X1 * d1) / (sw * M1) - colSums(w * X0 * d0) / (sw * M0)
+    } else {
+      est <- sum(w * (m1 - m0)) / sw
+      emp <- w * ((m1 - m0) - est) / sw
+      G   <- colSums(w * (X1 * d1 - X0 * d0)) / sw
+    }
+    list(est = est, G = G, emp = emp, mean1 = M1, mean0 = M0)
+  }
+}
+
+# reg_ame_if_maker() -- the g-computation above wearing its influence-function hat: the empirical term
+# plus the coefficient influence carried along the jacobian.
+#' @keywords internal
+reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
+  if (is.null(coef_if)) return(NULL)
+  g <- reg_gcomp_maker(fit, data, wt, ratio)
+  if (is.null(g)) return(NULL)
+  function(var, level, ref) {
+    p <- g(var, level, ref)
+    if (is.null(p)) return(NULL)
+    delta <- coef_if(unname(p$G))
+    if (is.null(delta)) return(NULL)
+    emp <- reg_if_align(p$emp, length(delta), data[[svy_row_col]])
+    if (is.null(emp)) return(NULL)
+    emp + delta
+  }
+}
+
 
 # === 3+ LEVEL OUTCOMES (Phase 18z10) ============================================================
 #
@@ -284,16 +391,23 @@ reg_score_polr <- function(fit) {
 }
 
 # The predicted-probability function of a 3+ level fit, as a PARAMETER-VECTOR closure -- the one piece
-# a finite-difference jacobian needs and neither package exposes. Returns list(theta, probs(theta, X),
-# mm(newdata)); NULL for anything else.
+# neither package exposes. Returns list(theta, levels, mm(newdata), probs(theta, X),
+# dmean(X, P, j, w)); NULL for anything else.
 #
 # DESIGN -- why a local predictor is not a duplicate implementation. marginaleffects computes its
 # delta-method standard errors from an internal jacobian it does not expose as an attribute (checked),
 # and perturbing the fit and re-calling it p+1 times costs ~4.6 s per table. The local softmax /
 # cumulative-logit IS the same arithmetic the SCORE functions above already need, so there is ONE
-# predictor with two consumers, not two predictors. It is policed the way reg_crude_if_maker() is: a
+# predictor with three consumers, not three predictors. It is policed the way reg_crude_if_maker() is: a
 # test pins the local AME to marginaleffects::avg_comparisons() (which it reproduces to 8 significant
 # digits) rather than to a hand-written expectation.
+#
+# `dmean(X, P, j, w)` is Phase 20d's addition: d/d(theta) of `sum_i w_i P_ij`, ANALYTIC, in the SAME
+# parameter order as `theta` and `vcov(fit)`. It is the derivative of `probs` above, so it belongs to
+# the one predictor rather than beside a caller, and it is what lets both the printed interval and the
+# gap test read one jacobian. It replaced a central-difference jacobian that cost 2.4 s PER CONTRAST
+# (44 re-predictions on a 21 000-row frame); the analytic one is 6.6 ms and agrees with it, and with
+# marginaleffects' standard error, to ~1e-9.
 #' @keywords internal
 reg_prob_engine <- function(fit) {
   tt <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
@@ -315,6 +429,13 @@ reg_prob_engine <- function(fit) {
         p  <- E / rowSums(E)
         colnames(p) <- lev
         p
+      },
+      # softmax: d p_ij / d beta_{c,m} = p_ij (1{j == c} - p_ic) x_im, for the K-1 NON-reference
+      # categories c (column 1 of P is the reference and has no coefficients). Column-major over
+      # (c, m) == `as.vector(t(B))` == CATEGORY-MAJOR, the order `theta` and `vcov` already use.
+      dmean = function(X, P, j, w) {
+        as.vector(vapply(seq_len(ncol(P))[-1L], function(cc)
+          colSums((w * P[, j] * ((j == cc) - P[, cc])) * X), numeric(ncol(X))))
       }))
   }
   if (inherits(fit, "polr") && !inherits(fit, "svyolr")) {
@@ -339,15 +460,78 @@ reg_prob_engine <- function(fit) {
         p   <- cbind(cum, 1) - cbind(0, cum)
         colnames(p) <- lev
         p
+      },
+      # cumulative logit: P_ij = F(z_j - eta_i) - F(z_{j-1} - eta_i), with F(z_0 - eta) := 0 and
+      # F(z_K - eta) := 1, so both densities vanish at the outer categories. Hence
+      #   d P_ij / d b_m  = (f(z_{j-1} - eta) - f(z_j - eta)) x_im
+      #   d P_ij / d z_k  =  f(z_j - eta) 1{k == j} - f(z_{j-1} - eta) 1{k == j-1}
+      # in `theta`'s own order, c(beta, zeta).
+      dmean = function(X, P, j, w) {
+        eta <- as.vector(X %*% unname(b))
+        n0  <- numeric(length(eta))
+        fhi <- if (j <= length(z))  stats::dlogis(z[[j]]      - eta) else n0
+        flo <- if (j >= 2L)         stats::dlogis(z[[j - 1L]] - eta) else n0
+        c(colSums((w * (flo - fhi)) * X),
+          vapply(seq_along(z), function(k) {
+            v <- n0
+            if (k == j)      v <- v + fhi
+            if (k == j - 1L) v <- v - flo
+            sum(w * v)
+          }, numeric(1)))
       }))
   }
   NULL
 }
 
+# reg_gcomp_cat_maker() -- reg_gcomp_maker()'s twin for a 3+ level outcome. Same closure contract, one
+# difference that is forced by the shape of the table: a multinomial / ordinal model shows ONE COLUMN
+# PER OUTCOME CATEGORY, so the closure answers for ALL of them at once. The two counterfactual
+# probability matrices are what costs anything, and they serve every category, so producing them once
+# is also what makes this cheaper than asking per category.
+#' @keywords internal
+reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
+  eng <- reg_prob_engine(fit)
+  if (is.null(eng)) return(NULL)
+  w <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
+  sw <- sum(w)
+  cf <- function(lv, var) {
+    d <- reg_counterfactual(data, var, lv)
+    if (is.null(d)) return(NULL)
+    eng$mm(d)
+  }
+  function(var, level, ref) {
+    X1 <- cf(level, var); X0 <- cf(ref, var)
+    if (is.null(X1) || is.null(X0)) return(NULL)
+    P1 <- tryCatch(eng$probs(eng$theta, X1), error = function(e) NULL)
+    P0 <- tryCatch(eng$probs(eng$theta, X0), error = function(e) NULL)
+    if (is.null(P1) || is.null(P0) || !all(is.finite(P1)) || !all(is.finite(P0))) return(NULL)
+    K <- length(eng$levels)
+    est <- M1 <- M0 <- numeric(K)
+    G <- emp <- vector("list", K)
+    for (j in seq_len(K)) {
+      p1 <- P1[, j]; p0 <- P0[, j]
+      M1[j] <- sum(w * p1) / sw; M0[j] <- sum(w * p0) / sw
+      g1 <- eng$dmean(X1, P1, j, w); g0 <- eng$dmean(X0, P0, j, w)
+      if (ratio) {
+        if (!isTRUE(M1[j] > 0) || !isTRUE(M0[j] > 0)) return(NULL)
+        est[j]   <- log(sum(w * p1) / sum(w * p0))
+        emp[[j]] <- w * (p1 - M1[j]) / (sw * M1[j]) - w * (p0 - M0[j]) / (sw * M0[j])
+        G[[j]]   <- g1 / (sw * M1[j]) - g0 / (sw * M0[j])
+      } else {
+        est[j]   <- sum(w * (p1 - p0)) / sw
+        emp[[j]] <- w * ((p1 - p0) - est[j]) / sw
+        G[[j]]   <- (g1 - g0) / sw
+      }
+      if (!is.finite(est[j])) return(NULL)
+    }
+    list(levels = eng$levels, est = est, G = G, emp = emp, mean1 = M1, mean0 = M0)
+  }
+}
+
 # reg_ame_if_cat_maker() -- the marginal influence function for a 3+ level outcome, ONE outcome
-# category at a time (each model column shows one). Same two-term shape as reg_ame_if_maker(); only the
-# jacobian G is obtained by finite differences of the local AME instead of analytically, because a
-# softmax / cumulative-logit derivative has no `mu.eta` to read it off.
+# category at a time (each model column shows one). The g-computation above, plus the score-based
+# coefficient influence: same two-term shape as reg_ame_if_maker().
 #' @keywords internal
 reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   eng <- reg_prob_engine(fit)
@@ -357,101 +541,14 @@ reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   if (is.null(cif)) return(NULL)
   j <- match(as.character(category), eng$levels)
   if (is.na(j)) return(NULL)
-  w <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
-  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
-  sw <- sum(w)
-  cf <- function(lv, var) {
-    d <- data; x <- data[[var]]
-    d[[var]] <- if (is.factor(x)) factor(as.character(lv), levels = levels(x))
-                else if (is.numeric(x)) x + as.numeric(lv)
-                else as.character(lv)
-    eng$mm(d)
-  }
+  g <- reg_gcomp_cat_maker(fit, data, wt, ratio)
+  if (is.null(g)) return(NULL)
   function(var, level, ref) {
-    X1 <- cf(level, var); X0 <- cf(ref, var)
-    if (is.null(X1) || is.null(X0)) return(NULL)
-    est <- function(th) {
-      p1 <- tryCatch(eng$probs(th, X1)[, j], error = function(e) NULL)
-      p0 <- tryCatch(eng$probs(th, X0)[, j], error = function(e) NULL)
-      if (is.null(p1) || is.null(p0)) return(NULL)
-      list(p1 = p1, p0 = p0)
-    }
-    m <- est(eng$theta)
-    if (is.null(m) || !all(is.finite(m$p1)) || !all(is.finite(m$p0))) return(NULL)
-    val <- function(pp) if (ratio) log(sum(w * pp$p1) / sum(w * pp$p0))
-                        else       sum(w * (pp$p1 - pp$p0)) / sw
-    A  <- val(m)
-    if (!is.finite(A)) return(NULL)
-    # the empirical-averaging term (the same two shapes reg_ame_if_maker uses)
-    if (ratio) {
-      M1 <- sum(w * m$p1) / sw; M0 <- sum(w * m$p0) / sw
-      if (!isTRUE(M1 > 0) || !isTRUE(M0 > 0)) return(NULL)
-      emp <- w * (m$p1 - M1) / (sw * M1) - w * (m$p0 - M0) / (sw * M0)
-    } else {
-      emp <- w * ((m$p1 - m$p0) - A) / sw
-    }
-    # the delta term: G = d(estimand)/d(theta) by central differences (one perturbation per parameter
-    # serves every contrast in this call; ~140 ms for 20 parameters, measured).
-    th <- eng$theta
-    h  <- pmax(1e-5, abs(th) * 1e-5)
-    G  <- vapply(seq_along(th), function(r) {
-      tp <- th; tp[r] <- tp[r] + h[r]; up <- est(tp)
-      tm <- th; tm[r] <- tm[r] - h[r]; dn <- est(tm)
-      if (is.null(up) || is.null(dn)) return(NA_real_)
-      (val(up) - val(dn)) / (2 * h[r])
-    }, numeric(1))
-    if (anyNA(G)) return(NULL)
-    delta <- cif(G)
+    p <- g(var, level, ref)
+    if (is.null(p)) return(NULL)
+    delta <- cif(p$G[[j]])
     if (is.null(delta)) return(NULL)
-    emp <- reg_if_align(emp, length(delta), data[[svy_row_col]])
-    if (is.null(emp)) return(NULL)
-    emp + delta
-  }
-}
-
-#     either errored (caught -> NULL, i.e. no test) or built the wrong contrast width.
-#' @keywords internal
-reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
-  if (is.null(coef_if)) return(NULL)
-  tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
-  fam <- tryCatch(stats::family(fit), error = function(e) NULL)
-  if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
-  b    <- stats::coef(fit)
-  keep <- !is.na(b)
-  bk   <- b[keep]
-  w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
-  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
-  sw <- sum(w)
-  cf <- function(lv, var) {                       # the counterfactual model matrix at one level/shift
-    d <- data
-    x <- data[[var]]
-    d[[var]] <- if (is.factor(x)) factor(as.character(lv), levels = levels(x))
-                else if (is.numeric(x)) x + as.numeric(lv)
-                else as.character(lv)
-    X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
-    if (is.null(X) || ncol(X) != length(b)) return(NULL)
-    X[, keep, drop = FALSE]
-  }
-  function(var, level, ref) {
-    X1 <- cf(level, var); X0 <- cf(ref, var)
-    if (is.null(X1) || is.null(X0)) return(NULL)
-    e1 <- as.vector(X1 %*% bk);  e0 <- as.vector(X0 %*% bk)
-    m1 <- fam$linkinv(e1);       m0 <- fam$linkinv(e0)
-    d1 <- fam$mu.eta(e1);        d0 <- fam$mu.eta(e0)
-    if (!all(is.finite(m1)) || !all(is.finite(m0))) return(NULL)
-    if (ratio) {
-      M1 <- sum(w * m1) / sw; M0 <- sum(w * m0) / sw
-      if (!isTRUE(M1 > 0) || !isTRUE(M0 > 0)) return(NULL)
-      emp <- w * (m1 - M1) / (sw * M1) - w * (m0 - M0) / (sw * M0)
-      G   <- colSums(w * X1 * d1) / (sw * M1) - colSums(w * X0 * d0) / (sw * M0)
-    } else {
-      A   <- sum(w * (m1 - m0)) / sw
-      emp <- w * ((m1 - m0) - A) / sw
-      G   <- colSums(w * (X1 * d1 - X0 * d0)) / sw
-    }
-    delta <- coef_if(unname(G))
-    if (is.null(delta)) return(NULL)
-    emp <- reg_if_align(emp, length(delta), data[[svy_row_col]])
+    emp <- reg_if_align(p$emp[[j]], length(delta), data[[svy_row_col]])
     if (is.null(emp)) return(NULL)
     emp + delta
   }
@@ -472,6 +569,25 @@ reg_if_align <- function(v, n, des_rows) {
   at <- svy_row_at(n, suppressWarnings(as.integer(des_rows)))
   if (is.null(at) || length(at) != length(v)) return(NULL)
   out <- numeric(n); out[at] <- v; out
+}
+
+# reg_delta_se() -- the standard error a g-computed quantity PRINTS: the delta method, sqrt(G' V G),
+# with V the fit's own variance-covariance matrix. It is marginaleffects' quantity exactly (measured to
+# 1e-8 on glm and weighted svyglm alike); the difference is that G comes from reg_gcomp_maker()
+# analytically instead of from p+1 numerical re-predictions. On an svyglm, `vcov(fit)` is already the
+# design-based sandwich, so a survey design is right by construction and needs no branch here.
+# ⚠ NOT interchangeable with reg_if_se() below -- see reg_gcomp_maker()'s note on the two variances.
+#' @keywords internal
+reg_delta_se <- function(G, V) {
+  if (is.null(G) || is.null(V) || !is.matrix(V)) return(NA_real_)
+  g <- as.numeric(G)
+  if (!length(g) || anyNA(g) || nrow(V) != ncol(V) || length(g) != nrow(V)) return(NA_real_)
+  nm <- names(G)
+  if (!is.null(nm) && !is.null(rownames(V)) && all(nm %in% rownames(V)))
+    V <- V[nm, nm, drop = FALSE]                     # by NAME where both carry one, position otherwise
+  v <- as.numeric(t(g) %*% V %*% g)
+  if (!isTRUE(is.finite(v)) || v < 0) return(NA_real_)
+  sqrt(v)
 }
 
 # reg_if_se() -- the standard error of a quantity whose per-observation influence contributions are `d`.

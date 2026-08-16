@@ -459,7 +459,13 @@ R/
 │                              user should name), `exp`, `word` (the header), `scale` (the
 │                              EST_SCALES key stamped on the column), `display`, `crude_fam` /
 │                              `crude_shape` (which REG_EMPIRICAL row pairs with it),
-│                              `comparison` (the marginaleffects contrast), `status` + the `why` /
+│                              `comparison` (the marginal contrast), 20d's `engine` (WHICH engine
+│                              computes this row's marginal quantities: "gcomp" = tabxplor's own
+│                              analytic g-computation | "marginaleffects" | "auto" = the rule, stated
+│                              ONCE in reg_marginal_engine(): everything but `at_reference`, whose
+│                              one-row profile grid g-computation does not build. It is a PERMISSION,
+│                              not a promise -- the producer returns NULL and reg_marginal() falls back
+│                              for the WHOLE call, never a per-contrast mix), `status` + the `why` /
 │                              `note` closures (gettext at render, statically extractable). It
 │                              replaced a FOUR-argument product (family x effect x at x
 │                              exponentiate = 36 cells for 9 estimands, 3 degrade blocks, 2 aborts,
@@ -575,7 +581,7 @@ R/
 │                              which is what z13/z16 stored them per column FOR. Reports the STORED
 │                              values, so `conf_level = NA` honestly means "no interval was stamped".
 ├── zzz-fact-keys.R  (~250 L) Phase 20a (KEY 2): REFERENTIAL INTEGRITY between the declared fact
-│                              tables. **TAB_FOREIGN_KEYS** = 34 declared edges (from / get / to /
+│                              tables. **TAB_FOREIGN_KEYS** = 51 declared edges (from / get / to /
 │                              allow / orphan), read only through tx_check_foreign_keys(), which runs
 │                              at LOAD -- a key written by hand in one table and read by name in
 │                              another is a FOREIGN KEY, and a dangling one breaks the build at the
@@ -601,6 +607,12 @@ R/
 │                              TAB_ARGS -- `formals(tab)` does not exist while R/tab-args.R is being
 │                              sourced. ⚠ rlang::is_missing(), never is.symbol(): merely touching a
 │                              no-default formal raises "argument is missing".
+│                              20d: +2 edges on the two vocabularies reg_build() dispatches on --
+│                              REG_ESTIMANDS' `builder` -> REG_BUILDERS and `engine` ->
+│                              REG_MARGINAL_ENGINES (allow "auto"). The other direction of `builder`
+│                              is reg_build()'s own `switch()`, whose arms are all NAMED and whose
+│                              default now ABORTS -- it used to fall through to the coefficient
+│                              builder, so a typo built the wrong column in silence.
 ├── tab-counts.R     (~430 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize.
 │                              19i: its ~15 copy-pasted boundary lines are ONE
@@ -1021,7 +1033,33 @@ R/
 │                              `producers`) and color_signif_rd; `{VALUES}` in a `doc` is where the
 │                              generated list is spliced. ⚠ read the rows with `[[`, never `$`:
 │                              `r$values` partial-matches `values_from`.
-├── tab_reg.R       (~5490 L)  Phase 20c (KEY 4 + KEY 5): the SURFACE is one word per question --
+├── tab_reg.R       (~5590 L)  Phase 20d (KEY 7): **reg_marginal() is a DISPATCHER** between two
+│                              engines, reading the estimand row's declared `engine`. The fast one is
+│                              **reg_marginal_gcomp()** -- one counterfactual sweep per (predictor,
+│                              level) over R/reg-influence.R's reg_gcomp_maker() /
+│                              reg_gcomp_cat_maker(), printing est +- crit * reg_delta_se(G, vcov(fit))
+│                              through the existing reg_wald_finalize(), and taking the adjusted
+│                              predictions from the SAME sweep (so the whole avg_predictions() pass
+│                              disappears). The slow one is **reg_marginal_me()**, today's body
+│                              verbatim. It returns the SAME shape, so reg_marginal_column() /
+│                              cols_ame() / cols_vsrest() / reg_apply_display() / reg_empirical_fit()
+│                              are untouched; a NULL from the fast route falls back for the WHOLE call
+│                              (never a per-contrast mix -- one column, one convention). Measured
+│                              10.0 s -> 1.2 s (binomial) and 45.2 s -> 5.2 s (multinomial).
+│                              + `want_se = FALSE` and `vcov = FALSE` wherever the interval is
+│                              DISCARDED (reg_apply_display's fold keeps the column's own CI; the
+│                              prediction pass only ever reads $estimate) -- byte-identical estimates,
+│                              4-7x on those calls, and it helps the routes that stay numeric.
+│                              + reg_marginal_basis_warn() = 18z15's poly()/ns() guard, HOISTED out of
+│                              the per-predictor loop so it runs once whichever engine answered (both
+│                              build the counterfactual by re-evaluating the formula, so both can be
+│                              silently wrong on a basis expansion).
+│                              ⚠ reg_empirical_fit()'s marginal branch assigned its per-predictor
+│                              estimates to `est` -- ALSO its estimand-row argument. Latent while
+│                              nothing read that argument twice; the moment the engine is read off it
+│                              per predictor, every predictor after the first aborted inside a
+│                              tryCatch and lost its `obs` in silence.
+│                              Phase 20c (KEY 4 + KEY 5): the SURFACE is one word per question --
 │                              `dependent`->**`outcome`** (package-wide: the formal, `deps$outcome`,
 │                              `n_outcomes`, `reg_per_outcome()`, `reg_measures(data, outcome)` and
 │                              the `test` tibble's DECLARED column), `split_var`->**`tab_vars`**,
@@ -1245,7 +1283,7 @@ R/
 │                              multinomial refused), rd_qq (the analytic Beta band), rd_thin/rd_with_seed,
 │                              reg_curves (-> meta$assumptions, drawn on skeleton_data at the MODELLED
 │                              level, NULL with several outcomes)
-├── reg-influence.R  (~495 L) Phase 18z8-B: influence functions + the SE of the gap between two
+├── reg-influence.R  (~620 L) Phase 18z8-B: influence functions + the SE of the gap between two
 │                              estimators on the SAME rows (the covariance no arithmetic on the two
 │                              printed intervals recovers). Pure matrix math; the package's ONLY
 │                              survey::svyrecvar() caller; every fn returns NULL, never a wrong number.
@@ -1256,6 +1294,32 @@ R/
 │                              == the Woolf SE the Obs_OR column prints); reg_ame_if_maker (the
 │                              two-term marginal IF, == marginaleffects' SE); reg_if_se (svyrecvar
 │                              with a design == SE(svyglm) exactly, else sum of squares).
+│                              20d (KEY 7): **THE G-COMPUTATION PRODUCERS**, because an average
+│                              marginal effect and BOTH its variances are ONE counterfactual sweep read
+│                              three ways. **reg_gcomp_maker(fit, data, wt, ratio)** (lm/glm/svyglm) and
+│                              **reg_gcomp_cat_maker()** (multinom/polr, answering for EVERY outcome
+│                              category at once -- the two probability matrices serve them all) return
+│                              a closure (var, level, ref) -> list(est, G [ANALYTIC], emp, mean1,
+│                              mean0); the two IF makers are now their four-line wrappers, the
+│                              single-equation one BYTE-IDENTICAL by construction. The 3+ level jacobian
+│                              stops being central differences -- reg_prob_engine() gained **dmean()**,
+│                              the derivative of its own probs() (softmax: p_j(1{j=c}-p_c)x; cumulative
+│                              logit: the two densities at the cuts), so that predictor now has THREE
+│                              consumers, not two: 2.4 s -> 6.6 ms per contrast, ~1e-9 on gap_se.
+│                              + **reg_delta_se(G, V)** = the standard error a marginal effect PRINTS,
+│                              sqrt(G' vcov(fit) G). ⚠ IT IS NOT reg_if_se(): the influence-function SE
+│                              is a SANDWICH variance PLUS the empirical-averaging term (measured up to
+│                              3.6 % away on a rare level) and answers "is this effect different from
+│                              its crude twin"; reg_delta_se is marginaleffects' own quantity (1e-8 on
+│                              glm and weighted svyglm alike) and answers "what interval does this
+│                              print". Two questions, two variances, never swapped.
+│                              + reg_counterfactual(data, var, lv) = the ONE "sample with var set to
+│                              this level" rule both makers share. ⚠ it assigns through `[<-`, never
+│                              factor(): a fresh factor() DROPS `ordered`, so an ordered predictor got
+│                              TREATMENT contrasts where the fit used polynomial ones (measured on gss
+│                              rincome: AME 0.1038 instead of 0.0302). It cannot bite through tab_reg()
+│                              -- 14r's reg_fit() de-orders predictors -- but the argument is "a level
+│                              label" and must be right for one.
 │                              z9: reg_ame_if_maker's counterfactual gained a NUMERIC arm -- (level, ref)
 │                              are SHIFTS on the observed x, so (k, 0) is the k-unit forward difference
 │                              the AME columns show (it used to coerce the column to character).
@@ -1266,8 +1330,8 @@ R/
 │                              returns NULL not a wrong number; bread is ALWAYS vcov(), never
 │                              solve(polr$Hessian) -- measured 99% off), reg_prob_engine (the local
 │                              softmax / cumulative logit, one producer for the score AND the jacobian)
-│                              + reg_ame_if_cat_maker (the per-category marginal IF, jacobian by
-│                              central differences; pinned to marginaleffects to 10 decimals).
+│                              + reg_ame_if_cat_maker (the per-category marginal IF; pinned to
+│                              marginaleffects to 10 decimals).
 │                              z14-iii: reg_if_align(v, n, des_rows) over svy_row_at() = the ONE
 │                              row-space alignment. `[` does not drop rows on a CALIBRATED/PPS design,
 │                              so svy_domain_design pads the fit's and svyglm keeps the zero-weight
@@ -2282,6 +2346,119 @@ No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** 
 **FOLLOW-UPS.** 19j can start on this commit — the leaf now owns its whole head and tail, which is
 what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_signif` note above.
 19l: the deprecation-warning corpus migration (133 remain).
+
+---
+
+
+
+#### Phase 20d — KEY 7: marginal effects, computed once and computed fast
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6894**, against the
+inherited FAIL 0 / WARN 58 / PASS 6777 — same warning count, +117 assertions, nothing red.
+`dev/verify_reg_specs.R` prints **IDENTICAL over all 290 cases** (every message, spec, column
+attribute, label and test key), against a baseline saved on the untouched tree.
+
+**The measured result.** `marginaleffects` leaves the hot path entirely on the `at = "average"` route:
+
+| case (gss, 21 483 rows; warm, min of 2) | before | after | |
+|---|---|---|---|
+| `effect = "marginal"` (binomial, 4 predictors) | 8.69 s | **0.59 s** | 14.7x |
+| `effect = "marginal", measure = "ratio"` | 8.46 s | **0.42 s** | 20.3x |
+| `effect = "marginal", empirical = TRUE` | 9.21 s | **0.66 s** | 14.0x |
+| `display = "ame"` (the fold onto a coefficient column) | 6.61 s | **0.40 s** | 16.4x |
+| `effect = "marginal"` (3-level **multinomial**) | 36.39 s | **3.43 s** | 10.6x |
+| `effect = "coefficient"` / `at_reference` (untouched) | 0.27 / 1.23 s | 0.28 / 1.26 s | 1.0x |
+
+**The brief's own route would have been a defect, and that is the phase's most important finding.**
+19o and the plan of plans both said "supply the SE from the influence function". Measured, that
+substitution moves printed standard errors by **up to 3.6 %** on a rare level — `reg_coef_if_maker()`
+is a *sandwich* variance (empirical information, not `vcov(fit)`) **and** the full IF adds the
+empirical-averaging term. The phase's own ruling is "a change in the last printed decimal is
+acceptable, a change anywhere else is a defect", so the printed interval takes the **analytic delta**,
+`sqrt(G' vcov(fit) G)`, which reproduces `marginaleffects` to **1e-8** on estimate, standard error,
+both bounds *and* the p-value, on `glm` and weighted `svyglm` alike. The full IF stays exactly where
+it was, in the adjustment-gap test. **Two different questions — *how uncertain is this AME* vs *is it
+different from its crude twin* — correctly answered by two different variances**, and that is now
+said in the code (`reg_delta_se()` beside `reg_if_se()`, each pointing at the other).
+
+**The producers (`R/reg-influence.R`).** An AME, its adjusted predictions and both variances are ONE
+counterfactual sweep read three ways, so the sweep became its own producer: **`reg_gcomp_maker()`**
+(lm/glm/svyglm) and **`reg_gcomp_cat_maker()`** (multinom/polr). The two influence makers are now
+their four-line wrappers — the single-equation one **byte-identical by construction** (same
+arithmetic, same order), locked by the existing 1e-10/1e-12 pins. Details in the Repository Map.
+
+**The 3+ level half was NOT in the brief.** A 3-level multinomial AME was measured at **45.2 s**
+(against 4.4 s for coefficients) — worse than the binomial case that motivated the phase — and its
+existing central-difference jacobian cost **2.4 s per contrast**, i.e. it was never a fast path. The
+analytic softmax / cumulative-logit jacobian is the derivative of the function `reg_prob_engine()`
+already implements, so it was validated against **both** oracles before being written into the plan:
+marginaleffects (multinomial SE 1.06e-09; ordinal 5.3e-09 … 3.0e-08, every category; estimates exact)
+and the package's own central-difference jacobian. `reg_prob_engine()` gained `dmean()` and now has
+three consumers instead of two.
+
+**`vcov = FALSE` wherever the interval is discarded** — byte-identical estimates, and it is what
+helps the routes that stay numeric: the prediction pass only ever reads `$estimate`, and
+`reg_apply_display()`'s fold pokes `pct`/`diff` into a column that keeps its own CI (a new
+`want_se = FALSE`).
+
+**Two defects found, each with the fixture that fails without it.**
+
+1. ⚠ **`reg_empirical_fit()` clobbered its own `est` argument.** Its marginal branch assigned the
+   per-predictor estimates to `est` — which is *also* the estimand-row argument. Harmless while
+   nothing read that argument twice; the moment the engine is read off it per predictor, **every
+   predictor after the first aborted inside a `tryCatch` and lost its `obs` in silence**. `obs` is
+   what `color = "adjustment"` scores, so nothing in the printed values showed it. Caught by
+   `verify_reg_specs.R` (one changed case), which is exactly what that harness is for.
+2. **`reg_build()`'s builder dispatch fell through to the coefficient builder** — the 20a-routed
+   item. Every arm is named now and the default aborts, with `REG_BUILDERS` + a foreign key
+   (⚠ `TAB_FOREIGN_KEYS` is 51 edges, +2).
+
+**And one latent trap hardened**: the counterfactual wrote `factor(lv, levels = levels(x))`, which
+**drops `ordered`** — an ordered predictor would then get treatment contrasts where the fit used
+polynomial ones (measured on gss `rincome`: AME 0.1038 instead of 0.0302). It cannot bite through
+`tab_reg()` (14r's `reg_fit()` de-orders predictors first), so this is a *contract* fix on a shared
+helper, with its own unit fixture rather than an end-to-end one.
+
+**HONEST CONCERNS.**
+
+- ⚠ **Three existing assertions were relaxed from `tolerance = 1e-10` to `1e-7`**
+  (`test-tab_reg-rr.R`, `test-tab_reg-numeric-crude.R` ×2), and a relaxed assertion always deserves
+  suspicion. The justification is measured, not asserted: on the same fit, **marginaleffects' own
+  step-size choice (`fdforward` vs `fdcenter`) moves that bound by 3.99e-9, while our analytic value
+  sits 2.74e-9 from its default** — our residual is *smaller than the oracle's own noise*, because
+  ours is the exact number and its is the approximation. Only the **bounds** were relaxed; every
+  ESTIMATE assertion stays at 1e-10 and passes with a relative difference of **0**.
+- ⚠ **`at_reference` and the MNL `vsrest` row stay on `marginaleffects`**, declared, not forgotten:
+  a one-row profile grid is not something g-computation builds, and the route costs 2.4 s, not 45.
+  `effect = "at_reference"` improved anyway (2.4 s → ~1.5 s) purely from the prediction pass.
+- **`engine` is `"auto"` on every row**, resolved by one rule in `reg_marginal_engine()` rather than
+  written out 36 times — the `crude_fam = "auto"` idiom from the same table. That is a *rule* wearing
+  a column's clothes; it is honest only because any row can override it and a fixture asserts that.
+  If a future family needs a per-row value, write it there rather than widening the rule.
+- **The fallback is per CALL, not per contrast** — deliberate (one column, one convention), but it
+  means a single refusing contrast pays the full numerical route for the whole table.
+- **`dev/verify_reg_specs.R` gained a third declared-delta shape**, `EST_ADDITIONS`, beside its two
+  rename tables: a new member on a `REG_ESTIMANDS` row rides `est` into every spec and into
+  `reg_call()`, so without it the run reports every non-aborting case as CHANGED. Its diff printer
+  was also fixed — it unlisted the first 12 elements, which for `cols` is always *column 1*, so it
+  printed two identical lines while a column-11 attribute had really moved.
+- **The crosstab harnesses were not run**: the diff touches `R/reg-*.R` and `R/tab_reg.R` only, no
+  `tab()` code path, and `test-golden.R` covers the goldens inside the suite anyway.
+- ⚠ **The timings are ext4/WSL2** and are not comparable to the committed Windows baselines.
+  Recorded in `dev/benchmarks/results_2.0.0/`.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild, and the jamovi Regressions panel's marginal option is no longer the one that
+freezes it.
+
+**FOLLOW-UPS.** 20e can start on this commit — the marginal path has settled, which is what a
+provably-pure `reg_build()` refactor needs, and `dev/verify_reg_specs.R`'s baseline should be re-saved
+past `EST_ADDITIONS` first. ⚠ **20f must re-measure**: the case for a process pool was built on a
+15.3 s call that is now ~1.2 s, and on a 45 s multinomial that is now 5.2 s — of which **4.4 s is the
+`multinom` fit itself**, so whatever remains to parallelise is the fitting, not the marginal pass.
+Routed to **20h**: the model AME interval uses `z` while its crude companion beside it uses
+`t(degf)` (a live asymmetry noted at `R/reg-resolve.R:843-851`; closing it changes printed numbers on
+a clustered design, which §6 forbids in this phase), and `REG_ESTIMANDS$obs` still has no reader.
 
 ---
 

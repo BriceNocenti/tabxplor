@@ -219,6 +219,11 @@
   themselves. **`set_caption()` / `get_caption()`** store a caption that survives a pipeline.
 * **`tab_transpose()` / `transpose = TRUE`** — flip a table, mainly for the column-percentage inversion
   workflow. Also: **French vignettes on a bilingual pkgdown website**.
+* **Marginal effects are much faster.** `tab_reg(effect = "marginal")` computes its estimates,
+  adjusted predictions and confidence intervals itself, from an analytic derivative, instead of
+  through a numerical one: measured 10.0 s → 1.2 s on a four-predictor logistic regression over
+  21 000 rows, and 45.2 s → 5.2 s on a three-level multinomial. The printed numbers are unchanged
+  (they match `marginaleffects` to eight decimal places, which the tests pin).
 * **New jamovi "Regression models" analysis (`jmvtabreg`)** for `tab_reg()`. The Crosstables module (`jmvtab`)
   gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and
   exports now show the per-cell hover tooltips (counts, confidence intervals, differences;

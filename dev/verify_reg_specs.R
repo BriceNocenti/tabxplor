@@ -360,6 +360,14 @@ CALL_RENAMES <- list(          # reg_call() itself -- KEY 4's four cross-produce
   list(from = "split_var", to = "tab_vars",  map = identity)
 )
 
+# Phase 20d: the third declared shape of delta, beside a rename and a deletion -- an ADDITION. A new
+# member on a REG_ESTIMANDS row rides `est` into every spec and into reg_call(), so it would report
+# every non-aborting case as CHANGED and drown the signal. Declaring it here drops it from BOTH sides,
+# which keeps IDENTICAL meaningful: what the run then proves is that NOTHING ELSE moved.
+# ⚠ each entry is a member of one estimand row (`$est` / `$ests[[i]]`), named for the phase that added
+# it. Remove an entry once its baseline has been re-saved past it.
+EST_ADDITIONS <- c("engine")   # 20d: which engine computes a row's marginal quantities
+
 apply_renames <- function(c1) {
   if (is.null(c1$out)) return(c1)
   # ⚠ rename IN PLACE. identical() on two lists compares names in ORDER, so deleting the old field
@@ -375,11 +383,15 @@ apply_renames <- function(c1) {
     }
     x
   }
+  drop_added <- function(e) { if (is.list(e)) e[EST_ADDITIONS] <- NULL; e }
   fix_one <- function(o) {
     if (is.null(o) || is.null(o$call) || is.null(o$call$fit_spec)) return(o)
-    o$call$fit_spec$specs <- lapply(o$call$fit_spec$specs, rename, rules = SPEC_RENAMES)
+    o$call$fit_spec$specs <- lapply(o$call$fit_spec$specs, function(s) {
+      s <- rename(s, SPEC_RENAMES); s$est <- drop_added(s$est); s })
     o$call$fit_spec       <- rename(o$call$fit_spec, FIT_SPEC_RENAMES)
     o$call                <- rename(o$call, CALL_RENAMES)
+    o$call$est            <- drop_added(o$call$est)
+    if (!is.null(o$call$ests)) o$call$ests <- lapply(o$call$ests, drop_added)
     o
   }
   # a tabxplor_tabs case dumps a LIST of tables
@@ -499,9 +511,19 @@ if (identical(mode, "save")) {
         for (f in union(names(a$out), names(z$out))) {
           if (identical(a$out[[f]], z$out[[f]])) next
           cat("    $", f, ":\n", sep = "")
-          av <- paste(utils::head(unlist(a$out[[f]]), 12), collapse = " | ")
-          zv <- paste(utils::head(unlist(z$out[[f]]), 12), collapse = " | ")
-          cat("      - ", substr(av, 1, 220), "\n      + ", substr(zv, 1, 220), "\n", sep = "")
+          # ⚠ print the DIFFERING elements, not the first 12: `cols` is one nested list per column, so
+          # head(unlist(.), 12) showed column 1 whatever moved -- twice identical lines, and a real
+          # delta invisible (measured in Phase 20d, on a column-11 attribute).
+          av <- unlist(a$out[[f]]); zv <- unlist(z$out[[f]])
+          if (length(av) == length(zv) && !is.null(names(av)) && identical(names(av), names(zv))) {
+            k <- which(av != zv | xor(is.na(av), is.na(zv)))
+            for (kk in utils::head(k, 12L))
+              cat("      [", names(av)[kk], "] - ", substr(av[[kk]], 1, 100),
+                  "\n                 + ", substr(zv[[kk]], 1, 100), "\n", sep = "")
+            if (length(k)) next
+          }
+          cat("      - ", substr(paste(utils::head(av, 12), collapse = " | "), 1, 220),
+              "\n      + ", substr(paste(utils::head(zv, 12), collapse = " | "), 1, 220), "\n", sep = "")
         }
       }
     }
