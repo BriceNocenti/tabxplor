@@ -490,7 +490,22 @@ TAB_ARGS <- list(
             " one table per \\code{row_var}. With \\code{tab_vars}, tables stay a list regardless.")),
   parallel = list(
     default = NULL,
-    producers = c("tab"), option = "parallel",
+    # Phase 20f-iii (KEY 4): ONE `parallel` for both producers -- the same option, the same worker
+    # count rule, the same pool, the same tab_parallel_stop(). What differs is the UNIT it maps
+    # over, hence `doc_for`: `tab()` dispatches per `row_var`, `tab_reg()` per model (several
+    # outcomes / a models list), per `tab_vars` group, and per outcome of a multi-outcome recursion.
+    producers = c("tab", "tab_reg"), option = "parallel",
+    doc_for = list(tab_reg = c(
+      "Opt-in parallel build of the models of one call, using the (Suggests-only) \\pkg{mirai}",
+      " package: several \\code{outcome}s, a \\code{predictors} list, or the \\code{tab_vars} groups.",
+      " \\code{NULL} (default) reads \\code{getOption(\"tabxplor.parallel\")} (off); \\code{FALSE} forces",
+      " serial; \\code{TRUE} uses an auto worker count; an integer sets the number of worker processes.",
+      " Byte-identical to the serial result. It pays off for MANY, EVENLY SIZED models against a",
+      " survey-size data frame, and is a loss otherwise (the pool costs about a second to start, and",
+      " two uneven models cannot gain much). Some shapes are always serial and say so when asked:",
+      " a model comparison (\\code{stats = \"compare_*\"}) is a test BETWEEN the fits, and compared",
+      " models with \\code{empirical = TRUE} share one observed block. The worker pool persists for",
+      " the session; release it with \\code{\\link{tab_parallel_stop}}.")),
     doc = c("Opt-in parallel build of the per-\\code{row_var} tables, using the (Suggests-only)",
             " \\pkg{mirai} package. \\code{NULL} (default) reads \\code{getOption(\"tabxplor.parallel\")} (off);",
             " \\code{FALSE} forces serial; \\code{TRUE} uses an auto worker count; an integer sets the number of",

@@ -13,6 +13,8 @@
 #      An unbalanced axis cannot reach its unit count however many cores are free.
 #   1b the TRANSPORT    -- daemon spin-up and the everywhere() ship of the fixture. The ceiling is
 #      only worth having if it is not eaten by getting the data to the workers.
+#   1d the ACHIEVED     -- what `tab_reg(parallel =)` really delivers on the same calls (20f-iii).
+#      The gap to 1a's ceiling is the implementation's own overhead, and is the number to quote.
 #   1c the REDUNDANCY   -- call counts of the quantities a multi-model call may compute per unit and
 #      read once. 20f-i's whole finding was that this, not concurrency, is where the time is; the
 #      counts are the contract that says whether it repeats one axis out.
@@ -182,9 +184,53 @@ grid <- lapply(names(CASES), function(lbl) {
              stringsAsFactors = FALSE)
 })
 
+grid_df <- do.call(rbind, grid[!vapply(grid, is.null, logical(1))])
+
 cat("\nNOTE `sum units` is an OVER-estimate of the loop's own content: each unit built alone re-runs\n")
 cat("the argument boundary, which the real call runs once. So `ceiling` is conservative -- a real\n")
 cat("pool cannot beat it, and may fall short of it.\n")
+
+# ==================================================================================================
+# 1d -- THE ACHIEVED SPEEDUP (Phase 20f-iii)
+# ==================================================================================================
+# 1a's ceiling is what a PERFECT pool would leave. This is what `tab_reg(parallel =)` actually
+# delivers on the same call: same fixture, same expression, one extra argument. The gap between the
+# two columns is the implementation's own overhead (dispatch, serialisation, the units the shape
+# refuses to parallelise) -- and it is the only honest number to quote.
+# ⚠ prints "n/a" on a tree without the argument, so the file still diffs against the 20f-ii run.
+cat("\n=== 1d  THE ACHIEVED SPEEDUP (tab_reg(parallel = ), Phase 20f-iii) ===\n")
+cat("serial  = the 1a `whole` call.   parallel = the same call with `parallel = min(units, 4)`.\n")
+cat("ceiling = 1a's, for reference. A pool costs ~1.6 s on its FIRST dispatch (1b), amortised here\n")
+cat("by timeit()'s warm-up run -- which is what a session that builds more than one table sees.\n\n")
+cat(sprintf("%-44s %8s %8s %8s %9s\n", "shape", "serial", "parallel", "achieved", "ceiling"))
+cat(strrep("-", 118), "\n")
+
+with_parallel <- function(expr, n) as.call(c(as.list(expr), list(parallel = n)))
+
+achieved <- if (!requireNamespace("mirai", quietly = TRUE)) {
+  cat("mirai not installed -- achieved speedup not measured.\n"); NULL
+} else {
+  out <- lapply(names(CASES), function(lbl) {
+    cs  <- CASES[[lbl]]
+    ref <- grid_df[grid_df$case == lbl, , drop = FALSE]
+    if (nrow(ref) == 0L) return(NULL)
+    n   <- min(cs$n_units, 4L)
+    par <- tryCatch(timeit(with_parallel(cs$whole, n)), error = function(e) NA_real_)
+    if (is.na(par)) {
+      cat(sprintf("%-44s %6.2f s      n/a (no `parallel` on this tree)\n", lbl, ref$whole))
+      return(NULL)
+    }
+    ser <- timeit(cs$whole)
+    cat(sprintf("%-44s %6.2f s %6.2f s %7.2fx %8.2fx\n", lbl, ser, par, ser / par,
+                ref$speedup_ceiling))
+    data.frame(case = lbl, axis = cs$axis, n_units = cs$n_units, workers = n,
+               serial = round(ser, 3), parallel = round(par, 3),
+               speedup_achieved = round(ser / par, 3),
+               speedup_ceiling = ref$speedup_ceiling, stringsAsFactors = FALSE)
+  })
+  tab_parallel_stop()
+  do.call(rbind, out[!vapply(out, is.null, logical(1))])
+}
 
 # ==================================================================================================
 # 1b -- THE TRANSPORT
@@ -265,10 +311,13 @@ cat("here -- it fits one univariable model per predictor with no closed form.\n"
 # --- write ----------------------------------------------------------------------------------------
 tag <- Sys.getenv("TABXPLOR_BENCH_TAG", "run")
 dir <- file.path("dev", "benchmarks", "results_2.0.0")
-utils::write.csv(do.call(rbind, grid),
+utils::write.csv(grid_df,
                  file.path(dir, paste0("phase20f2_axis_grid_", tag, ".csv")), row.names = FALSE)
 utils::write.csv(do.call(rbind, red),
                  file.path(dir, paste0("phase20f2_redundancy_", tag, ".csv")), row.names = FALSE)
 if (!is.null(transport))
   utils::write.csv(transport, file.path(dir, paste0("phase20f2_transport_", tag, ".csv")),
+                   row.names = FALSE)
+if (!is.null(achieved))
+  utils::write.csv(achieved, file.path(dir, paste0("phase20f2_achieved_", tag, ".csv")),
                    row.names = FALSE)

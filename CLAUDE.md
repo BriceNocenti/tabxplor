@@ -427,6 +427,34 @@ R/
 │                              that WITHHOLD `obs` rather than lie) and reg_gap_se_columns.
 │                              ⚠ it sorts BEFORE tab_reg.R, so its only top-level code (the
 │                              REG_EMPIRICAL literal) may not read anything defined there
+├── reg-spec-build.R (~435 L) Phase 20f-iii: WHAT ONE MODEL CONTRIBUTES TO A `tab_reg()` TABLE, as
+│                              ONE declared product -- "20e one grain finer". Six stages carried
+│                              their own `map(specs, ...)`, so "which parts of the table are
+│                              per-model and which are between-models" needed four files to answer.
+│                              **`reg_spec_build(i, ctx, emp_shared)`** does, in today's relative
+│                              order for one spec: fit -> columns -> gof/global/check rows -> the
+│                              `add_n` count -> the crude block -> `reg_set_obs()` -> the two tooltip
+│                              fragments; **`new_reg_spec_product()`** is the 4th record constructor
+│                              (formals ARE the contract; ⚠ no dot-prefixed key). **THE PAYLOAD
+│                              RULE**: no fit and nothing referencing one, so a unit can cross a
+│                              process boundary -- with TWO declared exceptions, each identical to a
+│                              reason that shape is serial anyway: `fit` (only consumer
+│                              `reg_compare_rows()`) and the crude block's 60-100 MB `$frame`/`$fits`
+│                              (kept only for the block SHARED with the compared models;
+│                              `reg_emp_slim()` drops them otherwise). TWO placeholders, because a
+│                              worker cannot know post-`make.unique()` facts: the footer rows' `col`
+│                              (rewritten wholesale per product -- every row of one model shares one)
+│                              and the tooltips' (col_idx, skeleton row) pair. ⚠ tips read the spec's
+│                              OWN block, `reg_set_obs()` reads `own %||% emp_shared` -- the
+│                              comparison-mode asymmetry (`obs` is shared, the gap covariance is per
+│                              model). **`reg_specs_independent(ctx)`** = NULL or THE REASON, and the
+│                              three reasons are facts about the statistics: a comparison is a test
+│                              BETWEEN fits · compared models share spec 1's crude block · an
+│                              all-coefficient compound formula takes its skeleton from the first fit
+│                              (`skeleton_deferred`, narrower than "any compound"). + the other two
+│                              parallel axes' workers, `reg_build_group()` (G) and
+│                              `reg_build_outcome()` (R). ⚠ sorts BEFORE tab_reg.R: no top-level code
+│                              reading a tab_reg.R object
 ├── reg-resolve.R    (~980 L) Phase 19m-ii: THE argument boundary of `tab_reg()` -- 19i's
 │                              `tab_resolve_common_args()` medicine for the producer that never got
 │                              one. **`reg_resolve_args()`** is the ONE entry point (tab_reg() calls
@@ -824,7 +852,14 @@ R/
 │                              browser). ⚠ the Positron probe reads a settings file that also holds
 │                              secrets: it extracts TWO keys by regex and never parses or logs
 │                              anything else. Do not widen it.
-├── tab-parallel.R   (~230 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
+├── tab-parallel.R   (~230 L) THE dispatch seam of BOTH producers. 20f-iii added three callers and
+│                              changed NOTHING here -- tab_pmap() is generic (`.l` per-unit args,
+│                              `.f_name` a namespaced worker, `.const` small, `.ship` big), so
+│                              `tab_reg(parallel =)` reuses the same option, worker-count rule, pool
+│                              and tab_parallel_stop(). Its units are MODELS (reg_stage_specs), the
+│                              `tab_vars` GROUPS (reg_build_group) and the OUTCOMES of a
+│                              multi-outcome recursion (reg_build_outcome).
+│                              Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
 │                              20f: **the trampoline RELAYS the worker's conditions** -- it collects
@@ -1075,11 +1110,36 @@ R/
 │                              `producers`) and color_signif_rd; `{VALUES}` in a `doc` is where the
 │                              generated list is spliced. ⚠ read the rows with `[[`, never `$`:
 │                              `r$values` partial-matches `values_from`.
-├── tab_reg.R       (~4735 L)  Phase 20e (KEY 6): **reg_build() IS A STAGED BUILD** -- 20 deparsed
-│                              lines over EIGHT named stages (was 726 source lines, 39 top-level
+├── tab_reg.R       (~4575 L)  Phase 20f-iii: **the STAGES are cross-spec ASSEMBLERS** and the
+│                              per-MODEL half is R/reg-spec-build.R's declared product. SEVEN stages
+│                              now: _split (the tab_vars recursion, at the TOP, returning a finished
+│                              TABLE -- and axis G's tab_pmap()) / **_setup** (was _fit's tail: the
+│                              shape facts, the reref relevel of `data`+`data_canon`, the FIT-FREE
+│                              skeleton or `skeleton_deferred`, and the per-spec PLAN -- `want_n` /
+│                              `n_names` / `want_emp`, the two de-duplications that used to be
+│                              loop-carried `break`/`next` a worker cannot reproduce) / **_specs**
+│                              (the loop: serial, or tab_pmap() when reg_specs_independent() says
+│                              nothing -- plus the column LAYOUT the products imply, `built` being
+│                              their flattened view) / _footer (⚠ SLOT-MAJOR: every product's gof
+│                              rows, then reg_compare_rows() -- UNPORTED, a test between fit OBJECTS
+│                              -- then the globals, then the checks; each product's rows are re-keyed
+│                              from a pre-make.unique placeholder to `fit_first_col[[i]]`) / _rows
+│                              (labels, sparklines, `tab`; the add_n columns are SPLICED from the
+│                              products) / _assemble (the crude blocks + the model columns, which
+│                              already carry `obs`/`gap_se`) / _tips (resolves the products'
+│                              (col_idx, row) placeholders against `labels` / `disp_levels`, which is
+│                              what freed the tooltips from needing _rows first) / _finalize.
+│                              ⚠ THE ORDER IS STILL THE SOURCE ORDER, but the message stream is
+│                              SPEC-major now (one model's diagnostics arrive together) -- 20f-iii's
+│                              one declared delta, and measured at ZERO reordered cases across
+│                              verify_reg_specs.R's 290. + `reg_gof_tibble()` -> per-spec
+│                              **`reg_gof_rows()`** and `reg_global_rows()` per-spec (one caller
+│                              each, each loop body already a pure function of `i`).
+│                              Phase 20e (KEY 6): **reg_build() IS A STAGED BUILD** -- 20 deparsed
+│                              lines over named stages (was 726 source lines, 39 top-level
 │                              locals, 7 closures, eleven unnamed phases: the package's largest
 │                              function), each named after THE PART OF THE TABLE IT PRODUCES.
-│                              **`new_reg_ctx()`** (32 keys) is new_ctx()'s idiom, fourth use -- the
+│                              **`new_reg_ctx()`** is new_ctx()'s idiom, fourth use -- the
 │                              FORMALS are the contract, `as.list(environment())` the body, the
 │                              globalVariables() mirror DERIVED -- and 19i's lesson: a stage product
 │                              is DECLARED, never left to appear (an undeclared key is ABSENT, so its
@@ -1091,24 +1151,17 @@ R/
 │                              (`c(ctx, ctx$shared)`), so `shared` stays ONE nested record PROJECTED
 │                              at each stage head, never flattened into a second carrier (19i's
 │                              finding), and tx_check_reg_ctx() keeps the two name sets disjoint at
-│                              load. The stages: reg_stage_split (the tab_vars recursion, at the TOP,
-│                              returning a finished TABLE) / _fit (fits + skeleton + the shape facts;
-│                              ⚠ it REWRITES `data` on the reref path, which four later stages read)
-│                              / _columns (the 3 declared builders + the column LAYOUT) / _footer
-│                              (gof + compare + global + checks -> the `test` tibble) / _rows (labels,
-│                              relabels, sparklines, add_n -> `tab`) / _empirical (the crude blocks)
-│                              / _assemble (`obs` + `gap_se`, then the columns into `tab`) / _tips
-│                              (`meta$empirical_tips`; ⚠ reads names(tab), so AFTER _assemble) /
-│                              _finalize. ⚠ **THE ORDER IS THE SOURCE ORDER AND IS LOAD-BEARING**:
-│                              FOUR sites fit models (_fit, _footer's linearity refits, _empirical's
-│                              univariable fits, _split -> reg_interaction_rows) and every fit may
-│                              inform or warn, so a reorder moves the MESSAGE STREAM, which
-│                              verify_reg_specs.R compares in order. ⚠ that also corrects the plan of
-│                              plans' §5.4 "the ONE place a fit happens = the parallel seam": on a
-│                              5-predictor `empirical = TRUE` table the model fits are a MINORITY, so
-│                              20f must measure all four. The 7 closures became 4 top-level functions
-│                              (reg_cols_coef/_ame/_vsrest, dispatched by REG_BUILDERS; reg_emp_frame,
-│                              shared by TWO stages; reg_set_obs; reg_add_emp_cols) + one local.
+│                              load. ⚠ **THE STAGE ORDER IS THE SOURCE ORDER AND IS LOAD-BEARING**:
+│                              every fit -- the reported ones, the linearity refits, the crude
+│                              univariable ones -- may inform or warn, so a reorder moves the MESSAGE
+│                              STREAM, which verify_reg_specs.R compares in order. ⚠ that also
+│                              corrects the plan of plans' §5.4 "the ONE place a fit happens = the
+│                              parallel seam": on a 5-predictor `empirical = TRUE` table the model
+│                              fits are a MINORITY, so 20f measured all four. The 7 closures became 4
+│                              top-level functions (reg_cols_coef/_ame/_vsrest, dispatched by
+│                              REG_BUILDERS; reg_emp_frame, shared by TWO stages; reg_set_obs --
+│                              20f-iii takes `(bi, e, f, sp, ctx)`, never `fits[[fi]]`;
+│                              reg_add_emp_cols) + one local.
 │                              Phase 20d (KEY 7): **reg_marginal() is a DISPATCHER** between two
 │                              engines, reading the estimand row's declared `engine`. The fast one is
 │                              **reg_marginal_gcomp()** -- one counterfactual sweep per (predictor,
@@ -1325,6 +1378,11 @@ R/
 │                              COLUMN BY COLUMN -> an error on unequal groups, wrong rows when calibrated)
 ├── reg-assumptions.R (~950 L) Phase 18z15: THE model checks of a tab_reg() table, their CURE
 │                              (`shape =`) and the primitives its plots draw.
+│                              20f-iii: **reg_check_rows() is PER SPEC** -- `(data, f, sp, shared,
+│                              stats, col_var, grouped)` returning that model's rows or NULL, its
+│                              accumulator argument gone. Its two siblings (reg_gof_rows /
+│                              reg_global_rows) moved the same way; each had one caller and each loop
+│                              body was already a pure function of `i`.
 │                              Phase 20f: **EACH CHECK COSTS WHAT IT SAYS.** `REG_CHECKS` gains
 │                              **`cost`** ("free" = arithmetic on the fit in hand -> the DEFAULT
 │                              `stats` set | "refit" = it fits a model -> asked for by name), because
@@ -2117,20 +2175,23 @@ itself.
 | **20e** | KEY 6 — `reg_build()` becomes a staged build                       | the package's largest function (534 lines, 7 local closures, 11 unnamed phases) gets `new_reg_ctx()` + five named stages. **Pure refactor**: `verify_reg_specs.R` must print IDENTICAL |
 | **20f** | `tab_reg()` parallelisation: measure, then decide                  | ✅ **measured "no"** — the remaining cost was the model-check footer (81–94 % of a call), most of it computed several times and read once. No pool; three de-duplications + a declared `REG_CHECKS$cost` instead (2.6–6.0× on a default call). Study: `dev/tabxplor_reg_performance.md` |
 | **20f-ii** | the same question at the MODEL level: measure the three axes     | ✅ **measured** — the three axes are not the same shape. `tab_vars` (G) and outcomes × a models list (R) already return finished tables and are dispatchable today, but clear ≥2× only on an *even* axis at survey scale; the **S** axis (several outcomes in one table · a models list) holds the 2×+ shapes (2.86× at four outcomes) and cannot be dispatched as written. Shipped the crude-block de-duplication + the cross-outcome `compare` guard. Study §6 |
-| **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks  | "20e one grain finer": the six per-spec loops become ONE declared product, so what is per-model and what is between-models is stated once. ⚠ the only Phase 20 phase that deliberately gives up the IDENTICAL message-order proof (stage-major → spec-major) |
+| **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks  | ✅ **done** — the six per-spec loops are ONE declared product (`R/reg-spec-build.R`), and `parallel` becomes a shared argument over all three model axes. ⚠ the message-order price it budgeted for was measured at **zero** reordered cases; what changed instead is 9 abort messages losing purrr's `In index:` wrapper |
+| **20f-iiii** | the reg framework: finished, and CLEAN under parallelisation  | take `tab_reg()` from *"parallel, with three exceptions to remember"* to *"parallel, or ONE stated reason"*. Each of `reg_specs_independent()`'s three refusals has a measured route out — the crude block is the OUTCOME's, not spec 1's; a `reg_compare_digest()` would make a between-model test computable from KB; the deferred skeleton may not need a fit at all — and for each, **"keep it, with the number"** is a complete answer. + the worker-error relay (which also restores "which model failed"), the nesting rule stated once, and the two routed redundancies. Plan of plans §9 |
 | **20g** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
 | **20h** | Harvest 1: the deletion pass                                       | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product |
 | **20i** | Harvest 2: open integration                                        | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building** |
 
 **Dependencies**: 20a first · 20b and 20c need 20a's harnesses · 20d needs 20c · 20e needs 20d ·
-20f needs 20d+20e · 20f-ii needs 20f · 20f-iii needs 20f-ii · 20g needs 20b/20c/20d ·
-20h then 20i last.
+20f needs 20d+20e · 20f-ii needs 20f · 20f-iii needs 20f-ii · 20f-iiii needs 20f-iii ·
+20g needs 20b/20c/20d · 20h then 20i last.
 
 ⚠ **The `tab_reg()` phases are deliberately separate sessions** — one story, several frames of
 mind: 20d is **numerical parity** (research, closed forms, tolerance fixtures), 20e is a **pure
 structural refactor** proved by one harness printing IDENTICAL, 20f and 20f-ii are **measurements**
-that may conclude "no" (and both did, in part), and 20f-iii is a refactor that knowingly trades the
-message-order half of that proof for a declared per-spec product.
+that may conclude "no" (and both did, in part), 20f-iii is a refactor that budgeted for trading
+the message-order half of that proof for a declared per-spec product -- and, measured, did not have
+to spend it -- and 20f-iiii is three different questions again (a numerical-parity one, a plumbing
+fix in a shared file, a census), which is why it too gets its own.
 Interleaving them is how a refactor and a numeric change land in one diff and
 neither can be verified.
 
@@ -2466,6 +2527,116 @@ No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** 
 **FOLLOW-UPS.** 19j can start on this commit — the leaf now owns its whole head and tail, which is
 what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_signif` note above.
 19l: the deprecation-warning corpus migration (133 remain).
+
+---
+
+
+
+#### Phase 20f-iii — the S axis: `reg_spec_build()`, and the parallelism it unlocks
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6959** — the
+inherited warning count exactly, and +39 assertions from this phase's own two fixtures.
+`dev/verify_reg_specs.R` reports **9 of 290 cases changed, all in ONE declared way** (below), and
+⚠ **ZERO cases with a message-ORDER change** — the price the plan of plans and the study both said
+was irreducible was not paid at all, and that is the phase's most useful negative result.
+`test-parallel-parity.R` green **unsandboxed** (PASS 20) with a new case per axis.
+
+**`reg_build()`'s per-MODEL half is ONE declared product.** Six stages carried their own
+`map(specs, …)`, plus `_assemble`'s per-column `reg_set_obs()` reading `fits[[fi]]`, so *"which
+parts of the table are per-model and which are between-models"* took four files to answer. Now
+**`R/reg-spec-build.R`**: `reg_spec_build(i, ctx, emp_shared)` → `new_reg_spec_product()` (the
+fourth record constructor, same idiom), doing in one place what one model contributes — fit,
+columns, GOF / global / check rows, its `add_n` count, its observed block, its `obs`/`gap_se`, its
+two tooltip fragments. `tab_reg.R` **4762 → 4573**; the stages above it are cross-spec **assemblers**,
+and `reg_stage_columns()` / `reg_stage_empirical()` are gone into it. Details in the Repository Map.
+
+**THE PAYLOAD RULE, and why it is what made the S axis dispatchable**: the product carries no fit
+and nothing referencing one. **Two exceptions, each declared and each identical to a reason that
+shape is serial anyway** — `fit` (sole consumer `reg_compare_rows()`) and the crude block's
+60–100 MB `$frame`/`$fits`, kept only for the block SHARED with the compared models
+(`reg_emp_slim()` drops them elsewhere). **`reg_specs_independent(ctx)`** is the one predicate —
+`NULL`, or the *reason*, reported only when `parallel` was explicitly asked for — and its three
+reasons are facts about the statistics: a comparison is a test BETWEEN fits · compared models share
+spec 1's observed block · an all-coefficient compound formula reads its skeleton off the first fit.
+
+**`parallel` is now a shared argument of both producers (KEY 4), over all three axes** — the models
+of one table (S), the `tab_vars` groups (G) and the outcomes of a multi-outcome recursion (R) — and
+`R/tab-parallel.R` **needed no change**: `tab_pmap()` was already generic, so the option, the worker
+count rule, the pool, `tab_parallel_stop()` and 20f's condition relay are the same ones. jamovi is
+serial by construction (`tab_parallel_workers(cache_env =)`), with no new rule.
+
+**Three producers became per-spec** — `reg_gof_tibble()` → **`reg_gof_rows()`**, `reg_global_rows()`,
+`reg_check_rows()`. Each had exactly ONE caller and each loop body was already a pure function of
+`i`; leaving them vectorised and calling them with singleton lists would have been a half-migrated
+representation.
+
+**Two loop-carried de-duplications became a DECLARED per-spec plan** (`reg_stage_setup()`'s
+`spec_plan`): `add_n`'s "one count column per distinct outcome" `break`/`next` pair, and 20f-ii's
+crude-block `break`. A worker cannot reproduce a loop-carried skip, and a reader had to simulate one.
+
+**Two placeholders**, because a worker cannot know post-`make.unique()` facts: the footer rows' `col`
+(rewritten wholesale per product — every row of one model shares one) and the tooltips'
+`(column index, skeleton row)` pair. The second also **freed the tooltips from needing
+`reg_stage_rows()` to have run**, which is what let the row axis move after the loop.
+
+**THE DECLARED DELTA, and it is not the one that was expected.** 9 of 290 harness cases changed, all
+in the same way: an ABORT inside the fit loop no longer wears purrr's `i In index: N. Caused by
+error in ...` wrapper, because that loop is no longer a `purrr::map()`. The message is strictly more
+direct (`"score" scores must lie in 0..4` instead of two frames of context), and all nine are
+self-identifying (each names the variable). ⚠ what is LOST is `i With name: m1.` on a models list —
+an error in the 2nd model of a comparison no longer says which model. Recorded rather than papered
+over. **No message ORDER moved**: the only per-spec emitters are the fit itself,
+`reg_marginal_basis_warn()` and the Brant test, and no harness case combines two of them across two
+specs.
+
+**MEASURED** (`dev/benchmarks/results_2.0.0/phase20f2_*_20fiii.*`, harness gained a section 1d
+"THE ACHIEVED SPEEDUP" beside 20f-ii's ceilings): the S axis delivers **2.93×** on four
+outcomes, **2.74×** on three balanced models, **2.20×** on the R axis (2 outcomes × a models list)
+and **2.03×** on two outcomes; the G axis **1.93×** over eight EVEN survey waves and **1.08×** over
+four uneven race groups — its balance figure, confirmed. ⚠ five of the eight rows come out ABOVE
+§6.2's ceiling, which is that ceiling's own conservatism (a unit built alone re-runs the argument
+boundary), not a contradiction. ⚠ at teaching scale the question is moot: 0.25 s → 0.23 s, which is
+why the doc sentence names the shape that pays.
+
+**HONEST CONCERNS.**
+
+- ⚠ **The product's `fit` slot is conditional** (populated only when `compare != "none"`). Declared
+  with its single consumer and single reason, and unreachable otherwise because the same condition
+  forces the serial path — but a conditional slot is the kind of thing that bites, and it is the one
+  place the record is not uniform.
+- ⚠ **A worker's ERRORS are not relayed like its messages.** `tab_pmap_trampoline()` catches
+  conditions deliberately and not errors (mirai's `[.stop]` re-throws the first). So under
+  `parallel`, a failing model surfaces with a different call stack than serially, and with several
+  units it may be a *different* model's error that is reported. Pre-existing on `tab()`, inherited
+  here.
+- ⚠ **`reg_stage_specs()` ships the WHOLE ctx** as `tab_pmap()`'s one `.ship` element. That is the
+  right split (everything big — `data`, `skeleton_data`, a prebuilt design — is inside it, sent once
+  per dispatch) but it means a future ctx key holding something enormous would travel silently.
+- **The parallel payoff stays narrow, and the doc sentence says so**: the pool costs ~1.6 s on its
+  first dispatch, so `parallel` is a loss below roughly 5 s of work, and two uneven units cannot
+  reach 2× at all. `parallel_min` stays `2L` — `tab_reg()` obeys the argument as `tab()` does
+  (maintainer's ruling) — so it is the doc, not a heuristic, that carries the caveat.
+- **`R/` grew ~+250 net** (+433 for the new file, −189 from `tab_reg.R`, ~+6 elsewhere).
+  Expected, and not the metric: what moved is that the per-model half of a regression table is one
+  declared object, and the file that used to hold it lost the six loops.
+- **The multinomial-comparison grid rebuild was left alone.** In a multinomial model comparison with
+  `empirical`, specs 2..S have no crude block of their own, so each tooltip block re-runs
+  `reg_empirical()` — 20f-ii's §6.4 redundancy, one shape further in. Reusing spec 1's grid would be
+  byte-identical only if every spec resolves the same `y_ref`, which holds today but is not stated
+  anywhere; **routed to 20f-iiii** rather than assumed -- where lifting the crude block out of the
+  loop entirely (it is the OUTCOME's, not spec 1's) would delete it for free.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — but ⚠ **20g owes
+one UI item**: nothing exposes `parallel` in the jamovi panels, and nothing should (the live cache
+forces serial), so what 20g must NOT do is add a checkbox for it.
+
+**FOLLOW-UPS.** 20g can start on this commit. **20f-iiii** (new, added this session) owns everything
+this phase routed and everything it left honest: the three refusals of `reg_specs_independent()`,
+the worker-error relay, the multinomial-comparison grid rebuild, `reg_global_rows()`'s `drop1`
+refits (from 20f), and the product-slot census. `reg_stage_tips()`'s two halves (routed here by 20e)
+are CLOSED — 20f-iii split them into `reg_spec_tips_mnl()` / `reg_spec_tips_num()`. 20h keeps the
+deprecated-call corpus sweep.
 
 ---
 

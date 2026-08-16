@@ -150,3 +150,69 @@ test_that("a worker's messages reach the user, in unit order (Phase 20f)", {
   expect_length(serial, 2L)                          # the fixture really does emit
   expect_identical(said(2L), serial)                 # text AND order survive the process boundary
 })
+
+
+# === Phase 20f-iii: the three tab_reg() axes ======================================================
+# S = several models in ONE table (outcomes / a models list), G = the tab_vars groups, R = the
+# outcomes x models-list recursion. All three go through the SAME tab_pmap(), so what is asserted
+# here is the same contract as above -- byte-identity, and the worker's conditions reaching the
+# user -- on the producer that dispatches whole model fits rather than aggregates.
+
+reg_fx <- local({
+  d <- forcats::gss_cat
+  d$married <- factor(ifelse(d$marital == "Married", "Married", "Not married"))
+  d$party3  <- forcats::fct_lump_n(d$partyid, 2)
+  d$year_f  <- factor(d$year)
+  d
+})
+
+test_that("tab_reg(parallel=): the S axis (several outcomes in one table) is byte-identical", {
+  warm_pool(2L)
+  args <- list(reg_fx, c("married", "tvhours"), c("race", "age"), stats = FALSE)
+  expect_identical(
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+})
+
+test_that("tab_reg(parallel=): the G axis (tab_vars groups) is byte-identical", {
+  warm_pool(2L)
+  args <- list(reg_fx, "married", "race", family = "binomial", tab_vars = "year_f", stats = FALSE)
+  expect_identical(
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+})
+
+test_that("tab_reg(parallel=): the R axis (outcomes x a models list) is byte-identical", {
+  warm_pool(2L)
+  args <- list(reg_fx, c("married", "tvhours"),
+               list(m1 = "race", m2 = c("race", "age")), stats = FALSE)
+  expect_identical(
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+})
+
+test_that("tab_reg(parallel=): a worker's messages reach the user, in unit order", {
+  # The family-detection notice fires once per outcome, in outcome order -- so it is both the
+  # "did the relay work" check and an order-independent check that no unit was skipped.
+  warm_pool(2L)
+  said <- function(parallel) {
+    msgs <- character()
+    withCallingHandlers(
+      tab_reg(reg_fx, c("married", "tvhours"), "race", stats = FALSE, parallel = parallel),
+      message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") })
+    grep("outcome detected", msgs, value = TRUE)
+  }
+  serial <- said(FALSE)
+  expect_length(serial, 2L)
+  expect_identical(said(2L), serial)
+})
+
+test_that("tab_reg(parallel=): a shape that must stay serial says so, and is identical", {
+  warm_pool(2L)
+  args <- list(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
+               family = "binomial", stats = "compare_baseline")
+  expect_message(do.call(tab_reg, c(args, list(parallel = 2L))), "one after another")
+  expect_identical(
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+})

@@ -1699,18 +1699,19 @@ exact dual of the Wald p; `method="profile"` = `confint`+LR for unweighted binom
 **Phase 20e (KEY 6) — the staged build, and `R/reg-empirical.R`.** `reg_build()` was 726 lines,
 39 top-level locals, 7 local closures and eleven unnamed phases — the largest function in the
 package — while `tab_build()` has had a typed ctx and named stages since 17e/19i. It is now **20
-deparsed lines over eight stages, each named after the part of the table it produces**:
+deparsed lines over named stages, each named after the part of the table it produces** (as reshaped
+by 20f-iii, next section):
 
 ```
-  ctx <- new_reg_ctx(...)                    32 declared keys; `shared` stays ONE nested record
+  ctx <- new_reg_ctx(...)                    declared keys; `shared` stays ONE nested record
   if (!is.null(tab_vars)) return(reg_stage_split(ctx))   the recursion, at the TOP (returns a table)
-  reg_stage_fit        fits + skeleton + the shape facts   (⚠ REWRITES `data` on the reref path)
-  reg_stage_columns    the 3 declared builders + the column layout
-  reg_stage_footer     gof / compare / global / checks -> the `test` tibble
-  reg_stage_rows       labels, relabels, sparklines, add_n -> `tab`
-  reg_stage_empirical  the crude blocks (emp_by_fit)
-  reg_stage_assemble   `obs` + `gap_se` (reg_set_obs), then the columns into `tab`
-  reg_stage_tips       `meta$empirical_tips`   (⚠ reads names(tab), so it runs after assemble)
+  reg_stage_setup      the skeleton (fit-free), the shape facts, the per-spec PLAN
+                                                        (⚠ REWRITES `data` on the reref path)
+  reg_stage_specs      ONE reg_spec_build() per model + the column layout their products imply
+  reg_stage_footer     the products' rows + reg_compare_rows() -> the `test` tibble
+  reg_stage_rows       labels, relabels, sparklines, the products' add_n columns -> `tab`
+  reg_stage_assemble   the crude blocks + the model columns into `tab`
+  reg_stage_tips       `meta$empirical_tips`, resolving the products' placeholders
   reg_stage_finalize   the inference basis, then reg_finalize()
 ```
 
@@ -1724,11 +1725,11 @@ constructors) keeps the two name sets disjoint at load. ⚠ **no ctx key may sta
 `as.list(environment())` defaults to `all.names = FALSE`, so `.fit_cache` would be silently dropped
 from the record — the ctx key is `fit_cache`, `reg_build()`'s formal keeps its dot.
 
-⚠ **The stage order is the SOURCE order and is load-bearing**: FOUR sites fit models (here, the
-footer's linearity refits, the empirical stage's univariable fits, and the split branch's interaction
-refits), every fit may inform or warn, and `dev/verify_reg_specs.R` compares the message stream *in
-order*. On a 5-predictor `empirical = TRUE` table the model fits are a minority — which is what 20f
-must measure before parallelising `reg_stage_fit()`.
+⚠ **The stage order is the SOURCE order and is load-bearing**: every fit — the reported ones, the
+footer's linearity refits, the crude univariable ones, the split branch's interaction refits — may
+inform or warn, and `dev/verify_reg_specs.R` compares the message stream *in order*. On a
+5-predictor `empirical = TRUE` table the model fits are a minority, which is why 20f measured all
+four sites rather than parallelising the obvious one.
 
 The seven closures became four named top-level functions (`reg_cols_coef` / `reg_cols_ame` /
 `reg_cols_vsrest`, dispatched by `REG_BUILDERS`; `reg_emp_frame`, `reg_set_obs`, `reg_add_emp_cols`)
@@ -1737,6 +1738,41 @@ plus one one-line local. The same phase carved **`R/reg-empirical.R`** (~1190 L)
 `reg_empirical_fit()`, `reg_empirical_columns()`, `reg_same_estimand`/`_frame`,
 `reg_gap_se_columns()` — the producers whose *stage* is `reg_stage_empirical()`, the `tab-leaf.R` /
 `tab.R` relationship.
+
+**Phase 20f-iii — `reg_spec_build()`, and the parallelism it unlocks.** 20e named the *stages*;
+six of them still carried their own `map(specs, …)`, so *"which parts of the table are per-model and
+which are between-models"* took four files to answer. **`R/reg-spec-build.R`** is that answer:
+`reg_spec_build(i, ctx, emp_shared)` produces everything one model contributes — its fit, its
+columns, its GOF / global / check rows, its `add_n` count, its observed (crude) block, its
+`obs`/`gap_se` and its two tooltip fragments — as one declared `new_reg_spec_product()` record, and
+the stages above it become cross-spec **assemblers**.
+
+**The payload rule** is what makes the S axis (several outcomes in one table, or a models list)
+dispatchable: *the product carries no fit and nothing referencing one*. Two exceptions, each
+declared and each identical to a reason that shape is serial anyway — `fit` (whose only consumer is
+`reg_compare_rows()`) and the crude block's 60–100 MB `$frame`/`$fits`, kept only for the block that
+is *shared* with the compared models (`reg_emp_slim()` drops them everywhere else). Two
+**placeholders** carry what a worker cannot know: the footer rows' `col` (rewritten wholesale per
+product, since every row of one model shares one) and the tooltips' `(column index, skeleton row)`
+pair — which also freed the tooltips from needing `reg_stage_rows()` to have run.
+
+**`reg_specs_independent(ctx)`** is the one predicate: `NULL`, or the *reason*, reported when
+`parallel` was explicitly asked for. Its three reasons are facts about the statistics, not
+limitations — a model comparison is a test *between* fits (`stats::anova(m_lo, m_hi)`, or survey's
+own `regTermTest` Wald arm, so re-implementing it would make tabxplor a second producer of a survey
+quantity); compared models share spec 1's observed block; an all-coefficient table with a compound
+formula reads its shared skeleton off the first fit. Everything else — several outcomes, a default
+models list — is independent.
+
+`parallel` therefore becomes a shared argument of both producers, over the *same* option, worker
+count rule, pool and `tab_parallel_stop()`, and `R/tab-parallel.R` needed no change: `tab_pmap()`
+was already generic. Its `tab_reg()` units are the models (`reg_stage_specs`), the `tab_vars` groups
+(`reg_build_group`) and the outcomes of a multi-outcome recursion (`reg_build_outcome`). Measured
+ceilings and the reasons they are narrow: `dev/tabxplor_reg_performance.md` §6–§7.
+
+Three footer producers moved with it: `reg_gof_tibble()` → per-spec **`reg_gof_rows()`**, and
+`reg_global_rows()` / `reg_check_rows()` per spec. Each had exactly one caller and each loop body
+was already a pure function of the index, so what changed is who holds the loop.
 
 **Phase 17h — integration (all internal, byte-identical).** `reg_build(data, specs, shared, split_var,
 .fit_cache, …)`: the per-dependent family/do_exp/effect_shape/eff_word/color live ONLY on the specs (read

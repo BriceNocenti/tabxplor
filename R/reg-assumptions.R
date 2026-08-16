@@ -508,29 +508,28 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
   }))
 }
 
-# THE producer: the check rows of every fit, appended to the GOF tibble. A sibling of
-# reg_compare_rows() / reg_global_rows(), and placed beside them so `data` (the Linearity refit needs
-# it) and `specs` are in scope -- reg_gof_tibble() has neither.
+# THE producer: the check rows of ONE fit. A sibling of reg_gof_rows() / reg_global_rows(), and the
+# only one of the three that needs `data` -- the Linearity check refits with an added term.
+# Phase 20f-iii: per SPEC. It was vectorised over `fits` and accumulated onto the GOF tibble; its one
+# caller is reg_spec_build(), which holds one model at a time, and reg_stage_footer() concatenates.
+# NULL = this model contributes no check row.
 #' @keywords internal
 # `shared` is new_reg_shared()'s record (Phase 20e: it used to be a hand-written subset of it, so a
 # renamed setting could go quiet here while the real record still carried it).
-reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_col,
-                           grouped_by_fit) {
+reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
   weighted <- isTRUE(shared$weighted)
   gof <- function(test, col_var, value, nobs, outcome = NA_character_)
     if (is.null(value) || is.na(value)) NULL
     else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs, outcome = outcome)
 
-  rows <- purrr::map(seq_along(specs), function(i) {
-    sp <- specs[[i]]
-    f  <- fits[[i]]
+  grouped <- isTRUE(grouped)
+  rows <- (function() {
     if (is.null(f)) return(NULL)
-    grouped <- isTRUE(grouped_by_fit[[i]])
     keep <- reg_footer_stats(sp$fit_family, weighted, grouped, stats)
     keys <- reg_checks_for(sp$fit_family, weighted, grouped, has_fit = !is.null(f$fit))
     keys <- keys[vapply(keys, function(k) any(names(REG_CHECKS[[k]]$types) %in% keep), logical(1))]
     if (length(keys) == 0L) return(NULL)
-    cv  <- fit_first_col[[i]]
+    cv  <- col_var
     fit <- f$fit
     out <- list()
     if ("linearity" %in% keys && !isTRUE(sp$compound))
@@ -554,10 +553,10 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
     }
     if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs, sp$outcome)))
     out
-  })
-  rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
-  if (length(rows) == 0) return(reg_gof)
-  dplyr::bind_rows(reg_gof, dplyr::bind_rows(rows))
+  })()
+  rows <- purrr::compact(rows)
+  if (length(rows) == 0) return(NULL)
+  dplyr::bind_rows(rows)
 }
 
 

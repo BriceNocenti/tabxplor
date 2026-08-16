@@ -526,7 +526,8 @@ The order below is the recommended one; what is **binding** is the dependency li
 | **20e** | KEY 6 — `reg_build()` becomes a staged build                                         | 20d                   | 20d changes what the marginal path computes, and restructuring around a moving target is how a "pure refactor" stops being provably pure |
 | **20f** | `tab_reg()` parallelisation: measure, then decide                                    | 20d, 20e              | ⚠ **re-measure first**; a pool attaches to `reg_stage_fit()`, which 20e creates, and "do not parallelise" is a legitimate outcome |
 | **20f-ii** | the same question at the MODEL level: measure the three axes                       | 20f-i                 | ✅ measured; G and R are dispatchable today but only clear ≥2× on an even axis, and the S axis — where the 2×+ shapes are — cannot be dispatched as written |
-| **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks                   | 20f-ii, 20e           | ⚠ **its own session**: "20e one grain finer", and the only Phase 20 phase that deliberately gives up the IDENTICAL message-order proof |
+| **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks                   | 20f-ii, 20e           | ✅ done — the per-model half is ONE declared product and `parallel` is a shared argument over all three model axes; the message-order price it budgeted for was measured at **zero** |
+| **20f-iiii** | the reg framework: finished, and CLEAN under parallelisation                   | 20f-iii               | ⚠ the three serial-only shapes are the last thing about `tab_reg()` a user must *remember*; each has a measured route out, and "keep it, with the number" is a complete answer |
 | **20g** | jamovi: the level-collapse UI, the boundary, the rebuild                             | 20b, 20c, 20d         | it carries every new vocabulary into the UI, and 20d is what un-freezes the marginal option |
 | **20h** | Harvest 1: the deletion pass                                                         | everything structural | it measures what the finished surface made unnecessary                |
 | **20i** | Harvest 2: open integration                                                          | 20h                   | ⚠ creative, and deliberately its OWN session: a deletion pass and a design pass want different frames of mind (the 19l / 19m precedent) |
@@ -1108,6 +1109,117 @@ declared in the DONE summary**; it is the one irreducible price, and it is why t
 along with a phase that claims IDENTICAL. Plus `test-parallel-parity.R` extended with a reg case
 (⚠ **unsandboxed** — bwrap's `--unshare-net` breaks mirai's dispatcher) and a re-run of
 `dev/benchmarks/phase20f2_reg_model_axis.R` measuring the *achieved* speedup against §6.2's ceiling.
+
+---
+
+#### Phase 20f-iiii — the reg framework: finished, and CLEAN under parallelisation
+
+**Goal**: finish what 20f-iii routed, and take the reg framework from *"parallel, with three
+exceptions you have to remember"* to *"parallel, or one stated reason"*. The exceptions are not a
+correctness problem — each is declared, each is reported, and 20f-iii's fixtures pin them — but
+**three exceptions is a thing a user carries in their head**, and Phase 20 exists to remove exactly
+that kind of load. Each has a route out that is a *measurement*, not a guess, and for each **"keep
+it, with the number written down" is a complete answer** (20f's own rule).
+
+**Read first**: `dev/tabxplor_reg_performance.md` §6–§7 (the axes, the achieved numbers, the two
+still-routed redundancies) · 20f-iii's DONE summary in CLAUDE.md (the payload rule, the two
+placeholders, the honest concerns) · `R/reg-spec-build.R` (all three refusals are one function,
+`reg_specs_independent()`).
+
+---
+
+**A — THE THREE REFUSALS, each measured before it is kept or removed.**
+
+1. **`compare != "none"`** — `reg_compare_rows()` needs two fit OBJECTS. 20f-ii §6.3 measured
+   transport at **0.05 s for a 16 MB frame**, so returning S fits may cost nothing at all and the
+   refusal may be pure caution. ⚠ **but measure the right thing**: a `glm` keeps `$data`, `$model`
+   and `$qr`, so serialising one can drag the whole frame — that is the number to get, not the
+   round-trip. If it is expensive, the second route is the idiom the jamovi path already uses:
+   a **`reg_compare_digest()`** carrying only what `anova()` reads (deviance, df.residual, terms,
+   nobs, and for the survey arm what `regTermTest` needs). That would be a genuine simplification —
+   a between-model test computable from KB — and it is the same distillation `reg_build_digest()`
+   performs for the reref path. ⚠ it must reproduce `anova.glm` / `anova.svyglm` **bit for bit**,
+   with the 20f `reg_nested_test()` precedent as the template (and its warning: `drop1.glm`'s
+   dispersion is not `summary()`'s).
+
+2. **comparison + `empirical`** — and this one is a *modelling* mistake, not a payload one:
+   **the crude block is not spec 1's, it is the OUTCOME's.** Every input to it is table-wide or
+   per-outcome, and comparison mode has exactly one outcome — which is precisely why 20f-ii could
+   stop rebuilding it. 20f-iii kept it inside the loop only because 20f-ii's `break` had put it
+   there. **Lift it out**: build it once (in `reg_stage_setup()`, or its own small stage) and hand
+   it to every spec as a `.ship` constant. The refusal disappears, the loop stops carrying state,
+   and the code finally says what the block is. ⚠ the one thing to verify first: it reads
+   `f$positive_level` and `f$y_ref` off the fit — `reg_positive_level()` is already the fit-free
+   producer of the first (`R/tab_reg.R`), and `y_ref` is the outcome's reference category, so both
+   look liftable; **confirm, do not assume**.
+
+3. **the deferred skeleton** (an all-coefficient table with a compound formula) — it needs
+   `reg_skeleton_from_fit(fits[[1]]$fit)`. Route: `stats::terms(formula, data)` + `model.matrix()`
+   on a tiny frame gives the same term names with no IRLS. ⚠ **this is the one most likely to end
+   in a declared "no"** — a compound formula is the escape hatch, and a table that uses one is
+   rarely a four-model comparison, so the honest outcome may be to keep it and say so in one line.
+
+**The metric for A**: after it, `reg_specs_independent()` returns `NULL` for every shape a user
+actually builds, or names **one** reason with a measurement behind it.
+
+---
+
+**B — THE TWO HONEST CONCERNS 20f-iii LEFT, which are one fix.**
+
+4. **A worker's ERRORS are not relayed the way its messages are.** `tab_pmap_trampoline()` collects
+   conditions deliberately and not errors (mirai's `[.stop]` re-throws the first), so under
+   `parallel` a failing model surfaces with a different call stack than serially and, with several
+   units, possibly a *different unit's* error. Shared with `tab()`, so the fix lands in
+   `R/tab-parallel.R` and both producers get it.
+
+5. **…and it restores what 20f-iii lost.** Its nine changed messages dropped purrr's
+   `i With name: m1.`, so an error in the 2nd model of a list no longer names the model. A
+   `reg_spec_build()` that wraps its own body and re-throws with the SPEC's label
+   (`rlang::try_fetch` + `cli_abort(parent = )`) fixes it in **both** branches — and names the
+   model rather than an index, which is better than what was lost.
+
+---
+
+**C — INTEGRATION AND SIMPLIFICATION (the reward of the restructure).**
+
+6. **Census `new_reg_spec_product()`'s slots for orphans.** Several facts moved into the builder and
+   may no longer need to leave it (`emp$crude_key`, `emp$fac_preds`), and the ctx's `fit_of_col` /
+   `fit_ncol` should be re-checked for readers now that `_assemble` is four lines. ⚠ the `fit` slot
+   is the phase's own subject (A1) — if A1 removes the refusal it stops being conditional.
+
+7. **The nesting rule, stated once.** `tab_vars` × specs × outcomes NEST, and only the OUTERMOST
+   axis dispatches — a worker forces `parallel = FALSE` so it never spawns nested daemons. That is
+   currently three literals in three files; it should be one declared fact, the way
+   `tab_rowvar_ctxs()` states it for `tab()`.
+
+8. **The two still-routed redundancies** (`dev/tabxplor_reg_performance.md` §7.4): the multinomial
+   comparison's per-spec grid rebuild (byte-identical to reuse only if every spec resolves the same
+   `y_ref` — true today, stated nowhere), and `reg_global_rows()`'s `drop1` reduced-model refits
+   (⚠ the only cheaper route is a Wald test, which is a *different number* — so this one is very
+   likely a declared keep). Item 2 above may delete the first for free.
+
+9. **`reg_interaction_rows()`**, the fourth fitting site: it lives after the split barrier and needs
+   the POOLED data across groups, so it cannot join a per-spec product. Declare that where it sits,
+   so the next reader does not re-derive it.
+
+10. **jamovi**: the reg bridge must never send `parallel`, and the live cache forces serial
+    (`tab_parallel_workers(cache_env =)`). Today that is a comment; make it **one fixture**.
+
+---
+
+**Surface**: none expected. `parallel` is already the shared argument, and A removes *refusals*, not
+arguments — so a table that used to be serial simply becomes faster, and its doc sentence gets
+shorter.
+
+**Verification**: `dev/verify_reg_specs.R` (declared deltas only — and A1's digest route, if taken,
+must be pinned against the real `anova()` at `expect_identical`) · `test-parallel-parity.R`
+extended to the shapes A un-refuses (⚠ **unsandboxed**) · a re-run of section **1d** of
+`dev/benchmarks/phase20f2_reg_model_axis.R`, which now measures the achieved speedup directly, with
+a comparison-mode row added.
+
+**Depends on**: 20f-iii. ⚠ **its own session**, and the same reason as its three predecessors: A is
+a numerical-parity question, B is a plumbing fix in a shared file, and C is a census. Interleaving
+them is how a refactor and a numeric change land in one diff and neither can be verified.
 
 ---
 

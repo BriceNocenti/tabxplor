@@ -30,6 +30,7 @@ tab_reg(
   display = "value",
   cleannames = NULL,
   subtext = "",
+  parallel = NULL,
   ...
 )
 }
@@ -507,6 +508,17 @@ column wins and \code{display} is ignored, with a message.}
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
+
+\item{parallel}{Opt-in parallel build of the models of one call, using the (Suggests-only)
+\pkg{mirai} package: several \code{outcome}s, a \code{predictors} list, or the \code{tab_vars} groups.
+\code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off); \code{FALSE} forces serial; \code{TRUE}
+uses an auto worker count; an integer sets the number of worker processes. Byte-identical to
+the serial result. It pays off for \strong{many, evenly sized} models against a survey-size data
+frame, and is a loss otherwise (the pool costs about a second to start, and two uneven models
+cannot gain much). Some shapes are always serial and say so when asked: a model comparison
+(\code{stats = "compare_*"}) is a test \emph{between} the fits, and compared models with
+\code{empirical = TRUE} share one observed block. The worker pool persists for the session; release
+it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
 
 \item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
 cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()}

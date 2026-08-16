@@ -1,0 +1,9 @@
+"case","axis","n_units","workers","serial","parallel","speedup_achieved","speedup_ceiling"
+"G tab_vars 4 groups (race), n = 200 000","G",3,3,1.484,1.379,1.076,1.305
+"G tab_vars 8 groups (year), n = 200 000","G",8,4,1.911,0.99,1.93,2.666
+"G tab_vars 4 groups (race), n = 21 483","G",3,3,0.25,0.229,1.092,1.888
+"S 2 outcomes, one table, n = 200 000","S",2,2,5.007,2.465,2.031,1.98
+"S 4 outcomes, one table, n = 200 000","S",4,4,9.291,3.169,2.932,2.619
+"S 3-model comparison UNBALANCED, n = 200 000","S",3,3,4.279,2.734,1.565,1.454
+"S 3-model comparison BALANCED, n = 200 000","S",3,3,7.365,2.692,2.736,2.662
+"R 2 outcomes x a models list, n = 200 000","R",2,2,10.46,4.756,2.199,1.911

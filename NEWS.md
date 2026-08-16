@@ -91,7 +91,8 @@
   `options(tabxplor.var_labels = TRUE)` shows variable labels instead of names in exports.
 * **New arguments on `tab()`**: `na` gains `"common_base"` /,
   `spread_vars =`, `n_min =` (hide small-base cells), `display =` (composite cells like `"{pct} (n={n})"`),
-  `common_totrow =`, a per-`col_var` / positional `ref`, and `parallel =` (opt-in, needs `mirai`).
+  `common_totrow =`, a per-`col_var` / positional `ref`, and `parallel =` (opt-in, needs `mirai`;
+  also on `tab_reg()`, where it builds the models / groups / outcomes of one call in parallel).
 * **`tab_counts()`** — build a full colour-coded table from already-aggregated counts (long, wide, `table`,
   or frequencies + base N) instead of microdata.
 * **`tab_reg()`** — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal),

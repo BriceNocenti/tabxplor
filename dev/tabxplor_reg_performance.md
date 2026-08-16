@@ -277,3 +277,85 @@ list**, where `compare = "none"` and `empirical = FALSE` mean there is no shared
   `outcome = c("a","b"), stats = "compare_baseline"` reached `reg_compare_rows()` with two different
   responses, where `anova.glmlist`'s own `sameresp` filter silently dropped a model and the surviving
   row was labelled with the wrong outcome.
+
+---
+
+## 7. Phase 20f-iii — what the S axis cost, and what it delivers
+
+§6.5 listed four things that would constrain a `reg_build()` restructure of the S axis. Three of
+them survived as *declared refusals* rather than as obstacles, and the fourth — the one the study
+called "the one irreducible price" — **did not have to be paid**.
+
+### 7.1 The restructure
+
+`reg_spec_build()` (`R/reg-spec-build.R`) is everything one model contributes, as one
+`new_reg_spec_product()` record; the six stages that carried a `map(specs, …)` became cross-spec
+assemblers. The three §6.5 constraints are `reg_specs_independent(ctx)`, which returns `NULL` or the
+**reason**, reported whenever `parallel` was explicitly asked for:
+
+| refusal | why it is a fact about the statistics |
+|---|---|
+| `compare != "none"` | a test *between* two fitted models needs both objects (`stats::anova(m_lo, m_hi)`, or survey's `regTermTest` Wald arm). It returns early on the default, so it excludes little |
+| comparison + `empirical` | spec 1's crude block is every column's `obs` **and** every column's gap-test crude leg, and it carries the heavy frame |
+| the skeleton was deferred | narrower than §6.5's "a compound formula": only an **all-coefficient** table reads its skeleton off the first fit — the marginal builders key by the original variables, so theirs is fit-free |
+
+**The payload rule** is what makes the rest dispatchable: the product carries no fit and nothing
+referencing one, with exactly those two exceptions (`fit`, and the shared crude block's
+`$frame`/`$fits`) — each on a path that is serial for one of the reasons above.
+
+### 7.2 The message stream: the predicted price was not paid
+
+§6.5 item 4 predicted that a per-spec design would turn the stream **stage-major → spec-major**, so
+`dev/verify_reg_specs.R` would print *"(same set, different ORDER)"* for multi-spec cases.
+**Measured: zero cases.** The reason is worth recording, because it also says where a future
+reordering *would* show: after 20d and 20f, the only per-spec emitters left are the fit itself,
+`reg_marginal_basis_warn()` and the Brant test — and no case in the 290 combines two of them across
+two specs. Everything else on the moved paths is condition-free (`reg_curves`, `reg_level_counts`,
+`reg_complete_frame`, `reg_gof_rows`, `reg_glance`, `reg_global_rows`, the whole of
+`R/reg-empirical.R`, `reg_gap_se_columns`).
+
+What *did* change, in **9 of 290 cases**: an abort raised inside the fit loop no longer wears
+purrr's `i In index: N. Caused by error in …` wrapper, that loop no longer being a `purrr::map()`.
+The message is more direct and each is self-identifying; ⚠ the loss is `i With name: m1.` on a
+models list — an error in the 2nd model of a comparison no longer names the model.
+
+### 7.3 The achieved speedup
+
+Section **1d** of `dev/benchmarks/phase20f2_reg_model_axis.R` runs each §6.2 shape twice, serial and
+with `parallel = min(units, 4)`, so the ceiling and the delivery are measured on the same call.
+
+| shape (n = 200 000; ext4/WSL2, min of 3 warm runs) | serial | `parallel` | **achieved** | §6.2 ceiling |
+|---|---|---|---|---|
+| **S** 4 outcomes, one table | 9.29 s | **3.17 s** | **2.93×** | 2.62× |
+| **S** 3-model comparison, balanced | 7.37 s | **2.69 s** | **2.74×** | 2.66× |
+| **R** 2 outcomes × a models list | 10.46 s | **4.76 s** | **2.20×** | 1.91× |
+| **S** 2 outcomes, one table | 5.01 s | **2.46 s** | **2.03×** | 1.98× |
+| **G** `tab_vars`, 8 even survey waves | 1.91 s | **0.99 s** | **1.93×** | 2.67× |
+| **S** 3-model comparison, unbalanced | 4.28 s | 2.73 s | 1.57× | 1.45× |
+| **G** `tab_vars`, 4 uneven race groups | 1.48 s | 1.38 s | 1.08× | 1.30× |
+| **G** `tab_vars`, 4 uneven groups, n = 21 483 | 0.25 s | 0.23 s | 1.09× | 1.89× |
+
+⚠ **The achieved figure EXCEEDS the ceiling on five of the eight rows**, and that is the ceiling's
+own conservatism showing, not a measurement error: §6.2 builds it from `sum units`, and a unit built
+alone re-runs the argument boundary the real call runs once (it exceeds `whole` on five rows there
+too). Read the two columns as "about the same", not as a contradiction.
+
+**What the pattern says.** The S axis delivers what 20f-ii said it would — **2.0×–2.9× wherever the
+models are alike**, and the *default* models list is included (a comparison KEY is what refuses, and
+`compare = "none"` is the default). The G axis delivers only on an even axis (1.93× over eight
+survey waves, 1.08× over four uneven race groups), exactly as its balance figure predicted. And at
+teaching scale the whole question is moot: 0.25 s → 0.23 s.
+
+**Read it with §6.2's noise band (±0.1–0.35×) and §6.3's transport figures.** The pool costs ~1.6 s
+on its first dispatch of a session, which the harness amortises with its warm-up run — so a session
+that builds ONE table sees less than this, and a session that builds several sees this. That is why
+the argument stays opt-in and its documented sentence names the shape that pays: **many, evenly
+sized models against a survey-size frame**.
+
+### 7.4 What is still redundant, one shape further in
+
+In a **multinomial** model comparison with `empirical`, specs 2..S have no crude block of their own
+(§6.4's `break`), so each one's tooltip block re-runs `reg_empirical()` on the same grid. Reusing
+spec 1's would be byte-identical only if every spec resolves the same `y_ref` — true today, stated
+nowhere — so it is left alone and routed to 20h rather than assumed. `reg_global_rows()`'s `drop1`
+refits (§4's routed item) are also still there.

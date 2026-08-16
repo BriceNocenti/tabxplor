@@ -316,14 +316,15 @@ TAB_OPTIONS <- list(
   # --- parallel ----------------------------------------------------------------------------------
   parallel = tx_opt(
     FALSE, "parallel", arg = "parallel",
-    doc = c("build the per-`row_var` tables of one [tab()] call on parallel CPU cores (needs the",
-            "`mirai` package). `TRUE` = auto select number of cores, integer = that many cores.",
-            "Release the pool with [tab_parallel_stop()].")),
+    doc = c("build the independent units of one call on parallel CPU cores (needs the `mirai`",
+            "package): the per-`row_var` tables of a [tab()], the models / `tab_vars` groups /",
+            "outcomes of a [tab_reg()]. `TRUE` = auto select number of cores, integer = that many",
+            "cores. Release the pool with [tab_parallel_stop()].")),
 
   parallel_min = tx_opt(
     2L, "parallel",
-    c("the smallest `row_var` count worth dispatching (fewer runs serially, since the setup would",
-      "outweigh the gain)."))
+    c("the smallest UNIT count worth dispatching -- `row_var`s for [tab()], models for [tab_reg()]",
+      "(fewer runs serially, since the setup would outweigh the gain)."))
 )
 
 # DORMANT, and deliberately without a row: `tabxplor.totcol_range` ("off"/"range"/"min") -- how a

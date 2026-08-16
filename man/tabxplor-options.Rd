@@ -82,8 +82,8 @@ relevant function, which always wins over the option.
 \section{Parallel build}{
 
 \describe{
-\item{\code{tabxplor.parallel}}{\code{FALSE} (default): build the per-\code{row_var} tables of one \code{\link[=tab]{tab()}} call on parallel CPU cores (needs the \code{mirai} package). \code{TRUE} = auto select number of cores, integer = that many cores. Release the pool with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}. Per-call \verb{parallel =}.}
-\item{\code{tabxplor.parallel_min}}{\code{2L} (default): the smallest \code{row_var} count worth dispatching (fewer runs serially, since the setup would outweigh the gain).}
+\item{\code{tabxplor.parallel}}{\code{FALSE} (default): build the independent units of one call on parallel CPU cores (needs the \code{mirai} package): the per-\code{row_var} tables of a \code{\link[=tab]{tab()}}, the models / \code{tab_vars} groups / outcomes of a \code{\link[=tab_reg]{tab_reg()}}. \code{TRUE} = auto select number of cores, integer = that many cores. Release the pool with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}. Per-call \verb{parallel =}.}
+\item{\code{tabxplor.parallel_min}}{\code{2L} (default): the smallest UNIT count worth dispatching -- \code{row_var}s for \code{\link[=tab]{tab()}}, models for \code{\link[=tab_reg]{tab_reg()}} (fewer runs serially, since the setup would outweigh the gain).}
 }
 }
 
