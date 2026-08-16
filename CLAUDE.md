@@ -1633,8 +1633,8 @@ to the surface.** After it:
 - `tab_reg()` gains a staged build and stops paying for a variance it already computes
   (**15.3 s → ~2 s**, measured).
 
-**Not a feature phase either**, with two deliberate exceptions: the jamovi level-collapse UI (20f)
-and — only if the measurement justifies it — `tab_reg()` parallelisation (20d part 3).
+**Not a feature phase either**, with two deliberate exceptions: the jamovi level-collapse UI (20g)
+and — only if the measurement justifies it — `tab_reg()` parallelisation (20f).
 
 **The hard rules are Phase 19's nine, unchanged**: simplify and integrate, never add another ad hoc
 layer · never guess what something is · one resolver, taken to completion · **facts live in ONE
@@ -1648,13 +1648,13 @@ it · golden discipline · the phase **"DONE" summary goes in CLAUDE.md and ONLY
 `v1.2.0` (59), not the dev head. Check every removal against it.
 
 ⚠ **Do not count lines as the simplification metric.** Phase 19 grew 11.9 % and got substantially
-better; Phase 20 will grow `R/` too (`TAB_ARGS`, `TEST_ROWS`, `tab_style()`, three generators, two
+better; Phase 20 will grow `R/` too (`TAB_ARGS`, `TEST_ROWS`, `outcome_level`, three generators, two
 harnesses). The metrics that track reality: *formals per producer · duplicated `@param` blocks ·
 `man/` lines · exports with zero external callers · cross-table keys unchecked · aborts vs informs*.
 `man/` is the one surface that shrinks unambiguously: **8 930 → ~7 300**.
 
 ⚠ **Differentiator 4 is the one at risk**: the jamovi UI shows R argument names *on purpose*, so
-every rename must reach `jamovi/*.a.yaml` in 20f or the teaching path starts lying.
+every rename must reach `jamovi/*.a.yaml` in 20g or the teaching path starts lying.
 `test-jamovi-vocabulary.R` goes red on any renamed value and stays red until then — that is the
 gate working, and it is why 20f cannot be skipped.
 
@@ -1672,34 +1672,37 @@ this phase cures, so they are stated as one set.
 | **KEY 3** | *which accessors exist* → one generic `fmt_attr()` pair + a measured keep-list + `tab_columns()` | **20a** |
 | **KEY 4** | *if two producers ask the same question, they ask it with the same word* → `tab_vars`, `ref`, `ci_method`, `footer` | **20c** |
 | **KEY 5** | *what kind of statistical row this is* → `TEST_ROWS`; the crosstab half of the footer finally declared | **20c** |
-| **KEY 6** | *which stage of a regression build produced which part of the table* → `new_reg_ctx()` + five named stages | **20d** |
+| **KEY 6** | *which stage of a regression build produced which part of the table* → `new_reg_ctx()` + five named stages | **20e** |
 | **KEY 7** | *which estimands tabxplor can differentiate analytically* → a declared `se` column; the AME stops being computed twice | **20d** |
-| **KEY 8** | *which arguments are a rendering style rather than a table* → `tab_style()` | **20e** |
+| **KEY 8** | *the export surface re-declares seven arguments five times* → `TAB_ARGS` covers the exporters too — **not** a `tab_style()` bundle | **20b** |
 | **KEY 9** | *a package whose whole value is a data model states it in one place* → `?tabxplor-model` | Phase 22b |
 
 **KEY 1 is this phase's keystone**, as KEY 5 was of Phase 19. Everything else is a prerequisite for
-it (2, 3), a second instance of it in another subsystem (4, 5, 8), or independent of it (6, 7).
+it (2, 3), a second instance of it in another subsystem (4, 5) — or, in KEY 8's case, **the same
+instance**: the export surface's duplication turned out to be KEY 1's, one subsystem further out.
+Only 6 and 7 are independent of it.
 
 ---
 
 #### Settled decisions — do not re-open
 
-Twenty-seven rulings; full table + rationale in the plan of plans §4. The ones that change what
+Thirty rulings; full table + rationale in the plan of plans §4. The ones that change what
 gets built:
 
 | decision | ruling |
 |---|---|
-| **the inference bundle** | **REJECTED.** No `tab_inference()`. `ci_method` / `design_effect` / `anova` stay flat formals with their option twins; the only change is `tab_reg(method =)` → **`ci_method`** with a declared `model` slot. *A bundle must make the common call shorter, not only the signature* — the general test for every future one |
+| **both proposed bundles** | **REJECTED.** No `tab_inference()`, no `tab_style()`. `ci_method` / `design_effect` / `anova` stay flat with their option twins (the only change is `tab_reg(method =)` → **`ci_method`** with a declared `model` slot); the exporters keep every formal. *A bundle must make the common call shorter, not only the signature* — the general test for every future one. And the lesson generalises: **a mirrored formal is not automatically a problem** — 7 defaulted arguments × 5 exporters cost a user nothing, the duplication was 35 hand-written `@param` blocks, which is KEY 1 |
 | `tab()`'s 9 deprecated formals | **into `...`**, caught by name, with an **abort on an unnamed 6th argument** |
 | the legacy step API | **hard-deprecate now**, defunct in 2.1.0 — the exported *chaining API*, never the computations (those moved into the leaf in 19j). ⚠ removes nothing this cycle: `tab-steps-legacy.R`'s 1 433 lines stay |
 | `tab_many()` | **stays soft-deprecated**; only its 448-line `.Rd` is fixed (`@inheritDotParams` → plain `@param`, −390) |
 | `tab_logit()` / `multi_logit()` | **deleted** (genuinely unreleased) — ⚠ **59 test call sites** to migrate, not "nothing references them" |
-| `tab_reg()` renames | `split_var` → **`tab_vars`** · `reference` → **`ref`** (`c(var = "level")`, absorbing `inverse_two_level_factors`) · `stats`+`compare`+`baseline` → **`footer`** · `.fit_cache` → `...` |
+| `tab_reg()` renames | `split_var` → **`tab_vars`** · `dependent` → **`outcome`** (package-wide) · `reference` → **`ref`** (`c(var = "level")`, **predictors only**) · `method` → **`ci_method`** · `stats`+`compare`+`baseline` → **`footer`** · `.fit_cache` → `...` |
+| **`outcome_level`** (new) | `inverse_two_level_factors` is **deleted** for `outcome_level = c(outcome = "level")`. ⚠ NOT absorbed into `ref`: **`ref` names the level you compare AGAINST, `outcome_level` the level you MODEL** — opposite roles, so one argument would carry two meanings. binomial → the modelled level (the column header); multinomial → the baseline (taking over what `reference` does today); ordinal → **refused**. Precedent: SAS `PROC LOGISTIC` has exactly this pair, `EVENT=` beside `REF=` |
 | `tab(ref / ref2)` · `na`'s two vocabularies · the `color` default asymmetry · `pct = "no"` | **unchanged** — the last two deliberate; *state* `pct`'s default in `?tab` rather than change it |
-| `tab_style()` · `TEST_ROWS` · reg parallelisation · the jamovi level-collapse UI | **all inside Phase 20**, pre-release |
+| `TEST_ROWS` · reg parallelisation · the jamovi level-collapse UI | **all inside Phase 20**, pre-release — parallelisation as its own phase (20f), gated on 20d and 20e and free to conclude "no" |
 | accessors | **generic mostly, a few named ones kept — the most used.** The keep-list is measured at plan time and must include `get_col_var()` and `set_row_kind()` |
-| `new_lvl()`/`is_lvl()` un-exported · `tab_prepare()` + `tab_get_wrapped_dimensions()` → `@keywords internal` · `complete_partial_totals()` un-exported · `tabxplor.color_style_type` deleted | ruled |
-| `tabxplor.stars` absorbs `signif_levels`+`signif_labels` **and becomes a per-call ladder** · new `options(tabxplor.total_names = c(row=, col=, tab=, other=))` | ruled |
+| `new_lvl()`/`is_lvl()` **stay exported** (a user meets the class) · `tab_prepare()` + `complete_partial_totals()` **off the public surface** · `tab_get_wrapped_dimensions()` → `@keywords internal` · `tabxplor.color_style_type` deleted | ⚠ `tab_prepare` and `complete_partial_totals` **are CRAN 1.3.1**, so both take the deprecate-now / un-export-in-2.1.0 route — never a silent drop |
+| `tabxplor.stars` absorbs `signif_levels`+`signif_labels` **and becomes a per-call ladder** · new `options(tabxplor.total_names = c(row=, col=, tab=, other=))`, **and `total_names` / `totaltab_name` / `other_level` leave the signatures** | ⚠ all three are **CRAN 1.3.1 formals** of `tab()` (and of `tab_many()`), so they go through `...` with a deprecation, not out |
 | `@inheritDotParams` | **never** — it *inlines*; `tab_many.Rd` is the 448-line proof |
 | `...` | on **wrappers and superseded producers only**; `tab()` and `tab_reg()` keep every live formal |
 | the `tab_kable_*` / `xl_font_*` option renames · a JS syntax gate · column-axis `ordered` | **stay dropped** — do not re-propose |
@@ -1710,8 +1713,8 @@ gets built:
 
 - **Per phase, targeted** (`filter =`) plus the sentinels the phase entry names. **Not the full
   suite after every edit.**
-- **Full suite** at three checkpoints: end of **20b**, end of **20d**, end of **20g** — plus one
-  **`devtools::check()` at the end of 20g**, so Phase 22 does not inherit a broken tree (19n found
+- **Full suite** at three checkpoints: end of **20b**, end of **20e**, end of **20i** — plus one
+  **`devtools::check()` at the end of 20i**, so Phase 22 does not inherit a broken tree (19n found
   three `check()`-only failures invisible to the suite). The CI-locale run is the release phase's.
 - **Six harnesses.** Four exist (`verify_golden_field_delta.R` · `verify_color_attrs.R` ·
   `verify_reg_specs.R` · `verify_no_ghost_functions.R`); **two are new in 20a and gate 20b/20c**:
@@ -1725,7 +1728,7 @@ gets built:
 
 #### The phases
 
-Seven. Each is *plan-then-implement*, starting in plan mode, in its own fresh session. The
+Nine. Each is *plan-then-implement*, starting in plan mode, in its own fresh session. The
 maintainer commits between phases and pushes at the end of Phase 20.
 
 **There is deliberately no documentation phase** — Phase 22 below already owns the architecture
@@ -1739,19 +1742,27 @@ itself.
 | phase | title | one line |
 |---------|--------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | **20a** | The floor: referential integrity, the exposed surface, dead weight | KEY 2's foreign keys · KEY 3's `fmt_attr()`/`tab_columns()` · the deletions and demotions · `tab_many.Rd` −390 · the two harnesses · the 2 live colour-engine `FIXME`s |
-| **20b** | KEY 1 — the argument surface as data                               | `TAB_ARGS` + generated `@param`s and ~15 value lists (part 1, byte-identical) → `...` + `tab_check_dots()`, `tab()` 52 → ~37, the `stars` ladder and `total_names` (part 2) |
-| **20c** | KEY 4 + KEY 5 — one word per question, and the footer's model      | the four `tab_reg()` renames · `footer =` with `TEST_ROWS` as its vocabulary |
-| **20d** | `tab_reg()`: analytic marginal SE, staged build, parallel verdict  | KEY 7 (85 % of a 15.3 s call is an avoidable numerical jacobian) → KEY 6 (`new_reg_ctx()`) → **re-measure, then decide** ("do not parallelise" is a legitimate outcome) |
-| **20e** | KEY 8 — `tab_style()` and the exporters' mirror                    | 28 mirrored formals over five **released** exporters; `theme`/`color`/`caption`/`transpose`/`path` stay flat |
-| **20f** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
-| **20g** | Harvest: the deletion pass and open integration                    | re-run the censuses and **report what did not shrink** · then the creative half: what does the finished surface make possible? *(ask before building)* |
+| **20b** | KEY 1 + KEY 8 — the argument surface as data, producers and exporters alike | `TAB_ARGS` + generated `@param`s and ~15 value lists, **the five exporters included** (part 1, byte-identical) → `...` + `tab_check_dots()`, `tab()` 52 → ~37, the `stars` ladder, `total_names` (part 2) |
+| **20c** | KEY 4 + KEY 5 — one word per question, and the footer's model      | the `tab_reg()` renames incl. `dependent` → `outcome` and the new `outcome_level` · `footer =` with `TEST_ROWS` as its vocabulary |
+| **20d** | KEY 7 — marginal effects, computed once and computed fast          | 85 % of a 15.3 s call is an avoidable *numerical* jacobian, and tabxplor already owns the analytic SE. Then the research half: can `marginaleffects` leave the hot path entirely? ⚠ **web searches expected** |
+| **20e** | KEY 6 — `reg_build()` becomes a staged build                       | the package's largest function (534 lines, 7 local closures, 11 unnamed phases) gets `new_reg_ctx()` + five named stages. **Pure refactor**: `verify_reg_specs.R` must print IDENTICAL |
+| **20f** | `tab_reg()` parallelisation: measure, then decide                  | ⚠ **re-measure first** — if 20d got the call to ~2 s the case may have evaporated. Study in a `dev/*.md`, **pause**, then implement only what the measurement justifies. **A measured "no" is a complete phase** |
+| **20g** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
+| **20h** | Harvest 1: the deletion pass                                       | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product |
+| **20i** | Harvest 2: open integration                                        | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building** |
 
-**Dependencies**: 20a first · 20b and 20c need 20a's harnesses · 20d needs 20c · 20e needs only
-20a · 20f needs 20b/20c/20d · 20g last.
+**Dependencies**: 20a first · 20b and 20c need 20a's harnesses · 20d needs 20c · 20e needs 20d ·
+20f needs 20d+20e · 20g needs 20b/20c/20d · 20h then 20i last.
 
-**Mapping from the old draft** (nothing lost): old 20d (jamovi UI) → **20f** · old 20e (the
-marginal-effects freeze) → **20d part 1**, root-caused as KEY 7 · old 20f (parallelisation) →
-**20d part 3**.
+⚠ **The three `tab_reg()` phases are deliberately separate sessions** — one story, three frames of
+mind: 20d is **numerical parity** (research, closed forms, tolerance fixtures), 20e is a **pure
+structural refactor** proved by one harness printing IDENTICAL, 20f is a **measurement** that may
+conclude "no". Interleaving them is how a refactor and a numeric change land in one diff and
+neither can be verified.
+
+**Mapping from the old draft** (nothing lost): old 20d (jamovi UI) → **20g** · old 20e (the
+marginal-effects freeze) → **20d**, root-caused as KEY 7 · old 20f (parallelisation) → **20f**,
+unchanged in content but now gated on 20d and 20e.
 
 **At the end of each Phase,** add a `#### Phase 20{x} — <title>` header **here, in CLAUDE.md**, and
 write the **"DONE" summary** under it. Write it in **this file and nowhere else**. Update the
