@@ -144,3 +144,136 @@ is a different number); the null `multinom` / `polr` inside `reg_glance()`; and 
 `tab_pmap()` relays worker conditions in unit order (Phase 20f), `reg_build()` is staged (20e) — but
 a worker must still return `reg_build_digest()` and never a fit (~10 MB each; ~41.5 MB per jamovi
 round-trip was Phase o's measured freeze), and the jamovi path stays serial by construction.
+
+*It was re-opened, one axis out, in Phase 20f-ii. §6.*
+
+---
+
+## 6. Phase 20f-ii — the MODEL axis
+
+§1–§5 asked whether a pool helps **inside one model build**. 20f-ii asks it where a call builds
+**several independent models**. Harness: `dev/benchmarks/phase20f2_reg_model_axis.R`; results
+`dev/benchmarks/results_2.0.0/phase20f2_*`. Same platform caveat as above.
+
+### 6.1 The three axes are not the same shape
+
+This is the structural finding, and it decides more than the timings do.
+
+| axis | loop | one unit returns | parallel shape |
+|---|---|---|---|
+| **G** — `tab_vars` groups | `reg_stage_split()`, a recursive `reg_build()` per level | `list(data, test)` — **finished tibbles** | ✅ already `tab_pmap`-shaped. Fit-free products; the one cross-unit step (`reg_write_group_gap()`) is a post-loop barrier matching by KEY, not position; and the message stream is **already unit-major**, so a relay preserves order exactly |
+| **R** — several outcomes × a models list | `tab_reg()`'s own recursion | a finished `tabxplor_tab` (its `fit_spec` is ~4 KB of strings) | ✅ no cross-unit dependency at all |
+| **S** — several outcomes in ONE table · a models list | `reg_stage_fit()` + six more per-spec loops in `_columns` / `_footer` / `_rows` / `_empirical` / `_tips` | the **raw fit** — and `emp_by_fit[[i]]` carries `$frame` + `$fits`, **60–100 MB at n = 200 000** | ❌ blocked as written: six to ten times the payload §5's constraint was written about |
+
+### 6.2 The ceiling, and why balance decides it
+
+`whole` is the real call; `units` are the same models built one at a time.
+`ceiling = max(max unit, (whole − sum units) + max unit)` — a perfect pool with a core per unit.
+⚠ it is **conservative**: a unit built alone re-runs the argument boundary the real call runs once,
+so `sum units` can exceed `whole` (it does on five of the eight rows), and the clamp is what keeps
+the ceiling from falling below the longest unit, which no number of extra cores can shorten.
+
+| shape (n = 200 000 unless stated) | whole | max unit | ceiling | balance | speedup |
+|---|---|---|---|---|---|
+| G `tab_vars` 4 groups (race — **uneven**) | 1.73 s | 0.94 s | 1.41 s | 2.23 | **1.23×** |
+| G `tab_vars` 8 groups (year — **even**) | 1.93 s | 0.28 s | 0.85 s | 1.63 | **2.28×** |
+| G `tab_vars` 4 groups (race), n = 21 483 | 0.29 s | 0.13 s | 0.19 s | 1.70 | 1.53× |
+| S 2 outcomes, one table | 5.21 s | 2.79 s | 2.79 s | 1.04 | 1.87× |
+| S 4 outcomes, one table | 9.14 s | 3.19 s | 3.19 s | 1.25 | **2.86×** |
+| S 3-model comparison, **unbalanced** | 4.24 s | 3.21 s | 3.21 s | 2.09 | 1.32× |
+| S 3-model comparison, **balanced** | 7.21 s | 3.10 s | 3.10 s | 1.19 | **2.33×** |
+| R 2 outcomes × a models list | 10.27 s | 5.44 s | 5.44 s | 1.05 | 1.89× |
+
+**Balance, not unit count, is the variable.** The same axis at the same size gives 1.23× over four
+uneven race groups and 2.28× over eight even survey waves; the same three-model comparison gives
+1.32× when one model dominates and 2.33× when they are alike. Two units cannot reach 2× at all once
+the shared remainder is counted (S 2 outcomes: 1.87× at a balance of 1.04, which is as even as an
+axis gets).
+
+⚠ **These ceilings carry ±0.1–0.35× of run-to-run noise**, which is worth more than a footnote when
+the decision bar is 2×. A second run of the same harness on the same tree gave G-8-even **2.11×**
+(against 2.28×), S-4-outcomes **2.52×** (against 2.86×) and the unbalanced comparison **1.41×**
+(against 1.32×). So "2.86×" honestly reads "about 2.5–2.9×, before any implementation overhead" —
+and only the S axis is clear of the bar by more than the noise.
+
+### 6.3 Transport is NOT the obstacle — which is worth recording, because it was assumed to be
+
+| | |
+|---|---|
+| the 200 000-row fixture, serialized | 16.0 MB (gss_cat itself: 1.3 MB) |
+| `daemons(4)` spin-up | 0.59 s — once per session |
+| first 4-task round-trip | 1.67 s — dispatcher connection setup, once per pool |
+| `everywhere()` ship of the 200 000-row frame | **0.05 s** — once per dispatch |
+| **warm** 4-task round-trip | **0.003 s** — once per dispatch |
+
+The `big_df` figure §26 of the decisions doc records ("transfer is the killer", 6.8 s) is a 161 MB
+fixture; at survey scale the ship is two orders cheaper and a warm dispatch is free. So the honest
+statement is that **the model axis is bounded by Amdahl and by balance, not by serialisation**.
+
+### 6.4 The redundancy: one more "computed k times, read once"
+
+Call counts, one instrumented run each (n = 21 483), before → after
+(`results_2.0.0/phase20f2_redundancy_{before,after}.csv`). `reg_fit` is the whole cost unit; the two
+`reg_empirical*` columns are what 20f-ii changed.
+
+| shape | `reg_fit` | `reg_empirical` | `reg_empirical_fit` |
+|---|---|---|---|
+| 1 model, `empirical` | 3 | 1 | 1 |
+| **3-model comparison, `empirical`** | 9 → **5** | 3 → **1** | 3 → **1** |
+| **3-model comparison, `color = "adjustment"`** | 9 → **5** | 3 → **1** | 3 → **1** |
+| 2 outcomes, `empirical` (must NOT change) | 6 | 2 | 2 |
+| `tab_vars` 4 groups | 3 | 0 | 0 |
+| 2 outcomes × a models list | 4 | 0 | 0 |
+
+The "must NOT change" row is the half of the contract that says the fix did not over-reach: two
+outcomes are two genuinely different crude blocks, and they stay two. `reg_skeleton` is 3 for four
+`tab_vars` groups and 2 for a two-outcome recursion — per-unit rebuilds on the FULL frame, left
+alone here and noted for whoever restructures those axes.
+
+In **comparison mode** every input to the `_empirical` loop is table-wide or per-*outcome*, and a
+models list is refused unless it has exactly one outcome — so specs 2..S recomputed spec 1 exactly,
+and only spec 1 was ever read (`reg_stage_assemble()` takes `emp_by_fit[[1]]` as every column's
+`obs` *and* as its gap-test crude leg). The one other reader, `reg_stage_tips()`'s numeric block,
+emitted duplicate rows for a column name every spec resolves identically, which
+`tab_export_prep()`'s `match()` then discarded first-wins. Fixed with the idiom the `add_n` loop 70
+lines up already uses: `if (i > 1L && n_outcomes <= 1L) break`.
+
+**This is 20f-i's finding repeating one axis out**, and it is worth more than the pool would have
+been on the same shape: a free `(S−1)/S` of the whole crude stage on every model comparison with a
+crude companion — which `color = "adjustment"` turns on automatically.
+
+### 6.5 What the S axis would cost
+
+The S axis is where the ≥2× shapes are (2.86× at four outcomes, 2.33× at three balanced models), and
+it is the one that cannot be dispatched as written. Making it dispatchable is a `reg_build()`
+restructure of 20e's size — the six per-spec loop *bodies* lifted out of the table-scalar stages into
+one `reg_spec_build()` returning a declared product, the stages becoming cross-spec assemblers
+("20e one grain finer"). Four things constrain it, all verified in the code rather than assumed:
+
+1. **`reg_compare_rows()` cannot be ported.** It needs two fit *objects*: `stats::anova(m_lo, m_hi)`
+   — the `method = "Wald"` → `regTermTest` arm on a survey fit — plus `reg_compare_guard()` and
+   `reg_aic_value()`. Re-implementing survey's Wald arithmetic would make tabxplor a second producer
+   of a survey quantity, the same class as §3's measured `drop1` vs `anova` divergence (12.47 against
+   14.25). It stays, and **forces the serial path** — a fact about the statistic, not a limitation:
+   a between-model test needs the models together. It returns early on `compare == "none"`, which is
+   the default, so this excludes far less than it sounds.
+2. **Comparison mode with a crude block cannot go parallel either**: spec 1's block is every column's
+   `obs`, and it carries the 60–100 MB frame of §6.1.
+3. **A compound formula** takes its shared skeleton from `fits[[1]]`.
+4. **The message stream turns stage-major → spec-major**, so `dev/verify_reg_specs.R` stops printing
+   IDENTICAL for multi-spec cases and prints *"(same set, different ORDER)"* instead. Detectable, not
+   silent — but it is the one irreducible price, and it must be declared.
+
+What is left parallel after those: **several outcomes** (any `empirical`), and **the default models
+list**, where `compare = "none"` and `empirical = FALSE` mean there is no shared crude block at all.
+
+### 6.6 Verdict
+
+- **G and R could be dispatched today**, reusing `tab_pmap()` with no restructure — but they clear
+  a ≥2× bar only for an *even* axis at survey scale, where the whole saving is about a second.
+- **S is where the 2×+ shapes are**, and it needs §6.5's restructure first.
+- **What shipped in 20f-ii regardless of any of that**: §6.4's de-duplication, and a guard on a
+  latent defect found beside it — `compare` was gated nowhere, so
+  `outcome = c("a","b"), stats = "compare_baseline"` reached `reg_compare_rows()` with two different
+  responses, where `anova.glmlist`'s own `sameresp` filter silently dropped a model and the surviving
+  row was labelled with the wrong outcome.

@@ -1,0 +1,46 @@
+tabxplor Phase 20f-ii -- tab_reg() MODEL-AXIS profile -- R version 4.6.1 (2026-06-24) 
+fixture: forcats::gss_cat (21483 rows) and a seeded 200 000-row resample
+platform: ext4 / WSL2 -- NOT comparable to the committed Windows baselines
+timings: min of 3 warm runs.  counts: one instrumented run.
+
+=== 1a  THE AXIS GRID ===
+whole   = the real call.   units = the same models built one at a time.
+ceiling = (whole - sum units) + max unit, i.e. a perfect pool with a unit per core.
+balance = max unit / mean unit; 1.00 is perfectly even, high means one unit dominates.
+
+shape                                           whole    sum u    max u  ceiling  balance   speedup
+---------------------------------------------------------------------------------------------------------------------- 
+G tab_vars 4 groups (race), n = 200 000        1.73 s   1.26 s   0.94 s   1.41 s    2.23     1.23x
+G tab_vars 8 groups (year), n = 200 000        1.93 s   1.36 s   0.28 s   0.85 s    1.63     2.28x
+G tab_vars 4 groups (race), n = 21 483         0.29 s   0.23 s   0.13 s   0.19 s    1.70     1.53x
+S 2 outcomes, one table, n = 200 000           5.21 s   5.36 s   2.79 s   2.79 s    1.04     1.87x
+S 4 outcomes, one table, n = 200 000           9.14 s  10.21 s   3.19 s   3.19 s    1.25     2.86x
+S 3-model comparison UNBALANCED, n = 200 000   4.24 s   4.59 s   3.21 s   3.21 s    2.09     1.32x
+S 3-model comparison BALANCED, n = 200 000     7.21 s   7.82 s   3.10 s   3.10 s    1.19     2.33x
+R 2 outcomes x a models list, n = 200 000     10.27 s  10.42 s   5.44 s   5.44 s    1.05     1.89x
+
+NOTE `sum units` is an OVER-estimate of the loop's own content: each unit built alone re-runs
+the argument boundary, which the real call runs once. So `ceiling` is conservative -- a real
+pool cannot beat it, and may fall short of it.
+
+=== 1b  THE TRANSPORT (what a pool costs before it computes anything) ===
+fixture serialized: gss_cat 1.3 MB, the 200 000-row resample 16.0 MB
+daemons(4) spin-up           0.59 s   } once per session
+everywhere(load_all)         0.00 s   } (dev only -- an installed package costs 0)
+first 4-task round-trip      1.67 s   } dispatcher connection setup
+everywhere(ship 200k rows)   0.05 s   <- once per dispatch
+warm 4-task round-trip      0.003 s  <- once per dispatch
+
+=== 1c  THE REDUNDANCY (what a multi-model call computes per unit and reads once) ===
+shape                                          reg_fit / reg_skeleton / reg_resolve_args / reg_empirical / reg_emp_fit
+---------------------------------------------------------------------------------------------------------------------- 
+1 model, empirical, n = 21 483                 3 / 1 / 1 / 1 / 1
+3-model comparison, empirical, n = 21 483      9 / 1 / 1 / 3 / 3
+3-model comparison, adjustment colour, n = 21 483   9 / 1 / 1 / 3 / 3
+2 outcomes, empirical, n = 21 483              6 / 1 / 1 / 2 / 2
+tab_vars 4 groups, n = 21 483                  3 / 3 / 1 / 0 / 0
+2 outcomes x a models list, n = 21 483         4 / 2 / 2 / 0 / 0
+
+A count is a contract: a later run that sees a bigger number has found a regression, and one
+that sees a smaller one has found a de-duplication. `reg_empirical_fit` is the expensive column
+here -- it fits one univariable model per predictor with no closed form.

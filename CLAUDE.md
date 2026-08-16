@@ -455,8 +455,12 @@ R/
 │                              collapsed FIVE drifted producers, `tab_reg()` is ONE whose vocabularies
 │                              are already declared once each, and TAB_ARG_VALUES' own exclusion rule
 │                              ("validating it means REWRITING it") disqualifies 11 of 15 candidates.
-│                              THE ORDER IS THE DESIGN, and the 23 constraints are written out as
-│                              `H1`..`H23` where they bind -- three of which were VIOLATED: the
+│                              THE ORDER IS THE DESIGN, and the 24 constraints are written out as
+│                              `H1`..`H24` where they bind (20f-ii's H24 = a between-model test
+│                              needs the models to share an OUTCOME -- `compare` was gated nowhere,
+│                              so several outcomes + a comparison key reached reg_compare_rows()
+│                              with two responses, `anova.glmlist` silently dropped one and the row
+│                              was labelled with the wrong outcome) -- three of which were VIOLATED: the
 │                              `empirical` forcing/degrade straddled the notes and the specs (so a
 │                              stored effect word could contradict its own column), the
 │                              `color_signif` default landed 22 lines after the note that reads it,
@@ -2112,17 +2116,22 @@ itself.
 | **20d** | KEY 7 — marginal effects, computed once and computed fast          | 85 % of a 15.3 s call is an avoidable *numerical* jacobian, and tabxplor already owns the analytic SE. Then the research half: can `marginaleffects` leave the hot path entirely? ⚠ **web searches expected** |
 | **20e** | KEY 6 — `reg_build()` becomes a staged build                       | the package's largest function (534 lines, 7 local closures, 11 unnamed phases) gets `new_reg_ctx()` + five named stages. **Pure refactor**: `verify_reg_specs.R` must print IDENTICAL |
 | **20f** | `tab_reg()` parallelisation: measure, then decide                  | ✅ **measured "no"** — the remaining cost was the model-check footer (81–94 % of a call), most of it computed several times and read once. No pool; three de-duplications + a declared `REG_CHECKS$cost` instead (2.6–6.0× on a default call). Study: `dev/tabxplor_reg_performance.md` |
+| **20f-ii** | the same question at the MODEL level: measure the three axes     | ✅ **measured** — the three axes are not the same shape. `tab_vars` (G) and outcomes × a models list (R) already return finished tables and are dispatchable today, but clear ≥2× only on an *even* axis at survey scale; the **S** axis (several outcomes in one table · a models list) holds the 2×+ shapes (2.86× at four outcomes) and cannot be dispatched as written. Shipped the crude-block de-duplication + the cross-outcome `compare` guard. Study §6 |
+| **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks  | "20e one grain finer": the six per-spec loops become ONE declared product, so what is per-model and what is between-models is stated once. ⚠ the only Phase 20 phase that deliberately gives up the IDENTICAL message-order proof (stage-major → spec-major) |
 | **20g** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
 | **20h** | Harvest 1: the deletion pass                                       | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product |
 | **20i** | Harvest 2: open integration                                        | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building** |
 
 **Dependencies**: 20a first · 20b and 20c need 20a's harnesses · 20d needs 20c · 20e needs 20d ·
-20f needs 20d+20e · 20g needs 20b/20c/20d · 20h then 20i last.
+20f needs 20d+20e · 20f-ii needs 20f · 20f-iii needs 20f-ii · 20g needs 20b/20c/20d ·
+20h then 20i last.
 
-⚠ **The three `tab_reg()` phases are deliberately separate sessions** — one story, three frames of
+⚠ **The `tab_reg()` phases are deliberately separate sessions** — one story, several frames of
 mind: 20d is **numerical parity** (research, closed forms, tolerance fixtures), 20e is a **pure
-structural refactor** proved by one harness printing IDENTICAL, 20f is a **measurement** that may
-conclude "no". Interleaving them is how a refactor and a numeric change land in one diff and
+structural refactor** proved by one harness printing IDENTICAL, 20f and 20f-ii are **measurements**
+that may conclude "no" (and both did, in part), and 20f-iii is a refactor that knowingly trades the
+message-order half of that proof for a declared per-spec product.
+Interleaving them is how a refactor and a numeric change land in one diff and
 neither can be verified.
 
 **Mapping from the old draft** (nothing lost): old 20d (jamovi UI) → **20g** · old 20e (the
@@ -2461,6 +2470,94 @@ what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_s
 ---
 
 
+
+#### Phase 20f-ii — `tab_reg()` parallelisation at the model level
+
+**PARTLY DONE (2026-08-16): the measurement is complete and two fixes shipped; the S-axis
+restructure is NOT built and is a fresh-session piece.** Study: `dev/tabxplor_reg_performance.md`
+**§6** (extended, never a second file — it is *the* durable answer to "why is `tab_reg()` not
+parallel", and a second document answering it one axis out is the duplication this phase exists to
+remove). Re-runnable harness `dev/benchmarks/phase20f2_reg_model_axis.R`, before/after in
+`dev/benchmarks/results_2.0.0/phase20f2_*`.
+
+**THE STRUCTURAL FINDING, which decides more than the timings do: the three model axes are not the
+same shape.** `tab_vars` groups (**G**) and several outcomes × a models list (**R**) are the two
+places `tab_reg()` already recurses, and each unit returns a **finished table** — fit-free, KB-sized,
+with the cross-unit work already after the loop and the message stream already unit-major, so a
+`tab_pmap()` relay would preserve order exactly. Several outcomes in ONE table, or a models list
+(**S**), share one table: the unit returns the raw fit, and `emp_by_fit[[i]]` carries `$frame` +
+`$fits` — **60–100 MB at n = 200 000**, six to ten times the payload 20f-i's constraint was written
+about.
+
+**THE MEASUREMENT.** Ceilings (a perfect pool, zero overhead; clamped at the longest unit, since no
+number of cores shortens it): G 4 uneven race groups **1.23×** · G 8 even survey waves **2.28×** ·
+G 4 groups at n = 21 483 1.53× (0.29 s total) · S 2 outcomes 1.87× · S 4 outcomes **2.86×** ·
+S 3-model comparison unbalanced 1.32× / balanced **2.33×** · R 2 outcomes × a models list 1.89×.
+⚠ **Balance, not unit count, is the variable**: the same axis at the same size gives 1.23× over four
+uneven groups and 2.28× over eight even ones. And **transport is not the obstacle**, which had been
+assumed: shipping the 16 MB fixture is **0.05 s** and a warm 4-task round-trip **0.003 s** — the
+1.67 s is the first dispatch's connection setup, once per pool. So the axis is bounded by Amdahl and
+by balance, not by serialisation. (The decisions doc's "transfer is the killer", 6.8 s, is a 161 MB
+fixture.)
+
+**WHAT SHIPPED.** Both verified `IDENTICAL` by `dev/verify_reg_specs.R` over all 290 cases.
+
+- **The crude-block de-duplication — 20f-i's finding repeating one axis out.** In COMPARISON mode
+  every input to `reg_stage_empirical()`'s loop is table-wide or per-*outcome*, and a models list is
+  refused unless it has exactly one outcome — so specs 2..S recomputed spec 1 **exactly**, and only
+  spec 1 was read (`reg_stage_assemble()` takes `emp_by_fit[[1]]` as every column's `obs` *and* as
+  its gap-test crude leg). Its one other reader, `reg_stage_tips()`'s numeric block, emitted
+  duplicate rows for a column name every spec resolves identically, which `tab_export_prep()`'s
+  `match()` discarded first-wins. Fixed with the idiom the `add_n` loop 70 lines up already uses,
+  `if (i > 1L && n_outcomes <= 1L) break`. Measured on a 3-model comparison: **`reg_empirical`
+  3 → 1, `reg_empirical_fit` 3 → 1, `reg_fit` 9 → 5** — and **unchanged at 2 / 2 / 6** for two
+  outcomes, which is the half of the contract that says it did not over-reach (two outcomes are two
+  genuinely different crude blocks). Worth more than the pool would have been on that same shape.
+- **A latent defect beside it**: `compare` was gated **nowhere**, so
+  `outcome = c("a","b"), stats = "compare_baseline"` reached `reg_compare_rows()` with two different
+  responses — `anova.glmlist`'s own `sameresp` filter silently dropped a model and the surviving row
+  was labelled with `specs[[1]]`'s outcome. One `cli_abort` at H24 in `reg_resolve_args()`, the first
+  point `compare` (S1) and the resolved `prep$outcome` (S2) are both known. A models list already
+  refused several outcomes; this is the same fact for the one-model-per-outcome shape.
+
+**WHAT IS NOT BUILT, and what it would cost** (§6.5, each constraint read in the code): the S axis
+needs the six per-spec loop *bodies* lifted out of the table-scalar stages into one
+`reg_spec_build()` returning a declared product — "20e one grain finer", ~580 lines over 6 files.
+⚠ `reg_compare_rows()` **cannot be ported**: it needs two fit *objects*
+(`stats::anova(m_lo, m_hi)`, the `method = "Wald"` → `regTermTest` arm on a survey fit), and
+re-implementing survey's Wald arithmetic would make tabxplor a second producer of a survey quantity
+— the same class as 20f-i's measured `drop1` vs `anova` divergence (12.47 against 14.25). It stays
+and **forces the serial path**, which is a fact about the statistic, not a limitation: a
+between-model test needs the models together. It returns early on `compare == "none"` (the default),
+so that excludes much less than it sounds. Also serial: comparison mode *with* a crude block (spec
+1's block is every column's `obs` and carries the 60–100 MB frame) and a compound formula (the
+shared skeleton comes from `fits[[1]]`). ⚠ And any per-spec design turns the message stream
+**stage-major → spec-major**, so `verify_reg_specs.R` stops printing IDENTICAL for multi-spec cases
+and prints *"(same set, different ORDER)"* — detectable, not silent, but the one irreducible price.
+
+**HONEST CONCERNS.**
+
+- ⚠ **The phase's headline question got two answers, and the second is the one to act on.** Measured
+  against the ≥2× bar, G and R clear it only for an *even* axis at survey scale where the whole
+  saving is ~1 s, while **S — the axis that cannot be dispatched as written — is where the 2×+
+  shapes are** (2.86× at four outcomes). That is the opposite of the a-priori ranking, which had G
+  as the promising one because it was the easy one.
+- ⚠ **Every ceiling is an upper bound that no implementation reaches**, and the `sum units` term is
+  itself an over-estimate (a unit built alone re-runs the argument boundary the real call runs once —
+  it exceeds `whole` on five of the eight rows, which is why the ceiling is clamped at `max unit`).
+- **The harness cost three self-inflicted re-runs** and the reasons are in its header: `tab_vars`
+  needs a factor (`year` is integer), the S fixtures needed a `grepl("dem", ...)` that gss_cat's
+  lowercase levels actually match, and ⚠ **`Rscript` reads a file incrementally, so editing the
+  harness mid-run corrupts the run** — a whole measurement was discarded to that.
+- **No golden churn** (no `tab()` path is touched) and the jamovi path is untouched, so no
+  `jmvtools::prepare()` is needed — 20g still owns the outstanding rebuild.
+
+**FOLLOW-UPS.** The S-axis restructure is its own session, on 20e's precedent (a pure structural
+refactor proved by one harness) — and ⚠ it must re-save `dev/verify_reg_specs.R`'s baseline first and
+declare the message-order delta. 20h: `reg_global_rows()`'s `drop1` refits (still routed from 20f-i),
+`reg_stage_tips()`'s two halves, and the deprecated-call corpus sweep.
+
+---
 
 #### Phase 20f — `tab_reg()` parallelisation: measure, then decide
 

@@ -3594,6 +3594,18 @@ reg_stage_empirical <- function(ctx) {
     num_preds_e <- if (any(compound)) character(0) else numeric_preds
     if (length(fac_preds_e) > 0L || length(num_preds_e) > 0L) {
       for (i in seq_along(specs)) {
+        # ⚠ Phase 20f-ii: in COMPARISON mode the crude block is the SAME OBJECT for every spec, so
+        # build it once. Every input below is either table-wide (fac_preds_e / num_preds_e /
+        # union_predictors / the table's own conf_level, method, design_spec) or per-OUTCOME
+        # (crude_key / fit_family / est / positive_level / y_ref / trials / outcome_level, and
+        # reg_emp_frame() keys on `dep_i` alone) -- and a models list is refused unless it has
+        # exactly ONE outcome (reg_resolve_args, block E). So specs 2..S recomputed spec 1 exactly,
+        # at one univariable reg_fit() per predictor with no closed form, and only spec 1 was read:
+        # reg_stage_assemble() takes emp_by_fit[[1]] as every column's `obs` AND as its gap-test
+        # crude leg. The one other reader, reg_stage_tips()'s numeric block, emitted DUPLICATE rows
+        # for a column name every spec resolves the same way, which tab_export_prep()'s match()
+        # then discarded first-wins. Same idiom, same reason, as the add_n loop 70 lines up.
+        if (i > 1L && n_outcomes <= 1L) break
         # Phase 18z10: ONE stored fact decides eligibility -- reg_crude_key(), computed once at spec
         # construction. It replaced a duplicated family whitelist here, a `quasipoisson -> poisson` alias
         # in reg_empirical_columns(), a lookup-miss return, and (worst) `positive_level`-is-NULL as a

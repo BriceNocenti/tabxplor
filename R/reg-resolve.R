@@ -809,6 +809,22 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   prep <- reg_prepare_data(data, outcome, predictors, tab_vars = tab_vars, wt = wt,
                            shape = shape, family = family)
 
+  # ⚠ H24 (Phase 20f-ii): a between-model test compares two fits OF THE SAME OUTCOME, and nothing
+  # said so. A models LIST already refuses several outcomes (block E), but the one-model-per-outcome
+  # shape did not: `outcome = c("a","b"), stats = "compare_baseline"` reached reg_compare_rows()
+  # with two different responses, where `anova.glmlist`'s own `sameresp` filter silently dropped a
+  # model and the surviving row was labelled with specs[[1]]$outcome -- a wrong outcome on a wrong
+  # test, with no message. It must be refused HERE: `compare` is resolved in S1 and `prep$outcome`
+  # is the resolved outcome vector, so this is the first point both are known.
+  if (!identical(compare, "none") && length(prep$outcome) > 1L)
+    cli::cli_abort(c("A model comparison needs the models to share one {.arg outcome}.",
+                     "x" = paste0("{.arg stats} asks for {.val {paste0('compare_', compare)}}, but ",
+                                  "{.arg outcome} names {length(prep$outcome)}: ",
+                                  "{.val {prep$outcome}}."),
+                     "i" = paste0("A comparison tests one model against another on the same ",
+                                  "response. Compare within an outcome, or drop the comparison ",
+                                  "key to get one column block per outcome.")), call = NULL)
+
   # S3 -- the per-outcome table.
   deps <- reg_resolve_estimands(prep$data, prep$outcome, family = family, effect = effect,
                                 measure = measure, trials = trials,
