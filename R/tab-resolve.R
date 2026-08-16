@@ -98,7 +98,7 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # boundary both producers share. `ci = "ratio"` stays LOSSLESS on the way through (it also pins the
   # ratio scale) so an existing call keeps its Katz bounds while the message teaches `color = "ratio"`.
   ci_ratio_req <- ci == "ratio"
-  ci <- resolve_ci_value(ci)
+  ci <- resolve_ci_value(ci, warn = FALSE)
 
   # Hoisted out of the `color = "auto"` case_when below, because the `color_signif` forcing needs the
   # SAME predicates and must run BEFORE it (see there).
@@ -110,10 +110,6 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # only if its FACTOR columns are on row/col %) is what left `tab(..., sup_cols = <numeric>,
   # color_signif = ...)` with no interval and therefore every cell greyed.
   has_num    <- any(!col_vars_text)
-  # Phase 19d: the odds ratio is computed on EVERY row/col-percentage table now, so "is this an OR
-  # table" stopped being an input. `color = "auto"` therefore never resolves to the odds ratio: the
-  # automatic reading of a percentage table is its difference, and an odds ratio is asked for by name.
-  auto_or    <- rep(FALSE, length(pct_vect))
 
   # DESIGN: color = "auto" resolves from the pct settings of the FACTOR col_vars ONLY, through the
   # declared `auto_for` contexts: row/col percentages -> "difference"; counts / all-% -> "contrib".
@@ -125,8 +121,12 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   # "auto" with an explicit measure no longer re-derives the explicit one from its `pct`.
   color_auto_text <- color == "auto" & ! num_only
   if (any(color_auto_text)) {
+    # Phase 19d: the odds ratio is computed on EVERY row/col-percentage table now, so "is this an OR
+    # table" stopped being an input, and `color = "auto"` never resolves to it: the automatic reading
+    # of a percentage table is its DIFFERENCE, and an odds ratio is asked for by name. Phase 20a
+    # deleted the `auto_or ~ "or_table"` arm this left behind -- a branch on a constant FALSE -- and
+    # the `"or_table"` context it was the only producer of.
     context <- dplyr::case_when(
-      auto_or    ~ "or_table",
       pct_rowcol ~ "pct",
       purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "counts",
       TRUE       ~ NA_character_
@@ -273,18 +273,22 @@ TAB_CI_STEP_VALUES <- c("auto", "no", "cell", "diff", "ratio", "ref")
 
 #' @keywords internal
 #' @noRd
-resolve_ci_value <- function(ci, user_env = rlang::caller_env(2)) {
+# @param warn  FALSE when the caller knows the deprecation has already been said, with the right
+#   `user_env` -- which is what tab_resolve_common_args() does at the argument boundary. The REWRITE
+#   still happens here, downstream, because `ci = "ratio"`'s second effect (pinning the Katz scale)
+#   is read off the RAW value by the per-row_var resolvers.
+resolve_ci_value <- function(ci, user_env = rlang::caller_env(2), warn = TRUE) {
   ci <- as.character(ci)
   ci[is.na(ci) | ci %in% c("", "FALSE")] <- "no"
   old <- ci %in% c("diff", "ratio")
-  if (any(old)) {
+  if (any(old) && isTRUE(warn)) {
     lifecycle::deprecate_soft(
       "2.0.0", I(paste0("tab(ci = \"", unique(ci[old])[1], "\")")),
       with = I(if (any(ci == "ratio")) "tab(ci = \"ref\", color = \"ratio\")" else "tab(ci = \"ref\")"),
       details = "`ci` says WHERE the interval sits; WHICH comparison it measures comes from `color`.",
       user_env = user_env)
-    ci[old] <- "ref"
   }
+  ci[old] <- "ref"
   bad <- !ci %in% c("auto", "no", "cell", "ref")
   if (any(bad)) {
     cli::cli_abort(c("Unknown {.arg ci} value {.val {unique(ci[bad])}}.",
@@ -380,7 +384,7 @@ display_comparison <- function(display) {
 #' @keywords internal
 #' @noRd
 resolve_leaf_ci <- function(ci, color, color_signif = "ignore", stars = FALSE, ref = "tot") {
-  ci        <- resolve_ci_value(if (is.null(ci)) "auto" else ci)[1]
+  ci        <- resolve_ci_value(if (is.null(ci)) "auto" else ci, warn = FALSE)[1]
   d         <- ci_disable_signif(ci, color_signif, stars)
   color_signif <- d$color_signif ; stars <- d$stars
   signif_on <- !identical(color_signif[1], "ignore") && !is.na(color_signif[1])
@@ -491,10 +495,13 @@ resolve_color_auto_num <- function(color, ref, ci, row_var, col_vars) {
 # for a per-col_var vector) and `na_ok`. Adding a value is one edit, and no two producers can
 # disagree about what a word means.
 #
-# NOT here, deliberately: `ci`. Its vocabulary carries a soft-deprecation (`"diff"`/`"ratio"` ->
-# `"ref"`), so validating it means RESOLVING it, and that is resolve_ci_value()'s job -- called by
-# every producer's own resolver (tab_resolve_settings / resolve_leaf_ci / tab_ci). One validator, in
-# the one place that can also rewrite the value.
+# NOT in TAB_ARG_VALUES, deliberately: `ci`. Its vocabulary carries a soft-deprecation
+# (`"diff"`/`"ratio"` -> `"ref"`), so validating it means REWRITING it, and that is
+# resolve_ci_value()'s job -- one validator, in the one place that can also rewrite the value. The
+# boundary CALLS it (step 3b) rather than declaring it, because only the boundary knows `user_env`:
+# the deprecation must name the user's call, not a tabxplor frame. Each producer's own resolver
+# (tab_resolve_settings / resolve_leaf_ci / tab_ci) still calls it too -- those are reachable without
+# this boundary -- and it is idempotent, so the second call is a no-op.
 #' @keywords internal
 #' @noRd
 TAB_ARG_VALUES <- list(
@@ -635,14 +642,23 @@ tab_resolve_common_args <- function(fn = "tab",
   if (!missing(ci_method))
     out$ci_method <- resolve_ci_method(ci_method,
                                        if (missing(method_cell)) NULL else method_cell,
-                                       if (missing(method_diff)) NULL else method_diff, fn)
+                                       if (missing(method_diff)) NULL else method_diff, fn,
+                                       user_env = user_env)
+
+  # 3b. `ci` -- said here, resolved downstream. Only this boundary knows `user_env`, so this is where
+  # the soft-deprecation of "diff"/"ratio" can name the USER's call rather than a tabxplor frame
+  # (which is why it never fired at all until Phase 20a). The VALUE is deliberately not rewritten
+  # here: `ci = "ratio"` has a second effect -- it pins the Katz ratio scale -- and the per-row_var
+  # resolvers read that off the raw word. They are told the message has been said (`warn = FALSE`).
+  if (!missing(ci)) invisible(resolve_ci_value(ci, user_env = user_env))
 
   # 4. the retired `OR`, routed to what it was: a display, a 2x2 and a reference.
   if (!missing(OR)) {
     route   <- tab_deprecate_or(OR,
                                 if (missing(display)) NULL else display,
                                 if (missing(ref2))    "first" else ref2,
-                                if (missing(ref))     "auto"  else ref)
+                                if (missing(ref))     "auto"  else ref,
+                                user_env = user_env)
     display <- route$display ; ref2 <- route$ref2 ; ref <- route$ref
   }
   if (!missing(display)) out$display <- display

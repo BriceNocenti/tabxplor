@@ -479,8 +479,11 @@ reg_family_mult_word <- function(family) {
 REG_USER_FAMILIES <- setdiff(names(REG_ESTIMANDS), REG_FIT_ONLY_FAMILIES)
 
 # Build-time integrity: the library can only be wrong at load time, so it is checked there.
+# Phase 20a: `scale` LEFT this block. Its target (EST_SCALES) lives in fmt_class.R, so it is a
+# cross-table foreign key like every other, and it is declared with them in R/zzz-fact-keys.R --
+# together with `fit`, `display`, `crude_fam` and `crude_shape`, which were never checked at all.
+# What stays here is this table's SELF-consistency: does it cover its own key set.
 local({
-  scales <- EST_SCALE_KEYS
   for (fam in names(REG_ESTIMANDS)) {
     fr <- REG_ESTIMANDS[[fam]]
     keys <- vapply(fr$rows, function(r) paste(r$effect, r$measure), character(1))
@@ -490,8 +493,6 @@ local({
       "every declared default has a row"                     =
         all(paste(names(fr$default), fr$default) %in% keys),
       "no (effect, measure) cell is declared twice" = !anyDuplicated(keys),
-      "every row's scale is an EST_SCALES key"      =
-        all(vapply(fr$rows, function(r) r$scale %in% scales, logical(1))),
       "every row's effect is a declared value"      =
         all(vapply(fr$rows, function(r) r$effect %in% REG_EFFECTS_VALUES, logical(1))),
       "every impossible row says why"               =
@@ -899,10 +900,9 @@ reg_measures_rd <- function() {
 }
 
 
-# Build-time exhaustiveness: every internal LINK key must be answerable by the assumption checks.
-# R/reg-assumptions.R cannot derive REG_CHECK_FAMILIES from REG_FIT_FAMILY (it loads first, and its
-# REG_CHECKS table consumes the vector at build time), so the two are tied here instead -- adding a
-# link key to REG_FIT_FAMILY without teaching the checks about it now fails to load, rather than
-# silently giving that estimand no diagnostics (the Phase 19l defect).
-stopifnot(all(names(REG_FIT_FAMILY) %in% REG_CHECK_FAMILIES))
+# Phase 20a: the "every link key is answerable by the assumption checks" assertion moved to
+# R/zzz-fact-keys.R, where every cross-table edge is declared -- and it moved UP a level while it
+# went: it is stated on REG_ESTIMANDS' own `fit` rows now, not on the three-entry REG_FIT_FAMILY
+# subset, so an estimand whose fit has no diagnostics fails to load whichever family it belongs to
+# (the Phase 19l defect, checked at its real grain).
 

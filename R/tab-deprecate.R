@@ -29,7 +29,7 @@
 # so it pins "first" itself -- which is also the sentence the message teaches.
 #' @keywords internal
 #' @noRd
-tab_deprecate_or <- function(OR, display, ref2, ref) {
+tab_deprecate_or <- function(OR, display, ref2, ref, user_env = rlang::caller_env(2)) {
   out <- list(display = display, ref2 = ref2, ref = ref)
   if (length(OR) == 0L) return(out)
   # The row_var axis is globalised on tab() (Phase 6), and `display` -- the argument `OR` retires
@@ -54,7 +54,7 @@ tab_deprecate_or <- function(OR, display, ref2, ref) {
                               "`display` shows it, `color = \"odds_ratio\"` colours it and `ref2` ",
                               "picks the 2x2. Its row reference follows `ref` like every other ",
                               "comparison (this call keeps the old `ref = \"first\"`)."),
-                            user_env = rlang::caller_env(2))
+                            user_env = user_env)
   # a user-set `display` wins -- it is the argument the deprecation points at.
   if (is.null(display) || length(display) == 0L || is.na(display[[1]]) || !nzchar(display[[1]]))
     out$display <- new_display
@@ -219,7 +219,9 @@ tab_deprecate_na_drop_all <- function(cols, filter_quo = NULL) {
 #' @param filter `r lifecycle::badge("superseded")` A \code{\link[dplyr:filter]{dplyr::filter}} to
 #'   apply to the data frame first — see [tab()]. Prefer filtering upstream.
 #'
-#' @inheritDotParams tab
+# `@inheritDotParams tab` used to sit here. It does not LINK -- it INLINES, splicing tab()'s whole
+# argument list into this page: 448 Rd lines for a shim whose own documentation is the translation
+# table above. `@param ...` says the same thing in one line, and `?tab` is one click away.
 #'
 #' @return What [tab()] returns: a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with
 #'   `tab_vars`), or a \code{tabxplor_tabs} list under `output_list = TRUE` / `compact = FALSE`.
@@ -269,10 +271,14 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   dot_names <- rlang::names2(rlang::enquos(..., .ignore_empty = "all"))
   unnamed   <- which(!nzchar(dot_names))
   if (length(unnamed) != 0L)
+    # WARNING: cli takes a `{?s}` quantity from the LAST substitution BEFORE it, so a leading
+    # "Argument{?s}" has none and cli_abort() dies with "Cannot pluralize without a quantity" --
+    # the guard still refused the call, but said nothing a caller could act on. cli::qty() sets the
+    # quantity without printing it, which is what a message opening on a plural needs.
     cli::cli_abort(c(
       "{.fn tab_many} takes only {.arg data}, {.arg row_vars}, {.arg col_vars}, {.arg tab_vars} and {.arg wt} by position.",
-      "x" = "Argument{?s} {unnamed + 5L} {?is/are} unnamed.",
-      "i" = "Name {?it/them}: the rest is passed to {.fn tab}, whose argument order differs."
+      "x" = "{cli::qty(length(unnamed))}Argument{?s} {unnamed + 5L} {?is/are} unnamed.",
+      "i" = "{cli::qty(length(unnamed))}Name {?it/them}: the rest is passed to {.fn tab}, whose argument order differs."
     ))
 
   extra <- tab_deprecate_many(

@@ -1,6 +1,8 @@
-# Phase 12a: tab_logit() / multi_logit() -- odds-ratio tables from binary logit models.
-# Statistical soundness is checked against a hand-run stats::glm / survey::svyglm + the log-OR
-# Wald interval that tab_logit stores (the exact dual of the Wald p-value).
+# PURPOSE: tab_reg() on a BINARY outcome -- odds-ratio tables from logit models.
+# ROLE: statistical soundness against a hand-run stats::glm / survey::svyglm plus the log-OR Wald
+#       interval the table stores (the exact dual of the Wald p-value). Phase 20a: these cases used
+#       to call tab_logit() / multi_logit(), deleted as thin wrappers -- the coverage is kept, the
+#       wrappers are not (multi_logit(models =) is tab_reg(predictors = <named list>)).
 
 logit_data <- function() {
   forcats::gss_cat |>
@@ -9,9 +11,9 @@ logit_data <- function() {
     )
 }
 
-test_that("tab_logit() returns a grouped odds-ratio tab with the right structure", {
+test_that("tab_reg() returns a grouped odds-ratio tab with the right structure", {
   skip_if_not_installed("broom")
-  t1 <- tab_logit(logit_data(), "married", c("race", "rincome"))
+  t1 <- tab_reg(logit_data(), "married", c("race", "rincome"))
 
   expect_s3_class(t1, "tabxplor_grouped_tab")
   expect_identical(dplyr::group_vars(t1), "var")
@@ -29,10 +31,10 @@ test_that("tab_logit() returns a grouped odds-ratio tab with the right structure
   expect_true(all(is.na(get_pvalue(col)[ref_lvls])))
 })
 
-test_that("tab_logit() odds ratios / CI / p match stats::glm (unweighted)", {
+test_that("tab_reg() odds ratios / CI / p match stats::glm (unweighted)", {
   skip_if_not_installed("broom")
   data <- logit_data()
-  t1   <- tab_logit(data, "married", c("race", "rincome"), cleannames = FALSE)
+  t1   <- tab_reg(data, "married", c("race", "rincome"), cleannames = FALSE)
   col  <- t1[["Model_OR"]]
 
   d <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
@@ -57,13 +59,13 @@ test_that("tab_logit() odds ratios / CI / p match stats::glm (unweighted)", {
   expect_equal(get_or(col)[i], unname(orm["raceBlack"]), tolerance = 1e-6)
 })
 
-test_that("tab_logit() matches survey::svyglm with survey weights", {
+test_that("tab_reg() matches survey::svyglm with survey weights", {
   skip_if_not_installed("broom")
   skip_if_not_installed("survey")
   data <- logit_data() |>
     dplyr::filter(!is.na(tvhours)) |>
     dplyr::mutate(w = tvhours + 1)                 # strictly positive weights
-  col <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+  col <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
                    cleannames = FALSE)[["Model_OR"]]
 
   dw <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
@@ -87,7 +89,7 @@ test_that("tab_logit() matches survey::svyglm with survey weights", {
 
 test_that("colour: grey_non_signif greys CI-includes-1 cells, colours large significant OR", {
   skip_if_not_installed("broom")
-  t1  <- tab_logit(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
+  t1  <- tab_reg(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
   col <- t1[["Model_OR"]]
   txt <- fmt_color_channels(col)$text
   sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 1 | get_ci_sup(col) < 1)
@@ -98,10 +100,10 @@ test_that("colour: grey_non_signif greys CI-includes-1 cells, colours large sign
   expect_true(txt[big] != 0)
 })
 
-test_that("multi_logit() puts one OR column per model, blank where a predictor is absent", {
+test_that("tab_reg() puts one OR column per model, blank where a predictor is absent", {
   skip_if_not_installed("broom")
-  t2 <- multi_logit(logit_data(), "married",
-                    models = list(demographic = c("race", "age"),
+  t2 <- tab_reg(logit_data(), "married",
+                    predictors = list(demographic = c("race", "age"),
                                   full        = c("race", "age", "rincome")))
   expect_s3_class(t2, "tabxplor_grouped_tab")
   expect_true(all(c("demographic", "full") %in% names(t2)))
@@ -113,14 +115,18 @@ test_that("multi_logit() puts one OR column per model, blank where a predictor i
   expect_false(all(is.na(get_or(t2[["full"]])[rincome_rows])))
 })
 
-test_that("a 3+ level dependent errors cleanly", {
+test_that("a 3+ level outcome forced to binomial errors cleanly", {
   skip_if_not_installed("broom")
-  expect_error(tab_logit(logit_data(), "marital", "race"), "binary|2 level")
+  # Phase 20a: tab_logit() forced the family, so this used to be an unqualified refusal. tab_reg()
+  # DETECTS a 6-level nominal outcome and builds a multinomial table instead -- which is exactly the
+  # capability the wrapper hid. What must still refuse is the FORCED family.
+  expect_error(tab_reg(logit_data(), "marital", "race", family = "binomial"), "binary|2 level")
+  expect_no_error(suppressMessages(tab_reg(logit_data(), "marital", "race")))
 })
 
-test_that("tab_logit() output exports through every backend without error", {
+test_that("tab_reg() output exports through every backend without error", {
   skip_if_not_installed("broom")
-  t1 <- tab_logit(logit_data(), "married", c("race", "rincome"))
+  t1 <- tab_reg(logit_data(), "married", c("race", "rincome"))
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
   skip_if_not_installed("openxlsx2")
@@ -131,7 +137,7 @@ test_that("tab_logit() output exports through every backend without error", {
 
 test_that("1/OR display renders OR < 1 as a reciprocal", {
   skip_if_not_installed("broom")
-  t1  <- tab_logit(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
+  t1  <- tab_reg(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
   txt <- format(t1[["Model_OR"]], special_formatting = TRUE)
   i <- which(as.character(t1$levels) == "Black")   # OR well below 1
   expect_match(txt[i], "^1/")
@@ -141,7 +147,7 @@ test_that("method = 'profile' uses profile-likelihood CI + LR-test p (dual)", {
   skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   data <- logit_data()
-  col  <- tab_logit(data, "married", c("race", "rincome"), method = "profile",
+  col  <- tab_reg(data, "married", c("race", "rincome"), method = "profile",
                     cleannames = FALSE)[["Model_OR"]]
 
   d <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
@@ -167,11 +173,11 @@ test_that("method = 'profile' falls back to Wald for weighted models (with a mes
     dplyr::filter(!is.na(tvhours)) |>
     dplyr::mutate(w = tvhours + 1)
   expect_message(
-    tw <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+    tw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
                     method = "profile", cleannames = FALSE),
     "not defined for survey"
   )
-  colw <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+  colw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
                     method = "wald", cleannames = FALSE)[["Model_OR"]]
   expect_equal(get_ci_inf(tw[["Model_OR"]]), get_ci_inf(colw))
   expect_equal(get_pvalue(tw[["Model_OR"]]), get_pvalue(colw))
@@ -179,7 +185,7 @@ test_that("method = 'profile' falls back to Wald for weighted models (with a mes
 
 test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
   skip_if_not_installed("broom")
-  col <- tab_logit(logit_data(), "married", c("race", "rincome"),
+  col <- tab_reg(logit_data(), "married", c("race", "rincome"),
                    color_signif = "ignore", cleannames = FALSE)[["Model_OR"]]
   expect_identical(get_color_signif(col), "ignore")
 
@@ -205,37 +211,37 @@ test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
 })
 
 
-# --- Phase 14x: na= forwarding + multi_logit K mode ------------------------------------------------
+# --- Phase 14x: na= forwarding + the model-comparison mode ----------------------------------------
 
-test_that("tab_logit()/multi_logit() forward na = 'drop_all'", {
+test_that("tab_reg()/tab_reg() forward na = 'drop_all'", {
   skip_if_not_installed("broom")
   d <- logit_data()
   # na = "drop_all" fits on the shared complete-case population -> runs without error and keeps shape.
-  t1 <- tab_logit(d, "married", c("race", "rincome"), na = "drop_all")
+  t1 <- tab_reg(d, "married", c("race", "rincome"), na = "drop_all")
   expect_s3_class(t1, "tabxplor_grouped_tab")
   expect_true("Model_OR" %in% names(t1))
 
-  t2 <- multi_logit(d, "married",
-                    models = list(demo = "race", full = c("race", "rincome")),
+  t2 <- tab_reg(d, "married",
+                    predictors = list(demo = "race", full = c("race", "rincome")),
                     na = "drop_all", compare = "sequential")
   expect_s3_class(t2, "tabxplor_grouped_tab")
   # a bad na value is rejected by match.arg (not silently forwarded)
-  expect_error(tab_logit(d, "married", "race", na = "nonsense"))
+  expect_error(tab_reg(d, "married", "race", na = "nonsense"))
 })
 
-test_that("multi_logit() accepts several dependents (K mode -> a list of tables)", {
+test_that("tab_reg() accepts several dependents (K mode -> a list of tables)", {
   skip_if_not_installed("broom")
   # second dependent NOT derived from a predictor (else the model is perfectly separated -> glm warns)
   d <- logit_data() |>
     dplyr::mutate(heavy_tv = factor(dplyr::if_else(tvhours >= 3, "heavy", "light")))
-  mt <- multi_logit(d, dependent = c("married", "heavy_tv"),
-                    models = list(demo = c("race", "age"), full = c("race", "age", "rincome")))
+  mt <- tab_reg(d, dependent = c("married", "heavy_tv"),
+                    predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")))
   expect_s3_class(mt, "tabxplor_tabs")
   expect_length(mt, 2L)
   expect_identical(names(mt), c("married", "heavy_tv"))
   expect_s3_class(mt[[1]], "tabxplor_grouped_tab")
 
   # one dependent still returns a single table (not a length-1 list)
-  st <- multi_logit(d, "married", models = list(a = "race", b = c("race", "age")))
+  st <- tab_reg(d, "married", predictors = list(a = "race", b = c("race", "age")))
   expect_s3_class(st, "tabxplor_grouped_tab")
 })

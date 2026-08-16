@@ -37,7 +37,7 @@ test_that("a clustered, stratified design matches a hand svyglm", {
   des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", which would compare a per-SD OR to a per-unit coefficient).
-  tab <- suppressMessages(tab_logit(des, "y", c("x1", "x2"), multiplier = 1))
+  tab <- suppressMessages(tab_reg(des, "y", c("x1", "x2"), multiplier = 1))
   tv  <- or_col(tab)
   # skeleton = Constant, x1(ref), x1 mid, x1 hi, x2 -> drop the reference row (OR = 1) for the term match
   hand_or <- exp(stats::coef(hand))
@@ -50,7 +50,7 @@ test_that("a prebuilt survey design passed as `data` equals the hand svyglm", {
   des  <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d01, nest = TRUE)
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
 
-  tab <- tab_logit(des, "y01", c("x1", "x2"), multiplier = 1)
+  tab <- tab_reg(des, "y01", c("x1", "x2"), multiplier = 1)
   tv  <- or_col(tab)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
 })
@@ -61,13 +61,13 @@ test_that("passing wt alongside a design object ABORTS (Phase 18z16-i, W10)", {
   des <- survey::svydesign(ids = ~psu, weights = ~w, data = d01)
   # it used to be silently ignored with a console note nothing downstream could see; every other
   # variable-role collision in the package aborts, and now so does this one, in tab() too.
-  expect_error(tab_logit(des, "y01", "x1", wt = "w"), "cannot be used when")
+  expect_error(tab_reg(des, "y01", "x1", wt = "w"), "cannot be used when")
   expect_error(suppressMessages(tab(des, x1, y01, wt = w)), "cannot be used when")
 })
 
 test_that("weighted footer is the reduced survey set (n / wald_null / nagelkerke_r2 / aic)", {
   d   <- reg_survey_data()
-  tab <- tab_logit(d, "y", c("x1", "x2"), wt = "w")
+  tab <- tab_reg(d, "y", c("x1", "x2"), wt = "w")
   tst <- tabxplor:::get_test(tab)
   # z13's overall-association rows and z15's model-check rows are in every default set; this asserts
   # the model-FIT statistics only.
@@ -80,7 +80,7 @@ test_that("weighted footer is the reduced survey set (n / wald_null / nagelkerke
 
 test_that("cox_snell_r2 is selectable via stats= for weighted models", {
   d   <- reg_survey_data()
-  tab <- tab_logit(d, "y", "x1", wt = "w",
+  tab <- tab_reg(d, "y", "x1", wt = "w",
                    stats = c("n", "nagelkerke_r2", "cox_snell_r2"))
   tst <- tabxplor:::get_test(tab)
   expect_true("cox_snell_r2" %in% tst$test)
@@ -89,8 +89,8 @@ test_that("cox_snell_r2 is selectable via stats= for weighted models", {
 test_that("weighted model comparison emits a design-based Wald row", {
   d   <- reg_survey_data()
   des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
-  tab <- suppressMessages(multi_logit(des, "y",
-                     models = list(base = "x1", full = c("x1", "x2")),
+  tab <- suppressMessages(tab_reg(des, "y",
+                     predictors = list(base = "x1", full = c("x1", "x2")),
                      compare = "baseline"))
   tst <- tabxplor:::get_test(tab)
   expect_true("compare_baseline_wald" %in% tst$test)
@@ -98,9 +98,9 @@ test_that("weighted model comparison emits a design-based Wald row", {
   expect_true(is.finite(wr$pvalue) && wr$pvalue >= 0 && wr$pvalue <= 1)
 })
 
-test_that("unweighted tab_logit is unchanged by the design plumbing", {
+test_that("an unweighted binomial fit is unchanged by the design plumbing", {
   d  <- reg_survey_data()
-  t0 <- tab_logit(d, "y", c("x1", "x2"), multiplier = 1)
+  t0 <- tab_reg(d, "y", c("x1", "x2"), multiplier = 1)
   hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = d, family = binomial())
   tv <- or_col(t0)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
@@ -185,7 +185,7 @@ test_that("split_var stacks one model per group (grouped by split_var + var)", {
 test_that("Phase g: split_var + a single model auto-spreads to side-by-side columns", {
   d <- reg_split_data()
   # default spread_models = TRUE: the sub-models sit side by side (no stacked `g` row-column)
-  t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g")
+  t <- tab_reg(d, "y", c("x1", "x2"), split_var = "g")
   expect_false("g" %in% names(t))
   # Phase 19n: each split level's column carries its sub-population in `col_group`, BESIDE the
   # outcome its `col_var` names -- the pair is the block identity, and it is what gives the export a
@@ -198,7 +198,7 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
   expect_true(all(nzchar(cg)))
   expect_setequal(unique(cg), c("north", "south"))
   # works with empirical = TRUE (crude companions spread too, level-suffixed)
-  te <- suppressWarnings(tab_logit(d, "y", "x1", split_var = "g", empirical = TRUE))
+  te <- suppressWarnings(tab_reg(d, "y", "x1", split_var = "g", empirical = TRUE))
   expect_true(any(grepl("^Obs_", names(te))))
   # several models per group cannot go side by side, so they stay stacked
   expect_true("g" %in% names(
@@ -208,7 +208,7 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
   # the groups are side by side now, so each group's estimates are its OWN column
-  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", multiplier = 1))
+  t <- dplyr::ungroup(tab_reg(d, "y", c("x1", "x2"), split_var = "g", multiplier = 1))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
@@ -256,16 +256,16 @@ test_that("split_var works with survey weights (per-group svyglm)", {
 
 test_that("split_var rejects an invalid grouping column", {
   d <- reg_split_data()
-  expect_error(tab_logit(d, "y", "x1", split_var = "x1"), "cannot also be")   # a predictor
-  expect_error(tab_logit(d, "y", "x1", split_var = "nope"), "not a column")
-  expect_error(tab_logit(d, "y", "x1", split_var = "x2"), "factor or character")
+  expect_error(tab_reg(d, "y", "x1", split_var = "x1"), "cannot also be")   # a predictor
+  expect_error(tab_reg(d, "y", "x1", split_var = "nope"), "not a column")
+  expect_error(tab_reg(d, "y", "x1", split_var = "x2"), "factor or character")
 })
 
 # --- Phase 12g-iv: multiplier + empirical ----------------------------------------------------
 test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", {
   d <- reg_split_data()
-  t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = 1))
-  t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x2 = 10)))
+  t0  <- suppressWarnings(tab_reg(d, "y", c("x1", "x2"), multiplier = 1))
+  t10 <- suppressWarnings(tab_reg(d, "y", c("x1", "x2"), multiplier = c(x2 = 10)))
   oc  <- grep("^Model_", names(t0), value = TRUE)[1]
   or0  <- vapply(t0[[oc]],  tabxplor::get_num, numeric(1))
   or10 <- vapply(t10[[oc]], tabxplor::get_num, numeric(1))
@@ -278,13 +278,13 @@ test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", 
 
 test_that("multiplier rejects non-numeric predictors / wrong families", {
   d <- reg_split_data()
-  expect_error(suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x1 = 2))),
+  expect_error(suppressWarnings(tab_reg(d, "y", c("x1", "x2"), multiplier = c(x1 = 2))),
                "numeric predictors")
 })
 
 test_that("empirical crude OR matches the weighted 2x2 odds ratio", {
   d   <- reg_split_data()
-  t   <- suppressWarnings(tab_logit(d, "y", "x1", empirical = TRUE))
+  t   <- suppressWarnings(tab_reg(d, "y", "x1", empirical = TRUE))
   expect_true(all(c("Obs_%", "Obs_OR") %in% names(t)))
   eo  <- vapply(dplyr::ungroup(t)[["Obs_OR"]], tabxplor::get_num, numeric(1))
   # hand crude OR of each x1 level vs the reference "a", positive outcome = first level of y

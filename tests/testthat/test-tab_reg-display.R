@@ -15,7 +15,7 @@ first_fmt <- function(t) reg_first_fmt(t)
 test_that("display='ci' shows a visible CI bracket for OR and beta", {
   skip_if_not_installed("broom")
   d  <- reg_data()
-  oc <- first_fmt(tab_logit(d, "married", c("race", "age"), display = "ci"))
+  oc <- first_fmt(tab_reg(d, "married", c("race", "age"), display = "ci"))
   txt <- format(oc, special_formatting = TRUE)
   expect_true(any(grepl("\\[.*;.*\\]", txt)))            # "<or> [<lo>;<hi>]"
   expect_equal(get_num(oc), get_or(oc))                  # primary value = the odds ratio (no reciprocal)
@@ -28,7 +28,7 @@ test_that("display='ci' shows a visible CI bracket for OR and beta", {
 
 test_that("est_ci bracket reads the stored asymmetric bounds", {
   skip_if_not_installed("broom")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "age", display = "ci"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "ci"))
   txt <- format(oc, special_formatting = TRUE)
   # a non-reference cell's bracket contains the rounded ci_inf / ci_sup
   i   <- which(!is.na(get_ci_inf(oc)))[1]
@@ -40,7 +40,7 @@ test_that("est_ci bracket reads the stored asymmetric bounds", {
 
 test_that("display='prob' folds the predicted probability into the OR cell", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", display = "prob"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "prob"))
   txt <- format(oc)
   expect_true(any(grepl("\\([0-9]", txt)))               # "(16%)" prediction
   expect_equal(get_num(oc), get_or(oc))                  # OR is still the primary field
@@ -49,7 +49,7 @@ test_that("display='prob' folds the predicted probability into the OR cell", {
 
 test_that("display='ame' folds the average marginal effect into the OR cell", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_logit(reg_data(), "married", "race", display = "ame"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "ame"))
   expect_true(any(grepl("\\([-+][0-9]", format(oc))))    # "(-21%)" / "(+1%)" marginal effect
   expect_equal(get_num(oc), get_or(oc))
 })
@@ -100,7 +100,7 @@ test_that("split_var tables get a per-group export footer; plain tables one foot
   n_groups <- nlevels(forcats::fct_drop(as.factor(d$race)))
   expect_equal(length(gregexpr("McFadden R2", md_s)[[1]]), n_groups)
 
-  t_plain <- tab_logit(d, "married", "age")
+  t_plain <- tab_reg(d, "married", "age")
   md_p <- gsub(intToUtf8(160L), " ", tab_md(t_plain, print = FALSE), fixed = TRUE)
   expect_true(grepl("Model fit", md_p))
   expect_equal(length(gregexpr("McFadden R2", md_p)[[1]]), 1L)  # a single block

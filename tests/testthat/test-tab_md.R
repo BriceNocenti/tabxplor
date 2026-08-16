@@ -4,6 +4,14 @@
 #   - Must run via test_check("tabxplor"), never in isolation.
 #   - Uses print = FALSE to capture the returned string for assertions.
 
+# Phase 20a: this file calls functions deprecated in 2.0.0 on purpose -- what it asserts is their
+# arithmetic, which the leaf shares with them and which does NOT go away in 2.1.0.
+# ⚠ This quiets the TOP-LEVEL calls only: testthat 3e runs local_reproducible_output() inside
+# every test_that(), which forces lifecycle_verbosity = "warning" again, so the in-block calls
+# still warn. Migrating them to tab() is the corpus sweep routed to Phase 20h.
+withr::local_options(lifecycle_verbosity = "quiet", .local_envir = testthat::teardown_env())
+
+
 gss <- forcats::gss_cat
 
 # === SECTION: Basic output ====================================================
@@ -314,10 +322,10 @@ testthat::test_that("the deprecated `title` arg still feeds `caption`", {
   testthat::expect_true(grepl("\n: My caption", md, fixed = TRUE))
 })
 
-# === SECTION: tab_md_css() / tab_css() ========================================
+# === SECTION: tab_css(format = "md") ==========================================
 
-testthat::test_that("tab_md_css emits the slot colour rules, chrome-free", {
-  css <- tab_md_css()
+testthat::test_that("tab_css(format = \"md\") emits the slot colour rules, chrome-free", {
+  css <- tab_css(format = "md")
   testthat::expect_type(css, "character")
   testthat::expect_true(grepl("\\.p1,", css))                             # a text-slot rule (bare part)
   testthat::expect_true(grepl("\\.o1,", css))                             # a bg-slot rule (bare part)
@@ -330,12 +338,12 @@ testthat::test_that("tab_md_css emits the slot colour rules, chrome-free", {
   testthat::expect_false(grepl("border", css, fixed = TRUE))              # no border chrome
 })
 
-testthat::test_that("tab_md_css theme = 'auto' adds the media block; 'light' does not", {
+testthat::test_that("format = 'md' + theme = 'auto' adds the media block; 'light' does not", {
   testthat::expect_true(grepl("@media (prefers-color-scheme: dark)",
-                              tab_md_css(theme = "auto"), fixed = TRUE))
+                              tab_css(format = "md", theme = "auto"), fixed = TRUE))
   # z11: `@media print` (the publication palette) now rides every stylesheet; what "light" must not
   # emit is the AUTO cascade's colour-scheme query.
-  testthat::expect_false(grepl("@media (prefers-color-scheme", tab_md_css(theme = "light"),
+  testthat::expect_false(grepl("@media (prefers-color-scheme", tab_css(format = "md", theme = "light"),
                                fixed = TRUE))
 })
 
@@ -344,13 +352,14 @@ testthat::test_that("the stylesheet is TABLE-INDEPENDENT", {
   # color_breaks -- which used to produce conflicting `.p20` rules -- now share one stylesheet, because
   # a class names a palette slot, not a threshold. If this ever fails, collisions are back.
   withr::local_options(list(tabxplor.color_breaks = default_color_scales()))
-  a <- tab_md_css(theme = "auto")
+  a <- tab_css(format = "md", theme = "auto")
   set_color_breaks(pct_diff = c(1, 2, 3, 4))
-  b <- tab_md_css(theme = "auto")
+  b <- tab_css(format = "md", theme = "auto")
   testthat::expect_identical(a, b)
-  # ... and it does not depend on any table at all -- Phase 19h dropped the inert `tabs` argument,
-  # so the stylesheet cannot be table-specific even by accident.
-  testthat::expect_false("tabs" %in% names(formals(tab_md_css)))
+  # ... and it does not depend on any table at all: the stylesheet cannot be table-specific even
+  # by accident, because tab_css() takes no table.
+  testthat::expect_false("tabs" %in% names(formals(tab_css)))
+  testthat::expect_false("x" %in% names(formals(tab_css)))
 })
 
 testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {
@@ -359,10 +368,10 @@ testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {
   testthat::expect_true(grepl("</style>", md, fixed = TRUE))
 })
 
-testthat::test_that("tab_md_css writes to a file when file is given", {
+testthat::test_that("tab_css(format = \"md\") writes to a file when file is given", {
   tmp <- tempfile(fileext = ".css")
   on.exit(unlink(tmp))
-  out <- tab_md_css(file = tmp)
+  out <- tab_css(format = "md", file = tmp)
   testthat::expect_true(file.exists(tmp))
   testthat::expect_gt(length(readLines(tmp)), 0)
 })
@@ -585,8 +594,8 @@ testthat::test_that("a blank separator row renders through pandoc as a <tr> of e
   testthat::expect_match(h, '<div class="tabxplor-tab">', fixed = TRUE)
 })
 
-testthat::test_that("tab_css(chrome=TRUE) carries the md-only rules; tab_md_css() omits them", {
-  css <- tab_css(style_tag = FALSE)                              # chrome = TRUE
+testthat::test_that("format = \"html\" carries the md-only rules; format = \"md\" omits them", {
+  css <- tab_css(style_tag = FALSE)                              # format = "html"
   reset <- ".tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}"
   testthat::expect_match(css, reset, fixed = TRUE)
   testthat::expect_match(css, "tr:not(:has(td:not(:empty)))", fixed = TRUE)     # blank-row rule
@@ -594,8 +603,8 @@ testthat::test_that("tab_css(chrome=TRUE) carries the md-only rules; tab_md_css(
   # the reset MUST precede the header underline (same specificity -> source order decides the tie)
   testthat::expect_lt(regexpr(reset, css, fixed = TRUE),
                       regexpr(".tabxplor-tab thead th{", css, fixed = TRUE))
-  # the chrome-free flavour (tab_md_css) omits all three
-  bare <- tab_md_css(style_tag = FALSE)
+  # the chrome-free flavour omits all three
+  bare <- tab_css(format = "md", style_tag = FALSE)
   testthat::expect_no_match(bare, reset, fixed = TRUE)
   testthat::expect_no_match(bare, "tr:not(:has", fixed = TRUE)
 })

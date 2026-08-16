@@ -245,9 +245,10 @@ effet protecteur (OR inférieur à 1) que l'ajustement rapproche de 1 reçoit la
 de risque rapproché de 1, ce qui est bien ce qu'on veut lire : « les autres variables expliquent une
 partie de cette association » est un seul énoncé, de quelque côté de 1 que se trouve l'effet.
 
-Le même écart se lit aussi en chiffres, dans la case ou au survol. `tab_reg()` n'a pas d'argument
-`display`, on pose donc le gabarit sur le tableau construit — les colonnes sans contrepartie observée
-gardent simplement leur affichage habituel :
+Le même écart se lit aussi en chiffres, dans la case ou au survol. L'argument `display =` pose le
+gabarit dès la construction (voir *Lire le tableau* plus bas) ; sur un tableau déjà construit,
+`set_display()` fait la même chose — les colonnes sans contrepartie observée gardent simplement leur
+affichage habituel :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>

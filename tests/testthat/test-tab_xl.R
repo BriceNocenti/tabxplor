@@ -138,7 +138,7 @@ testthat::test_that("tab_xl emits no font `scheme` (numbers really render in fon
   testthat::expect_false(any(grepl("Cascadia", fonts)))
   # a STARRED table: numbers switch to the monospace Cascadia Mono
   d  <- forcats::gss_cat; d$married <- as.integer(d$marital == "Married")
-  tr <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  tr <- suppressWarnings(tab_reg(d, "married", c("race", "relig")))
   p2 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tr, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
   fonts2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$fonts
@@ -182,7 +182,7 @@ testthat::test_that("tab_xl fonts are settable by option (plain vs starred)", {
   testthat::expect_false(any(grepl("DejaVu|Consolas", fonts)))   # nothing hardcoded; stars font unused
   # starred table -> the STARS number font
   d  <- forcats::gss_cat; d$married <- as.integer(d$marital == "Married")
-  tr <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  tr <- suppressWarnings(tab_reg(d, "married", c("race", "relig")))
   p2 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tr, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
   fonts2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$fonts
@@ -237,7 +237,7 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
   testthat::skip_if_not_installed("broom")
   d  <- forcats::gss_cat
   d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
-  tl <- tab_logit(d, "married", c("race", "relig"))
+  tl <- tab_reg(d, "married", c("race", "relig"))
   tmp <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp, open = FALSE, replace = TRUE)
   # Phase 18z13: column 2 is the per-level `n` (add_n = TRUE by default); the OR column follows it.
   xl_col <- function(f) {

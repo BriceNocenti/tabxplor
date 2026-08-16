@@ -1,7 +1,7 @@
 # Phase 12c: tab_reg() -- unified regression tables (gaussian beta / binomial OR / poisson IRR).
 # Statistical soundness is checked against hand-run stats::lm / glm / svyglm, comparing the fmt
 # fields tab_reg stores (the CI is the exact dual of the stored p / the significance stars).
-# tab_logit()/multi_logit() are exercised by test-tab_logit.R (the binomial wrappers).
+# Binary outcomes are exercised by test-tab_reg-binomial.R.
 #
 # CRAN time: this is the suite's heaviest file (~34 s serial, dozens of model fits). skip_on_cran()
 # trims the CRAN check without weakening our own CI -- devtools, covr AND r-lib/actions all set
@@ -17,11 +17,11 @@ reg_data <- function() {
 
 # ---- family dispatch + wrapper equivalence --------------------------------------------------
 
-test_that("tab_reg(family='binomial') is identical to tab_logit()", {
+test_that("tab_reg(family='binomial') is identical to tab_reg()", {
   skip_if_not_installed("broom")
   d  <- reg_data()
   t1 <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
-  t2 <- tab_logit(d, "married", c("race", "rincome"), cleannames = FALSE)
+  t2 <- tab_reg(d, "married", c("race", "rincome"), cleannames = FALSE)
   expect_equal(get_or(t1[["Model_OR"]]),     get_or(t2[["Model_OR"]]))
   expect_equal(get_pvalue(t1[["Model_OR"]]), get_pvalue(t2[["Model_OR"]]))
 })

@@ -46,8 +46,8 @@
 #   f_ci_cell       -> DONE Phase 3a (ci half-width -> asymmetric Wilson ci_inf/ci_sup; cell CI
 #                      also drawn on the total column, per decisions §1) [display]
 #   f_ci_diff       -> DONE Phase 3a (AC -> Newcombe default interval + universal-inclusion stars) [display]
-#   f_or            -> Phase 10/tab_logit (rr->ratio done in 1a; empirical log-OR Wald pvalue + 1/OR
-#                      display deferred to the tab_logit phase, NOT 3b)
+#   f_or            -> Phase 10/regression (rr->ratio done in 1a; empirical log-OR Wald pvalue +
+#                      1/OR display deferred to the regression phase, NOT 3b)
 #   f_chi2/f_subtab -> Phase 3b (table attribute chi2 -> test; chi2 pvalue field populated)
 #   f_color_afterci -> DONE Phase 3a (after_ci reads the real CI bounds via get_ci upper arm) [struct]
 #   f_color_contrib -> Phase 5 (contrib mode reworked in the diff/ratio color overhaul)

@@ -909,7 +909,7 @@ tab_html <- function(tabs,
   # Phase 13d: the cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is
   # table-independent (see tab_css()), hence built once per call -- or not at all, when a document
   # emitted tab_css() itself (options("tabxplor.tab_kable_css" = FALSE)).
-  style <- if (css) tab_css(theme = theme, chrome = TRUE, style_tag = FALSE) else ""
+  style <- if (css) tab_css(theme = theme, format = "html", style_tag = FALSE) else ""
   # Phase 14k: `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's
   # page to match -- and, under "auto", resolve it from the editor (the browser cannot see Positron).
   tab_kable_join(parts, css = style, theme = theme)
@@ -2356,6 +2356,8 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
 #' @param tabs A data.frame.
 #' @param no_tab_vars For data.frame of class `tabxplor_tab`, remove `tab_vars`.
 #' @param width_pad Number of characters lengths between columns.
+#' @return A list with the row count and the max character width.
+#' @keywords internal
 #' @export
 tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
                                        width_pad = 4L) {
@@ -3528,18 +3530,10 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 # The public value "crayon" is frozen for back-compat (it once returned crayon functions); the styles
 # are now built with cli (crayon is superseded) and stored in the internal `e$ansi` slot.
 get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NULL, theme = NULL, ...) {
-  # Phase 14l: `type` (the palette-FAMILY selector) stays; the OPTION tabxplor.color_style_type is
-  # deprecated -- it never chose a family, it globally repointed the TEXT channel into the FILL
-  # palette, i.e. fill-coloured font (the CHANNEL is chosen by `color = c(text, background)`). Warn
-  # once per session (deprecate_warn dedups and fires from these nested internal frames; deprecate_soft
-  # keys on the USER frame, so it would be silent from pillar_shaft). Only fires for someone who set
-  # the option to a non-default value -- for everyone else it is NULL now the seed write is gone.
-  opt_type <- getOption("tabxplor.color_style_type")
-  if (!is.null(opt_type) && !identical(opt_type, "text")) {
-    lifecycle::deprecate_warn(
-      "2.0.0", I('The option "tabxplor.color_style_type"'),
-      details = 'The colour CHANNEL is chosen by `color = c(text, background)` (see `?tab`).')
-  }
+  # `type` (the palette-FAMILY selector) stays. Phase 20a DELETED the option
+  # `tabxplor.color_style_type` and the warning that was its only reader: it was never seeded, so
+  # ?tabxplor-options documented a knob that did not exist, and the whole of it was a branch that
+  # existed to say it should not be used. The CHANNEL is chosen by `color = c(text, background)`.
   theme <- if (is.null(theme)) tx_theme_option("console") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"

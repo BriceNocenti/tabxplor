@@ -5,6 +5,14 @@
 # These are the fixtures that fail without that move; the byte-identity of everything else is proved
 # by test-golden.R + dev/verify_golden_field_delta.R, not here.
 
+# Phase 20a: this file calls functions deprecated in 2.0.0 on purpose -- what it asserts is their
+# arithmetic, which the leaf shares with them and which does NOT go away in 2.1.0.
+# ⚠ This quiets the TOP-LEVEL calls only: testthat 3e runs local_reproducible_output() inside
+# every test_that(), which forces lifecycle_verbosity = "warning" again, so the in-block calls
+# still warn. Migrating them to tab() is the corpus sweep routed to Phase 20h.
+withr::local_options(lifecycle_verbosity = "quiet", .local_envir = testthat::teardown_env())
+
+
 gss <- forcats::gss_cat
 
 test_that("a computation step does not decide the table's SHAPE (comp = 'all')", {

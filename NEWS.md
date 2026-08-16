@@ -47,6 +47,10 @@
   you try. A table reports whether it is merged (several row variables), grouped (sub-tables), or a
   list, and which of `tab_compact()` / `tab_transpose()` / `transpose = TRUE` accept that shape — a
   support matrix that used to exist only as scattered error messages.
+* **`tab_columns()`** does the same for the columns: one row per numeric column with what it
+  estimates, how it is coloured, and — side by side for the first time — the confidence level, the
+  degrees of freedom, the basis (raw count / weights / survey design) and the method its interval was
+  built with. **`fmt_attr(x, name)`** reads or writes any one of those facts by name.
 * **`forest_plot()` — a chart of any tabxplor table**, cross-table or regression: every estimate with
   its confidence interval, its stars and *its own cell colour*, one panel per column of the table.
   It reads the finished table and re-computes nothing, so the figure cannot disagree with the numbers
@@ -448,6 +452,25 @@
   They had been inert since the beta. Passing one still works and reports it once: the colour
   *channel* is chosen by `color = c(text, background)`, and font and width are CSS rules
   (see `tab_css()`).
+* **`tab_css(chrome =)` is now `tab_css(format = c("html", "md"))`**, which says what it is for:
+  `"html"` (the default) is the full stylesheet, `"md"` the colour classes only. **`tab_md_css()` is
+  removed** — it was `tab_css(format = "md")` under a name you had to already know.
+* **`tab_logit()` and `multi_logit()` are removed** — use `tab_reg(family = "binomial")`
+  (`multi_logit(models = )` is `tab_reg(predictors = <named list>)`). They were thin wrappers that
+  exposed only part of `tab_reg()`, so `effect`, `measure`, `compare`, `baseline`, `reference` and
+  `color` were out of reach through them.
+* **The option `tabxplor.color_style_type` is removed** (it was documented but never set, and only
+  ever emitted its own deprecation warning). The colour channel is `color = c(text, background)`.
+
+### Hard-deprecated (defunct in 2.1.0)
+
+* **The step-by-step chain** — `tab_pct()` / `tab_tot()` / `tab_totaltab()` / `tab_ci()` /
+  `tab_chi2()` — now warns on every call. What goes away is the *chaining API*, not the statistics:
+  `tab()` and `tab_num()` compute percentages, differences, confidence intervals and the whole-table
+  test in one pass, with the same arithmetic, and the numbers are identical.
+* `tab_prepare()`, `complete_partial_totals()` and `fct_recode_helper()` will become internal or be
+  removed in 2.1.0. `tab_prepare()`'s work is done by `tab()` itself (`na_drop_all` is
+  `filter = !is.na(...)`; `cleannames`, `other_if_less_than` and `other_level` are `tab()` arguments).
 
 ### Soft-deprecated
 
@@ -467,7 +490,8 @@
   arguments. The steps still work on an existing table and give the same numbers.
 * `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
 * Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
-  `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`.
+  `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`. `set_diff_type()` → `set_ref_type()`,
+  which shares its stem with `get_ref_type()` and with the `ref` attribute both address.
 * The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "difference"` +
   `color_signif =`); `color_type` (now inert).
 * **`tab(OR =)`** — `"OR"` / `"OR_pct"` map to `display = "{or}"` / `"{or} ({pct})"`, `"cumOR"` to

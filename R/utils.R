@@ -258,12 +258,6 @@ tx_deprecate_inert <- function(dots, fn) {
   options("tabxplor.parallel"     = FALSE)
   options("tabxplor.parallel_min" = 2L)
 
-  # Phase 17i: the jamovi live-UI caches fingerprint each column by class / factor levels / NA-count
-  # (cheap, per-column). Blind spot: a same-shape VALUE edit (values changed, structure unchanged) is
-  # not caught -> a stale cache HIT (self-heals on the next structural change). TRUE forces a full-value
-  # column hash (slower, exact) in BOTH modules -- the escape hatch for the paranoid. is.null-guarded so
-  # an Rprofile opt-in survives load. See ?tabxplor-options ; R/jmvtab-cache.R jmv_col_fp().
-  if (is.null(getOption("tabxplor.jmv_full_hash"))) options("tabxplor.jmv_full_hash" = FALSE)
 
   # Phase 13b: the colour-legend language. "auto" follows the R/OS locale (English fallback); "en"/"fr"
   # force it. Per-call `lang =` on the exporters overrides. Bind the R-tabxplor gettext catalog to the
@@ -372,7 +366,27 @@ score_from_lv1 <- function (data, name, vars_list) {
 
 
 
+# tx_user_call() -- was this deprecated function called by a USER, or by tabxplor itself?
+#
+# WHY IT EXISTS (Phase 20a). Two functions being un-exported in 2.1.0 -- tab_prepare() and
+# complete_partial_totals() -- still have exactly one caller each, and it is the package's own build.
+# `lifecycle::deprecate_soft()` is meant to handle that ("silent for same-package callers"), but it
+# treats a testthat run as a direct user call whatever `user_env` says, so under the suite EVERY
+# tab() would emit the nudge for a call the user never made. This asks the question the message is
+# actually about: whose code called it.
+#' @keywords internal
+#' @noRd
+tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamespace("tabxplor"))
+
+
 #' fct_recode helper to recode multiple variables
+#'
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' A code-writing convenience for [forcats::fct_recode()], unrelated to cross-tabulation: it
+#' prints a ready-to-paste `mutate()` call for a set of factor columns. Nothing in tabxplor uses it.
+#' It will be removed in 2.1.0 — copy it into your own project if you rely on it.
 #'
 #' @param data The data frame.
 #' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
@@ -393,10 +407,13 @@ score_from_lv1 <- function (data, name, vars_list) {
 #' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
 #' character variable is returned invisibly (or as main result if `cat = TRUE`).
 #' When a column carries a variable label (its `label` attribute), it is used as title in a comment.
+#' @keywords internal
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
                               freq = NULL, 
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
+  lifecycle::deprecate_soft("2.0.0", "fct_recode_helper()",
+                            details = "It writes forcats code and has nothing to do with tables.")
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))

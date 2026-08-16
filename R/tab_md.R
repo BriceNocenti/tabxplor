@@ -6,7 +6,7 @@
 #   - Phase 10f: a COLOURED table (any fmt column with a colour measure) wraps EVERY fmt cell in a
 #     break-derived pandoc span [<num>]{.class} (uncoloured cells get the neutral .n) so numbers stay
 #     aligned; an UNCOLOURED table (or color = FALSE) is byte-identical to the plain padded layout.
-#     Class names are palette-INDEPENDENT (slot -> break); tab_md_css() maps them to the palette hex.
+#     Class names are palette-INDEPENDENT (slot -> break); tab_css(format = "md") maps them to hex.
 # See: CLAUDE.md Phase 10f, dev/tabxplor_phase10_exporters.md (Sec 12).
 
 #' Export a tabxplor table to a markdown table
@@ -29,7 +29,7 @@
 #' @param color When `TRUE` (default) and the table carries colours (e.g. built with
 #'   `tab(..., color = "difference")`), each fmt cell is wrapped in a short pandoc bracketed span
 #'   `[value]{.class}` so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
-#'   companion \code{\link{tab_md_css}} styles the classes). `FALSE` produces plain monochrome
+#'   companion \code{\link[=tab_css]{tab_css(format = "md")}} styles the classes). `FALSE` produces plain monochrome
 #'   markdown. Uncoloured tables never get spans.
 #' @param color_legend When `TRUE` (default) and the table is coloured, prepend a colour-legend prose
 #'   line (its break-words in the same pandoc classes as the cells) above the subtext.
@@ -166,7 +166,7 @@ tab_md <- function(tabs,
   styled    <- any_color || isTRUE(css)
   if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
   if (isTRUE(css)) {
-    md_text <- paste0(tab_css(theme = theme, chrome = TRUE, style_tag = TRUE), "\n\n", md_text)
+    md_text <- paste0(tab_css(theme = theme, format = "html", style_tag = TRUE), "\n\n", md_text)
   }
 
   if (!is.null(file)) writeLines(md_text, file)
@@ -186,24 +186,10 @@ tab_md <- function(tabs,
 }
 
 
-#' CSS for the colour spans of \code{\link{tab_md}}
-#'
-#' A thin wrapper around \code{\link[=tab_css]{tab_css(chrome = FALSE)}}, kept for discoverability
-#' alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a
-#' palette **slot**, not a break -- so it takes no table: one stylesheet styles every table in a
-#' document. (Phase 19h dropped the inert `tabs` argument, which was documented as ignored.)
-#'
-#' @param ... Passed to \code{\link{tab_css}} (`theme`, `style_tag`, `file`).
-#'
-#' @return A character string of CSS (invisible when `file` is given).
-#' @seealso [tab_css()], which is the generator and also styles `tab_html()`.
-#' @export
-#'
-#' @examples
-#' cat(tab_md_css())
-tab_md_css <- function(...) {
-  tab_css(..., chrome = FALSE)
-}
+# Phase 20a: `tab_md_css()` is DELETED -- `tab_css(format = "md")` is the same call, and now says so
+# in its own name. It existed because `tab_css(chrome = FALSE)` was unguessable, which is a reason to
+# fix the argument, not to add a function. It was never released (absent from CRAN 1.3.1), so there
+# is nothing to deprecate.
 
 
 # Render ONE prepared table (`rd`, from tab_export_prep) to a markdown string (no file/clipboard/print

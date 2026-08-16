@@ -23,6 +23,7 @@
 \alias{get_comp_all}
 \alias{set_comp_all}
 \alias{get_ref_type}
+\alias{set_ref_type}
 \alias{set_diff_type}
 \alias{get_col_var}
 \alias{set_col_var}
@@ -125,6 +126,8 @@ get_comp_all(x, replace_na = TRUE)
 set_comp_all(x, comp_all = FALSE)
 
 get_ref_type(x, ...)
+
+set_ref_type(x, ref)
 
 set_diff_type(x, ref)
 
@@ -504,7 +507,11 @@ all of them in the whole tibble.
 
 \item \code{get_ref_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_diff_type()}: set the differences type attribute of a \code{fmt} vector
+\item \code{set_ref_type()}: set the reference attribute of a \code{fmt} vector — which row or column a
+comparison is made against. It is the writer of the attribute \code{\link[=get_ref_type]{get_ref_type()}} reads.
+
+\item \code{set_diff_type()}: \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{\link[=set_ref_type]{set_ref_type()}}, which shares its stem
+with the getter \code{\link[=get_ref_type]{get_ref_type()}} and with the \code{ref} attribute both of them address.
 
 \item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 
@@ -553,7 +560,7 @@ A \code{fmt} cell carries 21 fields. Many are \code{NA} when the quantity was no
 \item \code{diff} --- the difference from the reference cell (percentage points, or the outcome's own units).
 \item \code{ratio} --- the ratio to the reference cell (a relative risk, or a ratio of means).
 \item \code{ctr} --- the cell's contribution to the table's Chi-2.
-\item \code{var} --- the variance (of a mean; the Chi-2 variance on a percentage).
+\item \code{var} --- the column's variance quantity -- which one is given by its \code{scale}.
 \item \code{ci_inf} --- the lower bound of the confidence interval.
 \item \code{ci_sup} --- the upper bound of the confidence interval.
 \item \code{pvalue} --- the cell's own significance p-value, which the stars read.
@@ -571,27 +578,18 @@ A \code{fmt} cell carries 21 fields. Many are \code{NA} when the quantity was no
 \section{Every display token}{
 
 Generated from the package's own display table, so it cannot drift from what
-\code{get_num()} reads. The ones below that are not in the list above are written by
-the pipeline itself and are not meant to be typed:
+\code{get_num()} reads. Each of
+\code{pct}, \code{n}, \code{wn}, \code{mean}, \code{diff}, \code{ratio}, \code{or}, \code{ctr}, \code{var}, \code{obs}, \code{pvalue} shows the field of the same
+name, described above. The rest are composed or derived by the pipeline itself, and
+the last few are not meant to be typed:
 \itemize{
-\item \code{pct} --- the percentage.
-\item \code{n} --- the count.
-\item \code{wn} --- the weighted count.
-\item \code{mean} --- the mean.
-\item \code{diff} --- the difference from the reference.
-\item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means).
 \item \code{ci} --- the confidence interval of whatever the column compares.
-\item \code{or} --- the odds ratio.
-\item \code{ctr} --- the cell's contribution to the chi-squared.
-\item \code{var} --- the variance.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
-\item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only.
 \item \code{pct_ci} --- the percentage, with its interval printed beside it.
 \item \code{mean_ci} --- the mean, with its interval printed beside it.
 \item \code{or_pct} --- the odds ratio, with its percentage.
 \item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
 \item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.
-\item \code{pvalue} --- a test's p-value.
 \item \code{coef} --- a regression coefficient, on its own scale.
 \item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
 \item \code{est_ci} --- the estimate with a visible interval, reading whichever field the column's scale centres on.

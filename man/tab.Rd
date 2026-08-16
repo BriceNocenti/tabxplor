@@ -419,10 +419,8 @@ set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \
 needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
 only: colors, differences and the underlying fields are unchanged.}
 
-\item{color_breaks}{A per-table override of the colour thresholds, a named list of scales like
-\code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
-a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
-Unset scales fall back to the global setting.}
+\item{color_breaks}{A per-table override of the colour thresholds, in the form
+\code{\link{set_color_breaks}} accepts; unset scales keep the global ones.}
 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with

@@ -135,6 +135,6 @@ testthat::test_that("a popover carries the tooltip TEXT as its content, not its 
 })
 
 testthat::test_that("the one-line tooltip rule ships with the chrome, never with tab_md's CSS", {
-  testthat::expect_match(tab_css(chrome = TRUE,  style_tag = FALSE), "\\.tooltip-inner\\{")
-  testthat::expect_false(grepl("tooltip", tab_css(chrome = FALSE, style_tag = FALSE)))
+  testthat::expect_match(tab_css(format = "html", style_tag = FALSE), "\\.tooltip-inner\\{")
+  testthat::expect_false(grepl("tooltip", tab_css(format = "md",   style_tag = FALSE)))
 })

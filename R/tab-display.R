@@ -328,6 +328,13 @@ display_tokens_rd <- function(user_only = TRUE) {
   }
   toks <- names(DISPLAY_TOKENS)
   toks <- if (user_only) intersect(toks, DISPLAY_USER_FIELDS) else toks
+  # Phase 20a: on ?fmt (user_only = FALSE) this section sits ~30 lines below the field roll-call
+  # fmt_fields_rd() generates, and it was RE-GLOSSING every token named after a field -- eleven of
+  # them, in wording that had already drifted from FMT_FIELD_DOC's ("the table's Chi-2" vs "the
+  # chi-squared"). Two glosses of one fact is the disease, one level up. So a same-name token is
+  # named here and glossed THERE; only the tokens that are not a bare field carry a gloss.
+  same_name <- if (user_only) character(0) else intersect(toks, fmt_field_names)
+  toks      <- setdiff(toks, same_name)
   line <- function(tk) {
     r    <- DISPLAY_TOKENS[[tk]]
     doc  <- if (is.na(r$doc)) "" else paste0(" --- ", esc(r$doc))
@@ -342,8 +349,10 @@ display_tokens_rd <- function(user_only = TRUE) {
         "it is what Excel shows and what the colours read.")
     else
       c("Generated from the package's own display table, so it cannot drift from what",
-        "\\code{get_num()} reads. The ones below that are not in the list above are written by",
-        "the pipeline itself and are not meant to be typed:"),
+        "\\code{get_num()} reads. Each of",
+        paste0(paste0("\\code{", same_name, "}", collapse = ", "), " shows the field of the same"),
+        "name, described above. The rest are composed or derived by the pipeline itself, and",
+        "the last few are not meant to be typed:"),
     "\\itemize{", vapply(toks, line, character(1)), "}")
 }
 

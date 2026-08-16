@@ -106,7 +106,7 @@ testthat::test_that("tab_reg: beta shows SD, IRR says IRR, OR says OR", {
   testthat::expect_no_match(li, "odds-ratio")
 
   d2 <- dplyr::mutate(gss, married = as.integer(marital == "Married"))
-  o  <- suppressWarnings(tab_logit(d2, "married", "race"))
+  o  <- suppressWarnings(tab_reg(d2, "married", "race"))
   lo <- leg_en(o)
   testthat::expect_match(lo, "OR \u2265")
   testthat::expect_match(lo, "the reference category")

@@ -7,11 +7,16 @@
 complete_partial_totals(tabs)
 }
 \arguments{
-\item{tabs}{A table or data.framate containting \code{tabxplor_fmt} columns.}
+\item{tabs}{A table or data frame containing \code{tabxplor_fmt} columns.}
 }
 \value{
 The table with completed total rows, total tables, and reference rows.
 }
 \description{
-Complete partial total rows
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+A build-internal repair: after a reshape, a row that is a total in SOME columns is made a total
+in all of them. Its only caller is \code{\link[=tab_spread]{tab_spread()}}, inside the package. It will be made internal
+in 2.1.0.
 }
+\keyword{internal}

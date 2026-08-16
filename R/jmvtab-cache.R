@@ -235,11 +235,20 @@ jmv_hash <- function(x) rlang::hash(x)
 # the fingerprints of a pair's OWN columns (not the whole selection), so adding an unrelated variable
 # does NOT invalidate other pairs (the add-a-variable reuse goal). Catches relabels, missingness
 # edits, type changes. Blind spot (design 7): a same-shape value edit preserving levels + NA-count is
-# not caught (best-effort; self-heals on the next change). Opt-in full-value hash for the paranoid.
+# not caught (best-effort; self-heals on the next change).
+#
+# Phase 20a: the `tabxplor.jmv_full_hash` escape hatch is an internal CONSTANT now. It had one seed,
+# one read and no test, both sites inside the package, and it occupied a section of
+# ?tabxplor-options describing a knob no user would find a reason to turn. Flip the constant to hash
+# full column values (exact, slower) while diagnosing a stale-cache report.
+#' @keywords internal
+#' @noRd
+JMV_FULL_HASH <- FALSE
+
 #' @keywords internal
 #' @noRd
 jmv_col_fp <- function(col) {
-  if (isTRUE(getOption("tabxplor.jmv_full_hash", FALSE))) return(jmv_hash(col))
+  if (isTRUE(JMV_FULL_HASH)) return(jmv_hash(col))
   jmv_hash(list(class(col), if (is.factor(col)) levels(col) else NULL, sum(is.na(col))))
 }
 

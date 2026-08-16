@@ -5,6 +5,14 @@
 
 # === SECTION: Data setup ====================================================
 
+# Phase 20a: this file calls functions deprecated in 2.0.0 on purpose -- what it asserts is their
+# arithmetic, which the leaf shares with them and which does NOT go away in 2.1.0.
+# ⚠ This quiets the TOP-LEVEL calls only: testthat 3e runs local_reproducible_output() inside
+# every test_that(), which forces lifecycle_verbosity = "warning" again, so the in-block calls
+# still warn. Migrating them to tab() is the corpus sweep routed to Phase 20h.
+withr::local_options(lifecycle_verbosity = "quiet", .local_envir = testthat::teardown_env())
+
+
 sw <- dplyr::starwars |>
   tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
               other_if_less_than = 5)

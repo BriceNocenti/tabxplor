@@ -23,7 +23,7 @@
 #     crosstab store). Phase 17i replaced this file's duplicated + O(n^2)-evicting store lifecycle.
 #   - INHERITS jmv_col_fp()'s value-edit blind spot (a same-shape edit preserving class / factor levels /
 #     NA-count is NOT caught -> can serve a STALE fit after a data edit; best-effort, self-heals on the
-#     next structural change). Escape hatch for the paranoid: options(tabxplor.jmv_full_hash = TRUE)
+#     next structural change). Escape hatch: the JMV_FULL_HASH constant in R/jmvtab-cache.R.
 #     forces a full-value column hash (slower, exact) in BOTH modules -- see ?tabxplor-options.
 # See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 15b/17i.
 

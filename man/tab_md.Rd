@@ -47,7 +47,7 @@ hold a raw newline, so md "wrapping" means "do not truncate".}
 \item{color}{When \code{TRUE} (default) and the table carries colours (e.g. built with
 \code{tab(..., color = "difference")}), each fmt cell is wrapped in a short pandoc bracketed span
 \verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
-companion \code{\link{tab_md_css}} styles the classes). \code{FALSE} produces plain monochrome
+companion \code{\link[=tab_css]{tab_css(format = "md")}} styles the classes). \code{FALSE} produces plain monochrome
 markdown. Uncoloured tables never get spans.}
 
 \item{color_legend}{When \code{TRUE} (default) and the table is coloured, prepend a colour-legend prose

@@ -107,9 +107,9 @@ testthat::test_that("the generated CSS is syntactically valid in every mode", {
   # A single malformed rule makes the browser drop it -- and, inside @media, potentially the whole
   # block -- with no error anywhere. No selector-presence test catches that, so check the shape.
   # z11: "print" joins the list, and `@media print {` joins the at-rule opener stripped below.
-  for (chrome in c(TRUE, FALSE)) for (th in c("light", "dark", "auto", "print")) {
-    css <- tab_css(theme = th, chrome = chrome, style_tag = FALSE)
-    lab <- paste0(th, if (chrome) "/chrome" else "/md")
+  for (fmt in c("html", "md")) for (th in c("light", "dark", "auto", "print")) {
+    css <- tab_css(theme = th, format = fmt, style_tag = FALSE)
+    lab <- paste0(th, "/", fmt)
     testthat::expect_identical(lengths(regmatches(css, gregexpr("[{]", css))),
                                lengths(regmatches(css, gregexpr("[}]", css))), label = lab)
     body <- trimws(gsub("@media (print|\\(prefers-color-scheme: dark\\)) \\{|^\\}$", "",
@@ -125,9 +125,9 @@ testthat::test_that("cell colour classes are emitted bare AND scoped (Bootstrap-
   # -- every cell colour washed out on the pkgdown site while the legend spans survived. The scoped
   # twin `.tabxplor-tab .p1` (0,2,0) out-specifies it with no !important; the bare selector stays for
   # tab_md's editor contract and the legend spans outside the wrapper.
-  for (chrome in c(TRUE, FALSE)) {
-    css <- tab_css(chrome = chrome, style_tag = FALSE)
-    lab <- if (chrome) "chrome" else "md"
+  for (fmt in c("html", "md")) {
+    css <- tab_css(format = fmt, style_tag = FALSE)
+    lab <- fmt
     for (cls in c("p1", "m4", "o1", "u4")) {
       testthat::expect_match(css, paste0(".", cls, ",.tabxplor-tab .", cls, "{"),
                              fixed = TRUE, label = lab)
@@ -229,8 +229,8 @@ testthat::test_that("legend weight: text break-words bold, background break-word
 })
 
 testthat::test_that("tab_css() bolds the text slot classes, not the background ones (Phase 14c)", {
-  for (chrome in c(TRUE, FALSE)) {              # tab_md_css() is tab_css(chrome = FALSE)
-    css <- tab_css(style_tag = FALSE, chrome = chrome)
+  for (fmt in c("html", "md")) {
+    css <- tab_css(style_tag = FALSE, format = fmt)
     testthat::expect_match(css, ".p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}", fixed = TRUE)
     testthat::expect_false(grepl("[.]o1[^{]*[{][^}]*font-weight", css))
   }
@@ -353,7 +353,7 @@ testthat::test_that("numbers are monospace by default so figures stay column-ali
 testthat::test_that("the html engine flags a starred table with tx-has-stars, a plain one not", {
   plain   <- tab(gss, marital, race, pct = "row", color = "diff")
   d <- gss; d$married <- as.integer(d$marital == "Married")
-  starred <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  starred <- suppressWarnings(tab_reg(d, "married", c("race", "relig")))
   hp <- as.character(tab_kable(plain, css = FALSE))
   hs <- as.character(tab_kable(starred, css = FALSE))
   testthat::expect_no_match(hp, "tx-has-stars")
@@ -515,7 +515,7 @@ testthat::test_that("html engine: var_names drops the row-name column / the col_
 })
 
 testthat::test_that("tab_css() carries the label / vertical-name role classes", {
-  css <- tab_css(chrome = TRUE)
+  css <- tab_css(format = "html")
   testthat::expect_match(css, ".tx-lbl", fixed = TRUE)
   testthat::expect_match(css, ".tx-vname", fixed = TRUE)
   # NOT `sideways-lr`: still experimental with patchy support. vertical-rl + rotate(180deg) is the

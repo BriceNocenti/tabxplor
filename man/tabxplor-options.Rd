@@ -52,9 +52,6 @@ wider and would break column alignment). Override it for your own front-end / fo
 (follow the reader). \code{"auto"} needs a stylesheet, so only \code{tab_html()},
 \code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}. \code{"print"} reaches
 every backend, Excel included.}
-\item{\code{tabxplor.color_style_type}}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} the console colour CHANNEL,
-\code{"text"} or \code{"bg"}. Inert since 2.0.0: the channel is chosen per measure by
-\code{color = c(text, background)} (see \code{\link[=tab]{tab()}}), so setting it emits a deprecation warning.}
 \item{\code{tabxplor.print_rules}}{\code{TRUE} (default): every stylesheet \code{\link[=tab_css]{tab_css()}} emits also carries the
 black-and-white publication palette inside an \verb{@media print} block, so a table rendered in colour
 \strong{prints} (or saves to PDF) publication-ready with no further action. Set \code{FALSE} if your printer
@@ -163,18 +160,6 @@ on parallel CPU cores (needs the \code{mirai} package). \code{TRUE} = auto selec
 integer = that many cores. Release the pool with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
 \item{\code{tabxplor.parallel_min}}{\code{2L} (default): the smallest \code{row_var} count worth dispatching
 (fewer runs serially, since the setup would outweigh the gain).}
-}
-}
-
-\section{jamovi live cache}{
-
-\describe{
-\item{\code{tabxplor.jmv_full_hash}}{\code{FALSE} (default): the jamovi module caches (Crosstables and
-Regressions) fingerprint each data column cheaply by its class, factor levels and number of
-missing values, so an unrelated edit does not invalidate every table. A same-shape value edit
-(values changed but class, levels and NA-count unchanged) is therefore not detected and can serve
-a stale cached result until the next structural change. Set to \code{TRUE} to hash the full column
-values instead (exact, slightly slower) if you edit data in place and need every change caught.}
 }
 }
 

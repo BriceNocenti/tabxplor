@@ -35,9 +35,9 @@ A \code{tibble} of class \code{tab}. Total rows can then be detected using
 \code{\link{is_totrow}}, and total columns using \code{\link{is_totcol}}.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Superseded (2.0.0): totals are built directly by \code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}} (a
+Deprecated in 2.0.0, defunct in 2.1.0 -- totals are built directly by \code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}} (a
 total row is always computed, one total column shown). \code{tab_tot()} still works on an
 existing tab.
 }

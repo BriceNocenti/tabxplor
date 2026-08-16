@@ -331,13 +331,16 @@ default_ci_method <- function() vapply(CI_METHODS, `[[`, character(1), 1L)
 # by every entry point -- tab(), tab_many(), tab_num(), tab_counts() and tab_ci().
 #' @keywords internal
 resolve_ci_method <- function(ci_method = NULL, method_cell = NULL, method_diff = NULL,
-                              fn = "tab") {
+                              fn = "tab", user_env = rlang::caller_env()) {
   out <- default_ci_method()
   for (s in c("cell", "diff")) {
     v <- if (s == "cell") method_cell else method_diff
     if (is.null(v) || identical(v, out[[s]])) next
+    # WARNING: `user_env` must be threaded from the PRODUCER, not defaulted by lifecycle. This
+    # resolver is called from tab_resolve_common_args(), so lifecycle's own default would name a
+    # tabxplor frame as the user and stay silent -- which is what it did (Phase 20a).
     lifecycle::deprecate_soft("2.0.0", paste0(fn, "(method_", s, " = )"),
-                              paste0(fn, "(ci_method = )"))
+                              paste0(fn, "(ci_method = )"), user_env = user_env)
     out[[s]] <- v[[1]]
   }
   if (is.null(ci_method) || !length(ci_method)) ci_method <- character()

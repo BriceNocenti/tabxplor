@@ -227,7 +227,7 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_equal(measure_auto("pct", "bg"),   "ratio")
   testthat::expect_equal(measure_auto("num", "text"), "ratio")
   testthat::expect_equal(measure_auto("counts", "text"), "contrib")
-  testthat::expect_equal(measure_auto("or_table", "text"), "odds_ratio")
+  testthat::expect_equal(measure_auto("reg_ratio", "text"), "odds_ratio")
 
   # every scale states its own geometry; a derived one names its parent
   testthat::expect_equal(COLOR_SCALES$pct_ratio$center, 1)
@@ -353,12 +353,11 @@ testthat::test_that("color_type is deprecated on every exporter and does nothing
   d  <- forcats::gss_cat
   tb <- tab(d, marital, race, pct = "row", color = TRUE)
 
-  # each of the 7 public surfaces warns once when color_type is explicitly passed
+  # each of the 6 public surfaces warns once when color_type is explicitly passed
   lifecycle::expect_deprecated(tab_kable(tb, color_type = "bg"))
   lifecycle::expect_deprecated(tab_md(tb, color_type = "bg", print = FALSE))
   lifecycle::expect_deprecated(tab_css(color_type = "bg"))
   lifecycle::expect_deprecated(tab_export(tb, "md", color_type = "bg", print = FALSE))
-  lifecycle::expect_deprecated(tab_md_css(color_type = "bg"))
   p <- withr::local_tempfile(fileext = ".xlsx")
   lifecycle::expect_deprecated(suppressMessages(
     tab_xl(tb, color_type = "bg", path = p, open = FALSE, replace = TRUE)))
@@ -387,23 +386,15 @@ testthat::test_that("color_type default is no longer a literal that warns", {
   testthat::expect_equal(n, 0L)
 })
 
-testthat::test_that("the color_style_type OPTION is inert, and warns only when non-default", {
-  withr::defer(rlang::reset_warning_verbosity("lifecycle_The option \"tabxplor.color_style_type\""))
-  # inert: option = "bg" renders the SAME as an explicit text lookup (channel is chosen by `color=`).
-  # Both reads fire the option-deprecation warning (the check is unconditional on `type`), so both are
-  # suppressed here -- the warning itself is asserted separately below.
+testthat::test_that("the deleted color_style_type option is not read at all", {
+  # Phase 20a: the option is GONE (never seeded, read only to warn about itself), so setting it must
+  # change nothing and say nothing -- the colour CHANNEL is `color = c(text, background)`.
   withr::with_options(list(tabxplor.color_style_type = "bg"), {
-    a <- suppressWarnings(get_color_style("color_code", theme = "light"))
-    b <- suppressWarnings(get_color_style("color_code", type = "text", theme = "light"))
+    a <- get_color_style("color_code", theme = "light")
+    b <- get_color_style("color_code", type = "text", theme = "light")
     testthat::expect_identical(a, b)
+    testthat::expect_no_warning(get_color_style("color_code"))
   })
-  # warns when set non-default
-  rlang::reset_warning_verbosity("lifecycle_The option \"tabxplor.color_style_type\"")
-  withr::with_options(list(tabxplor.color_style_type = "bg"),
-    lifecycle::expect_deprecated(get_color_style("color_code"), "color_style_type"))
-  # silent when unset (the normal case now the seed write is gone)
-  withr::with_options(list(tabxplor.color_style_type = NULL),
-    testthat::expect_no_warning(get_color_style("color_code")))
 })
 
 testthat::test_that("the color_type=bg_legend latent abort can't be reached via the option", {
@@ -412,8 +403,8 @@ testthat::test_that("the color_type=bg_legend latent abort can't be reached via 
   # the option used to reach get_color_style("crayon", type = "bg_legend") via legend_render_line's
   # unvalidated fam("text"); hard-wiring "text" closes it. The DIRECT abort still stands (below).
   withr::with_options(list(tabxplor.color_style_type = "bg_legend"), {
-    testthat::expect_no_error(suppressWarnings(print(tb)))
-    testthat::expect_no_error(suppressWarnings(tab_color_legend(tb, medium = "console")))
+    testthat::expect_no_error(print(tb))
+    testthat::expect_no_error(tab_color_legend(tb, medium = "console"))
   })
   testthat::expect_error(get_color_style("crayon", type = "bg_legend"), "bg_legend")
 })

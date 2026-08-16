@@ -238,8 +238,9 @@ want to read: "the other variables explained part of this association" is one st
 side of 1 the effect is on.
 
 The same gap is readable as a number when you want the exact values, in the cell or on hover.
-`tab_reg()` has no `display` argument, so set the template on the finished table — the columns that
-have no observed counterpart simply keep their plain display:
+`display =` writes the template at build time (see *Reading the table* below); on a finished table
+`set_display()` does the same — the columns that have no observed counterpart simply keep their
+plain display:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>

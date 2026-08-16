@@ -45,5 +45,10 @@ character variable is returned invisibly (or as main result if \code{cat = TRUE}
 When a column carries a variable label (its \code{label} attribute), it is used as title in a comment.
 }
 \description{
-fct_recode helper to recode multiple variables
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+A code-writing convenience for \code{\link[forcats:fct_recode]{forcats::fct_recode()}}, unrelated to cross-tabulation: it
+prints a ready-to-paste \code{mutate()} call for a set of factor columns. Nothing in tabxplor uses it.
+It will be removed in 2.1.0 — copy it into your own project if you rely on it.
 }
+\keyword{internal}

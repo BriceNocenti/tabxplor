@@ -67,20 +67,18 @@ reference:
   - forest_plot
   - reg_check_plots
 
-- title: Regression shortcuts
+- title: What can this outcome be modelled as?
   desc: >
-    `tab_logit()` and `multi_logit()` are thin wrappers around `tab_reg()` for logistic models.
-    `reg_measures()` lists which effect x measure combinations an outcome can be modelled as.
+    `reg_measures()` lists which effect x measure combinations `tab_reg()` can build for a given
+    outcome, and why the others are refused.
   contents:
-  - tab_logit
-  - multi_logit
   - reg_measures
 
 - title: Export a finished table
   desc: >
     `tab_export()` is the one function most users need. `tab_html()`, `tab_md()`, `tab_xl()` and
     `tab_plot()` are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
-    `tab_css()` / `tab_md_css()` emit the colour stylesheet for a whole document.
+    `tab_css()` emits the colour stylesheet for a whole document.
   contents:
   - tab_export
   - tab_html
@@ -88,7 +86,6 @@ reference:
   - tab_xl
   - tab_plot
   - tab_css
-  - tab_md_css
 
 - title: Colours
   desc: >
@@ -129,18 +126,21 @@ reference:
   - tab_spread
   - tab_compact
   - tab_transpose
-  - complete_partial_totals
 
 - title: Inspect a table
   desc: >
     What have I got, and what can I do with it? `tab_shape()` reports the shape (merged, grouped, a
-    list) and `tab_supports()` which operations accept it; `tab_get_vars()` names the variables and
-    `is_tab()` tests the class.
+    list) and `tab_supports()` which operations accept it; `tab_columns()` lists every numeric
+    column with what it estimates, how it is coloured and how its interval was computed;
+    `tab_get_vars()` names the variables and `is_tab()` tests the class. `fmt_attr()` reads or
+    writes one column attribute by name.
   contents:
   - tab_shape
   - tab_supports
+  - tab_columns
   - tab_get_vars
   - is_tab
+  - fmt_attr
 
 - title: The fmt cell type
   desc: The `tabxplor_fmt` vctrs record behind every numeric cell, and its constructors.
@@ -156,7 +156,6 @@ reference:
     `tab()` / `tab_num()` supersede them.
   contents:
   - tab_many
-  - tab_prepare
   - tab_pct
   - tab_tot
   - tab_totaltab
@@ -167,9 +166,7 @@ reference:
   desc: Small utilities for preparing data or laying out a table.
   contents:
   - score_from_lv1
-  - fct_recode_helper
   - tab_wrap_text
-  - tab_get_wrapped_dimensions
   - tab_parallel_stop
 
 # An incomplete `articles:` index is a hard pkgdown error, so all six articles are listed here.

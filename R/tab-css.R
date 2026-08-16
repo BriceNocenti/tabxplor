@@ -630,22 +630,36 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
 #'   by `color = c(text, background)` (see [tab()]).
-#' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,
-#'   the greys) -- what [tab_html()] needs. `FALSE` emits the colour classes only, which
-#'   is what `tab_md()` wants: bare selectors you can map in your own editor's CSS.
+#' @param format Which output the stylesheet is for, in [tab_export()]'s own vocabulary.
+#'   `"html"` (the default) is the full stylesheet [tab_html()] needs: the colour classes **and**
+#'   the table's own look (font, background, border colours, the greys). `"md"` emits the colour
+#'   classes only, which is what [tab_md()] wants — bare selectors you can map in your own editor's
+#'   or publisher's CSS.
 #' @param style_tag Wrap the CSS in a `<style>` tag (default `TRUE`).
 #' @param file Optional path to write to instead of returning.
 #'
 #' @return The CSS, invisibly when `file` is given. Printed as-is by `knitr` with `results = "asis"`.
-#' @seealso [tab_kable()], [tab_md()], [set_color_palette()], [set_color_breaks()]
+#' @seealso [tab_html()], [tab_md()], [set_color_palette()], [set_color_breaks()]
 #' @export
 #' @examples
 #' cat(tab_css(theme = "auto"))
-#' cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
-tab_css <- function(theme = NULL, chrome = TRUE,
+#' cat(tab_css(format = "md", style_tag = FALSE))  # the markdown flavour
+tab_css <- function(theme = NULL, format = c("html", "md"),
                     style_tag = TRUE, file = NULL, print_rules = NULL, ...) {
   # Phase 19l: the retired inert arguments (`color_type`, ...) ride `...`.
-  tx_deprecate_inert(rlang::list2(...), "tab_css")
+  # Phase 20a: `chrome = TRUE/FALSE` became `format = c("html", "md")` -- the argument said which
+  # CSS mechanism it toggled, not which output it was for, and the function it named
+  # (`tab_md_css()` = `tab_css(chrome = FALSE)`) existed only because nobody could guess it. It is
+  # caught by NAME here rather than left to tx_deprecate_inert(), which would ACCEPT and IGNORE it:
+  # a swallowed `chrome = FALSE` emits the wrong stylesheet, silently.
+  dots <- rlang::list2(...)
+  if ("chrome" %in% names(dots))
+    cli::cli_abort(c("{.arg chrome} is now {.arg format}, which names the output it is for.",
+                     "i" = 'chrome = TRUE  ->  format = "html"  (the default)',
+                     "i" = 'chrome = FALSE ->  format = "md"'))
+  tx_deprecate_inert(dots[setdiff(names(dots), "chrome")], "tab_css")
+  format <- rlang::arg_match(format)
+  chrome <- identical(format, "html")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
   # z11: NULL -> option is the package idiom (cf. engine / popover / css / tooltips), and it is why
   # tab_html()/tab_md() need NO argument of their own -- they call tab_css() internally, so a user with

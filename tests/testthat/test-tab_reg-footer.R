@@ -128,8 +128,8 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
 test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-N nested models)", {
   skip_if_not_installed("broom")
   d  <- reg_data()
-  mc <- multi_logit(d, "married",
-                    models = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
+  mc <- tab_reg(d, "married",
+                    predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
                     compare = "baseline", cleannames = FALSE)
   cmp <- get_test(mc) |> dplyr::filter(test == "compare_baseline")
   expect_equal(nrow(cmp), 1L)                             # only the non-baseline column
@@ -151,8 +151,8 @@ test_that("compare falls back to Delta-AIC (with a message) when N differs acros
   # the likelihood-ratio test fires -- which is the point of that default. The AIC fallback is what the
   # opt-in per-model drop still needs, so that is what this test exercises.
   expect_message(
-    mc <- multi_logit(d, "married",
-                      models = list(a = "race", b = c("race", "tvhours")),
+    mc <- tab_reg(d, "married",
+                      predictors = list(a = "race", b = c("race", "tvhours")),
                       compare = "baseline", cleannames = FALSE, na = "drop_by_model"),
     "not nested or N differs"
   )
@@ -162,8 +162,8 @@ test_that("compare falls back to Delta-AIC (with a message) when N differs acros
 test_that("D1: the shared-population default makes the likelihood-ratio comparison fire", {
   skip_if_not_installed("broom")
   d  <- reg_data()
-  mc <- suppressMessages(multi_logit(d, "married",
-                                     models = list(a = "race", b = c("race", "tvhours")),
+  mc <- suppressMessages(tab_reg(d, "married",
+                                     predictors = list(a = "race", b = c("race", "tvhours")),
                                      compare = "baseline", cleannames = FALSE))
   tt <- get_test(mc)
   expect_true(any(grepl("^compare_", tt$test)))

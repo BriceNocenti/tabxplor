@@ -549,8 +549,7 @@ reference level / mean): the marginal effect \emph{at reference}, or -- for a mu
 Unweighted models use \code{\link[stats:lm]{stats::lm()}} / \code{\link[stats:glm]{stats::glm()}}; a \code{wt} weight column switches to a survey
 design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct design-based standard errors rather than the
 frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
-optional dependencies. \code{tab_logit()} / \code{multi_logit()} are convenience wrappers for the binomial
-family.
+optional dependencies.
 
 A \strong{nominal} outcome with 3+ unordered levels is fit as one multinomial logit (\code{\link[nnet:multinom]{nnet::multinom()}}),
 giving \strong{one odds-ratio column per non-reference outcome category} ("\verb{<category>} vs \verb{<reference>}:

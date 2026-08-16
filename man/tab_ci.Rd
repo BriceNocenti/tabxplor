@@ -89,9 +89,9 @@ A \code{tibble} of class \code{tab}, colored based on differences (from
 totals/first cells) and confidence intervals.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Superseded (2.0.0): confidence intervals are computed by the aggregate core, from the
+Deprecated in 2.0.0, defunct in 2.1.0 -- confidence intervals are computed by the aggregate core, from the
 \code{ci} / \code{ci_method} / \code{conf_level} / \code{stars} arguments of \code{\link[=tab]{tab()}}, \code{\link[=tab_plain]{tab_plain()}} and
 \code{\link[=tab_num]{tab_num()}} --- where the plan that decides them already lives. \code{tab_ci()} still works on an
 existing tab, reconstructing that plan from the table's own markers.

@@ -5,6 +5,14 @@
 # See: R/tab-resolve.R (TAB_ARG_VALUES / tab_validate_args / tab_resolve_common_args); CLAUDE.md
 #      > 2.0.0 roadmap > Phase 19i.
 
+# Phase 20a: this file calls functions deprecated in 2.0.0 on purpose -- what it asserts is their
+# arithmetic, which the leaf shares with them and which does NOT go away in 2.1.0.
+# ⚠ This quiets the TOP-LEVEL calls only: testthat 3e runs local_reproducible_output() inside
+# every test_that(), which forces lifecycle_verbosity = "warning" again, so the in-block calls
+# still warn. Migrating them to tab() is the corpus sweep routed to Phase 20h.
+withr::local_options(lifecycle_verbosity = "quiet", .local_envir = testthat::teardown_env())
+
+
 ab_gss <- function() {
   gss <- forcats::gss_cat
   gss$w <- ((as.integer(gss$marital) * 3L + as.integer(gss$race)) %% 5L) + 1
@@ -130,6 +138,13 @@ testthat::test_that("tab_ci() aborts on an unknown `ci`, but `diff` is its own n
   t <- tab_plain(ab_gss(), marital, race, pct = "row")
   testthat::expect_error(tab_ci(t, ci = "bogus"), "Unknown .*ci")
   testthat::expect_error(tab_ci(t, ci = "bogus"), "cell")
-  # no deprecation here: the pipeline itself calls the step with "diff"
-  testthat::expect_no_condition(tab_ci(t, ci = "diff"), class = "lifecycle_warning_deprecated")
+  # Phase 20a: tab_ci() ITSELF is deprecated now, so the call warns -- but not about its `ci` VALUE.
+  # "diff" is this step's own native word (the pipeline called it that way), and only the public
+  # anchor vocabulary soft-deprecates it. Collect every warning and check what they are about.
+  seen <- character(0)
+  withCallingHandlers(tab_ci(t, ci = "diff"),
+                      warning = function(w) { seen <<- c(seen, conditionMessage(w))
+                                              invokeRestart("muffleWarning") })
+  testthat::expect_true(any(grepl("tab_ci()", seen, fixed = TRUE)))
+  testthat::expect_false(any(grepl('ci = "diff"', seen, fixed = TRUE)))
 })

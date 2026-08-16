@@ -31,8 +31,10 @@ R/
 │                              reported "no_col_var" as a column variable. NOT folded in:
 │                              detect_totcols()'s `== "no_col_var"` (that asks "is this the TOTAL
 │                              column") and quo_miss_na_null_empty_no() (a deparsed user expression)
-│                              + 19a's **fmt_attr_rules** = HOW each attribute is carried (neutral/merge/arith/scalar,
-│                              one row each, meta_bind_rules-shaped) driving all 4 reconstructors through
+│                              + 19a's **fmt_attr_rules** = HOW each attribute is carried (neutral/merge/arith/scalar
+│                              + 20a's `write` = the attribute's own SETTER, so `fmt_attr<-()` validates
+│                              exactly as set_scale() does and a build-time stopifnot refuses an
+│                              attribute with no writer) driving all 4 reconstructors through
 │                              fmt_attrs_of/_merge/_arith + fmt_ptype_attrs -- the 7 hand-written 14-attribute
 │                              lists are GONE, adding an attribute is 2 lines, a build-time stopifnot enforces it,
 │                              and vec_ptype2 got ~2x faster; +fmt_base (the n_eff->tot_n->n coalesce, 5 sites);
@@ -43,6 +45,17 @@ R/
 │                              ONE tab_stamp_conf_level() sweep per build tail) (17a: moved here
 │                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
 │                              format/pillar methods, vctrs arithmetic/casting;
+│                              **fmt_attr(x, name)** / **`fmt_attr<-`** (20a, KEY 3) = THE generic
+│                              column-attribute accessor -- the RAW stored value with the declared
+│                              `neutral` default, writing through fmt_attr_rules$write. The named
+│                              accessors are the TAUGHT surface, this is the PROGRAMMATIC one, and it
+│                              is what stops the ~23-function family growing with the table: a 17th
+│                              attribute needs no accessor at all. ⚠ the HOT PATH stays hand-written
+│                              (get_col_var / is_totrow / get_scale). ⚠ get_conf_level / get_degf /
+│                              get_basis are RESOLVERS (option fallback / NA->Inf / ""->"n"), not raw
+│                              reads, which is why they stay internal; set_diff_type ->
+│                              **set_ref_type** (old name soft-deprecated: the pair did not share a
+│                              stem and its validation was commented out);
 │                              get_num()/set_num() (the read + write display maps -- 19m-iii: their
 │                              vocabulary is R/tab-display.R's DISPLAY_TOKENS, which asserts at BUILD
 │                              time that the two agree with it and with each other, after set_num
@@ -346,7 +359,8 @@ R/
 │                              TOTAL-TABLE group (the overlay used to drop the Ensemble test row) and is
 │                              skipped for an input that cannot SERVE the basis (pre-aggregated counts:
 │                              their footer says "n", so their test must not say "design").
-│                              inference_basis_order = the declared weakest-first enum (tab_inference_bind)
+│                              the weakest-first basis order is declared inline in basis_rank()
+│                              (fmt_class.R) -- there is no `inference_basis_order` symbol
 ├── survey-variance.R (~405 L) z14-ii Route A: the DESIGN variance of a table's cells -> the existing
 │                              `n_eff` field (n_eff = p(1-p)/Var_design, or s2/Var_design for a mean =
 │                              Korn-Graubard's device), so tab_ci + the color="OR" interval + contrib all
@@ -532,6 +546,29 @@ R/
 │                              same record from a finished RENDER model (the transpose has no table).
 │                              Refusals that are NOT shape facts (duplicated row keys, >1 total
 │                              row/column) stay local to tab_transpose(), with a comment saying so.
+│                              20a: **tab_columns(x)** (exported) = the COLUMN-axis mirror -- one row
+│                              per fmt column x its 19 stored facts, off fmt_attrs_of(). The only
+│                              place conf_level / degf / basis / ci_method are readable side by side,
+│                              which is what z13/z16 stored them per column FOR. Reports the STORED
+│                              values, so `conf_level = NA` honestly means "no interval was stamped".
+├── zzz-fact-keys.R  (~250 L) Phase 20a (KEY 2): REFERENTIAL INTEGRITY between the declared fact
+│                              tables. **TAB_FOREIGN_KEYS** = 34 declared edges (from / get / to /
+│                              allow / orphan), read only through tx_check_foreign_keys(), which runs
+│                              at LOAD -- a key written by hand in one table and read by name in
+│                              another is a FOREIGN KEY, and a dangling one breaks the build at the
+│                              moment it is made (19d renamed the colour measures and did not reach
+│                              EST_SCALES$label_meas; the fix shipped with a WARNING comment, which
+│                              is hard rule 4 one level up). ⚠ IT MUST SORT LAST: COLOR_SCALES lives
+│                              in tab_classes.R and REG_EMPIRICAL in tab_reg.R, so reg-estimand.R --
+│                              19o's proposed home -- sees neither; `zzz-` is last by construction.
+│                              ⚠ its two readers (tx_fk_scalar / tx_fk_all) use `[[`, never `$`:
+│                              MEASURES$adjustment has `scale_from` and no `scale`, so `$scale`
+│                              partial-matches to "gap". `allow` entries are STATED FACTS, never a
+│                              way to silence a real dangling key (DISPLAY_TOKENS' `ci` names a
+│                              DERIVED quantity; woolf/katz/wald_log are the only interval of their
+│                              geometry, so none is a `ci_method` a user picks). Holds every
+│                              cross-TABLE edge; a table's SELF-consistency stays beside it (the
+│                              seven intra-table stopifnot blocks are listed in the header).
 ├── tab-counts.R     (~430 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize.
 │                              19i: its ~15 copy-pasted boundary lines are ONE
@@ -738,7 +775,8 @@ R/
 │                              spans [<num>]{.p3} (aligned) via tab_export_prep; md_span_attr/
 │                              md_color_cell (13d: slot classes via tx_slot_class, no `.n` neutral --
 │                              an uncoloured cell is bracket-free, padded to the same offset);
-│                              tab_md_css() = thin wrapper on tab_css(chrome = FALSE).
+│                              tab_css(format = "md") = the colour classes only (20a: the argument
+│                              names the OUTPUT now, and the tab_md_css() wrapper is deleted).
 │                              14m-iii: md_has_color() = the ONE "is this table coloured" predicate
 │                              (shared: tab_md()'s ::: div gate + md_render_one's styled = do_color||css);
 │                              a STYLED table (coloured OR css) draws sub-table + name-underline
@@ -779,7 +817,7 @@ R/
 │                              engine): reset the host's per-cell border-width to 0 (BEFORE thead th),
 │                              redraw our blank-row rules (tr with all-:empty cells) as 1px border-top,
 │                              collapse :empty spacer cells. Tames finding 9/10 (host draws black per-row
-│                              borders + ugly spacers). chrome-only; tab_md_css() omits them.
+│                              borders + ugly spacers). format = "html" only; format = "md" omits them.
 ├── tab-export-prep.R (~940 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              (19n: tab_col_var_header() returns `group` beside `label` and
 │                              tab_header_runs() RLEs the PAIR -- RLE-ing the label alone merges two
@@ -886,7 +924,7 @@ R/
 │                              color="diff", `var`=var(Y) for the beta/SD(Y) effect-size colour) |
 │                              binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR
 │                              (multiplicative -> `or`, type="row", display="or", ci_type="or",
-│                              color="OR"). tab_logit()/multi_logit() = thin binomial-family wrappers.
+│                              color="OR"). A binary outcome is tab_reg(family = "binomial").
 │                              reg_* helpers (fit/skeleton/column/build + reg_wald_from_tidy shared Wald
 │                              CI<->p dual); `predictors` char-vec (one model, dependent may be a vector)
 │                              vs named list (model comparison); per-variable reference= relevel. 12c-ii:
@@ -1262,7 +1300,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai`, `kableExtra` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded; `kableExtra`'s two entry points — `render_kable_html()` engine dispatch + `kable_tabxplor_style()` — are guarded, the default `html` engine never touches it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(2.0.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. **The estimand is `effect` x `measure`** (19e, R/reg-estimand.R): the row it resolves to declares the fit, the `exp` flag, the header word and the stored `scale` -- additive beta -> the `diff` field + scale "raw_diff"/"log_coef"; multiplicative OR/IRR/cumOR -> `or` + scale "odds_ratio"; a ratio of means -> `ratio` + "mean_ratio". `exponentiate` / `at` / `estimate_display` are DELETED (`measure = "log"`, `effect = "at_reference"`, a real `display =`); `type`/`ci_type` are gone (19b). The `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12f: model-summary footer + compare= in the `test` attr. 12g / z14-i: SURVEY designs — `wt=` (a flat ids=~1 design), or a prebuilt `survey::svydesign` as `data` for anything richer (clusters / strata / fpc / CALIBRATION); `ids=`/`strata=`/`fpc=`/`nest=` are REMOVED (they reached only the omnibus p) and a svrepdesign/twophase is refused. A design's own weights become `.svy_weights` at the shared boundary, so the crude `Obs_*` columns, the AME, the frozen SD, the gap-test influence weights and the footer are all design-weighted (they silently were not); reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (the UNIT a continuous predictor's effect is reported per -- **default `"sd"`** since z9, so `Model_*` on a numeric row is per-1-SD, NOT `exp(coef(glm))`, unless `multiplier = 1`); `empirical_OR` (crude %/OR beside model OR, binary; z9: continuous predictors too, from their univariable fit). No new fmt fields; new Suggests svyVGAM. |
+| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). A binary outcome is `tab_reg(family = "binomial")` (20a deleted the tab_logit/multi_logit wrappers). **The estimand is `effect` x `measure`** (19e, R/reg-estimand.R): the row it resolves to declares the fit, the `exp` flag, the header word and the stored `scale` -- additive beta -> the `diff` field + scale "raw_diff"/"log_coef"; multiplicative OR/IRR/cumOR -> `or` + scale "odds_ratio"; a ratio of means -> `ratio` + "mean_ratio". `exponentiate` / `at` / `estimate_display` are DELETED (`measure = "log"`, `effect = "at_reference"`, a real `display =`); `type`/`ci_type` are gone (19b). The `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12f: model-summary footer + compare= in the `test` attr. 12g / z14-i: SURVEY designs — `wt=` (a flat ids=~1 design), or a prebuilt `survey::svydesign` as `data` for anything richer (clusters / strata / fpc / CALIBRATION); `ids=`/`strata=`/`fpc=`/`nest=` are REMOVED (they reached only the omnibus p) and a svrepdesign/twophase is refused. A design's own weights become `.svy_weights` at the shared boundary, so the crude `Obs_*` columns, the AME, the frozen SD, the gap-test influence weights and the footer are all design-weighted (they silently were not); reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (the UNIT a continuous predictor's effect is reported per -- **default `"sd"`** since z9, so `Model_*` on a numeric row is per-1-SD, NOT `exp(coef(glm))`, unless `multiplier = 1`); `empirical_OR` (crude %/OR beside model OR, binary; z9: continuous predictors too, from their univariable fit). No new fmt fields; new Suggests svyVGAM. |
 
 
 ---
@@ -1447,7 +1485,7 @@ this, not the code. Symptoms + rules:
 | `test-tab.R`             | Core: plain tables, pct, totals, NA, CI, chi2, references, wrapping                             |
 | `test-tab_classes.R`     | Class preservation through dplyr verbs                                                          |
 | `test-tab_xl.R`          | Basic Excel export                                                                              |
-| `test-tab_logit.R`       | Phase 12a: binomial-wrapper OR/CI/p parity vs glm/svyglm, 1/OR                                  |
+| `test-tab_reg-binomial.R`| Binary outcomes: OR/CI/p parity vs glm/svyglm, 1/OR (was test-tab_logit.R)                      |
 | `test-tab_reg.R`         | Phase 12c/12d/12e: beta/OR/IRR/MNL/ordinal + AME parity vs lm/glm/multinom/polr/marginaleffects |
 | `test-tab_reg-display.R` | Phase 12h: estimate_display (est_ci bracket / prob / ame folds), Excel test label, split footer |
 | `test-tab_reg-plots.R`   | Phase 12h / z15: reg_check_plots() smoke tests (build a gtable without error)                  |
@@ -2090,6 +2128,181 @@ No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** 
 **FOLLOW-UPS.** 19j can start on this commit — the leaf now owns its whole head and tail, which is
 what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_signif` note above.
 19l: the deprecation-warning corpus migration (133 remain).
+
+---
+
+
+
+#### Phase 20a — The floor: referential integrity, the exposed surface, the dead weight
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6626** — and every
+one of the 57 deprecation warnings is this phase's own, named below. Exports **93 → 94** (−`tab_logit`, −`multi_logit`, −`tab_md_css`;
++`fmt_attr`, +`fmt_attr<-`, +`tab_columns`, +`set_ref_type`) and **`man/` 8 930 → 7 318 (−18 %)** —
+the plan's estimate to within 20 lines. The three harnesses print the declared result:
+`dev/verify_color_attrs.R` **IDENTICAL** (293 cases), `dev/verify_tab_args.R` **IDENTICAL** on its
+own re-saved baseline, `dev/verify_golden_field_delta.R` **empty declaration set** over 1 788 cells ×
+36 goldens. `dev/census_exports.R` reports exactly the −3/+4.
+
+**The two harnesses, built and baselined FIRST — and they earned their keep before the phase's own
+work started.**
+
+- **`dev/verify_tab_args.R`** — three captures: `tab_resolve_common_args()` over a 167-case grid ·
+  52 built tables' per-column attributes + `meta`/`test` schema · and **the messages, in order**, of
+  30 deliberately invalid or legacy calls. That third capture is what 20b needs: moving nine formals
+  into `...` changes *what the package says* while every cell stays put.
+- **`dev/census_exports.R`** — per export: `released_in` (v1.2.0 / **CRAN 1.3.1** / dev) · callers in
+  `R/`, `tests/`, `vignettes/`, `README`, `dev/` · Rd lines · pkgdown section. Both traps are encoded
+  in the script rather than remembered: it does every set operation in R (so `LC_ALL` cannot reach
+  it) and matches `(^|[^a-zA-Z0-9._])name\(`, never `grep -w`.
+
+**Four defects, all found by the harnesses, all fixed with the fixture that fails without them.**
+
+1. ⚠ **Three deprecations had never fired.** `tab(OR = )`, `tab(ci = "diff"/"ratio")` and
+   `method_cell`/`method_diff` warn through `deprecate_soft(user_env = )`, and 19i's move of those
+   calls **into the shared boundary added a stack frame**: `caller_env(2)` now lands on `tab()`'s own
+   execution env, so lifecycle read a tabxplor frame as "the user" and stayed silent. `user_env` is
+   threaded explicitly now. ⚠ **`ci` is said at the boundary and rewritten downstream** — the first
+   attempt resolved it there, and `verify_color_attrs.R` caught that `ci = "ratio"` has a *second*
+   effect (it pins the Katz ratio scale) which the per-row_var resolvers read off the RAW word. Five
+   cases moved `mean_ratio → mean_diff`; the harness is the only thing that would have seen it.
+2. **`tab(total_names = )` was broken outright** — *any* non-default value aborted
+   (`forcats::fct_recode()` takes its pairs as NAMED `...` arguments, and the call spliced with `!!`
+   instead of `!!!`). It is a CRAN 1.3.1 formal whose only untested branch that was, and 20b is about
+   to move it onto an option.
+3. **`tab_many()`'s unnamed-argument guard aborted with a cli internal error** — cli takes a `{?s}`
+   quantity from the *last substitution before it*, so a message opening on `"Argument{?s}"` died
+   with *"Cannot pluralize without a quantity"*. The guard refused the call and said nothing
+   actionable. `cli::qty()` fixes it; 19h's safety net for positional calls now works.
+4. **`REG_EMPIRICAL$*$ci_method` carried `"wald_log"`, outside every declared vocabulary** — found by
+   KEY 2 on its first run, together with a wrong edge of mine.
+
+**KEY 2 — the foreign keys (`R/zzz-fact-keys.R`, new).** **`TAB_FOREIGN_KEYS`** declares **34 edges**
+(19o listed 12), read only through `tx_check_foreign_keys()`, which runs at **load**: a dangling key
+breaks the build at the moment it is made. ⚠ The file **must sort last** — `COLOR_SCALES` lives in
+`tab_classes.R` and `REG_EMPIRICAL` in `tab_reg.R`, both *after* `reg-estimand.R`, which is where 19o
+proposed putting it; `zzz-` is the only prefix that is last by construction. Its two readers
+(`tx_fk_scalar`/`tx_fk_all`) use `[[` exclusively — `MEASURES$adjustment` has `scale_from` and no
+`scale`, so `$scale` partial-matches to `"gap"`. Three `allow` entries, each a stated fact
+(`DISPLAY_TOKENS$field`'s `"ci"` is DERIVED, not a 22nd record field; `"katz"` / `"woolf"` /
+`"wald_log"` are the only interval of their geometry, so none is a `ci_method` a user picks). The two
+cross-FILE asserts moved in from `reg-estimand.R`, one of them **strengthened**: "every estimand's
+fit has model checks" is stated on `REG_ESTIMANDS$rows$fit` now, not on the three-entry
+`REG_FIT_FAMILY` subset it was written against. `tab.R` also gained the `SPINE_OWNED_INPUTS` ↔
+`CTX_SETTINGS_LOCALS` assert its own comment had promised since 19i and never had.
+
+**KEY 3 — the accessor surface stops growing with the attribute table.**
+
+- **`fmt_attr(x, name)` / `` `fmt_attr<-` ``** (exported), validated against `fmt_col_attrs`,
+  dispatching on an fmt column or a data.frame. **`fmt_attr_rules` gains a declared `write` column**
+  — the attribute's own setter — so the generic validates exactly as `set_scale()` does and a build-
+  time `stopifnot` refuses an attribute with no writer. **Adding a 17th attribute now needs no
+  accessor at all.** ⚠ The hot path stays hand-written (the `DISPLAY_TOKENS` precedent):
+  `get_col_var()` (33 sites), `is_totrow()` (44), `get_scale()` are untouched. ⚠ `fmt_attr()` is the
+  **raw** read; `get_conf_level()`/`get_degf()`/`get_basis()` are *resolvers* (option fallback, NA →
+  Inf, "" → "n") and stay internal — **the three named getters 19p asked for were NOT added**, per
+  the ruling: `fmt_attr()` + `tab_columns()` answer that user story with two names instead of three.
+- **`tab_columns(x)`** (exported) — one row per fmt column × its 19 stored facts, on `tab_shape()`'s
+  model and `fmt_attrs_of()`'s reader. The only place `conf_level` / `degf` / `basis` / `ci_method`
+  can be read side by side, which is what z13/z16 stored them per column *for*.
+- **`set_diff_type()` → `set_ref_type()`** (old name a soft-deprecated alias; it is in 1.3.1). The
+  pair did not share a stem, and the new name gets the validation the old one had **commented out**.
+- ⚠ **The planned `@keywords internal` sweep had no target, and that is reported rather than
+  faked**: the ~23 accessors are `@describeIn fmt`, i.e. **one** page already, so they occupy no
+  index line to demote. What the measurement *did* find is **53 S3-method Rd stubs** (12 accessor
+  generics × 3 arms), each a page restating its generic. Registered by `S3method()`, so `@noRd` beside
+  `@export` removes the page and keeps the registration: **36 pages, 803 `man/` lines, gone.**
+
+**The last unsurfaced Phase 19 fact.** ⚠ Correction to 19p §2.4: `basis` **is** already said —
+`tab_weight_line()` switches on all four values. Only **`degf`** was invisible, and it is exactly
+what makes a design-based interval differ from a flat one. `legend_method_phrase()` appends *"…, 42
+design df"* **only** when the basis is `design`/`design_partial` and `degf` is finite, so an ordinary
+table is byte-identical and only a real survey design gains the clause.
+
+**The two live `FIXME`s are answered, not restated.** They asked one question twice, and the answer is
+that the two arms of `vec_arith` ask *different* questions: `+`/`-` take two **symmetric** operands,
+so `row_kind` / `in_refrow` / `in_tottab` survive only where they AGREE (a sum of a total-row cell and
+a data cell sits in no row kind); `*`//` are **asymmetric** — "x per y" — so the metadata follows `x`,
+and `mean` is dropped because a ratio of two means is not a mean. No behaviour change; two `# DESIGN:`
+notes. `R/` now has **zero open FIXMEs**.
+
+**The deletions and demotions** (each checked against CRAN 1.3.1, commit `86320287`):
+
+- ⚠ **`tab_md_css()` is UNRELEASED** — absent from v1.2.0 *and* 1.3.1, which 19p §3.4 had wrong — so
+  it is **deleted**, not deprecated. And, per the maintainer's ruling, the argument that made it
+  necessary is fixed: **`tab_css(chrome = TRUE/FALSE)` → `tab_css(format = c("html", "md"))`**,
+  borrowing `tab_export(format =)`'s existing vocabulary, so `tab_css(format = "md")` reads like the
+  function it replaces. ⚠ `chrome` in `...` **aborts with the mapping** instead of being swallowed by
+  `tx_deprecate_inert()` — a silently ignored `chrome = FALSE` emits the wrong stylesheet. The
+  internal `chrome` word stays: it names a real CSS concept, and the translation happens once.
+- **`tab_logit()` / `multi_logit()` deleted** (unreleased): 523 Rd lines, 0 vignette uses, thin
+  forwarders that mirrored ~20 of `tab_reg()`'s formals and therefore **hid** `effect = "marginal"`,
+  `measure`, `compare`, `baseline`, `reference` and `color`. **62 test call sites migrated**;
+  `test-tab_logit.R` → `test-tab_reg-binomial.R`, coverage kept. ⚠ One assertion changed meaning
+  rather than moving: *"a 3+ level dependent errors cleanly"* was asserting the WRAPPER's forced
+  family — `tab_reg()` detects a 6-level nominal outcome and builds a multinomial table, which is the
+  capability the wrapper hid. It now pins both halves.
+- **`auto_or` and the `"or_table"` context deleted together** (rule 1): a `case_when` arm on a
+  constant `FALSE` and the allow-list value it was the only producer of.
+- **Soft-deprecated, released, never silently dropped**: `tab_prepare()` (+ `@keywords internal`, and
+  out of pkgdown's *"Superseded entry points and steps"*, which read as a verdict it had not been
+  given), `complete_partial_totals()`, `fct_recode_helper()`. `tab_get_wrapped_dimensions()` keeps its
+  export and gains `@keywords internal`. ⚠ **`tx_user_call()`** (new, `R/utils.R`) is why the first
+  two are silent from tabxplor's own build: `deprecate_soft()`'s "silent for same-package callers"
+  does **not** hold under testthat, which treats every call as direct — so without it every `tab()`
+  in the suite nudged about a call the user never made.
+- **The five legacy steps are HARD-deprecated** (`deprecate_warn`, defunct 2.1.0). ⚠ The message
+  distinguishes the deprecated **chaining API** from the **computations**, which moved into the leaf
+  in 19j and are shared — "tab_ci() is going away" would otherwise read as "the confidence interval
+  is". `test-steps-legacy.R` becomes the deprecation test. `R/tab-steps-legacy.R`'s 1 433 lines
+  **stay** this cycle.
+- **`tabxplor.color_style_type` deleted** — documented, never seeded, read at one place only to warn
+  about itself; `?tabxplor-options`' own "keep in sync with `.onLoad()`" promise is true now.
+  **`tabxplor.jmv_full_hash` → the internal constant `JMV_FULL_HASH`** (one seed, one read, no test,
+  both sites internal).
+- **`man/tab_many.Rd` 448 → 97**: `@inheritDotParams tab` does not link, it *inlines*.
+
+**Documentation truths**: `FMT_FIELD_DOC$var` states the **rule** ("which one is given by its
+`scale`") instead of the enumeration that drifts; `display_tokens_rd(user_only = FALSE)` stops
+re-glossing the eleven tokens named after a field (`?fmt` glossed them **twice**, 30 lines apart, in
+already-drifted wording); `?tab`'s `color_breaks` is one line; both reg vignettes' claim that
+*"`tab_reg()` has no `display` argument"* — contradicted by each file's own `display = "ci"` section
+430 lines later — is gone.
+
+**HONEST CONCERNS.**
+
+- ⚠ **Do not prefix a test run with `LC_ALL=C`.** Four `_snaps/render-html.md` failures appeared
+  under it and reproduced on a pristine `git worktree` of HEAD, which read as pre-existing drift;
+  the same tree is **FAIL 0** in the normal locale. `C` is a non-UTF-8 native encoding, harsher than
+  any CI runner — CLAUDE.md § Testing already says to use `C.UTF-8` for the CI-locale run, and this
+  is the second session to lose time to it. The `LC_ALL=C` rule belongs to the **censuses**
+  (`sort` / `uniq` / `comm` collation), never to the suite.
+- ⚠ **The planned "one `withr::local_options(lifecycle_verbosity = "quiet")` per test file" does not
+  work**, and the plan's cost estimate for the step hard-deprecation rested on it: testthat 3e runs
+  `local_reproducible_output()` inside **every** `test_that()`, which forces
+  `lifecycle_verbosity = "warning"` again. The file-level line covers **top-level** calls only (which
+  is real — `test-tab.R` builds its fixture with `tab_prepare()` there), and the comment in all 16
+  files says exactly that. So the deprecated calls inside test blocks **do** warn — measured: **57
+  warnings**, `tab_chi2` 14 · `tab_ci` 11 · `tab_tot` 9 · `tab_totaltab` 7 · `tab_pct` 7 ·
+  `tab_prepare` 6 · `fct_recode_helper` 3, and nothing else. Migrating those calls to `tab()` is the
+  corpus sweep, routed to **20h**.
+- **`tab_columns()` reports the STORED attributes**, so `conf_level = NA` honestly means "no interval
+  was stamped here" rather than "0.95 by default". One semantic, stated in `?tab_columns`.
+- **`fmt_attr()` beside 23 named accessors is two ways to say one thing** — legitimate only because
+  the header states the split (named = taught, generic = programmatic) *and* because the named family
+  stops growing. If that line is not held in 20b–20i it becomes duplication.
+
+**Routed to later phases** (measured here, not done here): `materialize_specs()$kind` has **no
+reader** and none of its five values is a `ROW_KINDS` value → **20h** · `REG_ESTIMANDS$builder` has no
+declared vocabulary (a bare `switch()` at `tab_reg.R:4144`) → **20e** · `TAB_ARG_VALUES$pct` says
+`"no"` where `PCT_BASES` says `"none"` → **20b** · `tab_totcol_range()` is an orphan producer kept
+alive only by its own test → **20h** · the deprecated-call corpus migration → **20h**.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild.
+
+**FOLLOW-UPS.** 20b and 20c can both start on this commit: `dev/verify_tab_args.R` and
+`dev/census_exports.R` are committed with baselines, and `TAB_FOREIGN_KEYS` protects every table edit
+they make.
 
 ---
 

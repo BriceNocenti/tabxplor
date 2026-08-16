@@ -51,9 +51,6 @@
 #'     (follow the reader). `"auto"` needs a stylesheet, so only `tab_html()`,
 #'     [tab_md()] and [tab_css()] honour it; static backends resolve it to `"light"`. `"print"` reaches
 #'     every backend, Excel included.}
-#'   \item{`tabxplor.color_style_type`}{`r lifecycle::badge("deprecated")` the console colour CHANNEL,
-#'     `"text"` or `"bg"`. Inert since 2.0.0: the channel is chosen per measure by
-#'     `color = c(text, background)` (see [tab()]), so setting it emits a deprecation warning.}
 #'   \item{`tabxplor.print_rules`}{`TRUE` (default): every stylesheet [tab_css()] emits also carries the
 #'     black-and-white publication palette inside an `@media print` block, so a table rendered in colour
 #'     **prints** (or saves to PDF) publication-ready with no further action. Set `FALSE` if your printer
@@ -152,16 +149,6 @@
 #'     integer = that many cores. Release the pool with [tab_parallel_stop()].}
 #'   \item{`tabxplor.parallel_min`}{`2L` (default): the smallest `row_var` count worth dispatching
 #'     (fewer runs serially, since the setup would outweigh the gain).}
-#' }
-#'
-#' @section jamovi live cache:
-#' \describe{
-#'   \item{`tabxplor.jmv_full_hash`}{`FALSE` (default): the jamovi module caches (Crosstables and
-#'     Regressions) fingerprint each data column cheaply by its class, factor levels and number of
-#'     missing values, so an unrelated edit does not invalidate every table. A same-shape value edit
-#'     (values changed but class, levels and NA-count unchanged) is therefore not detected and can serve
-#'     a stale cached result until the next structural change. Set to `TRUE` to hash the full column
-#'     values instead (exact, slightly slower) if you edit data in place and need every change caught.}
 #' }
 #'
 #' @name tabxplor-options

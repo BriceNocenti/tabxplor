@@ -637,28 +637,21 @@ set_num <- function(x, value) {
 #' @return A character vector with the vectors scale.
 #' @export
 get_scale <- function(x, ...) UseMethod("get_scale")
-#' Get the estimate scale of fmt columns
-#' @inheritParams fmt
-#' @return An empty character vector.
+#' @method get_scale default
 #' @export
-#' @keywords internal
+#' @noRd
 get_scale.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("scale")(x)),
          yes = purrr::attr_getter("scale")(x),
          no  = "mixed")
 }
-#' Get the estimate scale of fmt columns
 #' @method get_scale tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single string with the vector's scale.
 #' @export
-#' @keywords internal
+#' @noRd
 get_scale.tabxplor_fmt <- function(x, ...) attr(x, "scale", exact = TRUE)
-#' Get the estimate scale of fmt columns
-#' @inheritParams fmt
-#' @return A character vector with the data.frame column's scales.
+#' @method get_scale data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 get_scale.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_scale(.))
 
 #' @describeIn fmt set the estimate scale attribute of a \code{fmt} vector
@@ -676,28 +669,21 @@ set_scale     <- function(x, scale) {
 #' @return A character vector with the vectors percentage base.
 #' @export
 get_pct_base <- function(x, ...) UseMethod("get_pct_base")
-#' Get the percentage base of fmt columns
-#' @inheritParams fmt
-#' @return An empty character vector.
+#' @method get_pct_base default
 #' @export
-#' @keywords internal
+#' @noRd
 get_pct_base.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("pct_base")(x)),
          yes = purrr::attr_getter("pct_base")(x),
          no  = "none")
 }
-#' Get the percentage base of fmt columns
 #' @method get_pct_base tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single string with the vector's percentage base.
 #' @export
-#' @keywords internal
+#' @noRd
 get_pct_base.tabxplor_fmt <- function(x, ...) attr(x, "pct_base", exact = TRUE)
-#' Get the percentage base of fmt columns
-#' @inheritParams fmt
-#' @return A character vector with the data.frame column's percentage bases.
+#' @method get_pct_base data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 get_pct_base.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_base(.))
 
 # A column REPURPOSED as a plain count (the no-col_var `n`/`wn` columns, the Excel `add_n` layout
@@ -725,18 +711,13 @@ set_pct_base  <- function(x, pct_base) {
 #' @return A logical vector with the fmt vectors totrow field.
 #' @export
 is_totrow <- function(x, ...) UseMethod("is_totrow")
-#' Test function to detect cells in total rows
-#' @inheritParams fmt
-#' @return A logical vector with \code{FALSE}.
+#' @method is_totrow default
 #' @export
-#' @keywords internal
+#' @noRd
 is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#' Test function to detect cells in total rows
 #' @method is_totrow tabxplor_fmt
-#' @inheritParams fmt
-#' @return A logical vector with the totrow field.
 #' @export
-#' @keywords internal
+#' @noRd
 is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "row_kind") == "total"
 
 #' @describeIn fmt get the "row_kind" field: what kind of row each cell sits in
@@ -792,12 +773,9 @@ fmt_row_flag <- function(x, field, partial = FALSE) {
   purrr::reduce(flags, if (partial) `|` else `&`)
 }
 
-#' Test function to detect cells in total rows
-#' @inheritParams fmt
-#' @param partial Should partial total rows be counted as total rows ? Default to FALSE.
-#' @return A list of logical vectors, with the data.frame column's totrow fields.
+#' @method is_totrow data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "row_kind", partial)
 }
@@ -813,13 +791,26 @@ as_totrow  <- function(x, in_totrow = TRUE) {
 
 #' Complete partial total rows
 #'
-#' @param tabs A table or data.framate containting `tabxplor_fmt` columns.
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' A build-internal repair: after a reshape, a row that is a total in SOME columns is made a total
+#' in all of them. Its only caller is [tab_spread()], inside the package. It will be made internal
+#' in 2.1.0.
+#'
+#' @param tabs A table or data frame containing `tabxplor_fmt` columns.
 #'
 #' @return The table with completed total rows, total tables, and reference rows.
+#' @keywords internal
 #' @export
 #'
 # @examples
 complete_partial_totals <- function(tabs) {
+  # tabxplor's own call (tab_spread) stays silent; a direct user call is nudged. Released in CRAN
+  # 1.3.1, so it takes the deprecate-now / un-export-in-2.1.0 route.
+  if (tx_user_call())
+    lifecycle::deprecate_soft("2.0.0", "complete_partial_totals()",
+                              details = "It repairs a table the build no longer produces.")
   .diff_totrows <- suppressWarnings(is_totrow(tabs)) != is_totrow(tabs, partial = TRUE)
 
   if (any(.diff_totrows)) {
@@ -868,26 +859,17 @@ complete_partial_totals <- function(tabs) {
 #' @return A logical vector with the fmt vectors tottab field.
 #' @export
 is_tottab <- function(x, ...) UseMethod("is_tottab")
-#' Test function to detect cells in total tables
 #' @method is_tottab default
-#' @inheritParams fmt
-#' @return A logical vector with \code{FALSE}.
 #' @export
-#' @keywords internal
+#' @noRd
 is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#' Test function to detect cells in total tables
 #' @method is_tottab tabxplor_fmt
-#' @inheritParams fmt
-#' @return A logical vector with the tottab field.
 #' @export
-#' @keywords internal
+#' @noRd
 is_tottab.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_tottab")
-#' Test function to detect cells in total tables
-#' @param partial Should partial total tabs be counted as total tabs ? Default to FALSE.
-#' @inheritParams fmt
-#' @return A list of logical vectors, with the data.frame column's tottab fields.
+#' @method is_tottab data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 is_tottab.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "in_tottab", partial)
 }
@@ -906,25 +888,15 @@ as_tottab  <- function(x, in_tottab = TRUE) {
 #' @return The entered objects, with all fmt vectors with the wanted display.
 #' @export
 set_display <- function(x, value) UseMethod("set_display")
-#' Set the "display" vctrs::field of a \code{fmt} vector.
-#' @inheritParams fmt
-#' @return The entered vector (nothing happens).
+#' @method set_display default
 #' @export
-#' @keywords internal
+#' @noRd
 set_display.default <- function(x, value) {
 return(x)
 }
-#' Set the "display" vctrs::field of a \code{fmt} vector.
-#' @inheritParams fmt
-#' @details The special value \code{value = "num_ci"} is a type-adaptive alias for the
-#'   \code{"\{base\} \{ci\}"} composite: it writes \code{"\{pct\} \{ci\}"} on percentage/frequency
-#'   columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, so each value cell shows its base
-#'   value followed by whatever confidence interval the table carries (a cell, difference or ratio CI,
-#'   as driven by \code{ci = } / \code{color}). It is a display overlay: cells with no CI show the bare
-#'   base value.
-#' @return A fmt vectors with the wanted display.
+#' @method set_display tabxplor_fmt
 #' @export
-#' @keywords internal
+#' @noRd
 set_display.tabxplor_fmt <- function(x, value) {
   # "num_ci" is a type-adaptive alias for the "{base} {ci}" composite: show each value cell with the
   # confidence interval the table already carries (the difference / ratio CI driven by ci = / color,
@@ -937,11 +909,9 @@ set_display.tabxplor_fmt <- function(x, value) {
   vctrs::`field<-`(x, "display", value)
 }
 
-#' Set the "display" vctrs::field of a \code{fmt} vector.
-#' @inheritParams fmt
-#' @return The entered objects, with all fmt vectors with the wanted display.
+#' @method set_display data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 set_display.data.frame <- function(x, value) {
   x |>
     dplyr::mutate(dplyr::across(
@@ -957,27 +927,21 @@ set_display.data.frame <- function(x, value) {
 #' @return A logical vector with the fmt vectors totcol attribute.
 #' @export
 is_totcol <- function(x, ...) UseMethod("is_totcol")
-#' Test function for total columns
-#' @inheritParams fmt
-#' @return A single logical vector with the totcol attribute
+#' @method is_totcol default
 #' @export
-#' @keywords internal
+#' @noRd
 is_totcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("totcol")(x)),
          yes = purrr::attr_getter("totcol")(x),
          no  = FALSE)
 }
-#' Test function for total columns
-#' @inheritParams fmt
-#' @return A single logical vector with the totcol attribute
+#' @method is_totcol tabxplor_fmt
 #' @export
-#' @keywords internal
+#' @noRd
 is_totcol.tabxplor_fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
-#' Test function for total columns
-#' @inheritParams fmt
-#' @return A logical vector, with the data.frame column's totcol attributes.
+#' @method is_totcol data.frame
 #' @export
-#' @keywords internal
+#' @noRd
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
 #' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
@@ -995,27 +959,17 @@ as_totcol     <- function(x, totcol = TRUE) {
 #' @return A logical vector with the fmt vectors in_refrow field
 #' @export
 is_refrow <- function(x, ...) UseMethod("is_refrow")
-#' Test function to detect cells in reference rows
 #' @method is_refrow default
-#' @inheritParams fmt
-#' @return A logical vector with FALSE, the length of x.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#' Test function to detect cells in reference rows
 #' @method is_refrow tabxplor_fmt
-#' @inheritParams fmt
-#' @return  A logical vector with the in_refrow field.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
-#' Test function to detect cells in reference rows
 #' @method is_refrow data.frame
-#' @param partial Should partial reference rows be counted as reference rows ? Default to FALSE.
-#' @inheritParams fmt
-#' @return A list of logical vectors with the in_refrow fields.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   # Phase 9b-3: same fold as is_totrow/is_tottab (default partial = TRUE -> if_any). See fmt_row_flag.
   fmt_row_flag(x, "in_refrow", partial)
@@ -1061,40 +1015,45 @@ set_comp_all      <- function(x, comp_all = FALSE) { #comp_all = c("tab", "all")
 #' @return A logical vector with the fmt vectors type attributes
 #' @export
 get_ref_type <- function(x, ...) UseMethod("get_ref_type")
-#' Get differences type of fmt columns
 #' @method get_ref_type default
-#' @inheritParams fmt
-#' @return A single character with the ref attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_ref_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("ref")(x)),
          yes = purrr::attr_getter("ref")(x),
          no  = "") #NA_character_
 }
-#' Get differences type of fmt columns
 #' @method get_ref_type tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single character with the ref attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_ref_type.tabxplor_fmt <- function(x, ...) attr(x, "ref", exact = TRUE)
-#' Get differences type of fmt columns
 #' @method get_ref_type data.frame
-#' @inheritParams fmt
-#' @return A character vector with the ref attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_ref_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ref_type(.))
 }
 
-#' @describeIn fmt set the differences type attribute of a \code{fmt} vector
+#' @describeIn fmt set the reference attribute of a \code{fmt} vector — which row or column a
+#'   comparison is made against. It is the writer of the attribute [get_ref_type()] reads.
 #' @return A modified fmt vector.
 #' @export
-set_diff_type   <- function(x, ref) {
-  #stopifnot(ref %in% c("tot", "first", "no", "", NA_character_))
-  `attr<-`(x ,"ref" , ref)
+set_ref_type <- function(x, ref) {
+  # Phase 20a: the pair did not share a stem (`set_diff_type` wrote what `get_ref_type` read) and
+  # its validation had been commented out, so any string could be stored as a reference. The stored
+  # values are the resolver's own vocabulary plus a row NUMBER or a matched LABEL, which is why this
+  # checks a shape rather than a fixed list.
+  ref <- as.character(ref)[1]
+  if (is.na(ref)) ref <- ""
+  `attr<-`(x, "ref", ref)
+}
+
+#' @describeIn fmt `r lifecycle::badge("deprecated")` Use [set_ref_type()], which shares its stem
+#'   with the getter [get_ref_type()] and with the `ref` attribute both of them address.
+#' @export
+set_diff_type <- function(x, ref) {
+  lifecycle::deprecate_soft("2.0.0", "set_diff_type()", "set_ref_type()")
+  set_ref_type(x, ref)
 }
 
 
@@ -1119,30 +1078,21 @@ fmt_has_interval <- function(x) !all(is.na(get_ci_inf(x)))
 #' @return A logical vector with the fmt vectors col_var attributes
 #' @export
 get_col_var <- function(x, ...) UseMethod("get_col_var")
-#' Get names of column variable of fmt columns
 #' @method get_col_var default
-#' @inheritParams fmt
-#' @return A single character with the col_var attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_col_var.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("col_var")(x)),
          yes = purrr::attr_getter("col_var")(x),
          no  = "") #NA_character_
 }
-#' Get names of column variable of fmt columns
 #' @method get_col_var tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single character with the col_var attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_col_var.tabxplor_fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
-#' Get names of column variable of fmt columns
 #' @method get_col_var data.frame
-#' @inheritParams fmt
-#' @return A character vector with the col_var attributes.
 #' @export
-#' @keywords internal
+#' @noRd
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
 #' @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
@@ -1376,31 +1326,23 @@ set_basis <- function(x, basis) {
 #' @return A character vector with the vectors interval method ("" when no interval was computed).
 #' @export
 get_ci_method <- function(x, ...) UseMethod("get_ci_method")
-#' Get the interval method of fmt columns
-#' @inheritParams fmt
-#' @return An empty character vector.
+#' @method get_ci_method default
 #' @export
-#' @keywords internal
+#' @noRd
 get_ci_method.default <- function(x, ...) {
   m <- purrr::attr_getter("ci_method")(x)
   if (is.null(m) || is.na(m)) "" else m
 }
-#' Get the interval method of fmt columns
 #' @method get_ci_method tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single string with the vector's interval method.
 #' @export
-#' @keywords internal
+#' @noRd
 get_ci_method.tabxplor_fmt <- function(x, ...) {
   m <- attr(x, "ci_method", exact = TRUE)
   if (is.null(m) || is.na(m)) "" else m
 }
-#' Get the interval method of fmt columns
 #' @method get_ci_method data.frame
-#' @inheritParams fmt
-#' @return A character vector with the data.frame column's interval methods.
 #' @export
-#' @keywords internal
+#' @noRd
 get_ci_method.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_ci_method(.))
 
 #' @keywords internal
@@ -1439,30 +1381,21 @@ tab_stamp_inference <- function(tabs, conf_level = NULL, degf = NULL, basis = NU
 #' @return A logical vector with the fmt vectors is_refcol attributes
 #' @export
 is_refcol <- function(x, ...) UseMethod("is_refcol")
-#' Test function for reference columns
 #' @method is_refcol default
-#' @inheritParams fmt
-#' @return A single character with the ref_col attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("refcol")(x)),
          yes = purrr::attr_getter("refcol")(x),
          no  = FALSE)
 }
-#' Test function for reference columns
 #' @method is_refcol tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single character with the ref_col attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refcol.tabxplor_fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
-#' Test function for reference columns
 #' @method is_refcol data.frame
-#' @inheritParams fmt
-#' @return A character vector with the ref_col attributes.
 #' @export
-#' @keywords internal
+#' @noRd
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
 
 
@@ -1487,29 +1420,20 @@ fmt_color_attr <- function(x) attr(x, "color", exact = TRUE)
 #' @return A logical vector with the fmt vectors color attributes
 #' @export
 get_color <- function(x, ...) UseMethod("get_color")
-#' Get color
 #' @method get_color default
-#' @inheritParams fmt
-#' @return A single character with the color attribute.
 #' @export
-#' @keywords internal
+#' @noRd
 get_color.default     <- function(x, ...) {
   a <- purrr::attr_getter("color")(x)
   if (is.null(a)) "" else a[1]
 }
-#' Get color
 #' @method get_color tabxplor_fmt
-#' @inheritParams fmt
-#' @return A single character with the color attribute (the text channel).
 #' @export
-#' @keywords internal
+#' @noRd
 get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)[1]
-#' Get color
 #' @method get_color data.frame
-#' @inheritParams fmt
-#' @return A character vector with the color attributes.
 #' @export
-#' @keywords internal
+#' @noRd
 get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
@@ -2200,7 +2124,10 @@ FMT_FIELD_DOC <- c(
   diff      = "the difference from the reference cell (percentage points, or the outcome's own units)",
   ratio     = "the ratio to the reference cell (a relative risk, or a ratio of means)",
   ctr       = "the cell's contribution to the table's Chi-2",
-  var       = "the variance (of a mean; the Chi-2 variance on a percentage)",
+  # the RULE, not the enumeration: `var` carries a variance of a mean, the Chi-2 variance of a
+  # percentage or var(Y) on a regression column, and `scale` is what says which -- so listing the
+  # cases here is a copy that drifts every time a scale is added (Phase 20a).
+  var       = "the column's variance quantity -- which one is given by its `scale`",
   ci_inf    = "the lower bound of the confidence interval",
   ci_sup    = "the upper bound of the confidence interval",
   pvalue    = "the cell's own significance p-value, which the stars read",
@@ -2309,6 +2236,12 @@ is_placeholder_var <- function(nm) as.character(nm) %in% c("no_row_var", "no_col
 #              "neutral"  FORCED to the neutral (a sum of two columns is never a total column)
 #              "x"        taken from x blindly -- a DISPLAY fact, not an inferential one
 #   scalar   stored length 1 (new_fmt() `[1]`-subsets these itself); `color` is carried WHOLE.
+#   write    THE writer -- the attribute's own setter, so its validation is stated once and the
+#            generic `fmt_attr<-()` cannot become a second, laxer way to write the same attribute
+#            (Phase 20a, KEY 3). Every setter is `function(x, value)`-shaped and defined above.
+#            Adding an attribute without a writer now fails the build, so the accessor family can no
+#            longer fall behind the table: a 17th attribute is reachable through fmt_attr() the day
+#            it exists, with or without a named accessor of its own.
 #
 # vec_cast (all 3 arms) takes every attribute unconditionally from `to`, and vec_math (sum/mean)
 # every attribute unconditionally from `.x` -- neither needs a column of its own.
@@ -2322,27 +2255,27 @@ is_placeholder_var <- function(nm) as.character(nm) %in% c("no_row_var", "no_col
 #' @keywords internal
 #' @noRd
 fmt_attr_rules <- list(
-  scale        = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE ),
-  comp_all     = list(neutral = FALSE,          merge = "comp3",       arith = "merge",   scalar = TRUE ),
-  ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
-  pct_base     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE ),
-  col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE ),
+  scale        = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE , write = set_scale),
+  comp_all     = list(neutral = FALSE,          merge = "comp3",       arith = "merge",   scalar = TRUE , write = set_comp_all),
+  ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE , write = set_ref_type),
+  pct_base     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE , write = set_pct_base),
+  col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE , write = set_col_var),
   # Phase 19n: like `col_var` in every respect -- binding two sub-populations loses the distinction,
   # and the neutral is "no sub-population" rather than a "several_" word, because an unspread column
   # and a spread one differ by PRESENCE, not by which group they name.
-  col_group    = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE ),
-  totcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
-  refcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE ),
-  color        = list(neutral = "",             merge = "elementwise", arith = "x",       scalar = FALSE),
-  color_signif = list(neutral = "ignore",       merge = "same",        arith = "x",       scalar = TRUE ),
-  model_family = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE ),
-  role         = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE ),
-  conf_level   = list(neutral = NA_real_,       merge = "same",        arith = "merge",   scalar = TRUE ),
-  degf         = list(neutral = NA_real_,       merge = "min",         arith = "merge",   scalar = TRUE ),
-  basis        = list(neutral = "n",            merge = "weakest",     arith = "merge",   scalar = TRUE ),
+  col_group    = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE , write = set_col_group),
+  totcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE , write = as_totcol),
+  refcol       = list(neutral = FALSE,          merge = "same",        arith = "neutral", scalar = TRUE , write = as_refcol),
+  color        = list(neutral = "",             merge = "elementwise", arith = "x",       scalar = FALSE, write = set_color),
+  color_signif = list(neutral = "ignore",       merge = "same",        arith = "x",       scalar = TRUE , write = set_color_signif),
+  model_family = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE , write = set_model_family),
+  role         = list(neutral = "",             merge = "same",        arith = "x",       scalar = TRUE , write = set_role),
+  conf_level   = list(neutral = NA_real_,       merge = "same",        arith = "merge",   scalar = TRUE , write = set_conf_level),
+  degf         = list(neutral = NA_real_,       merge = "min",         arith = "merge",   scalar = TRUE , write = set_degf),
+  basis        = list(neutral = "n",            merge = "weakest",     arith = "merge",   scalar = TRUE , write = set_basis),
   # arithmetic destroys the interval (the bounds are reset to NA just below), so a sum must not keep
   # claiming Newcombe; binding unlike methods keeps no claim either.
-  ci_method    = list(neutral = "",             merge = "same",        arith = "neutral", scalar = TRUE )
+  ci_method    = list(neutral = "",             merge = "same",        arith = "neutral", scalar = TRUE , write = set_ci_method)
 )
 
 # THE completeness assertion, and it must run at PACKAGE BUILD (R CMD INSTALL / pkgload::load_all),
@@ -2352,7 +2285,10 @@ fmt_attr_rules <- list(
 # install, loudly, at the moment the formal is added. Mirrored in test-fmt_class.R so a cached binary
 # install is covered too. (`fmt_col_attrs <- setdiff(...)` above is the precedent for build-time
 # derivation; there is no Collate: field, and everything this needs precedes it in this file.)
-stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs))
+stopifnot(setequal(names(fmt_attr_rules), fmt_col_attrs),
+          # Phase 20a: ...and every row names its writer, so `fmt_attr<-()` validates exactly as the
+          # named setter does and an attribute cannot ship with no way to write it.
+          all(vapply(fmt_attr_rules, function(r) is.function(r$write), logical(1))))
 fmt_attr_rules <- fmt_attr_rules[fmt_col_attrs]      # lock new_fmt()'s own order
 
 # The reader's default for each attribute IS new_fmt()'s own formal default -- DERIVED, not declared,
@@ -2395,6 +2331,92 @@ fmt_attrs_of <- function(x) {
   if (is.na(b) || !nzchar(b)) a[[fmt_attr_i_basis]] <- "n"     # == get_basis()
   a
 }
+
+# === THE GENERIC ATTRIBUTE ACCESSOR (Phase 20a, KEY 3) ==========================================
+# `fmt_col_attrs` declares the 16 attributes exhaustively, by build-time assertion -- and the
+# EXPORTED accessors were ~23 hand-written functions beside it, neither exhaustive (four attributes
+# had none) nor consistent (the `ref` pair did not share a stem). That is the last hand-written
+# mirror of the attribute table, and it grew with every phase that stored a fact.
+#
+# THE ADMISSION TEST, stated here beside the one that governs a new attribute: *storing a fact is
+# internal; exporting its accessor is a user contract -- name the user story first.* Since 20a the
+# answer to "a 17th attribute needs an accessor" is NO: fmt_attr() reaches it the day it exists.
+#
+# TWO SURFACES, deliberately, and the distinction is what keeps this from being duplication:
+#   the NAMED accessors  are the TAUGHT surface -- a user writes get_scale(x), and the vignettes do.
+#   fmt_attr()           is the PROGRAMMATIC one -- a helper loops over fmt_col_attrs, and until now
+#                        had to write a switch over 16 function names to do it.
+#
+# ⚠ THE HOT PATH STAYS HAND-WRITTEN (the DISPLAY_TOKENS / fmt_attr_rules precedent). get_col_var()
+# (33 call sites in R/), is_totrow() (44) and get_scale() are untouched: they are `attr()` reads on
+# O(columns) loops, and routing them through a table lookup would buy nothing and cost a dispatch.
+#
+# ⚠ RAW, not resolved. fmt_attr() returns the STORED value with the declared `neutral` default. Three
+# named getters do more than read -- get_conf_level() falls back to the option, get_degf() maps NA to
+# Inf, get_basis() folds "" to "n" -- and those are RESOLVERS, which is why they stay internal: the
+# question "what does this column claim" and "what will the engine use" are two questions.
+
+#' Read or write one `fmt` column attribute, by name
+#'
+#' @description
+#' `r lifecycle::badge("experimental")`
+#'
+#' The generic form of the `get_*()` / `set_*()` family: one function covering every per-column
+#' attribute a `tabxplor_fmt` vector carries, so a helper can loop over them instead of naming each.
+#' The named accessors ([get_scale()], [get_col_var()], [is_totcol()], …) remain the readable way to
+#' address one known attribute.
+#'
+#' @param x A `tabxplor_fmt` vector, or a data.frame (then every `fmt` column is read).
+#' @param name The attribute: one of `"scale"`, `"comp_all"`, `"ref"`, `"pct_base"`, `"col_var"`,
+#'   `"col_group"`, `"totcol"`, `"refcol"`, `"color"`, `"color_signif"`, `"model_family"`, `"role"`,
+#'   `"conf_level"`, `"degf"`, `"basis"`, `"ci_method"`. An unknown name is an error naming the set.
+#' @param value The new value. Written through the attribute's own setter, so it is validated
+#'   exactly as `set_scale()` and friends validate it.
+#'
+#' @return The stored value (its declared default when the attribute is unset). On a data.frame, one
+#'   entry per `fmt` column, named. Writing returns the modified vector.
+#' @seealso [tab_columns()] for every column's attributes at once; [fmt()] for what each one means.
+#' @export
+#'
+#' @examples
+#' x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_base = "row")
+#' fmt_attr(x, "scale")
+#' fmt_attr(x, "col_var") <- "region"
+#' fmt_attr(x, "col_var")
+fmt_attr <- function(x, name) {
+  name <- fmt_attr_check_name(name)
+  if (is.data.frame(x)) {
+    keep <- vapply(x, is_fmt, logical(1))
+    out  <- lapply(x[keep], function(col) fmt_attr(col, name))
+    # `color` is the one non-scalar attribute (text + background channels), so it stays a list;
+    # everything else simplifies to the named vector every caller expects.
+    if (!isTRUE(fmt_attr_rules[[name]]$scalar)) return(out)
+    return(unlist(out, use.names = TRUE))
+  }
+  v <- attr(x, name, exact = TRUE)
+  if (is.null(v)) fmt_attr_rules[[name]]$neutral else v
+}
+
+#' @rdname fmt_attr
+#' @export
+`fmt_attr<-` <- function(x, name, value) {
+  name <- fmt_attr_check_name(name)
+  if (is.data.frame(x))
+    cli::cli_abort(c("{.fn fmt_attr<-} writes one {.cls tabxplor_fmt} column at a time.",
+                     "i" = "Use {.code dplyr::mutate(x, dplyr::across(where(is_fmt), ~ ...))}."))
+  fmt_attr_rules[[name]]$write(x, value)
+}
+
+#' @keywords internal
+#' @noRd
+fmt_attr_check_name <- function(name) {
+  name <- as.character(name)[1]
+  if (is.na(name) || !name %in% fmt_col_attrs)
+    cli::cli_abort(c("Unknown {.cls tabxplor_fmt} column attribute {.val {name}}.",
+                     "i" = "Valid: {.val {fmt_col_attrs}}."), call = NULL)
+  name
+}
+
 
 # THE reconcile of two columns' attributes -- what a BIND means (vec_ptype2, i.e. every c() /
 # vec_c() / bind / group). Five tight index loops, one per declared merge rule.
@@ -3509,7 +3531,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # Phase 12a: OR display. (1) an OR < 1 prints as "1/x" so it compares symmetrically to an
       # OR > 1 (odds ratios are multiplicatively symmetric) -- everywhere, incl. empirical OR.
       # (2) reference rows (OR == 1) print a bare "1", annotated with the empirical reference %
-      # when one is present (an empirical-OR crosstab); a pure model-OR table (tab_logit) has no
+      # when one is present (an empirical-OR crosstab); a pure model-OR table has no
       # pct, so the "( )" annotation drops. The empirical-OR path is byte-identical to before
       # except for the intended 1/x rendering of OR < 1 cells.
       if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
@@ -4352,7 +4374,7 @@ fmt_face_semantic <- function(theme = "light") {
 #   ref_auto     the reference this measure picks when the user leaves `ref = "auto"`.
 #   auto_for     the contexts in which this measure IS `color = TRUE`'s answer, per channel:
 #                list(text = <context keys>, bg = <context keys>). Contexts are named by what the
-#                COLUMN or the model is -- "pct" (row/col percentages), "counts", "or_table", "num",
+#                COLUMN or the model is -- "pct" (row/col percentages), "counts", "num",
 #                and tab_reg's "reg_diff" / "reg_ratio". One table for the three cascades that used
 #                to answer this question separately (and could therefore answer it differently).
 #   method       how the legend names this measure's TEST when it is not the column's own stored
@@ -4458,7 +4480,10 @@ MEASURES <- list(
                  channels = "text", producers = c("tab", "reg"),
                  applies_to = "pct", builds = "or", ref_auto = "first",
                  requires = c(ref = "always", ci = "gated"),
-                 auto_for = list(text = c("or_table", "reg_ratio")),
+                 # ⚠ tab() NEVER auto-resolves to the odds ratio (19d: it is asked for by name),
+                 # so this is a reg-only context. Phase 20a deleted the "or_table" entry beside it:
+                 # its only producer was a `case_when` arm on a constant FALSE.
+                 auto_for = list(text = "reg_ratio"),
                  subject = "OR",
                  raw = function(x) get_or(x),
                  scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
@@ -4711,7 +4736,7 @@ measure_ref_auto <- function(measure) {
 }
 
 # THE `color = TRUE` resolver: which measure is the automatic answer in a given CONTEXT, on a given
-# channel. Contexts are the column/model kinds declared in `auto_for` ("pct", "counts", "or_table",
+# channel. Contexts are the column/model kinds declared in `auto_for` ("pct", "counts",
 # "num", "reg_diff", "reg_ratio"). Priority is names(MEASURES) order, so a new measure that claims an
 # occupied context declares its precedence by where its row sits. "" = nothing colours here.
 #' @keywords internal
@@ -5190,9 +5215,23 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   if (is.null(lab)) gettext("confidence interval") else lab()
 }
 
-# "<method>, 95% confidence" (or just the confidence text when there is no method name).
+# "<method>, 95% confidence" (or just the confidence text when there is no method name), plus the
+# design degrees of freedom where there ARE any.
+#
+# Phase 20a: `degf` was the last fact of the Phase 19 model surfaced NOWHERE, although it is exactly
+# what makes a design-based interval differ from a flat one -- the critical value comes from
+# t(#PSU - #strata), not from z, and on a small design that is the difference between a bracket that
+# covers and one that does not. (`basis`, its twin, has always been said, in the weight line.)
+#
+# GATED on the basis, deliberately: an unweighted or weights-only table refers to z, has no design df
+# to name, and its footer must not grow a clause that says nothing. So every ordinary table is
+# byte-identical and only a real survey design gains the phrase.
 legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
   conf <- gettextf("%s%% confidence", legend_num(spec$conf_level * 100, lang))
+  df   <- spec$degf
+  if (isTRUE(spec$basis %in% c("design", "design_partial")) &&
+      !is.null(df) && length(df) == 1L && is.finite(df) && df > 0)
+    conf <- gettextf("%s, %s design df", conf, legend_num(df, lang))
   m    <- legend_method_name(spec, measure)
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
@@ -5656,6 +5695,10 @@ legend_specs <- function(x, theme = "light") {
     # Phase 19b: how THIS column's interval was computed -- both facts per column now.
     ci_method <- get_ci_method(col)
     conf_lvl  <- get_conf_level(col)
+    # Phase 20a: ...and the two that say HOW. `fmt_degf_attr()` is the RAW read (an unstamped column
+    # must contribute nothing, where get_degf() would answer Inf).
+    degf_col  <- fmt_degf_attr(col)
+    basis_col <- get_basis(col)
     # Phase 18z13 (D8): does this column carry a test on SOME rows only? A gap measure's SE is
     # missing wherever it could not be computed -- a group with an empty cell yields an infinite log
     # interval, a profile bracket is not est +/- crit*se -- and those rows then render exactly like a
@@ -5683,7 +5726,7 @@ legend_specs <- function(x, theme = "light") {
          measure_text = m_txt, measure_bg = m_bg,
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
          policy = policy, orientation = orient, scale = scale_key,
-         ci_method = ci_method, conf_level = conf_lvl,
+         ci_method = ci_method, conf_level = conf_lvl, degf = degf_col, basis = basis_col,
          is_reg = is_reg, eff_word = eff_word, role = role, shades = shades,
          theme = theme,
          model_family = get_model_family(col),        # Phase 18z5: the collapsibility caveat below
@@ -6505,10 +6548,12 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       obs     = rep_NA_real,
       gap_se  = rep_NA_real,
 
-      # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
-      # arguably it should follow x alone (x - a non-total y should probably stay total).
-      # Phase 19f: the same rule generalised to the seven kinds -- agreeing operands keep the kind,
-      # disagreeing ones fall back to the neutral "data".
+      # DESIGN: `+` / `-` take two SYMMETRIC operands -- two cells of the same kind of thing, in
+      # either order -- so the three row facts survive only where the operands AGREE: the sum of a
+      # total-row cell and a data cell sits in no row kind, is in no reference row and belongs to no
+      # single sub-table. `*` / `/` answer the same question the other way (below) precisely because
+      # they are NOT symmetric, and that asymmetry is the rule, not an oversight. (Phase 19f
+      # generalised the original two-valued in_totrow rule to the seven ROW_KINDS unchanged.)
       row_kind  = dplyr::if_else(get_row_kind(x) == get_row_kind(y), get_row_kind(x), "data"),
       in_refrow = is_refrow(x) & is_refrow(y),
       in_tottab = is_tottab(x) & is_tottab(y)
@@ -6518,9 +6563,14 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       display   = get_display(x),
       n      = get_n(x)   ,
       wn     = get_wn(x)  ,
-      # FIXME: suspect. Unlike +/- (which recomputes a weighted mean), */ operates pct_x
-      # against pct_y directly and drops mean to NA. Multiplying/dividing two percentage
-      # fields is rarely meaningful; revisit what * and / on fmt should actually mean.
+      # DESIGN: this arm is fmt-BY-fmt only -- `fmt * 2` never reaches it (vec_arith.tabxplor_fmt.
+      # default returns a bare numeric), so both operands are cells. `x * y` and `x / y` are read
+      # "x per y": x is the SUBJECT and y the scaler, which is why every metadata fact below is
+      # taken from x alone where `+` / `-` require agreement. The arithmetic is field-wise on `pct`
+      # and `mean` is dropped, because a product or a ratio of two means is not a mean -- and a
+      # ratio the package is asked for on purpose (`color = "ratio"`, the `ratio` field) is computed
+      # by the leaf against a declared reference, never by this operator. What this arm owes a user
+      # is that `mutate(a = x / y)` returns a well-formed fmt column instead of erroring.
       pct    = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)),
       diff   = rep_NA_real,
       ratio  = rep_NA_real,

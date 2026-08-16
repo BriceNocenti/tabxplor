@@ -31,14 +31,14 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 19n: the intended delta is TWO declared additions and nothing else. `col_group` -- which
-# SUB-POPULATION a column's block belongs to -- becomes a 16th column attribute and a declared `test`
-# tibble column, so the (level, col_var) pair a spread welded into `col_var` as "{level}<br>{col_var}"
-# is two stored facts. No golden case spreads, so the expected value is "" everywhere: the goldens
-# prove the addition costs an UNSPREAD table nothing.
-ADDED_ATTRS   <- "col_group"
+# Phase 20a: the intended delta is NOTHING. This phase adds no field, no attribute and no `test`
+# column -- it adds a load-time foreign-key check, a generic attribute accessor, and deletes
+# unreleased exports. An empty declaration set is the assertion, and a single reported change is a
+# defect (19n's `col_group` is landed and its goldens are regenerated; leaving that declaration here
+# would compare two copies of the new attribute -- the reset hazard named at the top).
+ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
-EXPECTED_ATTR <- list(col_group = "")
+EXPECTED_ATTR <- list()
 
 # POPULATED_FIELDS -- Phase 19m-i's mode: a rule change that FILLS cells which were NA, on a declared
 # subset of rows, and must touch nothing else. Per case: which fields may move, and a predicate over
@@ -74,9 +74,7 @@ RENAMED_TEST_COLS <- list()
 # would compare a declared column against a stripped copy of itself (the reset hazard at the top).
 DECLARE_INDEX_COLS <- FALSE
 
-# Phase 19m-ii: `dep` -- the dependent each footer row is about. NA on every crosstab row (`var = ""`
-# already means "the whole table", so "" is a taken meaning), which is what every golden case is.
-ADDED_TEST_COLS <- "col_group"    # 19n: the `test` twin of the column attribute (see above).
+ADDED_TEST_COLS <- character(0)   # 20a: reset -- this phase adds no `test` column.
 
 # Phase 18z16-i: the same pass also adds a `meta` SUB-FIELD (`inference` = the stored inference
 # basis). Unlike a field or a test column it has a definite VALUE, and it is stored only on the

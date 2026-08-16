@@ -33,7 +33,12 @@ than it will be merged into an "Others" level.}
 A modified data.frame.
 }
 \description{
-Prepare data for \code{\link{tab_plain}}.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+An internal step of the build, exported before the pipeline had one. Every one of its jobs is
+now an argument of \code{\link[=tab]{tab()}} — \code{na_drop_all} is \code{filter = !is.na(...)}, and \code{cleannames},
+\code{other_if_less_than} and \code{other_level} are formals of \code{\link[=tab]{tab()}} itself — so calling it by hand
+prepares data for a function that would prepare it again. It will be made internal in 2.1.0.
 }
 \examples{
 \donttest{data <- dplyr::starwars |>
@@ -42,3 +47,4 @@ tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
 data
 }
 }
+\keyword{internal}

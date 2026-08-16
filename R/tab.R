@@ -399,10 +399,8 @@ NULL
 #' it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
 #' never recorded one (a hand-built \code{\link{fmt}}) falls back to
 #' \code{options(tabxplor.conf_level)}.
-#' @param color_breaks A per-table override of the colour thresholds, a named list of scales like
-#' \code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
-#' a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
-#' Unset scales fall back to the global setting.
+#' @param color_breaks A per-table override of the colour thresholds, in the form
+#' \code{\link{set_color_breaks}} accepts; unset scales keep the global ones.
 #' @param add_n For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
 #' column or row with unweighted counts (`n`).
 #' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
@@ -1337,10 +1335,9 @@ force_comp <- function(comp, tab_vars) {
 # four of them yielded NULL and one yielded FALSE. Single-sourcing settles it on the safe fallback.
 #
 # conf_level_default(): THE default confidence level, as a formal default. It was the literal
-# `getOption("tabxplor.conf_level", 0.95)` in TEN signatures (tab, tab_many, tab_plain, tab_num,
-# tab_ci, tab_counts, tab_reg, tab_logit, multi_logit, new_inference). The option is still what it
-# reads, and ?tabxplor-options + each @param still name it -- only the ten copies of the expression
-# are gone.
+# `getOption("tabxplor.conf_level", 0.95)` in EIGHT signatures (tab, tab_many, tab_plain, tab_num,
+# tab_ci, tab_counts, tab_reg, new_inference). The option is still what it reads, and
+# ?tabxplor-options + each @param still name it -- only the copies of the expression are gone.
 #' @keywords internal
 #' @noRd
 resolve_cleannames <- function(cleannames) {
@@ -2001,6 +1998,15 @@ tab_setup <- function(ctx) {
 #' @noRd
 SPINE_OWNED_INPUTS <- c("pct", "color", "chi2", "ci", "ref", "ref2", "comp",
                         "totaltab", "totrow", "digits", "levels")
+
+# ...and the assert the comment above CTX_SETTINGS_LOCALS has always promised. Deleting an input
+# from the ctx is only safe if the spine projects it back, so every name here must reappear in
+# ctx_settings_locals() -- under its own name, or under the ONE rename each of these two has
+# (`pct` is per PAIR, `levels` resolves to the per-col_var `lvs`). Phase 20a: it was described in
+# prose and never written, so a spine-owned input with no projection would simply have vanished.
+stopifnot("every spine-owned input is projected back by ctx_settings_locals()" =
+            all(c(setdiff(SPINE_OWNED_INPUTS, c("pct", "levels")), "pct_vect", "lvs")
+                %in% CTX_SETTINGS_LOCALS))
 
 
 # === STAGE 2/5: tab_prepare_pop() -- prepare the population ONCE (cache tier 0) ==============
@@ -3397,6 +3403,14 @@ tab_cleannames_relabel <- function(data, vars_not_numeric) {
 
 #' Prepare data for \code{\link{tab_plain}}.
 #'
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' An internal step of the build, exported before the pipeline had one. Every one of its jobs is
+#' now an argument of [tab()] — `na_drop_all` is `filter = !is.na(...)`, and `cleannames`,
+#' `other_if_less_than` and `other_level` are formals of [tab()] itself — so calling it by hand
+#' prepares data for a function that would prepare it again. It will be made internal in 2.1.0.
+#'
 #' @param data A dataframe.
 #' @param ... Variables then to be passed in \code{\link{tab_plain}}.
 #' @param na_drop_all <\link[tidyr:tidyr_tidy_select]{tidy-select}> Removes all
@@ -3408,6 +3422,7 @@ tab_cleannames_relabel <- function(data, vars_not_numeric) {
 #' @param other_level The name of the "Other" level, as a character vector of length one.
 #'
 #' @return A modified data.frame.
+#' @keywords internal
 #' @export
 #' @examples \donttest{data <- dplyr::starwars |>
 #' tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
@@ -3418,6 +3433,12 @@ tab_prepare <-
   function(data, ..., na_drop_all,
            cleannames = NULL, other_if_less_than = 0,
            other_level = "Others") {
+    # Phase 20a: only a USER call is nudged -- tabxplor's own (tab_prepare_pop, below) is silent.
+    # Released in CRAN 1.3.1, so it is deprecated for a cycle before being made internal in 2.1.0;
+    # never silently un-exported.
+    if (tx_user_call()) lifecycle::deprecate_soft("2.0.0", "tab_prepare()", details = paste0(
+      "Its work is done by tab() itself: `na_drop_all` is `filter = !is.na(...)`, and ",
+      "`cleannames` / `other_if_less_than` / `other_level` are tab() arguments."))
 
     cleannames <-
       resolve_cleannames(cleannames)
@@ -3679,9 +3700,13 @@ leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totalt
 
   if (length(tab_vars) == 0) {
 
+    # WARNING: `!!!`, not `!!`. forcats::fct_recode() takes its pairs through `...` as NAMED
+    # arguments, so a named vector handed over as ONE positional argument is a hard error ("Each
+    # element of `...` must be a named string") -- which is what ANY non-default `total_names`
+    # produced on an ungrouped table, the argument's only untested branch.
     if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
         dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
-                                                       purrr::set_names("Total", total_names[1])))
+                                                       !!!purrr::set_names("Total", total_names[1])))
   } else {
     tabs <- tabs |>
       tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE)

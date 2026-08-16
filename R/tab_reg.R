@@ -3,7 +3,6 @@
 #   -- gaussian beta (additive), binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR
 #   (multiplicative) -- through the tabxplor_fmt diff|or / ci_inf|ci_sup / pvalue / var fields, so a
 #   regression table prints, colours and exports (kable / md / Excel) exactly like a crosstab.
-#   tab_logit()/multi_logit() are thin binomial-family wrappers with the curated binary-outcome UX.
 # KEY CONSTRAINTS:
 #   - Direct engine: stats::lm/glm (unweighted) / survey::svyglm (weighted) + nnet::multinom (nominal
 #     3+ level) + MASS::polr (ordinal 3+ level), all tidied with broom::tidy. No parsnip.
@@ -4629,8 +4628,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' Unweighted models use [stats::lm()] / [stats::glm()]; a `wt` weight column switches to a survey
 #' design ([survey::svyglm()]), which gives correct design-based standard errors rather than the
 #' frequency-inflated ones of `glm(weights=)`. `broom` (always) and `survey` (only with `wt`) are
-#' optional dependencies. `tab_logit()` / `multi_logit()` are convenience wrappers for the binomial
-#' family.
+#' optional dependencies.
 #'
 #' A **nominal** outcome with 3+ unordered levels is fit as one multinomial logit ([nnet::multinom()]),
 #' giving **one odds-ratio column per non-reference outcome category** ("`<category>` vs `<reference>`:
@@ -5366,109 +5364,11 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
 }
 
 
-#' Logistic-regression table (odds ratios)
-#'
-#' Convenience wrapper of [tab_reg()] for the binomial family: fits one binary logistic regression
-#' per `dependent` on a shared set of `predictors` and returns a `tabxplor` table of odds ratios
-#' (one column per dependent, the reference level shown as `1`, grouped by predictor). See [tab_reg()]
-#' for the engine, weighting and interval details.
-#'
-#' @inheritParams tab_reg
-#' @param dependent Character vector of binary dependent variable name(s). Each must be a 2-level
-#'   factor/character or a 0/1 numeric.
-#' @param predictors Character vector of predictor variable name(s).
-#' @param color_signif How significance drives the colours. `"grey_non_signif"` (default) colours
-#'   only odds ratios whose confidence interval excludes 1 and greys the rest.
-#'
-#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per `dependent`.
-#'
-#' @examples
-#' data <- forcats::gss_cat |>
-#'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-#'                                                 "Married", "Not married")))
-#' if (requireNamespace("broom", quietly = TRUE)) {
-#'   tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
-#' }
-#'
-#' @export
-tab_logit <- function(data, dependent, predictors, wt = NULL,
-                      inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
-                      shape = NULL, empirical = FALSE, add_n = TRUE,
-                      conf_level = conf_level_default(),
-                      method = c("wald", "profile"),
-                      stats = NULL, display = "value",
-                      color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                      stars = TRUE, na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                      cleannames = NULL, subtext = "") {
-  method       <- match.arg(method)
-  color_signif <- match.arg(color_signif)
-  na           <- match.arg(na)
-  stopifnot(is.character(predictors), length(predictors) >= 1L)
-  tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
-          split_var = split_var,
-          multiplier = multiplier, shape = shape, empirical = empirical, add_n = add_n,
-          conf_level = conf_level, method = method, stats = stats,
-          display = display,
-          inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, stars = stars, na = na,
-          cleannames = cleannames, subtext = subtext)
-}
-
-
-#' Compare several logistic-regression models (odds ratios side by side)
-#'
-#' Convenience wrapper of [tab_reg()] for the binomial family in model-comparison mode: fits several
-#' models for ONE binary `dependent`, one per named predictor set in `models`, and returns a
-#' `tabxplor` table with one odds-ratio column per model (predictors absent from a model left blank).
-#'
-#' @inheritParams tab_logit
-#' @inheritParams tab_reg
-#' @param dependent Character. Name of the binary dependent variable. May be a **vector** of several
-#'   binary dependents: the model comparison is then run once per dependent and the per-dependent
-#'   tables are returned as a list (one sheet each when exported to Excel).
-#' @param models A named list of character vectors; each element is one model's predictor set and its
-#'   name labels the column. Unnamed elements are labelled `model1`, `model2`, ...
-#'
-#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per model; or, for
-#'   several `dependent`s, a `tabxplor_tabs` list of such tables (one per dependent).
-#'
-#' @examples
-#' data <- forcats::gss_cat |>
-#'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-#'                                                 "Married", "Not married")))
-#' if (requireNamespace("broom", quietly = TRUE)) {
-#'   multi_logit(
-#'     data, dependent = "married",
-#'     models = list(demographic = c("race", "age"),
-#'                   full        = c("race", "age", "rincome"))
-#'   )
-#' }
-#'
-#' @export
-multi_logit <- function(data, dependent, models, wt = NULL,
-                        inverse_two_level_factors = TRUE, split_var = NULL, multiplier = "sd",
-                        empirical = FALSE, add_n = TRUE,
-                        conf_level = conf_level_default(),
-                        method = c("wald", "profile"),
-                        stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
-                        display = "value",
-                        color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                        stars = TRUE, na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                        cleannames = NULL, subtext = "") {
-  method       <- match.arg(method)
-  compare      <- match.arg(compare)
-  color_signif <- match.arg(color_signif)
-  na           <- match.arg(na)
-  # Phase 14x: `dependent` may be a VECTOR -> the model comparison runs once per dependent (tab_reg's K
-  # mode: a models list + several dependents -> one table each, returned as a tabxplor_tabs list).
-  stopifnot(is.character(dependent), length(dependent) >= 1L, is.list(models), length(models) >= 1L)
-  tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
-          split_var = split_var,
-          multiplier = multiplier, empirical = empirical, add_n = add_n,
-          conf_level = conf_level, method = method,
-          stats = stats, compare = compare, baseline = baseline,
-          display = display,
-          inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, stars = stars, na = na,
-          cleannames = cleannames, subtext = subtext)
-}
+# Phase 20a: `tab_logit()` and `multi_logit()` are DELETED. They were thin forwarders to
+# `tab_reg(family = "binomial")` that mirrored only ~20 of its formals, so a user who found them
+# could not reach `effect = "marginal"`, `measure = "ratio"`, `compare =`, `baseline =`,
+# `reference =` or `color =` -- a capability hole created purely by the mirror, plus 523 lines of
+# `man/`. Neither was ever released (absent from CRAN 1.3.1), so there is nothing to deprecate.
+#   tab_logit(data, dependent, predictors, ...)  ->  tab_reg(..., family = "binomial")
+#   multi_logit(data, dependent, models, ...)    ->  tab_reg(predictors = <named list>,
+#                                                            family = "binomial")

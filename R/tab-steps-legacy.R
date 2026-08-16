@@ -1,9 +1,13 @@
 # PURPOSE: The superseded dplyr-era step functions -- tab_pct()/tab_tot()/tab_totaltab() + their
 #   trio-exclusive formula helpers pct_formula()/diff_formula(), and (Phase 19j) tab_ci()/tab_chi2().
 # ROLE: Quarantined here out of tab.R's live pipeline -- 17f for the trio, 19j (KEY 5) for the two
-#   tests. These are the pre-2.0.0 step-by-step API: exported + superseded (badge, no lifecycle
-#   warning), still working on an existing tab, but OFF the tab()/tab_many() aggregate-core path.
-#   With 19j the WHOLE pre-2.0.0 chain lives here: nothing in tab.R's build calls a step any more.
+#   tests. These are the pre-2.0.0 step-by-step API: exported, HARD-deprecated since 20a (a
+#   lifecycle warning on every call), DEFUNCT in 2.1.0. They still work on an existing tab, but they
+#   are OFF the tab()/tab_many() aggregate-core path -- since 19j nothing in the build calls a step.
+#   ⚠ WHAT IS DEPRECATED IS THE CHAINING API, NOT THE COMPUTATIONS. The arithmetic moved into the
+#   leaf in 19j and is SHARED (see KEY CONSTRAINTS below); deleting these functions in 2.1.0 removes
+#   a way of ASKING, never a way of computing. Every deprecation message says so, because
+#   "tab_ci() is going away" would otherwise read as "the confidence interval is".
 # KEY CONSTRAINTS:
 #   - Exports unchanged (the @export roxygen travels with the functions; document() keeps NAMESPACE).
 #   - They call INTO the shared ARITHMETIC, which stays where the build uses it (chi2_compute_test,
@@ -27,9 +31,9 @@
 #' Add total table to a \code{\link[tabxplor]{tab}}
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded (2.0.0): the total table is built directly by the `totaltab` argument of
+#' Deprecated in 2.0.0, defunct in 2.1.0 -- the total table is built directly by the `totaltab` argument of
 #' [tab()] / [tab_plain()] / [tab_num()]. `tab_totaltab()` still works on an existing tab.
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
@@ -57,7 +61,13 @@
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                          name = "Ensemble", data = NULL) {
-  #.Deprecated("tab_plain() and tab_num(), which now have a totaltab argument")
+  # Phase 20a: HARD-deprecated (defunct in 2.1.0). What is deprecated is the exported CHAINING API,
+  # not the computations -- since 19j the arithmetic is shared with the leaf (ci_dispatch() /
+  # CI_GEOMS, chi2_compute_test() / chi2_write_contrib()), so a step and a build cannot give two
+  # answers. The message says so, because "tab_ci() is going away" would read as "the interval is".
+  lifecycle::deprecate_warn("2.0.0", "tab_totaltab()", "tab(totaltab = )", details = c(
+    "The step-by-step chain is superseded: tab() / tab_num() compute this in one pass.",
+    "i" = "The arithmetic is shared, so the numbers are identical -- only the chaining API goes."))
 
   get_vars  <- tab_get_vars(tabs)
 
@@ -168,9 +178,9 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #' Add totals to a \code{\link[tabxplor]{tab}}
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded (2.0.0): totals are built directly by [tab()] / [tab_plain()] / [tab_num()] (a
+#' Deprecated in 2.0.0, defunct in 2.1.0 -- totals are built directly by [tab()] / [tab_plain()] / [tab_num()] (a
 #' total row is always computed, one total column shown). `tab_tot()` still works on an
 #' existing tab.
 #'
@@ -199,7 +209,13 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'   }
 tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
                     totcol = "last", data = NULL) {
-  #.Deprecated("tab_plain() and tab_num(), which now have a tot argument")
+  # Phase 20a: HARD-deprecated (defunct in 2.1.0). What is deprecated is the exported CHAINING API,
+  # not the computations -- since 19j the arithmetic is shared with the leaf (ci_dispatch() /
+  # CI_GEOMS, chi2_compute_test() / chi2_write_contrib()), so a step and a build cannot give two
+  # answers. The message says so, because "tab_ci() is going away" would read as "the interval is".
+  lifecycle::deprecate_warn("2.0.0", "tab_tot()", "tab(tot = )", details = c(
+    "The step-by-step chain is superseded: tab() / tab_num() compute this in one pass.",
+    "i" = "The arithmetic is shared, so the numbers are identical -- only the chaining API goes."))
 
   stopifnot(
     tot %in% c("no", "row", "col", "both"),
@@ -389,9 +405,9 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded (2.0.0): percentages, differences and ratios are computed directly by
+#' Deprecated in 2.0.0, defunct in 2.1.0 -- percentages, differences and ratios are computed directly by
 #' [tab()] / [tab_plain()] via the `pct` / `ref` arguments. `tab_pct()` still works on an
 #' existing tab.
 #'
@@ -440,8 +456,13 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no"),
                     digits = NULL, ref = c("tot", "first", "no"),
                     comp = NULL, color = FALSE, just_diff = FALSE) { #Add keep/change grouping ?
-
-  # .Deprecated("tab_plain() and tab_num(), which now have pct and ref arguments")
+  # Phase 20a: HARD-deprecated (defunct in 2.1.0). What is deprecated is the exported CHAINING API,
+  # not the computations -- since 19j the arithmetic is shared with the leaf (ci_dispatch() /
+  # CI_GEOMS, chi2_compute_test() / chi2_write_contrib()), so a step and a build cannot give two
+  # answers. The message says so, because "tab_ci() is going away" would read as "the interval is".
+  lifecycle::deprecate_warn("2.0.0", "tab_pct()", "tab(pct = )", details = c(
+    "The step-by-step chain is superseded: tab() / tab_num() compute this in one pass.",
+    "i" = "The arithmetic is shared, so the numbers are identical -- only the chaining API goes."))
 
   #stopifnot(pct[1] %in% c("row", "col", "all", "all_tabs", "no"))
   get_vars         <- tab_get_vars(tabs)
@@ -617,7 +638,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
               type = type[[dplyr::cur_column()]],
               ref = ref[1],
               refer  = rlang::eval_tidy(reference[[dplyr::cur_column()]])
-            )) |> set_diff_type(ref[1])
+            )) |> set_ref_type(ref[1])
           ))
         )
 
@@ -632,7 +653,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
             type = type[[dplyr::cur_column()]],
             ref = ref[1],
             refer = rlang::eval_tidy(reference[[dplyr::cur_column()]])
-          )) |> set_diff_type(ref[1])
+          )) |> set_ref_type(ref[1])
         ))
     }
 
@@ -700,9 +721,9 @@ diff_formula <- function(x, type, ref, refer) {
 #' Add confidence intervals to a \code{\link[tabxplor]{tab}}
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded (2.0.0): confidence intervals are computed by the aggregate core, from the
+#' Deprecated in 2.0.0, defunct in 2.1.0 -- confidence intervals are computed by the aggregate core, from the
 #' `ci` / `ci_method` / `conf_level` / `stars` arguments of [tab()], [tab_plain()] and
 #' [tab_num()] --- where the plan that decides them already lives. `tab_ci()` still works on an
 #' existing tab, reconstructing that plan from the table's own markers.
@@ -814,6 +835,13 @@ tab_ci <- function(tabs,
                    ci_method = NULL,
                    method_cell = NULL, method_diff = NULL,
                    ci_scale = "diff", degf = NULL) {
+  # Phase 20a: HARD-deprecated (defunct in 2.1.0). What is deprecated is the exported CHAINING API,
+  # not the computations -- since 19j the arithmetic is shared with the leaf (ci_dispatch() /
+  # CI_GEOMS, chi2_compute_test() / chi2_write_contrib()), so a step and a build cannot give two
+  # answers. The message says so, because "tab_ci() is going away" would read as "the interval is".
+  lifecycle::deprecate_warn("2.0.0", "tab_ci()", "tab(ci = )", details = c(
+    "The step-by-step chain is superseded: tab() / tab_num() compute this in one pass.",
+    "i" = "The arithmetic is shared, so the numbers are identical -- only the chaining API goes."))
   # Phase 18z16-iiiii: the four interval methods are ONE named vector (see CI_METHODS); the
   # released `method_cell` / `method_diff` are soft-deprecated aliases into it, and validation is the
   # shared resolver's, so tab_ci() cannot accept a value tab() rejects.
@@ -1124,9 +1152,9 @@ tab_ci <- function(tabs,
 #' Add Chi2 summaries to a \code{\link[tabxplor]{tab}}
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded (2.0.0): the whole-table test and the per-cell contributions are computed by the
+#' Deprecated in 2.0.0, defunct in 2.1.0 -- the whole-table test and the per-cell contributions are computed by the
 #' aggregate core, from the `test` and `color` arguments of [tab()] --- where the plan that
 #' decides them already lives. `tab_chi2()` still works on an existing tab, reconstructing that
 #' plan from the table's own markers.
@@ -1174,6 +1202,13 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                      comp = NULL, color = c("no", "auto", "all", "all_pct"),
                      .deff = NULL
 ) {
+  # Phase 20a: HARD-deprecated (defunct in 2.1.0). What is deprecated is the exported CHAINING API,
+  # not the computations -- since 19j the arithmetic is shared with the leaf (ci_dispatch() /
+  # CI_GEOMS, chi2_compute_test() / chi2_write_contrib()), so a step and a build cannot give two
+  # answers. The message says so, because "tab_ci() is going away" would read as "the interval is".
+  lifecycle::deprecate_warn("2.0.0", "tab_chi2()", "tab(test = )", details = c(
+    "The step-by-step chain is superseded: tab() / tab_num() compute this in one pass.",
+    "i" = "The arithmetic is shared, so the numbers are identical -- only the chaining API goes."))
   get_vars        <- tab_get_vars(tabs)
   row_var         <- get_vars$row_var
   col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)

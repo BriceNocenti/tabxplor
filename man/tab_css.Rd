@@ -6,7 +6,7 @@
 \usage{
 tab_css(
   theme = NULL,
-  chrome = TRUE,
+  format = c("html", "md"),
   style_tag = TRUE,
   file = NULL,
   print_rules = NULL,
@@ -22,9 +22,11 @@ deliberate choice. \code{"auto"} emits every rule four times (a light base, the 
 both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
 editor's theme -- see its \code{theme} argument.}
 
-\item{chrome}{When \code{TRUE} (default) also style the table itself (font/background/border colours,
-the greys) -- what \code{\link[=tab_html]{tab_html()}} needs. \code{FALSE} emits the colour classes only, which
-is what \code{tab_md()} wants: bare selectors you can map in your own editor's CSS.}
+\item{format}{Which output the stylesheet is for, in \code{\link[=tab_export]{tab_export()}}'s own vocabulary.
+\code{"html"} (the default) is the full stylesheet \code{\link[=tab_html]{tab_html()}} needs: the colour classes \strong{and}
+the table's own look (font, background, border colours, the greys). \code{"md"} emits the colour
+classes only, which is what \code{\link[=tab_md]{tab_md()}} wants — bare selectors you can map in your own editor's
+or publisher's CSS.}
 
 \item{style_tag}{Wrap the CSS in a \verb{<style>} tag (default \code{TRUE}).}
 
@@ -98,8 +100,8 @@ Rows carry \code{.tx-bt}/\code{.tx-bb}/\code{.tx-bb2} (top / bottom / thick-bott
 
 \examples{
 cat(tab_css(theme = "auto"))
-cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
+cat(tab_css(format = "md", style_tag = FALSE))  # the markdown flavour
 }
 \seealso{
-\code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}, \code{\link[=set_color_palette]{set_color_palette()}}, \code{\link[=set_color_breaks]{set_color_breaks()}}
+\code{\link[=tab_html]{tab_html()}}, \code{\link[=tab_md]{tab_md()}}, \code{\link[=set_color_palette]{set_color_palette()}}, \code{\link[=set_color_breaks]{set_color_breaks()}}
 }

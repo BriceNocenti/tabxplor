@@ -408,9 +408,10 @@ All of Phase 19's, plus 19o's and 19p's:
     documentation alike. That is this phase's own method applied to its own new argument, and it is
     the difference between a stated rule and the `type` / `ci_type` disease.
 
-### 7.2 Five corrections to 19o and 19p
+### 7.2 Corrections to 19o and 19p
 
-Recorded so the ledger stops carrying them.
+Recorded so the ledger stops carrying them. **Items 6-10 were measured in Phase 20a** and correct
+this document as well as its two sources.
 
 1. ⚠ **The released baseline is CRAN 1.3.1, not `v1.2.0`.** The only git tag is `v1.2.0` (59
    exports), which is two releases old; `master` carries `1.3.1.9000`, a dev version. The CRAN
@@ -435,6 +436,25 @@ Recorded so the ledger stops carrying them.
    numbers**: 35 documented, 34 seeded, **exactly one** documented-but-never-seeded
    (`tabxplor.color_style_type`). And `tabxplor.totcol_range` is **neither seeded nor read** — both
    lines are commented out — so it needs no action at all, contrary to 19o §6.
+6. ⚠ **`tab_md_css()` is NOT released.** It is in neither `v1.2.0` nor CRAN 1.3.1, so 19p §3.4's
+   "soft-deprecate, released in v1.2.0" was wrong. **Deleted in 20a**, together with the argument
+   that made it necessary (`tab_css(chrome =)` → `tab_css(format = c("html", "md"))`).
+7. ⚠ **`basis` is already surfaced** — `tab_weight_line()` switches on all four values and prints a
+   sentence. 19p §2.4's "the legend names neither the df nor the basis" is half right: the item was
+   **`degf` alone**, and 20a added it, gated on a design basis so a flat table is byte-identical.
+8. ⚠ **KEY 2's block cannot live at `reg-estimand.R`'s tail** (19o §5 KEY β). `COLOR_SCALES` is in
+   `tab_classes.R` and `REG_EMPIRICAL` in `tab_reg.R`, both of which sort *after* it in C collation,
+   so it sees neither. 20a put it in a new last-sorting file, `R/zzz-fact-keys.R`. There are also
+   **34** cross-table edges, not 12, and **9** build-time `stopifnot` blocks, not 7.
+9. ⚠ **The `@keywords internal` sweep of the accessor family has no target.** The ~23 accessors are
+   `@describeIn fmt`, i.e. **one** Rd page already, so they occupy no reference-index line to demote.
+   The measurable duplication was elsewhere: **53 S3-method Rd stubs**, of which 20a removed 36
+   (`@noRd` beside `@export` keeps the `S3method()` registration).
+10. ⚠ **"one `withr::local_options(lifecycle_verbosity = "quiet")` per test file" does not work**, so
+    §7.1 item 2's cost estimate for the step hard-deprecation was optimistic: testthat 3e runs
+    `local_reproducible_output()` inside every `test_that()`, which forces `"warning"` again. The
+    file-level line covers top-level calls only. **Measured after 20a: 57 deprecation warnings in the
+    suite** — migrating those calls to `tab()` is the corpus sweep, and it belongs to **20h**.
 
 ### 7.3 One stale defect note to verify before acting on it
 
@@ -473,13 +493,20 @@ Four exist; **two are new in 20a and are the gate for 20b and 20c**.
 | `dev/verify_color_attrs.R`        | 293 cases: every stored colour attribute + both resolved slot vectors                                                                         | exists                        |
 | `dev/verify_reg_specs.R`          | 291 cases: the messages **in order**, the specs, `reg_call()`, column attributes, labels, test keys                                           | exists                        |
 | `dev/verify_no_ghost_functions.R` | comments naming functions that no longer exist                                                                                                | exists (a report, not a gate) |
-| **`dev/verify_tab_args.R`**       | every crosstab producer's **resolved** settings over a call grid — `tab_resolve_common_args()`'s return plus the stored per-column attributes | **build in 20a**              |
-| **the export-usage census**       | so "this export has no caller" is re-measurable rather than re-derived (⚠ and re-derived wrongly — see the `grep -w` trap below)              | **build in 20a**              |
+| `dev/verify_tab_args.R`           | 167 resolver cases + 52 built tables' stored attributes + **the messages, in order**, of 30 invalid or legacy calls                            | **built in 20a**              |
+| `dev/census_exports.R`            | one row per export: released_in (v1.2.0 / CRAN 1.3.1 / dev) · callers in R/ tests/ vignettes/ README/ dev/ · Rd lines · pkgdown section        | **built in 20a**              |
 
 ⚠ **Two measurement traps, both of which produced a wrong census while 19p was written**: run every
 `sort` / `uniq` / `comm` census under **`LC_ALL=C`** (the box is `fr_FR.UTF-8`, whose collation does
 not group identifiers containing `_` / `.`), and **never use `grep -w` on a pattern ending in `(`**
-— it reported nine live exports as having zero callers. Use `(^|[^a-zA-Z0-9._])name\(`.
+— it reported nine live exports as having zero callers. Use `(^|[^a-zA-Z0-9._])name\(`. Both are
+encoded in `dev/census_exports.R` now, so the census cannot be re-derived wrongly.
+
+⚠ **A third trap, and it is the opposite one: NEVER run the test suite under `LC_ALL=C`.** That rule
+belongs to the censuses alone. `C` is a **non-UTF-8** native encoding, harsher than any CI runner,
+and it produced four `_snaps/render-html.md` failures in 20a that reproduced on a pristine worktree
+of HEAD and read exactly like pre-existing drift. The same tree is **FAIL 0** in the normal locale.
+The CI-locale run uses **`C.UTF-8`** (CLAUDE.md § Testing).
 
 ---
 
@@ -628,6 +655,9 @@ diff reviewable.
   `reg_measures_rd()` pattern. `tab.Rd` groups by `group`. ⚠ Keep `doc` to **one sentence** per
   argument and let long prose stay in `@details` / `@section`, or you have re-invented roxygen
   inside a list.
+- ⚠ **Routed here by 20a**: `TAB_ARG_VALUES$pct` spells the "no percentage" value `"no"` while
+  `PCT_BASES` (the stored attribute's vocabulary) spells it `"none"` — one concept, two words, one of
+  which a user types and the other of which a column carries. `TAB_ARGS` is where that is stated.
 - **Generate the ~15 argument value lists** (19p §4.3 tabulates them): `color`, `color_signif`,
   `ci_method`, `pct`, `na`, `levels`, `tot`, `totaltab`, `comp`, `totcol`, `measure`, `effect`,
   `family`, `stats`/`check`, `shape`, the `color_breaks` scale names, `theme`. **The biggest single
@@ -916,6 +946,10 @@ restructuring around a moving target is how a pure refactor stops being provably
 **IDENTICAL**, which is exactly what that harness was built for. Zero golden churn. **Full suite at
 the end of the phase.**
 
+⚠ **Routed here by 20a**: `REG_ESTIMANDS$builder` (`"coef"` / `"ame"` / `"vsrest"`) has **no declared
+vocabulary** — it is read by a bare `switch()` in `reg_build()`, so it is the one column of that table
+whose legal values live in a consumer. Declaring it belongs with the stage split.
+
 ---
 
 #### Phase 20f — `tab_reg()` parallelisation: measure, then decide
@@ -1052,7 +1086,13 @@ summary. ⚠ Bump `JMVTAB_CACHE_SCHEMA` for anything that changes what a carrier
     and `tab_transpose()` on a regression aborts: the one cross-producer operation that did not
     become uniform;
   - the ~20 **dead formals sitting at positional argument slots** that 19l deliberately left (they
-    need a call-site-by-call-site read — 19l dropped one and the i18n tests caught it).
+    need a call-site-by-call-site read — 19l dropped one and the i18n tests caught it);
+  - **routed here by 20a**: `materialize_specs()$kind` has **no reader at all** and none of its five
+    values is a `ROW_KINDS` value, although its header claims it matches "the stored row-role
+    vocabulary"; `tab_totcol_range()` (`R/tab-export-prep.R`) is an orphan producer kept alive only
+    by its own test, its consumer commented out with the dormant `tabxplor.totcol_range`; and **the
+    deprecated-call corpus migration** — 57 warnings, all from calls the test suite makes to the
+    hard-deprecated steps and to `tab_prepare()` (§7.2 item 10).
 
 **Verification**: both proofs with **empty** declaration sets (`verify_golden_field_delta.R`,
 `verify_color_attrs.R`) — a deletion pass that moves a value has stopped being a deletion pass.
@@ -1083,6 +1123,10 @@ The phase's job is to *look*, propose, and only then build. Prompts, not a speci
 its own golden delta — this is the one Phase 20 phase that is *allowed* to move a value, because it
 may add something. It closes Phase 20, so it also runs the **full suite** and **one
 `devtools::check()`**, leaving Phase 22 a known-good tree.
+
+#### Phase 20j — Harvest 3: performance analysis and further improvements ? 
+
+Redo a performance analysis, and assess if meaningfull speed-ups can be achieved. I it’s not worthwhile, state it clearly.
 
 ---
 

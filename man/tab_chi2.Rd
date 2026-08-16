@@ -48,9 +48,9 @@ A \code{tibble} of class \code{tab}, with Chi2 summaries as metadata,
 possibly colored based on contributions of cells to variance.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Superseded (2.0.0): the whole-table test and the per-cell contributions are computed by the
+Deprecated in 2.0.0, defunct in 2.1.0 -- the whole-table test and the per-cell contributions are computed by the
 aggregate core, from the \code{test} and \code{color} arguments of \code{\link[=tab]{tab()}} --- where the plan that
 decides them already lives. \code{tab_chi2()} still works on an existing tab, reconstructing that
 plan from the table's own markers.

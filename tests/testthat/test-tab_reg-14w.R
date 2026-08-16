@@ -59,7 +59,7 @@ test_that("reg_title names the model family, dependent and predictors", {
 
 test_that("a model comparison title carries the dependent, reference level and effect", {
   skip_if_not_installed("broom")
-  t  <- multi_logit(w14_data(), "married", models = list(demo = "race", full = c("race", "rincome")),
+  t  <- tab_reg(w14_data(), "married", predictors = list(demo = "race", full = c("race", "rincome")),
                     cleannames = FALSE)
   m  <- tabxplor:::reg_call(t)
   expect_true(m$comparison)

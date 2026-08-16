@@ -106,6 +106,89 @@ tab_shape <- function(x) {
 }
 
 
+# tab_columns() -- the COLUMN-axis mirror of tab_shape() (Phase 20a, KEY 3). tab_shape() answers
+# "what have I got" about the table; this answers it about the columns, which is the question ~12
+# individual getters were being composed to ask -- and the only place the four inference facts
+# (conf_level / degf / basis / ci_method) can be read side by side, which is what z13/z16 stored them
+# per column FOR.
+#
+# It reports the STORED attributes (fmt_attrs_of(), the same bulk reader the vctrs reconcilers use),
+# never a resolved or defaulted-at-render value: `conf_level = NA` honestly means "no interval was
+# stamped on this column".
+
+#' Every `fmt` column of a table, and what it carries
+#'
+#' @description
+#' `r lifecycle::badge("experimental")`
+#'
+#' One row per numeric (`tabxplor_fmt`) column, with the per-column attributes that decide what it
+#' shows, what it estimates, how it is coloured and how its confidence interval was computed. The
+#' column-axis companion of [tab_shape()], which describes the table as a whole.
+#'
+#' @param x A `tabxplor_tab` / `tabxplor_grouped_tab`, or any data.frame holding `fmt` columns.
+#'
+#' @return A tibble, one row per `fmt` column:
+#' \describe{
+#'   \item{`column`}{the column name.}
+#'   \item{`col_var`, `col_group`}{the column variable, and the sub-population its block belongs to
+#'     (`""` when the table was never spread).}
+#'   \item{`scale`, `pct_base`}{what the column estimates, and on which percentage base.}
+#'   \item{`display`}{the display template(s) its cells carry.}
+#'   \item{`ref`, `comp_all`, `totcol`, `refcol`}{the comparison model: which baseline, whether it
+#'     compares across sub-tables, and whether this column is a total or the reference.}
+#'   \item{`color`, `color_bg`, `color_signif`}{the colour measure of each channel and the
+#'     significance policy.}
+#'   \item{`conf_level`, `degf`, `basis`, `ci_method`}{how this column's interval was computed — the
+#'     level, the degrees of freedom it is referred to (`NA` = the normal quantile), whether it rests
+#'     on the raw count, the weights or the survey design, and by which method.}
+#'   \item{`model_family`, `role`}{for a [tab_reg()] table: the column's model family, and whether it
+#'     holds the model estimate (`"model"`) or its observed counterpart (`"emp"`).}
+#' }
+#' @seealso [tab_shape()] for the table's own shape; [fmt_attr()] to read or write one attribute;
+#'   [fmt()] for what each attribute means.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' t <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "ref")
+#' tab_columns(t)
+#' }
+tab_columns <- function(x) {
+  if (!is.data.frame(x))
+    cli::cli_abort("{.fn tab_columns} needs a table (a data.frame with {.cls tabxplor_fmt} columns).")
+  fmt_cols <- names(x)[vapply(x, is_fmt, logical(1))]
+  if (!length(fmt_cols)) return(tibble::tibble(column = character(0)))
+  rows <- lapply(fmt_cols, function(cn) {
+    col <- x[[cn]]
+    a   <- fmt_attrs_of(col)
+    tibble::tibble(
+      column       = cn,
+      col_var      = a$col_var,
+      col_group    = a$col_group,
+      scale        = a$scale,
+      pct_base     = a$pct_base,
+      # the display is a per-CELL field, so a column may legitimately carry more than one (a total
+      # row often shows `n` where the body shows `pct`): report them all, in order of appearance.
+      display      = paste(unique(as.character(get_display(col))), collapse = " / "),
+      ref          = a$ref,
+      comp_all     = a$comp_all,
+      totcol       = a$totcol,
+      refcol       = a$refcol,
+      color        = a$color[1],
+      color_bg     = if (length(a$color) > 1L) a$color[2] else NA_character_,
+      color_signif = a$color_signif,
+      conf_level   = a$conf_level,
+      degf         = a$degf,
+      basis        = a$basis,
+      ci_method    = a$ci_method,
+      model_family = a$model_family,
+      role         = a$role
+    )
+  })
+  vctrs::vec_rbind(!!!rows)
+}
+
+
 # rd_shape() -- the SAME record, read off a finished render model (R/tab-export-prep.R) instead of a
 # table. Two producers, one record type, one checker: the render stack works on `rd`, whose `$vars`
 # already IS the variable model, so re-deriving it from a table it no longer holds would be the
