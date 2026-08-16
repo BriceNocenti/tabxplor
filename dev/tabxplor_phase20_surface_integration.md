@@ -1002,6 +1002,10 @@ complete phase**, not a failed one.
 
 ---
 
+#### Phase 20f-ii — `tab_reg()` parallelisation at the model level
+
+If Phase 20f-i have proven that paralellisation is useless inside a same outcome, is there a performance interest to parallelise it for each model (each outcome when several outcomes ; each predictors list ; each tab_vars) ?
+
 #### Phase 20g — jamovi: the level-collapse UI, the boundary, and the rebuild
 
 **Goal**: the module speaks the 2.0.0 vocabulary, gains the level-collapsing UI on **both**

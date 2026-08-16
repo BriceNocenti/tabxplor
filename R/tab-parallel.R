@@ -129,12 +129,25 @@ tab_parallel_stop <- function() {
 # worker carries NO user data. It reads the big shipped objects (data / fine_fused) from the daemon
 # global env (put there once by everywhere()), looks up the real worker by name in the tabxplor
 # namespace, and calls it with EXACTLY the same named arguments the serial branch uses.
+#
+# IT ALSO CATCHES THE UNIT'S CONDITIONS (Phase 20f). A daemon's console is not the user's, so a
+# cli_inform() or cli_warn() raised in a worker was simply LOST -- measured on tab_transform()'s
+# "several numeric col_vars with different references" notice, which prints under parallel = FALSE
+# and does not under parallel = TRUE. Conditions are collected here, muffled so the daemon's own
+# output stays clean, and returned with the value for tab_pmap() to replay in unit order. Errors are
+# NOT caught: mirai's [.stop] already re-throws the first one, which is the right behaviour.
 #' @keywords internal
 #' @noRd
 tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
   f    <- get(.f_name, envir = asNamespace("tabxplor"))
   ship <- mget(.ship_names, envir = .GlobalEnv)
-  do.call(f, c(row, .const, ship))
+  cnds <- list()
+  value <- withCallingHandlers(
+    do.call(f, c(row, .const, ship)),
+    message = function(m) { cnds[[length(cnds) + 1L]] <<- m; invokeRestart("muffleMessage") },
+    warning = function(w) { cnds[[length(cnds) + 1L]] <<- w; invokeRestart("muffleWarning") }
+  )
+  list(value = value, conditions = cnds)
 }
 
 
@@ -142,7 +155,9 @@ tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
 # BYTE-IDENTITY: both branches call `do.call(f, c(row, .const, .ship))` for each transposed row, in
 # input order. Serial passes the shipped objects as ordinary do.call args (copy-on-write, no copy);
 # parallel ships them ONCE via everywhere() and the trampoline re-reads them from the daemon global.
-# The worker body never branches on execution mode.
+# The worker body never branches on execution mode, and BOTH branches return the same plain list of
+# per-unit values -- the parallel one carries each unit's conditions alongside its value only between
+# the trampoline and the replay below.
 #   .l      : named list of per-unit vectors/lists (pmap-style; transposed to per-unit rows here).
 #   .f_name : name of the worker in the tabxplor namespace (looked up on both sides).
 #   .const  : small shared args, sent per task (parallel) / passed as constants (serial).
@@ -166,26 +181,40 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
 
   tab_pool_ensure(workers, compute)
 
-  # Ship the big objects + a tabxplor/data.table options snapshot + single-thread DT, ONCE. The
-  # options snapshot keeps option-sensitive leaf math (e.g. the numeric-CI effective n) identical on
-  # daemons; setDTthreads(1L) avoids workers x DT-threads oversubscription (grouped keyby sums are
+  # Ship the big objects + an options snapshot + single-thread DT, ONCE. The snapshot keeps
+  # option-sensitive leaf math (e.g. the numeric-CI effective n) identical on daemons;
+  # setDTthreads(1L) avoids workers x DT-threads oversubscription (grouped keyby sums are
   # thread-order-invariant, so this does NOT change results).
+  # `cli.*` / `crayon.*` / `width` ride along since Phase 20f, because a worker's message is now
+  # RELAYED to this session: cli renders its text at signal time, so without them a daemon would
+  # format with its own glyphs and its own wrap width and the relayed message would not match the
+  # one the serial branch prints.
+  keep <- "^tabxplor\\.|^datatable\\.|^cli\\.|^crayon\\.|^width$|^useFancyQuotes$"
   mirai::everywhere(
     {
       options(tabx_opts)
       data.table::setDTthreads(1L)
       list2env(tabx_ship, envir = .GlobalEnv)
     },
-    tabx_opts = options()[grepl("^tabxplor\\.|^datatable\\.", names(options()))],
+    tabx_opts = options()[grepl(keep, names(options()))],
     tabx_ship = .ship,
     .compute  = compute
   )
 
-  mirai::mirai_map(
+  got <- mirai::mirai_map(
     rows, tab_pmap_trampoline,
     .args    = list(.f_name = .f_name, .const = .const, .ship_names = names(.ship)),
     .compute = compute
   )[.stop]
+
+  # Replay the workers' conditions on the main process, in UNIT order (Phase 20f). The serial branch
+  # signals them live and in that same order, so what a user sees is the same set of messages, in the
+  # same relative order, whichever branch ran.
+  # ⚠ Inherently NOT identical in one respect, and it cannot be: a worker's conditions can only be
+  # replayed once the map has collected, so they land AFTER anything the caller signalled around
+  # tab_pmap() rather than interleaved with it. That is the price of another process, not a defect.
+  for (g in got) for (cnd in g$conditions) rlang::cnd_signal(cnd)
+  purrr::map(got, "value")
 }
 
 

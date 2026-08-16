@@ -1,0 +1,21 @@
+tabxplor Phase 20f -- tab_reg() cost profile -- R version 4.6.1 (2026-06-24) 
+fixture: forcats::gss_cat (21483 rows), a seeded 200 000-row resample, a 2 000-row draw
+platform: ext4 / WSL2 -- NOT comparable to the committed Windows baselines
+timings: min of 3 warm runs.  counts: one instrumented run.
+
+shape                                          default  no stats  checks   multinomHess / brant / drop1-refit
+---------------------------------------------------------------------------------------------------------------------- 
+binomial 4 preds, n = 2 000                     0.14 s    0.06 s     54%   0 / 0 / 3
+binomial 4 preds, n = 21 483                    0.65 s    0.16 s     75%   0 / 0 / 3
+binomial 6 preds (4 numeric), n = 200 000      12.27 s    1.29 s     89%   0 / 0 / 5
+binomial 4 preds + empirical, n = 21 483        0.69 s    0.21 s     69%   0 / 0 / 3
+binomial marginal, n = 21 483                   1.04 s    0.56 s     46%   0 / 0 / 3
+multinomial (3 lvl) 4 preds, n = 21 483         5.89 s    1.10 s     81%   7 / 0 / 2
+ordinal (16 lvl) 3 preds, n = 21 483            8.75 s    1.73 s     80%   0 / 3 / 2
+gaussian 4 preds, n = 21 483                    0.15 s    0.08 s     50%   0 / 0 / 3
+3-model comparison, n = 200 000                13.55 s    2.17 s     84%   0 / 0 / 8
+tab_vars (4 groups), n = 200 000                4.93 s    1.17 s     76%   0 / 0 / 9
+
+`checks` = the share of the call spent on the model-check footer (default minus stats = FALSE).
+The three counts are quantities a table computes MORE THAN ONCE and reads ONCE; each is a
+contract, so a later phase that re-runs this file sees a regression as a count, not a second.

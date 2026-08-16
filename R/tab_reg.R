@@ -1083,9 +1083,10 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
-  # Brant PO test -> warn (gated on brant); stash the omnibus p on the fit so reg_glance() can add the
-  # "Brant PO test" footer row without recomputing (Phase 14q Item I).
-  attr(fit, "brant_po") <- reg_ordinal_diagnostic(fit)
+  # Phase 20f: the Brant PO test is NOT run here. It is a footer ROW's statistic and it costs a fit
+  # (J-1 binary logits, ~1.1 s at n = 21 483), so it is computed where that row is built --
+  # reg_check_rows()'s `proportionality` branch. Running it at fit time meant paying for it on every
+  # diagnostic and crude univariable polr fit and reading exactly one of them.
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
        data = mdata)
 }
@@ -2268,8 +2269,9 @@ reg_validate_stat_keys <- function(x, arg = "stats", allowed = reg_stat_keys()) 
 
 # Resolve the `stats=` argument -> the ordered set of footer discriminators. Per-context defaults:
 # glm -> n/lr_null/mcfadden_r2/aic/bic (+dispersion for poisson/grouped); lm -> n/r2/r2_adj/f_model/
-# sigma; weighted -> n/wald_null/nagelkerke_r2/aic. A character vector overrides (keeping its order,
-# valid names only); FALSE / "none" suppresses the footer; NULL / "all" / TRUE = the default set.
+# sigma; weighted -> n/wald_null/nagelkerke_r2/aic; plus `global` and the free checks.
+# NULL / TRUE = that default set; "all" = every statistic AND every check, fit-based ones included;
+# FALSE / "none" = no footer; a character vector overrides (keeping its order, valid names only).
 reg_footer_stats <- function(family, weighted, grouped, stats) {
   # Phase 18z3: "rr" FIRST -- a quasi-likelihood has no AIC/BIC/McFadden, and binary-outcome Pearson
   # dispersion is meaningless (see reg_glance). Matches the pair reg_glance actually emits.
@@ -2282,11 +2284,16 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
            if (reg_fam_overdispersed(family, grouped)) s <- c(s, "phi"); s }
   # Phase 18z13: the per-predictor global test is in the DEFAULT set -- "is this variable associated
   # at all?" is the question a multi-level factor block leaves unanswered, and it costs no extra fit.
-  # Phase 18z15: so are the five model CHECKS (ruling R7 -- always, no opt-in gate). They need no new
-  # argument: `stats` already IS the footer vocabulary, so each is individually removable and
-  # `stats = FALSE` still hides everything. The applicable set is REG_CHECKS' own rule.
-  default <- c(default, "global", reg_checks_for(family, weighted, grouped))
-  if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(reg_check_expand(default))
+  # Phase 18z15 put the five model CHECKS there too; Phase 20f keeps the three that cost nothing and
+  # makes the two that fit a model opt-in (REG_CHECKS$cost). `stats` already IS the footer
+  # vocabulary, so each is individually addable and `stats = FALSE` still hides everything.
+  checks  <- reg_checks_for(family, weighted, grouped)
+  default <- c(default, "global", reg_checks_default(family, weighted, grouped))
+  # "all" MEANS ALL (Phase 20f). It used to be a synonym of NULL, i.e. of the default set -- already
+  # a misnomer, and one that D4 would have made worse: it is now the one value a user has to
+  # remember to see every statistic and every check this family allows, fit-based ones included.
+  if (identical(stats, "all")) return(reg_check_expand(unique(c(default, checks))))
+  if (is.null(stats) || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
   # A user writes a check KEY ("linearity"); a `test` row carries a discriminator ("linearity_lr").
   reg_check_expand(stats[stats %in% reg_stat_keys()])
@@ -4268,10 +4275,11 @@ reg_stage_finalize <- function(ctx) {
 #'   F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
 #'   McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
 #'   dispersion, `"phi"`). Every default set also carries the overall-association test `"global"` and
-#'   the five **model checks** below. Pass a character vector to pick the statistics (`"n"`,
-#'   `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"phi"`, `"r2"`, `"r2_adj"`, `"f_model"`,
-#'   `"sigma"`, `"global"`, `"interaction"`, `"linearity"`, `"proportionality"`, `"dispersion"`,
-#'   `"influence"`, `"collinearity"`), or `FALSE` / `"none"` to hide the footer entirely.
+#'   the **model checks that cost nothing** (see below). Pass a character vector to pick the statistics
+#'   (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"phi"`, `"r2"`, `"r2_adj"`,
+#'   `"f_model"`, `"sigma"`, `"global"`, `"interaction"`, `"linearity"`, `"proportionality"`,
+#'   `"dispersion"`, `"influence"`, `"collinearity"`), `"all"` for **everything this model can
+#'   report**, or `FALSE` / `"none"` to hide the footer entirely.
 #'
 #'   **Model comparison** (several models / outcomes only) is two more keys, so it needs no separate
 #'   argument: `"compare_sequential"` tests each model against the previous one, and
@@ -4294,19 +4302,27 @@ reg_stage_finalize <- function(ctx) {
 #'
 #' @section Model checks:
 #'
-#' Five checks are computed for every model, in the order of what each one threatens --- the estimate,
-#' what the estimate means, its interval, whether it is real at all, and why it is wide. Each is a
-#' footer row, so it travels into every export; none needs an argument, and any of them can be dropped
-#' through `stats`.
+#' Five checks, in the order of what each one threatens --- the estimate, what the estimate means, its
+#' interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels into
+#' every export, and each is named in `stats`.
+#'
+#' Three of them --- **Dispersion**, **Influence** and **Collinearity** --- are arithmetic on the model
+#' already fitted, so they ride the default footer and cost nothing. The other two fit a model:
+#' **Linearity** refits once per numeric predictor and **Proportionality** fits the Brant test's
+#' auxiliary logits. Those two are therefore **asked for by name** ---
+#' `stats = c("n", "aic", "linearity")`, or `stats = "all"` for every check this model allows.
+#' The cheap answer to the same question is already on screen either way: the observed shape of each
+#' numeric predictor is binned with no fit at all and drawn as the row's sparkline, and
+#' [reg_check_plots()] draws the full diagnostic panel for **every** check, free of the footer.
 #'
 #' \describe{
-#'   \item{**Linearity** (p-value, per numeric predictor)}{Is this predictor's effect really one
-#'     straight line? The model is refitted with that predictor's centred squared term and the two
-#'     compared. A small p says one slope is the wrong summary --- and the damage is **not confined to
+#'   \item{**Linearity** (p-value, per numeric predictor; costs one model fit)}{Is this predictor's
+#'     effect really one straight line? The model is refitted with that predictor's centred squared
+#'     term and the two compared. A small p says one slope is the wrong summary --- and the damage is **not confined to
 #'     that row**: on the model used throughout `vignette("tabxplor-reg")`, letting `age` curve moves
 #'     the top income category's odds ratio by 24 % and flips another income level's conclusion at the
 #'     5 % threshold.}
-#'   \item{**Proportionality (Brant)** (p-value, ordinal outcomes)}{Is one cumulative odds ratio enough
+#'   \item{**Proportionality (Brant)** (p-value, ordinal outcomes; costs one model fit)}{Is one cumulative odds ratio enough
 #'     for every cut of the outcome? Read it beside the size of the departure: at survey sample sizes
 #'     this test rejects on differences the eye calls mild. Weighted ordinal models (`svyolr`) have no
 #'     Brant fit, so the row is absent rather than approximated.}

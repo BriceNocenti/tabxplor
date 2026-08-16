@@ -493,8 +493,16 @@ now slices from the settings spine by explicit KEY — `settings$rows[i, ]` for 
 the whole-per-row_var worker `tab_build_one()` = `tab_transform |> tab_assemble_tables` over it via
 `tab_pmap()`: `purrr::map` when serial (the default, byte-identical, zero overhead) or a NAMED `"tabxplor"`
 daemon pool when `parallel` is on and there are ≥ `tabxplor.parallel_min` row_vars (the prepared `data` +
-`fine_fused` shipped once via `everywhere()`). Main gathers the finished per-row_var tabs and runs
-`tab_assemble_output()`. This is byte-identical because a single-row_var build equals its slice of the
+`fine_fused` shipped once via `everywhere()`, together with a snapshot of the `tabxplor.*` /
+`datatable.*` / `cli.*` / `crayon.*` / `width` options). Main gathers the finished per-row_var tabs and
+runs `tab_assemble_output()`. **A worker's `message`s and `warning`s ride back with its value and are
+replayed on main in unit order** (`tab_pmap_trampoline()` collects them under `withCallingHandlers`,
+`tab_pmap()` re-signals them with `rlang::cnd_signal()`) — before Phase 20f they were simply lost,
+measured on `tab_transform()`'s several-numeric-col_vars notice: 2 messages serially, 0 in parallel.
+The `cli.*` options ride along for the same reason: cli renders its text at signal time, so without
+them a daemon would format with its own glyphs and wrap width. ⚠ Necessarily NOT identical in one
+respect: the replay happens after collection, so worker conditions land after anything the caller
+signalled around `tab_pmap()` rather than interleaved with it. This is byte-identical because a single-row_var build equals its slice of the
 integrated build — guaranteed by the `tab_assemble` total-col decoupling (`totnames |> unique()`, so the
 lone-total rename-back tests the distinct name, not its occurrence count). jmvtab (cache_env) forces serial
 and keeps its hooks (`jmv_cache_aggregate` in `tab_aggregate`; `jmv_cache_store_tests` in `tab_build_tables`,
@@ -2087,17 +2095,37 @@ exception (a property of the design matrix, biasing nothing) and is in because e
 jamovi's own pane put it first.
 
 - **`REG_CHECKS`** — one row per check (`noun`, `types` = discriminator → instrument, `kind`/`digits`,
-  `families`, `weighted_ok`, `per_predictor`), read by `reg_checks_for()` (THE selection rule, the
-  `reg_crude_shape()` pattern), `reg_check_spec_entries()` (the `reg_footer_spec()` entries) and
+  `families`, `weighted_ok`, `per_predictor`, `cost`), read by `reg_checks_for()` (THE selection rule,
+  the `reg_crude_shape()` pattern), `reg_check_spec_entries()` (the `reg_footer_spec()` entries) and
   `reg_check_expand()` (a user's KEY → the `test` discriminators). `names(REG_CHECKS)` IS the `stats =`
-  vocabulary, so the footer label and the argument value cannot drift. ⚠ `noun` / the instruments are
+  vocabulary, so the footer label and the argument value cannot drift.
+  **`cost`** (Phase 20f) is what each check charges: `"free"` = arithmetic on the fit already in hand
+  (Dispersion / Influence / Collinearity), `"refit"` = it fits a model (Linearity, once per numeric
+  predictor; Proportionality's Brant logits). Only the free ones are in the DEFAULT set —
+  `reg_checks_default()`, whose one caller is `reg_footer_stats()`'s default composition, while
+  `reg_check_rows()` still asks `reg_checks_for()`, so a check named in `stats` is computed and shown.
+  Measured before the split: the two costly ones were 87 % of a default binomial table at n = 200 000.
+  ⚠ `cost` is INDEPENDENT of `panel`: a panel is always free, so `reg_check_plots()` never filters on
+  it. `stats = "all"` means every statistic and every applicable check (before 20f it was a synonym of
+  the default set — a name that already lied). See `dev/tabxplor_reg_performance.md`. ⚠ `noun` / the instruments are
   BARE MSGIDS: a top-level `gettext()` would evaluate once at load and freeze the build locale, so
   `reg_check_label()` translates at render and a dead-code anchor keeps potools able to extract them.
 - **No new statistic engine.** Linearity = `reg_fit(add_terms =)` (the third sibling of `cross =` /
-  `drop_extra =`: extra RHS terms, joining the formula and nothing else) + `reg_term_tests()`, the
-  dispatcher `global`/`interaction` already use. Its squared term comes from `reg_shape_term()`, which
+  `drop_extra =`: extra RHS terms, joining the formula and nothing else) + **`reg_nested_test()`**,
+  which compares the augmented fit with the `base_fit` already in hand. ⚠ It IS what `drop1()` returns,
+  bit for bit on both arms (`expect_identical` in `test-reg-checks.R`): the LR arm doubles the logLik
+  difference, the F arm divides by `deviance/df.residual` of the AUGMENTED fit, which is `drop1.glm`'s
+  own dispersion at `scale = 0` and neither the Pearson one nor `anova()`'s. Before Phase 20f the row
+  went through `reg_term_tests()` → `drop1()`, refitting the reduced model — i.e. `base_fit` — at 1.02 s
+  against 0.028 s on 200 000 rows. `reg_term_tests()` (the dispatcher `global`/`interaction` use) is
+  still the route for the design arm, where `survey::regTermTest()` refits nothing anyway. Its squared term comes from `reg_shape_term()`, which
   the z15-ii `shape = "quadratic"` remedy will emit — so the check and its cure are one object.
-  Dispersion and Influence are both `reg_coef_if_maker()` + `reg_if_se()` (`max SE_robust/SE_model`,
+  Dispersion and Influence are ONE pass, `reg_check_influence_pass()` (Phase 20f): one `vcov()`, one
+  influence closure and one sweep of the `p` unit contrasts, read two ways — `reg_if_se(d)` for the
+  first, `max|d|` for the second. Computed separately they were four `vcov()` calls per fit, which on a
+  multinomial fit is four `nnet:::multinomHess` re-derivations at 0.757 s each. The two footer ROWS
+  stay two declared rows; only the arithmetic merged. Both are `reg_coef_if_maker()` + `reg_if_se()`
+  (`max SE_robust/SE_model`,
   and `max |IF_i(e_j)|/SE_j` = dfbetas to correlation 0.999999 against `stats::dfbetas()`, working for
   `polr`/`multinom` and design-aware, which base R is not). Proportionality is the Brant p already
   stashed on the fit. Collinearity is `car::vif()` (a new Suggest; absent → no row).

@@ -820,9 +820,21 @@ R/
 │                              browser). ⚠ the Positron probe reads a settings file that also holds
 │                              secrets: it extracts TWO keys by regex and never parses or logs
 │                              anything else. Do not widen it.
-├── tab-parallel.R   (~215 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
+├── tab-parallel.R   (~230 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
+│                              20f: **the trampoline RELAYS the worker's conditions** -- it collects
+│                              message/warning under withCallingHandlers and returns them with the
+│                              value, tab_pmap() replays them in UNIT ORDER via rlang::cnd_signal().
+│                              A daemon's console is not the user's, so before that every cli_inform /
+│                              cli_warn raised inside tab_build_one() was silently LOST (measured on
+│                              tab_transform()'s several-numeric-col_vars notice: 2 messages serial,
+│                              0 parallel). The everywhere() options snapshot gained `cli.*` /
+│                              `crayon.*` / `width` for the same reason -- cli renders its text AT
+│                              SIGNAL TIME, so a daemon would otherwise format with its own glyphs
+│                              and wrap width. ⚠ the replay is necessarily AFTER collection, so
+│                              worker conditions land after anything the caller signalled around
+│                              tab_pmap() rather than interleaved with it.
 ├── tab-steps-legacy.R (~1425 L) The superseded dplyr-era step API, quarantined OUT of tab.R's live
 │                              pipeline: tab_pct()/tab_tot()/tab_totaltab() + pct_formula()/
 │                              diff_formula() (17f), and **tab_ci()/tab_chi2() (19j)**. With 19j the
@@ -1307,26 +1319,65 @@ R/
 │                              `.svy_row`, and the split branch NO LONGER subsets the design nor passes
 │                              it through utils::modifyList() (which merges a survey.design's $variables
 │                              COLUMN BY COLUMN -> an error on unequal groups, wrong rows when calibrated)
-├── reg-assumptions.R (~895 L) Phase 18z15: THE model checks of a tab_reg() table, their CURE
-│                              (`shape =`) and the primitives its plots draw. `REG_CHECKS` = the fact
+├── reg-assumptions.R (~950 L) Phase 18z15: THE model checks of a tab_reg() table, their CURE
+│                              (`shape =`) and the primitives its plots draw.
+│                              Phase 20f: **EACH CHECK COSTS WHAT IT SAYS.** `REG_CHECKS` gains
+│                              **`cost`** ("free" = arithmetic on the fit in hand -> the DEFAULT
+│                              `stats` set | "refit" = it fits a model -> asked for by name), because
+│                              the two fit-based ones were 87 % of a default binomial table at
+│                              n = 200 000 and 80 % of an ordinal one. Readers: reg_checks_default()
+│                              (ONE caller, reg_footer_stats()'s default composition -- reg_check_rows()
+│                              still asks reg_checks_for(), so a named check is computed and shown) and
+│                              reg_checks_costly(). ⚠ INDEPENDENT of `panel`: a panel is always free,
+│                              so reg_check_plots() never filters on it. `stats = "all"` MEANS ALL now
+│                              (it was a synonym of the default set -- a name that already lied).
+│                              + the three de-duplications the 20f measurement found:
+│                              **reg_nested_test(base, aug, use_f)** = THE test between two nested fits
+│                              ALREADY IN HAND, the route Linearity takes instead of drop1() (which
+│                              refits `base_fit`, 1.02 s vs 0.028 s at n = 200 000). ⚠ it IS what drop1
+│                              returns, BIT FOR BIT on both arms -- the F arm divides by
+│                              deviance/df.residual of the AUGMENTED fit, which is drop1.glm's own
+│                              dispersion at scale = 0 and is NEITHER the Pearson one summary() reports
+│                              NOR what anova(base, aug, test = "F") uses (14.25 vs 12.47 on a
+│                              quasipoisson fit), so neither may be substituted; pinned with
+│                              expect_identical in test-reg-checks.R. reg_term_tests() survives as the
+│                              DESIGN arm (regTermTest refits nothing anyway).
+│                              **reg_check_influence_pass(fit, want, V)** = Dispersion and Influence as
+│                              ONE decomposition read two ways (one vcov, one influence closure, one
+│                              sweep of the p unit contrasts; reg_if_se(d) vs max|d|). They were FOUR
+│                              vcov() calls per fit -- on a multinomial one, four multinomHess
+│                              re-derivations at 0.757 s each. The two footer ROWS stay two declared
+│                              rows. + reg_fit_vcov() (the per-fit constant) and the `V =` argument on
+│                              reg_check_model_se / reg_coef_if_maker / reg_score_multinom /
+│                              reg_score_polr. ⚠ reg_check_model_se keeps its own svy_vglm `fit$var`
+│                              degradation locally: that is a SANDWICH, and handing it to
+│                              reg_score_polr as the bread would double-count the design.
+│                              **the Brant test runs where its row is built** (reg_check_rows'
+│                              proportionality branch), not at fit time: it used to run on EVERY polr
+│                              fit -- the reported one, both Linearity refits, every crude univariable
+│                              one -- and be read once, and its "assumption is rejected" warning fired
+│                              from each (the crude fits are suppressMessages'd, not suppressWarnings'd).
+│                              `attr(fit, "brant_po")` is GONE.
+│                              `REG_CHECKS` = the fact
 │                              table (one row per check: `noun` + `types` = discriminator -> the
 │                              INSTRUMENT, both BARE MSGIDS -- a top-level gettext() freezes the build
 │                              locale, so reg_check_label() translates at render + a dead-code anchor
 │                              keeps potools able to extract; `kind`/`digits`/`families`/`weighted_ok`/
-│                              `per_predictor`/`panel`), read by reg_checks_for(what=) = THE selection
-│                              rule (the reg_crude_shape pattern), reg_check_spec_entries()
+│                              `per_predictor`/`cost`/`panel`), read by reg_checks_for(what=) = THE
+│                              selection rule (the reg_crude_shape pattern), reg_check_spec_entries()
 │                              (-> reg_footer_spec) and reg_check_expand() (a user's KEY -> the `test`
 │                              discriminators). names(REG_CHECKS) IS the `stats =` AND `check =`
 │                              vocabulary, so label, argument and panel title cannot drift; z15-iii
 │                              added two TAUGHT-BUT-NEVER-SCORED rows (residuals/normality) whose EMPTY
 │                              `types` IS "a panel, no footer row". NO new statistic engine: Linearity =
-│                              reg_fit(add_terms=) + reg_term_tests() (the dispatcher global/interaction
-│                              already use), its squared term from reg_shape_term() -- the SAME builder
-│                              `shape = "quadratic"` emits, so the check and its cure are one object;
-│                              Dispersion + Influence = reg_coef_if_maker() + reg_if_se() (max
-│                              SE_robust/SE_model, and max|IF_i(e_j)|/SE_j == stats::dfbetas() to
-│                              cor 0.999999, but working for polr/multinom and design-aware);
-│                              Proportionality = the Brant p already stashed on the fit; Collinearity =
+│                              reg_fit(add_terms=) + reg_nested_test() (20f), its squared term from
+│                              reg_shape_term() -- the SAME builder `shape = "quadratic"` emits, so the
+│                              check and its cure are one object;
+│                              Dispersion + Influence = reg_check_influence_pass() (20f: ONE sweep read
+│                              twice) over reg_coef_if_maker() + reg_if_se() (max SE_robust/SE_model,
+│                              and max|IF_i(e_j)|/SE_j == stats::dfbetas() to cor 0.999999, but working
+│                              for polr/multinom and design-aware);
+│                              Proportionality = reg_ordinal_diagnostic(), run at its own row; Collinearity =
 │                              car::vif() (the ONE new Suggest; absent -> no row, never a hand-roll).
 │                              z15-ii `shape`: a shape either RECODES THE COLUMN (log/sqrt/quantile
 │                              groups -- reg_resolve_shape + reg_shape_apply + reg_cut_quantiles, at ONE
@@ -2060,7 +2111,7 @@ itself.
 | **20c** | KEY 4 + KEY 5 — one word per question, and the footer's model      | the `tab_reg()` renames incl. `dependent` → `outcome` and the new `outcome_level` · `footer =` with `TEST_ROWS` as its vocabulary |
 | **20d** | KEY 7 — marginal effects, computed once and computed fast          | 85 % of a 15.3 s call is an avoidable *numerical* jacobian, and tabxplor already owns the analytic SE. Then the research half: can `marginaleffects` leave the hot path entirely? ⚠ **web searches expected** |
 | **20e** | KEY 6 — `reg_build()` becomes a staged build                       | the package's largest function (534 lines, 7 local closures, 11 unnamed phases) gets `new_reg_ctx()` + five named stages. **Pure refactor**: `verify_reg_specs.R` must print IDENTICAL |
-| **20f** | `tab_reg()` parallelisation: measure, then decide                  | ⚠ **re-measure first** — if 20d got the call to ~2 s the case may have evaporated. Study in a `dev/*.md`, **pause**, then implement only what the measurement justifies. **A measured "no" is a complete phase** |
+| **20f** | `tab_reg()` parallelisation: measure, then decide                  | ✅ **measured "no"** — the remaining cost was the model-check footer (81–94 % of a call), most of it computed several times and read once. No pool; three de-duplications + a declared `REG_CHECKS$cost` instead (2.6–6.0× on a default call). Study: `dev/tabxplor_reg_performance.md` |
 | **20g** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
 | **20h** | Harvest 1: the deletion pass                                       | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product |
 | **20i** | Harvest 2: open integration                                        | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building** |
@@ -2410,6 +2461,134 @@ what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_s
 ---
 
 
+
+#### Phase 20f — `tab_reg()` parallelisation: measure, then decide
+
+**DONE (2026-08-16). The verdict is NO POOL, and the phase's product is the measurement that says
+why — plus the four things the measurement found instead.** Full study:
+`dev/tabxplor_reg_performance.md`; re-runnable harness `dev/benchmarks/phase20f_reg_profile.R`,
+before/after in `dev/benchmarks/results_2.0.0/phase20f_reg_profile{_before,}.{txt,csv}`.
+
+**THE MEASUREMENT.** Post-20d/20e, **81–94 % of every default `tab_reg()` call is the model-check
+footer**, at every data size (binomial 4 preds: 0.65 s → 0.16 s with `stats = FALSE`; ordinal
+8.75 → 1.73; binomial 6 preds at n = 200 000 **12.27 → 1.29**). And a large part of that was the
+20d pathology one level down — *work computed several times and read once*, each traced by
+instrumenting the call, not inferred:
+
+1. **Linearity fitted the model TWICE per numeric predictor.** The augmented fit is the test; the
+   second was `drop1()` refitting the reduced model, which is `base_fit`, already in hand (1.02 s
+   against 0.028 s at n = 200 000).
+2. **`vcov()` recomputed FOUR times on one multinomial fit** — `nnet:::multinomHess` ran **7×** per
+   default table (1× at `stats = FALSE`) at **0.757 s each**, because `reg_check_model_se()` and
+   `reg_coef_if_maker()` each called it and `dispersion` and `influence` each called both.
+3. **The Brant test ran THREE times per ordinal table and was read once** (~1.1 s each):
+   `reg_fit_ordinal()` ran it on every polr fit — the reported one, both Linearity refits, every
+   crude univariable fit — and `attr(fit, "brant_po")` had exactly one reader.
+
+**WHY NO POOL**, five measured reasons: the work was redundant, not distributable · `tab_pmap()`
+**dropped worker conditions entirely** while `verify_reg_specs.R` compares messages *in order*, and
+three of the four fitting sites are unsuppressed or only message-suppressed — so parallelising them
+was a correctness regression · **jamovi can never use a pool** (`cache_env` forces serial,
+`.fit_cache` is an environment) and at teaching scale the checks were 94 % of the call, so the
+de-duplication is the only lever that reaches the interactive path · the common call was already
+0.16 s without the footer · and the one qualifying payload is now ~1 s of a 3.4 s call at
+n = 200 000. Also measured and declined, with the numbers, in the study: the Rao score test (z15's
+ruling holds — design-blind), `glm(start = )` (4 IRLS iterations either way), and
+`anova(base, aug, test = "F")` as the F engine (see the trap below).
+
+**WHAT LANDED INSTEAD** — no new option, no new formal, no new fact table, no concurrency.
+
+- **D1 — `reg_nested_test(base, aug, use_f)`** (`reg_nested_lr()` grown an F arm and promoted from
+  fallback to first choice): the Linearity check compares the two fits it holds. ⚠ It IS what
+  `drop1()` returns, **bit for bit on both arms** — and the F arm is the trap: `drop1.glm` at its
+  default `scale = 0` estimates the dispersion as `deviance/df.residual` of the AUGMENTED fit, which
+  is neither the Pearson dispersion `summary()` reports nor what `anova()` uses (12.47 against 14.25
+  on a quasipoisson fit). Pinned with `expect_identical()` on lm / gaussian glm / quasipoisson /
+  binomial, plus two refusal fixtures (not nested, different rows). `reg_term_tests()` stays the
+  design arm, where `regTermTest()` refits nothing anyway.
+- **D2 — `reg_check_influence_pass()`**: Dispersion and Influence are ONE decomposition read two
+  ways (one `vcov`, one influence closure, one sweep of the `p` unit contrasts). The two footer rows
+  stay two declared rows; only the arithmetic merged. `vcov()` per fit **4 → 1**, via a new
+  `reg_fit_vcov()` and a `V =` argument on `reg_check_model_se` / `reg_coef_if_maker` /
+  `reg_score_multinom` / `reg_score_polr`. ⚠ `reg_check_model_se` keeps its svy_vglm `fit$var`
+  degradation LOCAL: that is a sandwich, and handing it to `reg_score_polr` as the bread would
+  double-count the design.
+- **D3 — the Brant test moved to the row that reads it** (`reg_check_rows()`'s `proportionality`
+  branch); `attr(fit, "brant_po")` is deleted. One producer, one consumer, one warning.
+- **D4 — `REG_CHECKS$cost`** (`"free"` / `"refit"`) + `reg_checks_default()` / `reg_checks_costly()`
+  + two build-time `stopifnot`. The two fit-based checks leave the default `stats` set and are asked
+  for by name. ⚠ Default-set vs vocabulary, not vocabulary vs nothing: `reg_check_rows()` still asks
+  `reg_checks_for()`, and `reg_check_plots()` is untouched — a panel is always free, so `cost` is
+  independent of `panel`. **And `stats = "all"` starts meaning all**: it was a synonym of `NULL`,
+  i.e. of the default set, so it already lied and D4 would have made it worse. It is now the one
+  value to remember for the whole diagnostic footer (the maintainer's question, answered by fixing
+  the name rather than adding a `"checks"` group key).
+- **D5 — `tab_pmap()` relays worker conditions**, in unit order. Measured defect, not a
+  precaution: on `tab(parallel = 2)` with two numeric col_vars at different references, serial says
+  2 messages and parallel said **0**. The `everywhere()` options snapshot gained `cli.*` / `crayon.*`
+  / `width` for the same reason — cli renders its text AT SIGNAL TIME, so a daemon formatted with its
+  own glyphs and wrap width and the relayed message did not match the serial one (caught by the
+  fixture on its first run).
+
+**THE RESULT.** `stats = "all"` is the honest column — it computes strictly MORE than today's
+default did:
+
+| shape (gss_cat unless stated) | before (default) | after (default) | after (`stats = "all"`) |
+|---|---|---|---|
+| binomial, 4 predictors, n = 2 000 | 0.14 s | **0.08 s** | 0.12 s |
+| binomial, 4 predictors | 0.65 s | **0.32 s** | 0.67 s |
+| binomial, 6 predictors, n = 200 000 | 12.27 s | **3.44 s** | 7.90 s |
+| multinomial (3 levels) | 5.89 s | **1.78 s** | 3.95 s |
+| ordinal (16 levels) | 8.75 s | **1.45 s** | 4.13 s |
+| 3-model comparison, n = 200 000 | 13.55 s | **4.61 s** | 9.41 s |
+| `tab_vars` (4 groups), n = 200 000 | 4.93 s | **1.73 s** | 3.75 s |
+
+2.6–6.0× on the default call, and **1.3–2.1× even with every check asked for** — that second column
+is the pure de-duplication. Counts, before → after: `multinomHess` 7 → 2, `brant` 3 → 0 (1 when the
+check is asked for), the `drop1` refit 3 → 1 on a binomial table and 2 → 0 on a multinomial one.
+
+**VERIFICATION.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6920**, against the inherited FAIL 0 /
+WARN 58 / PASS 6894 — same warning count, +26 assertions, nothing red.
+`dev/verify_reg_specs.R`: **CHANGED in 188 of 290 cases, in exactly the two declared places** — the
+`test` tibble's rows (186 cases, D4) and the Brant warning (13 cases, D3). Every spec, every
+`reg_call()`, every column attribute and every label IDENTICAL, and every OTHER message identical
+**in order**. ⚠ The baseline must be re-saved past those two.
+`test-parallel-parity.R` green **unsandboxed** with its new fixture. No golden churn (no `tab()` code
+path is touched but `tab-parallel.R`, whose serial branch is unchanged), so
+`verify_golden_field_delta.R` / `verify_color_attrs.R` / `verify_tab_args.R` were not run.
+
+**HONEST CONCERNS.**
+
+- ⚠ **A default ordinal table no longer warns that the proportional-odds assumption is rejected.**
+  The warning is the Brant check's output, so it follows the check out of the default set. Declared,
+  ruled by the maintainer with that consequence stated, and in `NEWS.md` — but it is the one thing
+  here a user could miss rather than merely wait less for. Its own text says it over-rejects at
+  survey N, and `stats = "all"` / `stats = "proportionality"` brings it back.
+- ⚠ **`reg_nested_test()`'s ordinal arm is not bit-identical to `drop1.polr`** (which re-optimises
+  through `optim`), so an ordinal Linearity p can move in ~1e-6 — invisible at printed precision, and
+  the new number is the more accurate one. Not separately measured: no fixture pins an ordinal
+  Linearity p, and `verify_reg_specs.R` compares test KEYS, not values. Worth a look if 20h touches
+  the ordinal footer.
+- **D5's replay is necessarily late**: worker conditions land after anything the caller signalled
+  around `tab_pmap()`, rather than interleaved. Stated in the code and in the fixture, which asserts
+  the same set and the same relative order among worker conditions.
+- **The three `stats` migrations in the test corpus are a behaviour change made visible**: 6 blocks
+  now pass `stats = c("n", "linearity")` or `"proportionality"`. That is the argument working, but it
+  means a reader of those tests must know the default moved.
+- **`reg_global_rows()`'s `drop1` still refits** one reduced model per multi-coefficient term (~2 s
+  at n = 200 000). Left in the default set deliberately — it is a *test*, not a diagnostic, and the
+  only cheaper route (a Wald test) is a different number. Recorded in the study, routed to **20h**.
+- ⚠ The timings are ext4/WSL2 and are not comparable to the committed Windows baselines.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — but ⚠ **20g owes
+one UI item**: the Regressions panel's `stats` control must offer the two now-opt-in checks and an
+"all" entry, or the module silently loses them.
+
+**FOLLOW-UPS.** 20g can start on this commit (⚠ the `stats` control, above). 20h: the study's own
+routed item (`reg_global_rows()`'s refits), `reg_stage_tips()`'s two halves (from 20e), and the
+deprecated-call corpus sweep.
+
+---
 
 #### Phase 20e — KEY 6: `reg_build()` becomes a staged build
 

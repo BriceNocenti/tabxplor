@@ -151,6 +151,14 @@ jmvtab_reg_models <- function(models, pool) {
 # .h.R, so this is the same kind of boundary translation `refLevels` -> `reference` already is:
 # the UI asks two questions, the R argument takes one key (optionally carrying its baseline model).
 # NULL = the picker is on "none" -> tab_reg()'s own default footer set, untouched.
+#
+# ⚠ 20g OWES A CONTROL HERE. Since Phase 20f the default footer set excludes the two checks that fit
+# a model (Linearity, Proportionality -- REG_CHECKS$cost), so a jamovi table no longer shows them and
+# the module offers no way to ask. That is deliberate for now: the panel rebuilds on every option
+# change and those two were 80-90 % of a build, so fast-by-default is the right jamovi behaviour --
+# but the teaching path needs the tick-box. It belongs in the .a.yaml / .u.yaml sweep (a "Model
+# checks" box -> `stats = "all"`, default off), which is inert until the owed jmvtools::prepare()
+# anyway, and reg_check_plots() already draws every panel meanwhile.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_stats <- function(compare, baseline) {

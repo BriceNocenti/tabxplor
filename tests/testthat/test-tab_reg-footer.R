@@ -223,9 +223,12 @@ test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
     dplyr::mutate(rincome = forcats::fct_recode(rincome, NULL = "No answer", NULL = "Refused",
                                                 NULL = "Don't know", NULL = "Not applicable") |>
                     forcats::fct_relevel(sort))
-  suppressWarnings(t <- tab_reg(d, "rincome", c("marital", "race"), family = "ordinal"))
+  # Phase 20f: the Brant test fits J-1 binary logits, so it is opt-in (REG_CHECKS$cost == "refit")
+  # and computed HERE rather than at fit time.
+  suppressWarnings(t <- tab_reg(d, "rincome", c("marital", "race"), family = "ordinal",
+                                stats = c("n", "proportionality")))
   tst <- get_test(t)
-  # z15: the same stashed Brant p, now the "Proportionality (Brant)" model check
+  # z15: the Brant p, as the "Proportionality (Brant)" model check
   expect_true("proportionality" %in% tst$test)
   p <- tst$pvalue[tst$test == "proportionality"]
   expect_true(all(!is.na(p) & p >= 0 & p <= 1))

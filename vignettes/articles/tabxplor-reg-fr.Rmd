@@ -744,7 +744,7 @@ Pour les modèles pondérés, le résumé statistique est réduit (un test de Wa
 
 ## Vérifier le modèle
 
-Le même bas de tableau porte cinq **vérifications du modèle**. Vous ne les demandez pas, et il n'y a rien à apprendre au-delà des cinq noms : chacun désigne une hypothèse, et la parenthèse désigne l'instrument qui l'a mesurée.
+Le même bas de tableau porte cinq **vérifications du modèle**, et il n'y a rien à apprendre au-delà des cinq noms : chacun désigne une hypothèse, et la parenthèse désigne l'instrument qui l'a mesurée. Trois d'entre elles ne coûtent rien et s'affichent par défaut ; les deux qui exigent d'ajuster un modèle — **Linearity** et **Proportionality** — se demandent par leur nom, ou toutes d'un coup avec `stats = "all"`.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))

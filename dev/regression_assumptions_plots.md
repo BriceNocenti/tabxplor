@@ -1063,9 +1063,18 @@ that the only delta is the added empty `term` column.
 
 ### Two smaller deviations
 
-- **`stats` carries the checks; there is no new argument.** R7 ("always, no opt-in gate") is satisfied
-  by putting them in the *default set*, which also gives a per-check escape for free and keeps
-  `stats = FALSE` meaning what it meant.
+- **`stats` carries the checks; there is no new argument.** R7 ("always, no opt-in gate") was
+  satisfied by putting them in the *default set*, which also gives a per-check escape for free and
+  keeps `stats = FALSE` meaning what it meant.
+  ⚠ **Superseded in part by Phase 20f, after measurement**: the two checks that fit a model
+  (Linearity, per numeric predictor; Proportionality's Brant logits) were **87 % of a default
+  binomial table at n = 200 000 and 80 % of an ordinal one**, so they are now declared
+  `REG_CHECKS$cost == "refit"` and asked for by name — `stats = c("n", "linearity")`, or
+  `stats = "all"` for every check the family allows. The three that are arithmetic on the fit in hand
+  stay in the default set. R7's *spirit* survives where it costs nothing: the free answer to the same
+  question — the observed curve, binned by `reg_curves()` with no fit at all — is still always
+  computed and always drawn as the row sparkline, and `reg_check_plots()` still draws **every** panel
+  regardless of `cost`. See `dev/tabxplor_reg_performance.md`.
 - **`rd_bin()` / `rd_resid()` / `rd_qq()` were not written** (§21 step 1 asked for them unwired). They
   have no caller until z15-iii, and shipping untested functions for two sessions is the dead weight the
   roadmap's own rules forbid. They land with the curves that use them.

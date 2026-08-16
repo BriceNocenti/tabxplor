@@ -100,13 +100,15 @@
   `reg_check_plots()` draw it.
 * **Every regression table now checks itself.** The footer carries five model checks — **Linearity**
   (per continuous predictor), **Proportionality (Brant)**, **Dispersion (robust/model SE)**,
-  **Influence (max dfbetas)** and **Collinearity (max VIF)** — computed for every model, with no
-  argument to remember and one row per model column so a comparison reads down. They matter: on the
-  model used throughout the regression vignette, letting `age` curve moves the top income category's
-  odds ratio by a quarter and flips another income level's verdict, and nothing in the table used to
-  say so. Any of them can be dropped through `stats =`; `stats = "collinearity"` needs the new
-  suggested package `car`. The per-predictor overall-association test (`stats = "global"`) moved from
-  a footer sentence to footer rows for the same reason.
+  **Influence (max dfbetas)** and **Collinearity (max VIF)** — one row per model column, so a
+  comparison reads down. They matter: on the model used throughout the regression vignette, letting
+  `age` curve moves the top income category's odds ratio by a quarter and flips another income
+  level's verdict, and nothing in the table used to say so. The three that cost nothing are shown by
+  default; the two that fit a model (Linearity, Proportionality) are asked for by name —
+  `stats = c("n", "aic", "linearity")`, or **`stats = "all"` for every statistic and every check the
+  model allows**. `stats = "collinearity"` needs the new suggested package `car`. The per-predictor
+  overall-association test (`stats = "global"`) moved from a footer sentence to footer rows for the
+  same reason.
 * **A continuous predictor's row shows the shape of its effect**, as a small curve in its own label —
   ten bins of the outcome against the predictor, with no model in it (`options(tabxplor.spark = FALSE)`
   to switch it off, `"ascii"` for a font without block characters). In HTML it becomes an inline SVG.
@@ -231,6 +233,15 @@
 
 ## Changes that may affect existing code
 
+* **`tab_reg(stats =)`: the two model checks that fit a model are now opt-in**, and `"all"` means
+  all. Linearity refits once per continuous predictor and the Brant proportional-odds test fits its
+  own auxiliary logits; between them they were most of the cost of a regression table (a
+  200 000-row, 6-predictor logit went from 12.3 s to 3.4 s). Ask for them by name —
+  `stats = c("n", "aic", "linearity")` — or take everything with `stats = "all"`, which previously
+  meant only the default set. Dispersion, Influence and Collinearity are unchanged and still shown
+  by default, `reg_check_plots()` still draws **every** panel, and the observed curve in each
+  continuous predictor's own row label needs no model at all. One consequence: an ordinal table no
+  longer warns about a rejected proportional-odds assumption unless you asked for the check.
 * **Everything past the variable roles must now be named.** `tab()`, `tab_plain()`, `tab_num()` and
   `tab_counts()` take `...` right after their variable arguments, so an unnamed extra argument is
   refused by name instead of landing in whatever formal sat at that position. Every named call keeps

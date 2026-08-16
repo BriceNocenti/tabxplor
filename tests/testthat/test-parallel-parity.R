@@ -122,3 +122,31 @@ test_that("parallel works WITHOUT a manual pre-warm (tab_pool_ensure auto-load_a
   expect_error(tab_par(), NA)                        # no crash on the fresh, self-warmed pool
   expect_identical(tab_par(), tab_seq())             # and byte-identical to serial
 })
+
+test_that("a worker's messages reach the user, in unit order (Phase 20f)", {
+  # A daemon's console is not the user's, so before the tab_pmap() condition relay every
+  # cli_inform() / cli_warn() raised inside tab_build_one() was silently DROPPED. Measured on this
+  # very call: 2 messages serially, 0 in parallel -- a table that quietly stopped explaining itself.
+  #
+  # The emitter is tab_transform()'s "several numeric col_vars with different references" notice,
+  # which needs a col% regime and two numeric col_vars given DIFFERENT references; it fires once per
+  # row_var, so the count is also an order-independent check that no unit was skipped.
+  warm_pool(2L)
+  gss2 <- gss
+  gss2$tvhours2 <- gss2$tvhours
+
+  said <- function(parallel) {
+    msgs <- character()
+    withCallingHandlers(
+      tab(gss2, c(race, marital), c(tvhours, tvhours2), pct = "col",
+          ref = c(tvhours = "first", tvhours2 = "tot"), parallel = parallel),
+      message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") },
+      warning = function(w) { msgs <<- c(msgs, conditionMessage(w)); invokeRestart("muffleWarning") }
+    )
+    grep("Several numeric col_vars", msgs, value = TRUE)
+  }
+
+  serial <- said(FALSE)
+  expect_length(serial, 2L)                          # the fixture really does emit
+  expect_identical(said(2L), serial)                 # text AND order survive the process boundary
+})

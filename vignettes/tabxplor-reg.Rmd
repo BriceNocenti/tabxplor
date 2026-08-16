@@ -712,7 +712,7 @@ For weighted models a reduced set is reported (a Wald test against the null, Nag
 
 ## Checking the model
 
-The same footer carries five **model checks**. You do not ask for them, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it.
+The same footer carries five **model checks**, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it. Three of them cost nothing and are printed by default; the two that fit a model — **Linearity** and **Proportionality** — are asked for by name, or all at once with `stats = "all"`.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))

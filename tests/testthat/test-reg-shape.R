@@ -108,11 +108,13 @@ test_that("the marginal path keeps ONE row per predictor (an AME already integra
 test_that("a cured predictor gets no Linearity row (its remedy is already in the model)", {
   skip_if_not_installed("broom")
   d  <- shp_data()
-  t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
+  # Phase 20f: Linearity refits, so it is opt-in (REG_CHECKS$cost == "refit")
+  t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                 stats = c("n", "linearity")))
   tt <- get_test(t0)
   expect_true(any(grepl("^linearity", tt$test) & tt$var == "age"))
   t1 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                 shape = c(age = "quadratic")))
+                                 stats = c("n", "linearity"), shape = c(age = "quadratic")))
   t1t <- get_test(t1)
   expect_false(any(grepl("^linearity", t1t$test) & t1t$var == "age"))
 })

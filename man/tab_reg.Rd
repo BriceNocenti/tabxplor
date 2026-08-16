@@ -453,10 +453,11 @@ silently returns zero for those (a warning fires if you reach one through a \cod
 F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
 McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
 dispersion, \code{"phi"}). Every default set also carries the overall-association test \code{"global"} and
-the five \strong{model checks} below. Pass a character vector to pick the statistics (\code{"n"},
-\code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"}, \code{"f_model"},
-\code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"}, \code{"proportionality"}, \code{"dispersion"},
-\code{"influence"}, \code{"collinearity"}), or \code{FALSE} / \code{"none"} to hide the footer entirely.
+the \strong{model checks that cost nothing} (see below). Pass a character vector to pick the statistics
+(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"},
+\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"}, \code{"proportionality"},
+\code{"dispersion"}, \code{"influence"}, \code{"collinearity"}), \code{"all"} for \strong{everything this model can
+report}, or \code{FALSE} / \code{"none"} to hide the footer entirely.
 
 \strong{Model comparison} (several models / outcomes only) is two more keys, so it needs no separate
 argument: \code{"compare_sequential"} tests each model against the previous one, and
@@ -584,19 +585,27 @@ directly; simple \code{y ~ a + b} formulas behave exactly like \code{outcome = "
 \section{Model checks}{
 
 
-Five checks are computed for every model, in the order of what each one threatens --- the estimate,
-what the estimate means, its interval, whether it is real at all, and why it is wide. Each is a
-footer row, so it travels into every export; none needs an argument, and any of them can be dropped
-through \code{stats}.
+Five checks, in the order of what each one threatens --- the estimate, what the estimate means, its
+interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels into
+every export, and each is named in \code{stats}.
+
+Three of them --- \strong{Dispersion}, \strong{Influence} and \strong{Collinearity} --- are arithmetic on the model
+already fitted, so they ride the default footer and cost nothing. The other two fit a model:
+\strong{Linearity} refits once per numeric predictor and \strong{Proportionality} fits the Brant test's
+auxiliary logits. Those two are therefore \strong{asked for by name} ---
+\code{stats = c("n", "aic", "linearity")}, or \code{stats = "all"} for every check this model allows.
+The cheap answer to the same question is already on screen either way: the observed shape of each
+numeric predictor is binned with no fit at all and drawn as the row's sparkline, and
+\code{\link[=reg_check_plots]{reg_check_plots()}} draws the full diagnostic panel for \strong{every} check, free of the footer.
 
 \describe{
-\item{\strong{Linearity} (p-value, per numeric predictor)}{Is this predictor's effect really one
-straight line? The model is refitted with that predictor's centred squared term and the two
-compared. A small p says one slope is the wrong summary --- and the damage is \strong{not confined to
+\item{\strong{Linearity} (p-value, per numeric predictor; costs one model fit)}{Is this predictor's
+effect really one straight line? The model is refitted with that predictor's centred squared
+term and the two compared. A small p says one slope is the wrong summary --- and the damage is \strong{not confined to
 that row}: on the model used throughout \code{vignette("tabxplor-reg")}, letting \code{age} curve moves
 the top income category's odds ratio by 24 \% and flips another income level's conclusion at the
 5 \% threshold.}
-\item{\strong{Proportionality (Brant)} (p-value, ordinal outcomes)}{Is one cumulative odds ratio enough
+\item{\strong{Proportionality (Brant)} (p-value, ordinal outcomes; costs one model fit)}{Is one cumulative odds ratio enough
 for every cut of the outcome? Read it beside the size of the departure: at survey sample sizes
 this test rejects on differences the eye calls mild. Weighted ordinal models (\code{svyolr}) have no
 Brant fit, so the row is absent rather than approximated.}

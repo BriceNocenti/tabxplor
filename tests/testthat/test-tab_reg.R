@@ -605,9 +605,17 @@ test_that("ordinal PO diagnostic warns when the parallel-lines assumption is vio
   skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   skip_if_not_installed("brant")
+  # Phase 20f: the Brant test is the Proportionality CHECK's statistic and it fits J-1 binary logits,
+  # so it runs -- and warns -- only when that check is asked for. It used to run on every polr fit in
+  # the build, including the diagnostic and crude ones, and warn from each of them.
   expect_warning(
-    tab_reg(ord_income_data(), "income3", c("race", "age"), family = "ordinal"),
+    tab_reg(ord_income_data(), "income3", c("race", "age"), family = "ordinal",
+            stats = c("n", "proportionality")),
     "proportional-odds"
+  )
+  # a default ordinal table is silent about it, and pays nothing for the test
+  expect_no_warning(
+    suppressMessages(tab_reg(ord_income_data(), "income3", c("race", "age"), family = "ordinal"))
   )
 })
 

@@ -15,11 +15,16 @@
 # Checks pane put first, so its absence would read as an omission.
 #
 # NOTHING HERE IS A NEW STATISTIC ENGINE. Four of the five reuse code the package already owns:
-#   Linearity       reg_fit(add_terms =) + reg_term_tests()  -- the dispatcher `global`/`interaction` use
-#   Proportionality attr(fit, "brant_po"), already computed at fit time by reg_fit_ordinal()
-#   Dispersion      reg_coef_if_maker() + reg_if_se()        -- the sandwich, design-aware
-#   Influence       reg_coef_if_maker()                      -- the same closure, per observation
-#   Collinearity    car::vif()                               -- the one new Suggest
+#   Linearity       reg_fit(add_terms =) + reg_nested_test()  -- both fits in hand, no second one
+#   Proportionality reg_ordinal_diagnostic()                  -- the Brant test, run where its row is
+#   Dispersion      reg_check_influence_pass() + reg_if_se()  -- the sandwich, design-aware
+#   Influence       reg_check_influence_pass()                -- the SAME sweep, read the other way
+#   Collinearity    car::vif()                                -- the one new Suggest
+#
+# EACH COSTS WHAT IT SAYS (Phase 20f). Two of the five need a model fit -- Linearity one per numeric
+# predictor, Proportionality the Brant test's J-1 logits -- and `REG_CHECKS$cost` declares that, which
+# is what keeps them out of the default `stats` set and reachable by name. The other three are
+# arithmetic on the fit already in hand, and the two influence-based ones share one sweep.
 #
 # WARNING -- i18n. `noun` and the `types` values (the instrument) are BARE MSGIDS and are never
 # gettext()'d in the list: a top-level list evaluates ONCE at load, which would freeze the msgid at
@@ -71,8 +76,16 @@ reg_check_family_of <- function(f) {
 #   families      where the check is defined at all
 #   weighted_ok   FALSE = refused on a weighted / design fit (never approximated)
 #   per_predictor one row per (model column x predictor) rather than one per model column
+#   cost          "free"  = arithmetic on the fit already in hand -- in the DEFAULT `stats` set
+#                 "refit" = it fits a model, so the user asks for it by name (Phase 20f). Measured:
+#                 the fit-based pair was 87 % of a default binomial table at n = 200 000 and 80 % of
+#                 an ordinal one. The cheap answer to the same question is already shown for free --
+#                 reg_curves() bins the observed shape with no fit at all, and the row sparkline and
+#                 the reg_check_plots() panels draw it -- so what is opt-in here is the p-value, not
+#                 the diagnostic. `stats = "all"` turns every one of them on.
 #   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
-#                 vocabulary. `auto` draws every panel the family allows.
+#                 vocabulary. `auto` draws every panel the family allows. ⚠ INDEPENDENT of `cost`:
+#                 a panel is always free, which is why reg_check_plots() never filters on it.
 #' @keywords internal
 REG_CHECKS <- list(
   # 1. the ESTIMATE: is this predictor's effect really one straight line?
@@ -81,35 +94,35 @@ REG_CHECKS <- list(
     types = c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"),
     kind = "pvalue", digits = NA_integer_,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE,
-    panel = "linearity"),
+    cost = "refit", panel = "linearity"),
   # 2. what the estimate MEANS: is one odds ratio enough for every cut?
   proportionality = list(
     noun = "Proportionality",
     types = c(proportionality = "Brant"),
     kind = "pvalue", digits = NA_integer_,
     families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE,
-    panel = "proportionality"),
+    cost = "refit", panel = "proportionality"),
   # 3. the INTERVAL: are the standard errors wide enough?
   dispersion = list(
     noun = "Dispersion",
     types = c(dispersion = "robust/model SE"),
     kind = "gof", digits = 2L,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    panel = "dispersion"),
+    cost = "free", panel = "dispersion"),
   # 4. is it REAL: does one respondent carry the result?
   influence = list(
     noun = "Influence",
     types = c(influence = "max dfbetas"),
     kind = "gof", digits = 2L,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    panel = "influence"),
+    cost = "free", panel = "influence"),
   # 5. why is it WIDE: can the data tell these predictors apart?
   collinearity = list(
     noun = "Collinearity",
     types = c(collinearity = "max VIF"),
     kind = "gof", digits = 2L,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, panel = "collinearity"),
+    per_predictor = FALSE, cost = "free", panel = "collinearity"),
   # TAUGHT, NEVER SCORED (SS14). Both were measured NOT to discriminate as verdicts -- binned residuals
   # put 45 % of bins outside the band for the mis-specified model against 40 % for the corrected one,
   # and normality is irrelevant to coefficient inference at survey n -- but both are the canonical
@@ -117,11 +130,11 @@ REG_CHECKS <- list(
   residuals = list(
     noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, panel = "residuals"),
+    per_predictor = FALSE, cost = "free", panel = "residuals"),
   normality = list(
     noun = "Normality", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, panel = "normality")
+    per_predictor = FALSE, cost = "free", panel = "normality")
 )
 
 # Every discriminator the checks can emit (the `test` values that are check rows).
@@ -146,6 +159,31 @@ reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = 
     ok && if (what == "footer") length(ck$types) > 0L else !is.na(ck$panel)
   }, logical(1))]
 }
+
+# The DEFAULT footer set: the applicable checks that cost no model fit (Phase 20f). Its ONE caller is
+# reg_footer_stats()'s default composition -- reg_check_rows() keeps asking reg_checks_for(), so a
+# check named in `stats =` is still computed and still shown. Default set vs vocabulary, not
+# vocabulary vs nothing.
+#' @keywords internal
+reg_checks_default <- function(family, weighted = FALSE, grouped = FALSE, has_fit = TRUE) {
+  keys <- reg_checks_for(family, weighted, grouped, has_fit, what = "footer")
+  keys[vapply(keys, function(k) identical(REG_CHECKS[[k]]$cost, "free"), logical(1))]
+}
+
+# The checks that cost a model fit, as a sentence -- read by ?tab_reg's generated `stats` prose, so
+# the argument names them from the table rather than from a hand-kept list.
+#' @keywords internal
+reg_checks_costly <- function()
+  names(REG_CHECKS)[vapply(REG_CHECKS, function(ck) identical(ck$cost, "refit"), logical(1))]
+
+# The table's own consistency, at build time (the fmt_attr_rules / MEASURES idiom).
+stopifnot(
+  # every row declares a cost, and only the two legal values exist
+  all(vapply(REG_CHECKS, function(ck) isTRUE(ck$cost %in% c("free", "refit")), logical(1))),
+  # a taught-but-never-scored row has no footer row to opt into, so it can only be free
+  all(vapply(REG_CHECKS, function(ck) length(ck$types) > 0L || identical(ck$cost, "free"),
+             logical(1)))
+)
 
 # A `stats =` value the user writes is a check KEY ("linearity"); a `test` row carries a
 # DISCRIMINATOR ("linearity_lr"). One expansion, so both vocabularies stay in this file.
@@ -224,14 +262,23 @@ reg_check_design <- function(fit) {
   des
 }
 
+# THE fit's coefficient covariance, resolved once (Phase 20f). It is a per-fit constant that checks 3
+# and 4 each used to recompute twice -- four times per fit -- and on a multinomial fit ONE call is
+# `nnet:::multinomHess` re-deriving the whole Hessian, measured at 0.757 s against a 1.10 s table.
+# Returns NULL rather than a substitute: reg_check_model_se() below keeps its own svy_vglm
+# degradation, because `fit$var` is a SANDWICH and handing that to reg_score_polr() as the bread
+# would double-count the design (the trap that function's own WARNING documents).
+#' @keywords internal
+reg_fit_vcov <- function(fit) tryCatch(stats::vcov(fit), error = function(e) NULL)
+
 # The model-based standard errors, on the fit's NATIVE coefficient scale, in vcov order. This is the
 # denominator of both Dispersion and Influence, and taking it from vcov() rather than from the printed
 # `tidy` is what makes Dispersion answer the question SS9.2 states: vcov() already carries a
 # quasi-likelihood's estimated dispersion (so a quasipoisson fit reads ~1) while a plain poisson's
 # does not (so it reads ~sqrt(phi)) -- the two families' rows then say different, true things.
 #' @keywords internal
-reg_check_model_se <- function(fit) {
-  V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
+reg_check_model_se <- function(fit, V = NULL) {
+  if (is.null(V)) V <- reg_fit_vcov(fit)
   if (is.null(V)) {
     V <- tryCatch(fit$var, error = function(e) NULL)          # svy_vglm stores $var
     if (is.null(V)) return(NULL)
@@ -250,25 +297,8 @@ reg_check_model_se <- function(fit) {
 # which is why it is computable on a clustered design where the Pearson phi is not (df.residual of an
 # svyglm is the DESIGN df).
 #' @keywords internal
-reg_check_dispersion <- function(fit) {
-  se_mod <- reg_check_model_se(fit)
-  if (is.null(se_mod)) return(NA_real_)
-  cif <- reg_coef_if_maker(fit)
-  if (is.null(cif)) return(NA_real_)
-  des <- reg_check_design(fit)
-  p   <- length(se_mod)
-  out <- NA_real_
-  for (j in seq_len(p)) {
-    e <- rep(0, p); e[[j]] <- 1
-    d <- cif(e)
-    if (is.null(d)) return(NA_real_)                          # the closure's p disagrees with vcov's
-    s <- reg_if_se(d, des)
-    if (!is.finite(s)) next
-    r <- s / se_mod[[j]]
-    if (is.na(out) || r > out) out <- r
-  }
-  out
-}
+reg_check_dispersion <- function(fit, V = NULL)
+  reg_check_influence_pass(fit, "dispersion", V)[["dispersion"]]
 
 # Check 4 -- INFLUENCE, as max_j max_i |dfbetas_ij|: "no single respondent moves any coefficient by
 # more than X of its own standard error". dfbetas rather than Cook's distance because Cook's D is
@@ -283,22 +313,51 @@ reg_check_dispersion <- function(fit) {
 # WARNING: never materialise the n x p matrix (reg-influence.R's memory contract). The loop keeps a
 # running maximum and discards each length-n vector.
 #' @keywords internal
-reg_check_influence <- function(fit) {
-  se_mod <- reg_check_model_se(fit)
-  if (is.null(se_mod)) return(NA_real_)
-  cif <- reg_coef_if_maker(fit)
-  if (is.null(cif)) return(NA_real_)
-  p   <- length(se_mod)
-  out <- NA_real_
+reg_check_influence <- function(fit, V = NULL)
+  reg_check_influence_pass(fit, "influence", V)[["influence"]]
+
+# THE pass both of them are (Phase 20f). Checks 3 and 4 are ONE decomposition read two ways: the same
+# vcov, the same influence closure, and the same p unit contrasts -- of which dispersion keeps
+# `reg_if_se(d)` and influence keeps `max|d|`. Computing them separately meant two vcov() calls each,
+# and two full sweeps of length-n influence vectors, for numbers derived from the same object; the
+# fmt_gap_parts() idiom, applied where it was missing.
+#
+# The two footer ROWS stay two declared rows (REG_CHECKS is unchanged) -- only the arithmetic merges,
+# and `want` is what lets a table that asked for just one of them pay for just one.
+#
+# WARNING: never materialise the n x p matrix (reg-influence.R's memory contract). The loop keeps two
+# running maxima and discards each length-n vector.
+#' @keywords internal
+reg_check_influence_pass <- function(fit, want = c("dispersion", "influence"), V = NULL) {
+  none <- c(dispersion = NA_real_, influence = NA_real_)
+  if (is.null(V)) V <- reg_fit_vcov(fit)
+  se_mod <- reg_check_model_se(fit, V)
+  if (is.null(se_mod)) return(none)
+  cif <- reg_coef_if_maker(fit, V)
+  if (is.null(cif)) return(none)
+  do_d <- "dispersion" %in% want
+  do_i <- "influence"  %in% want
+  des  <- if (do_d) reg_check_design(fit) else NULL
+  p    <- length(se_mod)
+  disp <- NA_real_
+  infl <- NA_real_
   for (j in seq_len(p)) {
     e <- rep(0, p); e[[j]] <- 1
     d <- cif(e)
-    if (is.null(d)) return(NA_real_)
-    m <- suppressWarnings(max(abs(as.numeric(d)), na.rm = TRUE)) / se_mod[[j]]
-    if (!is.finite(m)) next
-    if (is.na(out) || m > out) out <- m
+    if (is.null(d)) return(none)                              # the closure's p disagrees with vcov's
+    if (do_d) {
+      s <- reg_if_se(d, des)
+      if (is.finite(s)) {
+        r <- s / se_mod[[j]]
+        if (is.na(disp) || r > disp) disp <- r
+      }
+    }
+    if (do_i) {
+      m <- suppressWarnings(max(abs(as.numeric(d)), na.rm = TRUE)) / se_mod[[j]]
+      if (is.finite(m) && (is.na(infl) || m > infl)) infl <- m
+    }
   }
-  out
+  c(dispersion = disp, influence = infl)
 }
 
 # Check 5 -- COLLINEARITY, as the largest variance inflation factor.
@@ -323,25 +382,61 @@ reg_check_collinearity <- function(fit) {
   max(val)
 }
 
-# Check 1 -- LINEARITY, per numeric predictor: the model plus this predictor's CENTRED SQUARED term,
-# tested by the shared reg_term_tests() dispatcher (drop1 unweighted, survey::regTermTest on a design,
-# F for gaussian / quasipoisson). This is car::residualPlots()'s curvature test, design-correct for
-# free -- and deliberately NOT the cheaper no-refit Rao score test, which returns the IDENTICAL p on a
-# weights-only and on a stratified+clustered design where the design-based Wald differs by thirty
-# orders of magnitude.
+# Check 1 -- LINEARITY, per numeric predictor: the model plus this predictor's CENTRED SQUARED term.
+# This is car::residualPlots()'s curvature test, design-correct for free -- and deliberately NOT the
+# cheaper no-refit Rao score test, which returns the IDENTICAL p on a weights-only and on a
+# stratified+clustered design where the design-based Wald differs by thirty orders of magnitude.
+#
+# THE CHECK COSTS EXACTLY ONE FIT (Phase 20f). The augmented likelihood IS the test, so that fit is
+# irreducible; the SECOND one was not. Until 20f the row went through reg_term_tests() -> drop1(),
+# which refits the reduced model -- and the reduced model is `base_fit`, already in hand. Measured:
+# 1.02 s against 0.028 s at n = 200 000, and the check is the largest single cost of a default
+# tab_reg() call. reg_nested_test() is now the FIRST choice, not the fallback it was.
 #
 # The squared term is built by reg_shape_term(), which the `shape = "quadratic"` remedy will emit --
 # so the check and its cure are provably the same object, not two spellings of one idea. Centring is
 # not cosmetic: uncentred, the pair's own VIF is 38.7 against 1.2 centred, so check 5 would flag every
 # curved model as broken.
-# The likelihood-ratio test between two NESTED maximum-likelihood fits, from their log-likelihoods.
-# It is not an approximation of what drop1() returns -- it IS what drop1() returns: verified equal to
-# 1e-10 on a glm. It exists because `nnet:::drop1.multinom` computes only Df and AIC (it has no `test`
-# argument and no p-value at all), so the multinomial arm had no test otherwise. Returns NULL for a
-# quasi-likelihood or anything without a usable logLik, never a wrong number.
+# THE test between two NESTED fits ALREADY IN HAND -- the no-refit twin of reg_term_tests()'s drop1
+# branch, and since Phase 20f the route the Linearity check takes.
+#
+# It is not an approximation of what drop1() returns, it IS what drop1() returns, on BOTH arms and to
+# the last bit (asserted in test-reg-checks.R at tolerance 0, on lm / gaussian glm / quasipoisson /
+# poisson / binomial):
+#   * the LR arm reads the two log-likelihoods, because drop1's LRT is their doubled difference;
+#   * the F arm reads the two deviances against the AUGMENTED fit's `deviance / df.residual`, which is
+#     the dispersion drop1.glm estimates at its default `scale = 0`. ⚠ that is NOT the Pearson
+#     dispersion `summary()` reports and NOT what `anova(base, aug, test = "F")` uses -- on a
+#     quasipoisson fit those give 14.25 where drop1 gives 12.47, so neither may be substituted here.
+#
+# It predates 20f because `nnet:::drop1.multinom` computes only Df and AIC (no `test` argument, no
+# p-value at all), so the multinomial arm had no test otherwise.
+#
+# `use_f` is the caller's family fact (reg_fam_disp_estimated), never re-derived here. Returns NULL --
+# never a wrong number -- for anything without a usable logLik / deviance, for a non-nested pair, and
+# for two fits built on different rows.
 #' @keywords internal
-reg_nested_lr <- function(base, aug) {
-  ll <- function(f) tryCatch(as.numeric(stats::logLik(f)), error = function(e) NA_real_)
+reg_nested_test <- function(base, aug, use_f = FALSE) {
+  num <- function(expr) tryCatch(as.numeric(expr), error = function(e) NA_real_)
+  # Two fits on different N are not nested, whatever their formulas say. The augmented term is a
+  # function of a predictor already in the model, so the complete-case set cannot change -- this
+  # asserts that rather than assuming it. An engine with no nobs() method stays eligible.
+  n0 <- num(stats::nobs(base)); n1 <- num(stats::nobs(aug))
+  if (!is.na(n0) && !is.na(n1) && !isTRUE(all.equal(n0, n1))) return(NULL)
+
+  if (use_f) {
+    r0 <- num(stats::df.residual(base)); r1 <- num(stats::df.residual(aug))
+    d0 <- num(stats::deviance(base));    d1 <- num(stats::deviance(aug))
+    if (anyNA(c(r0, r1, d0, d1))) return(NULL)
+    k <- r0 - r1
+    disp <- d1 / r1
+    if (!is.finite(k) || k <= 0 || !is.finite(disp) || disp <= 0) return(NULL)
+    s <- ((d0 - d1) / k) / disp
+    if (!is.finite(s) || s < 0) return(NULL)
+    return(list(stat = s, df = k, df2 = r1, p = stats::pf(s, k, r1, lower.tail = FALSE)))
+  }
+
+  ll <- function(f) num(stats::logLik(f))
   df <- function(f) tryCatch({
     e <- f$edf
     if (is.null(e)) e <- attr(stats::logLik(f), "df")
@@ -352,7 +447,7 @@ reg_nested_lr <- function(base, aug) {
   k <- d1 - d0
   s <- 2 * (l1 - l0)
   if (!is.finite(k) || k <= 0 || !is.finite(s) || s < 0) return(NULL)
-  list(stat = s, df = k, p = stats::pchisq(s, k, lower.tail = FALSE))
+  list(stat = s, df = k, df2 = NA_real_, p = stats::pchisq(s, k, lower.tail = FALSE))
 }
 
 #' @keywords internal
@@ -383,28 +478,33 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
                     multiplier = NULL, add_terms = tm))),
                    error = function(e) NULL)
     if (is.null(f2) || is.null(f2$fit)) return(NULL)
-    # drop1() refits through update(), which re-evaluates the fit's stored `data` SYMBOL -- a local of
-    # reg_fit() that is long gone by now. multinom / polr keep that symbol, so without this the whole
-    # multinomial and ordinal arm silently produced no row (the failure was hidden behind
-    # drop1.multinom's own cat() progress until reg_term_tests started capturing it).
+
+    # THE FAST ROUTE, and the ordinary one: both fits are in hand and nested by construction, so the
+    # comparison between them IS drop1's answer, bit for bit, with no second fit (Phase 20f). A
+    # design fit is excluded on principle rather than on cost -- a design-based Wald is not a
+    # likelihood ratio, and regTermTest() refits nothing anyway.
+    if (!use_wald && !is.null(base_fit)) {
+      nt <- reg_nested_test(base_fit, f2$fit, use_f)
+      if (!is.null(nt))
+        return(list(reg_test_row(types[[if (use_f) "f" else "lr"]], fit_first_col_i, v,
+                                 nt$stat, nt$df, nt$df2, nt$p, f2$nobs, outcome = sp$outcome)))
+    }
+
+    # The slow route: a design fit, no base fit (a direct caller), or an engine whose logLik /
+    # deviance is not usable. drop1() refits through update(), which re-evaluates the fit's stored
+    # `data` SYMBOL -- a local of reg_fit() that is long gone by now. multinom / polr keep that
+    # symbol, so without this the whole multinomial and ordinal arm silently produced no row (the
+    # failure was hidden behind drop1.multinom's own cat() progress until reg_term_tests started
+    # capturing it).
     fit2 <- reg_selfheal_call(f2$fit, f2$data)
     # WARNING: the scope must be the FIT's own term label, verbatim -- terms() may re-spell what we
     # pasted, and drop1() then rejects the scope (the trap z8 documented for interactions).
     have <- tryCatch(attr(stats::terms(fit2), "term.labels"), error = function(e) character(0))
     lab  <- have[length(have)]
     if (!length(lab) || is.na(lab)) return(NULL)
-    got <- purrr::compact(reg_term_tests(fit2, v, lab, use_f, use_wald, types = types,
-                                         col_var = fit_first_col_i, nobs = f2$nobs,
-                                         outcome = sp$outcome))
-    if (length(got)) return(got)
-    # The shared dispatcher produced nothing: the engine's drop1 method has no p-value (multinomial).
-    # Both fits are in hand and nested, so the likelihood ratio between them IS the same test -- but
-    # only where a likelihood ratio is valid, so a design fit stops here rather than inventing one.
-    if (use_wald || is.null(base_fit)) return(NULL)
-    lr <- reg_nested_lr(base_fit, fit2)
-    if (is.null(lr)) return(NULL)
-    list(reg_test_row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs,
-                      outcome = sp$outcome))
+    purrr::compact(reg_term_tests(fit2, v, lab, use_f, use_wald, types = types,
+                                  col_var = fit_first_col_i, nobs = f2$nobs,
+                                  outcome = sp$outcome))
   }))
 }
 
@@ -435,14 +535,23 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
     out <- list()
     if ("linearity" %in% keys && !isTRUE(sp$compound))
       out <- c(out, reg_check_linearity_rows(data, sp, shared, cv, base_fit = fit))
+    # Phase 20f: the Brant test is computed HERE, where its row is built, and nowhere else. It used to
+    # run inside reg_fit_ordinal() on every polr fit -- the reported one, both Linearity refits and
+    # every crude univariable fit -- and be read only here: three runs at ~1.1 s for one number, and
+    # its "assumption is rejected" warning fired once per fit (the crude fits are suppressMessages'd,
+    # not suppressWarnings'd, so their copies escaped). One producer, one consumer, one warning.
     if ("proportionality" %in% keys) {
-      bp <- attr(fit, "brant_po")
+      bp <- reg_ordinal_diagnostic(fit)
       if (!is.null(bp) && !is.na(bp))
         out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
                                        NA_real_, bp, f$nobs, outcome = sp$outcome)))
     }
-    if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs, sp$outcome)))
-    if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs, sp$outcome)))
+    # Phase 20f: ONE vcov and ONE influence sweep for both, computed only if either is wanted.
+    if (any(c("dispersion", "influence") %in% keys)) {
+      di <- reg_check_influence_pass(fit, intersect(c("dispersion", "influence"), keys))
+      if ("dispersion" %in% keys) out <- c(out, list(gof("dispersion", cv, di[["dispersion"]], f$nobs, sp$outcome)))
+      if ("influence"  %in% keys) out <- c(out, list(gof("influence",  cv, di[["influence"]],  f$nobs, sp$outcome)))
+    }
     if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs, sp$outcome)))
     out
   })

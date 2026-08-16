@@ -96,8 +96,10 @@ test_that("Collinearity equals car::vif(), on one VIF scale whatever the term de
 
 test_that("Linearity is drop1() on the model plus the predictor's centred squared term", {
   skip_if_not_installed("broom")
+  # Phase 20f: it costs a fit, so it is asked for by name (REG_CHECKS$cost == "refit").
   t  <- suppressMessages(tab_reg(chk_data(), "married", c("race", "age", "rincome"),
-                                 family = "binomial", cleannames = FALSE))
+                                 family = "binomial", cleannames = FALSE,
+                                 stats = c("n", "linearity")))
   tt <- get_test(t)
   li <- tt[tt$test %in% tabxplor:::reg_check_types() & startsWith(tt$test, "linearity"), ]
   expect_identical(nrow(li), 1L)                          # one numeric predictor
@@ -128,31 +130,70 @@ test_that("the curvature p is invariant to the centring, which exists for the Co
   expect_lt(max(car::vif(ctr)[, 3]^2), 5)
 })
 
-test_that("the nested-LR fallback IS drop1's test, and it is what carries multinomial Linearity", {
-  skip_if_not_installed("nnet")
-  # on a glm, where drop1 works, the fallback must reproduce it exactly -- otherwise the multinomial
-  # arm would be answering a different question from every other family's
+test_that("reg_nested_test() IS drop1's test, to the last bit, on both arms", {
+  # Phase 20f: the Linearity check takes this route INSTEAD of drop1(), so "equal" is not enough --
+  # if the two ever diverged the check would silently start answering a different question. Every
+  # assertion here is `expect_identical()` on the double, not a tolerance.
   cf <- chk_fit(preds = c("race", "age"))
   dm <- cf$data
   dm$z <- (dm$age - mean(dm$age)) / stats::sd(dm$age)
+
+  # -- the LR arm (binomial) ------------------------------------------------------------------------
   aug <- stats::glm(married ~ race + age + I(z^2), data = dm, family = stats::binomial())
   d1  <- stats::drop1(aug, scope = "I(z^2)", test = "Chisq")
-  lr  <- tabxplor:::reg_nested_lr(cf$fit, aug)
-  expect_equal(lr$stat, d1[["LRT"]][2], tolerance = 1e-10)
-  expect_equal(lr$p, d1[["Pr(>Chi)"]][2], tolerance = 1e-10)
+  lr  <- tabxplor:::reg_nested_test(cf$fit, aug, use_f = FALSE)
+  expect_identical(lr$stat, d1[["LRT"]][2])
+  expect_identical(lr$p,    d1[["Pr(>Chi)"]][2])
+  expect_true(is.na(lr$df2))
 
+  # -- the F arm: lm, gaussian glm and quasipoisson ------------------------------------------------
+  # ⚠ quasipoisson is the one that pins the DISPERSION: drop1.glm estimates it as deviance/df.residual
+  # of the augmented fit, which is neither summary()'s Pearson dispersion nor what anova() uses (14.25
+  # against 12.47 on this shape). This assertion is what stops a "tidier" substitution.
+  # ⚠ the outcome must be genuinely UNEXPLAINED by the predictors: a numeric copy of `age` gives an
+  # exact fit (RSS ~ 1e-25), and then both routes are comparing floating-point noise.
+  dm$num <- as.numeric(dm$year)
+  dm$cnt <- as.integer(dm$year - min(dm$year))
+  cases <- list(
+    lm         = list(stats::lm(num ~ race + age, dm),
+                      stats::lm(num ~ race + age + I(z^2), dm)),
+    gaussianglm = list(stats::glm(num ~ race + age, dm, family = stats::gaussian()),
+                       stats::glm(num ~ race + age + I(z^2), dm, family = stats::gaussian())),
+    quasipoisson = list(suppressWarnings(stats::glm(cnt ~ race + age, dm, family = stats::quasipoisson())),
+                        suppressWarnings(stats::glm(cnt ~ race + age + I(z^2), dm,
+                                                    family = stats::quasipoisson())))
+  )
+  for (nm in names(cases)) {
+    b <- cases[[nm]][[1]]; a <- cases[[nm]][[2]]
+    ref <- suppressWarnings(stats::drop1(a, scope = "I(z^2)", test = "F"))
+    got <- tabxplor:::reg_nested_test(b, a, use_f = TRUE)
+    expect_identical(got$stat, ref[["F value"]][2], info = nm)
+    expect_identical(got$p,    ref[[grep("^Pr\\(", names(ref), value = TRUE)[1]]][2], info = nm)
+    expect_identical(got$df2,  as.numeric(stats::df.residual(a)), info = nm)
+  }
+
+  # -- it refuses rather than guesses ---------------------------------------------------------------
+  expect_null(tabxplor:::reg_nested_test(aug, cf$fit))       # not nested the right way round
+  half <- stats::glm(married ~ race + age, data = dm[seq_len(nrow(dm) %/% 2L), ],
+                     family = stats::binomial())
+  expect_null(tabxplor:::reg_nested_test(half, aug))         # different rows
+})
+
+test_that("the nested test is what carries multinomial Linearity", {
+  skip_if_not_installed("nnet")
   # nnet:::drop1.multinom returns only Df and AIC -- it has no `test` argument and no p-value at all,
-  # so without the fallback the multinomial arm silently produced no row
+  # so without this route the multinomial arm silently produced no row
   d  <- chk_data()
   dn <- tidyr::drop_na(d, marital, race, age)
   zz <- (dn$age - mean(dn$age)) / stats::sd(dn$age); dn$z <- zz
   b <- nnet::multinom(marital ~ race + age,          dn, trace = FALSE)
   a <- nnet::multinom(marital ~ race + age + I(z^2), dn, trace = FALSE)
-  ref <- tabxplor:::reg_nested_lr(b, a)
+  ref <- tabxplor:::reg_nested_test(b, a)
   expect_identical(ref$df, a$edf - b$edf)                 # one extra coefficient per category
 
   out <- utils::capture.output(t <- suppressMessages(suppressWarnings(
-    tab_reg(d, "marital", c("race", "age"), family = "multinomial", cleannames = FALSE))))
+    tab_reg(d, "marital", c("race", "age"), family = "multinomial", cleannames = FALSE,
+            stats = c("n", "linearity")))))
   tt <- get_test(t)
   li <- tt[startsWith(tt$test, "linearity"), , drop = FALSE]
   expect_identical(nrow(li), 1L)
@@ -168,7 +209,7 @@ test_that("a comparison table carries one check row per (model column x numeric 
   t <- suppressMessages(tab_reg(
     chk_data(), "married",
     list(m1 = c("race", "age"), m2 = c("race", "age", "tvhours")),
-    family = "binomial", cleannames = FALSE))
+    family = "binomial", cleannames = FALSE, stats = c("n", "linearity", "dispersion")))
   tt <- get_test(t)
   li <- tt[startsWith(tt$test, "linearity"), , drop = FALSE]
   # age is in both models, tvhours only in m2 -> 3 rows, and the plan lays out 2 labelled rows
@@ -186,11 +227,14 @@ test_that("a comparison table carries one check row per (model column x numeric 
   expect_true(any(grepl("Dispersion (robust/model SE)", md, fixed = TRUE)))
 })
 
-test_that("the checks are in the default stats set, individually removable, and gone at stats=FALSE", {
+test_that("the FREE checks are the default set, the costly ones are opt-in, and stats='all' is all", {
   skip_if_not_installed("broom")
   d <- chk_data()
   full <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial")))
+  # Phase 20f: the three that are arithmetic on the fit in hand ride the default footer...
   expect_true(all(c("dispersion", "influence", "collinearity") %in% full$test))
+  # ...and the one that refits does not (it was 87 % of a default call at n = 200 000)
+  expect_false(any(startsWith(full$test, "linearity")))
 
   # a `stats =` vector takes the check KEY; only what it names survives
   one <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
@@ -199,9 +243,35 @@ test_that("the checks are in the default stats set, individually removable, and 
   expect_false(any(c("dispersion", "collinearity") %in% one$test))
   expect_false(any(startsWith(one$test, "linearity")))
 
+  # naming the costly one brings it back -- opting in needs no new argument
+  opt <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                           stats = c("n", "linearity"))))
+  expect_true(any(startsWith(opt$test, "linearity")))
+
+  # `stats = "all"` MEANS all: strictly more than the default, and every applicable check in it.
+  # (It used to be a synonym of NULL, i.e. of the default set -- a name that already lied.)
+  all_t <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                             stats = "all")))
+  expect_true(all(setdiff(full$test, "") %in% all_t$test))
+  expect_gt(length(unique(all_t$test)), length(unique(full$test)))
+  expect_true(any(startsWith(all_t$test, "linearity")))
+
   none <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                             stats = FALSE)))
   expect_false(any(tabxplor:::reg_check_types() %in% none$test))
+})
+
+test_that("REG_CHECKS$cost declares which checks fit a model, and the readers agree with it", {
+  # the declared fact, and the two derived sets
+  expect_setequal(tabxplor:::reg_checks_costly(), c("linearity", "proportionality"))
+  free <- tabxplor:::reg_checks_default("ordinal")
+  expect_false(any(tabxplor:::reg_checks_costly() %in% free))
+  expect_true(all(free %in% tabxplor:::reg_checks_for("ordinal")))
+  # the default set is exactly the applicable checks minus the costly ones -- no third rule
+  expect_setequal(free, setdiff(tabxplor:::reg_checks_for("ordinal"), tabxplor:::reg_checks_costly()))
+  # a panel is always free: reg_check_plots() keeps every panel whatever `cost` says
+  expect_true(all(c("linearity", "proportionality") %in%
+                    tabxplor:::reg_checks_for("ordinal", what = "panel")))
 })
 
 test_that("a check absent for a family produces no row, never a wrong number", {

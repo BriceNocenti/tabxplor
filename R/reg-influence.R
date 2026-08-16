@@ -93,11 +93,14 @@ reg_if_from_parts <- function(X, W, r) {
 # contrast can be keyed by `skeleton$term` with no second naming rule. Aliased (rank-deficient)
 # coefficients are dropped: no displayed contrast can load a column the fit could not estimate.
 #' @keywords internal
-reg_coef_if_maker <- function(fit) {
+reg_coef_if_maker <- function(fit, V = NULL) {
   # Phase 18z10: a 3+ level fit has no working residuals / IRLS weights, so it goes through the
   # score core instead. Same contract, different algebra (see reg_if_from_score's WARNING).
+  # `V` (Phase 20f) is the fit's vcov when a caller already holds it -- the GLM path below never
+  # needs one (it builds its own information matrix from X and W), so this is the only branch that
+  # reads it, and passing NULL is exactly today's behaviour.
   if (inherits(fit, "multinom") || inherits(fit, "polr")) {
-    sc <- if (inherits(fit, "multinom")) reg_score_multinom(fit) else reg_score_polr(fit)
+    sc <- if (inherits(fit, "multinom")) reg_score_multinom(fit, V) else reg_score_polr(fit, V)
     return(if (is.null(sc)) NULL else reg_if_from_score(sc$S, sc$bread))
   }
   X <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
@@ -336,8 +339,8 @@ reg_if_from_score <- function(S, bread) {
 # defence here is structural, not a comment: the columns are NAMED and every lookup goes by name, so a
 # mismatch is a NULL (the names test below), never a wrong number.
 #' @keywords internal
-reg_score_multinom <- function(fit) {
-  V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
+reg_score_multinom <- function(fit, V = NULL) {
+  if (is.null(V)) V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
   X <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
   P <- tryCatch(stats::predict(fit, type = "probs"), error = function(e) NULL)
   if (is.null(V) || is.null(X) || is.null(P) || !is.matrix(P) || ncol(P) < 2L) return(NULL)
@@ -361,9 +364,9 @@ reg_score_multinom <- function(fit) {
 # double-count the design exactly as vcov(svyglm) would in the GLM path above. svyolr is unreachable
 # anyway: tab_reg() refuses a weighted 3+ level outcome with effect = "ame".)
 #' @keywords internal
-reg_score_polr <- function(fit) {
+reg_score_polr <- function(fit, V = NULL) {
   if (inherits(fit, "svyolr")) return(NULL)
-  V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
+  if (is.null(V)) V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
   b <- tryCatch(stats::coef(fit), error = function(e) NULL)
   z <- fit$zeta
   if (is.null(V) || is.null(b) || is.null(z) || !length(b)) return(NULL)
