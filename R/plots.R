@@ -374,7 +374,7 @@ reg_plot_fits <- function(x, data = NULL) {
     # the secondary form: a bare lm / glm / svyglm / polr / multinom / svyolr
     fr <- tryCatch(stats::model.frame(x), error = function(e) NULL)
     return(list(list(fit = x, data = if (is.null(data)) fr else data,
-                     family = reg_plot_family_of(x), dependent = reg_plot_dep_of(x),
+                     family = reg_plot_family_of(x), outcome = reg_plot_dep_of(x),
                      predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL, design = NULL,
                      label = gettext("Model"))))
   }
@@ -405,8 +405,8 @@ reg_plot_fits <- function(x, data = NULL) {
   nobs_tab <- reg_plot_nobs(x)
   purrr::imap(fs$specs, function(sp, i) {
     f <- tryCatch(suppressMessages(suppressWarnings(reg_fit(
-      data, sp$dependent, sp$predictors, sp$fit_family, ds, isTRUE(sp$est$exp),
-      if (is.null(sp$inverse)) fs$inverse_two_level_factors else sp$inverse,
+      data, sp$outcome, sp$predictors, sp$fit_family, ds, isTRUE(sp$est$exp),
+      reg_outcome_level_of(sp$outcome_level) %||% fs$outcome_level,
       fs$conf_level, fs$method, trials = sp$trials, formula = sp$formula,
       multiplier = fs$multiplier, drop_extra = fs$na_shared_vars,
       add_terms = reg_shape_add(fs$shape_terms, sp$predictors)))),
@@ -421,7 +421,7 @@ reg_plot_fits <- function(x, data = NULL) {
                        "x" = "Model {.val {sp$label}} was fitted on {n_i} rows; this data gives {f$nobs}.",
                        "i" = "Pass the same data (and the same weights / design) the table was built from."))
     }
-    list(fit = f$fit, data = f$data, family = sp$fit_family, dependent = sp$dependent,
+    list(fit = f$fit, data = f$data, family = sp$fit_family, outcome = sp$outcome,
          predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
          positive_level = f$positive_level, label = sp$label)
   }) |> purrr::compact()
@@ -435,7 +435,7 @@ reg_plot_nobs <- function(x) {
   as.numeric(tt$n[tt$test == "n"])
 }
 
-# The (family, dependent, predictors) of a BARE fit -- the secondary form's only inference.
+# The (family, outcome, predictors) of a BARE fit -- the secondary form's only inference.
 #' @keywords internal
 reg_plot_family_of <- function(fit) {
   if (inherits(fit, "polr") || inherits(fit, "svyolr")) return("ordinal")
@@ -490,7 +490,7 @@ reg_panel_linearity <- function(ctxs, cols, opts) {
     num <- reg_numeric_preds(cx$data, cx$predictors)
     if (!is.null(opts$predictors)) num <- intersect(num, opts$predictors)
     if (!length(num)) return(NULL)
-    ly <- rd_link_y(cx$data[[cx$dependent]], cx$family, cx$trials, cx$positive_level)
+    ly <- rd_link_y(cx$data[[cx$outcome]], cx$family, cx$trials, cx$positive_level)
     w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else NULL
     purrr::list_rbind(purrr::map(num, function(v) {
       # Phase 18z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
@@ -524,7 +524,7 @@ reg_panel_linearity <- function(ctxs, cols, opts) {
 # every non-gaussian family here uses a randomised quantile residual instead.
 reg_panel_residuals <- function(ctxs, cols, opts) {
   rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$dependent]], cx$trials, opts$seed)
+    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
     f <- tryCatch(as.numeric(stats::fitted(cx$fit)), error = function(e) NULL)
     if (is.null(r) || is.null(f) || length(f) != length(r)) return(NULL)
     b <- rd_bin(f, r, NULL, max(5L, min(60L, floor(sqrt(length(r))))), "identity")
@@ -547,7 +547,7 @@ reg_panel_residuals <- function(ctxs, cols, opts) {
 # 3. NORMALITY -- the Q-Q plot of the dispatched residual, against the ANALYTIC pointwise band.
 reg_panel_normality <- function(ctxs, cols, opts) {
   rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$dependent]], cx$trials, opts$seed)
+    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
     q <- if (is.null(r)) NULL else rd_qq(r, opts$conf, min(opts$max_points, 400L))
     if (is.null(q)) return(NULL)
     dplyr::mutate(q, model = cx$label)
@@ -667,7 +667,7 @@ reg_panel_collinearity <- function(ctxs, cols, opts) {
 reg_panel_proportionality <- function(ctxs, cols, opts) {
   rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
     if (cx$family != "ordinal") return(NULL)
-    y  <- as.factor(cx$data[[cx$dependent]])
+    y  <- as.factor(cx$data[[cx$outcome]])
     lv <- levels(y)
     if (length(lv) < 3L) return(NULL)
     fp <- reg_factor_preds(cx$data, cx$predictors)
@@ -1135,7 +1135,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
 
   # --- facets ---------------------------------------------------------------------------------------
   nvar <- nlevels(e$var); nfac <- nlevels(e$facet)
-  ngrp <- length(unique(e$group[nzchar(e$group)]))            # sub-tables (tab_vars / a split_var)
+  ngrp <- length(unique(e$group[nzchar(e$group)]))            # sub-tables (tab_vars / a tab_vars)
   if (!identical(facet, FALSE) && (nvar > 1L || nfac > 1L || ngrp > 1L)) {
     if (max(nvar, 1L) * max(nfac, 1L) * max(ngrp, 1L) > 12L)
       cli::cli_inform(c("!" = "{max(nvar, 1L) * max(nfac, 1L) * max(ngrp, 1L)} panels.",
@@ -1152,7 +1152,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   # when the columns do not share a scale, the unit moves into the strip and the axis title goes: one
   # ggplot object still comes back (no ggh4x, no gtable), which is what keeps `+ theme()` working.
   rm_  <- reg_call(x)
-  outn <- if (!is.null(rm_)) paste(unique(rm_$dependent), collapse = " / ")
+  outn <- if (!is.null(rm_)) paste(unique(rm_$outcome), collapse = " / ")
           else as.character(e$col_var[1])
   xt <- if (one) with_legend_lang(lang, function(lg)
     fp_unit_word(scl$unit, reg_eff_word_of(x, mcol), conf, outn)) else NULL

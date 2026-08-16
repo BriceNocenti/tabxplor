@@ -91,7 +91,7 @@ test_that("weighted model comparison emits a design-based Wald row", {
   des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
   tab <- suppressMessages(tab_reg(des, "y",
                      predictors = list(base = "x1", full = c("x1", "x2")),
-                     compare = "baseline"))
+                     stats = "compare_baseline"))
   tst <- tabxplor:::get_test(tab)
   expect_true("compare_baseline_wald" %in% tst$test)
   wr <- tst[tst$test == "compare_baseline_wald", ]
@@ -175,7 +175,7 @@ reg_split_data <- function() {
 # models list produces (one column per model, so a side-by-side layout has no single column to key on).
 test_that("split_var stacks one model per group (grouped by split_var + var)", {
   d <- reg_split_data()
-  t <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")
+  t <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", tab_vars = "g")
   expect_s3_class(t, "tabxplor_grouped_tab")
   expect_setequal(dplyr::group_vars(t), c("g", "var"))
   expect_true("g" %in% names(t))
@@ -185,7 +185,7 @@ test_that("split_var stacks one model per group (grouped by split_var + var)", {
 test_that("Phase g: split_var + a single model auto-spreads to side-by-side columns", {
   d <- reg_split_data()
   # default spread_models = TRUE: the sub-models sit side by side (no stacked `g` row-column)
-  t <- tab_reg(d, "y", c("x1", "x2"), split_var = "g")
+  t <- tab_reg(d, "y", c("x1", "x2"), tab_vars = "g")
   expect_false("g" %in% names(t))
   # Phase 19n: each split level's column carries its sub-population in `col_group`, BESIDE the
   # outcome its `col_var` names -- the pair is the block identity, and it is what gives the export a
@@ -198,17 +198,17 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
   expect_true(all(nzchar(cg)))
   expect_setequal(unique(cg), c("north", "south"))
   # works with empirical = TRUE (crude companions spread too, level-suffixed)
-  te <- suppressWarnings(tab_reg(d, "y", "x1", split_var = "g", empirical = TRUE))
+  te <- suppressWarnings(tab_reg(d, "y", "x1", tab_vars = "g", empirical = TRUE))
   expect_true(any(grepl("^Obs_", names(te))))
   # several models per group cannot go side by side, so they stay stacked
   expect_true("g" %in% names(
-    tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")))
+    tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", tab_vars = "g")))
 })
 
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
   # the groups are side by side now, so each group's estimates are its OWN column
-  t <- dplyr::ungroup(tab_reg(d, "y", c("x1", "x2"), split_var = "g", multiplier = 1))
+  t <- dplyr::ungroup(tab_reg(d, "y", c("x1", "x2"), tab_vars = "g", multiplier = 1))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
@@ -222,7 +222,7 @@ test_that("tab_spread pivots split groups into side-by-side columns", {
   d  <- reg_split_data()
   # a models list stays stacked, so tab_spread() has something to pivot -- and this is the public
   # route for "full control of the layout" now that the auto-spread has no opt-out.
-  t  <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", split_var = "g")
+  t  <- tab_reg(d, "y", list(m1 = "x1", m2 = c("x1", "x2")), family = "binomial", tab_vars = "g")
   sp <- tab_spread(t, g)
   expect_s3_class(sp, "tabxplor_tab")
   # one OR column per split level (north / south), sharing the var/level stub
@@ -233,7 +233,7 @@ test_that("tab_spread pivots split groups into side-by-side columns", {
 test_that("split_var footer carries per-group GOF", {
   d   <- reg_split_data()
   # a models list keeps the STACKED shape, where each group is a row block with its own footer
-  t   <- tab_reg(d, "y", list(m1 = "x1", m2 = "x1"), family = "binomial", split_var = "g")
+  t   <- tab_reg(d, "y", list(m1 = "x1", m2 = "x1"), family = "binomial", tab_vars = "g")
   tst <- tabxplor:::get_test(t)
   # Phase 19g: the split level rides a column NAMED after the split variable, like a crosstab's tab_var
   expect_setequal(unique(tst$g), c("north", "south"))   # tagged per split group
@@ -243,7 +243,7 @@ test_that("split_var footer carries per-group GOF", {
 test_that("split_var works with survey weights (per-group svyglm)", {
   d <- reg_split_data()
   t <- tab_reg(d, "y", list(m1 = c("x1", "x2"), m2 = c("x1", "x2")), family = "binomial",
-               wt = "w", split_var = "g", multiplier = 1)
+               wt = "w", tab_vars = "g", multiplier = 1)
   expect_s3_class(t, "tabxplor_grouped_tab")
   sub  <- dplyr::filter(d, g == "north")
   des  <- survey::svydesign(ids = ~1, weights = ~w,
@@ -256,9 +256,9 @@ test_that("split_var works with survey weights (per-group svyglm)", {
 
 test_that("split_var rejects an invalid grouping column", {
   d <- reg_split_data()
-  expect_error(tab_reg(d, "y", "x1", split_var = "x1"), "cannot also be")   # a predictor
-  expect_error(tab_reg(d, "y", "x1", split_var = "nope"), "not a column")
-  expect_error(tab_reg(d, "y", "x1", split_var = "x2"), "factor or character")
+  expect_error(tab_reg(d, "y", "x1", tab_vars = "x1"), "cannot also be")   # a predictor
+  expect_error(tab_reg(d, "y", "x1", tab_vars = "nope"), "not a column")
+  expect_error(tab_reg(d, "y", "x1", tab_vars = "x2"), "factor or character")
 })
 
 # --- Phase 12g-iv: multiplier + empirical ----------------------------------------------------

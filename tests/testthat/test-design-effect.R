@@ -107,7 +107,7 @@ testthat::test_that("tab_reg never reads the option: its crude CIs are ALWAYS co
   d <- kish_data(600L)
   mk <- function(v) withr::with_options(
     list(tabxplor.design_effect = v),
-    tab_reg(d, dependent = "y", predictors = "g", family = "binomial", wt = "w",
+    tab_reg(d, outcome = "y", predictors = "g", family = "binomial", wt = "w",
             empirical = TRUE))
   off <- mk(FALSE); on <- mk(TRUE)
   cn <- names(on)

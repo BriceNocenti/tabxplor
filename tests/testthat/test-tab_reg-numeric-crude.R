@@ -313,7 +313,7 @@ test_that("the SD is frozen ONCE: same unit across split groups, compared models
                    cleannames = FALSE)
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
   spl   <- tab_reg(d, "married", list(m1 = c("age", "race"), m2 = c("age", "race")),
-                   family = "binomial", multiplier = "sd", split_var = "grp", cleannames = FALSE)
+                   family = "binomial", multiplier = "sd", tab_vars = "grp", cleannames = FALSE)
   expect_equal(base_k(spl), base_k(plain), tolerance = 1e-12)
 
   cmp <- tab_reg(d, "married", list(m1 = "age", m2 = c("age", "race")), family = "binomial",

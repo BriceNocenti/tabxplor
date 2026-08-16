@@ -307,18 +307,39 @@ zscore_formula <- function(conf_level) conf_level_to_crit(conf_level, Inf)
 #   diff        a proportion minus its reference     (ci = "diff")     ci_prop_diff
 #   mean_diff   a numeric mean minus its reference                     ci_mean_diff2
 #   mean_ratio  a numeric mean over its reference    (color = "ratio") ci_mean_ratio
+#   model       a regression coefficient's interval  (tab_reg)         reg_fit's Wald / profile
 # Phase 18z16-iiiii: this table IS the public grammar. One named vector,
-# `ci_method = c(cell = , diff = , mean_diff = , mean_ratio = )`, partial (an unnamed slot keeps its
-# default), replaced five parallel `method_*` arguments that had to be listed, validated, threaded,
-# cache-keyed and stored one by one across six files. There is no `ratio` slot: a proportion ratio has
-# exactly one method (Katz's log risk-ratio), so it is not a choice -- the never-released
+# `ci_method = c(cell = , diff = , mean_diff = , mean_ratio = , model = )`, partial (an unnamed slot
+# keeps its default), replaced five parallel `method_*` arguments that had to be listed, validated,
+# threaded, cache-keyed and stored one by one across six files. There is no `ratio` slot: a proportion
+# ratio has exactly one method (Katz's log risk-ratio), so it is not a choice -- the never-released
 # `method_ratio` had one legal value and went with the five.
+#
+# Phase 20c (KEY 4): the `model` slot is what made `tab_reg(method =)` the same argument as
+# `tab(ci_method =)`. It is the fifth answer to ONE question -- *how is this interval computed* --
+# and it had its own argument, its own name and its own vocabulary purely because it belongs to the
+# other producer.
 CI_METHODS <- list(
   cell       = c("wilson", "wald", "beta"),
   diff       = c("newcombe", "ac", "wald"),
   mean_diff  = c("welch", "student"),
-  mean_ratio = c("robust", "quasipoisson", "poisson")
+  mean_ratio = c("robust", "quasipoisson", "poisson"),
+  model      = c("wald", "profile")
 )
+
+# WHICH PRODUCER offers each slot. A crosstab has no model interval and a regression no cell one, so
+# a consumer that enumerates the slots (the jamovi vocabulary gate, which asserts one ComboBox per
+# slot in the CROSSTAB module) must be able to ask. Declared as a named vector rather than by
+# restructuring CI_METHODS into a list-of-lists: that would touch default_ci_method(),
+# resolve_ci_method()'s validation loop, CI_GEOMS$method_slot and CI_METHOD_LABELS for one fact.
+#' @keywords internal
+CI_SLOT_PRODUCER <- c(cell = "tab", diff = "tab", mean_diff = "tab", mean_ratio = "tab",
+                      model = "reg")
+stopifnot(setequal(names(CI_SLOT_PRODUCER), names(CI_METHODS)))
+
+# The slots one producer offers, in declaration order.
+#' @keywords internal
+ci_slots_of <- function(producer) names(CI_METHODS)[CI_SLOT_PRODUCER[names(CI_METHODS)] == producer]
 
 # The package's own methods -- DERIVED from the table above, so a default cannot drift from the values
 # it is chosen among.

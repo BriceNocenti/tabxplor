@@ -202,13 +202,13 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
   d <- forcats::gss_cat |>
     dplyr::mutate(married = as.integer(marital == "Married"), tv = tvhours)
   want <- list(
-    list(a = list(dependent = "married", family = "binomial"),                  w = "OR"),
-    list(a = list(dependent = "married", family = "binomial", measure = "ratio"), w = "RR"),
-    list(a = list(dependent = "tv", family = "poisson"),                        w = "IRR"),
-    list(a = list(dependent = "tv", family = "quasipoisson"),                   w = "IRR"),
+    list(a = list(outcome = "married", family = "binomial"),                  w = "OR"),
+    list(a = list(outcome = "married", family = "binomial", measure = "ratio"), w = "RR"),
+    list(a = list(outcome = "tv", family = "poisson"),                        w = "IRR"),
+    list(a = list(outcome = "tv", family = "quasipoisson"),                   w = "IRR"),
     # ⚠ the case that shows the fit word must NOT win unconditionally: a logistic fit asked for a
     # MARGINAL ratio has a crude RISK-ratio column beside it, and both are legended RR.
-    list(a = list(dependent = "married", family = "binomial", effect = "marginal",
+    list(a = list(outcome = "married", family = "binomial", effect = "marginal",
                   measure = "ratio"),                                            w = "RR")
   )
   for (cs in want) {

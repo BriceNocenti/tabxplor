@@ -67,14 +67,14 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = 
 ### tab_reg tests ----
 
 # Variable name duplication in exports
-tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 ) |> 
   tab_export("md")
 # |           | levels               |Emp. % (married)  |Emp. OR (married)  |Model OR (married)  | |Emp. rate (tvhours)  |Emp. IRR (tvhours)  |Model IRR (tvhours)  |
 # |:----------|:---------------------|-----------------:|------------------:|-------------------:|-|--------------------:|-------------------:|--------------------:|
 # |           |                      | *married: 01-Married*|               |                    | | *tvhours*           |
-tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 ) |> 
   tab_export()
@@ -86,7 +86,7 @@ tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", 
 # - Also, please use brackets instead of parenthesis for variable names in column names in console. For example "[married]"
 
 # No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
-tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, exponentiate = FALSE, 
 )
 # - With `exponentiate = FALSE`, the base coefficient of a logistic model is all greyed out, every with *** significance. 
@@ -101,21 +101,21 @@ tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "re
 #   What else would need to be done for it to work consistently, in a statistically sound way ? Log the confidence interval ?
 
 
-tab_reg(gss_simple, dependent = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, exponentiate = FALSE
 )
 # - same two problems than with binomial + `exponentiate = FALSE` here : no colors + wrong empirical counterpart.
 #    With empirical = TRUE, keep `Emp. rate`, log() the IRR and use the diff vctrs field for that, 
 #    use rename the column `Emp. log(IRR)`, same color scale than raw coefficient.
 
-tab_reg(gss_simple, dependent = "party3", predictors = c("race", "rincome", "relig", "tvhours"),
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "tvhours"),
         empirical = TRUE, exponentiate = FALSE
 )
 # - same here, and same for ordinal regression I think. 
 
 
 
-tab_reg(gss_simple, dependent = "married", predictors = c("rincome", "party3"), split_var = "race",
+tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "party3"), tab_vars = "race",
         empirical = TRUE, #exponentiate = FALSE
 )
 # - New feature : with a `split_var`, when there is only one dependent var, and only one predictors list, 

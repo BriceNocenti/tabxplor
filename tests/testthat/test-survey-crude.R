@@ -172,7 +172,7 @@ test_that("split_var x design: an uncalibrated design with UNEQUAL groups builds
   d$grp <- factor(sample(c("A", "B"), nrow(d), TRUE))   # deliberately unequal
   expect_false(length(unique(table(d$grp))) == 1L)
   des <- svc_des(d)
-  tt  <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", split_var = "grp"))
+  tt  <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", tab_vars = "grp"))
   pos <- levels(d$y)[1]                         # tab_reg models the FIRST outcome level by default
   expect_identical(reg_call(tt)$positive_level, pos)
   des$variables$.pos <- as.integer(d$y == pos)
@@ -190,7 +190,7 @@ test_that("split_var x a CALIBRATED design weights the right respondents", {
   cal <- suppressMessages(survey::calibrate(
     svc_des(d), ~aux, c(`(Intercept)` = nrow(d), aux = sum(d$aux))))
   tt <- suppressWarnings(suppressMessages(
-    tab_reg(cal, "y", "x", family = "binomial", split_var = "grp")))
+    tab_reg(cal, "y", "x", family = "binomial", tab_vars = "grp")))
   cal$variables$.pos <- as.integer(d$y == levels(d$y)[1])
   for (g in c("A", "B")) {
     fit <- suppressWarnings(survey::svyglm(

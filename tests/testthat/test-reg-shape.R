@@ -288,7 +288,7 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE))
   a <- get_assumptions(t)
-  expect_identical(a$dependent, "married")
+  expect_identical(a$outcome, "married")
   expect_identical(a$link, "logit")
   # P(married) RISES with age over most of the range; reading the complement would invert it
   y <- a$curves$age$y

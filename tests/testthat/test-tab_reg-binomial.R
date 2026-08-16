@@ -147,7 +147,7 @@ test_that("method = 'profile' uses profile-likelihood CI + LR-test p (dual)", {
   skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   data <- logit_data()
-  col  <- tab_reg(data, "married", c("race", "rincome"), method = "profile",
+  col  <- tab_reg(data, "married", c("race", "rincome"), ci_method = "profile",
                     cleannames = FALSE)[["Model_OR"]]
 
   d <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
@@ -174,11 +174,11 @@ test_that("method = 'profile' falls back to Wald for weighted models (with a mes
     dplyr::mutate(w = tvhours + 1)
   expect_message(
     tw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
-                    method = "profile", cleannames = FALSE),
+                    ci_method = "profile", cleannames = FALSE),
     "not defined for survey"
   )
   colw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
-                    method = "wald", cleannames = FALSE)[["Model_OR"]]
+                    ci_method = "wald", cleannames = FALSE)[["Model_OR"]]
   expect_equal(get_ci_inf(tw[["Model_OR"]]), get_ci_inf(colw))
   expect_equal(get_pvalue(tw[["Model_OR"]]), get_pvalue(colw))
 })
@@ -223,7 +223,7 @@ test_that("tab_reg()/tab_reg() forward na = 'drop_all'", {
 
   t2 <- tab_reg(d, "married",
                     predictors = list(demo = "race", full = c("race", "rincome")),
-                    na = "drop_all", compare = "sequential")
+                    na = "drop_all", stats = "compare_sequential")
   expect_s3_class(t2, "tabxplor_grouped_tab")
   # a bad na value is rejected by match.arg (not silently forwarded)
   expect_error(tab_reg(d, "married", "race", na = "nonsense"))
@@ -234,7 +234,7 @@ test_that("tab_reg() accepts several dependents (K mode -> a list of tables)", {
   # second dependent NOT derived from a predictor (else the model is perfectly separated -> glm warns)
   d <- logit_data() |>
     dplyr::mutate(heavy_tv = factor(dplyr::if_else(tvhours >= 3, "heavy", "light")))
-  mt <- tab_reg(d, dependent = c("married", "heavy_tv"),
+  mt <- tab_reg(d, outcome = c("married", "heavy_tv"),
                     predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")))
   expect_s3_class(mt, "tabxplor_tabs")
   expect_length(mt, 2L)

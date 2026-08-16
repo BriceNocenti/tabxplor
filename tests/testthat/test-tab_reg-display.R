@@ -92,7 +92,7 @@ test_that("split_var tables get a per-group export footer; plain tables one foot
   # a models list keeps the STACKED per-group footer (the auto-spread side-by-side shape is tested
   # separately). The two models share ONE "Model fit" block per group, keyed on the group.
   t_split <- tab_reg(d, "married", list(m1 = "age", m2 = "age"), family = "binomial",
-                     split_var = "race")
+                     tab_vars = "race")
   # Phase g (A7): a styled md table's label cells use non-breaking spaces; normalise for text greps.
   md_s <- gsub(intToUtf8(160L), " ", tab_md(t_split, print = FALSE), fixed = TRUE)
   expect_true(grepl("Model fit", md_s))

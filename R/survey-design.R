@@ -397,10 +397,18 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
 tab_robust_overlay <- function(test_tbl, rob, tab_vars) {
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
   if (is.null(rob) || nrow(rob) == 0)           return(test_tbl)
-  # the classic per-(subtable x col) effect-size / validity facts to carry through
-  es_keep    <- test_tbl[test_tbl$test %in% c("chi2", "F_welch"), , drop = FALSE]
+  # The classic per-(subtable x col) effect-size / validity facts to carry through. Phase 20c: the
+  # rule is "every CLASSIC crosstab row" (TEST_ROWS `producer == "tab" & !design`), deduplicated on
+  # the join key -- it used to name `c("chi2", "F_welch")`, which READ like a display choice and was
+  # in fact a de-duplication device (chi2_compute_test() emits F_welch and F_classic from the same
+  # table with the same eta2, so naming one picked a representative row). Stated as what it is, the
+  # failure mode goes with it: a producer emitting F_classic without F_welch dropped the whole
+  # design row for that column, p-value included, through the semi_join below.
+  es_keep    <- test_tbl[test_tbl$test %in% TEST_CROSSTAB_KEYS[
+    !vapply(TEST_CROSSTAB_KEYS, function(k) isTRUE(TEST_ROWS[[k]]$design), logical(1))], , drop = FALSE]
   tabvars_in <- intersect(tab_vars, names(test_tbl))
   jk  <- intersect(c(tabvars_in, "col"), names(es_keep))
+  es_keep <- dplyr::distinct(es_keep, dplyr::across(dplyr::all_of(jk)), .keep_all = TRUE)
   rob <- dplyr::semi_join(rob, dplyr::distinct(es_keep[jk]), by = jk)
   if (nrow(rob) == 0) return(test_tbl)
   rob <- dplyr::left_join(

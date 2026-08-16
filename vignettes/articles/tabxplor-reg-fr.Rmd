@@ -604,7 +604,7 @@ Sans plan de sondage, les intervalles des colonnes observées tiennent déjà co
 
 ## Comparer plusieurs modèles
 
-Il est possible de passer une **liste nommée** d'ensembles de variable explicatives (prédicteurs) pour afficher plusieurs modèles côte à côte. `compare =` ajoute un test du rapport de vraisemblance (*likelihood ratio test*) dans le bas de tableau (`"baseline"` = chaque modèle vs le premier modèle ; `"sequential"` = chaque modèle vs le précédent) :
+Il est possible de passer une **liste nommée** d'ensembles de variable explicatives (prédicteurs) pour afficher plusieurs modèles côte à côte. Le test du rapport de vraisemblance (*likelihood ratio test*) est une clé de plus dans `stats =` : `stats = "compare_baseline"` compare chaque modèle au premier (on en désigne un autre avec `stats = c(compare_baseline = "M2")`), `stats = "compare_sequential"` compare chaque modèle au précédent :
 
 ```{r}
 tab_reg(gss_simple,
@@ -612,15 +612,15 @@ tab_reg(gss_simple,
         list("Race only"    = "race",
              "+ age"        = c("race", "age"),
              "+ party"      = c("race", "age", "party3")),
-        compare = "sequential")
+        stats = "compare_sequential")
 ```
 
 ## Le même modèle au sein de sous-populations
 
-`split_var =` est l'analogue du `tab_vars` de `tab()` pour une regression : le même modèle est ajusté **au sein de chaque modalité** de la variable choisie, et les tableaux par groupe sont empilés en un seul tableau. Cela permet de répondre à la question : « cet effet est-il confirmé dans chaque sous-groupe ? ».
+`tab_vars =` est l'analogue du `tab_vars` de `tab()` pour une regression : le même modèle est ajusté **au sein de chaque modalité** de la variable choisie, et les tableaux par groupe sont empilés en un seul tableau. Cela permet de répondre à la question : « cet effet est-il confirmé dans chaque sous-groupe ? ».
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "year")
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
 ```
 
 Lire une ligne d'un groupe à l'autre est la même corvée que comparer un modèle à son effet observé, et
@@ -635,7 +635,7 @@ Les groupes réunissent ici des personnes différentes : l'écart entre deux de 
 seulement du bruit » :
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
         color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
@@ -692,7 +692,7 @@ Deux détails utiles. Les **étoiles** de significativité dans les cases contin
 chaque estimation — « cet effet diffère-t-il de 1 ? » — et non celui de l'écart ; le p de l'écart est
 dans l'infobulle. Et le test agrégé du bas de tableau est un test du rapport de vraisemblance (un test
 F pour les modèles linéaires et quasi, un test de Wald fondé sur le plan de sondage avec des poids —
-la même règle que `compare =` ci-dessous), calculé sur un modèle groupé supplémentaire, et portant sur
+la même règle que la comparaison de modèles ci-dessous), calculé sur un modèle groupé supplémentaire, et portant sur
 les **coefficients** : avec `effect = "marginal"` les cases montrent des effets marginaux tandis que le bas
 de tableau teste les coefficients, deux questions proches mais distinctes, et la ligne le précise.
 

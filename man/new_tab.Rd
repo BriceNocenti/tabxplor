@@ -50,7 +50,7 @@ print/export time from this attribute rather than baked into the table.
 (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
 variable model being derived from the declared index columns and from the columns' own
 \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
-family, dependent, predictors, reference level, and the \code{fit_spec}
+family, outcome, predictors, reference level, and the \code{fit_spec}
 \code{\link{reg_check_plots}} refits from).
 \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.

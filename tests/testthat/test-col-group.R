@@ -1,7 +1,7 @@
 # Phase 19n: `col_group` -- WHICH SUB-POPULATION a column's block belongs to.
 #
 # Two producers turn a variable into side-by-side blocks: `tab(spread_vars =)` / `tab_spread()` (a
-# `tab_var` level) and `tab_reg(split_var =)` (a split group). Until 19n both WELDED the level into
+# `tab_var` level) and `tab_reg(tab_vars =)` (a split group). Until 19n both WELDED the level into
 # the column's `col_var` as "{level}<br>{col_var}", and three backends recovered it by sniffing for
 # that html tag (Excel's two-line span and its wrap flag, the colour legend's name normaliser) while
 # a fourth un-escaped it back after htmlEscape(). `tab_wrap_text(brk = "<br>")` produces the very

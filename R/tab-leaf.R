@@ -1306,7 +1306,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 # selector, derive the reference-relative fields diff (cell - ref), ratio (cell / ref, the "x2 rule")
 # and, when OR/color needs it, rr / or; plus the ref-row / ref-col markers. Extracted VERBATIM from
 # tab_plain()'s inline block so the FRESH build stays byte-identical AND the jmvtab tier-3 re-ref
-# (jmv_tab3_reref) can recompute exactly these ref-dependent fields from a cached table's ref-
+# (jmv_tab3_reref) can recompute exactly these ref-outcome fields from a cached table's ref-
 # INDEPENDENT pct base, without a new_fmt() rebuild -- one implementation, no forked math.
 # Returns a list; elements not computed for the given `pct` are NULL, so the caller's guards behave
 # identically to the former inline locals. Phase 19d: the odds ratio is computed UNCONDITIONALLY on

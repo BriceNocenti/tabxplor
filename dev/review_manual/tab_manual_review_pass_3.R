@@ -84,7 +84,7 @@ gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and fir
 
 
 # logistic (odds ratios):
-tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome"), family = "binomial", 
         empirical = TRUE
 )  
 # - Summary stats are difficult to read because they are greyed out : 
@@ -103,7 +103,7 @@ tab_reg(gss_simple, married ~ race + rincome, family = "binomial", effect = "ame
 #   that can really help the user interpret and understand the model is a good candidate for tooltips.
 
 
-tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome"), family = "binomial", 
         effect = "ame", empirical = TRUE
 ) 
 # "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:95:1:
@@ -119,11 +119,11 @@ tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), fa
 #   Make web searches, ensure the framework to compare "modelised" versus "empirical" is statistically sound, good practice, standard.
 
 
-tab_reg(gss_simple, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial")
+tab_reg(gss_simple, outcome = "marital", predictors = c("race", "rincome"), family = "multinomial")
 # - With multinomial, where a same model have different columns, set all the colums to the same col_var, 
 #   so that horizontal borders between the columns are automatically removed.
 
-tab_reg(gss_simple, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial", 
+tab_reg(gss_simple, outcome = "marital", predictors = c("race", "rincome"), family = "multinomial", 
   effect = "ame", at = "average"
 )
 # here, adding many column for `empirical=TRUE` would create too much columns. But there is a way : 
@@ -135,17 +135,17 @@ tab_reg(gss_simple, dependent = "marital", predictors = c("race", "rincome"), fa
 
 # # odds ratio of each outcome category versus the rest at reference population work
 # # (but in fact, like predicted, it’s still more difficult to read than AME at average)
-# tab_reg(gss_simple, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial", 
+# tab_reg(gss_simple, outcome = "marital", predictors = c("race", "rincome"), family = "multinomial", 
 #   effect = "coefficient", at = "reference"
 # )
 
 # ordinal (proportional-odds): one cumulative-OR column
-tab_reg(gss_simple, dependent = "rincome", predictors = c("marital", "race"), family = "ordinal")
+tab_reg(gss_simple, outcome = "rincome", predictors = c("marital", "race"), family = "ordinal")
 # - Add Brant omnibus pvalue in summary statistics for "ordinal" ?
 
 
 # linear (betas):
-tab_reg(gss_simple, dependent = "tvhours", predictors = c("race", "age"), family = "gaussian")
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "age"), family = "gaussian")
 # - here too, reference it greyed out, but must be black (0)
 # - Also here, for "race" predictor, I have two cells with "***" but that are greyed out (Black 1/1.30, Other 1/1.44), 
 #    I don’t understand, please enquire and explain it to me.
@@ -186,8 +186,8 @@ nb_questions <- c(9, 6, 12, 6, 4, 4, 5, 7)
 scores_RPS_logits <- 
 tab_reg(
   ct13_reg, 
-  dependent = vars_scores_RPS13_final, predictors = scores_RPS_predictors2, wt = "pondqaa", 
-  family = "binomial", trials = nb_questions, empirical = TRUE, compare = "sequential", 
+  outcome = vars_scores_RPS13_final, predictors = scores_RPS_predictors2, wt = "pondqaa", 
+  family = "binomial", trials = nb_questions, empirical = TRUE, stats = "compare_sequential", 
   cleannames = FALSE
 )
 # "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:169:1:
@@ -201,9 +201,9 @@ tab_reg(
 score_risques_phy_logits <- 
 tab_reg(
   ct13_reg, 
-  dependent = vars_scores_RPS13_final[[1]], predictors = scores_RPS_predictors2, wt = "pondqaa", 
-  family = "binomial", trials = nb_questions[[1]], empirical = TRUE, compare = "baseline", 
-  baseline = "complet",
+  outcome = vars_scores_RPS13_final[[1]], predictors = scores_RPS_predictors2, wt = "pondqaa", 
+  family = "binomial", trials = nb_questions[[1]], empirical = TRUE,
+  stats = c(compare_baseline = "complet"),
   cleannames = FALSE
 )
 score_risques_phy_logits |> tab_export(theme="light") # theme="auto"

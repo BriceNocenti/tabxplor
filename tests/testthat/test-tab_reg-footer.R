@@ -130,7 +130,7 @@ test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-
   d  <- reg_data()
   mc <- tab_reg(d, "married",
                     predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
-                    compare = "baseline", cleannames = FALSE)
+                    stats = "compare_baseline", cleannames = FALSE)
   cmp <- get_test(mc) |> dplyr::filter(test == "compare_baseline")
   expect_equal(nrow(cmp), 1L)                             # only the non-baseline column
 
@@ -153,7 +153,7 @@ test_that("compare falls back to Delta-AIC (with a message) when N differs acros
   expect_message(
     mc <- tab_reg(d, "married",
                       predictors = list(a = "race", b = c("race", "tvhours")),
-                      compare = "baseline", cleannames = FALSE, na = "drop_by_model"),
+                      stats = "compare_baseline", cleannames = FALSE, na = "drop_by_model"),
     "not nested or N differs"
   )
   expect_true("compare_baseline_aic" %in% get_test(mc)$test)
@@ -164,7 +164,7 @@ test_that("D1: the shared-population default makes the likelihood-ratio comparis
   d  <- reg_data()
   mc <- suppressMessages(tab_reg(d, "married",
                                      predictors = list(a = "race", b = c("race", "tvhours")),
-                                     compare = "baseline", cleannames = FALSE))
+                                     stats = "compare_baseline", cleannames = FALSE))
   tt <- get_test(mc)
   expect_true(any(grepl("^compare_", tt$test)))
   expect_false("compare_baseline_aic" %in% tt$test)      # a real test, not the degraded difference
@@ -175,7 +175,7 @@ test_that("D1: the shared-population default makes the likelihood-ratio comparis
 test_that("compare no-ops (message) for a single model", {
   skip_if_not_installed("broom")
   expect_message(
-    tab_reg(reg_data(), "married", "race", family = "binomial", compare = "baseline",
+    tab_reg(reg_data(), "married", "race", family = "binomial", stats = "compare_baseline",
             cleannames = FALSE),
     "at least two models"
   )
@@ -326,7 +326,7 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
   t <- suppressMessages(tab_reg(d, "married",
                                 list(m1 = c("race", "rincome"), m2 = c("race", "rincome")),
-                                split_var = "grp", family = "binomial", cleannames = FALSE))
+                                tab_vars = "grp", family = "binomial", cleannames = FALSE))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
   expect_true(nrow(g) > 0)

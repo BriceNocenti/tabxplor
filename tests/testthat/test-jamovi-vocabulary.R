@@ -40,9 +40,11 @@ test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
   # `ci` = the ANCHOR question's four answers (resolve_ci_value()'s valid set).
   expect_identical(opt_values(o, "ci"), c("auto", "no", "cell", "ref"))
 
-  # the four interval-method ComboBoxes = the four CI_METHODS slots, each in its declared order
-  # (first = the default, which must also be the yaml default).
-  for (slot in names(CI_METHODS)) {
+  # the interval-method ComboBoxes = the CI_METHODS slots THIS PRODUCER offers, each in its declared
+  # order (first = the default, which must also be the yaml default). Phase 20c: CI_METHODS gained a
+  # `model` slot for tab_reg(), and a crosstab has no model interval -- CI_SLOT_PRODUCER declares
+  # which slots belong where, so the loop asks instead of enumerating.
+  for (slot in ci_slots_of("tab")) {
     nm <- if (slot == "cell") "method_cell" else paste0("method_", slot)
     expect_identical(opt_values(o, nm), CI_METHODS[[slot]], info = nm)
     expect_identical(o[[nm]]$default, CI_METHODS[[slot]][[1]], info = nm)
@@ -83,7 +85,10 @@ test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   expect_identical(opt_values(o, "effect"),  REG_EFFECTS_VALUES)
   expect_identical(opt_values(o, "measure"), REG_MEASURES_VALUES)
   expect_identical(opt_values(o, "na"),      eval(formals(tab_reg)$na))
-  expect_identical(opt_values(o, "method"),  eval(formals(tab_reg)$method))
+  # Phase 20c: `method` became `ci_method`'s `model` slot, so the vocabulary is CI_METHODS' -- a
+  # stricter single source than the formal's own default vector was.
+  # ⚠ 20g owns renaming the yaml OPTION to match; jmvtabreg-cache.R translates until then.
+  expect_identical(opt_values(o, "method"),  CI_METHODS$model)
 
   # `color` on a reg table: off / the column's own geometry / the own-reference measures. The last
   # two are DERIVED (measure_own_ref), so the yaml cannot offer a measure D25 refuses.

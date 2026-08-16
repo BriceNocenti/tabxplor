@@ -36,10 +36,10 @@ test_that("D1 the crude Obs_* columns under a design are weighted, not unweighte
   b   <- svy_fixture()
   des <- survey::svydesign(~psu, weights = ~w, data = b)
   t_des <- suppressMessages(
-    tab_reg(des, dependent = "y", predictors = c("x", "z"), family = "binomial", empirical = TRUE))
-  t_wt  <- tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
+    tab_reg(des, outcome = "y", predictors = c("x", "z"), family = "binomial", empirical = TRUE))
+  t_wt  <- tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
                    empirical = TRUE, wt = "w")
-  t_un  <- tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
+  t_un  <- tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
                    empirical = TRUE)
 
   for (col in c("^Obs_%", "^Obs_OR")) {
@@ -64,10 +64,10 @@ test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal e
     unname(get_diff(col)[which(as.character(t$levels) == "high")])
   }
   a_des <- ame(suppressMessages(
-    tab_reg(des, dependent = "y", predictors = c("x", "z"), family = "binomial", effect = "marginal")))
-  a_wt  <- ame(tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
+    tab_reg(des, outcome = "y", predictors = c("x", "z"), family = "binomial", effect = "marginal")))
+  a_wt  <- ame(tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
                        effect = "marginal", wt = "w"))
-  a_un  <- ame(tab_reg(b, dependent = "y", predictors = c("x", "z"), family = "binomial",
+  a_un  <- ame(tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
                        effect = "marginal"))
   expect_equal(a_des, a_wt, tolerance = 1e-8)
   expect_false(isTRUE(all.equal(a_des, a_un, tolerance = 1e-3)))
@@ -80,7 +80,7 @@ test_that("D4 a replicate design is refused with a message pointing at svydesign
   des <- survey::svydesign(~psu, weights = ~w, data = b)
   rp  <- suppressWarnings(survey::as.svrepdesign(des, type = "bootstrap", replicates = 10))
   expect_error(tab(rp, x, y, pct = "row"), "svydesign")
-  expect_error(tab_reg(rp, dependent = "y", predictors = "x", family = "binomial"), "svydesign")
+  expect_error(tab_reg(rp, outcome = "y", predictors = "x", family = "binomial"), "svydesign")
 })
 
 # ---- D5: every microdata entry point accepts a design; tab_counts refuses one ---------------------
@@ -145,7 +145,7 @@ test_that("D7/D8 the footer says 'survey design', and tab_reg emits a weight lin
   # now that the intervals account for the design too (test-survey-variance.R pins the wording).
   expect_match(line, "sample design")
 
-  tr <- suppressMessages(tab_reg(des, dependent = "y", predictors = "x", family = "binomial"))
+  tr <- suppressMessages(tab_reg(des, outcome = "y", predictors = "x", family = "binomial"))
   line_reg <- tabxplor:::tab_weight_line(tr, lang = "en")
   expect_true(!is.null(line_reg))                    # D8: there used to be no line at all
   expect_false(grepl(".svy_weights", line_reg, fixed = TRUE))
@@ -175,7 +175,7 @@ test_that("D10 tab_reg() on a CALIBRATED design with incomplete cases works and 
   # `[` does NOT drop rows on a calibrated design -- it marks them prob = Inf. Assigning the shorter
   # complete-case frame used to abort here.
   tr <- suppressMessages(suppressWarnings(
-    tab_reg(cal, dependent = "y", predictors = "x", family = "binomial")))
+    tab_reg(cal, outcome = "y", predictors = "x", family = "binomial")))
   expect_s3_class(tr, "tabxplor_tab")
 
   lev  <- reg_call(tr)$positive_level

@@ -577,7 +577,7 @@ Without a design, the observed columns' intervals already account for the weight
 
 ## Comparing several models
 
-Pass a **named list** of predictor sets instead of a vector to fit and show several models side by side, and `compare =` adds a comparison Likelihood ratio test in the footer (`"baseline"` = each model vs. the first; `"sequential"` = each vs. the previous):
+Pass a **named list** of predictor sets instead of a vector to fit and show several models side by side. A comparison Likelihood ratio test is one more footer key: `stats = "compare_baseline"` tests each model against the first (name another with `stats = c(compare_baseline = "M2")`), `stats = "compare_sequential"` tests each against the previous one:
 
 ```{r}
 tab_reg(gss_simple,
@@ -585,15 +585,15 @@ tab_reg(gss_simple,
         list("Race only"    = "race",
              "+ age"        = c("race", "age"),
              "+ party"      = c("race", "age", "party3")),
-        compare = "sequential")
+        stats = "compare_sequential")
 ```
 
 ## The same model within sub-populations
 
-`split_var =` is the regression analogue of `tab()`'s `tab_vars`: the same model is fitted **within each level** of a grouping variable, and the per-group tables are stacked into one grouped table. It answers "does this effect hold in every subgroup?". With just one dependent variable, it uses `tab_spread()` internally to lay the groups out as side-by-side columns for an easy comparison : 
+`tab_vars =` is the regression analogue of `tab()`'s `tab_vars`: the same model is fitted **within each level** of a grouping variable, and the per-group tables are stacked into one grouped table. It answers "does this effect hold in every subgroup?". With just one dependent variable, it uses `tab_spread()` internally to lay the groups out as side-by-side columns for an easy comparison : 
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "year")
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
 ```
 
 Reading a row across the groups is the same chore as reading a model against its observed effect, and
@@ -607,7 +607,7 @@ it is, so `color_signif` works as everywhere else. Add `"grey_non_signif"` and a
 means "this really is a different effect, not just noise":
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "party3",
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
         color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
@@ -660,7 +660,7 @@ The three policies read that same interval:
 Two details worth knowing. The significance **stars** in the cells keep reading each estimate's own
 p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip.
 And the footer's aggregated test is a likelihood-ratio test (an F test for linear and quasi models, a
-design-based Wald test when you supply survey weights — the same rule as `compare =` below) computed on
+design-based Wald test when you supply survey weights — the same rule as the model comparison below) computed on
 one extra pooled model, on the **coefficients**: with `effect = "marginal"` the cells show marginal effects
 while the footer tests the coefficients, two related but distinct questions, and the line says so.
 

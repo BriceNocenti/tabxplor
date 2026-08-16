@@ -203,7 +203,7 @@ Besides its per-cell fields, each `fmt` column carries a few **column-level attr
 - `ci_method` — `get_ci_method()`: which interval engine built this column's bounds (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`, …; `""` when the column carries no interval).
 - `color` — `get_color()` / `set_color()`: the colour measure of the column — `""`, `"no"`, or one of the measure names `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` on a `tab_reg()` table). The discipline's acronyms (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) are permanent shorthands you may *type*, but a built table always stores — and its legend always names — the full word.
 - `col_var` — `get_col_var()`: the name of the column variable (a table can hold several).
-- `col_group` — `get_col_group()`: which sub-population the column's block belongs to, after a `spread_vars` / `tab_spread()` pivot or a `tab_reg(split_var =)` split (`""` otherwise). Together with `col_var` it identifies a column *block*: two blocks can show the same variable for two sub-populations, and exports head them on two lines.
+- `col_group` — `get_col_group()`: which sub-population the column's block belongs to, after a `spread_vars` / `tab_spread()` pivot or a `tab_reg(tab_vars =)` split (`""` otherwise). Together with `col_var` it identifies a column *block*: two blocks can show the same variable for two sub-populations, and exports head them on two lines.
 - `comp_all` — `get_comp_all()`: with `tab_vars`, is the comparison reference the sub-table (`FALSE`) or the whole table (`TRUE`)?
 - `totcol` / `refcol` — `is_totcol()` / `is_refcol()`: is this a total column / a reference column?
 

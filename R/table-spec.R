@@ -18,7 +18,7 @@
 #               `col_var` attribute. Uniform across producers by construction, because it is the
 #               columns themselves that answer.
 #   spec$call   the producer's own recipe: how this table was made. A regression stores its model
-#               record here (family / dependent / predictors / reference / `fit_spec`, the ~4 KB
+#               record here (family / outcome / predictors / reference / `fit_spec`, the ~4 KB
 #               recipe reg_check_plots() refits from). A crosstab stores nothing yet -- everything it
 #               would record already rides its columns -- so the slot is absent there rather than
 #               filled with a duplicate.
@@ -67,16 +67,16 @@ set_spec_field <- function(x, field, value) {
 
 # tab_kind() -- what kind of table this is. The stored fact first; the DEGRADED fallback (a table that
 # lost its `meta`) reads the `test` tibble's discriminators, exactly as the deleted is_reg_footer()
-# did. A regression carrying only interaction rows (`stats = FALSE`) is still a regression, which is
-# why both vocabularies are consulted.
+# did. Phase 20c: it asks TEST_ROWS which discriminators belong to the reg PRODUCER, so it no longer
+# has to know that a regression carrying only interaction rows (`stats = FALSE`) is one whose keys
+# live outside the footer spec -- two vocabularies became one column.
 #' @keywords internal
 #' @noRd
 tab_kind <- function(x) {
   k <- get_spec(x)[["kind"]]
   if (!is.null(k)) return(k)
   tt <- get_test(x)
-  if (!is.null(tt) && nrow(tt) > 0 &&
-      any(tt$test %in% c(reg_footer_test_types(), reg_interaction_types()))) "regression"
+  if (!is.null(tt) && nrow(tt) > 0 && any(tt$test %in% TEST_REG_KEYS)) "regression"
   else "crosstab"
 }
 

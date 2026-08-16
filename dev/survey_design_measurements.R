@@ -266,10 +266,10 @@ bdes <- svydesign(~psu, weights = ~w, data = b)
 cat("D1  (FIXED in z14-i) the crude block under a prebuilt design is now WEIGHTED\n")
 pcell <- function(t, pat, f) { cl <- t[[grep(pat, names(t))[1]]]
   f(cl)[which(as.character(t$levels) == "mid")] }
-t_des <- tab_reg(bdes, dependent = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE)
-t_wt  <- tab_reg(b, dependent = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE,
+t_des <- tab_reg(bdes, outcome = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE)
+t_wt  <- tab_reg(b, outcome = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE,
                  wt = "w")
-t_un  <- tab_reg(b, dependent = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE)
+t_un  <- tab_reg(b, outcome = "y", predictors = c("x","z"), family = "binomial", empirical = TRUE)
 cat(sprintf("      Obs_%%  design %.5f | wt= %.5f | unweighted %.5f  <- z14-i: design == wt\n",
             pcell(t_des, "^Obs_%", get_pct), pcell(t_wt, "^Obs_%", get_pct), pcell(t_un, "^Obs_%", get_pct)))
 cat(sprintf("      Obs_OR design %.5f | wt= %.5f | unweighted %.5f\n",
@@ -281,13 +281,13 @@ cat("D2  (FIXED in z14-i) effect = 'ame' under a design is now the POPULATION-av
 g <- function(t) { cl <- t[[grep("^Model_AME", names(t))[1]]]
   unname(get_diff(cl)[which(as.character(t$levels) == "high")]) }
 cat(sprintf("      design as data %+.6f | wt = 'w' %+.6f\n",
-            g(tab_reg(bdes, dependent="y", predictors=c("x","c2"), family="binomial", effect="ame")),
-            g(tab_reg(b, dependent="y", predictors=c("x","c2"), family="binomial", effect="ame",
+            g(tab_reg(bdes, outcome="y", predictors=c("x","c2"), family="binomial", effect="ame")),
+            g(tab_reg(b, outcome="y", predictors=c("x","c2"), family="binomial", effect="ame",
                       wt="w"))))
 
 rp <- as.svrepdesign(bdes, type = "bootstrap", replicates = 20)
 cat("D3  tab_reg(svrepdesign) : ",
-    tryCatch({tab_reg(rp, dependent="y", predictors="x", family="binomial"); "OK"},
+    tryCatch({tab_reg(rp, outcome="y", predictors="x", family="binomial"); "OK"},
              error = function(e) paste("ERROR -", sub("\n.*", "", conditionMessage(e)))), "\n")
 cat("D4  tab(svrepdesign)     : ",
     tryCatch({tab(rp, x, y, pct = "row"); "OK"},

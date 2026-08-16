@@ -96,6 +96,217 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 }
 
 
+# === SECTION: TEST_ROWS -- what kind of statistical row this is ====================================
+# Phase 20c (KEY 5). THE vocabulary of the `test` attribute's discriminator column: one row per kind
+# of test row, for BOTH producers. The `test` tibble is a 15-column union type carrying 39 kinds of
+# row (new_test_tibble(), R/tab_classes.R); before this table only the regression half was declared
+# (reg_footer_spec(), 31 of the 39) and the crosstab half lived as string literals in four consumers,
+# the `compare_*` keys were paste0()-generated in one file and hand-enumerated in another, and the
+# `interact_*` labels sat in a third literal map.
+#
+# THE RULE, the same one TAB_ARGS states one level out:
+#   *** TEST_ROWS OWNS WHAT A ROW IS. THE PRODUCER OWNS WHAT IT COMPUTES. ***
+# Nothing here decides a statistic; every column answers "how is this row selected, named, keyed or
+# rendered". The arithmetic stays in chi2_compute_test() / reg_glance() / svy_omnibus_one() / the
+# five checks.
+#
+# THE COLUMNS
+#   producer    "tab" (a crosstab omnibus test) | "reg". Partitions every consumer.
+#   kind        "gof" (a plain number, the `gof` display token) | "pvalue" | NA on a `line` row.
+#               The row_kind vocabulary (R/row-model.R), checked in R/zzz-fact-keys.R.
+#   digits      gof rows only. ⚠ DELIBERATELY absent on pvalue rows: only `kind == "gof"` ever reads
+#               it (test_grid_reg(), reg_footer_lines()), and reg_footer_plan()'s `%||% 0L` then
+#               gives every p-value row the same 0L instead of two values for one unread fact.
+#   render      "grid" = a footer ROW (a cell per model column) | "line" = a table-wide footer
+#               SENTENCE (a pooled test belongs to no single column).
+#   noun        the label's subject, a BARE MSGID -- gettext at render, never at load (a top-level
+#               gettext() freezes the build locale; REG_CHECKS' header states the same rule).
+#   instrument  the label's parenthetical, a bare msgid or NA. The label IS
+#               reg_check_label(noun, instrument) for every reg row -- ONE rule for all 34, which is
+#               why 21 hand-written labels, a 3-arm switch and reg_check_spec_entries()' own paste
+#               all collapse into it.
+#   stat        WHICH `stats =` KEY REQUESTS THIS ROW (reg only). This is the many-to-one that makes
+#               the user's vocabulary smaller than the storage's: linearity_lr/_f/_wald all carry
+#               "linearity", the four compare_baseline* rows all carry "compare_baseline". NA on a
+#               crosstab row -- an omnibus test is asked for with `tab(test = TRUE)`, not by name.
+#   method      "lr" | "f" | "wald" | "aic" -- WHICH INSTRUMENT fired, as a key. Exactly one of a
+#               `stat` block's rows is written per fit, and (stat, method) is unique, so
+#               test_row_key()/test_row_types() replace the paste0() generation and the three
+#               hand-written `types = c(wald=, f=, lr=)` maps.
+#   design      TRUE = the survey-design variant of a crosstab test.
+#   var_kind    "pct" | "mean" -- which column kind a crosstab row describes (EST_SCALES' vocabulary).
+#   anova       "welch" | "classic" -- which options(tabxplor.anova) value SELECTS this row. Both are
+#               computed and stored; the choice is pure display. NA = not an ANOVA F.
+#   cell_label  the in-cell test label ("Chi2", "F, Welch"), crosstab only.
+#   word        the same test's name inside the p-value ROW name ("Chi2", "Welch F", "ANOVA F").
+#               Two columns because they genuinely differ: the cell is cramped, the row name is prose.
+#
+# ⚠ THE ORDER IS THE CONTRACT: rows 1-31 in this order ARE reg_footer_spec()'s display order, which
+#   is also its fallback order. REG_GOF_KEYS is derived from it, so it took this order too (its only
+#   reader is an "Available: ..." message; one table, one order, never a second order column).
+# ⚠ WHAT IS NOT A ROW: Fisher's exact p and the weak-chi2 " !" flag are CONDITIONS ON the chi2 row
+#   (`pvalue_exact` and `min_e` columns of it), which is what keeps the tidy shape and the row count
+#   stable. They stay in test_cell_label_weak() / test_pvalue_descriptor()'s bodies.
+# ⚠ THE SCHEMA STAYS DECLARED IN new_test_tibble(): test_group_cols() reads every UNdeclared column
+#   as a grouping variable. This table declares the ROWS; that one declares the COLUMNS.
+
+# The five literal blocks. The sixth (model checks) is GENERATED from REG_CHECKS below, because that
+# table owns facts this one must not (`families`, `weighted_ok`, `panel`, and the two taught-but-
+# never-scored checks that have a panel and NO row here at all).
+#
+# `block` = WHICH PRODUCER WRITES THIS ROW, stamped per block rather than per row. It is the column
+# that makes the union type readable ("who emits a `dispersion` row?") and it is what REG_GOF_KEYS is
+# derived from: `stat` cannot serve, because a single-instrument row's `stat` IS its own name
+# (`dispersion`, `compare_baseline`), so "the rows reg_glance() emits" is not expressible in it.
+# `producer` follows from it (only `omnibus` is a crosstab block) and is stamped with it -- one
+# encoding, one convenience name, tied by an assertion at the file tail.
+#' @keywords internal
+#' @noRd
+TEST_ROWS <- local({
+  # ⚠ every member is NA when unset, never NULL: the defaulting below is utils::modifyList(), which
+  # REMOVES an entry whose value is NULL rather than setting it.
+  reg_gof <- function(noun, digits, stat, instrument = NA_character_, method = NA_character_)
+    list(producer = "reg", kind = "gof", digits = as.integer(digits), render = "grid",
+         noun = noun, instrument = instrument, stat = stat, method = method)
+  reg_p <- function(noun, stat, instrument = NA_character_, method = NA_character_)
+    list(producer = "reg", kind = "pvalue", render = "grid",
+         noun = noun, instrument = instrument, stat = stat, method = method)
+  reg_line <- function(instrument, stat, method)
+    list(producer = "reg", kind = NA_character_, render = "line",
+         noun = NA_character_, instrument = instrument, stat = stat, method = method)
+  tab_p <- function(var_kind, cell_label, word, design = FALSE, anova = NA_character_)
+    list(producer = "tab", kind = "pvalue", render = "grid", noun = NA_character_,
+         instrument = NA_character_, stat = NA_character_, method = NA_character_,
+         design = design, var_kind = var_kind, anova = anova,
+         cell_label = cell_label, word = word)
+
+  blocks <- list(
+    # --- goodness of fit, one per model column (reg_glance) --------------------------------------
+    glance = list(
+      n             = reg_gof("N",              0L, stat = "n"),
+      lr_null       = reg_p  ("LR vs null",         stat = "lr_null"),
+      wald_null     = reg_p  ("Wald vs null",       stat = "wald_null"),
+      f_model       = reg_p  ("F",                  stat = "f_model"),
+      r2            = reg_gof("R2",             3L, stat = "r2"),
+      r2_adj        = reg_gof("Adjusted R2",    3L, stat = "r2_adj"),
+      mcfadden_r2   = reg_gof("McFadden R2",    3L, stat = "mcfadden_r2"),
+      nagelkerke_r2 = reg_gof("Nagelkerke R2",  3L, stat = "nagelkerke_r2"),
+      cox_snell_r2  = reg_gof("Cox-Snell R2",   3L, stat = "cox_snell_r2"),
+      sigma         = reg_gof("Residual SD",    2L, stat = "sigma"),
+      aic           = reg_gof("AIC",            0L, stat = "aic"),
+      bic           = reg_gof("BIC",            0L, stat = "bic"),
+      # `phi` is the EXACT Pearson dispersion; `dispersion` names the CHECK (max robust/model SE).
+      phi           = reg_gof("Pearson dispersion", 2L, stat = "phi", instrument = "phi")),
+    # --- model comparison ------------------------------------------------------------------------
+    # Four instruments x two modes. The USER key is the `stat` (`compare_baseline` /
+    # `compare_sequential`); which of the four rows is written is the model's business, and
+    # reg_compare_rows() looks it up through test_row_key(stat, method).
+    compare = list(
+      compare_baseline      = reg_p("LR vs baseline",   stat = "compare_baseline",   method = "lr"),
+      compare_baseline_f    = reg_p("F vs baseline",    stat = "compare_baseline",   method = "f"),
+      compare_baseline_wald = reg_p("Wald vs baseline", stat = "compare_baseline",   method = "wald"),
+      compare_baseline_aic  = reg_gof("Delta-AIC vs baseline", 0L,
+                                      stat = "compare_baseline", method = "aic"),
+      compare_seq           = reg_p("LR vs previous",   stat = "compare_sequential", method = "lr"),
+      compare_seq_f         = reg_p("F vs previous",    stat = "compare_sequential", method = "f"),
+      compare_seq_wald      = reg_p("Wald vs previous", stat = "compare_sequential", method = "wald"),
+      compare_seq_aic       = reg_gof("Delta-AIC vs previous", 0L,
+                                      stat = "compare_sequential", method = "aic")),
+    # --- the per-predictor overall-association test ----------------------------------------------
+    global = list(
+      global_lr   = reg_p("Overall association", stat = "global", instrument = "LR",   method = "lr"),
+      global_f    = reg_p("Overall association", stat = "global", instrument = "F",    method = "f"),
+      global_wald = reg_p("Overall association", stat = "global", instrument = "Wald", method = "wald")),
+    # --- the five model checks, GENERATED from REG_CHECKS ----------------------------------------
+    check = test_rows_from_checks(),
+    # --- the aggregated effect-modification test: a footer LINE, not rows -------------------------
+    # Its `instrument` is the phrase reg_interaction_lines() prints ("a likelihood ratio test"), the
+    # only label these rows have -- they carry no footer row, so `noun` is free.
+    interaction = list(
+      interact_lr   = reg_line("likelihood ratio", stat = "interaction", method = "lr"),
+      interact_f    = reg_line("F test",           stat = "interaction", method = "f"),
+      interact_wald = reg_line("Wald test",        stat = "interaction", method = "wald")),
+    # --- the crosstab omnibus tests ---------------------------------------------------------------
+    # ⚠ exactly one row per (var_kind x anova x design) -- asserted below. That invariant is what
+    # lets a third ANOVA F be added as one row, with no code change anywhere.
+    omnibus = list(
+      chi2        = tab_p("pct",  "Chi2",             "Chi2"),
+      chi2_design = tab_p("pct",  "Chi2, Rao-Scott",  "Chi2",    design = TRUE),
+      F_welch     = tab_p("mean", "F, Welch",         "Welch F", anova = "welch"),
+      F_classic   = tab_p("mean", "F",                "ANOVA F", anova = "classic"),
+      # z16-iii: the flat and the full design run the SAME survey estimator (svyglm + regTermTest
+      # Wald), so there is one design row, and its `word` must not claim a Welch F.
+      F_design    = tab_p("mean", "F, survey", "F", design = TRUE))
+  )
+  # the members a block did not set, defaulted once rather than repeated on every row
+  defaults <- list(digits = NA_integer_, design = FALSE, var_kind = NA_character_,
+                   anova = NA_character_, cell_label = NA_character_, word = NA_character_,
+                   stat = NA_character_, method = NA_character_)
+  unlist(lapply(names(blocks), function(b)
+    lapply(blocks[[b]], function(r) utils::modifyList(defaults, c(r, list(block = b))))),
+    recursive = FALSE)
+})
+
+# The row readers. `.trow_chr` / `.trow_lgl` project one member over every row (the .dtok_* idiom of
+# R/tab-display.R); `.trow_keys` is the workhorse -- the names of the rows a predicate keeps, IN
+# DECLARATION ORDER, which is what makes every derived vector below order-stable.
+#' @keywords internal
+#' @noRd
+.trow_chr <- function(member)
+  vapply(TEST_ROWS, function(r) as.character(r[[member]])[[1]], character(1))
+#' @keywords internal
+#' @noRd
+.trow_lgl <- function(member) vapply(TEST_ROWS, function(r) isTRUE(r[[member]]), logical(1))
+# ⚠ which(), not [keep]: most members are NA on the rows they do not apply to, and `NA == "lr"` is
+# NA -- which logical indexing turns into a phantom NA element rather than dropping the row. That is
+# what made test_row_key() see two matches for a pair it declares unique.
+#' @keywords internal
+#' @noRd
+.trow_keys <- function(keep) names(TEST_ROWS)[which(keep)]
+
+# The derived key sets. Each replaces a hand-written literal; each keeps its old name so no call site
+# moved (the DISPLAY_TOKENS precedent).
+#' @keywords internal
+#' @noRd
+TEST_REG_KEYS      <- .trow_keys(.trow_chr("producer") == "reg")          # tab_kind()'s fallback
+#' @keywords internal
+#' @noRd
+TEST_FOOTER_KEYS   <- .trow_keys(.trow_chr("producer") == "reg" &
+                                   .trow_chr("render") == "grid")         # reg_footer_spec()
+#' @keywords internal
+#' @noRd
+TEST_CROSSTAB_KEYS <- .trow_keys(.trow_chr("producer") == "tab")
+
+# test_row_key(stat, method) -- THE (requesting key, instrument) -> discriminator lookup. It is total
+# because (stat, method) is asserted unique below, which is what lets reg_compare_rows() stop
+# paste0()-ing a key out of a `tag` and a suffix.
+#' @keywords internal
+#' @noRd
+test_row_key <- function(stat, method) {
+  k <- .trow_keys(.trow_chr("stat") == stat & .trow_chr("method") == method)
+  if (length(k) != 1L)
+    stop("tabxplor: no single TEST_ROWS row for stat '", stat, "', method '", method, "'.")
+  k
+}
+
+# test_row_types(stat) -- the same block as the `c(wald = , f = , lr = )` map reg_term_tests() takes.
+# Three literal copies (the interaction test, the global test, the linearity check) become this call.
+#' @keywords internal
+#' @noRd
+test_row_types <- function(stat) {
+  k <- .trow_keys(.trow_chr("stat") == stat & !is.na(.trow_chr("method")))
+  stats::setNames(k, .trow_chr("method")[k])
+}
+
+# The label of any reg row: ONE rule, applied to `noun` + `instrument`, translated at render.
+#' @keywords internal
+#' @noRd
+test_row_label <- function(key) {
+  r <- TEST_ROWS[[key]]
+  reg_check_label(r$noun, r$instrument)
+}
+
+
 # === SECTION: displayed-row selection, cell builders, reg footer spec ===============================
 # (Phase 16a moved these here from R/tab_classes.R so all `test`-attribute display lives in one module.)
 
@@ -118,15 +329,25 @@ tab_anova <- function(x) {
 # same row; the p-value cell shows that reliable exact p (labelled "Fisher") instead of the flagged
 # chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
 test_display_rows <- function(test_tbl, anova = tx_option("anova")) {
-  keep_f <- paste0("F_", anova)
   # Phase 18j: a design-based table carries chi2_design (factor) or F_design (numeric) INSTEAD of
   # the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.
   # (z16-iii: four discriminators became two, because the flat and the full design run the SAME
   # survey estimator; which one a table used is meta$inference$basis, not a second encoding here.)
-  disp   <- dplyr::filter(test_tbl,
-                          .data$test %in% c("chi2", "chi2_design", keep_f, "F_design"))
+  # Phase 20c: the four literals are TEST_ROWS' own selection rule -- every crosstab row whose
+  # `anova` slot is unset (it is not an ANOVA F) or names the chosen one. Adding a third F is a row.
+  keep <- test_crosstab_displayed(anova)
+  disp <- dplyr::filter(test_tbl, .data$test %in% keep)
   if (is.null(disp[["pvalue_exact"]])) disp$pvalue_exact <- NA_real_
   disp
+}
+
+# The crosstab discriminators DISPLAYED under a given `anova` choice. Both F rows are computed and
+# stored; picking one is pure display (tab_anova()).
+#' @keywords internal
+#' @noRd
+test_crosstab_displayed <- function(anova = tx_option("anova")) {
+  av <- .trow_chr("anova")
+  .trow_keys(.trow_chr("producer") == "tab" & (is.na(av) | av == anova))
 }
 
 # Build the fmt "pvalue" cells for a p-value display row. Phase 17c: the p lives HONESTLY in the
@@ -142,14 +363,16 @@ pvalue_line_fmt <- function(p, label = NA_character_) {
   fmt(display = disp, scale = "level_n", n = NA_integer_, pvalue = p, digits = 2L)
 }
 
-# The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
+# The label shown in a crosstab p-value cell for each test type (Phase 12f). NA -> no in-cell label.
 # Phase 18j / z16-iii: the design-based variant names its method (Rao-Scott / svyglm Wald F).
+# Phase 20c: the 5-arm switch is TEST_ROWS' `cell_label`. gettext() is applied uniformly now (it was
+# on "F, survey" alone) -- a label is a msgid, and English is byte-identical because an untranslated
+# msgid returns itself. The notation ("Chi2", "F") is simply never translated, which is a translator
+# decision rather than a code one.
 test_cell_label <- function(test) {
-  # Phase 18w: mostly notation + proper names (Welch/Rao-Scott), kept; "survey" translates.
-  switch(test,
-         "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F",
-         "chi2_design" = "Chi2, Rao-Scott", "F_design" = gettext("F, survey"),
-         NA_character_)
+  r <- TEST_ROWS[[test]]
+  if (is.null(r) || is.na(r$cell_label)) return(NA_character_)
+  gettext(r$cell_label)
 }
 
 # Phase 18m: the p-value ROW NAME (was an in-cell suffix -- moved out of the cell so a
@@ -161,16 +384,29 @@ test_cell_label <- function(test) {
 # "pvalue (Chi2, Welch F; survey-design)".
 # Phase 18w: the prose is translatable (gettext, ambient locale). Notation ("Chi2", "F") is kept;
 # proper names ("Welch", "Fisher", "Rao-Scott") stay as-is. English is byte-identical.
+# Phase 20c: the three literal `%in%` sets are TEST_ROWS' `var_kind` and `design`, and each test's
+# name in the row is its declared `word`. That closed a live defect: the numeric arm read
+# `if (any(num == "F_classic")) "ANOVA F" else "Welch F"`, and after the survey overlay a design
+# table carries ONLY `F_design` -- so it printed "Welch F" for a test that is a svyglm + regTermTest
+# Wald F. `F_design` declares `word = "F"`, and the "; survey-design" suffix already names it.
+# ⚠ `tests` is always the DISPLAYED rows (test_display_rows() ran first, at both call sites), so at
+# most one row of each var_kind reaches here -- which is why one `word` per side is the whole rule.
 test_pvalue_descriptor <- function(tests, used_exact = FALSE, weak = FALSE) {
   tests <- unique(tests[!is.na(tests)])
-  fac   <- tests[tests %in% c("chi2", "chi2_design")]
-  num   <- tests[tests %in% c("F_welch", "F_classic", "F_design")]
+  tests <- tests[tests %in% TEST_CROSSTAB_KEYS]
+  vk    <- vapply(tests, function(t) TEST_ROWS[[t]]$var_kind, character(1))
+  fac   <- tests[vk == "pct"]
+  num   <- tests[vk == "mean"]
   parts <- character(0)
   # a weak chi2 (smallest expected count < 5) with no exact companion keeps a " !" validity caveat.
-  if (length(fac)) parts <- c(parts, if (used_exact) gettext("Fisher") else if (weak) gettext("Chi2 !") else gettext("Chi2"))
-  if (length(num)) parts <- c(parts, if (any(num == "F_classic")) gettext("ANOVA F") else gettext("Welch F"))
+  # "Fisher" / "Chi2 !" are CONDITIONS ON the chi2 row (its `pvalue_exact` / `min_e` columns), never
+  # rows of their own -- which is what keeps the tidy shape and the row count stable.
+  if (length(fac)) parts <- c(parts, if (used_exact) gettext("Fisher") else if (weak) gettext("Chi2 !")
+                                     else gettext(TEST_ROWS[[fac[[1]]]]$word))
+  if (length(num)) parts <- c(parts, gettext(TEST_ROWS[[num[[1]]]]$word))
   if (!length(parts)) return(gettext("pvalue"))
-  robust <- if (any(tests %in% c("chi2_design", "F_design"))) gettext("; survey-design") else ""
+  robust <- if (any(vapply(tests, function(t) isTRUE(TEST_ROWS[[t]]$design), logical(1))))
+    gettext("; survey-design") else ""
   enc2utf8(gettextf("pvalue (%s%s)", paste(parts, collapse = ", "), robust))
 }
 
@@ -190,54 +426,32 @@ test_es_measure <- function(es_types) {
 # reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R), DISJOINT from the crosstab "chi2"/"F_*" so the
 # same `test` attribute drives both. One entry per footer stat: its row label + how the cell renders.
 # kind "gof" -> a plain number (the "gof" display token reading `statistic`); kind "pvalue" -> a p-value
-# cell. `digits` applies to gof cells. Order here = the display / fallback order.
-# Phase 18w: GOF row labels are translatable (gettext, ambient locale). Notation (N/F/R2/AIC/BIC and
-# the named pseudo-R2s) stays; the "vs null/baseline/previous" prose + "Adjusted R2"/"Residual SD"
-# translate. English is byte-identical (gettext returns the msgid).
+# cell. `digits` applies to gof cells. Order = TEST_ROWS' declaration order = the display order.
 #
-# Phase 18z15 -- the list is now the FIXED entries plus two GENERATED blocks, so no label is written
-# twice. The `global` per-predictor test moved from a footer LINE to footer ROWS (measured: in a
-# 3-model comparison its line rendered as three unlabelled sentences, and on a split table it printed
-# the split level, repeated, instead of the predictors); the five model CHECKS come from REG_CHECKS
-# (R/reg-assumptions.R), which is also the `stats =` / `check =` vocabulary. Both blocks are
-# per-predictor, keyed by the `term` column and rendered "<label>: <term>" by reg_footer_plan().
-reg_footer_spec <- function() c(list(
-  n                    = list(label = gettext("N"),                     kind = "gof",    digits = 0L),
-  lr_null              = list(label = gettext("LR vs null"),            kind = "pvalue"),
-  wald_null            = list(label = gettext("Wald vs null"),          kind = "pvalue"),
-  f_model              = list(label = gettext("F"),                     kind = "pvalue"),
-  r2                   = list(label = gettext("R2"),               kind = "gof",   digits = 3L),
-  r2_adj               = list(label = gettext("Adjusted R2"),      kind = "gof",   digits = 3L),
-  mcfadden_r2          = list(label = gettext("McFadden R2"),      kind = "gof",   digits = 3L),
-  nagelkerke_r2        = list(label = gettext("Nagelkerke R2"),    kind = "gof",   digits = 3L),
-  cox_snell_r2         = list(label = gettext("Cox-Snell R2"),     kind = "gof",   digits = 3L),
-  sigma                = list(label = gettext("Residual SD"),           kind = "gof",   digits = 2L),
-  aic                  = list(label = gettext("AIC"),                   kind = "gof",   digits = 0L),
-  bic                  = list(label = gettext("BIC"),                   kind = "gof",   digits = 0L),
-  # Phase 18z15: `dispersion` now names the CHECK (max robust/model SE, every family, from
-  # REG_CHECKS below); the exact Pearson dispersion this row used to hold keeps its own key `phi`.
-  phi                  = list(label = reg_check_label("Pearson dispersion", "phi"),
-                                                                        kind = "gof",   digits = 2L),
-  compare_baseline     = list(label = gettext("LR vs baseline"),        kind = "pvalue"),
-  compare_baseline_f   = list(label = gettext("F vs baseline"),         kind = "pvalue"),
-  compare_baseline_wald = list(label = gettext("Wald vs baseline"),     kind = "pvalue"),
-  compare_baseline_aic = list(label = gettext("Delta-AIC vs baseline"),  kind = "gof",  digits = 0L),
-  compare_seq          = list(label = gettext("LR vs previous"),        kind = "pvalue"),
-  compare_seq_f        = list(label = gettext("F vs previous"),         kind = "pvalue"),
-  compare_seq_wald     = list(label = gettext("Wald vs previous"),      kind = "pvalue"),
-  compare_seq_aic      = list(label = gettext("Delta-AIC vs previous"),  kind = "gof",  digits = 0L)
-  ),
-  # the per-predictor overall-association test (z13), and the five model checks (z15)
-  stats::setNames(lapply(reg_global_types(), function(d) list(
-      label = reg_check_label("Overall association",
-                              switch(d, global_lr = "LR", global_f = "F", "Wald")),
-      kind = "pvalue")), reg_global_types()),
-  reg_check_spec_entries()
-)
-reg_footer_test_types <- function() names(reg_footer_spec())
+# Phase 20c (KEY 5): DERIVED from TEST_ROWS, contents and order intact, so no consumer moved. What
+# went with the 21 hand-written entries: the `global` label switch, reg_check_spec_entries()' own
+# paste, and the two-encodings pair between this list and reg_compare_rows()' paste0()-built keys.
+# ⚠ IT MUST STAY A FUNCTION. Every label is gettext()'d HERE, at render, under the ambient locale;
+# a top-level list would evaluate once at load and freeze with_legend_lang()'s LANGUAGE switch.
+# Phase 18w: notation (N / F / R2 / AIC / BIC and the named pseudo-R2s) is its own translation;
+# the "vs null / baseline / previous" prose translates. English is byte-identical.
+reg_footer_spec <- function() {
+  stats::setNames(lapply(TEST_FOOTER_KEYS, function(k) {
+    r   <- TEST_ROWS[[k]]
+    out <- list(label = test_row_label(k), kind = r$kind)
+    # ⚠ the member is ABSENT on a pvalue row, never NA: reg_footer_plan()'s `s$digits %||% 0L` is
+    # what turns that into the 0L every p-value row has always carried, and only `kind == "gof"`
+    # ever reads it (test_grid_reg(), reg_footer_lines()).
+    if (identical(r$kind, "gof")) out$digits <- r$digits
+    out
+  }), TEST_FOOTER_KEYS)
+}
+reg_footer_test_types <- function() TEST_FOOTER_KEYS
 # Phase 18z8: the interaction discriminators are NOT in reg_footer_spec() (they render as a
 # table-wide footer LINE, not as rows -- see reg_interaction_rows), but a table carrying only them
-# (stats = FALSE) is still a reg table, so tab_kind()'s DEGRADED fallback must know them.
+# (stats = FALSE) is still a reg table, so tab_kind()'s DEGRADED fallback must know them. Since 20c
+# that fallback asks TEST_ROWS for every `producer == "reg"` key (TEST_REG_KEYS) and stops having to
+# know which of them render as rows.
 # Phase 19g (KEY 6): is_reg_footer() is GONE. "Is this a regression" is a stored fact
 # (meta$spec$kind, R/table-spec.R) that every consumer reads through tab_is_reg(); sniffing the
 # `test` tibble survives only inside tab_kind(), as the fallback for a table that lost its metadata.
@@ -253,7 +467,7 @@ test_key_col <- function(tt, col) {
 
 # Phase 19g (KEY 6): the SUB-POPULATION columns of a `test` tibble -- everything outside the fixed
 # schema. They are named after the grouping variable in BOTH arms (a crosstab's tab_vars, a
-# regression's split_var), which is what lets one rule read them: a row with no group column
+# regression's tab_vars), which is what lets one rule read them: a row with no group column
 # describes the whole table / whole model.
 #' @keywords internal
 test_group_cols <- function(tt) {
@@ -421,29 +635,29 @@ test_grid_reg <- function(x, test_tbl) {
   meta <- reg_call(x)
 
   # model columns (value cols) = the distinct fit columns, first-appearance order; headers = the
-  # dependent names when their count matches, else the column key itself.
+  # outcome names when their count matches, else the column key itself.
   # Phase 19l: the `"^Model .+ \\((.+)\\)$"` strip that stood here is DELETED. It matched an English
   # word plus a space, and NO producer has emitted that shape since Phase g -- the names are
   # "Model_OR" / "Model_OR [married]" (reg_column) and the col_var is reg_shared_col_var()'s
   # "<dep>: <positive_level>". So it always fell through and returned `cv` unchanged, which is what
   # the code does now, without pretending to parse.
   value_cols <- unique(reg$col)
-  # Phase 19m-ii: the dependent each value column estimates, read off the ROW'S OWN KEY. 19m-i marked
-  # the length coincidence this replaces as a MISSING JOIN KEY: `meta$dependent` enumerated the
+  # Phase 19m-ii: the outcome each value column estimates, read off the ROW'S OWN KEY. 19m-i marked
+  # the length coincidence this replaces as a MISSING JOIN KEY: `meta$outcome` enumerated the
   # OUTCOMES and `unique(reg$col)` the FITS, two different enumerations paired only when they happened
   # to be the same length.
   #
-  # THE RULE: a dependent names a column only when it IDENTIFIES it -- one model per outcome. A model
+  # THE RULE: an outcome names a column only when it IDENTIFIES it -- one model per outcome. A model
   # COMPARISON gives every column the same outcome, so there the column key (the model label) is the
   # header. That is strictly better in the one case the coincidence got wrong: a single-model
   # comparison (1 dep, 1 col) used to be headed by the OUTCOME rather than by the model.
-  dep_col <- if ("dep" %in% names(reg)) reg$dep else rep(NA_character_, nrow(reg))
-  dep_of  <- vapply(value_cols, function(cv) {
+  dep_col <- if ("outcome" %in% names(reg)) reg$outcome else rep(NA_character_, nrow(reg))
+  outcome_of  <- vapply(value_cols, function(cv) {
     d <- unique(dep_col[reg$col == cv])
     d <- d[!is.na(d) & nzchar(d)]
     if (length(d) == 1L) d else NA_character_
   }, character(1), USE.NAMES = FALSE)
-  value_headers <- if (!anyNA(dep_of) && !anyDuplicated(dep_of)) dep_of else value_cols
+  value_headers <- if (!anyNA(outcome_of) && !anyDuplicated(outcome_of)) outcome_of else value_cols
 
   # the ordered footer rows actually present: one per (stat, term), spec order then term order
   plan <- reg_footer_plan(reg)
@@ -458,7 +672,7 @@ test_grid_reg <- function(x, test_tbl) {
   grp_lv   <- unique(rv_key)
   is_split <- any(nzchar(grp_lv))
 
-  # shared-predictors column (dependent-vector / single model). A model COMPARISON has per-column
+  # shared-predictors column (outcome-vector / single model). A model COMPARISON has per-column
   # predictors that a row-dimension column cannot hold -> omit it (columns already name the models).
   show_preds <- !is.null(meta) && !isTRUE(meta$comparison) && length(meta$predictors) > 0
 
@@ -706,4 +920,87 @@ tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, re
     if (nm %in% fmt_nms) build_col(nm) else build_nonfmt(nm)), names(tabs))
   tabs2 <- tibble::new_tibble(out, nrow = length(out[[1]]))
   do.call(new_tab, c(list(tabs2), attrs)) |> dplyr::group_by(!!!rlang::syms(regroup))
+}
+
+
+# === SECTION: TEST_ROWS build-time checks + potools anchor ==========================================
+# At the file TAIL, the DISPLAY_TOKENS layout: everything the assertions read (TEST_ROWS itself, its
+# derived key sets, ROW_KINDS from R/row-model.R and REG_CHECKS from R/reg-assumptions.R -- both
+# earlier in C collation) is in scope here and nowhere earlier.
+
+stopifnot(exprs = {
+  # S1 -- a row is named, once
+  !is.null(names(TEST_ROWS))
+  all(nzchar(names(TEST_ROWS)))
+  !anyDuplicated(names(TEST_ROWS))
+
+  # S2 -- the enums
+  all(.trow_chr("producer") %in% c("tab", "reg"))
+  all(.trow_chr("block") %in% c("glance", "compare", "global", "check", "interaction", "omnibus"))
+  # `producer` is the convenience name of `block`: only the crosstab block is not a regression one
+  identical(.trow_chr("producer") == "tab", .trow_chr("block") == "omnibus")
+  all(.trow_chr("render")   %in% c("grid", "line"))
+  all(is.na(.trow_chr("kind")) | .trow_chr("kind") %in% ROW_KINDS)
+  all(is.na(.trow_chr("method")) | .trow_chr("method") %in% c("lr", "f", "wald", "aic"))
+  all(is.na(.trow_chr("var_kind")) | .trow_chr("var_kind") %in% c("pct", "mean"))
+
+  # S3 -- `digits` is the gof rows' fact, and ONLY theirs. A pvalue row must leave the member
+  # ABSENT so reg_footer_plan()'s `%||% 0L` gives every one of them the same 0L (see the header).
+  all(vapply(TEST_ROWS, function(r)
+    !identical(r$kind, "gof") || !is.na(r$digits), logical(1)))
+  all(vapply(TEST_ROWS, function(r)
+    identical(r$kind, "gof") || is.na(r$digits), logical(1)))
+
+  # S4 -- (stat, method) is UNIQUE, which is what makes test_row_key() total
+  !anyDuplicated(paste(.trow_chr("stat"), .trow_chr("method"))[
+    !is.na(.trow_chr("stat")) & !is.na(.trow_chr("method"))])
+
+  # S5 -- EXACTLY ONE crosstab row per (var_kind x anova choice x design). This is the invariant
+  # test_grid_crosstab() states only in a comment ("one displayed test per col_var"), and it is what
+  # lets a third ANOVA F be added as one row with no code change anywhere.
+  all(vapply(c("welch", "classic"), function(a)
+    all(table(vapply(test_crosstab_displayed(a),
+                     function(k) paste(TEST_ROWS[[k]]$var_kind, TEST_ROWS[[k]]$design), character(1)))
+        == 1L), logical(1)))
+
+  # S6 -- the producer partition: a crosstab row is asked for by `tab(test = TRUE)`, never by name,
+  # and it is the only kind that names a column kind and carries the two rendered labels.
+  identical(.trow_chr("producer") == "tab", is.na(.trow_chr("stat")))
+  identical(.trow_chr("producer") == "tab", !is.na(.trow_chr("var_kind")))
+  identical(.trow_chr("producer") == "tab", !is.na(.trow_chr("cell_label")))
+  identical(.trow_chr("producer") == "tab", !is.na(.trow_chr("word")))
+
+  # S7 -- a footer LINE has no cell, so it has no row kind, and it is outside the footer spec
+  all(is.na(.trow_chr("kind")[.trow_chr("render") == "line"]))
+  length(intersect(TEST_FOOTER_KEYS, .trow_keys(.trow_chr("render") == "line"))) == 0L
+
+  # S8 -- the generated check block round-trips: every discriminator REG_CHECKS can emit is a row
+  # here, and every row keyed by a check name is one of them.
+  setequal(reg_check_types(), .trow_keys(.trow_chr("block") == "check"))
+})
+
+# The labels are gettext()'d DYNAMICALLY (gettext(r$noun), gettext(r$cell_label)), which potools
+# cannot see -- the msgids left reg_footer_spec()'s static gettext() calls when they became TEST_ROWS
+# data. This dead branch states each one exactly once so `Rscript dev/update_translations.R` extracts
+# them; nothing here ever runs. Same device as reg_check_msgid_anchor() / legend_measure_word()'s.
+#' @keywords internal
+#' @noRd
+test_rows_msgid_anchor <- function() {
+  if (FALSE) c(
+    # the reg footer row nouns
+    gettext("N"), gettext("LR vs null"), gettext("Wald vs null"), gettext("F"),
+    gettext("R2"), gettext("Adjusted R2"), gettext("McFadden R2"), gettext("Nagelkerke R2"),
+    gettext("Cox-Snell R2"), gettext("Residual SD"), gettext("AIC"), gettext("BIC"),
+    gettext("LR vs baseline"), gettext("F vs baseline"), gettext("Wald vs baseline"),
+    gettext("Delta-AIC vs baseline"), gettext("LR vs previous"), gettext("F vs previous"),
+    gettext("Wald vs previous"), gettext("Delta-AIC vs previous"),
+    # the interaction line's instruments
+    gettext("likelihood ratio"), gettext("F test"), gettext("Wald test"),
+    # the crosstab cell labels and row-name words ("F, survey" already translated; the rest is
+    # notation and proper names, which a translator is expected to leave alone -- gettext() PERMITS
+    # a translation, it does not ask for one)
+    gettext("Chi2"), gettext("Chi2, Rao-Scott"), gettext("F, Welch"), gettext("F, survey"),
+    gettext("Welch F"), gettext("ANOVA F")
+  )
+  invisible(NULL)
 }

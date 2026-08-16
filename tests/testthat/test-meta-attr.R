@@ -212,7 +212,7 @@ test_that("tab_weight_line() reads the STORED basis, never the .svy_weights colu
 
 # === SECTION: the regression rebuild sites (Phase 18z16-iiiii) =================================
 
-test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked", {
+test_that("a weighted tab_reg(tab_vars=) keeps its inference, spread or stacked", {
   skip_if_no_gettext()
   skip_if_not_installed("survey")
   withr::local_options(list(tabxplor.lang = "en"))
@@ -225,15 +225,15 @@ test_that("a weighted tab_reg(split_var=) keeps its inference, spread or stacked
     w = stats::rgamma(n, 2, 2)
   )
   mk <- function(...) suppressMessages(
-    tab_reg(d, dependent = "y", predictors = "g", family = "binomial", wt = "w", ...))
+    tab_reg(d, outcome = "y", predictors = "g", family = "binomial", wt = "w", ...))
   flat <- mk()
   # The auto-spread is the shape that lost everything: it routes through tab_spread(), whose bare
   # new_tab() literal dropped the whole meta, so the table asserted "intervals use the unweighted
   # sample size" while its models came from svyglm. The stacked shape (several models per group) is
   # checked beside it.
-  wide <- mk(split_var = "s")
-  tall <- suppressMessages(tab_reg(d, dependent = "y", predictors = list(m1 = "g", m2 = "g"),
-                                   family = "binomial", wt = "w", split_var = "s"))
+  wide <- mk(tab_vars = "s")
+  tall <- suppressMessages(tab_reg(d, outcome = "y", predictors = list(m1 = "g", m2 = "g"),
+                                   family = "binomial", wt = "w", tab_vars = "s"))
   expect_identical(tabxplor:::tab_inference_basis(flat), "weights")   # non-vacuous
   expect_identical(tabxplor:::tab_inference_basis(wide), "weights")
   expect_identical(tabxplor:::tab_inference_basis(tall), "weights")
@@ -250,12 +250,12 @@ test_that("a split tab_reg()'s columns name the same interval methods as an unsp
     y = stats::rnorm(n)
   )
   mk <- function(...) suppressMessages(
-    tab_reg(d, dependent = "y", predictors = "g", family = "gaussian", ...))
+    tab_reg(d, outcome = "y", predictors = "g", family = "gaussian", ...))
   # the split branch used to write a THREE-key reduction of the six the unsplit branch writes, so a
   # split gaussian/poisson table's legend could not name the interval its Obs_* columns print.
   # Phase 19b: the methods ride the COLUMNS, so a rebuild site cannot lose them at all.
   meth <- function(t) sort(unique(get_ci_method(t)[purrr::map_lgl(t, is_fmt)]))
-  expect_identical(meth(mk(split_var = "s")), meth(mk()))
+  expect_identical(meth(mk(tab_vars = "s")), meth(mk()))
 })
 
 test_that("tab_reg() on a survey design keeps the design's degrees of freedom", {
@@ -274,7 +274,7 @@ test_that("tab_reg() on a survey design keeps the design's degrees of freedom", 
   # the one design consumer that never saw it: its model columns were on t(degf) (df.residual() of an
   # svyglm IS the design df) while its crude Obs_* columns stayed on z.
   tr <- suppressMessages(
-    tab_reg(des, dependent = "y", predictors = "g", family = "binomial", empirical = TRUE))
+    tab_reg(des, outcome = "y", predictors = "g", family = "binomial", empirical = TRUE))
   tt <- suppressMessages(tab(des, g, y, pct = "row", ci = "cell"))
   # (svy_degf() stores it as a double; survey::degf() returns an integer)
   expect_identical(tabxplor:::tab_inference_degf(tr), as.double(survey::degf(des)))

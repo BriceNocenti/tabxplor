@@ -29,7 +29,7 @@ gap_data <- function() {
 }
 
 gap_tab <- function(d, policy = "ignore", preds = "race", ...)
-  suppressMessages(tab_reg(d, dependent = "married", predictors = preds, split_var = "party3",
+  suppressMessages(tab_reg(d, outcome = "married", predictors = preds, tab_vars = "party3",
                            family = "binomial", color = c(TRUE, "between_groups"),
                            color_signif = policy, ...))
 
@@ -63,10 +63,10 @@ test_that("gap_se is NA on every table that has no counterpart", {
   testthat::expect_true(all(vapply(ct[reg_fmt_cols(ct)],
                                    function(c) all(is.na(get_gap_se(c))), logical(1))))
   # a reg table with no split_var
-  t <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", family = "binomial"))
+  t <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", family = "binomial"))
   testthat::expect_true(all(is.na(get_gap_se(t$Model_OR))))
   # profile-likelihood bounds are not est +/- crit*se, so no SE is recovered from them
-  pr <- gap_tab(d, method = "profile")
+  pr <- gap_tab(d, ci_method = "profile")
   testthat::expect_true(all(is.na(get_gap_se(pr[[reg_group_col(pr, "Dem")]]))))
 })
 
@@ -180,8 +180,8 @@ test_that("the tooltip carries the gap, its interval and its p", {
 
 test_that("the interaction test IS drop1() on the pooled model", {
   d <- gap_data()
-  t <- suppressMessages(tab_reg(d, dependent = "married", predictors = c("race", "age"),
-                                split_var = "party3", family = "binomial",
+  t <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "age"),
+                                tab_vars = "party3", family = "binomial",
                                 stats = c("n", "interaction")))
   it <- get_test(t)
   it <- it[it$test %in% tabxplor:::reg_interaction_types(), , drop = FALSE]
@@ -222,20 +222,20 @@ test_that("the footer line reaches every medium, once per model", {
 test_that("`color = 'between_groups'` turns the interaction test on; `stats=` asks for it alone", {
   d <- gap_data()
   testthat::expect_message(
-    t <- tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
+    t <- tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
                  family = "binomial", color = c(TRUE, "between_groups")),
     "interaction test")
   testthat::expect_length(tabxplor:::reg_interaction_lines(t, "en"), 1L)
   # off by default
-  t0 <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
+  t0 <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
                                  family = "binomial"))
   testthat::expect_length(tabxplor:::reg_interaction_lines(t0, "en"), 0L)
 })
 
 test_that("the interaction rows leave the GOF footer row-for-row unchanged", {
   d <- gap_data()
-  base <- suppressMessages(tab_reg(d, dependent = "married", predictors = "race",
-                                   split_var = "party3", family = "binomial"))
+  base <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race",
+                                   tab_vars = "party3", family = "binomial"))
   with <- gap_tab(d, "ignore")
   gof  <- function(t) { tt <- get_test(t); tt[tt$test %in% tabxplor:::reg_footer_test_types(), ] }
   testthat::expect_equal(gof(base), gof(with))
@@ -246,15 +246,15 @@ test_that("the interaction rows leave the GOF footer row-for-row unchanged", {
 
 test_that("the statistic follows compare=: F for gaussian, design-based Wald when weighted", {
   d <- gap_data()
-  gs <- suppressMessages(tab_reg(d[!is.na(d$tvhours), ], dependent = "tvhours", predictors = "race",
-                                 split_var = "party3", family = "gaussian",
+  gs <- suppressMessages(tab_reg(d[!is.na(d$tvhours), ], outcome = "tvhours", predictors = "race",
+                                 tab_vars = "party3", family = "gaussian",
                                  stats = c("n", "interaction")))
   testthat::expect_identical(unique(get_test(gs)$test[get_test(gs)$test %in%
                                                         tabxplor:::reg_interaction_types()]),
                              "interact_f")
   d$w <- 1 + (as.integer(d$race) %% 3) / 2                    # deterministic weights
   wt <- suppressWarnings(suppressMessages(
-    tab_reg(d, dependent = "married", predictors = "race", split_var = "party3",
+    tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
             family = "binomial", wt = "w", stats = c("n", "interaction"))))
   it <- get_test(wt); it <- it[it$test %in% tabxplor:::reg_interaction_types(), ]
   testthat::expect_identical(unique(it$test), "interact_wald")
@@ -264,7 +264,7 @@ test_that("the statistic follows compare=: F for gaussian, design-based Wald whe
 test_that("an unsupported engine degrades to no line, never to an error", {
   d <- gap_data()
   mn <- suppressWarnings(suppressMessages(
-    tab_reg(d, dependent = "party3", predictors = "race", split_var = "marital",
+    tab_reg(d, outcome = "party3", predictors = "race", tab_vars = "marital",
             family = "multinomial", stats = c("n", "interaction"))))
   testthat::expect_length(tabxplor:::reg_interaction_lines(mn, "en"), 0L)
   testthat::expect_no_error(tab_md(mn))
@@ -276,7 +276,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
   skip_if_not_installed("marginaleffects")
   d <- gap_data()
   testthat::expect_message(
-    t <- tab_reg(d, dependent = "married", predictors = c("race", "party3"), family = "binomial",
+    t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
                  effect = "at_reference", empirical = TRUE),
     "reference profile")
   mcol <- reg_fmt_cols(t)[[1]]
@@ -295,10 +295,10 @@ test_that("D7: `reference` picks the split_var baseline instead of the first lev
     fc[vapply(fc, function(nm) all(is.na(get_obs(t[[reg_group_col(t, nm)]]))), logical(1))]
   }
   b0 <- base_of(gap_tab(d))
-  b1 <- base_of(gap_tab(d, reference = c(party3 = "Rep")))
+  b1 <- base_of(gap_tab(d, ref = c(party3 = "Rep")))
   testthat::expect_true(grepl("Ind", b0[[1]], fixed = TRUE))   # the first level, by default
   testthat::expect_true(grepl("Rep", b1[[1]], fixed = TRUE))   # ... and it is choosable
-  # z5/z8 sent `reference = NULL` into the split recursion and left split_var out of the relevelable
+  # z5/z8 sent `ref = NULL` into the split recursion and left tab_vars out of the relevelable
   # set, so the only way to move the baseline was to relevel the data upstream.
   testthat::expect_false(identical(b0, b1))
 })
@@ -307,7 +307,7 @@ test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   skip_if_not_installed("broom")
   d  <- gap_data()
   sp <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = "race"),
-                                 split_var = "party3", family = "poisson",
+                                 tab_vars = "party3", family = "poisson",
                                  empirical = TRUE, color = c(TRUE, "between_groups")))
   fc <- reg_fmt_cols(sp)
   mdl <- fc[get_role(sp[fc]) == "model"]

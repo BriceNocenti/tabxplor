@@ -90,14 +90,18 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     # vocabulary (so the build core stays engine-free / testable without a live jamovi session).
     .opts = function(wt) {
       list(
-        dependent    = self$options$dependent,
+        # ⚠ 20g: the yaml option is still `dependent`; tab_reg() takes `outcome`.
+        outcome      = self$options$dependent,
         # the model-builder (`models` Array) folds into `predictors`: empty -> the flat pool (one
         # model); >=1 card -> a named list of predictor subsets (model comparison).
         predictors   = jmvtab_reg_models(self$options$models, self$options$predictors),
         # model-comparison test (footer): needs >=2 models; baseline = the chosen model's position.
+        # ⚠ 20g: still the yaml's own two option names -- jmvtab_reg_build() folds them into
+        # tab_reg()'s single `stats =` key, because renaming the OPTIONS would leave the module
+        # inert until the next jmvtools::prepare().
         compare      = self$options$compare,
         baseline     = self$options$baseline,
-        # Phase 15d: the per-dependent Model table drives family / modelled level / trials. The raw
+        # Phase 15d: the per-outcome Model table drives family / modelled level / trials. The raw
         # arrays are passed through; jmvtab_reg_build() resolves each outcome's family (auto-detect for
         # a blank pick), groups the outcomes by family, and calls tab_reg() once per family group.
         depFamily     = self$options$depFamily,
@@ -111,7 +115,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # quartiles / quintiles) -> tab_reg()'s `shape`.
         shapes       = self$options$shapes,
         wt           = wt,
-        split_var    = self$options$split_var,
+        tab_vars     = self$options$split_var,
         # Phase 19k: tab_reg()'s OWN estimand pair -- `effect` names the CONTRAST, `measure` the
         # MEASURE. The retired `exponentiate` / `at` / `estimate_display` options (and the
         # jmv_reg_estimand_opts() translator that mapped them) are gone.
@@ -119,8 +123,8 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         measure      = self$options$measure %||% "auto",
         display      = self$options$display %||% "value",
         empirical    = self$options$empirical,
-        # the reference-level picker (refLevels) -> tab_reg's `reference` named vector (NULL = default)
-        reference    = jmvtab_reg_ref_vector(self$options$refLevels),
+        # the reference-level picker (refLevels) -> tab_reg's `ref` named vector (NULL = default)
+        ref          = jmvtab_reg_ref_vector(self$options$refLevels),
         conf_level   = self$options$conf_level,
         method       = self$options$method,
         stars        = self$options$stars,
@@ -141,12 +145,12 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
 
     # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
-    # comparison was requested with several dependents, which tab_reg() does not allow).
+    # comparison was requested with several outcomes, which tab_reg() does not allow).
     .hint = function() {
       paste0("<div style='padding:12px;opacity:0.7;font-style:italic;'>",
-             "Select a <b>dependent</b> (outcome) variable and one or more <b>predictors</b> ",
+             "Select a <b>outcome</b> (outcome) variable and one or more <b>predictors</b> ",
              "to fit a regression. For a model comparison (predictor subsets), choose a single ",
-             "dependent.</div>")
+             "outcome.</div>")
     },
 
     # Phase h: shown in staged comparison mode when the model set / options changed but the user has not

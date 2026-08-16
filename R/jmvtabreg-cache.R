@@ -81,13 +81,13 @@ jmvreg_cached <- function(cache_env, tier, key, compute_fn)
 #' @keywords internal
 #' @noRd
 jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
-  used <- intersect(unique(c(sp$dependent, sp$predictors, reg_design_vars(design_spec))), names(data))
+  used <- intersect(unique(c(sp$outcome, sp$predictors, reg_design_vars(design_spec))), names(data))
   jmv_hash(list(
     kind       = "jmvreg",
-    dependent  = sp$dependent,
+    outcome  = sp$outcome,
     predictors = sp$predictors,
     trials     = sp$trials,
-    inverse    = sp$inverse,
+    inverse    = sp$outcome_level,
     formula    = if (!is.null(sp$formula)) paste(deparse(sp$formula), collapse = " ") else NULL,
     family     = family,
     nrow       = nrow(data),
@@ -146,6 +146,22 @@ jmvtab_reg_models <- function(models, pool) {
 # Phase h: the staged-comparison gate. A model comparison (>=2 folded models) is heavy -- refitting
 # every model on each live edit is what froze the panel, so its table recomputes ONLY on the Run/Export
 # action (jmvtabreg.b.R). jmvtab_reg_staged() reuses jmvtab_reg_models() so the predicate matches the
+# jmvtab_reg_stats() -- the module's `compare` ComboBox + `baseline` spinner folded into tab_reg()'s
+# ONE `stats =` (Phase 20c). The jamovi options keep their own names until 20g regenerates the
+# .h.R, so this is the same kind of boundary translation `refLevels` -> `reference` already is:
+# the UI asks two questions, the R argument takes one key (optionally carrying its baseline model).
+# NULL = the picker is on "none" -> tab_reg()'s own default footer set, untouched.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_stats <- function(compare, baseline) {
+  cmp <- compare %||% "none"
+  if (!nzchar(cmp) || identical(cmp, "none")) return(NULL)
+  if (identical(cmp, "sequential")) return("compare_sequential")
+  # the spinner is a COLUMN POSITION; 1 is the default, and an unnamed key already means "the first"
+  bl <- suppressWarnings(as.integer(baseline %||% NA))
+  if (is.na(bl) || bl <= 1L) "compare_baseline" else c(compare_baseline = as.character(bl))
+}
+
 # model set tab_reg() actually sees. jmvtab_reg_compare_sig() fingerprints the resolved build/display
 # options (the `.opts()` list, which already excludes the action + export controls), so `.run()` can
 # tell an unchanged/just-computed table (re-serve) from an outdated one (banner + Run prompt).
@@ -198,10 +214,10 @@ jmvtab_reg_mult_vector <- function(multiplicator) {
 }
 
 
-# === Per-dependent Model table -> tab_reg() args (Phase 15d / 15e) ==========================
+# === Per-outcome Model table -> tab_reg() args (Phase 15d / 15e) ==========================
 # The Model table (depFamily / depModelLevel / depTrials arrays) sets one family + modelled level +
-# trials per outcome. These three helpers resolve ONE dependent; jmvtab_reg_build() (Phase 15e) passes
-# the resolved per-dependent family / inverse / trials VECTORS to ONE tab_reg() call -- a mixed table
+# trials per outcome. These three helpers resolve ONE outcome; jmvtab_reg_build() (Phase 15e) passes
+# the resolved per-outcome family / inverse / trials VECTORS to ONE tab_reg() call -- a mixed table
 # (several outcomes, different families) is now one table, one column-group per outcome (no more
 # grouping-by-family / tabxplor_tabs stacking).
 
@@ -220,16 +236,16 @@ jmvtab_reg_dep_family <- function(depFamily, dep, data) {
 # ONLY when the user picked a NON-first level as the modelled one -> FALSE.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_dep_modelled_first <- function(depModelLevel, dep) {
+jmvtab_reg_dep_level <- function(depModelLevel, dep) {
   if (length(depModelLevel)) for (e in depModelLevel) {
     if (identical(as.character(e$var), dep) && length(e$level) && nzchar(as.character(e$level)))
-      return(FALSE)
+      return(as.character(e$level))
   }
-  TRUE
+  NA_character_
 }
 
 # The number of trials the user typed for a binomial outcome, or NA = "take the observed maximum".
-# Phase 19k: NA is now tab_reg()'s OWN spelling of that rule (`trials` accepts NA per dependent), so
+# Phase 19k: NA is now tab_reg()'s OWN spelling of that rule (`trials` accepts NA per outcome), so
 # this helper stops applying it. It used to take max() itself for any integer outcome -- the same
 # rule as R's `trials = TRUE`, but SILENTLY and on a different trigger: one rule, two semantics, and
 # the jamovi one could not be reproduced from the R API.
@@ -263,7 +279,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   cache_env <- jmvreg_cache_env(if (use_cache) store else NULL)
 
   nz  <- function(x) if (length(x) && nzchar(as.character(x)[[1]])) as.character(x) else NULL
-  dep   <- nz(opts$dependent)
+  dep   <- nz(opts$outcome)   # the key .opts() sets, already tab_reg()'s word
   # `predictors` may be a character vector (single model) OR a named list of character vectors
   # (model comparison, from jmvtab_reg_models()): pass a list through, coerce a vector.
   preds <- opts$predictors
@@ -276,17 +292,20 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   if (is.null(dep) || is.null(preds)) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
-  # model comparison (a predictor-subset list) needs a single dependent -> a friendly NULL / hint
+  # model comparison (a predictor-subset list) needs a single outcome -> a friendly NULL / hint
   # instead of tab_reg()'s abort while the user is still selecting.
   if (is.list(preds) && length(dep) > 1L) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
 
   # Phase 15e: resolve each outcome's family / modelled level / trials from the Model table, then pass them
-  # to ONE tab_reg() call as per-dependent vectors -- so several outcomes with DIFFERENT families render as
+  # to ONE tab_reg() call as per-outcome vectors -- so several outcomes with DIFFERENT families render as
   # one mixed table (tab_reg builds one column-group per outcome). No more family-grouping / stacking.
   fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$depFamily, d, data), character(1))
-  invs <- vapply(dep, function(d) jmvtab_reg_dep_modelled_first(opts$depModelLevel, d), logical(1))
+  # Phase 20c: the picker asks for a LEVEL and tab_reg() now takes one, so it travels intact.
+  # ⚠ it used to be folded into a logical ("did the user pick anything?"), which meant ANY pick
+  # modelled the SECOND level -- so choosing the first one in the UI silently modelled the other.
+  lvls <- vapply(dep, function(d) jmvtab_reg_dep_level(opts$depModelLevel, d), character(1))
   # trials are binomial-only (grouped / summed-score); non-binomial outcomes never carry one.
   tris <- vapply(seq_along(dep), function(i) {
     if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i])
@@ -294,7 +313,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   }, integer(1))
 
   fam_arg <- stats::setNames(fams, dep)
-  inv_arg <- if (all(invs)) TRUE else stats::setNames(invs, dep)   # scalar unless a pick overrode it
+  lvl_arg <- if (all(is.na(lvls))) NULL else stats::setNames(lvls, dep)[!is.na(lvls)]
   # Phase 19k: every BINOMIAL outcome gets an entry -- the typed count, or NA = "take the observed
   # maximum", which is tab_reg()'s own rule and which it applies only where there IS one (a factor
   # or a 0/1 numeric outcome stays an ordinary binary logit). So the module states an intent and R
@@ -307,21 +326,26 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   # them: no argument reaches tab_reg() through a second vocabulary any more.
   tabs <- tab_reg(
     data,
-    dependent    = dep,
+    outcome      = dep,
     predictors   = preds,
     family       = fam_arg,
     wt           = nz(opts$wt),
     effect       = opts$effect  %||% "coefficient",
     measure      = opts$measure %||% "auto",
     conf_level   = opts$conf_level,
-    method       = opts$method,
-    reference    = opts$reference,
-    inverse_two_level_factors = inv_arg,
-    split_var    = nz(opts$split_var),
+    # ⚠ 20g: the yaml option is still `method`; tab_reg() takes `ci_method`'s `model` slot.
+    ci_method    = opts$method,
+    ref          = opts$ref,
+    outcome_level = lvl_arg,
+    tab_vars     = nz(opts$tab_vars),
     empirical    = isTRUE(opts$empirical),
-    # `stats` is deliberately NOT passed: NULL is "the model-fit statistics that make sense for this
-    # family", which is what the module wants and what tab_reg() computes by default. It used to be
-    # passed as `opts$stats`, a key `.opts()` never set -- a dangling argument, not a control.
+    # Phase 20c: `stats` IS what the module sends now, because the model comparison is one of its
+    # keys. NULL keeps its old meaning -- "the model-fit statistics that make sense for this family",
+    # which is what the picker wants and what tab_reg() computes by default -- so an unset comparison
+    # sends NULL exactly as before, and only a chosen one adds a key.
+    # ⚠ 20g: the yaml still spells this pair `compare` / `baseline`; renaming the OPTIONS leaves the
+    # module inert until the next jmvtools::prepare(), so the translation lives here until then.
+    stats        = jmvtab_reg_stats(opts$compare, opts$baseline),
     display      = opts$display %||% "value",
     shape        = jmvtab_reg_shape_vector(opts$shapes),
     color        = opts$color,
@@ -330,8 +354,6 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     na           = opts$na,
     cleannames   = opts$cleannames,
     subtext      = opts$subtext,
-    compare      = if (is.null(opts$compare)) "none" else opts$compare,
-    baseline     = opts$baseline,
     multiplier   = jmvtab_reg_mult_vector(opts$multiplicator),   # tab_reg skips mnl/ordinal specs per-spec
     trials       = tri_arg,
     .fit_cache   = if (use_cache) cache_env else NULL

@@ -215,7 +215,7 @@ tab_xl <-
     col_vars_plain <- purrr::map(rd, ~ .$vars$col_vars)
 
     # Phase 14u: a `tabxplor_tabs` is an EXPLICIT collection of independent tables (one reg comparison
-    # per dependent, or a several-row_vars output_list) -> one sheet each by default. The col-var "auto"
+    # per outcome, or a several-row_vars output_list) -> one sheet each by default. The col-var "auto"
     # stacking (below) grouped tables that share col_vars onto one sheet, which is wrong for these; it is
     # kept for a plain manual `list(tab1, tab2)`.
     if (identical(sheets, "auto") && inherits(tabs_base, "tabxplor_tabs")) sheets <- "tabs"
@@ -256,8 +256,8 @@ tab_xl <-
     }
 
     if (missing(titles)) {
-      # Phase 14w (item 1): a regression table titles itself from its `reg_meta` (family + dependent +
-      # predictors, or dependent + reference + effect for a comparison) -- this is the reg fix for the old
+      # Phase 14w (item 1): a regression table titles itself from its `reg_meta` (family + outcome +
+      # predictors, or outcome + reference + effect for a comparison) -- this is the reg fix for the old
       # "levels by var" mis-title. Otherwise (Phase 14u): a NAMED tabxplor_tabs (a several-row_vars
       # output_list -> names = the row_vars) uses its element names, and a plain table the vars-derived
       # "X by Y" title.
@@ -982,7 +982,7 @@ xl_write_table <- function(wb, plan, o, reg) {
 # the `vars` attribute -- its only surviving trace on a built table is the fmt columns' `pct_base`.
 # DESIGN (Phase 14l): only an all-"col" table flips. A mean and a regression coefficient have no
 # percentage base at all (`none`), so neither is directional and neither may vote;
-# a genuinely mixed row+col table falls back to the dependent-first default rather than guessing.
+# a genuinely mixed row+col table falls back to the outcome-first default rather than guessing.
 #' @keywords internal
 tab_title_rows_first <- function(tabs) {
   types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_pct_base(.) else NA_character_)
@@ -1014,7 +1014,7 @@ tab_get_titles <- function(tabs, row, col, tab, max = 2) {
   rows <- tab_title_names(row, max)
   cols <- tab_title_names(col, max)
   swap <- tab_title_rows_first(tabs)
-  a    <- if (swap) rows else cols     # the dependent axis, named first
+  a    <- if (swap) rows else cols     # the outcome axis, named first
   b    <- if (swap) cols else rows
   res  <- if (!nzchar(a) && !nzchar(b)) "Table"
           else if (!nzchar(a)) b

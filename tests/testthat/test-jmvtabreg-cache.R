@@ -14,20 +14,20 @@ skip_if_not_installed("broom")
 # the arrays the build core actually reads.
 reg_opts <- function(...) {
   o <- utils::modifyList(list(
-    dependent = "married", predictors = c("race", "age"), wt = character(), ids = NULL, strata = NULL,
-    fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial",
+    outcome = "married", predictors = c("race", "age"), wt = character(), ids = NULL, strata = NULL,
+    fpc = NULL, nest = FALSE, tab_vars = NULL, family = "binomial",
     effect = "coefficient", display = "value",
-    inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
+    outcome_level = NULL, empirical = FALSE, ref = NULL, conf_level = 0.95,
     method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "drop_by_outcome",
     cleannames = TRUE, stats = NULL, subtext = "",
     compare = "none", baseline = 1L, multiplier = NULL, trials = NULL
   ), list(...))
   # derive the Model-table arrays from the convenience fields
   o$depFamily     <- if (identical(o$family, "auto")) list()
-                     else lapply(o$dependent, function(d) list(var = d, family = o$family))
+                     else lapply(o$outcome, function(d) list(var = d, family = o$family))
   o$depModelLevel <- list()
   o$depTrials     <- if (is.null(o$trials)) list()
-                     else lapply(o$dependent, function(d) list(var = d, n = as.character(o$trials)))
+                     else lapply(o$outcome, function(d) list(var = d, n = as.character(o$trials)))
   o$multiplicator <- if (is.null(o$multiplier)) list()
                      else Map(function(v, k) list(var = v, k = as.character(k)),
                               names(o$multiplier), unname(o$multiplier))
@@ -62,14 +62,14 @@ reg_field <- function(tab, field) {
 test_that("jmvtab_reg_build == tab_reg(), each GLM family", {
   gss <- gss_reg()
   cases <- list(
-    binomial = reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial"),
-    gaussian = reg_opts(dependent = "tvhours", predictors = c("race", "relig"), family = "gaussian"),
-    poisson  = reg_opts(dependent = "tvhours", predictors = c("race", "relig"), family = "poisson")
+    binomial = reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial"),
+    gaussian = reg_opts(outcome = "tvhours", predictors = c("race", "relig"), family = "gaussian"),
+    poisson  = reg_opts(outcome = "tvhours", predictors = c("race", "relig"), family = "poisson")
   )
   for (nm in names(cases)) {
     o      <- cases[[nm]]
     built  <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
-    direct <- quiet(tab_reg(gss, o$dependent, o$predictors, family = o$family,
+    direct <- quiet(tab_reg(gss, o$outcome, o$predictors, family = o$family,
                             cleannames = TRUE))
     expect_identical(reg_render(built), reg_render(direct), info = nm)
   }
@@ -77,7 +77,7 @@ test_that("jmvtab_reg_build == tab_reg(), each GLM family", {
 
 test_that("Phase 15e: mixed-family outcomes build ONE table (not a tabxplor_tabs list)", {
   gss <- gss_reg()
-  o <- reg_opts(dependent = c("married", "tvhours"), predictors = c("race", "age"))
+  o <- reg_opts(outcome = c("married", "tvhours"), predictors = c("race", "age"))
   o$depFamily <- list(list(var = "married", family = "binomial"),
                       list(var = "tvhours", family = "gaussian"))
   built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
@@ -92,7 +92,7 @@ test_that("Phase 15e: mixed-family outcomes build ONE table (not a tabxplor_tabs
 
 test_that("empirical + weighted builds run and match tab_reg()", {
   gss <- gss_reg()
-  o   <- reg_opts(dependent = "married", predictors = c("race", "age"),
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"),
                   family = "binomial", empirical = TRUE)
   built  <- jmvtab_reg_build(gss, o, NULL)$tabs
   direct <- suppressMessages(tab_reg(gss, "married", c("race", "age"),
@@ -101,7 +101,7 @@ test_that("empirical + weighted builds run and match tab_reg()", {
 
   skip_if_not_installed("survey")
   gss$w <- 0.5 + (seq_len(nrow(gss)) %% 7) / 4          # deterministic positive weights
-  ow    <- reg_opts(dependent = "married", predictors = c("race", "age"),
+  ow    <- reg_opts(outcome = "married", predictors = c("race", "age"),
                     family = "binomial", wt = "w")
   bw    <- jmvtab_reg_build(gss, ow, NULL)$tabs
   dw    <- suppressMessages(tab_reg(gss, "married", c("race", "age"), family = "binomial",
@@ -129,10 +129,10 @@ test_that("digest reref == refit-at-new-reference (display + fields)", {
          ref = c(race = "Black"), mult = c(age = 5))
   )
   for (g in grid) {
-    o     <- reg_opts(dependent = g$dep, predictors = g$preds, family = g$fam, reference = g$ref,
+    o     <- reg_opts(outcome = g$dep, predictors = g$preds, family = g$fam, ref = g$ref,
                       multiplier = g$mult)
     reref <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs                    # digest fast path
-    refit <- quiet(tab_reg(gss, g$dep, g$preds, family = g$fam, reference = g$ref,
+    refit <- quiet(tab_reg(gss, g$dep, g$preds, family = g$fam, ref = g$ref,
                            multiplier = g$mult, cleannames = TRUE))
     expect_identical(reg_render(reref), reg_render(refit),
                      info = paste(g$fam, paste(names(g$ref), collapse = "+")))
@@ -147,7 +147,7 @@ test_that("digest reref == refit-at-new-reference (display + fields)", {
 # --- 3. cache behaviour: reuse the fit on display / reference toggles, refit on a real change ---
 test_that("a repeat build and a reference change reuse the fit (no refit)", {
   gss <- gss_reg()
-  o   <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial")
 
   b1 <- jmvtab_reg_build(gss, o, NULL)
   expect_equal(b1$hits, 0L)                                   # first build: all misses
@@ -155,7 +155,7 @@ test_that("a repeat build and a reference change reuse the fit (no refit)", {
   b2 <- jmvtab_reg_build(gss, o, b1$store)                    # identical opts -> hit
   expect_gte(b2$hits, 1L)
 
-  b3 <- jmvtab_reg_build(gss, reg_opts(reference = c(race = "Black")), b2$store)   # reref -> hit
+  b3 <- jmvtab_reg_build(gss, reg_opts(ref = c(race = "Black")), b2$store)   # reref -> hit
   expect_gte(b3$hits, 1L)
 
   b4 <- jmvtab_reg_build(gss, reg_opts(color = "no"), b3$store)                    # display -> hit
@@ -177,7 +177,7 @@ test_that("a predictor / family change refits (a miss)", {
 test_that("an empty outcome / predictor selection yields a NULL table", {
   gss <- gss_reg()
   expect_null(jmvtab_reg_build(gss, reg_opts(predictors = character()), NULL)$tabs)
-  expect_null(jmvtab_reg_build(gss, reg_opts(dependent = character()), NULL)$tabs)
+  expect_null(jmvtab_reg_build(gss, reg_opts(outcome = character()), NULL)$tabs)
 })
 
 test_that("jmvtab_reg_ref_vector folds the picker into a named reference vector", {
@@ -210,7 +210,7 @@ test_that("the store round-trips through serialization (jamovi $state)", {
 test_that("a predictor-subset list == tab_reg() model comparison", {
   gss   <- gss_reg()
   mods  <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
-  o     <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+  o     <- reg_opts(outcome = "married", predictors = mods, family = "binomial")
   built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
   direct <- quiet(tab_reg(gss, "married", mods, family = "binomial", cleannames = TRUE))
   expect_identical(reg_render(built), reg_render(direct))
@@ -219,7 +219,7 @@ test_that("a predictor-subset list == tab_reg() model comparison", {
 test_that("Phase o: use_cache = FALSE builds the same table but persists NO store (the freeze fix)", {
   gss  <- gss_reg()
   mods <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
-  o    <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+  o    <- reg_opts(outcome = "married", predictors = mods, family = "binomial")
 
   cached   <- quiet(jmvtab_reg_build(gss, o, NULL, use_cache = TRUE))
   uncached <- quiet(jmvtab_reg_build(gss, o, NULL, use_cache = FALSE))
@@ -235,6 +235,8 @@ test_that("compare = baseline adds a comparison footer row", {
   gss <- gss_reg()
   o   <- reg_opts(predictors = list(small = c("race", "age"),
                                     full  = c("race", "age", "rincome")),
+                  # Phase 20c: the jamovi OPTIONS keep `compare` / `baseline` until 20g regenerates
+                  # the .h.R; jmvtab_reg_stats() folds them into tab_reg()'s one `stats =` key.
                   family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all")
   t   <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
   cmp <- get_test(t) |> dplyr::filter(grepl("^compare", test))
@@ -243,7 +245,7 @@ test_that("compare = baseline adds a comparison footer row", {
 
 test_that("a comparison list with several dependents yields a NULL table (guarded)", {
   gss <- gss_reg()
-  o   <- reg_opts(dependent = c("married", "tvhours"),
+  o   <- reg_opts(outcome = c("married", "tvhours"),
                   predictors = list(a = "race", b = c("race", "age")), family = "binomial")
   expect_null(jmvtab_reg_build(gss, o, NULL)$tabs)
 })
@@ -251,7 +253,7 @@ test_that("a comparison list with several dependents yields a NULL table (guarde
 test_that("model-comparison fits are cached and reused (only fit new subsets)", {
   gss  <- gss_reg()
   mods <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
-  o    <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+  o    <- reg_opts(outcome = "married", predictors = mods, family = "binomial")
 
   b1 <- quiet(jmvtab_reg_build(gss, o, NULL))
   expect_equal(b1$hits, 0L)                                   # first build: both models fit
@@ -260,13 +262,13 @@ test_that("model-comparison fits are cached and reused (only fit new subsets)", 
   expect_gte(b2$hits, 2L)
 
   # a display toggle (colour off) reuses both fits (no refit)
-  b3 <- quiet(jmvtab_reg_build(gss, reg_opts(dependent = "married", predictors = mods,
+  b3 <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = mods,
                                              family = "binomial", color = "no"), b2$store))
   expect_gte(b3$hits, 2L)
 
   # add a model: the two existing fits are reused, only the new subset is fit
   mods3 <- c(mods, list(age_only = "age"))
-  b4    <- quiet(jmvtab_reg_build(gss, reg_opts(dependent = "married", predictors = mods3,
+  b4    <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = mods3,
                                                 family = "binomial"), b2$store))
   expect_gte(b4$hits, 2L)
 })
@@ -323,7 +325,7 @@ test_that("Phase h: jmvtab_reg_staged() flags >=2-model comparisons only", {
 })
 
 test_that("Phase h: jmvtab_reg_compare_sig() changes with the options, is stable otherwise", {
-  o1 <- list(dependent = "married", predictors = list(a = "race", b = c("race", "age")),
+  o1 <- list(outcome = "married", predictors = list(a = "race", b = c("race", "age")),
              conf_level = 0.95, color = TRUE)
   o2 <- o1; o2$conf_level <- 0.90
   expect_identical(jmvtab_reg_compare_sig(o1), jmvtab_reg_compare_sig(o1))  # stable
@@ -354,7 +356,7 @@ test_that("Phase 19k: the trials picker == tab_reg(trials =), explicit and autom
   gss <- gss_reg()
   # (a) a FACTOR binomial outcome: NA resolves to no trials -> an ordinary binary logit, and the
   #     digest fast path stays available (the raw NA used to look like a grouped binomial).
-  o  <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
+  o  <- reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial")
   expect_true(is.na(jmvtab_reg_dep_trials(list(), "married")))
   b  <- quiet(jmvtab_reg_build(gss, o, NULL))
   expect_equal(reg_render(b$tabs),
@@ -387,7 +389,7 @@ test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
                                                 list(var = "educ", shape = "log"))),
                    c(age = "quadratic", educ = "log"))
   gss <- gss_reg()
-  o <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial")
+  o <- reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial")
   o$shapes <- list(list(var = "age", shape = "quadratic"))
   expect_equal(
     reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
@@ -399,7 +401,7 @@ test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
 # the estimand pair reaches tab_reg() untranslated (jmv_reg_estimand_opts() is deleted)
 test_that("Phase 19k: effect x measure x display pass straight through", {
   gss <- gss_reg()
-  o <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial",
+  o <- reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial",
                 effect = "coefficient", measure = "log", display = "value")
   expect_equal(
     reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
@@ -407,7 +409,7 @@ test_that("Phase 19k: effect x measure x display pass straight through", {
                              effect = "coefficient", measure = "log",
                              cleannames = TRUE, color_signif = "grey_non_signif"))))
   # a reg colour MEASURE (D25's surviving allow-list), not a checkbox
-  o2 <- reg_opts(dependent = "married", predictors = c("race", "age"), family = "binomial",
+  o2 <- reg_opts(outcome = "married", predictors = c("race", "age"), family = "binomial",
                  empirical = TRUE, color = "adjustment")
   expect_no_error(quiet(jmvtab_reg_build(gss, o2, NULL)))
 })

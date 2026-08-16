@@ -91,7 +91,7 @@ tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
 The same visual language extends to regression models: `tab_reg()` detects a binary outcome and fits a logistic regression, coloring odds ratios by strength and greying the non-significant ones, with a possible comparison between modelised quantities and their crude observed empirical counterparts.
 
 ```{r quick-look-reg, message = FALSE}
-tab_reg(gss, dependent = "married", predictors = c("race", "age", "rincome"), empirical = TRUE)
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"), empirical = TRUE)
 ```
 
 ## Export your tables

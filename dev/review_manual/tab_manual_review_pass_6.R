@@ -112,14 +112,14 @@ tab(pc18, c(SEXE, CRITREVENU), c(CLASSIQUE, METAL, WORLD, RAP, TRADI, NB_MUSIQUE
 ### tab_reg tests ----
 
 # Variable name duplication in exports
-tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 ) |> 
   tab_export("md")
 # |           | levels               |Emp. % [married]  |Emp. OR [married]  |Model OR [married]  | |Emp. rate [tvhours]  |Emp. IRR [tvhours]  |Model IRR [tvhours]  |
 # |:----------|:---------------------|-----------------:|------------------:|-------------------:|-|--------------------:|-------------------:|--------------------:|
 # |           |                      | *married: 01-Married*|               |                    | | *tvhours*           |
-tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 ) |> 
   tab_export()
@@ -131,17 +131,17 @@ tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", 
 #   please **remove the [] in levels / headers row in html and Excel** in a reliable way.
 
 # No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
-tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "relig", "age"),
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, exponentiate = FALSE, 
 )
 # - Strange enough, when I add `exponentiate = FALSE`, all the levels colums and numbers rows, in fact all the cells, turn bold : 
 #   all look mistaken with a total row or a reference row. Stanger still, the same with 
-#  dependent = "tvhours" and family = "poisson" have the righ bold (only reference rows and summary stats fully in bold).
+#  outcome = "tvhours" and family = "poisson" have the righ bold (only reference rows and summary stats fully in bold).
 
 
 
 
-tab_reg(gss_simple, dependent = "married", predictors = c("rincome", "party3"), split_var = "race")
+tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "party3"), tab_vars = "race")
 # - auto tab_spread() with a split var and just one dependent is not working for summary stats : 
 #   summary stats rows are repeated three times but they are all empty. 
 # - We just want a unique summary stats block below the predictors : please fix the code

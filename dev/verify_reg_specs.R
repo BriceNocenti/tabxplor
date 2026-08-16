@@ -91,9 +91,13 @@ reg_spec_cases <- function() {
                                                      family = c(married = "binomial", party3 = "multinomial")))
   add("perdep.family.named_part", function() tab_reg(reg_fx(), D2, P, family = c(married = "binomial")))
   add("perdep.family.short_pos",  function() tab_reg(reg_fx(), D2, P, family = c("binomial")))
+  # Phase 20c: `inverse_two_level_factors` (a logical toggling level ORDER) is `outcome_level`
+  # (which NAMES the level). The scalar case has no equivalent -- a level belongs to one outcome --
+  # so it becomes the partial-named one on the other dependent, keeping the case count.
   add("perdep.inverse.named_part",function() tab_reg(reg_fx(), D2, P,
-                                                     inverse_two_level_factors = c(married = FALSE)))
-  add("perdep.inverse.scalar",    function() tab_reg(reg_fx(), D2, P, inverse_two_level_factors = FALSE))
+                                                     outcome_level = c(married = "Not married")))
+  add("perdep.inverse.scalar",    function() tab_reg(reg_fx(), D2, P,
+                                                     outcome_level = c(party3 = "Other")))
   add("perdep.effect.named_part", function() tab_reg(reg_fx(), D2, P, effect = c(married = "marginal")))
   add("perdep.measure.named_part",function() tab_reg(reg_fx(), D2, P, measure = c(married = "log")))
 
@@ -134,9 +138,9 @@ reg_spec_cases <- function() {
         tab_reg(reg_fx(), "married", P, family = "binomial", color = cc, color_signif = ss))
     })
   add("color.adj.split",  function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             color = "adjustment", split_var = "race"))
+                                             color = "adjustment", tab_vars = "race"))
   add("color.betw.split", function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             color = "between_groups", split_var = "race"))
+                                             color = "between_groups", tab_vars = "race"))
 
   # --- empirical.* : H20/H22, the eff_word x empirical timing
   for (em in c(TRUE, FALSE)) for (fm in c("binomial", "ordinal", "gaussian"))
@@ -171,23 +175,29 @@ reg_spec_cases <- function() {
           function() tab_reg(reg_fx(), "married", P, family = "binomial", shape = s))
     })
   add("shape.with_split", function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             shape = c(age = "quadratic"), split_var = "race"))
+                                             shape = c(age = "quadratic"), tab_vars = "race"))
 
   # --- split.* : block W's five aborts
   for (sv in list(NULL, "race", "nope", "married", "age", c("race", "marital")))
     local({
       s <- sv
       add(paste0("split.", paste(s %||% "NULL", collapse = "_")), function()
-        tab_reg(reg_fx(), "married", P, family = "binomial", split_var = s))
+        tab_reg(reg_fx(), "married", P, family = "binomial", tab_vars = s))
     })
 
   # --- compare.* / stats.* / baseline
   M3 <- list(m1 = "race", m2 = c("race", "age"), m3 = c("race", "age", "marital"))
+  # Phase 20c: `compare` + `baseline` are two `stats =` keys, the baseline riding as the key's value.
+  # The case NAMES are unchanged so the pre-rename baseline still lines up, one for one.
   for (cp in c("none", "baseline", "sequential")) for (bl in list(NULL, "m1", "typo", 2L, 99L))
     local({
       c1 <- cp; b <- bl
+      st <- if (c1 == "none") NULL
+            else if (c1 == "sequential") "compare_sequential"
+            else if (is.null(b)) "compare_baseline"
+            else stats::setNames(as.character(b), "compare_baseline")
       add(sprintf("compare.%s.%s", c1, if (is.null(b)) "NULL" else as.character(b)), function()
-        tab_reg(reg_fx(), "married", M3, family = "binomial", compare = c1, baseline = b))
+        tab_reg(reg_fx(), "married", M3, family = "binomial", stats = st))
     })
   for (st in list(NULL, FALSE, "none", "all", c("n", "aic"), c("n", "typo"), "linearity", "global"))
     local({
@@ -255,24 +265,24 @@ reg_spec_cases <- function() {
   # --- reref.* : T's 13-clause conjunction, ONE clause off at a time. Nothing else covers this
   # axis, and a wrongly-TRUE `reref` returns a table built from a stale digest -- a WRONG NUMBER,
   # not an error. Each case reports whether the digest path was taken (via fit_spec + the columns).
-  base_reref <- list(family = "binomial", method = "wald")
+  base_reref <- list(family = "binomial", ci_method = "wald")
   reref_off <- list(
     on            = list(),
     off_marginal  = list(effect = "marginal"),
-    off_profile   = list(method = "profile"),
-    off_split     = list(split_var = "race"),
-    off_trials    = list(dependent = "score", trials = 4),
-    off_compare   = list(predictors = M3, compare = "sequential"),
+    off_profile   = list(ci_method = "profile"),
+    off_split     = list(tab_vars = "race"),
+    off_trials    = list(outcome = "score", trials = 4),
+    off_compare   = list(predictors = M3, stats = "compare_sequential"),
     off_models    = list(predictors = M3),
     off_color_adj = list(color = "adjustment"),
     off_shape     = list(shape = c(age = "quadratic")),
     off_display   = list(display = "prob"),
-    off_mnl       = list(dependent = "party3", family = "multinomial")
+    off_mnl       = list(outcome = "party3", family = "multinomial")
   )
   for (rn in names(reref_off)) local({
     ov <- reref_off[[rn]]; k <- rn
     add(paste0("reref.", k), function() {
-      a <- utils::modifyList(list(data = reg_fx(), dependent = "married", predictors = P,
+      a <- utils::modifyList(list(data = reg_fx(), outcome = "married", predictors = P,
                                   .fit_cache = new.env(parent = emptyenv())),
                              utils::modifyList(base_reref, ov))
       do.call(tab_reg, a)
@@ -281,19 +291,24 @@ reg_spec_cases <- function() {
 
   # --- reference.* : block U
   add("reference.factor", function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             reference = c(race = "Black")))
+                                             ref = c(race = "Black")))
+  # Phase 20c: a multinomial's BASELINE CATEGORY left `reference` (which names the level a predictor
+  # is compared against) for `outcome_level` (which names the level of the OUTCOME singled out).
+  # Both halves are covered: the capability, and the refusal that now points at the right argument.
   add("reference.outcome",function() tab_reg(reg_fx(), "party3", P, family = "multinomial",
-                                             reference = c(party3 = "Republican")))
+                                             outcome_level = c(party3 = "Other")))
+  add("reference.outcome_refused", function() tab_reg(reg_fx(), "party3", P, family = "multinomial",
+                                             ref = c(party3 = "Other")))
   add("reference.split",  function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             split_var = "race", reference = c(race = "Black")))
+                                             tab_vars = "race", ref = c(race = "Black")))
   add("reference.bad",    function() tab_reg(reg_fx(), "married", P, family = "binomial",
-                                             reference = c(race = "Nope")))
+                                             ref = c(race = "Nope")))
 
-  # --- add_n / stars / subtext / wrappers
+  # --- add_n / stars / subtext
+  # (Phase 20a deleted tab_logit() / multi_logit(); their two cases went with them. The binary
+  # outcome is `family = "binomial"` everywhere above, which is what the wrappers forwarded.)
   add("addn.false", function() tab_reg(reg_fx(), "married", P, family = "binomial", add_n = FALSE))
   add("stars.false",function() tab_reg(reg_fx(), "married", P, family = "binomial", stars = FALSE))
-  add("wrapper.tab_logit",  function() tab_logit(reg_fx(), "married", P))
-  add("wrapper.multi_logit",function() multi_logit(reg_fx(), "married", M3))
 
   out
 }
@@ -321,6 +336,57 @@ scrub <- function(x) {
 # rewrites the message, and every refactor step would report dozens of false CHANGEs. The reference
 # names the same call either way, so it is normalised out -- at COMPARISON time on both sides, so a
 # baseline saved before this rule was written still compares cleanly.
+# --- DECLARED renames -------------------------------------------------------------------------
+# A phase that RENAMES a spec field would otherwise report every case as CHANGED, which hides the
+# cases that changed for a real reason. Declaring the rename here is the twin of
+# dev/verify_golden_field_delta.R's RENAMED_TEST_COLS: the harness proves the MAPPING, then compares
+# everything else -- so the gate keeps biting through the rename instead of being re-baselined blind.
+# `to = NULL` means the field is DELETED and its value is not carried anywhere.
+#
+# Phase 20c: `inverse` (a logical: "model the FIRST level") became `outcome_level` (the level's
+# NAME, NA = the family's default). TRUE is the default in both spellings; FALSE had no name to map
+# to, so only the default maps and any non-default case is compared on its other fields.
+SPEC_RENAMES <- list(          # per-model, reg_call()$fit_spec$specs[[i]]
+  list(from = "dependent", to = "outcome", map = identity),
+  list(from = "inverse", to = "outcome_level",
+       map = function(v) if (isTRUE(v)) NA_character_ else v)
+)
+FIT_SPEC_RENAMES <- list(      # table-wide, reg_call()$fit_spec
+  list(from = "inverse_two_level_factors", to = "outcome_level",
+       map = function(v) if (isTRUE(v)) NULL else v)
+)
+CALL_RENAMES <- list(          # reg_call() itself -- KEY 4's four cross-producer renames
+  list(from = "dependent", to = "outcome",   map = identity),
+  list(from = "split_var", to = "tab_vars",  map = identity)
+)
+
+apply_renames <- function(c1) {
+  if (is.null(c1$out)) return(c1)
+  # ⚠ rename IN PLACE. identical() on two lists compares names in ORDER, so deleting the old field
+  # and appending the new one reports every case as CHANGED for a reason that is not the rename.
+  rename <- function(x, rules) {
+    for (r in rules) {
+      i <- match(r$from, names(x))
+      if (is.na(i)) next
+      v <- r$map(x[[i]])
+      if (is.null(r$to)) { x[[i]] <- NULL; next }
+      x[i] <- list(v)            # `[<-` with a list keeps a NULL value as a real element
+      names(x)[i] <- r$to
+    }
+    x
+  }
+  fix_one <- function(o) {
+    if (is.null(o) || is.null(o$call) || is.null(o$call$fit_spec)) return(o)
+    o$call$fit_spec$specs <- lapply(o$call$fit_spec$specs, rename, rules = SPEC_RENAMES)
+    o$call$fit_spec       <- rename(o$call$fit_spec, FIT_SPEC_RENAMES)
+    o$call                <- rename(o$call, CALL_RENAMES)
+    o
+  }
+  # a tabxplor_tabs case dumps a LIST of tables
+  c1$out <- if (!is.null(c1$out$call)) fix_one(c1$out) else lapply(c1$out, fix_one)
+  c1
+}
+
 strip_srcref <- function(m) gsub("(at [^ ]+\\.R):[0-9]+:[0-9]+", "\\1:#", m)
 
 capture_case <- function(f) {
@@ -358,7 +424,7 @@ dump_table <- function(x) {
     labels = lapply(as.list(names(x)[!fmt]), function(cn) list(name = cn, v = scrub(x[[cn]]))),
     test = if (is.null(tt)) NULL else
       list(names = names(tt), nrow = nrow(tt),
-           keys = if (nrow(tt)) scrub(tt[intersect(c("var", "col", "test", "dep"), names(tt))]) else NULL),
+           keys = if (nrow(tt)) scrub(tt[intersect(c("var", "col", "test", "outcome"), names(tt))]) else NULL),
     subtext = get_subtext(x),
     grouped = inherits(x, "tabxplor_grouped_tab"),
     kind    = tryCatch(tab_kind(x), error = function(e) "<err>")
@@ -402,7 +468,10 @@ if (identical(mode, "save")) {
   cat("saved to", path, "\n")
 } else {
   ref    <- readRDS(path)
-  norm   <- function(d) lapply(d, function(c1) { c1$messages <- strip_srcref(c1$messages); c1 })
+  norm   <- function(d) lapply(d, function(c1) {
+    c1$messages <- strip_srcref(c1$messages)
+    apply_renames(c1)
+  })
   ref    <- norm(ref); got <- norm(got)
   common <- intersect(names(ref), names(got))
   gone   <- setdiff(names(ref), names(got)); new <- setdiff(names(got), names(ref))

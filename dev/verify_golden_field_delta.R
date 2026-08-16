@@ -67,7 +67,13 @@ RENAMED_FIELDS <- list()
 # demands bit-identity of every other column.
 # Phase 19d-tail: nothing renamed (19g's re-key is landed and its goldens are regenerated; leaving
 # the rules here would compare two copies of the new schema -- the reset hazard named at the top).
-RENAMED_TEST_COLS <- list()
+# Phase 20c (KEY 4): the `test` tibble's declared `dep` column is `outcome`, renamed with the
+# argument -- so ONE word says "which outcome is this about" from the signature to the schema.
+# ⚠ it had to move IN new_test_tibble(): test_group_cols() reads every undeclared column as a
+# grouping variable, which is the defect class 19g and 19m-ii each hit once.
+RENAMED_TEST_COLS <- list(
+  dep = list(to = "outcome", map = function(v, tt) v)
+)
 # DECLARED_INDEX_COLS -- the non-fmt label columns that GAIN the tabxplor_lvl class in this phase.
 # Their VALUES must be identical (a declaration is not data); only class/role/var/ordered may appear.
 # Phase 19g: FALSE -- 19f's declaration is landed and its goldens are regenerated, so leaving this on

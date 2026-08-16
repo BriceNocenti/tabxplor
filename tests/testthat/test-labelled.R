@@ -146,7 +146,7 @@ test_that("tab_reg(): a labelled predictor shows value-label levels; labels stor
     bin  = mklab(sample(c(0, 1), n, TRUE), c(Non = 0, Oui = 1), "Reponse binaire"),
     avis = mklab(sample(c(1, 2, 3), n, TRUE), c(Pour = 1, Contre = 2, NSP = 3), "Avis")
   )
-  tr <- tab_reg(df, dependent = "bin", predictors = "avis", family = "binomial")
+  tr <- tab_reg(df, outcome = "bin", predictors = "avis", family = "binomial")
   expect_true(any(c("Contre", "NSP") %in% as.character(tr$levels)))
   expect_identical(get_vars_attr(tr)$var_labels[["avis"]], "Avis")
 })

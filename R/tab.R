@@ -1574,7 +1574,7 @@ tab_setup <- function(ctx) {
   # resolved measure; each consumer derives its own need from it (measure_builds / measure_applies)
   # instead of reading one of four precomputed per-step sub-passes. It is a data-free
   # function of the arguments + column classes: the exact boundary the Jamovi `.js` mirrors and
-  # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
+  # the Phase 7c cache keys on. Data-outcome resolution (ref = "auto"/regex, levels = "auto",
   # the leaf tot/totaltab forcing) deliberately stays in the leaf builders below.
   # See dev/tabxplor_argument_computation_map.md.
   .settings     <- tab_resolve_settings(color = color, ci = ci, chi2 = chi2,

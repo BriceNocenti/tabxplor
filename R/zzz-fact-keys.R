@@ -188,6 +188,23 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_CHECKS$kind",         function() tx_fk_scalar(REG_CHECKS, "kind"),
         function() ROW_KINDS),
 
+  # --- into TEST_ROWS (Phase 20c, KEY 5): what kind of statistical row this is ----------------
+  # `kind` is the same row-kind vocabulary a data row uses -- a footer row IS a row.
+  tx_fk("TEST_ROWS$kind",          function() tx_fk_scalar(TEST_ROWS, "kind"),
+        function() ROW_KINDS),
+  # `stat` is the `stats =` key that requests the row. A SELF-edge onto the vocabulary the argument
+  # boundary validates against (the DISPLAY_TOKENS$alias precedent), so a typo'd `stat` -- which
+  # would make a footer row unrequestable and therefore invisible -- breaks the build.
+  tx_fk("TEST_ROWS$stat",          function() tx_fk_scalar(TEST_ROWS, "stat"),
+        function() reg_stat_keys()),
+  # a crosstab row says which column kind it describes, in EST_SCALES' words
+  tx_fk("TEST_ROWS$var_kind",      function() tx_fk_scalar(TEST_ROWS, "var_kind"),
+        function() unique(tx_fk_scalar(EST_SCALES, "var_kind"))),
+  # the `anova` argument's two values ARE the two rows that declare them: TAB_ARGS owns the argument,
+  # TEST_ROWS owns which test each value selects.
+  tx_fk("TAB_ARGS$anova$values",   function() TAB_ARGS[["anova"]][["values"]],
+        function() unique(tx_fk_scalar(TEST_ROWS, "anova"))),
+
   # --- into the regression family vocabulary -------------------------------------------------
   tx_fk("names(REG_ESTIMANDS)",    function() names(REG_ESTIMANDS),
         function() names(REG_FAMILIES)),
@@ -231,7 +248,9 @@ TAB_FOREIGN_KEYS <- list(
   # and read by name in another -- the definition of a foreign key.
   tx_fk("TAB_ARGS$values_from",    function() tx_fk_all(TAB_ARGS, "values_from"),
         function() c("MEASURES", "COLOR_SIGNIF_VALUES", "CI_METHODS", "COLOR_SCALES",
-                     "DISPLAY_TOKENS")),
+                     "DISPLAY_TOKENS",
+                     # 20c: tab_reg()'s own vocabularies, each already declared once
+                     "REG_FAMILIES", "REG_ESTIMANDS", "REG_CHECKS", "TEST_ROWS")),
   tx_fk("TAB_ARGS$values_rd",      function() tx_fk_all(TAB_ARGS, "values_rd"),
         function() ls(asNamespace("tabxplor"), pattern = "_rd$")),
   tx_fk("TAB_ARGS$option",         function() tx_fk_all(TAB_ARGS, "option"),
@@ -298,7 +317,12 @@ tx_check_foreign_keys <- function(keys = TAB_FOREIGN_KEYS) {
 #' @keywords internal
 #' @noRd
 tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_counts",
-                                            "tab_many", "tab_build")) {
+                                            "tab_many", "tab_build",
+                                            # 20c (KEY 4): the regression producer joined TAB_ARGS,
+                                            # so a `tab_reg()` formal is checked against its
+                                            # declaration exactly like a crosstab one -- the first
+                                            # mechanical guard that argument and declaration agree.
+                                            "tab_reg")) {
   for (p in producers) {
     fn <- get(p, envir = asNamespace("tabxplor"))
     f  <- setdiff(names(formals(fn)), "...")

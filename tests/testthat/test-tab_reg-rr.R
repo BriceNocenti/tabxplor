@@ -23,7 +23,7 @@ rr_data <- function() {
 }
 
 # The 0/1 numeric the "rr" arm actually fits: reg_prep_binary picks the modelled ("positive") level,
-# honouring inverse_two_level_factors, then coerces to numeric.
+# honouring the modelled level (`outcome_level`), then coerces to numeric.
 rr_y01 <- function(d, dep = "married", inverse = TRUE)
   as.numeric(as.character(d[[dep]]) == reg_positive_level(d, dep, inverse))
 
@@ -91,13 +91,13 @@ test_that("the SE is the HC0 sandwich (not the naive Poisson SE, not the phi-sca
   expect_gt(max(abs(se_tab / (naive * sqrt(phi)) - 1)), 0.01)
 })
 
-test_that("the modelled level is the binomial one, and inverse_two_level_factors flips it", {
-  d <- rr_data()
+test_that("the modelled level is the binomial one, and `outcome_level` names it", {
+  d <- rr_data()                                        # married: levels "no", "yes"
   t1 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson"))
   t2 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson",
-                                 inverse_two_level_factors = FALSE))
-  expect_equal(reg_call(t1)$positive_level, reg_positive_level(d, "married", TRUE))
-  expect_equal(reg_call(t2)$positive_level, reg_positive_level(d, "married", FALSE))
+                                 outcome_level = c(married = "yes")))
+  expect_equal(reg_call(t1)$positive_level, "no")       # the FIRST level, by default
+  expect_equal(reg_call(t2)$positive_level, "yes")      # the one that was named
   expect_false(identical(reg_call(t1)$positive_level, reg_call(t2)$positive_level))
 })
 
@@ -157,11 +157,11 @@ test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispers
 test_that("method='profile' is refused for a modified Poisson and degrades to the robust Wald", {
   d <- rr_data()
   # it SAYS so (a profile likelihood on a deliberately misspecified quasi-likelihood is meaningless)...
-  expect_message(tab_reg(d, "married", "race", family = "poisson", method = "profile"),
+  expect_message(tab_reg(d, "married", "race", family = "poisson", ci_method = "profile"),
                  "quasi-likelihood")
   # ...and the interval it returns is exactly the robust Wald one.
-  tp <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", method = "profile"))
-  tw <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", method = "wald"))
+  tp <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", ci_method = "profile"))
+  tw <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", ci_method = "wald"))
   expect_equal(get_ci_inf(tp$Model_RR), get_ci_inf(tw$Model_RR), tolerance = 1e-12)
   expect_equal(get_ci_sup(tp$Model_RR), get_ci_sup(tw$Model_RR), tolerance = 1e-12)
 })

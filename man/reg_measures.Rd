@@ -4,12 +4,12 @@
 \alias{reg_measures}
 \title{What can this outcome be modelled as?}
 \usage{
-reg_measures(data, dependent, family = "auto")
+reg_measures(data, outcome, family = "auto")
 }
 \arguments{
 \item{data}{A data frame (or a \code{survey} design), as for \code{\link[=tab_reg]{tab_reg()}}.}
 
-\item{dependent}{The outcome column name.}
+\item{outcome}{The outcome column name.}
 
 \item{family}{The model family. \code{"auto"} (default) detects it and says so, exactly as
 \code{\link[=tab_reg]{tab_reg()}} does.}

@@ -77,7 +77,7 @@
 #'   (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
 #'   variable model being derived from the declared index columns and from the columns' own
 #'   \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
-#'   family, dependent, predictors, reference level, and the \code{fit_spec}
+#'   family, outcome, predictors, reference level, and the \code{fit_spec}
 #'   \code{\link{reg_check_plots}} refits from).
 #'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 #'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
@@ -467,7 +467,7 @@ pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 # predictor of a regression, "" = the whole table / whole model) and WHICH COLUMN it keys under
 # (`col`: a col_var for a crosstab, the fmt column name for a regression). The SUB-POPULATION it was
 # computed on rides a column NAMED AFTER THE GROUPING VARIABLE -- the tab_vars for a crosstab, the
-# `split_var` for a regression -- so both arms read it the same way, through test_group_cols().
+# `tab_vars` for a regression -- so both arms read it the same way, through test_group_cols().
 # That is what deleted the 13th column `term` (Phase 18z15 added it because `row_var` already meant
 # the split-group LEVEL on a reg row, so a predictor name there flipped a plain table into "split"
 # mode and was silently dropped on a spread one). One dimension, one column.
@@ -488,13 +488,17 @@ new_test_tibble <- local({
                                 # Phase 18z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
                                 # mean design effect this row's test corrected by (NA on basis "n").
                                 deff       = double(),
-                                # Phase 19m-ii: WHICH DEPENDENT this row is about. NA on a crosstab
+                                # Phase 19m-ii: WHICH OUTCOME this row is about. NA on a crosstab
                                 # row (`var = ""` already means "the whole table", so "" is a taken
                                 # meaning). It MUST be declared here: test_group_cols() reads
                                 # `setdiff(names(tt), names(new_test_tibble()))` as the GROUPING
                                 # variables, so an undeclared column would split the footer into one
                                 # block per outcome (19g's own defect, one file over).
-                                dep        = character(),
+                                # Phase 20c (KEY 4): `outcome`, renamed with the argument. It MUST
+                                # stay declared here for the reason 19m-ii gave it a name at all --
+                                # test_group_cols() reads every UNdeclared column as a grouping
+                                # variable, so an undeclared one splits the footer per outcome.
+                                outcome    = character(),
                                 # Phase 19n: WHICH SUB-POPULATION BLOCK this row keys under, after a
                                 # spread -- the twin of the fmt columns' own `col_group`. `col` alone
                                 # identified a block only while the level was WELDED into `col_var`;
@@ -1484,7 +1488,9 @@ tab_pvalue_lines <- function(tabs) {
   row_label_for <- function(key, g) {
     ing <- disp$.grp == g
     d   <- disp[ing, , drop = FALSE]
-    weak <- !is.null(d[["min_e"]]) && any(!is.na(d$min_e) & d$min_e < 5 & !has_exact[ing])
+    # Phase 20c: the threshold is test_weak_min_e (R/tab-test-display.R), not a second literal 5.
+    weak <- !is.null(d[["min_e"]]) &&
+      any(!is.na(d$min_e) & d$min_e < test_weak_min_e & !has_exact[ing])
     switch(key,
            "pvalue"      = test_pvalue_descriptor(d$test, any(has_exact[ing]), isTRUE(weak)),
            "effect size" = if (!is.null(d[["es_type"]])) test_es_measure(d$es_type) else "effect size",
@@ -1558,7 +1564,7 @@ reg_footer_lines <- function(tabs) {
   reg$.term     <- test_key_col(reg, "var")
   footer_labels <- plan$label
 
-  # split_var (Phase 12h): a split table carries per-group GOF, tagged in the `test` column NAMED
+  # tab_vars (Phase 12h): a split table carries per-group GOF, tagged in the `test` column NAMED
   # after the split variable (Phase 19g -- the same rule the crosstab arm reads its tab_vars by).
   # It gets one "Model fit" footer block PER group; a plain table gets one block at the end (a single
   # pseudo-group ""). tab_append_footer interleaves in row order.
@@ -2223,7 +2229,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   cond_obs <- !is.na(get_obs(x)) & !shows("obs")
   out_obs <- if (any(cond_obs)) {
     # Phase 19c: WHICH baseline `obs` holds is the measure's declared `ref_kind` ("group" = the
-    # reference split_var group, "observed" = the crude effect), not the measure's name.
+    # reference tab_vars group, "observed" = the crude effect), not the measure's name.
     ks  <- vapply(c(get_color(x), get_color_bg(x)), measure_key, character(1))
     ks  <- ks[!is.na(ks) & nzchar(ks)]
     lbl <- if (any(vapply(ks, function(k) identical(MEASURES[[k]]$ref_kind, "group"), logical(1))))

@@ -23,7 +23,7 @@ tc <- tab(df, race, marital, pct = "row", color = TRUE, test = TRUE, stars = TRU
 # suppressWarnings: tvhours is over-dispersed (~2.04); the dispersion warning is expected and
 # unrelated to what these tests exercise.
 tr <- suppressWarnings(
-  tab_reg(df, dependent = "tvhours", predictors = c("race", "marital"),
+  tab_reg(df, outcome = "tvhours", predictors = c("race", "marital"),
           family = "poisson", empirical = TRUE))
 
 strip_attr  <- function(x, a) { attr(x, a) <- NULL; x }

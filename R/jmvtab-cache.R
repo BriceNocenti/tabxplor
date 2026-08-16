@@ -1020,7 +1020,7 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
 # `tabxplor_tab`. This aligns tier-3 with the tiers-1-2 "plain atomic-vector lists" discipline (more
 # robust through jamovi's $state), lets the tier-4 field re-paints run on plain vectors (one final
 # fmt_wrap() replaces the per-field record reconstruction), and gives jmv_tab3_reref() a plain-field
-# base to recompute the reference-dependent fields from (increment 2). fmt_unwrap/fmt_wrap live in
+# base to recompute the reference-outcome fields from (increment 2). fmt_unwrap/fmt_wrap live in
 # R/tab.R (byte-identical round-trip, test-carrier-parity.R). These two helpers add the single-tab vs
 # output_list dispatch (a single carrier is discriminated by its `is_fmt` slot).
 #' @keywords internal

@@ -306,11 +306,11 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   }
 
   tab_vars <- rv$tab_vars
-  # Phase 16a: a regression `split_var` (the population each model was fit on) is a tab_var, but -- unlike
+  # Phase 16a: a regression `tab_vars` (the population each model was fit on) is a tab_var, but -- unlike
   # a crosstab tab_var whose level rides on a Total row -- it has NO Total row to carry its level, so
   # dropping it loses that information entirely. Keep it (rendered as a vertical/merged name column
   # below, like a merged row_var name) even when the other tab_vars are dropped for html/Excel.
-  split_var_col <- intersect(reg_call(tab)$split_var, tab_vars)
+  reg_grp_col <- intersect(reg_call(tab)$tab_vars, tab_vars)
   subtext  <- get_subtext(tab) |> purrr::discard(\(s) s == "")
 
   # Phase 14v: resolve the multinomial crude-companion tooltip fragments to a per-column, per-ROW list
@@ -336,7 +336,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 
   tab <- dplyr::ungroup(tab)
   if (drop_tab_vars && length(tab_vars) > 0) {
-    drop_these <- setdiff(tab_vars, split_var_col)   # Phase 16a: keep a reg split_var
+    drop_these <- setdiff(tab_vars, reg_grp_col)   # Phase 16a: keep a reg tab_vars
     if (length(drop_these) > 0) tab <- dplyr::select(tab, -tidyselect::all_of(drop_these))
   }
   # Phase 14i: `var_names` drops the row-side variable-NAME annotation -- the merged table's synthetic
@@ -423,9 +423,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # / Excel backends rotate. Both are named-int, indexed on the FINAL tab like every role above.
   label_names <- intersect(c(name_col, tab_vars), names(tab))
   label_cols  <- stats::setNames(match(label_names, names(tab)), label_names)
-  # Phase 16a: a kept reg split_var also rotates vertical (via var_name_col), but is NOT added to
+  # Phase 16a: a kept reg tab_vars also rotates vertical (via var_name_col), but is NOT added to
   # `name_col` so `var_names` never drops it (its levels are data, not a variable name).
-  var_name_col <- label_cols[names(label_cols) %in% c(name_col, split_var_col)]
+  var_name_col <- label_cols[names(label_cols) %in% c(name_col, reg_grp_col)]
   label_runs  <- tab_label_runs(tab, label_names)
 
   # Phase 14l: the Excel-only "<var>_sd" siblings tab_materialize_extras(backend = "xl") splits off a
@@ -657,15 +657,15 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       clean[j] <- "sd"
     }
   }
-  # Phase g: a regression column disambiguated across several dependents carries a trailing " [dep]"
+  # Phase g: a regression column disambiguated across several outcomes carries a trailing " [dep]"
   # bracket in its stored name ("Model_OR [married]"), so the console can tell columns apart. The col_var
   # span row already names the outcome, so the exported level header strips it. Role-driven (17c): only
   # "model"/"emp" columns are touched, never a crosstab level that happens to hold brackets.
   for (j in which(is_level)) {
-    # Phase 18z13: "n" too -- the per-level count column is disambiguated across dependents by the
+    # Phase 18z13: "n" too -- the per-level count column is disambiguated across outcomes by the
     # same bracket, for the same reason (the console needs to tell two outcomes' counts apart).
     if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp", "n"))
-      clean[j] <- tx_strip_dep_suffix(clean[j])
+      clean[j] <- tx_strip_outcome_suffix(clean[j])
   }
   # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning
   # name row would only duplicate the column headers -> drop it. A regression table named after the
@@ -763,14 +763,14 @@ roles_col_var_edges <- function(col_var_map, other_cols = NULL, real_col_vars = 
   else                 which(nzchar(cv) & cv != dplyr::lag(cv, default = NA_character_))
 }
 
-# tx_strip_dep_suffix() -- Phase 19h: the trailing " [dependent]" disambiguation bracket, removed in
+# tx_strip_outcome_suffix() -- Phase 19h: the trailing " [outcome]" disambiguation bracket, removed in
 # ONE place. A regression column built across several outcomes carries it in its stored NAME
 # ("Model_OR [married]") so the console can tell two outcomes' columns apart; wherever the outcome is
 # already named -- the col_var span row above the level header, the colour legend -- it is noise.
 # The regex was written twice, each copy commenting that the other existed. The two GATES stay local:
 # the header strip keys on the column's own role, the legend on the group carrying any role at all.
 #' @keywords internal
-tx_strip_dep_suffix <- function(x) sub(" \\[[^]]*\\]$", "", x)
+tx_strip_outcome_suffix <- function(x) sub(" \\[[^]]*\\]$", "", x)
 
 # tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
 #

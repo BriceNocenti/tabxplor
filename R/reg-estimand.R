@@ -360,6 +360,20 @@ REG_ESTIMANDS$quasipoisson <- list(
 #              "counts" beside a yes/no variable.
 #   outcome    NA on a user family; on an internal LINK key (rr / rd / mr), the OUTCOME family it
 #              belongs to. REG_FIT_FAMILY is derived from this column.
+#   outcome_level  WHAT `outcome_level = c(<outcome> = "<level>")` MEANS FOR THIS FAMILY, and the one
+#              non-uniformity in the argument -- forced by arithmetic, not by taste, so it is
+#              declared once here rather than written twice in prose:
+#                "modelled"  with TWO levels, singling one out IS choosing what is estimated (the
+#                            other becomes the baseline automatically), and the chosen level is the
+#                            column header. binomial.
+#                "baseline"  with k > 2 you can only choose the PIVOT, so the named level is the
+#                            category every other column is compared to -- the opposite role.
+#                            multinomial.
+#                NA          the outcome has no level to choose. `why` says which kind of "no":
+#                            an ordinal outcome HAS levels but must keep their order, and a numeric
+#                            one has none at all. NA + a `why` closure IS the refusal.
+#   why        the reason `outcome_level` is refused, a gettext closure, or NULL for the generic
+#              "this family models no level" message.
 #
 # ORDER IS LOAD-BEARING: `ui` is emitted into the generated jamovi JS in declaration order, and the
 # reader defaults ("regression" / "reg") replace the switches' own fall-through arms.
@@ -368,19 +382,21 @@ REG_ESTIMANDS$quasipoisson <- list(
 REG_FAMILIES <- list(
   gaussian     = list(display = function() gettext("linear regression"),
                       short = "linear",   ui = "gaussian (linear)",    ui_binary = NA_character_,
-                      outcome = NA_character_),
+                      outcome = NA_character_, outcome_level = NA_character_),
   binomial     = list(display = function() gettext("logistic regression"),
                       short = "logit",    ui = "binomial (logistic)",  ui_binary = "binomial (logistic)",
-                      outcome = NA_character_),
+                      outcome = NA_character_, outcome_level = "modelled"),
   poisson      = list(display = function() gettext("Poisson regression"),
                       short = "poisson",  ui = "poisson (counts)",     ui_binary = "poisson (risk ratio)",
-                      outcome = NA_character_),
+                      outcome = NA_character_, outcome_level = NA_character_),
   multinomial  = list(display = function() gettext("multinomial logistic regression"),
                       short = "mlogit",   ui = "multinomial (nominal)", ui_binary = NA_character_,
-                      outcome = NA_character_),
+                      outcome = NA_character_, outcome_level = "baseline"),
   ordinal      = list(display = function() gettext("ordinal logistic regression"),
                       short = "ologit",   ui = "ordinal (ordered)",    ui_binary = NA_character_,
-                      outcome = NA_character_),
+                      outcome = NA_character_, outcome_level = NA_character_,
+                      why = function() gettext(
+                        "an ordinal outcome must keep the order of its levels, so none can be singled out")),
   # a USER family the picker does not offer (the checkbox route is `family = "poisson"` + a
   # dispersion warning): `ui = NA` says so once, where the label lives.
   quasipoisson = list(display = function() gettext("quasi-Poisson regression"),
@@ -432,6 +448,65 @@ reg_family_ui_labels <- function(binary = FALSE) {
   f <- if (binary) "ui_binary" else "ui"
   v <- vapply(REG_FAMILIES, function(r) r[[f]], character(1))
   v[!is.na(v)]
+}
+
+# THE reader of a STORED outcome level. The per-outcome table and the spec carry it as a character
+# with NA for "the family's own default", because a tibble column and a typed record field cannot
+# hold NULL; every consumer wants that NA back as NULL, which is what reg_prep_binary() and
+# reg_positive_level() take. One name, so the NA <-> NULL boundary is written once.
+#' @keywords internal
+#' @noRd
+reg_outcome_level_of <- function(x) {
+  if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(x[[1]])) NULL else as.character(x)[[1]]
+}
+
+# What `outcome_level =` means for this family: "modelled" | "baseline" | NA (refused). Phase 20c.
+#' @keywords internal
+#' @noRd
+reg_outcome_level_role <- function(family)
+  REG_FAMILIES[[family]][["outcome_level"]] %||% NA_character_
+
+# THE refusal, from the declaration: which families do offer it, and why this one does not. One
+# message, so the resolver, the abort and the generated `@param` cannot say three different things.
+#' @keywords internal
+#' @noRd
+reg_outcome_level_abort <- function(outcome, family) {
+  why  <- REG_FAMILIES[[family]][["why"]]
+  offers <- names(REG_FAMILIES)[
+    !is.na(vapply(names(REG_FAMILIES), reg_outcome_level_role, character(1)))]
+  cli::cli_abort(c(
+    "{.arg outcome_level} does not apply to {.val {outcome}} ({reg_family_display_name(family)}).",
+    "x" = if (is.null(why)) gettext("this family models no single level of the outcome") else why(),
+    "i" = "It is offered for: {.val {offers}}."), call = NULL)
+}
+
+# THE per-outcome resolution: `outcome_level = c(<outcome> = "<level>")` -> the level for THIS
+# outcome, validated against the family's role and the levels the column actually has. NULL = the
+# user said nothing, which is every family's own default (binomial models the FIRST level, a
+# multinomial pivots on it).
+#' @keywords internal
+#' @noRd
+reg_resolve_outcome_level <- function(outcome_level, outcome, family, y) {
+  lv <- reg_per_outcome(outcome_level, outcome, NULL, NULL)
+  if (is.null(lv) || !length(lv) || is.na(lv) || !nzchar(lv)) return(NULL)
+  if (is.na(reg_outcome_level_role(family))) reg_outcome_level_abort(outcome, family)
+  lv   <- as.character(lv)[[1]]
+  have <- reg_outcome_levels(y, outcome)
+  if (!lv %in% have)
+    cli::cli_abort(c("{.arg outcome_level} {.val {lv}} is not a level of {.val {outcome}}.",
+                     "i" = "Levels: {.val {have}}."), call = NULL)
+  lv
+}
+
+# The levels `outcome_level` may name. A 0/1 numeric outcome has none of its own, so reg_prep_binary()
+# labels it "Not <outcome>" / "<outcome>" -- BOTH spellings are accepted here, which is what makes
+# the argument work on that path instead of being the silent no-op the old logical was.
+#' @keywords internal
+#' @noRd
+reg_outcome_levels <- function(y, outcome) {
+  if (is.numeric(y) && all(stats::na.omit(y) %in% c(0, 1)))
+    return(c(paste0("Not ", outcome), outcome, "0", "1"))
+  levels(forcats::fct_drop(as.factor(y)))
 }
 
 # REG_FAMILY_MULT_WORD -- the MULTIPLICATIVE effect word of a fit key: what exp(coef) is CALLED for
@@ -584,8 +659,8 @@ reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
 # the line that WOULD work, the standard `reg_detect_family()` and `ref2 = "cumulative"` already set.
 #' @keywords internal
 #' @noRd
-reg_estimand_abort <- function(res, dependent = NULL, arg = "measure") {
-  who <- if (is.null(dependent)) "" else cli::format_inline(" for {.val {dependent}}")
+reg_estimand_abort <- function(res, outcome = NULL, arg = "measure") {
+  who <- if (is.null(outcome)) "" else cli::format_inline(" for {.val {outcome}}")
   fam <- res$family
   if (identical(res$status, "unknown_family"))
     cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
@@ -619,6 +694,39 @@ REG_RETIRED_ARGS <- list(
       "i" = "{.code at = \"average\"} is the default {.code effect = \"marginal\"}."),
   estimate_display = function()
     c("i" = "{.arg estimate_display} is now {.arg display}, which also takes a {.code {\"{or} ({pct})\"}} template."),
+  # Phase 20c (KEY 5): three arguments for one concept -- WHAT RIDES THE MODEL-SUMMARY FOOTER --
+  # became one. The comparison is a footer key like any other, and the baseline model is the one
+  # parameter that key carries.
+  compare = function()
+    c("i" = "{.code compare = \"baseline\"} is now {.code stats = c(..., \"compare_baseline\")}.",
+      "i" = "{.code compare = \"sequential\"} is now {.code stats = c(..., \"compare_sequential\")}.",
+      "i" = "The comparison is a footer row like any other, so it is named in {.arg stats}."),
+  baseline = function()
+    c("i" = "{.arg baseline} is now the VALUE of the comparison key: {.code stats = c(compare_baseline = \"Model 1\")}.",
+      "i" = "An index works too: {.code stats = c(compare_baseline = 2)}. Omit it for the first model."),
+  # Phase 20c: a 25-character LOGICAL that toggled the outcome's level ORDER became an argument that
+  # NAMES the level -- checkable, readable in a sentence, and working on the 0/1 numeric path where
+  # the logical was a silent no-op.
+  inverse_two_level_factors = function()
+    c("i" = '{.arg inverse_two_level_factors} is now {.code outcome_level = c(<outcome> = "<level>")}, which NAMES the level modelled.',
+      "i" = "{.code TRUE} was \"model the first level\", which is still the default -- so drop the argument.",
+      "i" = '{.code FALSE} was "model the other one": name it, e.g. {.code outcome_level = c(married = "Not married")}.'),
+  # Phase 20c (KEY 4): both producers ask "how is this interval computed" with the same word now.
+  method = function()
+    c("i" = '{.arg method} is now {.arg ci_method}, the named vector {.fn tab} already takes.',
+      "i" = '{.code method = "profile"} is {.code ci_method = c(model = "profile")}, or just {.code ci_method = "profile"}.'),
+  # Phase 20c (KEY 4): four questions the two producers asked with two words each. `tab_reg()` is
+  # unreleased, so these are RENAMES -- the old spelling aborts naming the new one rather than
+  # living on as a permanent second vocabulary.
+  dependent = function()
+    c("i" = "{.arg dependent} is now {.arg outcome}, the word the rest of the package uses.",
+      "i" = 'It pairs with {.arg outcome_level}: {.code tab_reg(d, outcome = "married", outcome_level = c(married = "Married"))}.'),
+  split_var = function()
+    c("i" = "{.arg split_var} is now {.arg tab_vars}, as in {.fn tab} --- one table per group.",
+      "i" = "The STORAGE has said so since 19f: a split group is stamped as a `tab_var` on the index column."),
+  reference = function()
+    c("i" = "{.arg reference} is now {.arg ref}, as in {.fn tab}: {.code ref = c(race = \"White\")}.",
+      "i" = "For the level of the OUTCOME, that is {.arg outcome_level} --- `ref` names what you compare AGAINST."),
   exponentiate_ = function() character(0)
 )
 
@@ -635,6 +743,11 @@ reg_retired_args <- function(dots, fn = "tab_reg") {
       "{.arg {old[[1]]}} was removed from {.fn {fn}} in tabxplor 2.0.0.",
       REG_RETIRED_ARGS[[old[[1]]]]()))
   }
+  # Phase 20c: a DOT-PREFIXED name is internal, never a user argument -- `.fit_cache` (the jamovi
+  # live UI's cache environment) rides `...` since it stopped being a documented formal. Same
+  # convention as tab()'s `.cache` / `.return_armed` and test_group_cols()' scratch keys.
+  nms <- nms[!startsWith(nms, ".")]
+  if (!length(nms)) return(invisible(NULL))
   bad <- nms[!nzchar(nms)]
   cli::cli_abort(c("Unknown argument{?s} passed to {.fn {fn}}.",
                    "x" = "{.val {if (length(bad)) 'unnamed' else nms}}."))
@@ -764,13 +877,13 @@ reg_eff_word <- function(est, empirical = FALSE) {
   w
 }
 
-# reg_per_dep() -- THE per-dependent slicer, shared by `family`, `effect` and `measure` (and by the
-# multi-dependent recursion, which used to slice `trials` by hand and forward `family` whole -- D6).
-# A scalar applies to every outcome; a NAMED vector is keyed by dependent; a positional one is
-# aligned to `dependent`. NULL / NA anywhere means "the default".
+# reg_per_outcome() -- THE per-outcome slicer, shared by `family`, `effect` and `measure` (and by the
+# multi-outcome recursion, which used to slice `trials` by hand and forward `family` whole -- D6).
+# A scalar applies to every outcome; a NAMED vector is keyed by outcome; a positional one is
+# aligned to `outcome`. NULL / NA anywhere means "the default".
 #' @keywords internal
 #' @noRd
-reg_per_dep <- function(x, d, i, default) {
+reg_per_outcome <- function(x, d, i, default) {
   if (is.null(x)) return(default)
   v <- if (!is.null(names(x)))  { if (d %in% names(x)) x[[d]] else default }
        else if (length(x) == 1L) x[[1L]]
@@ -837,7 +950,7 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #' says so and, for the risk difference, falls back to the linear probability model.
 #'
 #' @param data A data frame (or a `survey` design), as for [tab_reg()].
-#' @param dependent The outcome column name.
+#' @param outcome The outcome column name.
 #' @param family The model family. `"auto"` (default) detects it and says so, exactly as
 #'   [tab_reg()] does.
 #'
@@ -848,10 +961,10 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #' d <- forcats::gss_cat
 #' d$married <- as.integer(d$marital == "Married")
 #' reg_measures(d, "married")
-reg_measures <- function(data, dependent, family = "auto") {
+reg_measures <- function(data, outcome, family = "auto") {
   svy <- svy_unwrap_data(data, "reg_measures")
   if (!is.null(svy)) data <- svy$data
-  fam <- if (identical(family, "auto")) reg_detect_family(data, dependent) else family
+  fam <- if (identical(family, "auto")) reg_detect_family(data, outcome) else family
   rows <- reg_estimands_for(fam)
   if (is.null(rows)) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
   grid <- expand.grid(effect = REG_EFFECTS_VALUES, measure = c("odds_ratio", "ratio", "difference"),
@@ -873,7 +986,7 @@ reg_measures <- function(data, dependent, family = "auto") {
     status = if (identical(lg$status, "ok")) "available" else "not defined",
     header = if (identical(lg$status, "ok")) paste0("Model_", lg$word) else NA_character_,
     note   = if (is.function(lg$why)) lg$why() else NA_character_))
-  cli::cli_inform(c("i" = "{.val {dependent}}: {.code family = \"{fam}\"}.",
+  cli::cli_inform(c("i" = "{.val {outcome}}: {.code family = \"{fam}\"}.",
                     "i" = 'The default is {.code measure = "{reg_default_measure(fam)}"}.'))
   out
 }

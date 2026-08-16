@@ -65,14 +65,37 @@ test_that("`color_signif` is validated on the reg path too", {
       tab_reg(d, "married", "race", family = "binomial", color_signif = s)))
 })
 
-test_that("`baseline` is shape-checked, and says so when `compare` cannot use it", {
+# Phase 20c: `compare` + `baseline` are two `stats =` keys, so the two things this used to check are
+# unrepresentable -- a baseline is a single string by grammar, and naming one IS asking for the
+# comparison. What is checkable instead is the grammar itself.
+test_that("the model-comparison keys are refused when they contradict each other", {
   skip_if_not_installed("broom")
   d <- rr_data(); M <- list(m1 = "race", m2 = c("race", "age"))
-  expect_error(tab_reg(d, "married", M, family = "binomial", baseline = c("m1", "m2")),
-               "single model name")
-  # a bogus baseline under compare = "none" used to be dropped in silence
-  expect_message(tab_reg(d, "married", M, family = "binomial", baseline = "m1"),
-                 "compare")
+  expect_error(tab_reg(d, "married", M, family = "binomial",
+                       stats = c("compare_baseline", "compare_sequential")),
+               "more than one model comparison")
+  expect_error(tab_reg(d, "married", M, family = "binomial",
+                       stats = c(compare_sequential = "m1")),
+               "sequential comparison has none")
+  # the retired spellings abort naming their replacement, they are not silently ignored
+  expect_error(tab_reg(d, "married", M, family = "binomial", compare = "baseline"),
+               "compare_baseline")
+  expect_error(tab_reg(d, "married", M, family = "binomial", baseline = "m1"),
+               "compare_baseline")
+})
+
+test_that("a comparison key ADDS a row and restricts nothing", {
+  skip_if_not_installed("broom")
+  d <- rr_data(); M <- list(m1 = "race", m2 = c("race", "age"))
+  only <- suppressMessages(tab_reg(d, "married", M, family = "binomial",
+                                   stats = "compare_sequential"))
+  both <- suppressMessages(tab_reg(d, "married", M, family = "binomial",
+                                   stats = c("n", "aic", "compare_sequential")))
+  # naming only the comparison keeps the per-family default statistics beside it
+  expect_true("mcfadden_r2" %in% get_test(only)$test)
+  expect_false("mcfadden_r2" %in% get_test(both)$test)
+  expect_true(any(grepl("^compare_seq", get_test(only)$test)))
+  expect_true(any(grepl("^compare_seq", get_test(both)$test)))
 })
 
 test_that("the scalar logicals are refused when they are not scalar logicals", {
@@ -91,7 +114,7 @@ test_that("a `split_var` that is also a predictor aborts before anything is anno
   # colours and forcings the call was never going to produce.
   expect_silent(expect_error(
     tab_reg(d, "married", c("race", "age"), family = "binomial",
-            split_var = "race", color = "adjustment"),
+            tab_vars = "race", color = "adjustment"),
     "cannot also be the outcome or a predictor"))
 })
 
@@ -150,28 +173,45 @@ test_that("a SHORTER positional `family` defaults the surplus dependents instead
   expect_identical(unname(reg_call(t)$families[["tvhours"]]), "gaussian")
 })
 
-test_that("a PARTIAL named `inverse_two_level_factors` defaults to TRUE instead of erroring", {
+test_that("a PARTIAL named `outcome_level` leaves the other outcomes at their default", {
   skip_if_not_installed("broom"); skip_if_not_installed("nnet")
   d <- rr_data()
   expect_no_error(
     suppressMessages(tab_reg(d, c("married", "party3"), "race",
-                             inverse_two_level_factors = c(married = FALSE))))
+                             outcome_level = c(married = "Not married"))))
 })
 
-test_that("a POSITIONAL `inverse_two_level_factors` is read positionally, not by name", {
+test_that("`outcome_level` names the level, on a factor and on a 0/1 numeric outcome", {
   skip_if_not_installed("broom")
   d <- rr_data()
-  # `c(TRUE, FALSE)[["married"]]` was a subscript error: the length>1 branch assumed names.
-  expect_no_error(
-    a <- suppressMessages(tab_reg(d, c("married", "score"), "race",
-                                  family = c("binomial", "gaussian"),
-                                  inverse_two_level_factors = c(FALSE, TRUE))))
-  b <- suppressMessages(tab_reg(d, c("married", "score"), "race",
-                                family = c("binomial", "gaussian"),
-                                inverse_two_level_factors = c(married = FALSE)))
-  # both spell "married models the OTHER level" (positive_level is aligned to `dependent`, unnamed);
-  # the positional one no longer errors on the way
-  expect_identical(reg_call(a)$positive_level[[1]], reg_call(b)$positive_level[[1]])
+  a <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                outcome_level = c(married = "Not married")))
+  expect_identical(reg_call(a)$positive_level[[1]], "Not married")
+
+  # Phase 20c: on a 0/1 numeric outcome the old logical was a SILENT NO-OP -- that branch returns
+  # before ever reaching the level reversal. Naming the level works there, in both spellings.
+  d$bin <- as.numeric(d$married == "Married")
+  b <- suppressMessages(tab_reg(d, "bin", "race", family = "binomial"))
+  expect_identical(reg_call(b)$positive_level[[1]], "bin")            # the 1s, by default
+  z <- suppressMessages(tab_reg(d, "bin", "race", family = "binomial",
+                                outcome_level = c(bin = "0")))
+  expect_identical(reg_call(z)$positive_level[[1]], "Not bin")        # the 0s, as asked
+})
+
+test_that("`outcome_level` is refused where the family has no level to single out", {
+  skip_if_not_installed("broom"); skip_if_not_installed("MASS")
+  d <- rr_data()
+  d$inc3 <- factor(forcats::fct_lump_n(d$rincome, 2), ordered = TRUE)
+  expect_error(suppressMessages(tab_reg(d, "inc3", "race", family = "ordinal",
+                                        outcome_level = c(inc3 = "Other"))),
+               "keep the order")
+  expect_error(suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                        outcome_level = c(married = "nope"))),
+               "not a level")
+  # and an OUTCOME named in `reference` says which argument does work
+  expect_error(suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                        reference = c(married = "Married"))),
+               "outcome_level")
 })
 
 # === defect 8: a formula `dependent` is not a vector of three dependents ==========================
@@ -187,26 +227,26 @@ test_that("a formula `dependent` beside `predictors` gives the teachable message
                "formula.*or.*predictors|predictors.*not both")
 })
 
-# === the `test` tibble's `dep` key (19m-i's "missing join key") ==================================
+# === the `test` tibble's `outcome` key (19m-i's "missing join key"; `dep` until 20c) ============
 
-test_that("every reg footer row states WHICH DEPENDENT it is about; every crosstab row states none", {
+test_that("every reg footer row states WHICH OUTCOME it is about; every crosstab row states none", {
   skip_if_not_installed("broom")
   d <- rr_data()
   t  <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
   tt <- attr(t, "test", exact = TRUE)
-  expect_true("dep" %in% names(tt))
-  expect_identical(unique(tt$dep), "married")
+  expect_true("outcome" %in% names(tt))
+  expect_identical(unique(tt$outcome), "married")
 
-  # a crosstab row is about no dependent -- NA, not "": `var = ""` already means "the whole table"
+  # a crosstab row is about no outcome -- NA, not "": `var = ""` already means "the whole table"
   ct <- tab(d, marital, race, test = TRUE)
-  expect_true("dep" %in% names(attr(ct, "test", exact = TRUE)))
-  expect_true(all(is.na(attr(ct, "test", exact = TRUE)$dep)))
+  expect_true("outcome" %in% names(attr(ct, "test", exact = TRUE)))
+  expect_true(all(is.na(attr(ct, "test", exact = TRUE)$outcome)))
 })
 
-test_that("`dep` is DECLARED in the schema, so it is not read as a grouping variable", {
+test_that("`outcome` is DECLARED in the schema, so it is not read as a grouping variable", {
   # test_group_cols() is `setdiff(names(tt), names(new_test_tibble()))` minus dot-prefixed names, so
   # an undeclared column would split the reg footer into one block per outcome (19g's own defect).
-  expect_true("dep" %in% names(new_test_tibble()))
+  expect_true("outcome" %in% names(new_test_tibble()))
   skip_if_not_installed("broom")
   t <- suppressMessages(tab_reg(rr_data(), "married", c("race", "age"), family = "binomial"))
   expect_length(test_group_cols(attr(t, "test", exact = TRUE)), 0L)
@@ -270,4 +310,49 @@ test_that("reg_color_auto_measure() reads the estimand's stored SCALE, not its a
   # a ratio geometry and an additive one do not answer the same context
   bt  <- reg_estimand("gaussian", "coefficient", "auto")             # raw_diff scale
   expect_false(identical(reg_color_auto_measure(or), reg_color_auto_measure(bt)))
+})
+
+
+# --- Phase 20c (KEY 4): one word per question ------------------------------------------------------
+# `tab_reg()` is unreleased, so each of these is a RENAME: the old spelling lands in `...` and aborts
+# naming its replacement (the reg_retired_args() idiom), rather than living on as a second vocabulary.
+test_that("every retired spelling aborts naming the argument that replaced it", {
+  skip_if_not_installed("broom")
+  d <- rr_data()
+  retired <- list(
+    dependent                 = list(dependent = "married"),
+    split_var                 = list(split_var = "race"),
+    reference                 = list(reference = c(race = "White")),
+    method                    = list(method = "profile"),
+    compare                   = list(compare = "baseline"),
+    baseline                  = list(baseline = "m1"),
+    inverse_two_level_factors = list(inverse_two_level_factors = FALSE)
+  )
+  wants <- c(dependent = "outcome", split_var = "tab_vars", reference = "ref",
+             method = "ci_method", compare = "compare_baseline", baseline = "compare_baseline",
+             inverse_two_level_factors = "outcome_level")
+  for (nm in names(retired)) {
+    args <- c(list(d, "married", "race", family = "binomial"), retired[[nm]])
+    expect_error(do.call(tab_reg, args), wants[[nm]], info = nm)
+  }
+})
+
+test_that("the two producers now ask the shared questions with the shared word", {
+  skip_if_not_installed("broom")
+  d <- rr_data()
+  # `tab_vars`, `ref` and `ci_method` are the SAME argument on both producers -- declared, so
+  # tx_check_tab_args() polices tab_reg()'s signature against TAB_ARGS like a crosstab's.
+  for (k in c("tab_vars", "ref", "ci_method", "na", "color", "color_signif", "display",
+              "conf_level", "stars", "wt", "add_n", "cleannames", "subtext")) {
+    expect_true(k %in% names(formals(tab_reg)), info = k)
+    expect_true("tab_reg" %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)
+    expect_true("tab"     %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)
+  }
+  # `ci_method`'s fifth slot IS the regression's, so a bare "profile" means it
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                ci_method = c(model = "profile")))
+  expect_identical(reg_call(t)$fit_spec$method, "profile")
+  # and an unknown slot is refused by the ONE validator both producers share
+  expect_error(tab_reg(d, "married", "race", family = "binomial", ci_method = c(nope = "wald")),
+               "Unknown")
 })

@@ -613,9 +613,11 @@ testthat::test_that("the released method_cell / method_diff are soft-deprecated 
   testthat::expect_equal(old, new)
   # Phase 19b: the resolved method is stamped on the COLUMNS that used it
   testthat::expect_true(all(get_ci_method(new)[purrr::map_lgl(new, is_fmt)] == "wald"))
-  # the vector is PARTIAL: an unnamed slot keeps its default, exactly like `ref` / `pct`
+  # the vector is PARTIAL: an unnamed slot keeps its default, exactly like `ref` / `pct`.
+  # Phase 20c: the 5th slot is `model`, tab_reg()'s -- one grammar, one vocabulary, both producers.
   testthat::expect_identical(unname(tabxplor:::resolve_ci_method(c(cell = "wald"))),
-                             c("wald", "newcombe", "welch", "robust"))
+                             c("wald", "newcombe", "welch", "robust", "wald"))
+  testthat::expect_identical(tabxplor:::ci_slots_of("reg"), "model")
   # and one validator answers for every entry point
   testthat::expect_error(tab(gss, race, marital, ci_method = c(diff = "wilson")), "newcombe")
   testthat::expect_error(tab(gss, race, marital, ci_method = c(nope = "wald")), "Unknown")

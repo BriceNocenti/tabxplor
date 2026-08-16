@@ -36,7 +36,7 @@ gapb_data <- function() {
 # makes some gaps actually REACH the first adj_ratio break (x1.1) -- a fixture that colours nothing
 # would let the policy tests pass vacuously.
 gapb_tab <- function(d, policy = "ignore", preds = c("race", "party3", "relig"), ...)
-  suppressMessages(tab_reg(d, dependent = "married", predictors = preds, family = "poisson",
+  suppressMessages(tab_reg(d, outcome = "married", predictors = preds, family = "poisson",
                            empirical = TRUE, color = c(TRUE, "adjustment"),
                            color_signif = policy, ...))
 
@@ -304,12 +304,12 @@ test_that("the same predicate fixes between_groups under method = 'profile'", {
   # that read as `grey_non_signif` and greyed the WHOLE column instead of falling back to the
   # descriptive reading.
   d  <- gapb_data()
-  pr <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "binomial",
+  pr <- suppressMessages(tab_reg(d, "married", "race", tab_vars = "party3", family = "binomial",
                                  color = c(TRUE, "between_groups"),
-                                 color_signif = "grey_non_signif", method = "profile"))
-  ig <- suppressMessages(tab_reg(d, "married", "race", split_var = "party3", family = "binomial",
+                                 color_signif = "grey_non_signif", ci_method = "profile"))
+  ig <- suppressMessages(tab_reg(d, "married", "race", tab_vars = "party3", family = "binomial",
                                  color = c(TRUE, "between_groups"),
-                                 color_signif = "ignore", method = "profile"))
+                                 color_signif = "ignore", ci_method = "profile"))
   cn <- names(pr)[vapply(pr, is_fmt, logical(1))]
   for (nm in cn) {
     testthat::expect_true(all(is.na(get_gap_se(pr[[nm]]))))

@@ -129,7 +129,7 @@ reg_coef_if_maker <- function(fit) {
 #   multinomial      : `category` picks the 0/1 indicator of that outcome category, which is the crude
 #                      estimand of the column being tested.
 #' @keywords internal
-reg_crude_if_maker <- function(data, dependent, crude_key, positive_level, wt, link,
+reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, link,
                                trials = NULL, category = "", ref_category = NULL) {
   gp <- switch(as.character(link)[1],
                "logit"    = function(m) 1 / (m * (1 - m)),
@@ -137,7 +137,7 @@ reg_crude_if_maker <- function(data, dependent, crude_key, positive_level, wt, l
                "identity" = function(m) 1,
                NULL)
   if (is.null(gp)) return(NULL)
-  yw <- tryCatch(reg_crude_yw(data, dependent, crude_key, positive_level, wt, trials, ref_category),
+  yw <- tryCatch(reg_crude_yw(data, outcome, crude_key, positive_level, wt, trials, ref_category),
                  error = function(e) NULL)
   if (is.null(yw)) return(NULL)
   # a categorical outcome averages the 0/1 indicator of the category this column shows

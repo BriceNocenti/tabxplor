@@ -161,7 +161,7 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
 #' measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
 #' observed (crude, unadjusted) effect beside a model effect, or -- under
-#' \code{split_var} with \code{color = "between_groups"} -- the reference group's estimate.
+#' \code{tab_vars} with \code{color = "between_groups"} -- the reference group's estimate.
 #' \code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
 #' predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
 #' A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.
@@ -169,7 +169,7 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' on the estimate's own test scale (the log-ratio on a multiplicative \code{scale} --
 #' \code{odds_ratio} / \code{pct_ratio} / \code{mean_ratio} -- the plain difference otherwise).
 #' Written by \code{tab_reg} where
-#' the two estimates are independent (\code{split_var} groups), so that
+#' the two estimates are independent (\code{tab_vars} groups), so that
 #' \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
 #' else, which leaves the significance policies inert there.
 #' A double vector the length of \code{n}. Non-displayed.
@@ -188,7 +188,7 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' @param col_var The name of the \code{col_var} used to calculate the vector
 #' @param col_group The sub-population this column's block belongs to: a level of a
 #'   \code{spread_vars} variable (\code{\link{tab_spread}}), or a \code{\link{tab_reg}}
-#'   \code{split_var} group. \code{""} (the default) when the table was never spread. Together with
+#'   \code{tab_vars} group. \code{""} (the default) when the table was never spread. Together with
 #'   \code{col_var} it identifies a column BLOCK: two blocks may show the same variable for two
 #'   sub-populations, and exports head them on two lines.
 #' @param totcol \code{TRUE} when the vector is a total column
@@ -217,7 +217,7 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.
 #' @param model_family For regression tables (\code{\link{tab_reg}}): the column's model family
 #' (\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
-#' as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
+#' as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several outcomes with
 #' different families, each column keeping its own effect wording.
 #' @param role For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a
 #' model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
@@ -428,7 +428,7 @@ fmt <- function(n         = integer(),
   obs     <- vctrs::vec_recycle(vctrs::vec_cast(obs    , double())   , size = max_size)
   # Phase 18z8: the SE of the GAP between the estimate and `obs`, on the estimate's own test
   # scale (log-ratio for or/ratio, plain difference for diff). Written only where the two are
-  # independent (split_var groups); NA elsewhere -> the gap has no interval -> the significance
+  # independent (tab_vars groups); NA elsewhere -> the gap has no interval -> the significance
   # policies stay inert on those cells. Non-displayed.
   gap_se  <- vctrs::vec_recycle(vctrs::vec_cast(gap_se , double())   , size = max_size)
 
@@ -1981,7 +1981,7 @@ new_fmt <- function(n         = integer(),
                     pct_base  = "none",
                     col_var   = ""   ,
                     # Phase 19n: WHICH SUB-POPULATION this column's block belongs to -- a level of a
-                    # `spread_vars` variable, or a `tab_reg(split_var =)` group; "" when the table was
+                    # `spread_vars` variable, or a `tab_reg(tab_vars =)` group; "" when the table was
                     # never spread. Both producers used to WELD it into `col_var` as
                     # "{level}<br>{col_var}", which three sites then sniffed for `<br>` (Excel's
                     # two-line span + its wrap flag, the legend's name normaliser) while a fourth
@@ -4823,7 +4823,7 @@ measure_validate <- function(color, producer = NULL, call = rlang::caller_env())
 }
 
 # Phase 18z13 (D7): is THIS column the baseline of its own gap measure? A measure whose baseline is
-# another column leaves `obs` empty on the column that IS that baseline -- the reference `split_var`
+# another column leaves `obs` empty on the column that IS that baseline -- the reference `tab_vars`
 # group, or a model with no observed counterpart -- so not one cell can ever be coloured and every break
 # in the ladder is unreachable. Printing the scale there describes a colouring that does not exist, and
 # costs the grouping (the line cannot merge with the columns that DO colour). Say what the column is
@@ -5211,7 +5211,7 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   # claim a method the bounds were never built with. Now: one lookup in a declared table.
   m <- spec$ci_method
   if (is.null(m) || is.na(m) || !nzchar(m)) return(NA_character_)
-  # Phase 19m-i: the two effect-word-dependent engines are ONE declared table (CI_METHOD_WORDED),
+  # Phase 19m-i: the two effect-word-outcome engines are ONE declared table (CI_METHOD_WORDED),
   # read by the same lookup as every other engine -- they were two hand-written switch() blocks.
   wd <- CI_METHOD_WORDED[[m]]
   if (!is.null(wd)) {
@@ -5836,13 +5836,13 @@ legend_streams <- function(x, style, lang, theme = "light") {
       show_this   <- show_global || mixed
       name_by_col <- mixed || any(cv_lines[cvs] > 1)
       spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
-      # Phase 18m: a multi-dependent regression column carries a trailing " [dep]" disambiguation
+      # Phase 18m: a multi-outcome regression column carries a trailing " [dep]" disambiguation
       # bracket in its NAME ("Model_OR [married]") for console clash-avoidance. The col_var span row
       # already names the outcome, so the legend strips the bracket (same regex as the header strip,
       # tab-export-prep.R). Gated to reg groups (columns carry a role) so a level label that happens to
       # end in "[...]" is untouched.
       if (any(nzchar(purrr::map_chr(g, "role"))))
-        spec$col_names <- tx_strip_dep_suffix(spec$col_names)
+        spec$col_names <- tx_strip_outcome_suffix(spec$col_names)
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
     })
@@ -6022,7 +6022,7 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
     streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
   for (rl in reg_model_lines(x, lg)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")  # Phase 18w: translated per family
-  # Phase 18z8: the aggregated effect-modification test (predictor x split_var) -- table-wide, so it
+  # Phase 18z8: the aggregated effect-modification test (predictor x tab_vars) -- table-wide, so it
   # rides the stream footer like the weight / Model: lines rather than the per-column footer rows.
   # `esc = TRUE`: the p-values carry significance stars, which pandoc would read as emphasis.
   for (il in reg_interaction_lines(x, lg)) if (nzchar(il)) push(list(.lg_tok(il, esc = TRUE)), "reg")

@@ -168,6 +168,22 @@
   `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
   effect-modification test, asked once for all a predictor's levels, so it carries none of the
   multiplicity of a per-cell reading. `color = "between_groups"` turns it on for you.
+* **`tab_reg()` speaks `tab()`'s vocabulary.** The arguments both producers share are now spelled the
+  same way: `dependent` is **`outcome`**, `split_var` is **`tab_vars`**, `reference` is **`ref`**
+  (`c(var = "level")`, predictors and `tab_vars`), and `method` is **`ci_method`** — the named vector
+  `tab()` takes, whose fifth slot is the regression's (`ci_method = c(model = "profile")`, or just
+  `"profile"`). `inverse_two_level_factors` (a logical that toggled level *order*) is
+  **`outcome_level`**, which names the level: `outcome_level = c(married = "Married")` for the level
+  MODELLED on a binomial outcome, the baseline category on a multinomial one, refused on an ordinal
+  one. It is the twin of `ref`, and the pair asks opposite questions — *`ref` names the level you
+  compare AGAINST, `outcome_level` the level you MODEL*. Every retired spelling aborts naming its
+  replacement.
+* **One `stats =` for the whole model-summary footer.** `compare` and `baseline` are gone: the
+  comparison is a footer key like any other, and the baseline model is that key's value —
+  `stats = c("n", "aic", "compare_sequential")`, `stats = c("n", compare_baseline = "Model 1")`, or
+  `stats = "compare_baseline"` for the first model. A comparison key *adds* a row and restricts
+  nothing. Note `stats = FALSE` / `"none"` now hides the comparison too, which `compare` did not.
+* **`tab_reg()` no longer documents `.fit_cache`** (jamovi-internal; it rides `...`).
 * **`tab_reg()` asks two questions instead of four.** An estimand is *which contrast* × *which effect
   measure*, so that is what the arguments are: **`effect = c("coefficient", "marginal",
   "at_reference")`** and **`measure = c("auto", "odds_ratio", "ratio", "difference", "log")`**, both
@@ -327,6 +343,9 @@
 
 ## Bug fixes
 
+* **A survey-design ANOVA row called itself a Welch F.** On a weighted / `svydesign` table the
+  numeric p-value row printed `pvalue (Chi2, Welch F; survey-design)` for a test that is a
+  design-based Wald F. It now says `F`, the `; survey-design` suffix naming the estimator.
 * **Arithmetic silently did nothing on a `pct_ci`, `mean_ci` or `pvalue` column.** `x * 2` returned
   `x` unchanged, with no warning, on display values `?fmt` documents — so `mutate()` over the fmt
   columns of a table showing confidence intervals quietly left them alone. They now write back to the

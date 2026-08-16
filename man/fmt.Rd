@@ -257,7 +257,7 @@ A double vector the length of \code{n}. Non-displayed.}
 \item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
 measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
 observed (crude, unadjusted) effect beside a model effect, or -- under
-\code{split_var} with \code{color = "between_groups"} -- the reference group's estimate.
+\code{tab_vars} with \code{color = "between_groups"} -- the reference group's estimate.
 \code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
 predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
 A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.}
@@ -266,7 +266,7 @@ A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"
 on the estimate's own test scale (the log-ratio on a multiplicative \code{scale} --
 \code{odds_ratio} / \code{pct_ratio} / \code{mean_ratio} -- the plain difference otherwise).
 Written by \code{tab_reg} where
-the two estimates are independent (\code{split_var} groups), so that
+the two estimates are independent (\code{tab_vars} groups), so that
 \code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
 else, which leaves the significance policies inert there.
 A double vector the length of \code{n}. Non-displayed.}
@@ -294,7 +294,7 @@ the whole table), or \code{"none"} (counts, means, coefficients).}
 
 \item{col_group}{The sub-population this column's block belongs to: a level of a
 \code{spread_vars} variable (\code{\link{tab_spread}}), or a \code{\link{tab_reg}}
-\code{split_var} group. \code{""} (the default) when the table was never spread. Together with
+\code{tab_vars} group. \code{""} (the default) when the table was never spread. Together with
 \code{col_var} it identifies a column BLOCK: two blocks may show the same variable for two
 sub-populations, and exports head them on two lines.}
 
@@ -323,7 +323,7 @@ residual instead -- see \code{\link{tab}}.
 
 \item{model_family}{For regression tables (\code{\link{tab_reg}}): the column's model family
 (\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
-as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
+as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several outcomes with
 different families, each column keeping its own effect wording.}
 
 \item{role}{For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a

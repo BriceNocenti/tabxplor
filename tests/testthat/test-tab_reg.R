@@ -151,11 +151,11 @@ test_that("measure = log on a logit yields raw log-odds (additive coef shape)", 
   expect_equal(sort(get_diff(col)[keep]), sort(unname(bm)), tolerance = 1e-6)
 })
 
-test_that("reference= relevels a factor predictor's baseline", {
+test_that("ref= relevels a factor predictor's baseline", {
   skip_if_not_installed("broom")
   d  <- reg_data()
   t1 <- tab_reg(d, "married", "race", family = "binomial",
-                reference = c(race = "White"), cleannames = FALSE)
+                ref = c(race = "White"), cleannames = FALSE)
   col <- t1[["Model_OR"]]
   white <- which(as.character(t1$levels) == "White" & as.character(t1$var) == "race")
   other <- which(as.character(t1$var) == "race" & as.character(t1$levels) != "White")
@@ -398,11 +398,11 @@ test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Phase 18z
   # used to die inside glm() with "contrasts can be applied only to factors with 2 or more levels"
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = "q"),
                "not a column name")
-  # Phase 19k: a named vector may LEAVE a dependent out (that entry falls back to its observed
-  # maximum, which is what lets explicit and automatic counts mix), but a name matching NO dependent
+  # Phase 19k: a named vector may LEAVE an outcome out (that entry falls back to its observed
+  # maximum, which is what lets explicit and automatic counts mix), but a name matching NO outcome
   # is a typo and says so.
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = c(other = 10)),
-               "not a dependent")
+               "not an outcome")
   expect_error(tab_reg(d, "score", "race", family = "binomial", trials = 0),
                "positive item count")
   # FALSE is the off switch, symmetric with TRUE -> the same abort as no `trials` at all
@@ -536,11 +536,11 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   expect_false(identical(unname(cvs[1]), "Dem vs Ind")) # not the per-category name
 })
 
-test_that("reference= keyed by the outcome sets the multinomial baseline category", {
+test_that("outcome_level= sets the multinomial baseline category", {
   skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   t1 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial",
-                reference = c(party3 = "Dem"), cleannames = FALSE)
+                outcome_level = c(party3 = "Dem"), cleannames = FALSE)
   expect_true(all(c("Ind vs Dem", "Rep vs Dem") %in% names(t1)))
 })
 
@@ -902,7 +902,7 @@ test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per 
   skip_if_not_installed("broom")
   d <- reg_2dep_data()
   r <- suppressWarnings(tab_reg(
-    d, dependent = c("married", "widowed"),
+    d, outcome = c("married", "widowed"),
     predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
     family = "binomial", cleannames = FALSE))
   expect_s3_class(r, "tabxplor_tabs")
@@ -945,7 +945,7 @@ test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fall
   d <- reg_2dep_data()
   r <- tab_reg(d, "married",
                predictors = list(small = c("race", "age"), complete = c("race", "age", "rincome")),
-               family = "binomial", compare = "baseline", baseline = "complete",
+               family = "binomial", stats = c(compare_baseline = "complete"),
                na = "drop_all", cleannames = FALSE)
   cmp <- get_test(r) |> dplyr::filter(grepl("^compare", test))
   expect_true("compare_baseline" %in% cmp$test)            # LR test

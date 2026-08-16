@@ -54,7 +54,7 @@ test_that("French typography: multiply sign + decimal comma (locale-independent)
 })
 
 reg_fit <- function() {
-  tab_reg(fr_data(), dependent = "y", predictors = c("race", "inc"), family = "binomial")
+  tab_reg(fr_data(), outcome = "y", predictors = c("race", "inc"), family = "binomial")
 }
 
 test_that("regression 'Model:' footer + estimand stay English when asked in English", {

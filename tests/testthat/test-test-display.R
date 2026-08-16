@@ -85,7 +85,7 @@ test_that("reg grid: split_var levels become the row groups", {
   # a models list keeps the STACKED grouped form, where split levels are the row groups
   g <- test_summary_grid(tab_reg(gss, "married",
                                  list(m1 = c("relig", "age"), m2 = c("relig", "age")),
-                                 split_var = "race"))
+                                 tab_vars = "race"))
   expect_length(g$groups, 3L)
   expect_setequal(vapply(g$groups, function(gr) gr$label_lines[[1]], character(1)),
                   c("White", "Black", "Other"))
@@ -148,7 +148,7 @@ test_that("a regression split_var renders as a merged, vertical first column in 
   skip_if_not_installed("broom")
   # a models list keeps the STACKED form, where the split_var is the merged vertical first column.
   r <- tab_reg(gss, "married", list(m1 = c("relig", "age"), m2 = c("relig", "age")),
-               split_var = "race")
+               tab_vars = "race")
   h <- as.character(tab_html(r))
   # each split level is one rowspan cell with the vertical (tx-vname) class
   for (lv in c("White", "Black", "Other"))

@@ -184,23 +184,23 @@ hd("W-C (FIXED). a degrade cannot escape the build it happened in")
 # the degrade is a local of the build, so there is no flag left to go stale.
 cat("clean       -> basis:",
     tab_inference_basis(suppressMessages(
-      tab_reg(desf, dependent = "col", predictors = "grp", family = "binomial"))), "\n")
+      tab_reg(desf, outcome = "col", predictors = "grp", family = "binomial"))), "\n")
 suppressMessages(tabxplor:::svy_var_degraded("size"))           # a degrade in an EARLIER call
 cat("after one   -> basis:",
     tab_inference_basis(suppressMessages(
-      tab_reg(desf, dependent = "col", predictors = "grp", family = "binomial"))),
+      tab_reg(desf, outcome = "col", predictors = "grp", family = "binomial"))),
     "  <-- was wrong: the footer then denied a variance that was computed\n")
 
 
 # ====================================================================================================
 hd("W-D (FIXED). the crude Obs_* columns STORE the effective base they used")
-g <- tabxplor:::reg_empirical(d, fac_preds = "grp", dependent = "col", crude_key = "binomial",
+g <- tabxplor:::reg_empirical(d, fac_preds = "grp", outcome = "col", crude_key = "binomial",
                               positive_level = "no", wt = "w", conf_level = 0.95)
 k1 <- g$category == g$category[[1]]        # the MODELLED category, one row per level
 cat("reg_empirical emp_n_draw:", fm(g$emp_n_draw[k1], 8), "\n")
 cat("tab()          n_eff    :", fm(get_n_eff(ON(tab(d, grp, col, wt = w, pct = "row"))[["no"]])[1:4], 8),
     "  <-- identical\n")
-R(); rr <- suppressMessages(tab_reg(d, dependent = "col", predictors = "grp", wt = "w",
+R(); rr <- suppressMessages(tab_reg(d, outcome = "col", predictors = "grp", wt = "w",
                                     family = "binomial", empirical = TRUE))
 cat("Obs_%  n_eff FIELD      :", fm(get_n_eff(rr[["Obs_%"]])), "  <-- NA on the Constant only\n")
 
@@ -237,9 +237,9 @@ cat("declared in globalVariables()?",
 # ====================================================================================================
 hd("OK 5. every family's crude column moves with the position")
 fam <- list(
-  binomial = list(dependent = "col",  family = "binomial"),
-  gaussian = list(dependent = "x",    family = "gaussian"),
-  ame      = list(dependent = "col",  family = "binomial", effect = "ame"))
+  binomial = list(outcome = "col",  family = "binomial"),
+  gaussian = list(outcome = "x",    family = "gaussian"),
+  ame      = list(outcome = "col",  family = "binomial", effect = "ame"))
 for (nm in names(fam)) for (W in list(NULL, "w")) {
   R(); r <- suppressWarnings(suppressMessages(do.call(
     tab_reg, c(list(d, predictors = "grp", empirical = TRUE, wt = W), fam[[nm]]))))

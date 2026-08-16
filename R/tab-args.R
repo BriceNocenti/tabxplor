@@ -18,6 +18,24 @@
 # TAB_ARG_VALUES is derived from this table rather than living beside it.
 #
 # KEY CONSTRAINTS:
+#   - `doc_in_producer = TRUE` says the prose stays in the producer's OWN roxygen.
+#
+#     ⚠ WHAT `tab_reg()`'s ROWS DECLARE, AND WHAT THEY DO NOT (Phase 20c, KEY 4). All 25 of its
+#     formals have a row, and every row states `producers`, `default_for` and where its vocabulary
+#     lives -- which is what lets tx_check_tab_args() police that signature exactly as it polices a
+#     crosstab one, and what makes "these two producers ask the SAME question" a declared fact
+#     rather than a claim. But `tab_reg()` does NOT get `@eval tab_args_rd()`, because the phase
+#     MEASURED the thing that would have justified it and it was not there:
+#
+#         the two producers share the NAME and the GRAMMAR of `wt` / `ref` / `na` / `display` /
+#         `color` / `ci_method` / `tab_vars` / `conf_level` / `add_n` / `data`.
+#         They do NOT share the PROSE -- every one of those reads differently on a model
+#         (`wt` is a survey design, `ref` a treatment contrast, `na` a per-fit drop grain,
+#         `display` an effect cell), and emitting the crosstab text into ?tab_reg would be
+#         WRONG documentation, not deduplicated documentation.
+#
+#     THE TEST for moving prose here is the one §4 states for a bundle: it must remove a DUPLICATE.
+#     Two hundred lines that say two different things are not a duplicate.
 #   - `doc` is roxygen text, moved VERBATIM from the producer's own block. It is rendered by
 #     tab_args_rd(), which orders by `formals()` and ASSERTS that the declared set and the formals
 #     are the same set -- so an argument added to a signature without a row breaks the build.
@@ -35,7 +53,7 @@
 #' @noRd
 TAB_ARGS <- list(
   data = list(
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_many"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_many", "tab_reg"),
     doc = "A data frame."),
   row_vars = list(
     producers = c("tab", "tab_many"),
@@ -51,12 +69,14 @@ TAB_ARGS <- list(
             " \\code{row_vars}/\\code{col_vars} (which now accept several variables). Kept working.")),
   col_var = list(producers = c("tab", "tab_plain", "tab_counts"), status = c(tab = "deprecated"), doc_with = "row_var"),
   tab_vars = list(
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_many"),
+    default_for = list(tab_reg = NULL),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_many", "tab_reg"),
     doc = c("<\\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :",
             "a subtable is made for each combination of levels of the selected variables.",
             "Leave empty to make a simple cross-table. All \\code{tab_vars} are converted to factor.")),
   wt = list(
-    producers = c("tab", "tab_plain", "tab_num", "tab_many"),   # tab_counts says `wt_counts`
+    default_for = list(tab_reg = NULL),
+    producers = c("tab", "tab_plain", "tab_num", "tab_many", "tab_reg"),   # tab_counts says `wt_counts`
     doc = "A weight variable, of class numeric. Leave empty for unweighted results."),
   sup_cols = list(
     producers = c("tab"), status = "deprecated",
@@ -64,8 +84,8 @@ TAB_ARGS <- list(
             "only the first level printed. Deprecated in 2.0.0: pass these columns in \\code{col_vars} and",
             "set \\code{levels = \"first\"} instead (\\code{col_vars} already accepts several variables).")),
   na = list(
-    default = "keep", default_for = list(tab_num = c("keep", "drop")),
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values = c("keep", "drop", "drop_all", "common_base"), leaf = c("keep", "drop"), size = 1L,
+    default = "keep", default_for = list(tab_reg = c("drop_by_outcome", "drop_by_model", "drop_all"), tab_num = c("keep", "drop")),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values = c("keep", "drop", "drop_all", "common_base"), leaf = c("keep", "drop"), size = 1L,
     doc = c("The policy to adopt for missing values, as a single string :",
             " \\itemize{",
             "  \\item \\code{\"keep\"}: by default, \\code{NA}'s of row, col and tab variables",
@@ -111,8 +131,9 @@ TAB_ARGS <- list(
             "base is below \\code{n_min} are blanked. Under \\code{pct = \"col\"} the same rule drops weak",
             "columns. Total rows/columns, the added-\\code{n} row/column and the p-value line are always kept.")),
   display = list(
+    default_for = list(tab_reg = "value"),
     default = NULL,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values_from = "DISPLAY_TOKENS",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values_from = "DISPLAY_TOKENS",
     doc = c("A single optional \\strong{composite display template} to show several fields in each",
             "  value cell (text output only -- the console, \\code{\\link{tab_kable}} and \\code{\\link{tab_md}};",
             "  Excel falls back to the primary field). A \\code{\\{\\}} template listing the fields to combine, e.g.",
@@ -183,8 +204,8 @@ TAB_ARGS <- list(
             "everything else in the package --- the reference, the interval, the colour --- follows",
             "from that choice.")),
   ref = list(
-    default = "auto", default_for = list(tab_num = "tot"),
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    default = "auto", default_for = list(tab_reg = NULL, tab_num = "tot"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     doc = c("The reference cell to calculate differences and ratios",
             " (used to print \\code{colors}) :",
             " \\itemize{",
@@ -320,21 +341,25 @@ TAB_ARGS <- list(
             " \\code{\"diff\"} and \\code{\"ratio\"} are soft-deprecated spellings of \\code{\"ref\"} (the second one",
             " also pins the ratio scale -- say \\code{color = \"ratio\"} instead).")),
   conf_level = list(
-    default = NULL,   # 20b: NULL on every producer; tab_resolve_common_args() resolves it
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), option = "conf_level", check = "probability",
+    default = NULL,   # 20b/20c: NULL on EVERY producer, the crosstab boundary and the
+                      # regression one each resolving it -- one idiom, and no call at source time
+                      # (this file sorts before the one that defines conf_level_default()).
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), option = "conf_level", check = "probability",
     doc = c("The confidence level, as a single numeric between 0 and 1.",
             "Default to 0.95 (95%).")),
   stars = list(
+    default_for = list(tab_reg = TRUE),
     default = NULL,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), option = "stars",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), option = "stars",
     doc = c("Logical (default \\code{FALSE} \\emph{opt-in}). With \\code{ci = \"ref\"}, print",
             "significance stars for each cell's difference from its reference, read from the displayed interval",
             "itself (universal CI-inclusion). \\code{NULL} uses `options(\"tabxplor.stars\")` (default",
             "\\code{FALSE}). \\code{ci = \"cell\"} and \\code{ci = \"no\"} anchor nothing to compare, so asking for",
             "stars alongside them informs you once and disables them.")),
   ci_method = list(
+    default_for = list(tab_reg = NULL),
     default = NULL,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values_from = "CI_METHODS",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values_from = "CI_METHODS",
     doc = c("The confidence-interval method of each kind of interval, as ONE named vector --",
             "partial, like \\code{ref} or \\code{pct}, so an unnamed kind keeps its default.",
             "\\itemize{",
@@ -371,8 +396,8 @@ TAB_ARGS <- list(
             "\\code{ci_method = c(cell = , diff = )} instead.")),
   method_diff = list(producers = c("tab"), status = "deprecated", doc_with = "method_cell"),
   color = list(
-    default = "no", default_for = list(tab_num = "auto"),
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    default = "no", default_for = list(tab_reg = TRUE, tab_num = "auto"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     values_from = "MEASURES", values_rd = "color_measures_rd",
     doc = c("Which measure(s) to color, on which visual channel. \\code{FALSE} (default)",
             "prints no color; \\code{TRUE} uses the smart per-column-type scheme (factors: the",
@@ -393,8 +418,9 @@ TAB_ARGS <- list(
             "\\code{ci = \"auto\"} builds. (The old combined strings \\code{\"diff_ci\"}, \\code{\"after_ci\"} and",
             "\\code{\"ci\"} still work but are soft-deprecated in favor of \\code{color_signif}.)")),
   color_signif = list(
+    default_for = list(tab_reg = NULL),
     default = "ignore",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     values_from = "COLOR_SIGNIF_VALUES", values_rd = "color_signif_rd",
     doc = c("How significance gates the color, as a single string:",
             "{VALUES}",
@@ -433,8 +459,9 @@ TAB_ARGS <- list(
     doc = c("A per-table override of the colour thresholds, in the form",
             "\\code{\\link{set_color_breaks}} accepts; unset scales keep the global ones.")),
   add_n = list(
+    default_for = list(tab_reg = TRUE),
     default = TRUE,
-    producers = c("tab", "tab_counts"),
+    producers = c("tab", "tab_counts", "tab_reg"),
     doc = c("For `pct = \"row\"` or `pct = \"col\"`, set to `FALSE` not to add another",
             "column or row with unweighted counts (`n`).")),
   add_pct = list(
@@ -451,8 +478,9 @@ TAB_ARGS <- list(
             "displayed in its own group after a blank-line separator (bold when the total is the reference for",
             "at least one row variable). Genuinely different totals (e.g. under `na = \"drop\"`) are never merged.")),
   subtext = list(
+    default_for = list(tab_reg = ""),
     default = "",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     doc = "A character vector to print rows of legend under the table."),
   output_list = list(
     default = FALSE,
@@ -484,8 +512,9 @@ TAB_ARGS <- list(
   names_sort = list(producers = c("tab", "tab_counts"), status = "deprecated", default = FALSE,
                     doc_with = "names_prefix"),
   cleannames = list(
+    default_for = list(tab_reg = NULL),
     default = NULL,
-    producers = c("tab", "tab_counts"), option = "cleannames",
+    producers = c("tab", "tab_counts", "tab_reg"), option = "cleannames",
     doc = c("Set to \\code{TRUE} to clean levels names, by removing",
             "prefix numbers like \"1-\", and text in parenthesis. All data formatting arguments are",
             "passed to \\code{\\link{tab_prepare}}.")),
@@ -573,6 +602,27 @@ TAB_ARGS <- list(
     producers = c("tab_many"), status = "deprecated",
     doc = c("`r lifecycle::badge(\"deprecated\")` <\\link[tidyr:tidyr_tidy_select]{tidy-select}>",
             "  Use [tab()]'s `filter`: `na_drop_all = c(a, b)` is `filter = !is.na(a) & !is.na(b)`.")),
+  # --- tab_reg()'s own arguments (Phase 20c, KEY 4) -----------------------------------------------
+  # Declared so tx_check_tab_args() covers the whole signature and `producers` / `default` /
+  # `values_from` are stated once; the prose stays in R/tab_reg.R's roxygen (`doc_in_producer`),
+  # because none of it has a duplicate to remove -- see the header.
+  outcome = list(producers = "tab_reg", doc_in_producer = TRUE),
+  predictors = list(producers = "tab_reg", default = NULL, doc_in_producer = TRUE),
+  family = list(producers = "tab_reg", default = "auto", values_from = "REG_FAMILIES",
+                doc_in_producer = TRUE),
+  effect = list(producers = "tab_reg", default = "coefficient", values_from = "REG_ESTIMANDS",
+                doc_in_producer = TRUE),
+  measure = list(producers = "tab_reg", default = "auto", values_from = "REG_ESTIMANDS",
+                 doc_in_producer = TRUE),
+  trials = list(producers = "tab_reg", default = NULL, doc_in_producer = TRUE),
+  empirical = list(producers = "tab_reg", default = FALSE, doc_in_producer = TRUE),
+  outcome_level = list(producers = "tab_reg", default = NULL, values_from = "REG_FAMILIES",
+                       doc_in_producer = TRUE),
+  multiplier = list(producers = "tab_reg", default = "sd", doc_in_producer = TRUE),
+  shape = list(producers = "tab_reg", default = NULL, values_from = "REG_CHECKS",
+               doc_in_producer = TRUE),
+  stats = list(producers = "tab_reg", default = NULL, values_from = "TEST_ROWS",
+               doc_in_producer = TRUE),
   output = list(
     producers = c("tab_build"), status = "internal",
     values = c("single", "list"), size = 1L,
@@ -698,7 +748,11 @@ tab_args_rd <- function(producer) {
     tag <- nms[vapply(nms, owner, character(1)) == o]
     tag <- c(intersect(o, tag), setdiff(tag, o))
     r   <- TAB_ARGS[[o]]
-    body <- r[["doc"]]
+    # a row may hold ONE prose per producer (`doc_for`) where the same argument genuinely reads
+    # differently -- `na`'s two vocabularies, `color`'s two channel sets. `default_for`'s idiom.
+    body <- r[["doc_for"]][[producer]] %||% r[["doc"]]
+    # ...and a row may hold NO prose at all: see `doc_in_producer` in the header.
+    if (is.null(body)) next
     if (!is.null(r[["values_rd"]])) {
       vals <- do.call(r[["values_rd"]], list(producer = producer))
       at   <- which(body == "{VALUES}")
@@ -765,7 +819,10 @@ color_signif_rd <- function(producer = "tab") {
 # the only file that sorts after all of them. What is checked HERE is this table's own shape.
 stopifnot(
   all(vapply(TAB_ARGS, function(r) !is.null(r[["producers"]]) && is.character(r[["producers"]]), logical(1))),
-  all(vapply(TAB_ARGS, function(r) !is.null(r[["doc"]]) || !is.null(r[["doc_with"]]), logical(1))),
+  # every row says where its prose is: here (`doc`), on a sibling row (`doc_with`), or in the
+  # producer's own roxygen (`doc_in_producer`). What is forbidden is saying nothing.
+  all(vapply(TAB_ARGS, function(r) !is.null(r[["doc"]]) || !is.null(r[["doc_with"]]) ||
+               isTRUE(r[["doc_in_producer"]]), logical(1))),
   all(vapply(TAB_ARGS, function(r)
     is.null(r[["doc_with"]]) || r[["doc_with"]] %in% names(TAB_ARGS), logical(1))),
   all(vapply(TAB_ARGS, function(r) is.null(r[["status"]]) ||

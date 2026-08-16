@@ -26,8 +26,8 @@ test_that("tab_reg() records reg_meta; a crosstab records none", {
   expect_identical(m$family, "binomial")
   expect_identical(m$effect, "coefficient")
   expect_false(m$comparison)
-  expect_identical(m$dependent, "married")
-  expect_identical(unname(m$positive_level), "Married")   # inverse_two_level: first level modelled
+  expect_identical(m$outcome, "married")
+  expect_identical(unname(m$positive_level), "Married")   # outcome_level default: the FIRST level is modelled
   expect_setequal(m$predictors, c("race", "rincome"))
 
   ct <- tab(forcats::gss_cat, marital, race, pct = "row")

@@ -96,7 +96,7 @@ for (nm in names(cases)) {
   st  <- jmvreg_cache_new()
   env <- jmvreg_cache_env(st)
   call1 <- function(ref) do.call(tab_reg, c(list(
-    data = dd, dependent = "y", predictors = c("marital", "race", "age"),
+    data = dd, outcome = "y", predictors = c("marital", "race", "age"),
     family = "binomial", reference = ref, .fit_cache = env), cases[[nm]]))
   t1 <- timeit(call1(NULL), reps = 3L)
   t2 <- timeit(call1(c(marital = "Divorced")), reps = 3L)   # a reference change, cache warm

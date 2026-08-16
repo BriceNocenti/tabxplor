@@ -158,17 +158,50 @@ reg_check_expand <- function(stats) {
   if (is.null(out)) character(0) else out
 }
 
-# The reg_footer_spec() entries the checks contribute -- one per discriminator, label built HERE (at
-# render, under the ambient locale, like every other footer label).
+# The TEST_ROWS rows the checks contribute -- one per discriminator (Phase 20c, KEY 5). GENERATED
+# rather than declared literally beside the other 32, because REG_CHECKS owns facts TEST_ROWS must
+# not: `families`, `weighted_ok`, `panel`, and the two taught-but-never-scored checks that have a
+# panel and NO test row at all. Declaring them twice would make `types` a second encoding of the
+# same ladder.
+# `noun` is the CHECK's (one per check); only `instrument` varies per row -- which is exactly why
+# the generator exists rather than three near-identical literals for `linearity`.
+# ⚠ `digits` is emitted only for a "gof" check: a pvalue row's digits is never read (only
+# `kind == "gof"` consults it), and leaving the member absent gives every p-value row in TEST_ROWS
+# the one shape. See the `digits` note in R/tab-test-display.R's TEST_ROWS header.
 #' @keywords internal
-reg_check_spec_entries <- function() {
+#' @noRd
+test_rows_from_checks <- function() {
   out <- list()
   for (ck in REG_CHECKS) for (d in names(ck$types)) {
-    out[[d]] <- list(label = reg_check_label(ck$noun, ck$types[[d]]),
-                     kind = ck$kind, digits = ck$digits)
+    # ⚠ NA, never NULL: TEST_ROWS defaults its members through utils::modifyList(), which REMOVES an
+    # entry whose value is NULL instead of setting it -- so a check whose instrument names a quantity
+    # ("max VIF") rather than a term test would lose the member outright.
+    row <- list(producer = "reg", kind = ck$kind, render = "grid",
+                noun = ck$noun, instrument = ck$types[[d]],
+                stat = REG_CHECK_KEY_OF[[d]] %||% NA_character_,
+                method = REG_CHECK_METHOD[[ck$types[[d]]]] %||% NA_character_)
+    if (identical(ck$kind, "gof")) row$digits <- as.integer(ck$digits)
+    out[[d]] <- row
   }
   out
 }
+
+# discriminator -> the check KEY that requests it (the `stats =` word). The inverse of `types`.
+#' @keywords internal
+#' @noRd
+REG_CHECK_KEY_OF <- local({
+  k <- unlist(lapply(names(REG_CHECKS),
+                     function(n) stats::setNames(rep(n, length(REG_CHECKS[[n]]$types)),
+                                                 names(REG_CHECKS[[n]]$types))))
+  as.list(k)
+})
+
+# instrument msgid -> the TEST_ROWS `method` key. Only the three that are a real term-test instrument
+# map; a check whose instrument names a quantity ("max VIF") has no method, and NULL becomes NA in
+# TEST_ROWS' own defaulting. Asserted round-trip in R/tab-test-display.R's tail.
+#' @keywords internal
+#' @noRd
+REG_CHECK_METHOD <- list(LR = "lr", F = "f", Wald = "wald")
 
 # "<noun> (<instrument>)" -- the ONE label shape of a check row, shared with the `global` test's rows
 # (which are not a check, but ask their question in the same words).
@@ -333,7 +366,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
   weighted <- isTRUE(shared$weighted)
   use_f    <- reg_fam_disp_estimated(sp$fit_family)
   use_wald <- reg_fam_svy_fitted(sp$fit_family, weighted)
-  types    <- c(wald = "linearity_wald", f = "linearity_f", lr = "linearity_lr")
+  # Phase 20c: the check's own three discriminators, read off TEST_ROWS instead of respelled here.
+  types    <- test_row_types("linearity")
 
   purrr::flatten(purrr::map(num, function(v) {
     tm <- reg_shape_term(data[[v]], v, "quadratic")
@@ -343,8 +377,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     # over-dispersion -- all already said once by the real fit, and this runs once per numeric
     # predictor. Its only output is a p-value.
     f2 <- tryCatch(suppressWarnings(suppressMessages(
-            reg_fit(data, sp$dependent, sp$predictors, sp$fit_family, shared$design_spec, isTRUE(sp$est$exp),
-                    if (is.null(sp$inverse)) shared$inverse_two_level_factors else sp$inverse,
+            reg_fit(data, sp$outcome, sp$predictors, sp$fit_family, shared$design_spec, isTRUE(sp$est$exp),
+                    reg_outcome_level_of(sp$outcome_level) %||% shared$outcome_level,
                     shared$conf_level, "wald", trials = sp$trials, formula = NULL,
                     multiplier = NULL, add_terms = tm))),
                    error = function(e) NULL)
@@ -361,7 +395,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     if (!length(lab) || is.na(lab)) return(NULL)
     got <- purrr::compact(reg_term_tests(fit2, v, lab, use_f, use_wald, types = types,
                                          col_var = fit_first_col_i, nobs = f2$nobs,
-                                         dep = sp$dependent))
+                                         outcome = sp$outcome))
     if (length(got)) return(got)
     # The shared dispatcher produced nothing: the engine's drop1 method has no p-value (multinomial).
     # Both fits are in hand and nested, so the likelihood ratio between them IS the same test -- but
@@ -370,7 +404,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
     lr <- reg_nested_lr(base_fit, fit2)
     if (is.null(lr)) return(NULL)
     list(reg_test_row(types[["lr"]], fit_first_col_i, v, lr$stat, lr$df, NA_real_, lr$p, f2$nobs,
-                      dep = sp$dependent))
+                      outcome = sp$outcome))
   }))
 }
 
@@ -381,9 +415,9 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
 reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_col,
                            grouped_by_fit) {
   weighted <- isTRUE(shared$weighted)
-  gof <- function(test, col_var, value, nobs, dep = NA_character_)
+  gof <- function(test, col_var, value, nobs, outcome = NA_character_)
     if (is.null(value) || is.na(value)) NULL
-    else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs, dep = dep)
+    else reg_test_row(test, col_var, "", value, NA_real_, NA_real_, NA_real_, nobs, outcome = outcome)
 
   rows <- purrr::map(seq_along(specs), function(i) {
     sp <- specs[[i]]
@@ -403,11 +437,11 @@ reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_
       bp <- attr(fit, "brant_po")
       if (!is.null(bp) && !is.na(bp))
         out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
-                                       NA_real_, bp, f$nobs, dep = sp$dependent)))
+                                       NA_real_, bp, f$nobs, outcome = sp$outcome)))
     }
-    if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs, sp$dependent)))
-    if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs, sp$dependent)))
-    if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs, sp$dependent)))
+    if ("dispersion"   %in% keys) out <- c(out, list(gof("dispersion",   cv, reg_check_dispersion(fit),   f$nobs, sp$outcome)))
+    if ("influence"    %in% keys) out <- c(out, list(gof("influence",    cv, reg_check_influence(fit),    f$nobs, sp$outcome)))
+    if ("collinearity" %in% keys) out <- c(out, list(gof("collinearity", cv, reg_check_collinearity(fit), f$nobs, sp$outcome)))
     out
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
@@ -869,12 +903,12 @@ rd_with_seed <- function(seed, expr) {
 reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L,
                        design = NULL) {
   if (length(numeric_preds) == 0L || length(specs) == 0L) return(NULL)
-  deps <- unique(vapply(specs, function(s) s$dependent, character(1)))
+  deps <- unique(vapply(specs, function(s) s$outcome, character(1)))
   if (length(deps) != 1L) return(NULL)
   sp <- specs[[1L]]
   if (isTRUE(sp$compound) || is.null(data[[deps]])) return(NULL)
   # WARNING: the MODELLED level, taken from the fit, never the factor's first level. `Married` before
-  # `Not married` in the data is exactly the case inverse_two_level_factors exists for, and reading the
+  # `Not married` in the data is exactly the case outcome_level exists for, and reading the
   # level order here instead drew the curve of the COMPLEMENT -- an upside-down sparkline beside a
   # correct odds ratio, which is worse than none.
   ly <- rd_link_y(data[[deps]], sp$fit_family, sp$trials, positive_level)
@@ -889,7 +923,7 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
       rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr)),
     numeric_preds))
   if (length(curves) == 0L) return(NULL)
-  list(dependent = deps, family = sp$fit_family, link = ly$link, ylab = ly$lab, curves = curves)
+  list(outcome = deps, family = sp$fit_family, link = ly$link, ylab = ly$lab, curves = curves)
 }
 
 
