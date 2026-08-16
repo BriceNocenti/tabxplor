@@ -366,7 +366,9 @@ CALL_RENAMES <- list(          # reg_call() itself -- KEY 4's four cross-produce
 # which keeps IDENTICAL meaningful: what the run then proves is that NOTHING ELSE moved.
 # ⚠ each entry is a member of one estimand row (`$est` / `$ests[[i]]`), named for the phase that added
 # it. Remove an entry once its baseline has been re-saved past it.
-EST_ADDITIONS <- c("engine")   # 20d: which engine computes a row's marginal quantities
+# Phase 20e: EMPTY -- 20d's `engine` is in the baseline now (re-saved on the pre-20e tree), so it is
+# COMPARED rather than dropped. Add a member here only for the duration of the phase that adds it.
+EST_ADDITIONS <- character(0)
 
 apply_renames <- function(c1) {
   if (is.null(c1$out)) return(c1)

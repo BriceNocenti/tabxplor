@@ -407,6 +407,26 @@ R/
 │                              svy_var_mean(wmult=) = a per-row weight multiplier, which is what lets
 │                              tab_reg()'s crude grid share this producer (a grouped-binomial row is a
 │                              cluster of `trials` draws -> the general ratio form, not a 2nd formula)
+├── reg-empirical.R (~1190 L) Phase 20e: THE OBSERVED (crude) COMPANION of a model effect, and the SE
+│                              of the gap between the two -- carved WHOLE out of tab_reg.R (5630 ->
+│                              4734), the 19l precedent applied to the package's biggest file. Its
+│                              STAGE is reg_stage_empirical() in tab_reg.R (the tab-leaf.R / tab.R
+│                              relationship): **REG_EMPIRICAL** = per family, the SHAPE of each crude
+│                              column (name / stored scale / display / digits / ref / pct base / CI
+│                              method / colour measure / link) + which of them is the effect twin of
+│                              the model's coefficient -- a family is ONE row, foreign-key checked in
+│                              zzz-fact-keys.R. TWO sources, one shape: `from = "grid"` = a CLOSED
+│                              FORM off reg_empirical()'s per-(var, level, category) grid (the
+│                              univariable model being saturated for a factor predictor, the crude OR
+│                              IS the Woolf 2x2 ratio); `from = "fit"` = a univariable reg_fit()
+│                              through the very fitter the table came from (ordinal, every numeric
+│                              predictor, any marginal shape), so ruling Q6 -- same estimand, link,
+│                              CI rule, multiplier -- holds by construction. Also reg_crude_y/_yw,
+│                              reg_level_counts (add_n's column), reg_empirical_fit, reg_fit_overlay,
+│                              reg_empirical_columns, reg_same_estimand/_frame (the two predicates
+│                              that WITHHOLD `obs` rather than lie) and reg_gap_se_columns.
+│                              ⚠ it sorts BEFORE tab_reg.R, so its only top-level code (the
+│                              REG_EMPIRICAL literal) may not read anything defined there
 ├── reg-resolve.R    (~980 L) Phase 19m-ii: THE argument boundary of `tab_reg()` -- 19i's
 │                              `tab_resolve_common_args()` medicine for the producer that never got
 │                              one. **`reg_resolve_args()`** is the ONE entry point (tab_reg() calls
@@ -613,6 +633,12 @@ R/
 │                              is reg_build()'s own `switch()`, whose arms are all NAMED and whose
 │                              default now ABORTS -- it used to fall through to the coefficient
 │                              builder, so a typo built the wrong column in silence.
+│                              20e: +**tx_check_reg_ctx()** = new_reg_ctx() and new_reg_shared()
+│                              declare TWO record types that every reg_stage_*() binds into ONE scope
+│                              (reg_ctx_locals() = the ctx plus its `shared` element), so a name in
+│                              both would SILENTLY SHADOW -- `c()` keeps both and list2env() lets the
+│                              LAST win. ⚠ same reason as tx_check_tab_args(): neither constructor
+│                              exists while the other's file is being sourced.
 ├── tab-counts.R     (~430 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize.
 │                              19i: its ~15 copy-pasted boundary lines are ONE
@@ -1033,7 +1059,41 @@ R/
 │                              `producers`) and color_signif_rd; `{VALUES}` in a `doc` is where the
 │                              generated list is spliced. ⚠ read the rows with `[[`, never `$`:
 │                              `r$values` partial-matches `values_from`.
-├── tab_reg.R       (~5590 L)  Phase 20d (KEY 7): **reg_marginal() is a DISPATCHER** between two
+├── tab_reg.R       (~4735 L)  Phase 20e (KEY 6): **reg_build() IS A STAGED BUILD** -- 20 deparsed
+│                              lines over EIGHT named stages (was 726 source lines, 39 top-level
+│                              locals, 7 closures, eleven unnamed phases: the package's largest
+│                              function), each named after THE PART OF THE TABLE IT PRODUCES.
+│                              **`new_reg_ctx()`** (32 keys) is new_ctx()'s idiom, fourth use -- the
+│                              FORMALS are the contract, `as.list(environment())` the body, the
+│                              globalVariables() mirror DERIVED -- and 19i's lesson: a stage product
+│                              is DECLARED, never left to appear (an undeclared key is ABSENT, so its
+│                              own is.null() guard ERRORS instead of firing). ⚠ NO ctx key may start
+│                              with a dot: `as.list(environment())` defaults to all.names = FALSE, so
+│                              `.fit_cache` would be SILENTLY DROPPED and the jamovi cache would just
+│                              stop being threaded -- the key is `fit_cache`, reg_build()'s formal
+│                              keeps its dot. **`reg_ctx_locals(ctx)` = ctx_settings_locals()'s twin**
+│                              (`c(ctx, ctx$shared)`), so `shared` stays ONE nested record PROJECTED
+│                              at each stage head, never flattened into a second carrier (19i's
+│                              finding), and tx_check_reg_ctx() keeps the two name sets disjoint at
+│                              load. The stages: reg_stage_split (the tab_vars recursion, at the TOP,
+│                              returning a finished TABLE) / _fit (fits + skeleton + the shape facts;
+│                              ⚠ it REWRITES `data` on the reref path, which four later stages read)
+│                              / _columns (the 3 declared builders + the column LAYOUT) / _footer
+│                              (gof + compare + global + checks -> the `test` tibble) / _rows (labels,
+│                              relabels, sparklines, add_n -> `tab`) / _empirical (the crude blocks)
+│                              / _assemble (`obs` + `gap_se`, then the columns into `tab`) / _tips
+│                              (`meta$empirical_tips`; ⚠ reads names(tab), so AFTER _assemble) /
+│                              _finalize. ⚠ **THE ORDER IS THE SOURCE ORDER AND IS LOAD-BEARING**:
+│                              FOUR sites fit models (_fit, _footer's linearity refits, _empirical's
+│                              univariable fits, _split -> reg_interaction_rows) and every fit may
+│                              inform or warn, so a reorder moves the MESSAGE STREAM, which
+│                              verify_reg_specs.R compares in order. ⚠ that also corrects the plan of
+│                              plans' §5.4 "the ONE place a fit happens = the parallel seam": on a
+│                              5-predictor `empirical = TRUE` table the model fits are a MINORITY, so
+│                              20f must measure all four. The 7 closures became 4 top-level functions
+│                              (reg_cols_coef/_ame/_vsrest, dispatched by REG_BUILDERS; reg_emp_frame,
+│                              shared by TWO stages; reg_set_obs; reg_add_emp_cols) + one local.
+│                              Phase 20d (KEY 7): **reg_marginal() is a DISPATCHER** between two
 │                              engines, reading the estimand row's declared `engine`. The fast one is
 │                              **reg_marginal_gcomp()** -- one counterfactual sweep per (predictor,
 │                              level) over R/reg-influence.R's reg_gcomp_maker() /
@@ -2350,6 +2410,121 @@ what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_s
 ---
 
 
+
+#### Phase 20e — KEY 6: `reg_build()` becomes a staged build
+
+**DONE (2026-08-16).** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6894** — byte-for-byte the
+inherited numbers. `dev/verify_reg_specs.R` prints **IDENTICAL over all 290 cases** (every message
+*in order*, every spec, every column attribute, every label, every test key) against a baseline
+saved on the untouched tree, and it printed IDENTICAL at every one of the phase's four checkpoints.
+Zero golden churn, zero `_snaps/` churn, `document()` a no-op (everything new is internal).
+
+**`reg_build()` is 726 source lines → 20 deparsed lines over eight named stages.** It was the
+largest function in the package — 39 top-level locals, 7 local closures, eleven unnamed phases —
+while `tab_build()` has had a typed ctx and named stages since 17e/19i. The largest function is now
+`plain_core()` (482 deparsed); the largest stage is `reg_stage_tips()` at 103.
+
+- **`new_reg_ctx()`** — 32 declared keys, `new_ctx()`'s idiom on its fourth use (the FORMALS are the
+  contract, `as.list(environment())` the body, the `globalVariables()` mirror DERIVED), with 19i's
+  rule applied: **a stage product is DECLARED, never left to appear** — an undeclared key is
+  *absent*, so its own `is.null()` guard errors instead of firing. The keys are grouped and commented
+  **by the stage that writes them**, so "what may a stage find" is readable without running a build.
+- **`shared` stays ONE nested record and is PROJECTED**, never flattened. `reg_ctx_locals(ctx)` is
+  `ctx_settings_locals()`'s twin (`c(ctx, ctx$shared)`), so the ~200 bare-name reads inside the moved
+  bodies read exactly as before, and 19i's two-carriers problem is not recreated. Stages close with
+  the existing `ctx_update()`.
+- **The eight stages, each named after the part of the table it produces**: `_split` (the `tab_vars`
+  recursion, at the TOP, returning a finished TABLE — `tab_build_tables()`'s shape) · `_fit` ·
+  `_columns` · `_footer` · `_rows` · `_empirical` · `_assemble` · `_tips` · `reg_stage_finalize`.
+  The seven closures became **four top-level functions** — `reg_cols_coef` / `reg_cols_ame` /
+  `reg_cols_vsrest` (the three arms `REG_BUILDERS` declares), `reg_emp_frame` (needed by TWO
+  stages), `reg_set_obs`, `reg_add_emp_cols` — plus one one-line local.
+- **`R/reg-empirical.R`** (~1190 L), carved whole out of `tab_reg.R` (5630 → **4734**): the observed/
+  crude subsystem the brief calls the package's third biggest, until now spelled as an `if` block
+  plus two 200+-line functions in the middle of the largest file. The producers live there, the
+  stage that drives them stays in `tab_reg.R` — the `tab-leaf.R` / `tab.R` relationship.
+
+**⚠ Two corrections to the plan of plans, both measured rather than assumed.**
+
+1. **The stage ORDER is the source order, and `_footer` runs BEFORE `_empirical`** (the §9 sketch has
+   them the other way round). Reordering is not a refactor here: **FOUR sites fit models** — `_fit`,
+   `_footer`'s linearity refits, `_empirical`'s univariable fits, and `_split` →
+   `reg_interaction_rows()` — and every fit may inform or warn, so the stage order IS the message
+   order, which `verify_reg_specs.R` compares.
+2. **§5.4's "the ONE place a fit happens = the parallel seam" is false.** On a 5-predictor
+   `empirical = TRUE` table the model fits are a *minority* of the fits. Written into
+   `reg_stage_fit()`'s own header: **20f must measure all four sites** before parallelising one.
+
+**One defect, found the moment the ctx was introduced and fixed with the rename.** ⚠
+`as.list(environment())` — the idiom all four record constructors use — defaults to
+**`all.names = FALSE`**, so **a dot-prefixed key is silently dropped from the record**. Declaring
+`.fit_cache` as a ctx key therefore made the jamovi fit cache simply stop being threaded, with no
+error until a stage read it. The ctx key is `fit_cache`; `reg_build()`'s formal keeps its dot
+(it is the entry point's internal argument, `tab()`'s `.cache` convention). Stated in `new_reg_ctx()`
+and in the Repository Map, because it applies to `new_reg_shared()` / `new_reg_spec()` /
+`new_reg_args()` equally.
+
+**The three findings from the plan, all fixed:**
+
+1. **`mnl_vsrest` was assigned and never read** — dead local, deleted. (`compound`'s inline
+   re-derivation in the empirical block is `any(compound)` now.)
+2. **Two hand-written mini-records named `shared`.** `reg_global_rows()` and `reg_check_rows()` each
+   took a `list(weighted =, design_spec =, …)` literal whose every field is a **subset** of the real
+   `new_reg_shared()` record — two look-alikes of the one typed record, in the file that declares it.
+   Verified field by field (incl. `reg_check_linearity_rows()`'s five reads); both take the real
+   record now, as `reg_interaction_rows()` already did.
+3. ⚠ **`skeleton_data = data`'s lazy default was forced too late.** The promise was first forced
+   *after* `data` is releveled on the jamovi reref path, so on that one path it silently meant the
+   **post**-relevel frame rather than the full pre-relevel data its own comment describes. Forced at
+   the head now (`new_reg_ctx()` forces it). Behaviour-identical and it is stated why: a factor
+   relevel moves no predictor between `reg_numeric_preds()`/`reg_factor_preds()`, and `reg_curves()`
+   reads only the numeric predictors and the outcome. `test-jmvtabreg-cache.R` (the reref
+   byte-identity contract) is green.
+
+**Also landed**: `tx_check_reg_ctx()` in `R/zzz-fact-keys.R` — `new_reg_ctx()` and
+`new_reg_shared()` declare two record types that every stage binds into ONE scope, so a shared name
+would silently shadow (`c()` keeps both, `list2env()` lets the last win). It lives there for
+`tx_check_tab_args()`'s reason: neither constructor exists while the other's file is being sourced.
+
+**Already done, reported not repeated**: `REG_ESTIMANDS$builder`'s missing vocabulary — routed here
+by 20a — **landed in 20d** (`REG_BUILDERS`, named `switch()` arms, an aborting default, and a
+two-directional foreign key). The stage split only inherits it.
+
+**HONEST CONCERNS.**
+
+- **`R/` grew.** `tab_reg.R` −896, `reg-empirical.R` +1190, so the reg subsystem is ~+290 lines: the
+  ctx declaration, ten stage headers, four hoisted helpers with their own docstrings. That is the
+  phase's expected shape (§2: *do not count lines as the simplification metric*), and the metric that
+  did move is the one KEY 6 is about — the largest function in the package went from 534 deparsed
+  lines to 20, and "which stage produced this part of the table" is now answerable by reading one
+  screen.
+- ⚠ **`reg_stage_tips()` is 103 deparsed lines and does two unrelated things** (the multinomial
+  crude tooltip and the numeric-predictor distribution tooltip). They share only their carrier
+  (`meta$empirical_tips`) and the fact that neither number can honestly take a column. Splitting them
+  would have been a second, unproved edit inside a phase whose contract is IDENTICAL; **routed to
+  20h**, where the census runs anyway.
+- **`reg_set_obs()` re-projects the whole ctx per column** (`list2env(reg_ctx_locals(ctx), …)` inside
+  a loop over columns). Measured as noise against a build that fits models, but it is the one place
+  the projection idiom sits on a per-column path rather than a per-stage one.
+- **The three `reg_cols_*` builders take `(f, sp, ctx)`** and read their ~13 settings by projection
+  rather than by named argument. That is deliberate (it is what made the hoist byte-identical and it
+  matches the stage idiom), but it means their signatures do not state what they read.
+- **Not run**: `verify_color_attrs.R` / `verify_golden_field_delta.R` / `verify_tab_args.R`. The diff
+  touches `R/tab_reg.R`, `R/reg-empirical.R`, `R/reg-assumptions.R` and `R/zzz-fact-keys.R` only —
+  no `tab()` code path — and `test-golden.R` covers the goldens inside the suite, which is green.
+- **`dev/verify_reg_specs.R`'s `EST_ADDITIONS` is now empty** and its baseline re-saved past 20d's
+  `engine`, per 20d's own follow-up: that member is COMPARED again rather than dropped on both sides.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild.
+
+**FOLLOW-UPS.** 20f can start on this commit and **must re-measure first**: `reg_stage_fit()` is the
+seam, but it is one of four fitting sites and 20d already took the marginal path from 15.3 s to
+~1.2 s. 20h: `reg_stage_tips()`'s two halves, and `reg_build()`'s remaining `.fit_cache` threading
+(the ruling was *keep as is*, and it was kept).
+
+---
 
 #### Phase 20d — KEY 7: marginal effects, computed once and computed fast
 

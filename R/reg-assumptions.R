@@ -412,6 +412,8 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
 # reg_compare_rows() / reg_global_rows(), and placed beside them so `data` (the Linearity refit needs
 # it) and `specs` are in scope -- reg_gof_tibble() has neither.
 #' @keywords internal
+# `shared` is new_reg_shared()'s record (Phase 20e: it used to be a hand-written subset of it, so a
+# renamed setting could go quiet here while the real record still carried it).
 reg_check_rows <- function(reg_gof, data, fits, specs, shared, stats, fit_first_col,
                            grouped_by_fit) {
   weighted <- isTRUE(shared$weighted)

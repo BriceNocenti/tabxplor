@@ -1685,8 +1685,50 @@ engine: `reg_detect_family()` (auto: binary→binomial / continuous→gaussian, 
 `broom::tidy`; Wald CI in-house — z for fixed-dispersion glm, t(df.residual) for lm/quasi/svyglm — the
 exact dual of the Wald p; `method="profile"` = `confint`+LR for unweighted binomial/poisson),
 `reg_skeleton()` (var/level/term rows), `reg_column()` (align a fit → one fmt column), `reg_build()`
-(assembler → `new_tab() |> group_by(var)`). `broom`/`survey`(/`MASS` for profile) are
+(the staged build, below). `broom`/`survey`(/`MASS` for profile) are
 `requireNamespace()`-guarded Suggests.
+
+**Phase 20e (KEY 6) — the staged build, and `R/reg-empirical.R`.** `reg_build()` was 726 lines,
+39 top-level locals, 7 local closures and eleven unnamed phases — the largest function in the
+package — while `tab_build()` has had a typed ctx and named stages since 17e/19i. It is now **20
+deparsed lines over eight stages, each named after the part of the table it produces**:
+
+```
+  ctx <- new_reg_ctx(...)                    32 declared keys; `shared` stays ONE nested record
+  if (!is.null(tab_vars)) return(reg_stage_split(ctx))   the recursion, at the TOP (returns a table)
+  reg_stage_fit        fits + skeleton + the shape facts   (⚠ REWRITES `data` on the reref path)
+  reg_stage_columns    the 3 declared builders + the column layout
+  reg_stage_footer     gof / compare / global / checks -> the `test` tibble
+  reg_stage_rows       labels, relabels, sparklines, add_n -> `tab`
+  reg_stage_empirical  the crude blocks (emp_by_fit)
+  reg_stage_assemble   `obs` + `gap_se` (reg_set_obs), then the columns into `tab`
+  reg_stage_tips       `meta$empirical_tips`   (⚠ reads names(tab), so it runs after assemble)
+  reg_stage_finalize   the inference basis, then reg_finalize()
+```
+
+The idiom is `new_ctx()`'s, fourth use: **the formals are the contract**, the body is
+`as.list(environment())`, `globalVariables()` is derived from them, and a stage product is DECLARED
+rather than left to appear (an undeclared key is *absent*, so its own `is.null()` guard errors
+instead of firing). Each stage opens `list2env(reg_ctx_locals(ctx), environment())` —
+`ctx_settings_locals()`'s twin, `c(ctx, ctx$shared)` — so `shared` is projected, never flattened
+into a second carrier; `tx_check_reg_ctx()` (`R/zzz-fact-keys.R`, the only file that sees both
+constructors) keeps the two name sets disjoint at load. ⚠ **no ctx key may start with a dot**:
+`as.list(environment())` defaults to `all.names = FALSE`, so `.fit_cache` would be silently dropped
+from the record — the ctx key is `fit_cache`, `reg_build()`'s formal keeps its dot.
+
+⚠ **The stage order is the SOURCE order and is load-bearing**: FOUR sites fit models (here, the
+footer's linearity refits, the empirical stage's univariable fits, and the split branch's interaction
+refits), every fit may inform or warn, and `dev/verify_reg_specs.R` compares the message stream *in
+order*. On a 5-predictor `empirical = TRUE` table the model fits are a minority — which is what 20f
+must measure before parallelising `reg_stage_fit()`.
+
+The seven closures became four named top-level functions (`reg_cols_coef` / `reg_cols_ame` /
+`reg_cols_vsrest`, dispatched by `REG_BUILDERS`; `reg_emp_frame`, `reg_set_obs`, `reg_add_emp_cols`)
+plus one one-line local. The same phase carved **`R/reg-empirical.R`** (~1190 L) out of `tab_reg.R`
+(5630 → 4734): the whole observed/crude subsystem — `REG_EMPIRICAL`, `reg_empirical()`,
+`reg_empirical_fit()`, `reg_empirical_columns()`, `reg_same_estimand`/`_frame`,
+`reg_gap_se_columns()` — the producers whose *stage* is `reg_stage_empirical()`, the `tab-leaf.R` /
+`tab.R` relationship.
 
 **Phase 17h — integration (all internal, byte-identical).** `reg_build(data, specs, shared, split_var,
 .fit_cache, …)`: the per-dependent family/do_exp/effect_shape/eff_word/color live ONLY on the specs (read
@@ -1696,7 +1738,7 @@ no longer re-lists ~30 positional args. Shared micro-helpers: `reg_wald_finalize
 est±crit·se → p-dual → exp assembly, behind `reg_wald_from_tidy` + the `reg_fit` Wald branch +
 `reg_reref_fit_res`), `reg_skel_key()`/`reg_skel_match()` (the `"\r"` skeleton-align idiom),
 `reg_cleanup()` (the cleannames strip), `reg_complete_frame()` (the ONE model complete-case frame —
-`reg_fit` uses it for the fit, the empirical + multinomial-tip blocks share it via `emp_frame_of()`
+`reg_fit` uses it for the fit, the empirical + multinomial-tip stages share it via `reg_emp_frame()`
 because the reref/digest fit carries no `$data`). The crude-companion columns are driven by the
 **`REG_EMPIRICAL`** fact table (per family: base + effect column SHAPE — fmt type/display/digits/ref/
 scale/colour measure/name — plus the CI method literal, which Phase 19b now STAMPS on the column) through one `emp_col()` builder; the CI-method
@@ -2242,6 +2284,8 @@ it keys under) and one column **named after the grouping variable** for the sub-
 for a crosstab, `split_var` for a regression), read by `test_group_cols()`.
 
 `reg_build()` has ONE assembly tail (`reg_finalize()`, shared with the split branch) and ONE column
-assembler (`cols_ame` / `cols_vsrest` / `cols_coef` behind a **per-spec** choice); its settings ride
-the typed `new_reg_shared()` record, whose formals also derive the `globalVariables()` mirror. The
+assembler (`reg_cols_ame` / `reg_cols_vsrest` / `reg_cols_coef` behind a **per-spec** choice, the
+`REG_BUILDERS` vocabulary); its settings ride the typed `new_reg_shared()` record and its stage
+products the typed `new_reg_ctx()` one (Phase 20e), both deriving their own `globalVariables()`
+mirror. The
 `stats =` / `check =` vocabulary is `reg_stat_keys()` with one validator.

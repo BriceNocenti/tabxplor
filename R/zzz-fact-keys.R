@@ -365,7 +365,25 @@ tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_
   invisible(TRUE)
 }
 
+# --- the regression context's own anti-shadow check (Phase 20e) -----------------------------------
+# tx_check_reg_ctx() -- new_reg_ctx() and new_reg_shared() declare TWO record types that every
+# reg_stage_*() binds into ONE scope (reg_ctx_locals() = the ctx plus its `shared` element). A name
+# in both would silently shadow: `c()` keeps both entries and list2env() lets the LAST one win, so a
+# stage would read the per-call setting where it meant its own product, or the reverse.
+# ⚠ Same reason tx_check_tab_args() lives here: neither constructor exists while the other's file is
+# being sourced, and zzz- is last by construction.
+#' @keywords internal
+#' @noRd
+tx_check_reg_ctx <- function() {
+  dup <- intersect(names(formals(new_reg_ctx)), names(formals(new_reg_shared)))
+  if (length(dup))
+    stop("tabxplor: new_reg_ctx() and new_reg_shared() both declare: ",
+         paste(dup, collapse = ", "), call. = FALSE)
+  invisible(TRUE)
+}
+
 # THE load-time check. It runs at R CMD INSTALL / pkgload::load_all(), so a rename that does not
 # reach a fact table breaks the BUILD, at the moment it is made -- which is the whole point.
 tx_check_foreign_keys()
 tx_check_tab_args()
+tx_check_reg_ctx()
