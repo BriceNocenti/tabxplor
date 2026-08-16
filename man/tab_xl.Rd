@@ -17,9 +17,9 @@ tab_xl(
   sheets = "auto",
   titles,
   caption = NULL,
-  font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
-  font_num = getOption("tabxplor.xl_font_num", "DejaVu Sans"),
-  font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
+  font_text = NULL,
+  font_num = NULL,
+  font_num_stars = NULL,
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
@@ -27,7 +27,7 @@ tab_xl(
   color = TRUE,
   transpose = FALSE,
   var_names = NULL,
-  or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
+  or_numeric = NULL,
   print_color_legend = lifecycle::deprecated(),
   ...
 )

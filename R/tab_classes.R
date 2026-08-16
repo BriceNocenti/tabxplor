@@ -868,9 +868,11 @@ tab_html <- function(tabs,
   color_legend <- o$color_legend
   compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
   if (o$color) compute <- c(compute, "colors")
-  tooltips <- if (is.null(tooltips)) {getOption("tabxplor.tab_kable_tooltips", TRUE)} else {tooltips}
-  popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
-  css     <- if (is.null(css)) {tx_getOption(c("tabxplor.kable_css", "tabxplor.tab_kable_css"), TRUE)} else {isTRUE(css)}
+  # 20b: NULL means "take the option", and the option's name, alias chain and default are declared
+  # once in TAB_OPTIONS (R/tabxplor-options.R).
+  tooltips <- if (is.null(tooltips)) tx_option("tab_kable_tooltips") else tooltips
+  popover  <- if (is.null(popover))  tx_option("kable_popover")      else popover
+  css      <- if (is.null(css))      isTRUE(tx_option("tab_kable_css")) else isTRUE(css)
 
   # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
   # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
@@ -1460,7 +1462,7 @@ tab_pvalue_lines <- function(tabs) {
   # MEASURE ("Cramér's V, eta2") move into the row NAMES (per group, via the descriptors), so the p-value
   # CELL is now the bare p (no in-cell "(Chi2)" suffix). Modes: "summary" (default) = p-value + effect
   # size; "all" = + statistic; "stat" = p-value + statistic; "pvalue" = p-value only.
-  mode       <- getOption("tabxplor.test_lines", "summary")
+  mode       <- tx_option("test_lines")
   add_stat   <- mode %in% c("stat", "all")
   add_es     <- mode %in% c("all", "summary")
   row_keys   <- c("pvalue", if (add_es) "effect size", if (add_stat) "statistic")

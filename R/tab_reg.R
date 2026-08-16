@@ -4227,7 +4227,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
                             positive_level = fits[[1]]$positive_level,
                             design = design_spec$design)
   if (!is.null(assumptions)) {
-    spark <- getOption("tabxplor.spark", TRUE)
+    spark <- tx_option("spark")
     lin   <- !is.na(skeleton$term) & skeleton$term == skeleton$var
     for (v in names(assumptions$curves)) {
       gl <- rd_spark(assumptions$curves[[v]]$y, spark)

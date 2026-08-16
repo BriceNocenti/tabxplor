@@ -1,12 +1,13 @@
 # PURPOSE: THE argument boundary of the crosstab producers -- validation (Phase 19i) and the
 #          argument-overwrite cascade (Phase 7b), each stated once.
 # ROLE: two layers, in this file, in this order.
-#   (1) tab_resolve_common_args() + TAB_ARG_VALUES / tab_validate_args() (Phase 19i, at the BOTTOM
-#       of this file): what every producer must do to its arguments before any of them means
-#       anything -- the `chi2` -> `test` rename, the vocabularies, the sizes, the "NULL -> option"
-#       resolutions, the `OR` route, the colour spec + D28, `tot` -> (totrow, totcol),
-#       `total_names`. tab() / tab_plain() / tab_num() / tab_counts() call it; five hand-written
-#       copies that had already drifted are one.
+#   (1) tab_resolve_common_args() + tab_validate_args() (Phase 19i, at the BOTTOM of this file):
+#       what every producer must do to its arguments before any of them means anything -- the
+#       `chi2` -> `test` rename, the vocabularies, the sizes, the "NULL -> option" resolutions, the
+#       `OR` route, the colour spec + D28, `tot` -> (totrow, totcol), and the four synthetic labels.
+#       tab() / tab_plain() / tab_num() / tab_counts() call it; five hand-written copies that had
+#       already drifted are one. The VOCABULARIES it checks are TAB_ARG_VALUES, derived in
+#       R/tab-args.R from each argument's own declaration (Phase 20b).
 #   (2) tab_resolve_settings(): the pure, data-free CASCADE shared by tab_build() and tab_counts():
 #       color = "auto" -> a concrete MEASURE (through MEASURES' declared `auto_for` contexts), then
 #       that measure's declared `requires` applied to chi2 / totrow / ci / ref.
@@ -502,22 +503,10 @@ resolve_color_auto_num <- function(color, ref, ci, row_var, col_vars) {
 # the deprecation must name the user's call, not a tabxplor frame. Each producer's own resolver
 # (tab_resolve_settings / resolve_leaf_ci / tab_ci) still calls it too -- those are reachable without
 # this boundary -- and it is idempotent, so the second call is a no-op.
-#' @keywords internal
-#' @noRd
-TAB_ARG_VALUES <- list(
-  pct      = list(values = c("no", "row", "col", "all", "all_tabs"),   leaf = NULL, size = NA,  na_ok = TRUE),
-  na       = list(values = c("keep", "drop", "drop_all", "common_base"),
-                  leaf = c("keep", "drop"),                                         size = 1L,  na_ok = FALSE),
-  levels   = list(values = c("all", "first", "auto"),                  leaf = NULL, size = NA,  na_ok = FALSE),
-  comp     = list(values = c("tab", "all", ""),                        leaf = NULL, size = 1L,  na_ok = TRUE),
-  tot      = list(values = c("row", "col", "both", "no", ""),          leaf = NULL, size = NA,  na_ok = FALSE),
-  totaltab = list(values = c("line", "table", "no", ""),               leaf = NULL, size = 1L,  na_ok = FALSE),
-  totcol   = list(values = c("last", "each", "all_col_vars", "no", ""), leaf = NULL, size = 1L, na_ok = FALSE),
-  output   = list(values = c("single", "list"),                        leaf = NULL, size = 1L,  na_ok = FALSE),
-  # Phase 19k: `anova` -- which one-way F a mean col_var's p-value line shows. NULL never reaches
-  # here (an unsupplied argument is not checked), and NULL is what means "the global option".
-  anova    = list(values = c("welch", "classic"),                      leaf = NULL, size = 1L,  na_ok = FALSE)
-)
+# TAB_ARG_VALUES lives in R/tab-args.R since Phase 20b, DERIVED from TAB_ARGS: the vocabulary is one
+# column of the argument's own declaration now, beside its producers, its option twin and its prose.
+# Its contents and its readers are unchanged -- see that file's header for the rule that keeps the
+# two tables apart (the fact table owns the VOCABULARY, TAB_ARGS owns the ARGUMENT).
 
 # tab_validate_args() -- check the supplied arguments against TAB_ARG_VALUES, aborting on the first
 # unknown value with the valid list in the message. Arguments not supplied are not checked; `fn`
@@ -587,13 +576,14 @@ tab_validate_args <- function(fn = "tab", ..., conf_level = NULL, n_min = NULL) 
 #   tot          VALIDATED but not expanded -- "both" means c("row","col") to tab()/tab_counts()
 #                and "row" to the numeric leaf, so each expands it itself, next to its own totals
 #   totrow, totcol                 the (row, col) translation tab() and tab_counts() share
-#   total_names  recycled to 2
+#   total_names, totaltab_name, other_level   the four synthetic labels, from the option (20b)
 #' @keywords internal
 #' @noRd
 tab_resolve_common_args <- function(fn = "tab",
                                     test, chi2, color, color_signif, ci, stars, conf_level,
                                     ci_method, method_cell, method_diff, cleannames,
-                                    OR, display, ref, ref2, tot, total_names,
+                                    OR, display, ref, ref2, tot,
+                                    total_names, totaltab_name, other_level,
                                     na, levels, pct, comp, totaltab, totcol, output, n_min, anova,
                                     user_env = rlang::caller_env()) {
   out <- list()
@@ -629,7 +619,9 @@ tab_resolve_common_args <- function(fn = "tab",
   if (!missing(comp))       out$comp       <- comp
   if (!missing(totaltab))   out$totaltab   <- totaltab
   if (!missing(output))     out$output     <- output
-  if (!missing(conf_level)) out$conf_level <- conf_level
+  # 20b: ONE default idiom -- every public producer says `conf_level = NULL` and the option is
+  # resolved HERE, so the value and its fallback are stated once each.
+  if (!missing(conf_level)) out$conf_level <- conf_level %||% conf_level_default()
   if (!missing(n_min))      out$n_min      <- n_min
 
   # 3. the three "NULL -> option" / named-vector resolutions.
@@ -687,7 +679,68 @@ tab_resolve_common_args <- function(fn = "tab",
     out$totrow <- "row" %in% tot || identical(tot[1], "both")
     out$totcol <- if ("col" %in% tot || identical(tot[1], "both")) "last" else "no"
   }
-  if (!missing(total_names)) out$total_names <- vctrs::vec_recycle(total_names, 2)
+  # 7. the four synthetic labels (20b). They come from `options(tabxplor.total_names)`; the three
+  # released arguments still win where they are given, saying so once. `total_names` keeps its own
+  # shape contract (length 1 or 2, recycled to 2 = row then column).
+  lbl <- tab_total_names()
+  if (!missing(total_names) && !is.null(total_names)) {
+    tab_deprecate_total_label(fn, "total_names", user_env)
+    lbl[c("row", "col")] <- vctrs::vec_recycle(as.character(total_names), 2)
+  }
+  if (!missing(totaltab_name) && !is.null(totaltab_name)) {
+    tab_deprecate_total_label(fn, "totaltab_name", user_env)
+    lbl[["tab"]] <- as.character(totaltab_name)[[1]]
+  }
+  if (!missing(other_level) && !is.null(other_level)) {
+    tab_deprecate_total_label(fn, "other_level", user_env)
+    lbl[["other"]] <- as.character(other_level)[[1]]
+  }
+  out$total_names   <- unname(lbl[c("row", "col")])
+  out$totaltab_name <- unname(lbl[["tab"]])
+  out$other_level   <- unname(lbl[["other"]])
 
   out
+}
+
+# tab_total_names() -- THE four synthetic labels, resolved from `options(tabxplor.total_names)` and
+# completed from the declared default, so a PARTIAL option
+# (`c(tab = "Ensemble", other = "Autres")`) leaves the other two alone.
+#' @keywords internal
+#' @noRd
+tab_total_names <- function() tab_total_names_merge(getOption("tabxplor.total_names"))
+
+# The merge itself, so a caller that HAS a partial vector (the jamovi bridge, which installs the
+# option for one build) completes it the same way a user's `options()` call is completed.
+#' @keywords internal
+#' @noRd
+tab_total_names_merge <- function(got) {
+  base <- tx_option_default("total_names")
+  if (is.null(got)) return(base)
+  # ⚠ stats::setNames, not as.character(): as.character() STRIPS the names, and every slot would
+  # then be read positionally -- `c(other = "Autres")` would silently rename the total ROW.
+  got <- stats::setNames(as.character(got), names(got))
+  if (is.null(names(got))) {                       # an unnamed vector fills row, col, tab, other
+    got <- stats::setNames(got, names(base)[seq_along(got)])
+  }
+  bad <- setdiff(names(got), names(base))
+  if (length(bad))
+    cli::cli_abort(c("Unknown {.code options(tabxplor.total_names)} slot{?s} {.val {bad}}.",
+                     "i" = "Valid: {.val {names(base)}}."), call = NULL)
+  base[names(got)] <- got
+  base
+}
+
+# The one message for the three released label formals (20b). It names the OPTION, not just the
+# deprecation: a user who set `totaltab_name = "Ensemble"` needs to be told where it lives now.
+#' @keywords internal
+#' @noRd
+tab_deprecate_total_label <- function(fn, arg, user_env) {
+  slot <- switch(arg, total_names = "row/col", totaltab_name = "tab", other_level = "other")
+  lifecycle::deprecate_soft(
+    "2.0.0", I(paste0(fn, "(", arg, " = )")),
+    I('options(tabxplor.total_names = )'),
+    details = paste0("The four synthetic labels are one option now: set the `", slot,
+                     "` slot, e.g. options(tabxplor.total_names = c(tab = \"Ensemble\", ",
+                     "other = \"Autres\"))."),
+    user_env = user_env)
 }

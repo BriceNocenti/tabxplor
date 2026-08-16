@@ -210,6 +210,21 @@
 
 ## Changes that may affect existing code
 
+* **Everything past the variable roles must now be named.** `tab()`, `tab_plain()`, `tab_num()` and
+  `tab_counts()` take `...` right after their variable arguments, so an unnamed extra argument is
+  refused by name instead of landing in whatever formal sat at that position. Every named call keeps
+  working, and a typo now gets a suggestion (`tab(colour = TRUE)` → *did you mean `color`?*) where R
+  used to say only "unused argument". One consequence worth knowing: an argument sitting after `...`
+  is matched **exactly**, so an abbreviation that used to partial-match silently (`color_br =`) is
+  now refused — with the full name in the message.
+* **The four synthetic labels are one option**: `options(tabxplor.total_names = c(row =, col =,
+  tab =, other =))` replaces the `total_names` / `totaltab_name` / `other_level` arguments (which
+  still work, with a message). A partial vector is allowed, so a French document can set
+  `c(tab = "Ensemble", other = "Autres")` once and leave the rest alone.
+* **`options(tabxplor.stars)` now carries the star ladder too**: `FALSE`, `TRUE`, or your own
+  `c("*" = 0.05, "**" = 0.01)`. It replaces `tabxplor.signif_levels` + `tabxplor.signif_labels`
+  (still read if you set them). The stars are a render-time reading of each cell's stored p-value,
+  so changing the ladder re-reads tables you have already built.
 * **`fmt` columns carry a 16th attribute, `col_group`** --- which sub-population a column's block
   belongs to, after `tab(spread_vars =)` / `tab_spread()` or `tab_reg(split_var =)` (`""` otherwise).
   Read it with `get_col_group()`. Those columns used to fold the level into their `col_var` as
@@ -435,6 +450,13 @@
   interval rather than a Welch one, and a Poisson crude rate ratio is called Katz rather than Wald.
 
 ## Deprecations
+
+### Soft-deprecated
+
+* `tab(total_names =)`, `tab(totaltab_name =)` and `tab(other_level =)` — use
+  `options(tabxplor.total_names =)`. Same on `tab_plain()`, `tab_num()` and `tab_counts()`.
+* `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)` — give the ladder to
+  `options(tabxplor.stars)` as a named vector.
 
 ### Removed
 

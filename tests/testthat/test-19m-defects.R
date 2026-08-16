@@ -56,8 +56,8 @@ test_that("19m-i A2: tab_apply_reference() takes the total column as a DECLARED 
   expect_true("totcol_vector" %in% names(formals(tab_apply_reference)))
   # and the leaf's own build is unaffected: a renamed total column still gets its odds ratio
   a <- tab(gss, marital, race, pct = "row", display = "{or}", ref = "first")
-  b <- tab(gss, marital, race, pct = "row", display = "{or}", ref = "first",
-           total_names = c("Total", "Ensemble"))
+  withr::local_options(tabxplor.total_names = c(row = "Total", col = "Ensemble"))
+  b <- tab(gss, marital, race, pct = "row", display = "{or}", ref = "first")
   expect_equal(get_or(a[[2]]), get_or(b[[2]]))
 })
 

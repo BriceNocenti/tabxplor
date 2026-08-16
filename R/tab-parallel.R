@@ -35,7 +35,7 @@ tabxplor_compute <- "tabxplor"
 #' @noRd
 tab_parallel_workers <- function(parallel = NULL, cache_env = NULL) {
   if (!is.null(cache_env)) return(0L)                       # jmvtab live cache: always serial
-  p <- if (is.null(parallel)) getOption("tabxplor.parallel", FALSE) else parallel
+  p <- if (is.null(parallel)) tx_option("parallel") else parallel
   if (is.null(p) || isFALSE(p)) return(0L)
   if (!requireNamespace("mirai", quietly = TRUE)) {
     rlang::warn(
@@ -157,7 +157,7 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
   rows <- purrr::transpose(vctrs::vec_recycle_common(!!!.l))
 
   serial <- workers <= 1L ||
-    length(rows) < getOption("tabxplor.parallel_min", 2L) ||
+    length(rows) < tx_option("parallel_min") ||
     !requireNamespace("mirai", quietly = TRUE)
 
   if (serial) {

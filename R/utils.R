@@ -36,18 +36,10 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
   string
 }
 
-# Read a tabxplor option that accepts synonym names (a renamed option's old name, or a
-# convenience alias); the FIRST name that is set (non-NULL) wins, then `default`. Pass the
-# SEEDED/canonical name LAST: the seeded default is always present, so a user's explicit
-# legacy/alias value must be checked before it to win. One resolver for every option synonym --
-# see ?tabxplor-options. (Phase 17j.)
-tx_getOption <- function(names, default = NULL) {
-  for (nm in names) {
-    v <- getOption(nm)
-    if (!is.null(v)) return(v)
-  }
-  default
-}
+# tx_getOption() MOVED to R/tab-options.R in Phase 20b, with the rest of the option subsystem it
+# belongs to -- and it had to: tab.R's top-level globalVariables() tail reaches conf_level_default()
+# -> tx_option() -> tx_getOption() while the namespace is still being SOURCED, and utils.R sorts
+# last of all.
 
 # THE retired-argument catcher for the export backends (Phase 19l).
 #
@@ -99,170 +91,14 @@ tx_deprecate_inert <- function(dots, fn) {
   # data.table::getDTthreads(verbose = getOption("datatable.verbose"))
 
 
-  set_color_palette()
+  set_color_palette()   # seeds tabxplor.color_style_theme (declared seed = "elsewhere")
 
-  # Phase 16f: bold the reference/total (+ coloured) cells in the CONSOLE, but only on a front-end that
-  # renders ANSI bold at fixed glyph width (Positron / VS Code; RStudio draws it wider and shears table
-  # alignment -- rstudio#1721). IDE-detected default; guarded with is.null so a user's .Rprofile choice
-  # survives (like tabxplor.color_style_theme). Override any time with options(tabxplor.console_bold = ).
-  if (is.null(getOption("tabxplor.console_bold")))
-    options("tabxplor.console_bold" = console_bold_default())
+  # Phase 20b (KEY 1): EVERY default comes from the declared table -- name, value, doc page and the
+  # "seed only if unset" rule alike. R/tabxplor-options.R.
+  tx_seed_options()
 
-  # option "tabxplor.color_breaks" : canonical Phase-13a scales (see set_color_breaks()).
-  # pct_ratio is the "only x2" rule (over side only); mean_ratio is asymmetric (4 over / 3 under);
-  # mean_diff = NULL restores the standardized (Glass's delta) default.
-  options("tabxplor.color_breaks" = default_color_scales())
-
-  options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
-
-  options("tabxplor.output_kable" = FALSE)
-
-  options("tabxplor.cleannames" = FALSE)
-
-  options("tabxplor.export_dir" = NULL)
-
-  options("tabxplor.kable_popover" = FALSE)
-
-  options("tabxplor.tab_kable_tooltips" = TRUE)
-
-  options("tabxplor.ci_print" = "ci") # or "moe"
-
-  # DORMANT (possible future implementation): tabxplor.totcol_range ("off"/"range"/"min") -- how a
-  # Total column's in-cell base is shown when col_vars have DIFFERING bases (e.g. na = "drop"):
-  # "range" = per-row "[min;max]" across col_vars, "min" = the smallest base. Retired pre-2.0.0
-  # release: the per-row literal templates it emitted defeat the composite-token padding
-  # (fmt_class.R format alignment groups by unique template), and its render-model compute
-  # (range_totcol) had no consumer. Dormant sites: tab.R tab_fold_addn_incell (read branch),
-  # tab-export-prep.R tab_totcol_range (helper, kept + tested directly).
-  # options("tabxplor.totcol_range" = "off")
-
-  # Phase 3a significance stars (universal CI-inclusion). `stars` default (OPT-IN: FALSE, so a plain
-  # tab() stores no per-cell pvalue and shows no stars; tab_reg() sets stars = TRUE itself), and the
-  # star thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
-  options("tabxplor.stars"         = FALSE)
-  options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
-  options("tabxplor.signif_labels" = c("*", "**", "***"))
-
-  # Weighted inference (§14): by default a weighted tab() estimates the population but bases every
-  # interval and test on the RAW number of respondents -- so it carries no design effect, and the
-  # footer says so. Opt in and the same intervals account for the unequal weighting exactly (the
-  # closed-form flat ids = ~1 design variance, Phase 18z16-ii). It needs the microdata weights
-  # (tab_counts on pre-aggregated counts cannot apply it) and it is blind to clustering and to
-  # calibration; for those, pass a survey::svydesign as `data` and the option is not consulted.
-  # SCOPE: tab() and its leaves only (ruling 1). tab_reg()'s crude Obs_* columns are ALWAYS on the
-  # weighted basis, so they always match the Model_* column beside them.
-  # Phase 19m-i: the "renamed from tabxplor.kish_neff" note that stood here is DELETED. Unlike the
-  # three genuine renames (tab_kable_css / export_theme / console_theme, resolved by tx_getOption),
-  # the old name was read NOWHERE -- survey-design.R uses a plain getOption() -- so the claim
-  # described an alias that did not exist. It never shipped (2.0.0-internal), so there is nothing to
-  # alias: the name is simply gone.
-  options("tabxplor.design_effect" = FALSE)
-
-  # Phase 18z15: the sparkline in a continuous predictor's row label of a tab_reg() table -- 10
-  # block glyphs showing the OBSERVED shape of its effect, the eye-half of the Linearity check.
-  # TRUE (default) = the block glyphs U+2581..U+2588; "ascii" = a plain-text ladder, for a console or
-  # a LaTeX font without them; FALSE = no sparkline (the label is then exactly what it was before).
-  options("tabxplor.spark"         = TRUE)
-
-  # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,
-  # matching oneway.test(var.equal=FALSE); "classic" = pooled-variance F). Both are always
-  # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
-  options("tabxplor.anova"         = "welch")
-
-  # Phase 16a / Phase 18j: how many crosstab test rows the EXPORTERS append (md/html/Excel).
-  # "summary" (the new default) = statistic + effect size + p-value (the console's full block, minus N,
-  # already shown by add_n); "stat" = statistic + p-value; "pvalue" = the single p-value row; "all" =
-  # summary. Console always shows the full N/statistic/effect-size/p-value block, so this is export-only.
-  options("tabxplor.test_lines"    = "summary")
-
-  # Phase 16e: the colour-legend style in EXPORTS (md/html/Excel). "prose" (default) = the full
-  # sentences; "terse" = the compact one-line console form. The console itself is always terse.
-  options("tabxplor.legend_style"  = "prose")
-
-  # Default confidence level for the intervals and significance tests. The per-call `conf_level`
-  # argument of tab() / tab_num() / tab_ci() / tab_reg() (and its wrappers) overrides it; it is also
-  # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Phase 18c).
-  options("tabxplor.conf_level"    = 0.95)
-
-  # Phase 6: the `tabxplor.compact` option is dropped, superseded by the `output_list`
-  # argument of tab() (default FALSE = merge; TRUE = list). tab_many()'s deprecated `compact`
-  # argument still works (mapped onto the output shape).
-
-  # Phase 19l: `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable` and
-  # `tabxplor.kable_html_font` are GONE with the kableExtra render engine. There is one engine
-  # (home-built, dependency-free, restyleable, the only one that could follow theme = "auto"), it
-  # always ships its stylesheet, and the font is a CSS rule -- see tab_css(). R/tab-render-html.R.
-
-  # The NUMBER font of each font-bearing export. Text (row labels, headers) always stays Condensed.
-  # Phase g: html/md numbers are MONOSPACE by default -- one lever `tab_kable_num_font` (was: a
-  # proportional font + a `_stars` monospace variant switched per table). Excel/plot keep the per-stars
-  # split (their alignment complaint is stars-specific, and the review did not touch them):
-  #   - html/md    -> ONE CSS font-family stack (tab_css()'s `.tx-num`), monospace.
-  #   - Excel      -> two single font names, no-stars/stars (xlsx has no fallback list, so the option IS
-  #     the fallback).
-  #   - tab_plot   -> ONE graphics family, applied to the whole plot body only when the table has stars
-  #     (ggpubr has no per-column font); "" keeps the ggpubr default. tab_plot() is superseded.
-  options("tabxplor.tab_kable_num_font"       = tx_num_font_html_stars)   # monospace
-  options("tabxplor.xl_font_num"        = "DejaVu Sans")                  # no stars (proportional)
-  options("tabxplor.xl_font_num_stars"  = "Cascadia Mono")               # stars (monospace)
-  options("tabxplor.xl_font_text"       = "DejaVu Sans Condensed")
-  # keep odds ratios as real numbers in Excel instead of "1/x" text; per-call tab_xl(or_numeric =).
-  options("tabxplor.xl_or_numeric"      = FALSE)
-  options("tabxplor.plot_num_font"      = "Cascadia Mono")                # applied only when stars
-
-  # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour
-  # scheme: their OS, plus any dark-mode toggle of the host page). "auto" needs a stylesheet, so only
-  # tab_html() / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
-  # kableExtra engine) resolve it to "light". See R/tab-css.R.
-  # WARNING: NOT `tabxplor.color_style_theme`, which is a different axis -- that one is the CONSOLE
-  # palette theme, set by set_color_palette() (which auto-detects the editor's theme, Phase 14g).
-  # DESIGN (Phase 14k): "light" STAYS the default and "auto" is opt-in -- this reverses the roadmap's
-  # plan to flip it. Unlike the console (a pane we can measure), an export is read who-knows-where, so
-  # a dark table must be asked for, not inferred. tab_kable()'s Viewer print is the one place "auto" is
-  # resolved in R rather than by the browser: only R can see the editor around the pane.
-  options("tabxplor.theme" = "light")
-
-  # Phase 18z11: also emit the black-and-white publication palette inside an `@media print` block,
-  # so a page rendered in colour PRINTS (or saves to PDF) publication-ready with no user action. On by
-  # default because the alternative is worse than it looks: converted to CIE lightness, the colour
-  # palette's two background directions are the SAME grey ramp, so a greyscale print silently loses the
-  # over/under distinction entirely. FALSE for someone whose colour printer is the point.
-  options("tabxplor.print_rules" = TRUE)
-
-  # Phase 13d: whether tab_html() inlines the stylesheet with each table (TRUE =
-  # self-contained: Viewer, jamovi, standalone .html). Set FALSE in a many-table .Rmd/.qmd that emits
-  # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.
-  # Phase 17j: renamed tabxplor.kable_css -> tabxplor.tab_kable_css (aligns with the tab_kable_* family).
-  # The old name still works (read via tx_getOption()); only the new one is seeded here.
-  options("tabxplor.tab_kable_css" = TRUE)
-
-  # Phase 14i: which variable NAMES the exporters annotate a table with. "both" (default) = today's
-  # behaviour; "rows" = only the row-variable names (a merged table's name column); "cols" = only the
-  # col_var spanning-name row; "none" = neither. It never touches a level column's HEADER (`marital`
-  # on a single-row_var table, `year` on a kept tab_var): that header identifies the column, costs no
-  # width, and is the col-side rule's mirror (which removes the span row, never the level names).
-  # Per-call `var_names =` on tab_kable/tab_md/tab_xl/tab_plot/tab_export overrides. R/tab-export-prep.R.
-  options("tabxplor.var_names" = "both")
-
-  # Phase k: opt-in display-swap of variable NAMES for variable LABELS (the haven/labelled `label`
-  # attribute, captured at build into meta$vars$var_labels). FALSE (default) shows names; TRUE shows
-  # the label where a variable has one (else its name). EXPORTS only (md/html/xl/plot) -- the console
-  # keeps canonical names, which disambiguate. Structure is unchanged, so name-based select()/reference
-  # still work. is.null-guarded so an Rprofile opt-in survives load. R/tab-export-prep.R var_label_map().
-  if (is.null(getOption("tabxplor.var_labels"))) options("tabxplor.var_labels" = FALSE)
-
-  # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
-  # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
-  # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).
-  # See R/tab-parallel.R + dev/tabxplor_2.0.0_decisions.md 26.
-  options("tabxplor.parallel"     = FALSE)
-  options("tabxplor.parallel_min" = 2L)
-
-
-  # Phase 13b: the colour-legend language. "auto" follows the R/OS locale (English fallback); "en"/"fr"
-  # force it. Per-call `lang =` on the exporters overrides. Bind the R-tabxplor gettext catalog to the
-  # package's compiled .mo (found under system.file("po"); harmless if absent -> English msgids).
-  options("tabxplor.lang" = "auto")
+  # Bind the R-tabxplor gettext catalog to the package's compiled .mo (found under system.file("po");
+  # harmless if absent -> English msgids).
   po <- system.file("po", package = pkgname)
   if (nzchar(po)) try(bindtextdomain("R-tabxplor", po), silent = TRUE)
 

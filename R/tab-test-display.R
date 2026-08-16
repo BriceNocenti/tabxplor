@@ -109,7 +109,7 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 #' @noRd
 tab_anova <- function(x) {
   a <- get_render_extras(x)[["anova"]]
-  if (is.null(a) || !nzchar(a[[1]])) getOption("tabxplor.anova", "welch") else a[[1]]
+  if (is.null(a) || !nzchar(a[[1]])) tx_option("anova") else a[[1]]
 }
 
 # Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
@@ -117,7 +117,7 @@ tab_anova <- function(x) {
 # Phase 18j: a weak chi2 (min_e < 5) carries a `pvalue_exact` column = the Fisher-exact p on that
 # same row; the p-value cell shows that reliable exact p (labelled "Fisher") instead of the flagged
 # chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
-test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
+test_display_rows <- function(test_tbl, anova = tx_option("anova")) {
   keep_f <- paste0("F_", anova)
   # Phase 18j: a design-based table carries chi2_design (factor) or F_design (numeric) INSTEAD of
   # the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.

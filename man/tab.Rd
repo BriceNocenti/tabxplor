@@ -10,32 +10,26 @@ tab(
   col_vars,
   tab_vars,
   wt,
-  sup_cols,
+  ...,
   pct = "no",
   color = "no",
   color_signif = "ignore",
-  OR = "no",
   test = FALSE,
   anova = NULL,
   na = "keep",
   levels = "all",
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others",
   ref = "auto",
   ref2 = "first",
   comp = "tab",
   ci = "auto",
-  conf_level = conf_level_default(),
+  conf_level = NULL,
   stars = NULL,
   ci_method = NULL,
   design_effect = NULL,
-  method_cell = NULL,
-  method_diff = NULL,
   totaltab = "line",
-  totaltab_name = "Ensemble",
   tot = c("row", "col"),
-  total_names = "Total",
   add_n = TRUE,
   add_pct = FALSE,
   common_totrow = FALSE,
@@ -47,15 +41,6 @@ tab(
   output_list = FALSE,
   parallel = NULL,
   spread_vars,
-  names_prefix = NULL,
-  names_sort = FALSE,
-  row_var,
-  col_var,
-  chi2 = lifecycle::deprecated(),
-  .cache = NULL,
-  .defer_level_merge = FALSE,
-  .return_armed = FALSE,
-  .levels_order = NULL,
   filter
 )
 }
@@ -74,9 +59,13 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{sup_cols}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Supplementary columns variables, with
-only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
-set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).}
+\item{...}{The arguments retired in 2.0.0, caught by name: the nine deprecated formals
+(\code{sup_cols}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{names_prefix}, \code{names_sort},
+\code{row_var}, \code{col_var}), the three total-label ones now carried by
+\code{options(tabxplor.total_names)} (\code{total_names}, \code{totaltab_name}, \code{other_level}), and the four
+jamovi-internal ones (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order}).
+Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
+-- past the variable roles, every argument must be named.}
 
 \item{pct}{The type of percentages to calculate, as a single string or a vector the same length
 as \code{col_vars} (like \code{levels} and \code{digits}) :
@@ -85,19 +74,21 @@ as \code{col_vars} (like \code{levels} and \code{digits}) :
 \item \code{"col"}: column percentages.
 \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-}}
+}
+The default is \code{"no"} --- \strong{deliberately}: a bare \code{tab()} is a
+table of \emph{counts}, which is what a first look at the data should be. Say
+\code{pct = "row"} (or \code{"col"}) as soon as you want to compare profiles;
+everything else in the package --- the reference, the interval, the colour --- follows
+from that choice.}
 
 \item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
 prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
 \code{difference} on the text + the \code{ratio} on the background; numerics: the
 \code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"difference"}: cell difference from the reference (percentage points for factors;
-the standardized difference Glass's \eqn{\Delta} for numeric means).
+\item \code{"difference"}: cell difference from the reference (percentage points for factors; the standardized difference Glass's \eqn{\Delta} for numeric means).
 \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
-\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
-coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
-\code{"ratio"}).
+\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 }
 The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
@@ -117,13 +108,8 @@ argument. \code{color} also names the table's COMPARISON, and so decides which i
 \item{color_signif}{How significance gates the color, as a single string:
 \itemize{
 \item \code{"ignore"} (default): color every deviation by its observed size.
-\item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
-deviation is not significant at \code{conf_level}. A cell is coloured only when it is BOTH
-significant AND at least as large as the first colour threshold, so an un-coloured (grey) cell
-may still be significant -- just too small to colour (and it can carry significance stars). The
-only guarantee is: a coloured cell is significantly different from its reference.
-\item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
-only cells whose interval clears the threshold, with dimmer, conservative colors.
+\item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose deviation is not significant at \code{conf_level}. A cell is coloured only when it is BOTH significant AND at least as large as the first colour threshold, so an un-coloured (grey) cell may still be significant -- just too small to colour (and it can carry significance stars). The only guarantee is: a coloured cell is significantly different from its reference.
+\item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect -- only cells whose interval clears the threshold, with dimmer, conservative colors.
 }
 With \code{color = "contrib"} the three values are three readings of the same departure from
 independence, because a contribution has no confidence interval to floor:
@@ -153,17 +139,6 @@ Colors are computed per column at print time; since 2.0.0 each column records th
 it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
 never recorded one (a hand-built \code{\link{fmt}}) falls back to
 \code{options(tabxplor.conf_level)}.}
-
-\item{OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The odds ratio is computed on \strong{every} row/col
-percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
-\code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
-\itemize{
-\item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
-\item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
-\item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
-}
-Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
-\code{ref2} (the column level).}
 
 \item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
 (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
@@ -245,8 +220,6 @@ passed to \code{\link{tab_prepare}}.}
 \item{other_if_less_than}{When set to a positive integer, levels with less count
 than it will be merged into an "Others" level.}
 
-\item{other_level}{The name of the "Other" level, as a single string.}
-
 \item{ref}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
 \itemize{
@@ -256,7 +229,7 @@ used for \code{diff}; the first line (or col) is used for the odds ratio.
 \item \code{"tot"}: totals are always used.
 \item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
-\item \code{"last"}: the mirror of \code{"first"} — the \strong{last level} of the row (or column)
+\item \code{"last"}: the mirror of \code{"first"} -- the \strong{last level} of the row (or column)
 variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
 Resolved inside each subtable when there are \code{tab_vars}.
 \item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
@@ -347,9 +320,6 @@ exact flat-design variance) instead of using the raw sample size. \code{NULL} ta
 superseded by a \code{\link[survey]{svydesign}} passed as \code{data} (which is always
 design-based). See the "Weights" section of the introduction vignette.}
 
-\item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
-\code{ci_method = c(cell = , diff = )} instead.}
-
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -360,8 +330,6 @@ calculations with \code{comp = "all"})
 \item \code{"no"}: not to draw any total table.
 }}
 
-\item{totaltab_name}{The name of the total table, as a single string.}
-
 \item{tot}{The totals :
 \itemize{
 \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
@@ -370,10 +338,6 @@ columns.
 \item \code{"col"}: only total column.
 \item \code{"no"}: remove all totals (after calculations if needed).
 }}
-
-\item{total_names}{The names of the totals, as a character vector of length one or two.
-Use syntax of type \code{c("Total row", "Total column")} to set different names for
-rows and cols.}
 
 \item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to \code{FALSE} not to add another
 column or row with unweighted counts (\code{n}).}
@@ -436,27 +400,6 @@ The worker pool persists for the session; release it with \code{\link{tab_parall
 
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
-
-\item{names_prefix, names_sort}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} These belong to
-\code{\link{tab_spread}}, which is the function that names the new columns; they reach it only
-when \code{spread_vars} is given. Call \code{tab_spread()} yourself for control over the names.}
-
-\item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
-\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
-
-\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0: the test is a
-Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
-misleading. Still works.}
-
-\item{.cache, .defer_level_merge, .return_armed, .levels_order}{Internal, for the jamovi
-\code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed
-multi-tier store is threaded through (Phase 7e); \code{.defer_level_merge} keeps full factor
-levels through the aggregate and test so \code{levels} becomes a display-time drop;
-\code{.return_armed} (Phase 7f) returns the pre-\code{finalize_color_spec} table so the tier-3
-cache can re-paint colours without a rebuild; \code{.levels_order} (Phase 7g-ii) is a named list
-of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,
-relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
-All default off; not for direct use.}
 
 \item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A
 \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string

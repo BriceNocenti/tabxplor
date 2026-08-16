@@ -10,28 +10,9 @@ tab_plain(
   col_var,
   tab_vars,
   wt,
-  pct = "no",
-  color = "no",
-  display = NULL,
-  OR = "no",
-  na = "keep",
-  ref = "auto",
-  ref2 = "first",
-  comp = "tab",
-  totaltab = "line",
-  totaltab_name = "Ensemble",
-  tot = NULL,
-  total_names = "Total",
-  subtext = "",
-  digits = 0,
+  ...,
   num = FALSE,
   df = FALSE,
-  ci = "auto",
-  conf_level = conf_level_default(),
-  stars = NULL,
-  ci_method = NULL,
-  design_effect = NULL,
-  color_signif = "ignore",
   .fine = NULL,
   .by_table = FALSE
 )
@@ -39,205 +20,23 @@ tab_plain(
 \arguments{
 \item{data}{A data frame.}
 
-\item{row_var, col_var}{The row variable, which will be printed with one level per line,
-and the column variable, which will be printed with one level per column. Numeric
-variables will be used as factors. To calculate means, use \code{\link{tab_num}}.}
+\item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-a subtable is made for each combination of levels of the
-selected variables. Leave empty to make a simple cross-table. All tab variables
-are converted to factor.}
+a subtable is made for each combination of levels of the selected variables.
+Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{pct}{The type of percentages to calculate :
-\itemize{
-\item \code{"row"}: row percentages.
-\item \code{"col"}: column percentages.
-\item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
-\item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-}}
-
-\item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
-prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
-\code{difference} on the text + the \code{ratio} on the background; numerics: the
-\code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
-\itemize{
-\item \code{"difference"}: cell difference from the reference (percentage points for factors;
-the standardized difference Glass's \eqn{\Delta} for numeric means).
-\item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
-\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
-coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
-\code{"ratio"}).
-\item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-}
-The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
-\code{"RR"}, \code{"or"} / \code{"OR"}.
-The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
-\strong{names pick the column type} (\code{pct} / \code{mean}). So
-\code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
-of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
-and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
-mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
-may go on the background.
-Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
-argument. \code{color} also names the table's COMPARISON, and so decides which interval
-\code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
-\code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)}
-
-\item{display}{A \code{{}} display template applied to the built table -- the same grammar
-\code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
-or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.}
-
-\item{OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The odds ratio is computed on \strong{every} row/col
-percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
-\code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
-\itemize{
-\item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
-\item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
-\item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
-}
-Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
-\code{ref2} (the column level).}
-
-\item{na}{The policy to adopt with missing values, as a single string.
-\itemize{
-\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
-are printed as explicit "NA" level.
-\item \code{"drop"}: removes NA of row, col and tab variables.
-}}
-
-\item{ref}{The reference cell to calculate differences and ratios
-(used to print \code{colors}) :
-\itemize{
-\item \code{"auto"}: by default, cell difference from the corresponding total
-(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
-(odds ratio/relative risks ratio).
-\item \code{"tot"}: totals are always used.
-\item \code{"first"}: calculate cell difference or ratio from the first cell
-of the row or column (useful to color temporal developments).
-\item \code{"last"}: the mirror of \code{"first"} — the \strong{last level} of the row (or column)
-variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-Resolved inside each subtable when there are \code{tab_vars}.
-\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
-\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
-to match with the names of the rows (or columns). Be precise enough to match only one
-column or row, otherwise you get a warning message.
-\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-}}
-
-\item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
-only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
-first level is used by default. For a \strong{binary} factor \code{ref2} is ignored: each level's
-OR is computed against the \emph{other} level, so both levels show a value (reciprocals of one
-another) instead of one being forced to \code{1}. See \code{ref} above for the list of possible values.}
-
-\item{comp}{Comparison level. When \code{tab_vars} are present, should the
-contributions to variance be calculated for each subtable/group (by default,
-\code{comp = "tab"}) ? Should they be calculated for the whole table
-(\code{comp = "all"}) ?
-\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
-
-\item{totaltab}{The total table,
-if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
-\itemize{
-\item \code{"line"}: by default, add a general total line (necessary for
-calculations with \code{comp = "all"})
-\item \code{"table"}: add a complete total table
-(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-\item \code{"no"}: not to draw any total table.
-}}
-
-\item{totaltab_name}{The name of the total table, as a single string.}
-
-\item{tot}{The totals :
-\itemize{
-\item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-columns.
-\item \code{"row"}: only total rows.
-\item \code{"col"}: only total column.
-\item \code{"no"}: remove all totals (after calculations if needed).
-}}
-
-\item{total_names}{The names of the totals, as a character vector of length one or two.
-Use syntax of type \code{c("Total row", "Total column")} to set different names for
-rows and cols.}
-
-\item{subtext}{A character vector to print rows of legend under the table.}
-
-\item{digits}{The number of digits to print, as a single integer, or an integer vector the
-same length as \code{col_vars}.}
+\item{...}{Every other argument of \code{\link[=tab]{tab()}} -- \code{pct}, \code{color}, \code{ci}, \code{tot}, ... -- passed
+by name. See \code{\link[=tab]{tab()}}; a typo gets a suggestion.}
 
 \item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).}
 
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
-
-\item{ci}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
-\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
-(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
-ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
-\itemize{
-\item \code{"auto"} (default): an interval on the comparison when the table makes one
-(percentages by row/column, means), an absolute cell interval for plain frequencies, and
-none at all when nothing needs one.
-\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
-and its reference -- the total cell, or the first cell under \code{ref = "first"}.
-\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
-\item \code{"no"}: no interval.
-}
-\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
-\code{color_signif} have nothing to read: asking for either alongside them informs you once and
-disables it, rather than silently testing something else.
-Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
-use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
-dual, so the bracket and the stars always agree), and means the Welch t interval. With
-\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
-\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
-also pins the ratio scale -- say \code{color = "ratio"} instead).}
-
-\item{conf_level}{The confidence level, as a single numeric between 0 and 1.
-Default to 0.95 (95\%).}
-
-\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "ref"}, print
-significance stars for each cell's difference from its reference, read from the displayed interval
-itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
-\code{FALSE}). \code{ci = "cell"} and \code{ci = "no"} anchor nothing to compare, so asking for
-stars alongside them informs you once and disables them.}
-
-\item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector --
-partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
-\itemize{
-\item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
-(default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
-degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
-the effective base, referred to a survey design's own degrees of freedom).
-\item \code{diff}: a proportion minus its reference (\code{ci = "ref"}) -- \code{"newcombe"}
-(default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
-(Agresti-Caffo) or \code{"wald"}.
-\item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
-group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
-interval).
-\item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
-\code{"robust"} (default, each group's own variance = modified/robust Poisson),
-\code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
-(naive).
-}
-Whatever the method, the significance stars come from that same interval, so bracket and stars
-always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
-a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.}
-
-\item{design_effect}{See \code{\link{tab}}: whether a \strong{weighted} table's intervals account
-for the weighting's own design effect. \code{NULL} (default) takes
-\code{options("tabxplor.design_effect")}.}
-
-\item{color_signif}{How significance interacts with \code{color}:
-\code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
-See \code{\link{tab}}.}
 
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed count-aggregate to roll up from
 instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);

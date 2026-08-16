@@ -957,6 +957,17 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
 #' @noRd
 jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
                                  row_vars, col_vars, tab_vars, ce) {
+  # Phase 20b: the four synthetic labels are `options(tabxplor.total_names)` now, not three
+  # arguments. The UI still lets the user type them, so they are installed for the duration of THIS
+  # build and restored after -- the module speaks tab()'s current vocabulary, which is the whole
+  # point of the jamovi teaching path (differentiator 4).
+  .lbl <- c(row = opts$total_names[[1]], col = opts$total_names[[min(2L, length(opts$total_names))]],
+            tab = opts$totaltab_name, other = opts$other_level)
+  .lbl <- .lbl[!vapply(.lbl, function(v) is.null(v) || !nzchar(v), logical(1))]
+  if (length(.lbl)) {
+    .old <- options(tabxplor.total_names = tab_total_names_merge(.lbl))
+    on.exit(options(.old), add = TRUE)
+  }
   rlang::inject(tab(
     data,
     row_vars     = tidyselect::all_of(row_vars),
@@ -997,9 +1008,6 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     add_n        = opts$add_n,
     add_pct      = opts$add_pct,
     subtext      = opts$subtext,
-    totaltab_name = opts$totaltab_name,
-    total_names   = opts$total_names,
-    other_level   = opts$other_level,
     output_list   = isTRUE(opts$output_list),
     .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE,
     .levels_order = opts$levels_order          # Phase 7g-ii: post-aggregate reorder (jmv_cache_aggregate)

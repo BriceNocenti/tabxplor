@@ -2586,8 +2586,9 @@ get_ci_moe <- function(x) {
 # line) reads the same ladder as every cell instead of a second copy of the thresholds.
 #' @keywords internal
 stars_from_pvalue <- function(p) {
-  brk <- sort(getOption("tabxplor.signif_levels", c(0.10, 0.05, 0.01)), decreasing = TRUE)
-  lab <- getOption("tabxplor.signif_labels", c("*", "**", "***"))
+  ladder <- tx_stars_ladder()          # 20b: ONE option carries glyphs AND cut-offs
+  brk <- unname(ladder)                                                # descending p
+  lab <- names(ladder)
   out <- c("", lab)[rowSums(outer(p, brk, `<`), na.rm = TRUE) + 1L]
   out[is.na(p)] <- ""
   out
@@ -4444,6 +4445,7 @@ GAP_ADDITIVE_FACTS <- list(
 
 MEASURES <- list(
   difference = list(word = function() gettext("difference"),           break_over = "+",       break_under = "-",
+                 doc = "cell difference from the reference (percentage points for factors; the standardized difference Glass's \\eqn{\\Delta} for numeric means).",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = c("tab", "reg"),
@@ -4454,6 +4456,7 @@ MEASURES <- list(
                  scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
                  sig_source = "bounds", gate_row = "refrow"),
   ratio      = list(word = function() gettext("ratio"),                break_over = .lg_times, break_under = .lg_div,
+                 doc = "relative risk (factors) or mean ratio (numerics) vs the reference.",
                  break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  # `ratio` shares `diff`'s build class: the leaf computes both fields in one pass, which
@@ -4466,6 +4469,7 @@ MEASURES <- list(
                  scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
                  sig_source = "bounds", gate_row = "refrow"),
   odds_ratio = list(word = function() "OR",                            break_over = "",        break_under = "1/",
+                 doc = "the empirical odds ratio (for \\code{pct = \"row\"}/\\code{\"col\"}), coloured on its own symmetric \\code{odds_ratio} scale (so \\code{pct_ratio} stays free for \\code{\"ratio\"}).",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = FALSE,
                  # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its
@@ -4489,6 +4493,7 @@ MEASURES <- list(
                  scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
                  sig_source = "bounds", gate_row = "refrow"),
   contrib    = list(word = function() gettext("contribution to Chi2"), break_over = .lg_times, break_under = .lg_times,
+                 doc = "signed contribution to the chi-squared (reference-free).",
                  break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
                  has_ref_lead = FALSE,
                  # the ONE measure the test step computes and stamps: the signed chi2 residual needs
@@ -4538,6 +4543,7 @@ MEASURES <- list(
   # disagreed about whether they may ride the background: they may, and it is the headline reading
   # `color = c("OR", "adjustment")`). `requires` states what asking for one turns on.
   adjustment = list(word = function() gettext("adjustment"),    break_over = .lg_times, break_under = .lg_div,
+                 doc = "how far each \\strong{modelled} effect sits from its \\strong{observed} (crude, unadjusted) counterpart -- what adjusting for the other predictors did to it. Turns \\code{empirical = TRUE} on. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = "reg",
@@ -4550,6 +4556,7 @@ MEASURES <- list(
                  gate_row = "refrow", force_policy = fmt_gap_force_policy,
                  by_scale = GAP_ADDITIVE_FACTS),
   between_groups = list(word = function() gettext("between groups"), break_over = .lg_times, break_under = .lg_div,
+                 doc = "with \\code{tab_vars}, how far each group's effect sits from the \\strong{first} group's, on the same row: a per-predictor reading of effect modification. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = "reg",
@@ -4566,7 +4573,7 @@ MEASURES <- list(
 # answer "no channel" / "no producer" for a row someone forgot to fill. Build-time, like
 # fmt_attr_rules' own exhaustiveness check (19a) -- the accessors derive from these names.
 stopifnot(all(vapply(MEASURES, function(m)
-  all(c("channels", "producers", "applies_to", "builds") %in% names(m)), logical(1))))
+  all(c("channels", "producers", "applies_to", "builds", "doc") %in% names(m)), logical(1))))
 
 # Phase 18z5, moved onto the `adjustment` row in 19c: `adjustment` on an ODDS RATIO needs one sentence
 # of honesty. The odds ratio is NON-COLLAPSIBLE -- adjusting for a covariate that predicts the outcome
@@ -4857,7 +4864,7 @@ measure_policy <- function(measure, policy = "ignore", x = NULL) {
 # resolve the display language: explicit `lang` > options(tabxplor.lang) > R/OS locale; english default.
 #' @keywords internal
 legend_resolve_lang <- function(lang = NULL) {
-  if (is.null(lang) || identical(lang, "")) lang <- getOption("tabxplor.lang", "auto")
+  if (is.null(lang) || identical(lang, "")) lang <- tx_option("lang")
   lang <- tolower(as.character(lang)[1])
   if (lang %in% c("fr", "french", "francais", "fran\u00e7ais")) return("fr")
   if (lang %in% c("en", "english"))                             return("en")
@@ -6004,7 +6011,7 @@ with_legend_lang <- function(lang, f) {
 # set options(tabxplor.legend_style = "terse") for the compact console-style one-liner. The console itself
 # always uses "terse" (a terminal is width-bound). Any value but "terse" resolves to "prose".
 legend_export_style <- function() {
-  if (identical(getOption("tabxplor.legend_style", "prose"), "terse")) "terse" else "prose"
+  if (identical(tx_option("legend_style"), "terse")) "terse" else "prose"
 }
 
 tab_footer_streams <- function(x, style = "prose", lang = NULL,
@@ -6062,8 +6069,9 @@ tab_stars_legend <- function(x, lang = NULL) {
   if (length(cols) == 0) return(NULL)
   if (!any(vapply(cols, function(cl) any(nzchar(get_stars(cl))), logical(1)))) return(NULL)
   with_legend_lang(lang, function(lg) {
-    lev  <- sort(getOption("tabxplor.signif_levels", c(0.10, 0.05, 0.01)))     # ascending p
-    lab  <- getOption("tabxplor.signif_labels", c("*", "**", "***"))
+    ladder <- tx_stars_ladder()
+    lev  <- sort(unname(ladder))                                              # ascending p
+    lab  <- names(ladder)
     lab  <- lab[order(nchar(lab), decreasing = TRUE)]                          # most stars first
     conf <- (1 - lev) * 100                                                    # aligned: *** <-> 99%
     semi <- if (identical(lg, "fr")) " ; " else "; "

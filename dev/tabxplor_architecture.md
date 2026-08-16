@@ -164,7 +164,8 @@ sub-field (a `NULL` value removes it). The sub-fields:
 Phase 19 replaced ~15 vocabularies-written-in-their-consumers with ~15 **declared fact tables**
 (`MEASURES`, `EST_SCALES`, `COLOR_SCALES`, `CI_GEOMS`, `CI_METHODS`, `DISPLAY_TOKENS`,
 `REG_ESTIMANDS`, `REG_EMPIRICAL`, `REG_FAMILIES`, `REG_CHECKS`, `TAB_ARG_VALUES`, `TAB_OPS`,
-`ROW_KINDS`, `fmt_attr_rules`, `meta_bind_rules`). That closed one class of drift and opened another:
+`ROW_KINDS`, `fmt_attr_rules`, `meta_bind_rules`; Phase 20b adds `TAB_ARGS` and `TAB_OPTIONS`).
+That closed one class of drift and opened another:
 
 > **a key written by hand in one table and read by name in another is a FOREIGN KEY**, and until 20a
 > none of them was checked.
@@ -1402,13 +1403,24 @@ tab |> mutate(across(where(is_fmt), ~mutate(., pct = pct * 2)))
 
 ## Options System
 
-All options are set in `.onLoad()` in `R/utils.R`. Users can override via `options()`. The
-user-facing, always-current list is the `?tabxplor-options` help page (`R/tabxplor-options.R`); the
-table below is a dev subset and lags it (e.g. it still lists the removed `color_style_type` /
-`color_html_24_bit` / `compact`).
+**Since Phase 20b an option is DECLARED ONCE, in `TAB_OPTIONS` (`R/tab-options.R`)** — one row per
+option, carrying its `default`, its `section` of the help page, the per-call `arg` that overrides
+it, its `alias` chain, its `seed` policy (`always` / `if_unset` / `elsewhere` / `no`) and its `doc`.
+`.onLoad()` (`R/utils.R`) seeds **from** that table, `?tabxplor-options` is `@eval`-generated from
+it by `tab_options_rd()`, and both the DEFAULT and the "Per-call `x =`" sentence are rendered rather
+than typed. Before, one option meant three hand-written places kept in step by a comment saying
+"keep this in sync"; adding one is a single row now, and `TAB_ARGS$option` points back at these keys
+through a checked foreign key.
+
+⚠ **The file name is load-bearing**: `tab-options.R` must sort before `tab.R` (`'-' < '.'`), because
+`tab.R`'s derived `globalVariables()` tail reaches `conf_level_default()` → `tx_option()` while the
+namespace is still being *sourced*. That is also why every computed `default` is a closure.
+
+The table below is a dev subset and lags the generated page.
 
 **Option synonyms (Phase 17j).** An option may be read under more than one name — a renamed option's
-old name, or a convenience alias — through the ONE resolver `tx_getOption(names, default)` (`R/utils.R`):
+old name, or a convenience alias — through the ONE resolver `tx_getOption(names, default)`
+(`R/tab-options.R`, moved there in 20b from `R/utils.R`):
 the first name set (non-NULL) wins, with the seeded/canonical name passed LAST so a user's explicit
 legacy/alias value overrides the seeded default. Three synonym pairs exist: `tabxplor.tab_kable_css`
 (seeded; was `tabxplor.kable_css`, a 2.0.0-new name renamed to join the `tab_kable_*` family) and the
@@ -1511,6 +1523,30 @@ finalize tail, forking no math.
   microdata prep (`tab_prepare_pop`), so the `tab()` arguments resolved there are not offered
   (`levels = "first"`/`"auto"`, `other_if_less_than`, `na = "drop_all"`/`"common_base"`, survey design,
   `wt` — use `wt_counts`); `cleannames` is the exception (applied on the aggregate keys, above).
+
+### R/tab-args.R — the argument surface as data (Phase 20b, KEY 1 + KEY 8)
+
+**`TAB_ARGS`** declares every public argument of the crosstab producers ONCE: which `producers` take
+it, its `status` (which may be NAMED, when an argument is deprecated on one producer and live on
+another), its `default` (+ `default_for` where a producer legitimately differs), its vocabulary
+(`values` here, or `values_from` naming the fact table that owns it), the `values_rd` renderer, its
+`option` twin, and its `doc` — the roxygen prose itself.
+
+> **THE RULE: the fact table owns the VOCABULARY, `TAB_ARGS` owns the ARGUMENT.** `MEASURES` knows
+> what `difference` is; `TAB_ARGS` knows that `color` is an argument of four producers, that it names
+> a measure, and how to say so in a help page.
+
+Three things read it. **`tab_args_rd(producer)`** generates the `@param` blocks (`#' @eval`, the
+fourth use of the `reg_measures_rd()` pattern) — ordered by `formals()`, with the declared set
+asserted equal to the formals at load (`tx_check_tab_args()`, `R/zzz-fact-keys.R`), so an argument
+added to a signature without a row breaks the build. **`tab_check_dots()`** validates the `...` the
+three superseded producers now take, refusing an unnamed argument by position and an unknown one with
+a suggestion. **`tab_dots_expand()`** fills an unsupplied argument from its declared default, which
+is what let the leaves keep their own starting points (`tab_num()` at `color = "auto"`, `ref = "tot"`).
+
+**`TAB_ARG_VALUES` is derived from it**, contents and order intact, so 19i's validators did not move.
+
+⚠ Read a row with `[[`, never `$`: `r$values` partial-matches `values_from`.
 
 ### R/tab-resolve.R (~180 lines) — the argument-overwrite cascade (Phase 7b)
 

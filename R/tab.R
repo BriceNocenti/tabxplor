@@ -85,368 +85,18 @@ NULL
 #' The package-wide display, color and statistics defaults are `options()`, listed at
 #' [tabxplor-options].
 #'
-#' @param data A data frame.
-#' @param row_vars,col_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
-#'  printed with one level per line, and the column variable(s), printed with one level per
-#'  column. For numeric variables means are calculated, in a single column. Each accepts one
-#'  variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
-#'  tables are merged into one by default (see \code{output_list}).
-#' @param row_var,col_var `r lifecycle::badge("deprecated")` Singular aliases of
-#'  \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.
-#' @param tab_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-#' a subtable is made for each combination of levels of the selected variables.
-#' Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.
-#' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param sup_cols `r lifecycle::badge("deprecated")` Supplementary columns variables, with
-#' only the first level printed. Deprecated in 2.0.0: pass these columns in \code{col_vars} and
-#' set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).
-#' @param na The policy to adopt for missing values, as a single string :
-#'  \itemize{
-#'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
-#'   are printed as an explicit `"NA"` level.
-#'   \item \code{"drop"}: remove `NA`'s in each row, col and tab variable before calculations,
-#'   so each column is computed on its own non-missing observations (bases can then differ
-#'   between col_vars).
-#'   \item \code{"drop_all"}: remove every observation missing on the \code{row_vars}, \strong{any}
-#'   \code{col_vars} or a \code{tab_vars}, so all columns share the same base (no `NA` anywhere).
-#'   \item \code{"common_base"}: fix a single population -- observations non-missing on the
-#'   \code{row_vars} and the \strong{first} \code{col_vars} (and \code{tab_vars}) -- shared by
-#'   every column, while secondary \code{col_vars} keep their own `NA`'s as a level within it.
-#'   This reproduces the historical \code{tab()} behaviour. Microdata only (not
-#'   \code{\link{tab_counts}}).
-#'   }
-#'   When several \code{row_vars} are combined into one table (no \code{tab_vars}), their \code{Total}
-#'   rows are identical whenever they share one population (\code{"keep"}, \code{"drop_all"},
-#'   \code{"common_base"}) and are then displayed as a \strong{single} Total row; only \code{"drop"}
-#'   can make them genuinely differ, in which case every Total row is kept (with a message).
-#' @param levels The levels of \code{col_vars} to keep, as a single string or a vector the same
-#' length as \code{col_vars} (for finer selections use \code{\link[dplyr:select]{dplyr::select}}) :
-#'  \itemize{
-#'   \item \code{"all"}: by default, all levels are kept.
-#'   \item \code{"first"}: only keep the first level of each \code{col_vars} (handy for compact
-#'   summary tables with many indicators).
-#'   \item \code{"auto"}: keep the first level when a \code{col_vars} has only two levels, keep all
-#'   levels otherwise.
-#'   }
-#' @param digits The number of digits to print, as a single integer, or an integer vector the
-#' same length as \code{col_vars}.
-#' @param n_min A single positive integer (default \code{0}, off). A pure display filter applied
-#' last: it hides small-base cells without recomputing anything. A row is dropped only when its
-#' \emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
-#' base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
-#' columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.
-#' @param display A single optional \strong{composite display template} to show several fields in each
-#'   value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
-#'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
-#'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-#'   \code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
-#'   Two of them are worth a worked example. \code{display = "\{pct\} (\{resid\})"} prints each
-#'   percentage with the adjusted standardized residual that says whether it departs from
-#'   independence -- the SPSS cell layout. And on a regression table
-#'   \code{\link{tab_reg}(..., display = "\{or\} (obs \{obs\})")} prints each adjusted odds ratio
-#'   next to the unadjusted one it is compared to (see \code{color = "adjustment"} in
-#'   \code{?tab_reg}). A bare field name is also accepted as a
-#'   shorthand for its single-field template, so \code{display = "ci"} is the same as
-#'   \code{display = "\{ci\}"} (it shows the confidence interval). The special value
-#'   \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
-#'   columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, chosen per column, so a mixed
-#'   factor + numeric table shows each value with its confidence interval in one call. Like
-#'   \code{"\{pct\} \{ci\}"} it displays the CI the table computes (the cell, difference or ratio CI
-#'   set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \code{color} that
-#'   needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
-#'   only: colors, differences and the underlying fields are unchanged.
-#' @param totaltab The total table, if there are subtables/groups
-#' (i.e. when \code{tab_vars} is provided) :
-#'  \itemize{
-#'   \item \code{"line"}: by default, add a general total line (necessary for
-#'   calculations with \code{comp = "all"})
-#'   \item \code{"table"}: add a complete total table
-#'  (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-#'   \item \code{"no"}: not to draw any total table.
-#'  }
-#' @param totaltab_name The name of the total table, as a single string.
-#' @param tot The totals :
-#'  \itemize{
-#'   \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-#'   columns.
-#'   \item \code{"row"}: only total rows.
-#'   \item \code{"col"}: only total column.
-#'   \item \code{"no"}: remove all totals (after calculations if needed).
-#'  }
-#' @param total_names The names of the totals, as a character vector of length one or two.
-#' Use syntax of type \code{c("Total row", "Total column")} to set different names for
-#' rows and cols.
-#' @param pct The type of percentages to calculate, as a single string or a vector the same length
-#' as \code{col_vars} (like \code{levels} and \code{digits}) :
-#'  \itemize{
-#'   \item \code{"row"}: row percentages.
-#'   \item \code{"col"}: column percentages.
-#'   \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
-#'   \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-#' }
-#' @param ref The reference cell to calculate differences and ratios
-#'  (used to print \code{colors}) :
-#'  \itemize{
-#'   \item \code{"auto"}: by default, cell difference from the corresponding total
-#'   (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-#'   used for `diff`; the first line (or col) is used for the odds ratio.
-#'   \item \code{"tot"}: totals are always used.
-#'   \item \code{"first"}: calculate cell difference or ratio from the first cell
-#' of the row or column (useful to color temporal developments).
-#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
-#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-#' Resolved inside each subtable when there are \code{tab_vars}.
-#'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
-#'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
-#'   to match with the names of the rows (or columns). Be precise enough to match only one
-#'   column or row, otherwise you get a warning message.
-#'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-#' }
-#' A (named) vector gives one reference per \code{row_vars} --- \code{ref = c(race = "first")}
-#' names the row variable it applies to, an unnamed vector goes by position, and any variable it
-#' does not mention keeps \code{"auto"}.
-#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
-#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
-#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
-#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
-#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
-#' @param comp The comparison level : by subtables/groups, or for the whole table.
-#' \itemize{
-#'   \item \code{"tab"}: by default, contributions to variance,
-#' row differences from totals/first cells, and row confidence intervals for these
-#' differences, are calculated for each \code{tab_vars} group.
-#'   \item \code{"all"}: compare cells to the general total line (provided there is
-#'    a total table with a total row), or with the first line of the total table
-#'    when \code{ref = "first"}.
-#' }
-#' @param OR `r lifecycle::badge("deprecated")` The odds ratio is computed on **every** row/col
-#'  percentage table since 2.0.0, so this argument had nothing left to switch on: it was a
-#'  \code{display}, a \code{color} and a \code{ref2} welded together. Each value maps to one of them:
-#'  \itemize{
-#'   \item \code{"OR"} -> \code{display = "\{or\}"} (show the odds ratio instead of the percentage);
-#'   \item \code{"OR_pct"} -> \code{display = "\{or\} (\{pct\})"};
-#'   \item \code{"cumOR"} -> \code{ref2 = "cumulative"}.
-#'  }
-#'  Colour it with \code{color = "odds_ratio"}, and pick which 2x2 with \code{ref} (the row) and
-#'  \code{ref2} (the column level).
-#' @param test Set to \code{TRUE} to calculate a statistical test of independence for each
-#' (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
-#' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. The whole-table summary also carries an
-#' \strong{effect size} (Cramer's V / phi for factors, eta-squared for means) and, on a small sparse
-#' factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-value. Useful to print
-#' metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
-#' Automatically added if needed for \code{color}.
-#'
-#' \code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
-#' passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogonal fact --- the
-#' \strong{inference basis} (the "weighting level" of \code{vignette("tabxplor")}), stored on each
-#' column and named in the table's footer --- says how the \emph{interval and the test} are:
-#' \enumerate{
-#'  \item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
-#'  \strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
-#'  they carry no design effect. This is the default, and the footer says so.
-#'  \item \code{wt = w} plus \code{design_effect = TRUE} (or, for a whole session,
-#'  \code{options(tabxplor.design_effect = TRUE)}) --- the same intervals and
-#'  tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
-#'  (the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
-#'  \code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
-#'  \code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. Being exact rather
-#'  than a bound, it can make an interval \emph{narrower} as well as wider --- unequal probabilities
-#'  can carry more information than equal ones. It is blind to clustering and to calibration, which
-#'  the weights do not record.
-#'  \item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
-#'  the same quantities, now with strata, clusters, \code{fpc} and calibration, and every interval
-#'  referred to the design's own degrees of freedom.
-#' }
-#' A fourth basis is not a choice but a fallback: when a design-based table's variance cannot be
-#' computed, it reverts to the weighting-only correction, and its footer says so.
-#' Turn the option on when you want a \code{tab()} percentage interval to be comparable with the
-#' \code{Obs_*} column of a \code{\link{tab_reg}} on the same data: \code{tab_reg()} never reads it,
-#' because its crude companions are \emph{always} on the weighted basis, beside a model column that
-#' always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
-#' \code{wt} beside a design is an error (a design already carries its own weights).
-#' @param anova Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
-#' \code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
-#' F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
-#' computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
-#' it changes which row is shown, never a number.
-#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0: the test is a
-#' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
-#' misleading. Still works.
-#' @param ci **What the confidence interval is anchored on** -- one question, four answers. The
-#'  \emph{geometry} of the interval is not asked here: it follows the comparison the table makes
-#'  (\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
-#'  ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
-#'   \itemize{
-#'    \item \code{"auto"} (default): an interval on the comparison when the table makes one
-#'      (percentages by row/column, means), an absolute cell interval for plain frequencies, and
-#'      none at all when nothing needs one.
-#'    \item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
-#'      and its reference -- the total cell, or the first cell under \code{ref = "first"}.
-#'    \item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
-#'    \item \code{"no"}: no interval.
-#'   }
-#'  \code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
-#'  \code{color_signif} have nothing to read: asking for either alongside them informs you once and
-#'  disables it, rather than silently testing something else.
-#'  Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
-#'  use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
-#'  dual, so the bracket and the stars always agree), and means the Welch t interval. With
-#'  \code{ci = "cell"} the result prints as `[inf;sup]`; set
-#'  `options("tabxplor.ci_print" = "moe")` for `pct +- moe`.
-#'  \code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
-#'  also pins the ratio scale -- say \code{color = "ratio"} instead).
-#' @param conf_level The confidence level, as a single numeric between 0 and 1.
-#' Default to 0.95 (95%).
-#' @param stars Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "ref"}, print
-#' significance stars for each cell's difference from its reference, read from the displayed interval
-#' itself (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")` (default
-#' \code{FALSE}). \code{ci = "cell"} and \code{ci = "no"} anchor nothing to compare, so asking for
-#' stars alongside them informs you once and disables them.
-#' @param ci_method The confidence-interval method of each kind of interval, as ONE named vector --
-#' partial, like \code{ref} or \code{pct}, so an unnamed kind keeps its default.
-#' \itemize{
-#'   \item \code{cell}: a proportion's own interval (\code{ci = "cell"}) -- \code{"wilson"}
-#'     (default, the score interval), \code{"wald"} (the normal approximation, commonly taught --
-#'     degenerate at 0 or 1) or \code{"beta"} (Korn-Graubard: the exact Clopper-Pearson interval on
-#'     the effective base, referred to a survey design's own degrees of freedom).
-#'   \item \code{diff}: a proportion minus its reference (\code{ci = "ref"}) -- \code{"newcombe"}
-#'     (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
-#'     (Agresti-Caffo) or \code{"wald"}.
-#'   \item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
-#'     group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
-#'     interval).
-#'   \item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
-#'     \code{"robust"} (default, each group's own variance = modified/robust Poisson),
-#'     \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
-#'     (naive).
-#' }
-#' Whatever the method, the significance stars come from that same interval, so bracket and stars
-#' always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
-#' a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.
-#' @param design_effect Logical or \code{NULL} (default). Whether the confidence intervals, stars and
-#' colour thresholds of a \strong{weighted} table account for the weighting's own design effect (the
-#' exact flat-design variance) instead of using the raw sample size. \code{NULL} takes
-#' \code{options("tabxplor.design_effect")} (\code{FALSE} by default). Ignored without \code{wt}, and
-#' superseded by a \code{\link[survey]{svydesign}} passed as \code{data} (which is always
-#' design-based). See the "Weights" section of the introduction vignette.
-#' @param method_cell,method_diff `r lifecycle::badge("deprecated")` Use
-#' \code{ci_method = c(cell = , diff = )} instead.
-# @param ci_visible By default, confidence intervals are calculated and used to set
-# colors, but not printed. Set to \code{TRUE} to print them in the result.
-#' @param color Which measure(s) to color, on which visual channel. \code{FALSE} (default)
-#' prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
-#' \code{difference} on the text + the \code{ratio} on the background; numerics: the
-#' \code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
-#'  \itemize{
-#'   \item \code{"difference"}: cell difference from the reference (percentage points for factors;
-#'   the standardized difference Glass's \eqn{\Delta} for numeric means).
-#'   \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
-#'   \item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}),
-#'   coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for
-#'   \code{"ratio"}).
-#'   \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-#'  }
-#' The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
-#' \code{"RR"}, \code{"or"} / \code{"OR"}.
-#' The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
-#' \strong{names pick the column type} (\code{pct} / \code{mean}). So
-#' \code{c("difference", "ratio")} puts the difference on the text and the ratio on the background
-#' of every column; \code{c(pct = "difference", mean = "ratio")} colors factors by the difference
-#' and numeric means by the ratio (text channel); \code{list(pct = c("difference", "ratio"),
-#' mean = "ratio")} combines both (per-type, with channels). Only \code{difference} / \code{ratio}
-#' may go on the background.
-#' Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
-#' argument. \code{color} also names the table's COMPARISON, and so decides which interval
-#' \code{ci = "auto"} builds. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and
-#' \code{"ci"} still work but are soft-deprecated in favor of \code{color_signif}.)
-#' @param color_signif How significance gates the color, as a single string:
-#'  \itemize{
-#'   \item \code{"ignore"} (default): color every deviation by its observed size.
-#'   \item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
-#'   deviation is not significant at \code{conf_level}. A cell is coloured only when it is BOTH
-#'   significant AND at least as large as the first colour threshold, so an un-coloured (grey) cell
-#'   may still be significant -- just too small to colour (and it can carry significance stars). The
-#'   only guarantee is: a coloured cell is significantly different from its reference.
-#'   \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
-#'   only cells whose interval clears the threshold, with dimmer, conservative colors.
-#'  }
-#' With \code{color = "contrib"} the three values are three readings of the same departure from
-#' independence, because a contribution has no confidence interval to floor:
-#'  \itemize{
-#'   \item \code{"ignore"} and \code{"grey_non_signif"} color the \strong{relative} contribution
-#'   (a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
-#'   the correspondence-analysis reading, so the scale is relative to the table);
-#'   \item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
-#'   the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
-#'   thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
-#'  }
-#' In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
-#' residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
-#' whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
-#' the package rule -- weighted estimate, and a base that follows the inference basis: the raw
-#' \code{n} by default (the reading a correspondence analysis expects), and under
-#' \code{options(tabxplor.design_effect = TRUE)} or a \code{survey} design that raw \code{n} divided
-#' by the \strong{association's} design effect -- Rao-Scott's mean generalized delta-bar, the very
-#' one the whole-table test reports, so the colours and the p-value of one table describe one design
-#' effect. The
-#' contribution itself stays weighted (it estimates the population table's structure, and is therefore
-#' identical at every basis, which is what keeps the correspondence-analysis reading safe). One base
-#' for the whole table, so a counts table and a percentage table of the same data give the SAME
-#' residuals. Cells whose expected count is below 1 are left
-#' uncolored: the normal approximation does not hold there.
-#' Colors are computed per column at print time; since 2.0.0 each column records the confidence level
-#' it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
-#' never recorded one (a hand-built \code{\link{fmt}}) falls back to
-#' \code{options(tabxplor.conf_level)}.
-#' @param color_breaks A per-table override of the colour thresholds, in the form
-#' \code{\link{set_color_breaks}} accepts; unset scales keep the global ones.
-#' @param add_n For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
-#' column or row with unweighted counts (`n`).
-#' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
-#' variable (for `pct = "row"`) or a row with the frequencies of the column variable
-#' (for  `pct = "col"`).
-#' @param common_totrow With several \code{row_vars}, `FALSE` (the default) shows one Total row per
-#' row variable. Set to `TRUE` to collapse the identical Total rows into a single shared Total,
-#' displayed in its own group after a blank-line separator (bold when the total is the reference for
-#' at least one row variable). Genuinely different totals (e.g. under `na = "drop"`) are never merged.
-#' @param subtext A character vector to print rows of legend under the table.
-#' @param output_list Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
-#'  merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
-#'  one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.
-#' @param parallel Opt-in parallel build of the per-\code{row_var} tables, using the (Suggests-only)
-#'  \pkg{mirai} package. \code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off);
-#'  \code{FALSE} forces serial; \code{TRUE} uses an auto worker count; an integer sets the number of
-#'  worker processes. Byte-identical to the serial result. It pays off for the survey workflow --
-#'  \emph{many} \code{row_vars} against a small/medium data frame (roughly 10k-60k rows) in ONE
-#'  \code{tab()} call -- and is a loss for few tables or multi-million-row data (so it stays opt-in).
-#'  The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.
-#' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
-#'  to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).
-#' @param names_prefix,names_sort `r lifecycle::badge("deprecated")` These belong to
-#'  \code{\link{tab_spread}}, which is the function that names the new columns; they reach it only
-#'  when \code{spread_vars} is given. Call \code{tab_spread()} yourself for control over the names.
-#' @param cleannames Set to \code{TRUE} to clean levels names, by removing
-#' prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
-#' passed to \code{\link{tab_prepare}}.
-#' @param other_if_less_than When set to a positive integer, levels with less count
-#' than it will be merged into an "Others" level.
-#' @param other_level The name of the "Other" level, as a single string.
-#' @param filter `r lifecycle::badge("superseded")` A
-#' \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
-#' (which will be converted to code, i.e. to a call). Prefer filtering the data with
-#' \code{\link[dplyr:filter]{dplyr::filter}} upstream of \code{tab()}; this argument is kept
-#' for back-compatibility (e.g. printing multiple tabs from a
-#' \code{\link[tibble:tribble]{tibble::tribble}}).
-#' @param .cache,.defer_level_merge,.return_armed,.levels_order Internal, for the jamovi
-#' \code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed
-#' multi-tier store is threaded through (Phase 7e); \code{.defer_level_merge} keeps full factor
-#' levels through the aggregate and test so \code{levels} becomes a display-time drop;
-#' \code{.return_armed} (Phase 7f) returns the pre-\code{finalize_color_spec} table so the tier-3
-#' cache can re-paint colours without a rebuild; \code{.levels_order} (Phase 7g-ii) is a named list
-#' of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,
-#' relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
-#' All default off; not for direct use.
+#' @eval tab_args_rd("tab")
+#' @param ... The arguments retired in 2.0.0, caught by name: the nine deprecated formals
+#'   (`sup_cols`, `OR`, `chi2`, `method_cell`, `method_diff`, `names_prefix`, `names_sort`,
+#'   `row_var`, `col_var`), the three total-label ones now carried by
+#'   `options(tabxplor.total_names)` (`total_names`, `totaltab_name`, `other_level`), and the four
+#'   jamovi-internal ones (`.cache`, `.defer_level_merge`, `.return_armed`, `.levels_order`).
+#'   Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
+#'   -- past the variable roles, every argument must be named.
+# ⚠ THE @param BLOCKS ARE GENERATED (Phase 20b, KEY 1). Every one of tab()'s arguments -- its
+# producers, its legal values, its option twin and this prose -- is ONE row of TAB_ARGS
+# (R/tab-args.R). Edit the row, not this file; tab_args_rd() orders by formals() and a load-time
+# check refuses a formal with no row (and a row with no formal).
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
 #' @details
@@ -594,28 +244,39 @@ NULL
 #'   specialist contingency-table models built on top of it --- quasi-independence, Goodman's RC
 #'   association models, UNIDIFF --- see the \pkg{logmult} package
 #'   (\url{https://cran.r-project.org/package=logmult}), which also supports complex survey designs.
-tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
+tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 pct = "no", color = "no", color_signif = "ignore",
-                OR = "no", test = FALSE, anova = NULL,
+                test = FALSE, anova = NULL,
                 na = "keep", levels = "all",
-                cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
-                other_if_less_than = 0, other_level = "Others",
+                cleannames = NULL, other_if_less_than = 0,
                 ref = "auto", ref2 = "first", comp = "tab",
-                ci = "auto", conf_level = conf_level_default(), stars = NULL,
+                ci = "auto", conf_level = NULL, stars = NULL,
                 ci_method = NULL, design_effect = NULL,
-                method_cell = NULL, method_diff = NULL,
-                totaltab = "line", totaltab_name = "Ensemble",
-                tot = c("row", "col"), total_names = "Total",
+                totaltab = "line", tot = c("row", "col"),
                 add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
                 subtext = "", digits = 0, n_min = 0, display = NULL,
                 color_breaks = NULL,
                 output_list = FALSE, parallel = NULL,
-                spread_vars, names_prefix = NULL, names_sort = FALSE,
-                row_var, col_var,
-                chi2 = lifecycle::deprecated(),
-                .cache = NULL, .defer_level_merge = FALSE, .return_armed = FALSE,
-                .levels_order = NULL,
-                filter) {
+                spread_vars, filter) {
+
+  # Phase 20b: `...` sits right after `wt`, so R itself enforces "everything past the variable roles
+  # is named" -- which is the unnamed-6th-argument guard §7.1 asked for, without a hand-written one.
+  # Nothing is lost: position 6 used to be `sup_cols`, so no LIVE argument was ever reachable
+  # positionally past `wt`. What rides `...` is exactly three kinds of thing, all declared in
+  # TAB_ARGS (R/tab-args.R): the nine deprecated formals, the three retired total-label ones, and
+  # the four jamovi-internal dot-args.
+  .dots <- rlang::enquos(..., .ignore_empty = "all")
+  tab_check_dots(.dots, "tab")
+  OR          <- dots_value(.dots, "OR", "no")
+  chi2        <- dots_value(.dots, "chi2", lifecycle::deprecated())
+  method_cell <- dots_value(.dots, "method_cell")
+  method_diff <- dots_value(.dots, "method_diff")
+  names_prefix <- dots_value(.dots, "names_prefix")
+  names_sort   <- dots_value(.dots, "names_sort", FALSE)
+  .cache             <- dots_value(.dots, ".cache")
+  .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
+  .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
+  .levels_order      <- dots_value(.dots, ".levels_order")
 
   # Phase 19i: THE argument boundary -- validation + every "one rule written N times" derivation --
   # runs once, here, in tab_resolve_common_args() (R/tab-resolve.R), shared with tab_many(),
@@ -629,27 +290,36 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     ci = ci, stars = stars, conf_level = conf_level,
     ci_method = ci_method, method_cell = method_cell, method_diff = method_diff,
     cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
-    tot = tot, total_names = total_names, na = na, levels = levels, pct = pct,
+    tot = tot, na = na, levels = levels, pct = pct,
+    total_names   = dots_value(.dots, "total_names"),
+    totaltab_name = dots_value(.dots, "totaltab_name"),
+    other_level   = dots_value(.dots, "other_level"),
     comp = comp, totaltab = totaltab, n_min = n_min, anova = anova,
     user_env = rlang::caller_env())
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars ; ci_method <- .a$ci_method
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   color_spec <- .a$color_spec ; color <- .a$color
   total_names <- .a$total_names ; tot <- .a$tot
+  totaltab_name <- .a$totaltab_name ; other_level <- .a$other_level
+  conf_level <- .a$conf_level
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
-  # row_vars/col_vars (which now accept one variable OR several). Capture the effective quosure
-  # once via enquo() (never evaluate the tidy-select arg), nudging users of the old names.
-  .rv_dep <- rlang::enquo(row_var)
-  .cv_dep <- rlang::enquo(col_var)
-  row_var_quo <- if (!rlang::quo_is_missing(.rv_dep)) {
-    lifecycle::deprecate_soft("2.0.0", "tab(row_var = )", "tab(row_vars = )")
-    .rv_dep
-  } else rlang::enquo(row_vars)
-  col_var_quo <- if (!rlang::quo_is_missing(.cv_dep)) {
-    lifecycle::deprecate_soft("2.0.0", "tab(col_var = )", "tab(col_vars = )")
-    .cv_dep
-  } else rlang::enquo(col_vars)
+  # row_vars/col_vars (which now accept one variable OR several).
+  #
+  # ⚠ THE PARTIAL-MATCHING TRAP, and it is the same class as 20a's first defect (three deprecations
+  # that had silently stopped firing). `row_var` is a PREFIX of the live `row_vars`, and R matches a
+  # partial name against the formals sitting BEFORE `...` -- so since 20b these two never reach
+  # `.dots` at all: they are bound to `row_vars` / `col_vars` and already do exactly the right thing.
+  # Only the NUDGE would be lost, so it is read off the call the user actually wrote.
+  .said <- names(sys.call())
+  if ("row_var" %in% .said)
+    lifecycle::deprecate_soft("2.0.0", "tab(row_var = )", "tab(row_vars = )",
+                              user_env = rlang::caller_env())
+  if ("col_var" %in% .said)
+    lifecycle::deprecate_soft("2.0.0", "tab(col_var = )", "tab(col_vars = )",
+                              user_env = rlang::caller_env())
+  row_var_quo <- rlang::enquo(row_vars)
+  col_var_quo <- rlang::enquo(col_vars)
 
   # Phase 18z14-i: a prebuilt survey design passed as `data` is unwrapped at THE one boundary
   # (R/survey-design.R) -- its model frame drives the whole pipeline, its weights become the weight
@@ -684,14 +354,15 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   }
 
   # Phase 7a: `sup_cols` is soft-deprecated -- `col_vars` already accepts several variables, so
-  # supplementary columns go there with `levels = "first"`.
-  sup_cols_quo <- rlang::enquo(sup_cols)
-  if (quo_miss_na_null_empty_no(sup_cols_quo)) {
+  # supplementary columns go there with `levels = "first"`. Since 20b it rides `...`.
+  sup_cols_quo <- .dots$sup_cols
+  if (is.null(sup_cols_quo) || quo_miss_na_null_empty_no(sup_cols_quo)) {
     sup_cols <- character()
   } else {
     lifecycle::deprecate_soft(
       "2.0.0", "tab(sup_cols = )",
-      details = "Pass these columns in `col_vars` and set `levels = \"first\"`."
+      details = "Pass these columns in `col_vars` and set `levels = \"first\"`.",
+      user_env = rlang::caller_env()
     )
     sup_cols <- names(tidyselect::eval_select(sup_cols_quo, data))
   }
@@ -1318,8 +989,21 @@ new_ctx <- function(...) {
 # "tab". Sites: the two leaf resolvers plain_resolve / num_resolve.
 #' @keywords internal
 #' @noRd
-resolve_stars <- function(stars) {
-  if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
+resolve_stars <- function(stars, call = rlang::caller_env()) {
+  # 20b: `tabxplor.stars` carries the LADDER as well as the switch, so a numeric option means "on".
+  # The argument stays a plain logical: the glyphs are read from the stored p-value at RENDER time,
+  # so a per-call ladder would be a per-column stored fact -- deliberately not built (the option
+  # re-reads every table that already exists, which is the better contract).
+  if (is.null(stars)) {
+    v <- tx_option("stars")
+    return(if (is.numeric(v)) length(v) > 0L else isTRUE(v))
+  }
+  if (is.numeric(stars))
+    cli::cli_abort(c("{.arg stars} is TRUE or FALSE; the star LADDER is a global option.",
+                     "i" = 'Set it with {.code options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))}
+                            -- it is read when the table is printed, so it applies to every table.'),
+                   call = call)
+  stars
 }
 #' @keywords internal
 #' @noRd
@@ -1336,16 +1020,17 @@ force_comp <- function(comp, tab_vars) {
 #
 # conf_level_default(): THE default confidence level, as a formal default. It was the literal
 # `getOption("tabxplor.conf_level", 0.95)` in EIGHT signatures (tab, tab_many, tab_plain, tab_num,
-# tab_ci, tab_counts, tab_reg, new_inference). The option is still what it reads, and
-# ?tabxplor-options + each @param still name it -- only the copies of the expression are gone.
+# tab_ci, tab_counts, tab_reg, new_inference). Since 20b the VALUE 0.95 lives once more, in
+# TAB_OPTIONS; this stays as the INTERNAL formal default (the public producers say `NULL` and let
+# tab_resolve_common_args() resolve it -- one idiom on the surface, one expression underneath).
 #' @keywords internal
 #' @noRd
 resolve_cleannames <- function(cleannames) {
-  if (is.null(cleannames)) getOption("tabxplor.cleannames", FALSE) else cleannames
+  if (is.null(cleannames)) tx_option("cleannames") else cleannames
 }
 #' @keywords internal
 #' @noRd
-conf_level_default <- function() getOption("tabxplor.conf_level", 0.95)
+conf_level_default <- function() tx_option("conf_level")
 
 
 # tab_build() -- the shared table-building engine behind tab() and tab_many().

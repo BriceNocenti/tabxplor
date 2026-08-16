@@ -143,7 +143,7 @@ svy_check_test <- function(test, arg = "test") {
 svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE,
                                 design_effect = NULL) {
   if (!is.null(design_spec) && !is.null(design_spec$design))          return("design")
-  de <- if (is.null(design_effect)) getOption("tabxplor.design_effect", FALSE)
+  de <- if (is.null(design_effect)) tx_option("design_effect")
         else isTRUE(design_effect)
   if (length(wt) > 0L && isTRUE(can_serve) && (isTRUE(force) || isTRUE(de))) return("weights")
   "n"

@@ -206,37 +206,9 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' unweighted sample size. When the counts are not real whole numbers (a base-less / weighted-only
 #' input), confidence intervals and chi-squared are disabled with a message.
 #'
-#' @param data A data frame of counts, or a `table` / `xtabs` / `matrix` object.
-#' @param row_var The row variable (one level per line). For a `table` object it defaults to the
-#'   first dimension.
-#' @param col_var The column variable (one column per level). For a `table` object it defaults to
-#'   the second dimension. Not used with `cols`.
-#' @param tab_vars <[`tidy-select`][tidyr::tidyr_tidy_select]> Tab variables: a subtable is made for
-#'   each combination of their levels.
-#' @param counts The column holding the **unweighted** count for each cell (long tidy shape).
-#' @param wt_counts Optional column holding the **weighted** count for each cell. Leave empty for an
-#'   unweighted table.
-#' @param cols <[`tidy-select`][tidyr::tidyr_tidy_select]> For a wide `data.frame`: the columns
-#'   holding the `col_var` levels.
-#' @param col_name Name of the (synthesised) column variable when `cols` is used.
-#' @param base For `input = "pct"`: the column holding each row's sample size N.
-#' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
-#'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,color_signif,OR,test,na,cleannames,ref,ref2,comp,ci,conf_level,stars,ci_method,totaltab,totaltab_name,tot,total_names,add_n,add_pct,common_totrow,subtext,digits,n_min,display,color_breaks,spread_vars
-#'   Same meaning as in [tab()]. `color` accepts every form [tab()] does (`FALSE` / `TRUE` /
-#'   a measure / `c(text, background)` / `list(pct =, mean =)`). Only `na = "keep"` / `"drop"` are
-#'   available (`"drop_all"` / `"common_base"` need the microdata). The [tab()] arguments that pick or
-#'   collapse levels *during the microdata prep* — which `tab_counts()` starts past — are not offered:
-#'   `levels = "first"` / `"auto"` (keeping a subset of levels), `other_if_less_than` / `other_level`
-#'   (lumping rare levels counts individual observations); build from microdata with [tab()] for those.
-#'   Likewise the microdata-only / numeric-mean-only arguments: `wt` (use `wt_counts`); a survey
-#'   design as `data` (per-observation weights and structure a count table cannot carry -- it is
-#'   refused with a message); `design_effect` (same reason: no per-observation weights); `parallel`;
-#'   `output_list`; `sup_cols`. The `mean_diff` / `mean_ratio` slots of `ci_method` are inert here
-#'   (a counts table has no numeric column).
-#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 2.0.0 (see [tab()]).
-#' @param names_prefix,names_sort `r lifecycle::badge("deprecated")` These belong to
-#'   \code{\link{tab_spread}} — see [tab()].
+#' @eval tab_args_rd("tab_counts")
+#' @param ... Every other argument of [tab()] -- `pct`, `color`, `ci`, `tot`, ... -- passed
+#'   by name. See [tab()]; a typo gets a suggestion.
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
 #' @export
@@ -255,20 +227,13 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' tab_counts(wide, row_var = marital, cols = c(Other, Black, White),
 #'            col_name = "race", pct = "row")
 tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
-                       cols, col_name = "variable", base, input = c("counts", "pct"),
-                       pct = "no", color = "no", color_signif = "ignore",
-                       OR = "no", test = FALSE,
-                       na = "keep", cleannames = NULL,
-                       ref = "auto", ref2 = "first", comp = "tab",
-                       ci = "auto", conf_level = conf_level_default(),
-                       stars = NULL, ci_method = NULL,
-                       totaltab = "line", totaltab_name = "Ensemble",
-                       tot = c("row", "col"), total_names = "Total",
-                       add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
-                       subtext = "", digits = 0, n_min = 0, display = NULL,
-                       color_breaks = NULL,
-                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
-                       chi2 = lifecycle::deprecated()) {
+                       cols, col_name = "variable", base, input = c("counts", "pct"), ...) {
+
+  # Phase 20b: the ten leading formals are this constructor's OWN -- the input shape -- and `...`
+  # begins exactly where the arguments shared with tab() do. See tab_plain().
+  .d <- rlang::list2(...)
+  tab_check_dots(.d, "tab_counts")
+  list2env(tab_dots_expand(.d, "tab_counts"), environment())
 
   # Phase 18z14-i: tab_counts() starts from pre-aggregated counts, so it is the ONE entry point
   # that REFUSES a survey design rather than unwrapping it -- a design's weights and structure are
@@ -298,11 +263,15 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     "tab_counts", test = test, chi2 = chi2, color = color, color_signif = color_signif,
     ci = ci, stars = stars, conf_level = conf_level, ci_method = ci_method,
     cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
-    tot = tot, total_names = total_names, na = na, pct = pct, comp = comp,
+    tot = tot, na = na, pct = pct, comp = comp,
+    total_names   = .d$total_names,
+    totaltab_name = .d$totaltab_name,
+    other_level   = .d$other_level,
     totaltab = totaltab, n_min = n_min, user_env = rlang::caller_env())
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   color_spec <- .a$color_spec ; total_names <- .a$total_names
+  conf_level <- .a$conf_level ; totaltab_name <- .a$totaltab_name
   # The two MEAN interval methods are inert on a counts table -- there are no mean columns -- so an
   # explicit setting is refused rather than silently accepted (it used to ride along and do nothing).
   counts_refuse_mean_methods(ci_method)

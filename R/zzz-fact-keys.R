@@ -223,7 +223,29 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("names(REG_LOG_BASE)",     function() names(REG_LOG_BASE),
         function() names(REG_MEASURE_ALIASES)),
   tx_fk("REG_MEASURE_ALIASES",     function() as.character(REG_MEASURE_ALIASES),
-        function() REG_MEASURES_VALUES)
+        function() REG_MEASURES_VALUES),
+
+  # --- into the ARGUMENT surface (Phase 20b) -------------------------------------------------
+  # TAB_ARGS declares, per argument, which fact table owns its vocabulary, which renderer prints
+  # it, and which option is its default. Each of those three is a key written by hand in one table
+  # and read by name in another -- the definition of a foreign key.
+  tx_fk("TAB_ARGS$values_from",    function() tx_fk_all(TAB_ARGS, "values_from"),
+        function() c("MEASURES", "COLOR_SIGNIF_VALUES", "CI_METHODS", "COLOR_SCALES",
+                     "DISPLAY_TOKENS")),
+  tx_fk("TAB_ARGS$values_rd",      function() tx_fk_all(TAB_ARGS, "values_rd"),
+        function() ls(asNamespace("tabxplor"), pattern = "_rd$")),
+  tx_fk("TAB_ARGS$option",         function() tx_fk_all(TAB_ARGS, "option"),
+        function() names(TAB_OPTIONS)),
+  tx_fk("TAB_ARGS$doc_with",       function() tx_fk_all(TAB_ARGS, "doc_with"),
+        function() names(TAB_ARGS)),
+  tx_fk("TAB_ARGS$pct$stored",     function() TAB_ARGS[["pct"]][["stored"]],
+        function() PCT_BASES),
+  tx_fk("TAB_OPTIONS$arg",         function() tx_fk_scalar(TAB_OPTIONS, "arg"),
+        function() unique(c(names(TAB_ARGS), tx_fk_all(TAB_OPTIONS, "arg_extra"))),
+        # an option whose per-call twin belongs to an exporter or to tab_reg(), neither of which is
+        # in TAB_ARGS yet (their `@param`s are still hand-written -- see the file header there)
+        allow = c("theme", "css", "tooltips", "popover", "font_text", "font_num",
+                  "font_num_stars", "or_numeric", "lang", "print_rules", "var_names"))
 )
 
 
@@ -266,6 +288,50 @@ tx_check_foreign_keys <- function(keys = TAB_FOREIGN_KEYS) {
   invisible(orphans)
 }
 
+# --- the argument surface's own anti-drift check (Phase 20b) --------------------------------------
+# tx_check_tab_args() -- every covered producer's FORMALS and its declared TAB_ARGS rows are the
+# same set, and every surviving formal's default is the declared one. This is what makes the
+# generated `@param` blocks safe: an argument added to a signature without a row, or a default
+# changed in a signature without changing the declaration, breaks the BUILD.
+# ⚠ It must live here and not in R/tab-args.R: `formals(tab)` is not available while that file is
+# being sourced (tab.R comes later). zzz- sorts last, which is the whole reason this file exists.
+#' @keywords internal
+#' @noRd
+tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_counts",
+                                            "tab_many", "tab_build")) {
+  for (p in producers) {
+    fn <- get(p, envir = asNamespace("tabxplor"))
+    f  <- setdiff(names(formals(fn)), "...")
+    d  <- tab_args_for(p)
+    if (p == "tab_build") f <- intersect(f, d)     # tab_build is internal: only `output` is declared
+    if (length(setdiff(f, d)))
+      stop("tabxplor: ", p, "() has formals with no TAB_ARGS row: ",
+           paste(setdiff(f, d), collapse = ", "), call. = FALSE)
+    if (length(setdiff(d, f)) && p != "tab_build") {
+      # a DECLARED argument that is no longer a formal must ride `...` -- so the producer must have
+      # one, or the argument is simply unreachable.
+      if (!"..." %in% names(formals(fn)))
+        stop("tabxplor: ", p, "() declares ", paste(setdiff(d, f), collapse = ", "),
+             " but takes neither the formal nor `...`.", call. = FALSE)
+    }
+    for (k in intersect(f, d)) {
+      r  <- TAB_ARGS[[k]]
+      if (is.null(r[["default"]]) && is.null(r[["default_for"]])) next
+      ov <- r[["default_for"]]
+      dd <- if (!is.null(ov) && p %in% names(ov)) ov[[p]] else r[["default"]]
+      got <- formals(fn)[[k]]
+      # ⚠ rlang::is_missing(), never `is.symbol(x)`: a formal with NO default IS the empty symbol,
+      # and merely touching it raises "argument is missing".
+      if (rlang::is_missing(got)) next
+      if (!identical(eval(got, envir = asNamespace("tabxplor")), dd))
+        stop("tabxplor: ", p, "(", k, " = ) does not match its declared TAB_ARGS default.",
+             call. = FALSE)
+    }
+  }
+  invisible(TRUE)
+}
+
 # THE load-time check. It runs at R CMD INSTALL / pkgload::load_all(), so a rename that does not
 # reach a fact table breaks the BUILD, at the moment it is made -- which is the whole point.
 tx_check_foreign_keys()
+tx_check_tab_args()

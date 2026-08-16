@@ -32,100 +32,9 @@
 #' totals, tests) -- but it stays the smallest entry point into the aggregate core, and takes the
 #' same `ci` / `ci_method` / `conf_level` / `stars` / `display` arguments, resolved by the same
 #' rules, so its numbers agree with `tab()`'s cell for cell.
-#' @param data A data frame.
-#' @param row_var,col_var The row variable, which will be printed with one level per line,
-#'  and the column variable, which will be printed with one level per column. Numeric
-#'  variables will be used as factors. To calculate means, use \code{\link{tab_num}}.
-#' @param tab_vars  <\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-#' a subtable is made for each combination of levels of the
-#' selected variables. Leave empty to make a simple cross-table. All tab variables
-#' are converted to factor.
-#' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param digits The number of digits to print, as a single integer, or an integer vector the
-#' same length as \code{col_vars}.
-#' @param na The policy to adopt with missing values, as a single string.
-#'  \itemize{
-#'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
-#'   are printed as explicit "NA" level.
-#'   \item \code{"drop"}: removes NA of row, col and tab variables.
-#'   }
-#' @param totaltab The total table,
-#' if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
-#'  \itemize{
-#'   \item \code{"line"}: by default, add a general total line (necessary for
-#'   calculations with \code{comp = "all"})
-#'   \item \code{"table"}: add a complete total table
-#'  (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-#'   \item \code{"no"}: not to draw any total table.
-#'  }
-#' @param totaltab_name The name of the total table, as a single string.
-#' @param tot The totals :
-#'  \itemize{
-#'   \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-#'   columns.
-#'   \item \code{"row"}: only total rows.
-#'   \item \code{"col"}: only total column.
-#'   \item \code{"no"}: remove all totals (after calculations if needed).
-#'  }
-#' @param total_names The names of the totals, as a character vector of length one or two.
-#' Use syntax of type \code{c("Total row", "Total column")} to set different names for
-#' rows and cols.
-#' @param pct The type of percentages to calculate :
-#'  \itemize{
-#'   \item \code{"row"}: row percentages.
-#'   \item \code{"col"}: column percentages.
-#'   \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
-#'   \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-#' }
-#' @param ref The reference cell to calculate differences and ratios
-#'  (used to print \code{colors}) :
-#'  \itemize{
-#'   \item \code{"auto"}: by default, cell difference from the corresponding total
-#'   (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-#'   used for `diff` ; cell ratio from the first line (or col) is use for `OR`
-#'   (odds ratio/relative risks ratio).
-#'   \item \code{"tot"}: totals are always used.
-#'   \item \code{"first"}: calculate cell difference or ratio from the first cell
-#' of the row or column (useful to color temporal developments).
-#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
-#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-#' Resolved inside each subtable when there are \code{tab_vars}.
-#'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
-#'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
-#'   to match with the names of the rows (or columns). Be precise enough to match only one
-#'   column or row, otherwise you get a warning message.
-#'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-#' }
-#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
-#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
-#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
-#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
-#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
-#' @param comp Comparison level. When \code{tab_vars} are present, should the
-#' contributions to variance be calculated for each subtable/group (by default,
-#'  \code{comp = "tab"}) ? Should they be calculated for the whole table
-#'  (\code{comp = "all"}) ?
-#'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-#'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param subtext A character vector to print rows of legend under the table.
-#' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
-#' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
-#' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
-#' correspondence analysis with \pkg{FactoMineR}.
-#' @param design_effect See \code{\link{tab}}: whether a \strong{weighted} table's intervals account
-#' for the weighting's own design effect. \code{NULL} (default) takes
-#' \code{options("tabxplor.design_effect")}.
-#' @param display A \code{{}} display template applied to the built table -- the same grammar
-#'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
-#'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
-#' @param color_signif How significance interacts with `color`:
-#' \code{"ignore"} (default), \code{"grey_non_signif"} or \code{"guaranteed_effect"}.
-#' See \code{\link{tab}}.
-#' @param .fine,.by_table Internal. `.fine` is a pre-computed count-aggregate to roll up from
-#' instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
-#' `.by_table` forces the table-by-table path.
-#'
-#' @inheritParams tab
+#' @eval tab_args_rd("tab_plain")
+#' @param ... Every other argument of [tab()] -- `pct`, `color`, `ci`, `tot`, ... -- passed
+#'   by name. See [tab()]; a typo gets a suggestion.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -151,18 +60,18 @@
 #'   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
 #'   tab_chi2()
 #' }
-tab_plain <- function(data, row_var, col_var, tab_vars, wt,
-                      pct = "no", color = "no", display = NULL, OR = "no",
-                      na = "keep",
-                      ref = "auto", ref2 = "first", comp = "tab",
-                      totaltab = "line", totaltab_name = "Ensemble",
-                      tot = NULL, total_names = "Total",
-                      subtext = "", digits = 0,
-                      num = FALSE, df = FALSE,
-                      ci = "auto", conf_level = conf_level_default(), stars = NULL,
-                      ci_method = NULL, design_effect = NULL, color_signif = "ignore",
-                      .fine = NULL, .by_table = FALSE
+tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
+                      num = FALSE, df = FALSE, .fine = NULL, .by_table = FALSE
 ) {
+  # Phase 20b (KEY D): the ~22 arguments this leaf shares with tab() ride `...`, filled from their
+  # DECLARED defaults (TAB_ARGS, R/tab-args.R) -- including the ones that legitimately differ here.
+  # Every leading positional slot is untouched, and `...` starts exactly where the shared arguments
+  # begin, so no call that works today changes meaning; what changes is that a typo now gets a
+  # suggestion instead of R's bare "unused argument".
+  .d <- rlang::list2(...)
+  tab_check_dots(.d, "tab_plain")
+  list2env(tab_dots_expand(.d, "tab_plain"), environment())
+
   # Phase 18z14-i: a survey design as `data` is unwrapped FIRST -- tidyselect must see a data frame.
   # On the tab() pipeline path `data` is already a frame, so this is a single inherits() and a no-op.
   # The design itself is not used here yet (tab_plain has no test); its weights are, which is what
@@ -175,10 +84,14 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   .a <- tab_resolve_common_args(
     "tab_plain", color = color, color_signif = color_signif, stars = stars,
     conf_level = conf_level, OR = OR, display = display, ref = ref, ref2 = ref2,
-    tot = tot, total_names = total_names, na = na, pct = pct, comp = comp, totaltab = totaltab,
+    tot = tot, na = na, pct = pct, comp = comp, totaltab = totaltab,
+    total_names   = .d$total_names,
+    totaltab_name = .d$totaltab_name,
+    other_level   = .d$other_level,
     ci = ci, ci_method = ci_method, user_env = rlang::caller_env())
   stars <- .a$stars ; display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
-  total_names <- .a$total_names ; ci_method <- .a$ci_method
+  total_names <- .a$total_names ; ci_method <- .a$ci_method ; conf_level <- .a$conf_level
+  totaltab_name <- .a$totaltab_name
 
   # Phase 19l: THE shared NSE preamble (leaf_defuse_vars, below) -- one rule for the three producers.
   .v <- leaf_defuse_vars(data, rlang::enquo(row_var), rlang::enquo(col_var),
@@ -1816,104 +1729,9 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' Means table
 #' @description Cross categorical variables with numeric variables, and get a table
 #' of means and standard deviations.
-#' @param data A data frame.
-#' @param row_var The row variable, which will be printed with one level per line. If
-#' numeric, it will be used as a factor.
-#' @param col_vars The numeric variables, which will appear in columns :
-#' means and standard deviation are calculated for each levels of `row_var` and `tab_vars`.
-#' @param tab_vars  <\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-#' a subtable is made for each combination of levels of the
-#' selected variables. Leave empty to make a simple cross-table. All tab variables
-#' are converted to factor.
-#' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param digits The number of digits to print, as a single integer, or an integer vector the
-#' same length as \code{col_vars}.
-#' @param na The policy to adopt for missing values in row and tab variables (factors),
-#' as a single string.
-#'  \itemize{
-#'   \item \code{"keep"}: by default, \code{NA}'s of row and tab variables
-#'   are printed as an explicit `"NA"` level.
-#'   \item \code{"drop"}: remove `NA`'s in row and tab variables.
-#'   }
-#' `NA`s in numeric variables are always removed when calculating means. For that reason
-#' the `n` field of each resulting \code{\link{fmt}} column, used to calculate confidence
-#' intervals, only takes into account the complete observations (without `NA`).
-#' To drop all rows with `NA` in any numeric variable first, use \code{\link{tab_prepare}}
-#' or the superseded \code{\link{tab_many}}'s `na_drop_all` argument.
-#' @param totaltab The total table,
-#' if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
-#'  \itemize{
-#'   \item \code{"line"}: by default, add a general total line (necessary for
-#'   calculations with \code{comp = "all"})
-#'   \item \code{"table"}: add a complete total table
-#'  (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-#'   \item \code{"no"}: not to draw any total table.
-#'  }
-#' @param totaltab_name The name of the total table, as a single string.
-#' @param tot The totals :
-#'  \itemize{
-#'   \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-#'   columns.
-#'   \item \code{"row"}: only total rows.
-#'   \item \code{"col"}: only total column.
-#'   \item \code{"no"}: remove all totals (after calculations if needed).
-#'  }
-#' @param total_names The names of the totals, as a character vector of length one or two.
-#' Use syntax of type \code{c("Total row", "Total column")} to set different names for
-#' rows and cols.
-#' @param ref The reference cell to calculate differences and ratios
-#'  (used to print \code{colors}) :
-#'  \itemize{
-#'   \item \code{"auto"}: by default, cell difference from the corresponding total
-#'   (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-#'   used for `diff` ; cell ratio from the first line (or col) is use for `OR`
-#'   (odds ratio/relative risks ratio).
-#'   \item \code{"tot"}: totals are always used.
-#'   \item \code{"first"}: calculate cell difference or ratio from the first cell
-#' of the row or column (useful to color temporal developments).
-#'   \item \code{"last"}: the mirror of \code{"first"} — the **last level** of the row (or column)
-#' variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-#' Resolved inside each subtable when there are \code{tab_vars}.
-#'   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
-#'   \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
-#'   to match with the names of the rows (or columns). Be precise enough to match only one
-#'   column or row, otherwise you get a warning message.
-#'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-#' }
-#' @param comp Comparison level. When \code{tab_vars} are present, should the
-#' contributions to variance be calculated for each subtable/group (by default,
-#'  \code{comp = "tab"}) ? Should they be calculated for the whole table
-#'  (\code{comp = "all"}) ?
-#'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-#'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param color Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
-#'   grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
-#'   \code{c("difference", "ratio")} vector). For numeric means the useful measures are
-#'   \code{"difference"} (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio);
-#'   \code{TRUE} uses \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.
-#' @param display A \code{{}} display template applied to the built table -- the same grammar
-#'   \code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
-#'   or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.
-#' @param color_signif How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
-#'   / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.
-#' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
-#' @param subtext A character vector to print rows of legend under the table.
-#' @param conf_level The confidence level for the confidence intervals,
-#'  as a single numeric between 0 and 1. Default to 0.95 (95%).
-#' @param ci_method,design_effect See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
-#'  slots of \code{ci_method} are meaningful here (a numeric table has no proportion interval).
-#' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
-#' With \code{ci = "ref"}, print per-cell Welch t significance stars for the difference from the
-#' reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).
-#' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not `fmt`).
-#' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a `tibble`),
-#' with normal numeric vectors (not `fmt`). Useful, for example, to pass the table to
-#' correspondence analysis with \pkg{FactoMineR}.
-#' @param .fine,.by_table Internal. `.fine` is a pre-computed moment-sum aggregate (from
-#' \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; `.by_table` forces
-#' the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.
-#'
-#' @inheritParams tab
+#' @eval tab_args_rd("tab_num")
+#' @param ... Every other argument of [tab()] -- `color`, `ci`, `tot`, `digits`, ... -- passed
+#'   by name. See [tab()]; a typo gets a suggestion.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -1930,19 +1748,16 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #' tab_num(data, category, wind, tot = "row",
 #'         color = "difference", color_signif = "guaranteed_effect")
 #' }
-tab_num <- function(data, row_var, col_vars, tab_vars, wt,
-                    color = "auto", display = NULL, color_signif = "ignore",
-                    anova = NULL,
-                    na = c("keep", "drop"),
-                    ref = "tot", comp = c("tab", "all"),
-                    ci = "auto", conf_level = conf_level_default(), stars = NULL, #ci_visible = FALSE,
-                    ci_method = NULL, design_effect = NULL,
-                    totaltab = "line", totaltab_name = "Ensemble",
-                    tot = NULL, total_names = "Total",
-                    subtext = "", digits = 0, num = FALSE, df = FALSE,
-                    color_breaks = NULL,
-                    .fine = NULL, .by_table = FALSE
+tab_num <- function(data, row_var, col_vars, tab_vars, wt, ...,
+                    num = FALSE, df = FALSE, .fine = NULL, .by_table = FALSE
 ) {
+  # Phase 20b: see tab_plain(). This leaf's own starting points -- `color = "auto"`, `ref = "tot"`,
+  # `comp = c("tab", "all")`, `na = c("keep", "drop")` -- are declared as `default_for` entries in
+  # TAB_ARGS, so moving the formals into `...` kept them instead of silently adopting tab()'s.
+  .d <- rlang::list2(...)
+  tab_check_dots(.d, "tab_num")
+  list2env(tab_dots_expand(.d, "tab_num"), environment())
+
   # Phase 18z14-i: unwrap a survey design FIRST -- see tab_plain(); a no-op on the pipeline path.
   svy       <- svy_unwrap_data(data, "tab_num")
   if (!is.null(svy)) data <- svy$data
@@ -1955,11 +1770,15 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   .a <- tab_resolve_common_args(
     "tab_num", color = color, color_signif = color_signif, ci = ci, stars = stars,
     conf_level = conf_level, ci_method = ci_method, display = display, ref = ref,
-    tot = tot, total_names = total_names, na = na[1], comp = comp[1], totaltab = totaltab,
+    tot = tot, na = na[1], comp = comp[1], totaltab = totaltab,
+    total_names   = .d$total_names,
+    totaltab_name = .d$totaltab_name,
+    other_level   = .d$other_level,
     anova = anova, user_env = rlang::caller_env())
   ci_method <- .a$ci_method ; stars <- .a$stars ; display <- .a$display ; ref <- .a$ref
   total_names <- .a$total_names ; na <- .a$na ; comp <- .a$comp
   color_spec <- .a$color_spec ; color <- .a$color
+  conf_level <- .a$conf_level ; totaltab_name <- .a$totaltab_name
 
   # Phase 19l: THE shared NSE preamble (leaf_defuse_vars, above). `plural = TRUE` -> several col_vars
   # + their tidyselect positions, which is the ONE thing this leaf needs that the factor one does not.

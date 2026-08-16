@@ -583,7 +583,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 # span header, the single-row_var header, and the merged row_var name column.
 #' @keywords internal
 var_label_display <- function(x, tab) {
-  if (!isTRUE(getOption("tabxplor.var_labels", FALSE))) return(x)
+  if (!isTRUE(tx_option("var_labels"))) return(x)
   labs <- get_vars_attr(tab)[["var_labels"]]
   if (is.null(labs) || length(labs) == 0L) return(x)
   hit <- !is.na(x) & x %in% names(labs)
@@ -786,11 +786,11 @@ tx_strip_dep_suffix <- function(x) sub(" \\[[^]]*\\]$", "", x)
 tx_num_font <- function(medium = c("html", "xl", "plot"), has_stars = FALSE,
                         plain = NULL, stars = NULL) {
   switch(match.arg(medium),
-    html = getOption("tabxplor.tab_kable_num_font", tx_num_font_html_stars),
-    xl   = if (isTRUE(has_stars)) stars %||% getOption("tabxplor.xl_font_num_stars", "Cascadia Mono")
-           else                   plain %||% getOption("tabxplor.xl_font_num", "DejaVu Sans"),
+    html = tx_option("tab_kable_num_font"),
+    xl   = if (isTRUE(has_stars)) stars %||% tx_option("xl_font_num_stars")
+           else                   plain %||% tx_option("xl_font_num"),
     # "" keeps the ggpubr default: tab_plot() has no per-column font, so a plain table is left alone
-    plot = if (isTRUE(has_stars)) getOption("tabxplor.plot_num_font", "Cascadia Mono") else "")
+    plot = if (isTRUE(has_stars)) tx_option("plot_num_font") else "")
 }
 
 # roles_color_flags() -- Phase 19h: THE colour flags of the render model, one producer for the prep
@@ -854,7 +854,7 @@ resolve_export_opts <- function(theme = NULL,
                                 var_names = NULL,
                                 allow_auto = FALSE) {
   theme <- tx_theme_resolve(theme, allow_auto = allow_auto)
-  if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")
+  if (is.null(var_names)) var_names <- tx_option("var_names")
   var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
   color <- isTRUE(color)
   list(theme = theme,

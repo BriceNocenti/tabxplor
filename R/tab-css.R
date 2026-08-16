@@ -59,9 +59,11 @@ tx_resolve_theme <- function(theme) {
 # picked the console theme.
 #' @keywords internal
 tx_theme_option <- function(scope = c("export", "console")) {
+  # 20b: the name chain AND the default come from TAB_OPTIONS (R/tabxplor-options.R), so a renamed
+  # option or a changed default reaches every reader and the help page at once.
   switch(match.arg(scope),
-    export  = tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light"),
-    console = tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light"))
+    export  = tx_option("theme"),
+    console = tx_getOption(tx_option_names("color_style_theme"), "light"))
 }
 
 # tx_theme_resolve() -- THE "auto" downgrade, in one place. `"auto"` means "follow the reader",
@@ -664,7 +666,7 @@ tab_css <- function(theme = NULL, format = c("html", "md"),
   # z11: NULL -> option is the package idiom (cf. engine / popover / css / tooltips), and it is why
   # tab_html()/tab_md() need NO argument of their own -- they call tab_css() internally, so a user with
   # a colour printer sets options(tabxplor.print_rules = FALSE) once for a whole document.
-  if (is.null(print_rules)) print_rules <- getOption("tabxplor.print_rules", TRUE)
+  if (is.null(print_rules)) print_rules <- tx_option("print_rules")
   css <- tx_css_render(tx_css_rules(chrome = chrome), o$theme, chrome = chrome,
                        print_rules = print_rules)
   if (isTRUE(style_tag)) css <- paste0("<style>\n", css, "\n</style>")

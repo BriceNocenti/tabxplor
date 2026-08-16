@@ -107,18 +107,25 @@ tab_xl <-
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = 10, color_legend = TRUE,
            sheets = "auto", titles, caption = NULL,
-           font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
-           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans"),
-           font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
+           font_text = NULL, font_num = NULL, font_num_stars = NULL,
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            theme = NULL,
            color = TRUE,
            transpose = FALSE, var_names = NULL,
-           or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
+           or_numeric = NULL,
            print_color_legend = lifecycle::deprecated(), ...) {
 
     # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
     tx_deprecate_inert(rlang::list2(...), "tab_xl")
+
+    # 20b: ONE default idiom on the public surface -- an option-backed argument says `NULL` and the
+    # value comes from the declared table (TAB_OPTIONS, R/tabxplor-options.R). These four used to
+    # spell `getOption("tabxplor.xl_*", <a literal repeated in .onLoad and in ?tabxplor-options>)`
+    # in the formal itself, which is the third of the three idioms 20b collapsed.
+    font_text      <- font_text      %||% tx_option("xl_font_text")
+    font_num       <- font_num       %||% tx_option("xl_font_num")
+    font_num_stars <- font_num_stars %||% tx_option("xl_font_num_stars")
+    or_numeric     <- or_numeric     %||% tx_option("xl_or_numeric")
 
     # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
     .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)

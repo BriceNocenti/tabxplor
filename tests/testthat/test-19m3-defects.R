@@ -115,7 +115,8 @@ testthat::test_that("the survey variance producers stopped promising a configura
 testthat::test_that("a renamed total column still keeps its odds ratio (19m-i, still closed)", {
   # the regression this phase must not undo while touching the Total convention.
   t1 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{or}", ref = "first")
-  t2 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{or}", ref = "first",
-            total_names = c("Total", "Ensemble"))
+  # 20b: the totals are renamed through the option now, not through `total_names =`.
+  withr::local_options(tabxplor.total_names = c(row = "Total", col = "Ensemble"))
+  t2 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{or}", ref = "first")
   testthat::expect_equal(get_or(t1[[2]]), get_or(t2[[2]]))
 })

@@ -569,6 +569,15 @@ R/
 │                              geometry, so none is a `ci_method` a user picks). Holds every
 │                              cross-TABLE edge; a table's SELF-consistency stays beside it (the
 │                              seven intra-table stopifnot blocks are listed in the header).
+│                              20b: +6 edges into the ARGUMENT surface (TAB_ARGS' `values_from` /
+│                              `values_rd` / `option` / `doc_with` / `pct$stored`, and TAB_OPTIONS'
+│                              `arg`) + **tx_check_tab_args()** = the anti-drift check the generated
+│                              `@param` blocks rest on: every covered producer's FORMALS and its
+│                              declared TAB_ARGS rows are the same set, and every surviving formal's
+│                              default IS the declared one. ⚠ it must live HERE and not beside
+│                              TAB_ARGS -- `formals(tab)` does not exist while R/tab-args.R is being
+│                              sourced. ⚠ rlang::is_missing(), never is.symbol(): merely touching a
+│                              no-default formal raises "argument is missing".
 ├── tab-counts.R     (~430 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize.
 │                              19i: its ~15 copy-pasted boundary lines are ONE
@@ -582,7 +591,8 @@ R/
 │                              19i: **tab_resolve_common_args()** = what every crosstab producer
 │                              must do to its arguments, run once, by tab() / tab_plain() / tab_num()
 │                              / tab_counts() (5 hand-written copies that had drifted -> 1): the
-│                              chi2->test rename, **TAB_ARG_VALUES** + tab_validate_args() (the
+│                              chi2->test rename, TAB_ARG_VALUES (DERIVED from TAB_ARGS since 20b)
+│                              + tab_validate_args() (the
 │                              vocabulary AS DATA: `values` / `leaf` / `size` / `na_ok` per argument,
 │                              so `totaltab`/`n_min`/`conf_level`, validated NOWHERE before, abort
 │                              naming the valid set), resolve_cleannames/_stars/_ci_method, the `OR`
@@ -883,16 +893,61 @@ R/
 │                              NOT an inline max-width (would out-specify @media). 15c-ii: OS-scaling-
 │                              aware cap via @media (device-width) tiers (CSS px = already scaled; screen
 │                              not iframe-viewport = no feedback loop); base cap stands if unsupported.
-├── utils.R         (~755 L)  .onLoad() options setup + tx_getOption() (17j: the ONE option-synonym
-│                              resolver -- first name set wins, seeded/canonical LAST; backs the
-│                              tab_kable_css [was kable_css] rename + the console_theme/export_theme
-│                              silent aliases), factor/list utilities, tx_str_wrap/tx_str_trunc
+├── utils.R         (~600 L)  .onLoad() (20b: it SEEDS FROM TAB_OPTIONS -- ~35 hand-written
+│                              options() calls gone; tx_getOption() moved to R/tab-options.R with
+│                              the rest of the subsystem, because tab.R's top-level tail reaches it
+│                              while the namespace is still being SOURCED), factor/list utilities,
+│                              tx_deprecate_inert/tx_user_call, tx_str_wrap/tx_str_trunc
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
 │                              they live in dev/color_palette_tools.R and must stay there -- they
 │                              are the sole reason the package would depend on farver + colorspace.
-├── tabxplor-options.R (~170 L) Doc-only page `?tabxplor-options`: every tabxplor.* global option
-│                              (defaults live in .onLoad; keep in sync). Cross-linked from ?tab.
+├── tab-options.R    (~430 L) Phase 20b (KEY 1): THE option subsystem -- **TAB_OPTIONS**, one row
+│                              per option (`default` · `section` · `arg` = its per-call twin ·
+│                              `alias` = the tx_getOption synonym chain · `seed` =
+│                              always/if_unset/elsewhere/no · `doc`), plus tx_getOption /
+│                              tx_option / tx_option_names / tx_option_default, tx_seed_options()
+│                              (what .onLoad calls) and tab_options_rd() (the `@eval` that
+│                              GENERATES `?tabxplor-options`). One option was three hand-written
+│                              places -- an options() call, an \item{}, and a default restated in
+│                              the prose -- kept in step by a comment saying "keep this in sync";
+│                              the DEFAULT and the "Per-call `x =`" sentence are rendered from the
+│                              row now, so neither can drift. ~25 call sites that respelled a
+│                              default (`getOption("tabxplor.anova", "welch")`) read tx_option().
+│                              +`tabxplor.total_names` (the four synthetic labels, ONE partial
+│                              named vector) and `tabxplor.stars` absorbing signif_levels +
+│                              signif_labels (tx_stars_ladder = the ONE reader; the retired pair
+│                              still wins if a user set it). ⚠ THE FILE NAME IS LOAD-BEARING: it
+│                              must sort before `tab.R` ('-' < '.'), because tab.R's DERIVED
+│                              globalVariables() tail calls new_ctx() -> conf_level_default() ->
+│                              tx_option() AT SOURCE TIME -- which is also why every computed
+│                              `default` is a CLOSURE.
+├── tab-args.R      (~1000 L) Phase 20b (KEY 1 + KEY 8): THE argument surface as data.
+│                              **TAB_ARGS** = one row per public argument of the crosstab producers
+│                              (`producers` · `status`, which may be NAMED when an argument is
+│                              deprecated on ONE producer -- `row_var` is a deprecated alias on
+│                              tab() and the REAL formal of the leaves · `default` + `default_for`
+│                              · `values`/`leaf`/`size`/`na_ok` · `values_from` = the fact table
+│                              that OWNS the vocabulary · `values_rd` = its renderer · `option` ·
+│                              `check` · `doc`, moved VERBATIM · `doc_with` · `validate`).
+│                              THE RULE: *the fact table owns the VOCABULARY, TAB_ARGS owns the
+│                              ARGUMENT*. **TAB_ARG_VALUES is DERIVED from it**, contents and order
+│                              intact (the DISPLAY_TOKENS precedent), so its four readers did not
+│                              move; `validate = FALSE` is what keeps `ci` and `input` out of it
+│                              (their own resolvers rewrite/partial-match them).
+│                              **tab_args_rd(producer)** = the `@eval` generator behind every
+│                              producer's `@param` block -- ORDER from formals(), SET asserted
+│                              equal to the declared one at load. **tab_check_dots()** = the
+│                              validator that makes `...` a net gain (an unnamed argument refused
+│                              by position, an unknown one refused with a suggestion -- and the
+│                              suggester must match PREFIXES too, since a formal after `...` loses
+│                              R's partial matching). **tab_dots_expand()** fills an unsupplied
+│                              argument from its declared default, which is why the leaves kept
+│                              their own (`tab_num` starts at color="auto", ref="tot").
+│                              +color_measures_rd (from MEASURES' new `doc` member, filtered by
+│                              `producers`) and color_signif_rd; `{VALUES}` in a `doc` is where the
+│                              generated list is spliced. ⚠ read the rows with `[[`, never `$`:
+│                              `r$values` partial-matches `values_from`.
 ├── tab_reg.R       (~5460 L)  Phase 12c–12h: unified regression tables. 19m-ii moved the ARGUMENT
 │                              BOUNDARY out to R/reg-resolve.R, so `tab_reg()` itself is 147 lines
 │                              (was 821) holding ONE user message (was 30): the retired-args guard,
@@ -1836,10 +1891,12 @@ I want you to  **drastically** simplify comments, **dividing their global length
 #### Phase 22f — Tests simplification
 - testthat tests have grown organically, it was right for development, but would slow future dev for no real benefits: I want you to select the tests that are really necessary , and to move the others to a unique script not run with `test`. **The full suite must go below 20 seconds** (parallelised, on this computer).
 
-#### Phase 22g — `dev/` folder simplification
+#### Phase 22g — `dev/` folder and `CLAUDE.md` simplification
 Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
 - Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
 - Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
+
+Also simplify CLAUDE.md.
 
 ### Phase 2{x} — release
 
@@ -2132,6 +2189,152 @@ what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_s
 ---
 
 
+
+#### Phase 20b — KEY 1 + KEY 8: the argument surface as data
+
+**DONE (2026-08-16), both parts.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6696**, against the
+inherited FAIL 0 / WARN 58 / PASS 6626 — same warning count, +70 assertions, nothing red.
+`dev/verify_tab_args.R` reports the **declared delta and nothing else**: two new keys on every
+resolver case (`totaltab_name`, `other_level`) and one changed message (`unused_arg`, which is the
+new suggestion) — ⚠ **`columns` is UNCHANGED across all 52 built tables**, which is the gate that
+matters: an argument that survives resolution but stops reaching a column shows up there and nowhere
+else. `dev/verify_color_attrs.R` **IDENTICAL** (293 cases), goldens untouched, `_snaps/` untouched,
+`document()` idempotent, `tools::checkDocFiles()` **silent**.
+
+**Formals: 149 → 80** across the five crosstab producers (`tab` 52 → 36 + `...`, `tab_plain` 29 → 9
++ `...`, `tab_num` 28 → 9 + `...`, `tab_counts` 40 → 10 + `...`, `tab_many` unchanged).
+**`man/` 7 318 → 6 801** (`tab_plain.Rd` 279 → 78, `tab_num.Rd` 208 → 70, `tab_counts.Rd` 137 → 92,
+`tab.Rd` 693 → 636). `R/` grows **+533 lines**, which is expected and is not the metric (§2).
+
+**The declaration (part 1, byte-identical to behaviour).**
+
+- **`R/tab-args.R`** — **`TAB_ARGS`**, 67 rows, one per public argument of the five producers. The
+  rule that keeps it from swallowing the fact tables is stated in its header: ***the fact table owns
+  the VOCABULARY, TAB_ARGS owns the ARGUMENT*** — `MEASURES` knows what `difference` is; `TAB_ARGS`
+  knows that `color` is an argument of four producers, which table names its values, and how to say
+  so in a help page.
+- **`TAB_ARG_VALUES` is DERIVED from it**, contents *and order* intact (the `DISPLAY_TOKENS`
+  precedent), so `tab_validate_args()`, `tab_deprecate_many()`, `tab_ci()`'s totcol guard and
+  `test-jamovi-vocabulary.R` did not move — and a frozen copy of the 19i literal is now a fixture.
+  `validate = FALSE` is what keeps `ci` and `input` out of it: both are DECLARED here (so
+  `resolve_ci_value()` stops spelling `c("auto","no","cell","ref")` twice in its own body) but
+  validated by their own resolvers, because one rewrites its values and the other partial-matches.
+- **`tab_args_rd(producer)`** — the fourth use of the `reg_measures_rd()` pattern, and the first to
+  emit `@param` tags rather than an `@section` (spiked first; roxygen2 8.0.0 processes markdown,
+  links and `\itemize{}` through `@eval` unchanged). The **order is `formals()`** — better than the
+  proposed `group` column, because it matches `\usage{}` *and* is self-checking. ⚠ Which is why
+  **there is deliberately no `group` column**: it was left with no reader, and a column with no
+  reader is weight, not a fact (19b's admission test), so it is not there.
+- **`color_measures_rd()` / `color_signif_rd()`** read `MEASURES` (which gains a `doc` member, in
+  its existing exhaustiveness `stopifnot`) and `COLOR_SIGNIF_VALUES`. A `"{VALUES}"` element in a
+  `doc` is *where* the generated list is spliced — an argument's value list sits mid-paragraph, with
+  the grammar explained after it, so appending would have been wrong. The `(default)` marker is
+  derived from the vocabulary's first entry, the convention `CI_METHODS` already uses.
+- **`R/tabxplor-options.R` → `R/tab-options.R`, and it stops being doc-only**: **`TAB_OPTIONS`**,
+  34 rows × (`default` · `section` · `arg` · `alias` · `seed` · `doc`). `.onLoad()` **seeds from
+  it** (−35 hand-written `options()` calls), `?tabxplor-options` is **`@eval`-generated** from it,
+  and the DEFAULT and the "Per-call `x =`" sentence are *rendered* rather than typed — which is what
+  the deleted *"keep this in sync with .onLoad()"* comment used to ask a reader to do by hand.
+  ~25 call sites that respelled a default (`getOption("tabxplor.anova", "welch")`) read
+  `tx_option()` now, and the three `tx_getOption()` alias chains read `tx_option_names()`.
+- ⚠ **The file name is load-bearing, and this cost two failed loads to find**: `tab.R` sorts
+  *before* `tabxplor-options.R` but *after* `tab-options.R`, and `tab.R`'s DERIVED
+  `globalVariables()` tail calls `new_ctx()` → `conf_level_default()` → `tx_option()` **at source
+  time**. That is also why every computed `default` is a **closure**, and why `tx_getOption()` moved
+  out of `utils.R` (which sorts last of all) into the option subsystem it belongs to.
+
+**The signatures (part 2).**
+
+- **`...` sits right after `wt`**, so **R itself** enforces "everything past the variable roles is
+  named" — §7.1's unnamed-6th-argument guard, with no hand-written guard. Nothing is lost: position
+  6 was `sup_cols`, so no *live* argument was ever reachable positionally past `wt`.
+- ⚠ **The plan-of-plans' leaf sketch was wrong and would have broken released positional calls** —
+  it moved `num`/`df` to positions 6/7 of `tab_plain()` (they are 20/21) and dropped
+  `row_var`/`col_var`/`tab_vars` from `tab_counts()`' first four slots. Every leading positional slot
+  is kept instead, and `...` begins exactly where the *shared* arguments begin.
+- **`tab_check_dots()`** is what makes `...` a net gain: an unnamed argument refused **by position**,
+  an unknown one refused **with a suggestion**. ⚠ The suggester must match **prefixes** as well as
+  edit distance — a formal sitting after `...` loses R's partial matching, so an abbreviation that
+  used to bind silently (`color_br =`) now arrives here and must be *named*, not merely refused.
+- **`tab_dots_expand()`** fills an unsupplied argument from its **declared** default. That column
+  exists because the mirrors documented themselves as "same meaning as in `tab()`" while their
+  DEFAULTS were not all the same and nothing said which: `tab_num()` alone starts from
+  `color = "auto"`, `ref = "tot"`, `comp = c("tab","all")`, `na = c("keep","drop")`, and both leaves
+  from `tot = NULL`. Moving the formals into `...` would have thrown that away silently.
+- **`options(tabxplor.total_names = c(row=, col=, tab=, other=))`** replaces three released formals
+  (caught by name, deprecated with a message that names the **option**, lossless). A partial vector
+  is completed from the declared default. The jamovi bridge installs it for the duration of one
+  build instead of passing three arguments — the module speaks `tab()`'s current vocabulary, which
+  is the point of the teaching path.
+- **`options(tabxplor.stars)` absorbs `signif_levels` + `signif_labels`** (3 → 1). `tx_stars_ladder()`
+  is the one reader; the retired pair is no longer seeded and still wins if a user set it.
+  ⚠ `stars = <numeric>` **aborts naming the option** rather than being ignored: the ladder is a
+  render-time reading of the stored p-value, so a per-call one would be a per-column stored fact —
+  deliberately not built (maintainer's ruling: re-reading every table you already have is the better
+  contract).
+- **`conf_level` is one idiom now**: every public producer says `NULL` and
+  `tab_resolve_common_args()` resolves it. `conf_level_default()` survives as the *internal* default.
+- **`?tab` states `pct`'s `"no"` default** and why (a bare `tab()` is a table of counts).
+
+**KEY 2 grows with the phase, which is the discipline it exists for**: 6 new edges into the argument
+surface (`values_from` / `values_rd` / `option` / `doc_with` / `pct$stored`, and `TAB_OPTIONS$arg`)
+plus **`tx_check_tab_args()`** — every covered producer's FORMALS and its declared rows are the same
+set, and every surviving formal's default **is** the declared one. ⚠ It lives in `zzz-fact-keys.R`
+and not beside `TAB_ARGS` because `formals(tab)` does not exist while `R/tab-args.R` is being
+sourced. Both halves are proved to bite by fixtures.
+
+**Three defects found and fixed, each with the fixture that fails without it.**
+
+1. ⚠ **`tab(row_var = )`'s deprecation silently stopped firing** — `row_var` is a **prefix** of the
+   live `row_vars`, and R matches a partial name against the formals **before** `...`, so it never
+   reached `.dots`: the argument still did exactly the right thing and only the nudge was lost. It is
+   read off `names(sys.call())` now. **This is 20a's first defect one level up** (three deprecations
+   that had stopped firing), and it is the reason the harness dumps messages at all.
+2. ⚠ **`as.character()` strips names**, so `tab_total_names_merge(c(other = "Autres"))` filled the
+   slots *positionally* and silently renamed the total **row**. Caught by its own fixture before it
+   could ship.
+3. **The `$` partial-matching trap the `zzz-fact-keys.R` header warns about, hit again**:
+   `r$values` matches `values_from`, so three rows leaked into the derived `TAB_ARG_VALUES`. Every
+   read of a `TAB_ARGS` row uses `[[` now, and the header says so.
+
+⚠ **And one guard fired that nobody had thought about**: `test-non-ascii.R` exempts comments and
+checks *string literals*, so moving 360 lines of `@param` prose out of roxygen and into a `doc =`
+vector moved an em-dash across that line. It is a real property of this migration — any prose that
+becomes data becomes ASCII-checked — and it is worth knowing before 20h moves the exporters'.
+
+**HONEST CONCERNS.**
+
+- ⚠ **KEY 8 is only half landed, and that is a coverage gap, not a half-migration.** `TAB_ARGS`
+  covers the five crosstab producers; the **seven exporters and `tab_reg()` have not joined**, so
+  their `@param` blocks are still hand-written — 35 blocks for 7 concepts on the export side, and
+  `?tab_reg`'s 101-line colour block. There is no *duplicate* encoding (an exporter's `color` is a
+  logical, a different argument that happens to share a name), so hard rule 5 is not breached; but
+  the plan's `?tab_reg` −90 and the exporters' −125 Rd lines are **not delivered**. `color_measures_rd()`
+  exists and is filtered by `producers`, so `?tab_reg` is one `@eval` away. **Routed to 20h**, which
+  is the pass that re-runs the censuses anyway.
+- ⚠ **`var_labels` did not get its per-call argument** (§2.6). Measured: 5 new formals + ~12
+  threading edits through `prep_one_table()` / `tab_export_prep()` / the transpose, for an argument
+  with **0 corpus uses** — surface growth in a phase about shrinking it. **Routed to 20h**, where it
+  lands with the exporters' `TAB_ARGS` rows and costs one row instead of five formals.
+- **`tab.Rd` is 636, not the plan's ~490.** Prose moved verbatim (ruling 3), so the only saving on
+  that page is the generated value lists. The rest is 22d's editorial pass — which will now edit
+  **one table** instead of five files.
+- **A user's abbreviation of an argument after `...` is a behaviour change.** `tab(pct = "row",
+  col = "difference")` used to partial-match `color`; it now aborts with the full name in the
+  message. Deliberate (silent partial matching is how a value reaches the wrong argument) and in
+  `NEWS.md`, but it is the one thing here that can break a working script.
+- **`test-jamovi-vocabulary.R` stays GREEN** — 20b renamed no *value*, only re-homed the table, so
+  the 20g gate the plan warned about was not triggered. No `.a.yaml` / `.u.yaml` was touched, so **no
+  `jmvtools::prepare()` is needed**; 20g still owns the outstanding rebuild.
+- **`tab_dots_expand()` re-derives defaults on every leaf call** (a `tab_args_for()` scan + a
+  `formals()` call). Measured as noise against a build, but it is on the leaf's hot path if someone
+  ever calls `tab_plain()` in a tight loop — memoise it there if a profile ever says so.
+
+**FOLLOW-UPS.** 20c can start on this commit: `TAB_ARGS`' idiom exists, and its `status` /
+`default_for` / `doc_with` columns are exactly what a rename needs. 20h: the exporters' and
+`tab_reg()`'s `TAB_ARGS` rows, `var_labels`, and the deprecated-call corpus sweep (still 58).
+
+---
 
 #### Phase 20a — The floor: referential integrity, the exposed surface, the dead weight
 

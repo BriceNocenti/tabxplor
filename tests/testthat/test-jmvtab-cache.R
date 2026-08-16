@@ -48,6 +48,15 @@ jmv_oracle <- function(opts, data) {
                         if (length(opts$ref)) opts$ref else "auto")$ci
   wt_sym <- if (length(opts$wt)) rlang::sym(opts$wt) else NULL
   # Phase 19k: no translation left -- every option is passed under the name tab() gives it.
+  # 20b: the four synthetic labels are an option, exactly as jmv_tab3_build_armed() installs them.
+  .lbl <- c(row = opts$total_names[[1]],
+            col = opts$total_names[[min(2L, length(opts$total_names))]],
+            tab = opts$totaltab_name, other = opts$other_level)
+  .lbl <- .lbl[!vapply(.lbl, function(v) is.null(v) || !nzchar(v), logical(1))]
+  if (length(.lbl)) {
+    .old <- options(tabxplor.total_names = tabxplor:::tab_total_names_merge(.lbl))
+    on.exit(options(.old), add = TRUE)
+  }
   rlang::inject(tab(
     data, row_vars = tidyselect::all_of(opts$row_vars), col_vars = tidyselect::all_of(opts$col_vars),
     tab_vars = tidyselect::all_of(opts$tab_vars), wt = !!wt_sym, pct = opts$pct, color = color,
@@ -57,8 +66,7 @@ jmv_oracle <- function(opts, data) {
     ci_method = c(cell = opts$method_cell, diff = opts$method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
     other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
-    subtext = opts$subtext, totaltab_name = opts$totaltab_name, total_names = opts$total_names,
-    other_level = opts$other_level, output_list = isTRUE(opts$output_list)
+    subtext = opts$subtext, output_list = isTRUE(opts$output_list)
   ))
 }
 

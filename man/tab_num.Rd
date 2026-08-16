@@ -10,27 +10,9 @@ tab_num(
   col_vars,
   tab_vars,
   wt,
-  color = "auto",
-  display = NULL,
-  color_signif = "ignore",
-  anova = NULL,
-  na = c("keep", "drop"),
-  ref = "tot",
-  comp = c("tab", "all"),
-  ci = "auto",
-  conf_level = conf_level_default(),
-  stars = NULL,
-  ci_method = NULL,
-  design_effect = NULL,
-  totaltab = "line",
-  totaltab_name = "Ensemble",
-  tot = NULL,
-  total_names = "Total",
-  subtext = "",
-  digits = 0,
+  ...,
   num = FALSE,
   df = FALSE,
-  color_breaks = NULL,
   .fine = NULL,
   .by_table = FALSE
 )
@@ -38,153 +20,33 @@ tab_num(
 \arguments{
 \item{data}{A data frame.}
 
-\item{row_var}{The row variable, which will be printed with one level per line. If
-numeric, it will be used as a factor.}
+\item{row_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{col_vars}{The numeric variables, which will appear in columns :
-means and standard deviation are calculated for each levels of \code{row_var} and \code{tab_vars}.}
+\item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
+printed with one level per line, and the column variable(s), printed with one level per
+column. For numeric variables means are calculated, in a single column. Each accepts one
+variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
+tables are merged into one by default (see \code{output_list}).}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-a subtable is made for each combination of levels of the
-selected variables. Leave empty to make a simple cross-table. All tab variables
-are converted to factor.}
+a subtable is made for each combination of levels of the selected variables.
+Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{color}{Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
-grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
-\code{c("difference", "ratio")} vector). For numeric means the useful measures are
-\code{"difference"} (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio);
-\code{TRUE} uses \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.}
+\item{...}{Every other argument of \code{\link[=tab]{tab()}} -- \code{color}, \code{ci}, \code{tot}, \code{digits}, ... -- passed
+by name. See \code{\link[=tab]{tab()}}; a typo gets a suggestion.}
 
-\item{display}{A \code{{}} display template applied to the built table -- the same grammar
-\code{\link{tab}} takes (e.g. \code{"{or}"}, \code{"{pct} {ci}"}, \code{"{pct} (n={n})"}),
-or the type-adaptive alias \code{"num_ci"}. Display only: it never changes what is computed.}
+\item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).}
 
-\item{color_signif}{How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
-/ \code{"guaranteed_effect"}) -- see \code{\link{tab}}.}
-
-\item{anova}{Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
-\code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
-F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
-computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
-it changes which row is shown, never a number.}
-
-\item{na}{The policy to adopt for missing values in row and tab variables (factors),
-as a single string.
-\itemize{
-\item \code{"keep"}: by default, \code{NA}'s of row and tab variables
-are printed as an explicit \code{"NA"} level.
-\item \code{"drop"}: remove \code{NA}'s in row and tab variables.
-}
-\code{NA}s in numeric variables are always removed when calculating means. For that reason
-the \code{n} field of each resulting \code{\link{fmt}} column, used to calculate confidence
-intervals, only takes into account the complete observations (without \code{NA}).
-To drop all rows with \code{NA} in any numeric variable first, use \code{\link{tab_prepare}}
-or the superseded \code{\link{tab_many}}'s \code{na_drop_all} argument.}
-
-\item{ref}{The reference cell to calculate differences and ratios
-(used to print \code{colors}) :
-\itemize{
-\item \code{"auto"}: by default, cell difference from the corresponding total
-(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
-(odds ratio/relative risks ratio).
-\item \code{"tot"}: totals are always used.
-\item \code{"first"}: calculate cell difference or ratio from the first cell
-of the row or column (useful to color temporal developments).
-\item \code{"last"}: the mirror of \code{"first"} — the \strong{last level} of the row (or column)
-variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-Resolved inside each subtable when there are \code{tab_vars}.
-\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
-\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
-to match with the names of the rows (or columns). Be precise enough to match only one
-column or row, otherwise you get a warning message.
-\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-}}
-
-\item{comp}{Comparison level. When \code{tab_vars} are present, should the
-contributions to variance be calculated for each subtable/group (by default,
-\code{comp = "tab"}) ? Should they be calculated for the whole table
-(\code{comp = "all"}) ?
-\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
-
-\item{ci}{\strong{What the confidence interval is anchored on} -- one question, four answers. The
-\emph{geometry} of the interval is not asked here: it follows the comparison the table makes
-(\code{color}, then \code{display}), so an odds-ratio table gets an odds-ratio interval and a
-ratio-coloured one a Katz ratio interval, with no way for the two to disagree.
-\itemize{
-\item \code{"auto"} (default): an interval on the comparison when the table makes one
-(percentages by row/column, means), an absolute cell interval for plain frequencies, and
-none at all when nothing needs one.
-\item \code{"ref"}: the interval of the difference (or ratio, or odds ratio) between a cell
-and its reference -- the total cell, or the first cell under \code{ref = "first"}.
-\item \code{"cell"}: the absolute interval of the cell's own percentage or mean.
-\item \code{"no"}: no interval.
-}
-\code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
-\code{color_signif} have nothing to read: asking for either alongside them informs you once and
-disables it, rather than silently testing something else.
-Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
-use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
-dual, so the bracket and the stars always agree), and means the Welch t interval. With
-\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
-\code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
-also pins the ratio scale -- say \code{color = "ratio"} instead).}
-
-\item{conf_level}{The confidence level for the confidence intervals,
-as a single numeric between 0 and 1. Default to 0.95 (95\%).}
-
-\item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
-With \code{ci = "ref"}, print per-cell Welch t significance stars for the difference from the
-reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
-
-\item{ci_method, design_effect}{See \code{\link{tab}}. Only the \code{mean_diff} / \code{mean_ratio}
-slots of \code{ci_method} are meaningful here (a numeric table has no proportion interval).}
-
-\item{totaltab}{The total table,
-if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
-\itemize{
-\item \code{"line"}: by default, add a general total line (necessary for
-calculations with \code{comp = "all"})
-\item \code{"table"}: add a complete total table
-(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-\item \code{"no"}: not to draw any total table.
-}}
-
-\item{totaltab_name}{The name of the total table, as a single string.}
-
-\item{tot}{The totals :
-\itemize{
-\item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-columns.
-\item \code{"row"}: only total rows.
-\item \code{"col"}: only total column.
-\item \code{"no"}: remove all totals (after calculations if needed).
-}}
-
-\item{total_names}{The names of the totals, as a character vector of length one or two.
-Use syntax of type \code{c("Total row", "Total column")} to set different names for
-rows and cols.}
-
-\item{subtext}{A character vector to print rows of legend under the table.}
-
-\item{digits}{The number of digits to print, as a single integer, or an integer vector the
-same length as \code{col_vars}.}
-
-\item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not \code{fmt}).}
-
-\item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a \code{tibble}),
-with normal numeric vectors (not \code{fmt}). Useful, for example, to pass the table to
+\item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
+with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
 
-\item{color_breaks}{A per-table colour-threshold override -- see \code{\link{tab}}.}
-
-\item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
-\code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces
-the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.}
+\item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed count-aggregate to roll up from
+instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
+\code{.by_table} forces the table-by-table path.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

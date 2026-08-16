@@ -68,7 +68,8 @@ testthat::test_that("the lone total column is found by its stored flag, not by i
   testthat::expect_length(tot, 1L)
 
   # a total name carrying regex metacharacters must behave exactly like a plain one
-  t2 <- tab(gss, marital, race, pct = "row", total_names = c("Total", "Total (n)"))
+  withr::local_options(tabxplor.total_names = c(row = "Total", col = "Total (n)"))
+  t2 <- tab(gss, marital, race, pct = "row")
   tot2 <- which(purrr::map_lgl(t2, ~ is_fmt(.) && is_totcol(.)))
   testthat::expect_length(tot2, 1L)
   testthat::expect_identical(unname(get_num(t[[tot]])), unname(get_num(t2[[tot2]])))

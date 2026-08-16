@@ -15,49 +15,18 @@ tab_counts(
   col_name = "variable",
   base,
   input = c("counts", "pct"),
-  pct = "no",
-  color = "no",
-  color_signif = "ignore",
-  OR = "no",
-  test = FALSE,
-  na = "keep",
-  cleannames = NULL,
-  ref = "auto",
-  ref2 = "first",
-  comp = "tab",
-  ci = "auto",
-  conf_level = conf_level_default(),
-  stars = NULL,
-  ci_method = NULL,
-  totaltab = "line",
-  totaltab_name = "Ensemble",
-  tot = c("row", "col"),
-  total_names = "Total",
-  add_n = TRUE,
-  add_pct = FALSE,
-  common_totrow = FALSE,
-  subtext = "",
-  digits = 0,
-  n_min = 0,
-  display = NULL,
-  color_breaks = NULL,
-  spread_vars = character(),
-  names_prefix = NULL,
-  names_sort = FALSE,
-  chi2 = lifecycle::deprecated()
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame of counts, or a \code{table} / \code{xtabs} / \code{matrix} object.}
+\item{data}{A data frame.}
 
-\item{row_var}{The row variable (one level per line). For a \code{table} object it defaults to the
-first dimension.}
+\item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{col_var}{The column variable (one column per level). For a \code{table} object it defaults to
-the second dimension. Not used with \code{cols}.}
-
-\item{tab_vars}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Tab variables: a subtable is made for
-each combination of their levels.}
+\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
+a subtable is made for each combination of levels of the selected variables.
+Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
 
 \item{counts}{The column holding the \strong{unweighted} count for each cell (long tidy shape).}
 
@@ -74,22 +43,8 @@ holding the \code{col_var} levels.}
 \item{input}{\code{"counts"} (default) or \code{"pct"} (with \code{cols} and \code{base}: the level columns hold
 frequencies, and counts are rebuilt from them and \code{base}).}
 
-\item{pct, color, color_signif, OR, test, na, cleannames, ref, ref2, comp, ci, conf_level, stars, ci_method, totaltab, totaltab_name, tot, total_names, add_n, add_pct, common_totrow, subtext, digits, n_min, display, color_breaks, spread_vars}{Same meaning as in \code{\link[=tab]{tab()}}. \code{color} accepts every form \code{\link[=tab]{tab()}} does (\code{FALSE} / \code{TRUE} /
-a measure / \code{c(text, background)} / \code{list(pct =, mean =)}). Only \code{na = "keep"} / \code{"drop"} are
-available (\code{"drop_all"} / \code{"common_base"} need the microdata). The \code{\link[=tab]{tab()}} arguments that pick or
-collapse levels \emph{during the microdata prep} — which \code{tab_counts()} starts past — are not offered:
-\code{levels = "first"} / \code{"auto"} (keeping a subset of levels), \code{other_if_less_than} / \code{other_level}
-(lumping rare levels counts individual observations); build from microdata with \code{\link[=tab]{tab()}} for those.
-Likewise the microdata-only / numeric-mean-only arguments: \code{wt} (use \code{wt_counts}); a survey
-design as \code{data} (per-observation weights and structure a count table cannot carry -- it is
-refused with a message); \code{design_effect} (same reason: no per-observation weights); \code{parallel};
-\code{output_list}; \code{sup_cols}. The \code{mean_diff} / \code{mean_ratio} slots of \code{ci_method} are inert here
-(a counts table has no numeric column).}
-
-\item{names_prefix, names_sort}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} These belong to
-\code{\link{tab_spread}} — see \code{\link[=tab]{tab()}}.}
-
-\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 2.0.0 (see \code{\link[=tab]{tab()}}).}
+\item{...}{Every other argument of \code{\link[=tab]{tab()}} -- \code{pct}, \code{color}, \code{ci}, \code{tot}, ... -- passed
+by name. See \code{\link[=tab]{tab()}}; a typo gets a suggestion.}
 }
 \value{
 A \code{tabxplor_tab} (or \code{tabxplor_grouped_tab} when \code{tab_vars} are provided).
