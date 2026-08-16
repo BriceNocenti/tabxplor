@@ -515,10 +515,9 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 uses an auto worker count; an integer sets the number of worker processes. Byte-identical to
 the serial result. It pays off for \strong{many, evenly sized} models against a survey-size data
 frame, and is a loss otherwise (the pool costs about a second to start, and two uneven models
-cannot gain much). Some shapes are always serial and say so when asked: a model comparison
-(\code{stats = "compare_*"}) is a test \emph{between} the fits, and compared models with
-\code{empirical = TRUE} share one observed block. The worker pool persists for the session; release
-it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
+cannot gain much). One shape is always serial and says so when asked: a model comparison
+(\code{stats = "compare_*"}) is a test \emph{between} the fits, so they are built together. The worker
+pool persists for the session; release it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
 
 \item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
 cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()}

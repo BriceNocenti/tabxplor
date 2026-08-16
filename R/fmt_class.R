@@ -56,8 +56,9 @@ utils::globalVariables(c("var", "name", "size", "color",
                          "marital", "race", "partyid", "rincome", "relig"))
 
 # mirai daemon globals (R/tab-parallel.R): `tabx_opts`/`tabx_ship` are list2env()'d into each
-# daemon's .GlobalEnv by tab_pmap(); `.stop` is mirai_map()'s own collection selector.
-utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
+# daemon's .GlobalEnv by tab_pmap(). (`.stop`, mirai_map()'s abort-on-first-error selector, is gone
+# since Phase 20f-iiii: the trampoline catches its own error so that collection can complete.)
+utils::globalVariables(c("tabx_opts", "tabx_ship"))
 
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################

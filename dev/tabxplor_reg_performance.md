@@ -359,3 +359,94 @@ In a **multinomial** model comparison with `empirical`, specs 2..S have no crude
 spec 1's would be byte-identical only if every spec resolves the same `y_ref` — true today, stated
 nowhere — so it is left alone and routed to 20h rather than assumed. `reg_global_rows()`'s `drop1`
 refits (§4's routed item) are also still there.
+
+---
+
+## 8. Phase 20f-iiii — what was measured, kept and removed
+
+20f-iii left three refusals in `reg_specs_independent()`. This phase measured each one before
+deciding, which is what §6's rule asks for: *"keep it, with the number written down" is a complete
+answer.* Two were kept with a number; the third was a modelling mistake and is gone.
+
+### 8.1 The `compare` refusal — a DECLARED KEEP, and the number
+
+A between-model test needs the fit OBJECTS (`stats::anova(m_lo, m_hi)`, or survey's `regTermTest`
+Wald arm). §6.3 measured *transport* at 0.05 s for a 16 MB frame, which suggested the refusal might
+be pure caution. Measured on the fits themselves, it is not:
+
+| one `reg_fit()` result, binomial, 6 predictors, n = 200 000 | serialised |
+|---|---|
+| **the whole record** | **162.4 MB** |
+| `$fit$model` | 94.7 MB |
+| `$fit$family` | 87.8 MB |
+| `$fit$formula` / `$fit$terms` | 87.8 MB each |
+| `$fit$qr` | 34.2 MB |
+| `$data` | 10.7 MB |
+
+The three ~88 MB entries are **environment captures**: a `family` object, a formula and a terms
+object each close over the frame they were built in. So returning S fits to the main process is
+~half a gigabyte for a three-model comparison, three orders away from the round-trip figure.
+
+The alternative — a `reg_compare_digest()` carrying only what `anova()` reads — was refused on hard
+rule 5: the survey arm would make tabxplor a second producer of a survey Wald statistic, the same
+class as §3's measured `drop1`-vs-`anova` divergence (12.47 against 14.25). **The refusal stays**,
+and it is a fact about the statistic: a test between two models needs both models.
+
+### 8.2 The `skeleton_deferred` refusal — kept, and UNREACHABLE from `tab_reg()`
+
+`compound` is only ever `formula_mode`, which refuses `predictors` and takes one bare LHS, so a
+deferred-skeleton table has **exactly one spec** and `reg_specs_independent()` returns at its
+`length(specs) < 2L` guard first. It survives as the invariant for a direct `reg_build()` caller.
+A fit-free `reg_skeleton_from_fit()` twin was measured and refused: it diverges per fitter and would
+need a second producer of `reg_fit()`'s own complete-case + `fct_drop` frame preparation.
+
+But **measuring it found three silent defects in that path**, all now fixed:
+
+| call (`forcats::gss_cat`) | rows built, before | after |
+|---|---|---|
+| `tab_reg(g, married ~ race * age, family = "binomial")` | 7 | 7 |
+| `tab_reg(g, party3 ~ race * age, family = "multinomial")` | **4** | 7 |
+| `tab_reg(g, inc3 ~ race * age, family = "ordinal")` | **5** | 7 |
+
+1. `reg_fit_multinom()` / `reg_fit_ordinal()` **built the formula from the bare predictors and never
+   saw the user's**, so a compound formula was silently reduced to main effects — the interaction was
+   dropped from the MODEL, not merely from the table.
+2. `reg_skeleton_from_fit()` read its coefficient names from `coef()`, which is a **matrix** for
+   `nnet::multinom` (`names()` is NULL, so every non-pure-factor term produced zero rows) and **one
+   short** for `MASS::polr` (no intercept, while `model.matrix()` has one, so `assign` was
+   misaligned). The names come off the model matrix now — the vector `assign` indexes by
+   construction, identical for `lm`/`glm`/`svyglm`, which is why this went unseen.
+3. Both engines then needed `environment(fml) <- environment()`: they store their call and
+   re-evaluate it, so a formula carrying the user's environment resolves `fml` nowhere.
+
+### 8.3 The crude-block refusal — REMOVED
+
+It was not a payload problem but a modelling one: **the observed block belongs to the OUTCOME, not
+to the first model.** Every input to it is table-wide or per-outcome, and it read exactly two things
+off a fit — both with exact producers of their own (`reg_positive_level()`, which `reg_prep_binary()`
+itself calls; and the outcome's first level, which `reg_crude_yw()` already collapses any foreign
+`ref_category` to). `reg_stage_crude()` builds it once, before any model, for every one-outcome
+table; a several-outcome table keeps its blocks per spec, where each spec IS an outcome and the work
+stays on the parallel axis.
+
+What that removed, beyond the refusal: `share_crude`, the `emp_shared` hand-down, the loop's last
+piece of carried state, `reg_emp_slim()`'s three-slot allow-list (a block leaves as its columns and
+nothing else, so the payload rule has ONE exception left), and **§7.4's first routed redundancy** —
+`reg_spec_tips_mnl()`'s second `reg_empirical()` producer, which existed only for the compared
+models that had no block. Its "byte-identical only if every spec resolves the same `y_ref`" caveat
+is now a build-time `stopifnot` in `reg_stage_setup()`, not a hope.
+
+**Measured on the shape it un-refuses** (three models on one outcome with `color = "adjustment"`,
+n = 200 000, ext4/WSL2, min of 2 warm runs): **9.06 s serial → 6.08 s with `parallel = 3`, 1.49×**.
+Lower than the 2.74× the same three models reach without a crude block, and the reason is Amdahl,
+not the dispatch: the block is now a serial pre-pass, so the univariable crude fits — which is most
+of what `empirical` costs — do not ride the pool. Building it per spec instead would parallelise it
+and give three identical copies of one answer, which is what 20f-ii deleted. The honest reading is
+that the shape went from *refused* to *1.5×*, and that the remaining serial share is a correct
+answer to "how many times should this be computed", not a missed axis.
+
+### 8.4 What is still redundant
+
+`reg_global_rows()`'s `drop1` reduced-model refits (§4's routed item) are a **declared keep**: the
+only cheaper route is a Wald test, which is a different number, and this is a test a reader quotes
+rather than a diagnostic. Written into its header.

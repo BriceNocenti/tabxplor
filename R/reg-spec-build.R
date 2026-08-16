@@ -47,9 +47,10 @@ new_reg_spec_product <- function(
     gof_rows = NULL, global_rows = NULL, check_rows = NULL,
     # --- meta$empirical_tips --------------------------------------------------------------------
     tips = list(mnl = NULL, num = NULL),
-    # --- the scalars the table-scalar stages read off a fit today --------------------------------
-    # (reg_curves() takes positive_level; the assemblers take nothing else from a model object)
-    nobs = NA_real_, positive_level = NULL, y_ref = NULL,
+    # --- the ONE scalar a table-scalar stage reads off a fit -------------------------------------
+    # reg_stage_rows() hands products[[1]]$positive_level to reg_curves(); the assemblers take
+    # nothing else from a model object.
+    positive_level = NULL,
     # --- declared exceptions to the payload rule -------------------------------------------------
     # `fit`: NULL unless `compare != "none"`, whose reg_compare_rows() is the ONLY consumer -- and
     # which is also the first reason reg_specs_independent() forces the serial path.
@@ -62,32 +63,40 @@ new_reg_spec_product <- function(
 }
 
 
-# reg_emp_slim() -- drop everything in a crude block that exists only to serve THIS spec's own
-# reg_set_obs() and tooltips: the complete-case `$frame`, the fitted crude legs `$fits` and the
-# per-(var, level, category) `$grid`. They are 60-100 MB at survey scale and have no reader once
-# the builder returns -- reg_stage_assemble() wants `$cols`, and nothing else outside reg_build()
-# ever sees the block at all.
+# reg_emp_slim() -- a crude block leaves the builder as its COLUMNS and nothing else. Everything
+# else in it (the complete-case `$frame`, the fitted crude legs `$fits`, the per-(var, level,
+# category) `$grid`, the two predictor sets, the shape and the effect vector) exists to serve
+# reg_set_obs() and the tooltips, which both run here; `$frame` + `$fits` alone are 60-100 MB at
+# survey scale. reg_stage_assemble() splices `$cols`, and nothing outside reg_build() ever sees a
+# block at all.
 #' @keywords internal
 #' @noRd
 reg_emp_slim <- function(e) {
   if (is.null(e)) return(NULL)
-  e[intersect(c("cols", "shape", "effect"), names(e))]
+  e["cols"]
 }
 
 
 # reg_specs_independent() -- CAN THE SPECS BE BUILT WITHOUT ONE ANOTHER? NULL = yes; otherwise the
 # REASON, which reg_stage_specs() reports when `parallel` was explicitly asked for, so what was not
-# parallelised is never silent (Phase 20f's own rule). The three are facts about the statistics, not
-# limitations of the builder, and each is read in the code rather than assumed:
+# parallelised is never silent (Phase 20f's own rule). BOTH are facts about the statistics, not
+# limitations of the builder, and each is MEASURED rather than assumed:
 #   1. a model comparison is a test BETWEEN fits -- stats::anova(m_lo, m_hi), or survey's own
-#      regTermTest Wald arm. Re-implementing that arithmetic would make tabxplor a second producer
-#      of a survey quantity. `compare = "none"` is the default, so this excludes far less than it
-#      sounds.
-#   2. in comparison mode ONE crude block (spec 1's) is every model column's `obs` AND its gap
-#      test's crude leg, and that block carries the heavy frame.
-#   3. an all-coefficient table with a compound formula takes its shared skeleton from the first
-#      fit. That is narrower than "any compound formula": the marginal builders key on the original
-#      variables, so their skeleton is fit-free either way (reg_stage_setup).
+#      regTermTest Wald arm -- so the fit OBJECTS have to meet. Returning them instead was measured
+#      (Phase 20f-iiii): one reg_fit() result serialises to 162 MB at n = 200 000 ($model 94 MB;
+#      $family / $formula / $terms ~88 MB each, environment captures dragging the whole frame), so
+#      shipping S fits back to run one anova() is the expensive route -- and a distilled
+#      reg_compare_digest() would make tabxplor a second producer of a survey Wald statistic.
+#      DECLARED KEEP. `compare = "none"` is the default, so it excludes far less than it sounds.
+#   2. an all-coefficient table with a compound formula takes its shared skeleton from the first
+#      fit (reg_skeleton_from_fit). A fit-free twin was measured and refused: it diverges per fitter
+#      (names(coef()) is NULL for nnet::multinom and one short for MASS::polr) and would need a
+#      second producer of reg_fit()'s own complete-case + fct_drop frame preparation.
+#      ⚠ UNREACHABLE from tab_reg(): `compound` is only ever `formula_mode`, which refuses
+#      `predictors` and takes one bare LHS, so such a table has exactly ONE spec and returns at the
+#      guard above. It stays as the invariant for a direct reg_build() caller.
+# The third refusal 20f-iii shipped -- "the compared models share one observed block" -- is GONE:
+# the block belongs to the OUTCOME and reg_stage_crude() builds it before the models.
 #' @keywords internal
 #' @noRd
 reg_specs_independent <- function(ctx) {
@@ -95,8 +104,6 @@ reg_specs_independent <- function(ctx) {
   s <- ctx$shared
   if (!identical(s$compare, "none"))
     return("a model comparison is a test between the fits, so they are built together")
-  if (isTRUE(ctx$is_comparison) && isTRUE(s$empirical))
-    return("the compared models share one observed (crude) block, built by the first of them")
   if (isTRUE(ctx$skeleton_deferred))
     return("a compound formula takes the shared coefficient skeleton from the first fit")
   NULL
@@ -106,11 +113,30 @@ reg_specs_independent <- function(ctx) {
 # === THE BUILDER ================================================================================
 #
 # reg_spec_build() -- everything ONE spec contributes, in the order it contributes it. `i` indexes
-# ctx$specs; `emp_shared` is the crude block of spec 1 when it serves this one (comparison mode) and
-# NULL otherwise -- the loop hands it down, which is exactly why that shape stays serial.
+# ctx$specs; everything else comes off the ctx, so a unit is a pure function of (i, ctx).
+#
+# The wrapper exists to NAME THE MODEL when one fails. With several models, "which one" is the first
+# question, and the answer used to come from purrr::map()'s `i With name: m1.` -- which Phase 20f-iii
+# lost when the fit loop stopped being a map. Wrapping here restores it with the model's own LABEL
+# instead of an index, and in BOTH branches: `.f_name` is this function, so a daemon runs the
+# wrapper too and the serial and parallel messages are the same string (hence `call = NULL`, which
+# is also why the two cannot diverge through a call frame).
 #' @keywords internal
 #' @noRd
-reg_spec_build <- function(i, ctx, emp_shared = NULL) {
+reg_spec_build <- function(i, ctx) {
+  if (length(ctx$specs) < 2L) return(reg_spec_build_one(i, ctx))
+  label <- ctx$specs[[i]]$label
+  rlang::try_fetch(
+    reg_spec_build_one(i, ctx),
+    error = function(cnd) cli::cli_abort("Model {.val {label}} could not be built.",
+                                         parent = cnd, call = NULL,
+                                         class = "tabxplor_unit_named",
+                                         tabxplor_unit = label))
+}
+
+#' @keywords internal
+#' @noRd
+reg_spec_build_one <- function(i, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   sp <- specs[[i]]
 
@@ -198,98 +224,52 @@ reg_spec_build <- function(i, ctx, emp_shared = NULL) {
   }
 
   # --- 5. THE OBSERVED (CRUDE) BLOCK -------------------------------------------------------------
-  own      <- NULL
-  degraded <- FALSE
+  # ONLY where this spec IS an outcome of its own. A one-outcome table has ONE block, built before
+  # any model by reg_stage_crude() and read below as `crude` -- see that stage for why the block
+  # belongs to the outcome rather than to a model.
+  own <- NULL
   if (isTRUE(spec_plan$want_emp[[i]])) {
-    # ⚠ the two crude predictor sets are TABLE-scalar and come from the declared plan: `num_preds`
-    # is emptied when ANY spec has a compound formula (one such spec strips the numeric crude
-    # columns from every block, compound or not), so it is not derivable from `sp` alone.
-    fac_preds_e <- factor_preds
-    num_preds_e <- spec_plan$num_preds
-    key_i   <- sp$crude_key
-    pos_i   <- if (reg_fam_binary(sp_fam)) f$positive_level else NULL
     mdata_i <- reg_emp_frame(sp$outcome, ctx)          # the same complete-case frame as the model
+    pos_i   <- if (reg_fam_binary(sp_fam)) f$positive_level else NULL
     var_y_i <- if (sp_fam == "gaussian")
       suppressWarnings(stats::var(as.numeric(mdata_i[[sp$outcome]]), na.rm = TRUE)) else NA_real_
-    emp_i   <- reg_empirical(mdata_i, fac_preds_e, sp$outcome, key_i, pos_i, design_spec$wt,
-                             trials = sp$trials, ref_category = f$y_ref,
-                             conf_level = conf_level, design_spec = design_spec)
-    degraded <- isTRUE(attr(emp_i, "degrade"))
-    # Which predictors have no closed form and must be fitted? z9: the numeric ones. z10: EVERY
-    # predictor under an ordinal outcome (proportional odds is a constraint, so the univariable model
-    # is not saturated). reg_crude_saturated() states the rule; nothing here re-derives it.
-    fit_preds_e <- c(
-      num_preds_e,
-      if (!reg_crude_saturated(key_i, TRUE)) fac_preds_e else character(0))
-    # The crude fits take the FULL `data` + `drop_extra`, never the pre-filtered frame: a prebuilt
-    # survey design's keep_mask is computed from `data` itself (reg_resolve_design).
-    # `marginal`: reg_empirical_columns() swaps the crude shape for a marginal one only where the
-    # model's own estimand is marginal AND on a probability scale (a gaussian AME IS its coefficient;
-    # a poisson AME is additive while its crude shape stays a rate RATIO, which reg_same_estimand()
-    # then refuses), so the fit follows the shape it must fill.
-    fit_i <- reg_empirical_fit(
-      data, fit_preds_e, sp$outcome, sp_fam, design_spec,
-      outcome_level = inv_sp,
-      conf_level = conf_level, method = method, skeleton = skeleton, multiplier = multiplier,
-      other_preds = union_predictors, est = sp$est, wt = design_spec$wt,
-      # z17 (D2): always kept. `want_fit` does not decide whether the univariable crude models are
-      # FITTED (they are, to fill the crude column) -- only whether the fitted object survives for
-      # the gap test's crude leg. Build-time locals; they never reach the jamovi .fit_cache.
-      want_fit = TRUE, trials = sp$trials,
-      shape_terms = shape_terms,
-      marginal = !identical(sp$est$effect, "coefficient") &&
-        (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
-    own <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, key_i, sp_fam, sp$est, var_y_i,
-                                 conf_level = conf_level, color_signif = color_signif,
-                                 color = sp$color, fit_est = fit_i,
-                                 # W-D: `n_eff` is written only where something corrected it
-                                 weighted = svy_weighted(design_spec, design_spec$wt),
-                                 # z16-iiiii (D4): the design df the MODEL columns are already
-                                 # referred to, so the crude bracket beside them matches
-                                 degf = design_spec$degf %||% Inf)
+    own <- reg_crude_block(sp, sp_fam, inv_sp, sp$crude_key, mdata_i, pos_i, f$y_ref, var_y_i, ctx)
     # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
     # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
     if (!is_comparison && length(own$cols)) {
       scv <- reg_shared_col_var(sp_fam, sp$outcome, pos_i, cleannames)
       own$cols <- purrr::map(own$cols, ~ set_col_var(.x, scv))
     }
-    # Phase 18z8-B: the crude block also carries what the GAP TEST needs -- the frame it was computed
-    # on, the factor predictors it covers and the fitted crude legs. All are locals here and nowhere
-    # else; reg_emp_slim() drops them again on the way out unless this block is the SHARED one.
-    own$frame     <- mdata_i
-    own$fac_preds <- fac_preds_e
-    own$crude_key <- key_i
-    own$fit_preds <- fit_preds_e
-    own$fits      <- fit_i$fits
-    own$grid      <- emp_i
+    own$tips_num <- reg_spec_tips_num(sp, pos_i, own, ctx)
   }
+  degraded <- isTRUE(own$degraded)
 
   # --- 6. `obs` AND `gap_se` ---------------------------------------------------------------------
-  # ⚠ `own %||% emp_shared`, and NOT the other way round: in comparison mode only spec 1 builds a
-  # block, and reg_stage_assemble() used to hand emp_by_fit[[1]] to every column. The gap SE still
-  # comes from THIS column's own fit -- the two estimators' covariance is per model though `obs` is
-  # not, which is exactly what makes `color = "adjustment"` work in comparison mode.
-  e    <- own %||% emp_shared
+  # ⚠ `own %||% crude`, and NOT the other way round: with several outcomes each spec has its own
+  # block, and it wins. The gap SE still comes from THIS column's own fit -- the two estimators'
+  # covariance is per model though `obs` is not, which is exactly what makes `color = "adjustment"`
+  # work when several models share one outcome.
+  e    <- own %||% crude
   cols <- purrr::map(cols, function(bi) { bi$col <- reg_set_obs(bi, e, f, sp, ctx); bi })
 
   # --- 7. THE TOOLTIPS ---------------------------------------------------------------------------
-  # ⚠ these read `own`, never `e`: a tooltip describes THIS outcome's crude grid, and a compared
-  # model that borrowed spec 1's block has none of its own (today's emp_by_fit[[si]], same).
-  tips <- list(mnl = NULL, num = NULL)
+  # ⚠ the MULTINOMIAL fragment is the SPEC's: it keys this model's own category columns, so every
+  # model of a comparison contributes one. The NUMERIC fragment is the BLOCK's -- it keys the crude
+  # effect column, which the models of a one-outcome table share -- and is built with the block.
+  tips <- list(mnl = NULL, num = own$tips_num)
   if (isTRUE(empirical)) {
-    tips$mnl <- reg_spec_tips_mnl(sp, f, own, cols, ctx)
-    tips$num <- reg_spec_tips_num(sp, f, own, ctx)
+    tips$mnl <- reg_spec_tips_mnl(sp, e, cols, ctx)
     degraded <- degraded || isTRUE(attr(tips$mnl, "degrade"))
   }
 
   new_reg_spec_product(
     cols = cols,
-    # the payload rule: the block is slimmed unless it is about to be handed to another spec
-    emp  = if (isTRUE(share_crude) && i == 1L) own else reg_emp_slim(own),
+    # THE PAYLOAD RULE: a block leaves as its columns and nothing else -- no frame, no crude legs.
+    emp  = reg_emp_slim(own),
     n_col = n_col,
     gof_rows = gof_rows, global_rows = global_rows, check_rows = check_rows,
     tips = tips,
-    nobs = f$nobs, positive_level = f$positive_level, y_ref = f$y_ref,
+    positive_level = f$positive_level,
     # the other payload exception, and its only consumer
     fit = if (!identical(compare, "none")) f else NULL,
     skeleton = skel_out, degraded = degraded)
@@ -298,18 +278,23 @@ reg_spec_build <- function(i, ctx, emp_shared = NULL) {
 
 # === THE TWO TOOLTIP FRAGMENTS ==================================================================
 #
-# The two cases where a crude number cannot honestly take a column of its own. Both were blocks of
-# reg_stage_tips(); they moved here because both read the crude block's HEAVY halves (`$grid`,
-# `$frame`), which must not travel back. What they emit instead of a finished row is a fragment
-# keyed by SKELETON ROW (and, for the multinomial one, by within-spec COLUMN) -- reg_stage_tips()
-# resolves those to the final labels.
+# The two cases where a crude number cannot honestly take a column of its own. Both read a crude
+# block's HEAVY halves (`$grid`, `$frame`), which never leave reg_build(). What they emit instead of
+# a finished row is a fragment keyed by SKELETON ROW (and, for the multinomial one, by within-spec
+# COLUMN) -- reg_stage_tips() resolves those to the final labels.
+#
+# ⚠ THEY BELONG TO DIFFERENT THINGS, and that is not a detail: the multinomial fragment keys ONE
+# MODEL's category columns, so every model of a comparison contributes one; the numeric fragment
+# keys the crude effect COLUMN, which the models of a one-outcome table share, so it is built once
+# with the block (reg_stage_crude / reg_spec_build step 5). Letting each spec build the numeric one
+# would re-emit identical rows for a single column -- the duplication Phase 20f-ii deleted.
 
 # reg_spec_tips_mnl() -- a multinomial outcome: one crude column per category would double the
 # table, so the crude % + diff per (category column, predictor level) travel in `empirical_tips`
-# and the render appends an "crude:" fragment.
+# and the render appends an "crude:" fragment. `e` is the block serving this spec.
 #' @keywords internal
 #' @noRd
-reg_spec_tips_mnl <- function(sp, f, own, cols, ctx) {
+reg_spec_tips_mnl <- function(sp, e, cols, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   if (!identical(sp$fit_family, "multinomial") || length(factor_preds) == 0L) return(NULL)
   idx <- which(!purrr::map_lgl(cols, ~ is.null(.$emp_key)))
@@ -317,12 +302,13 @@ reg_spec_tips_mnl <- function(sp, f, own, cols, ctx) {
   is_fac_t <- skeleton$var %in% factor_preds
   # Phase 18z10: read straight off the MERGED crude grid -- reg_empirical_tips() is gone, it was
   # reg_empirical() at a three-part key (measured bit-identical), and keeping two producers of one
-  # quantity is exactly the sync-by-comment pair Phase 17 rule 5 forbids. Reuse the block already
-  # built for this spec when there is one; otherwise build the grid here.
-  tipsd <- if (!is.null(own$grid)) own$grid else
-    reg_empirical(reg_emp_frame(sp$outcome, ctx), factor_preds, sp$outcome, "multinomial", NULL,
-                  design_spec$wt, ref_category = f$y_ref, conf_level = conf_level,
-                  design_spec = design_spec)
+  # quantity is exactly the sync-by-comment pair Phase 17 rule 5 forbids.
+  # ⚠ Phase 20f-iiii deleted the `else reg_empirical(...)` rebuild that stood here for the compared
+  # models, which had no block of their own: a multinomial spec is either the outcome of a
+  # several-outcome table (its own block, want_emp) or one of several models on ONE outcome (the
+  # stage's block, `crude`), so the grid always exists and the second producer had become dead.
+  tipsd <- e$grid
+  if (is.null(tipsd)) return(NULL)
   tk  <- reg_skel_key(tipsd$var, tipsd$level, tipsd$category)
   out <- purrr::compact(purrr::map(idx, function(k) {
     b    <- cols[[k]]
@@ -353,7 +339,7 @@ reg_spec_tips_mnl <- function(sp, f, own, cols, ctx) {
 # has visible content (a tooltip on the blank base cell would never be discovered).
 #' @keywords internal
 #' @noRd
-reg_spec_tips_num <- function(sp, f, own, ctx) {
+reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   if (length(numeric_preds) == 0L) return(NULL)
   if (is.null(own) || is.null(own$shape) || !shape_visible(own$shape)) return(NULL)
@@ -368,7 +354,7 @@ reg_spec_tips_num <- function(sp, f, own, ctx) {
   if (!length(vars)) return(NULL)
   w  <- if (is.null(design_spec$wt)) NULL else own$frame[[design_spec$wt]]
   yb <- reg_crude_y(own$frame, sp$outcome, sp$fit_family,
-                    if (reg_fam_binary(sp$fit_family)) f$positive_level else NULL)
+                    if (reg_fam_binary(sp$fit_family)) positive_level else NULL)
   purrr::list_rbind(purrr::map(vars, function(v) {
     x <- as.numeric(own$frame[[v]])
     m <- reg_weighted_mean(x, w); s <- reg_predictor_sd(x, w)
@@ -407,10 +393,10 @@ reg_build_group <- function(g, sl, tab_vars, specs, fit_cache, shared, data) {
   #   `[` does not drop rows on a CALIBRATED or PPS design, so the group-local complete-case
   #     positions then landed on the wrong respondents (measured OR 1/2.17 and 1/3.13 against
   #     svyglm's 3.48 and 4.11 on the same groups, with no warning).
-  # ⚠ `parallel = FALSE`: a worker never spawns nested daemons, and a group's own model axis is not
-  # a second place to dispatch. `fit_cache` rides through -- it is non-NULL only under jamovi, which
-  # forces the serial branch anyway (tab_parallel_workers(cache_env =)), so it never crosses a
-  # process boundary.
+  # ⚠ `parallel = FALSE` is THE NESTING RULE, stated once in tab_pmap()'s everywhere() block: a
+  # group's own model axis is not a second place to dispatch. `fit_cache` rides through -- it is
+  # non-NULL only under jamovi, which forces the serial branch anyway
+  # (tab_parallel_workers(cache_env =)), so it never crosses a process boundary.
   tg <- reg_build(sub, specs, shared, tab_vars = NULL, .fit_cache = fit_cache,
                   ref = NULL, reref = FALSE, skeleton_data = data, parallel = FALSE)
   # Phase 19g (KEY 6): the group level rides a column NAMED AFTER the split variable -- exactly

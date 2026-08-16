@@ -433,25 +433,30 @@ R/
 │                              per-model and which are between-models" needed four files to answer.
 │                              **`reg_spec_build(i, ctx, emp_shared)`** does, in today's relative
 │                              order for one spec: fit -> columns -> gof/global/check rows -> the
-│                              `add_n` count -> the crude block -> `reg_set_obs()` -> the two tooltip
-│                              fragments; **`new_reg_spec_product()`** is the 4th record constructor
-│                              (formals ARE the contract; ⚠ no dot-prefixed key). **THE PAYLOAD
-│                              RULE**: no fit and nothing referencing one, so a unit can cross a
-│                              process boundary -- with TWO declared exceptions, each identical to a
-│                              reason that shape is serial anyway: `fit` (only consumer
-│                              `reg_compare_rows()`) and the crude block's 60-100 MB `$frame`/`$fits`
-│                              (kept only for the block SHARED with the compared models;
-│                              `reg_emp_slim()` drops them otherwise). TWO placeholders, because a
+│                              `add_n` count -> (a per-outcome crude block) -> `reg_set_obs()` -> the
+│                              multinomial tooltip; **`new_reg_spec_product()`** is the 4th record
+│                              constructor (formals ARE the contract; ⚠ no dot-prefixed key).
+│                              **THE PAYLOAD RULE**: no fit and nothing referencing one, so a unit
+│                              can cross a process boundary -- ONE declared exception since 20f-iiii,
+│                              `fit` (only consumer `reg_compare_rows()`, on a path that is serial
+│                              anyway). A crude block leaves as its COLUMNS and nothing else
+│                              (`reg_emp_slim()`); its 60-100 MB `$frame`/`$fits` never travel.
+│                              TWO placeholders, because a
 │                              worker cannot know post-`make.unique()` facts: the footer rows' `col`
 │                              (rewritten wholesale per product -- every row of one model shares one)
-│                              and the tooltips' (col_idx, skeleton row) pair. ⚠ tips read the spec's
-│                              OWN block, `reg_set_obs()` reads `own %||% emp_shared` -- the
-│                              comparison-mode asymmetry (`obs` is shared, the gap covariance is per
-│                              model). **`reg_specs_independent(ctx)`** = NULL or THE REASON, and the
-│                              three reasons are facts about the statistics: a comparison is a test
-│                              BETWEEN fits · compared models share spec 1's crude block · an
-│                              all-coefficient compound formula takes its skeleton from the first fit
-│                              (`skeleton_deferred`, narrower than "any compound"). + the other two
+│                              and the tooltips' (col_idx, skeleton row) pair. ⚠ the MULTINOMIAL tip
+│                              is the SPEC's (it keys that model's category columns); the NUMERIC one
+│                              is the BLOCK's, built once with it -- letting each spec build it
+│                              re-emits identical rows for one column (20f-ii's deleted duplication).
+│                              **`reg_specs_independent(ctx)`** = NULL or THE REASON, and since
+│                              20f-iiii there are TWO, each a fact about the statistics AND measured
+│                              (perf study §8): a comparison is a test BETWEEN fits (returning them
+│                              instead = 162 MB per fit at n = 200 000) · an all-coefficient compound
+│                              formula takes its skeleton from the first fit (`skeleton_deferred` --
+│                              ⚠ UNREACHABLE from tab_reg(), a compound formula forces exactly one
+│                              spec, kept as the invariant for a direct reg_build() caller). The
+│                              third ("compared models share one crude block") is GONE: the block is
+│                              the OUTCOME's, built by reg_stage_crude(). + the other two
 │                              parallel axes' workers, `reg_build_group()` (G) and
 │                              `reg_build_outcome()` (R). ⚠ sorts BEFORE tab_reg.R: no top-level code
 │                              reading a tab_reg.R object
@@ -852,7 +857,25 @@ R/
 │                              browser). ⚠ the Positron probe reads a settings file that also holds
 │                              secrets: it extracts TWO keys by regex and never parses or logs
 │                              anything else. Do not widen it.
-├── tab-parallel.R   (~230 L) THE dispatch seam of BOTH producers. 20f-iii added three callers and
+├── tab-parallel.R   (~300 L) THE dispatch seam of BOTH producers. 20f-iiii: **THE NESTING RULE is
+│                              stated and ENFORCED here, once** -- the axes nest (`row_var`s;
+│                              `tab_vars` groups x models x outcomes) and only the OUTERMOST
+│                              dispatches, so the everywhere() snapshot forces `tabxplor.parallel`
+│                              off in every daemon (the `^tabxplor\.` regex used to SHIP the user's
+│                              value in, and the three `parallel = FALSE` unit sites masked it only
+│                              because an argument beats an option). + **the worker ERROR relay**:
+│                              `[.stop]` re-threw mirai's own wrapper BEFORE the condition replay, so
+│                              a failure discarded every message the successful units had produced --
+│                              the diagnostics that explain it. The trampoline catches its unit's
+│                              error and returns it on the payload, `[]` collects, the replay runs up
+│                              to and INCLUDING the failing unit (serially the ones after it never
+│                              ran) and `tab_unit_abort()` names it -- ⚠ de-duplicated by NAME, not
+│                              by class, because the axes nest and an inner failure legitimately
+│                              gains an outer name. `tab_cnd_strip()` makes a condition safe to send
+│                              back (⚠ non-optional: reg_fit()'s survey call holds the DESIGN in its
+│                              own `call`). `tab_pmap(.names =)` = what to call each unit; the SERIAL
+│                              branch names it too, so purrr's `i In index: N` is gone and both
+│                              branches say one sentence. 20f-iii added three callers and
 │                              changed NOTHING here -- tab_pmap() is generic (`.l` per-unit args,
 │                              `.f_name` a namespaced worker, `.const` small, `.ship` big), so
 │                              `tab_reg(parallel =)` reuses the same option, worker-count rule, pool
@@ -1110,14 +1133,39 @@ R/
 │                              `producers`) and color_signif_rd; `{VALUES}` in a `doc` is where the
 │                              generated list is spliced. ⚠ read the rows with `[[`, never `$`:
 │                              `r$values` partial-matches `values_from`.
-├── tab_reg.R       (~4575 L)  Phase 20f-iii: **the STAGES are cross-spec ASSEMBLERS** and the
-│                              per-MODEL half is R/reg-spec-build.R's declared product. SEVEN stages
+├── tab_reg.R       (~4680 L)  Phase 20f-iiii: **`reg_stage_crude()`** -- THE OBSERVED (CRUDE) BLOCK
+│                              BELONGS TO THE OUTCOME, so a one-outcome table builds it ONCE, before
+│                              any model, and a several-outcome one builds each with its spec (which
+│                              IS its outcome, so the work stays on the parallel axis). It is
+│                              FIT-FREE, which is what makes it liftable: the two facts it used to
+│                              read off a fit have exact producers -- `reg_positive_level()` (the
+│                              function reg_prep_binary() itself calls) and the outcome's first level
+│                              (reg_crude_yw() already collapses a foreign `ref_category` to it).
+│                              `reg_crude_block()` = the shared arithmetic, so the two paths cannot
+│                              fork. It DELETED `share_crude`, the `emp_shared` hand-down, the loop's
+│                              last carried state, one refusal and one whole redundant producer.
+│                              ⚠ TWO build-time stopifnot in reg_stage_setup() carry it: with one
+│                              outcome every spec is built from deps[1,] (so reading specs[[1]] is
+│                              legal -- 20f-ii's "true today, stated nowhere"), and
+│                              `skeleton_deferred` implies `!empirical`.
+│                              + `reg_fit_formula()` = the model formula of the 3+ level engines,
+│                              and a MEASURED defect: reg_fit_multinom()/_ordinal() BUILT it from the
+│                              bare predictors and never saw the user's, so `party3 ~ race * age`
+│                              silently fitted `race + age` -- the interaction left the MODEL, not
+│                              just the table. ⚠ they need `environment(fml) <- environment()`: both
+│                              store their call and re-evaluate it. And `reg_skeleton_from_fit()`
+│                              takes its coefficient names off the MODEL MATRIX (the vector `assign`
+│                              indexes), never coef(): a matrix for nnet::multinom (names() NULL) and
+│                              one short for MASS::polr (no intercept).
+│                              Phase 20f-iii: **the STAGES are cross-spec ASSEMBLERS** and the
+│                              per-MODEL half is R/reg-spec-build.R's declared product. EIGHT stages
 │                              now: _split (the tab_vars recursion, at the TOP, returning a finished
 │                              TABLE -- and axis G's tab_pmap()) / **_setup** (was _fit's tail: the
 │                              shape facts, the reref relevel of `data`+`data_canon`, the FIT-FREE
 │                              skeleton or `skeleton_deferred`, and the per-spec PLAN -- `want_n` /
-│                              `n_names` / `want_emp`, the two de-duplications that used to be
-│                              loop-carried `break`/`next` a worker cannot reproduce) / **_specs**
+│                              `n_names` / `want_emp` / `want_crude`, the de-duplications that used
+│                              to be loop-carried `break`/`next` a worker cannot reproduce) /
+│                              **_crude** (above) / **_specs**
 │                              (the loop: serial, or tab_pmap() when reg_specs_independent() says
 │                              nothing -- plus the column LAYOUT the products imply, `built` being
 │                              their flattened view) / _footer (⚠ SLOT-MAJOR: every product's gof
@@ -2176,7 +2224,7 @@ itself.
 | **20f** | `tab_reg()` parallelisation: measure, then decide                  | ✅ **measured "no"** — the remaining cost was the model-check footer (81–94 % of a call), most of it computed several times and read once. No pool; three de-duplications + a declared `REG_CHECKS$cost` instead (2.6–6.0× on a default call). Study: `dev/tabxplor_reg_performance.md` |
 | **20f-ii** | the same question at the MODEL level: measure the three axes     | ✅ **measured** — the three axes are not the same shape. `tab_vars` (G) and outcomes × a models list (R) already return finished tables and are dispatchable today, but clear ≥2× only on an *even* axis at survey scale; the **S** axis (several outcomes in one table · a models list) holds the 2×+ shapes (2.86× at four outcomes) and cannot be dispatched as written. Shipped the crude-block de-duplication + the cross-outcome `compare` guard. Study §6 |
 | **20f-iii** | the S axis: `reg_spec_build()`, and the parallelism it unlocks  | ✅ **done** — the six per-spec loops are ONE declared product (`R/reg-spec-build.R`), and `parallel` becomes a shared argument over all three model axes. ⚠ the message-order price it budgeted for was measured at **zero** reordered cases; what changed instead is 9 abort messages losing purrr's `In index:` wrapper |
-| **20f-iiii** | the reg framework: finished, and CLEAN under parallelisation  | take `tab_reg()` from *"parallel, with three exceptions to remember"* to *"parallel, or ONE stated reason"*. Each of `reg_specs_independent()`'s three refusals has a measured route out — the crude block is the OUTCOME's, not spec 1's; a `reg_compare_digest()` would make a between-model test computable from KB; the deferred skeleton may not need a fit at all — and for each, **"keep it, with the number"** is a complete answer. + the worker-error relay (which also restores "which model failed"), the nesting rule stated once, and the two routed redundancies. Plan of plans §9 |
+| **20f-iiii** | the reg framework: finished, and CLEAN under parallelisation  | ✅ **done** — the crude block is the OUTCOME's (`reg_stage_crude()`), so one refusal is GONE; the other two are declared keeps **with their measurement** (a fit is 162 MB; the deferred skeleton is unreachable from `tab_reg()`). + the worker-error relay, the nesting rule enforced once, and three silent defects in the compound-formula path |
 | **20g** | jamovi: the level-collapse UI, the boundary, the rebuild           | every new vocabulary into the `.a.yaml`s (generated) · the collapse as a real `tabxplor_lvl` R operation emitted into both modules · the readable export path · the owed `prepare()` + live pass |
 | **20h** | Harvest 1: the deletion pass                                       | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product |
 | **20i** | Harvest 2: open integration                                        | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building** |
@@ -2531,6 +2579,143 @@ what KEY 5 needs. 19k: the jamovi boundary's own mirrors, including the `color_s
 ---
 
 
+
+#### Phase 20f-iiii — the reg framework: finished, and CLEAN under parallelisation
+
+**DONE (2026-08-16), all three parts.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6987** — the
+inherited warning count exactly, +28 assertions. `dev/verify_reg_specs.R`: **3 of 290 cases changed,
+all in the ONE declared way** (below); every spec, `reg_call()`, column attribute, label and test key
+IDENTICAL, and every other message identical **in order**. `test-parallel-parity.R` green
+**unsandboxed** (PASS 26) with three new cases.
+
+**THE THREE REFUSALS, each MEASURED before it was kept or removed** — 20f's own rule that *"keep it,
+with the number written down" is a complete answer*. Study: `dev/tabxplor_reg_performance.md` **§8**.
+
+1. **`compare != "none"` — DECLARED KEEP, with the number.** 20f-ii measured *transport* at 0.05 s
+   for a 16 MB frame, which made the refusal look like caution. Measured on the fits themselves it
+   is not: **one `reg_fit()` result serialises to 162.4 MB at n = 200 000** — `$fit$model` 94.7 MB,
+   and `$fit$family` / `$formula` / `$terms` **87.8 MB each**, because a family object, a formula and
+   a terms object each close over the frame they were built in. Three fits ≈ half a gigabyte. The
+   `reg_compare_digest()` alternative would re-implement `anova.svyglm` → `regTermTest` (hard rule
+   5), so it was not attempted.
+2. **`skeleton_deferred` — KEPT, and UNREACHABLE from `tab_reg()`.** `compound` is only ever
+   `formula_mode`, which refuses `predictors` and takes one bare LHS ⇒ **exactly one spec** ⇒
+   `reg_specs_independent()` returns at its `length(specs) < 2L` guard first. And
+   `reg_crude_key(compound = TRUE)` is `NA` ⇒ `empirical` is turned off at the boundary, so a
+   deferred skeleton and a crude block **cannot co-exist** (now a build-time `stopifnot`). It stays
+   as the invariant for a direct `reg_build()` caller. A fit-free twin was measured and refused: it
+   diverges per fitter and would need a second producer of `reg_fit()`'s frame preparation.
+3. **the crude block — REMOVED**, and it was a *modelling* mistake, not a payload one.
+
+**A2 — the observed (crude) block belongs to the OUTCOME.** `reg_stage_crude()` builds it once,
+before any model, for every one-outcome table; a several-outcome table keeps its blocks per spec,
+where each spec IS an outcome and the work stays on the parallel axis instead of serialising into a
+pre-pass. It is **fit-free**, which is what makes it liftable — the two facts it read off the model
+have exact producers of their own (`reg_positive_level()`, the function `reg_prep_binary()` itself
+calls to order the levels; and the outcome's first level, which `reg_crude_yw()` already collapses
+any foreign `ref_category` to, so **`y_ref` moves no number, provably**). Details in the Repository
+Map. What it deleted: `share_crude` · the `emp_shared` argument and hand-down · the loop's last piece
+of carried state · `reg_emp_slim()`'s three-slot allow-list (a block leaves as its COLUMNS, so the
+payload rule has **one** exception left) · refusal 2 · and **§7.4's first routed redundancy**,
+`reg_spec_tips_mnl()`'s second `reg_empirical()` producer, whose "byte-identical only if every spec
+resolves the same `y_ref` — true today, stated nowhere" caveat is a `stopifnot` now.
+
+⚠ **Two traps the design pass caught before they shipped**: the NUMERIC tooltip must stay on the
+block (reading `own %||% crude` would make specs 2..S re-emit identical `Obs_*` rows — exactly what
+20f-ii deleted), and `want_crude` must **not** be gated on `!at_profile` (under
+`effect = "at_reference"` the block is still built; only `obs` is withheld).
+
+**THREE SILENT DEFECTS, found by measuring refusal 3** — all in the compound-formula path, all with
+fixtures. Measured through `tab_reg()`: `party3 ~ race * age` built **4 rows instead of 7** and
+`inc3 ~ race * age` **5**, both losing `age` and both interactions.
+
+- ⚠ **`reg_fit_multinom()` / `reg_fit_ordinal()` never saw the user's formula.** They BUILT one from
+  the bare predictors, so a compound formula was silently reduced to main effects — the interaction
+  left the **model**, not merely the table. `reg_fit_formula()` is the one rule now (the glm arm's,
+  which fitted `formula` verbatim all along). ⚠ both then need `environment(fml) <- environment()`:
+  they store their call and re-evaluate it (`model.frame.multinom`, which `reg_skeleton_from_fit()`
+  reads), so a formula carrying the user's environment resolves `fml` nowhere.
+- ⚠ **`reg_skeleton_from_fit()` indexed `names(coef(fit))` with the model matrix's `assign`.**
+  `coef()` is a **matrix** for `nnet::multinom` (`names()` NULL → every non-pure-factor term produced
+  zero rows) and **one short** for `MASS::polr` (no intercept, while `model.matrix()` has one). It
+  reads `colnames(model.matrix(fit))` now — the vector `assign` indexes by construction, identical
+  for lm/glm/svyglm, which is why this went unseen.
+
+**B — the worker error relay** (`R/tab-parallel.R`, both producers). `mirai_map(...)[.stop]` re-threw
+mirai's own wrapper *before* the condition replay, so a failure **discarded every message the
+successful units had already produced** — the diagnostics that explain it — and what surfaced was a
+`miraiError`, not the worker's condition. The trampoline catches its unit's error and returns it on
+the payload; `[]` collects; the replay runs up to and **including** the failing unit (serially the
+ones after it never ran, so replaying them would show output the serial branch cannot produce).
+`tab_cnd_strip()` makes a condition safe to send back — ⚠ non-optional, `reg_fit()`'s
+`do.call(survey::svyglm, list(fml, design = ...))` puts the whole design in the error's own `call`.
+`reg_spec_build()` wraps its body and names the **model's label**; `tab_pmap(.names =)` names the
+unit, **in the serial branch too**, so purrr's `i In index: N` is gone and both branches say one
+sentence. ⚠ the de-duplication is by NAME, not by class: the axes nest, so an inner failure
+legitimately gains an outer name (`Build failed on "score". Caused by: Model "m1" could not be
+built.`).
+
+**C — the declarations.** The **nesting rule** is stated and enforced once, in `tab_pmap()`'s
+`everywhere()` block (the option snapshot's `^tabxplor\.` regex was **shipping the user's
+`tabxplor.parallel` into every daemon**; the three `parallel = FALSE` unit sites masked it only
+because an argument beats an option — they stay as defence in depth, each a one-line pointer).
+⚠ A helper function was rejected: the three sites assign three different shapes, so it would be
+three overloads of one word. Two **declared keeps** where they sit: `reg_global_rows()`'s `drop1`
+refits (the only cheaper route is a Wald test, a *different number* — 20f's `drop1` 12.47 vs `anova`
+14.25 precedent) and `reg_interaction_rows()`, the fourth fitting site, which lives after the split
+barrier and needs the POOLED data, so it is a different question rather than a missed axis. **Census
+deletions**: product slots `nobs` / `y_ref`, ctx keys `fit_ncol` / `fit_of_col` (zero readers
+package-wide), `emp$crude_key` (write-only), and a stale comment claiming two consumers read
+`fit_of_col` — both use `fit_first_idx`. ⚠ `emp$fac_preds` was a census candidate and is **alive**
+(`reg_set_obs()` reads it); said so in one line.
+
+**A real jamovi hole, closed**: in **staged** mode `jmvtab_reg_build(use_cache = FALSE)` passes
+`.fit_cache = NULL`, so `parallel` fell through to the option — a user who had set
+`tabxplor.parallel` would have jamovi spawning daemons inside its own R process, for a UI that
+repaints on every click. One word, plus a fixture pinning both cache modes.
+
+**THE DECLARED DELTA: 3 of 290 harness cases, all multi-spec aborts**, each now naming the model
+(`Model "m2" could not be built. Caused by: …`) instead of an anonymous error or purrr's
+`i In index: 2.`. All three are strictly more informative, and the nested case now names **both**
+the outcome and the model.
+
+**MEASURED** on the shape A2 un-refuses (three models on one outcome with `color = "adjustment"`,
+n = 200 000): **9.06 s serial → 6.08 s with `parallel = 3`, 1.49×**. ⚠ Lower than the 2.74× the same
+three models reach *without* a crude block, and the reason is Amdahl, not the dispatch: the block is
+now a serial pre-pass, so the univariable crude fits do not ride the pool. Building it per spec
+instead would parallelise three identical copies of one answer — which is what 20f-ii deleted. The
+honest reading is *refused → 1.5×*, with the remaining serial share the correct answer to "how many
+times should this be computed".
+
+**HONEST CONCERNS.**
+
+- ⚠ **The compound-formula fix CHANGES NUMBERS** on multinomial and ordinal tables that use the
+  escape hatch: they now fit the model the user wrote. Nothing pinned the old behaviour (it would
+  have been pinning a bug) and no harness case covers that combination, so the fixture in
+  `test-tab_reg.R` is the only guard — it asserts the row axis matches the glm arm's on the same RHS.
+  This was **not in the phase brief**; it was found by measuring refusal 3 and fixed because leaving
+  it would have made the skeleton fix "work" only by matching a wrong model.
+- ⚠ **`reg_stage_crude()`'s block rides the shipped ctx** to every daemon (`$frame` + `$fits`,
+  60-100 MB at survey scale) whenever a models list dispatches with `empirical`. Shipped whole and
+  measured rather than pre-emptively slimmed — the 1.49× above is *with* that cost. A
+  table-scalar slimming rule is written down in the plan if a future measurement wants it.
+- **`reg_specs_independent()` still names two reasons**, not one. The phase's metric asked for
+  "NULL for every shape a user actually builds, or ONE reason with a measurement" — refusal 2 is
+  provably unreachable from the public API, so a *user* meets exactly one; the second survives as an
+  internal invariant, which is a different thing from a user-facing exception.
+- **A worker error has no backtrace** (`tab_cnd_strip()` removes it, and it must). The unit's name
+  replaces it. Stated where the stripping happens.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild, and ⚠ still must NOT add a `parallel` control (the module is serial by
+construction, now in code rather than in a comment).
+
+**FOLLOW-UPS.** 20g can start on this commit. 20h: the deprecated-call corpus sweep, and the two
+items this phase re-declared rather than removed (`reg_global_rows()`'s refits, and whether the
+shipped crude block ever needs slimming).
+
+---
 
 #### Phase 20f-iii — the S axis: `reg_spec_build()`, and the parallelism it unlocks
 

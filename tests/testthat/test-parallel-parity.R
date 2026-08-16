@@ -216,3 +216,53 @@ test_that("tab_reg(parallel=): a shape that must stay serial says so, and is ide
     suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
     suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
 })
+
+test_that("tab_reg(parallel=): compared models with a crude block DISPATCH (Phase 20f-iiii)", {
+  # 20f-iii refused this shape -- spec 1 built the observed block and handed it down the loop. It is
+  # the OUTCOME's block now, built by reg_stage_crude() before any model, so nothing is shared
+  # between specs. `color = "adjustment"` is the everyday way in: it turns `empirical` on.
+  warm_pool(2L)
+  args <- list(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
+               family = "binomial", color = "adjustment", stats = FALSE)
+  said <- character()
+  withCallingHandlers(do.call(tab_reg, c(args, list(parallel = 2L))),
+                      message = function(m) { said <<- c(said, conditionMessage(m))
+                                              invokeRestart("muffleMessage") })
+  expect_false(any(grepl("one after another", said)))  # it is NOT refused any more
+  expect_identical(
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
+    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+})
+
+
+# === Phase 20f-iiii: a worker's ERROR ==============================================================
+# [.stop] used to re-throw mirai's own wrapper BEFORE tab_pmap() replayed anything, so a failure
+# discarded every message the successful units had already produced -- the diagnostics that explain
+# it. The trampoline catches its unit's error and returns it, so collection completes.
+
+test_that("a failing unit is NAMED, identically in both branches", {
+  warm_pool(2L)
+  bad <- reg_fx
+  bad$constvar <- factor("only")                     # a one-level predictor: the fit cannot run
+  fail <- function(parallel) tryCatch(
+    suppressMessages(tab_reg(bad, "married", list(m1 = "race", m2 = c("race", "constvar")),
+                             family = "binomial", stats = FALSE, parallel = parallel)),
+    error = conditionMessage)
+
+  serial <- fail(FALSE)
+  expect_match(serial, 'Model "m2"')                 # the model's LABEL, not an index
+  expect_identical(fail(2L), serial)                 # ...and the process boundary changes nothing
+})
+
+test_that("a sibling unit's messages still reach the user when another unit fails", {
+  warm_pool(2L)
+  bad <- reg_fx
+  bad$constvar <- factor("only")
+  msgs <- character()
+  expect_error(withCallingHandlers(
+    tab_reg(bad, c("married", "tvhours"), list(m1 = "race", m2 = c("race", "constvar")),
+            stats = FALSE, parallel = 2L),
+    message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") }))
+  # the family-detection notice of the FIRST outcome was produced before the failure and survives
+  expect_true(any(grepl("outcome detected", msgs)))
+})

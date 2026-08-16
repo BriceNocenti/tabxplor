@@ -446,6 +446,31 @@ test_that("a compound formula with an interaction renders and exports without er
   expect_no_error(tab_md(t1))
 })
 
+test_that("a compound formula reaches the 3+ level engines too (Phase 20f-iiii)", {
+  # TWO measured defects, both silent. (1) reg_fit_multinom() / reg_fit_ordinal() BUILT the formula
+  # from the bare predictors and never saw the user's, so the interaction was dropped from the MODEL
+  # -- `party3 ~ race * age` fitted `race + age`. (2) reg_skeleton_from_fit() read its coefficient
+  # names from coef(), which is a MATRIX for nnet::multinom (names() NULL -> every non-factor term
+  # produced zero rows) and drops MASS::polr's intercept (one short, so assign was misaligned).
+  skip_if_not_installed("broom")
+  skip_if_not_installed("nnet")
+  skip_if_not_installed("MASS")
+  d <- reg_data()[seq(1, nrow(reg_data()), 6), ]
+  d$party3 <- forcats::fct_lump_n(d$partyid, 2)
+  d$inc3   <- factor(forcats::fct_lump_n(d$rincome, 2), ordered = TRUE)
+  d <- as.data.frame(d)
+  ref <- tab_reg(d, married ~ race * age, family = "binomial", cleannames = FALSE, stats = FALSE)
+  expect_true(sum(grepl(":", as.character(ref$var))) >= 2L)
+  for (f in list(list("multinomial", stats::as.formula("party3 ~ race * age")),
+                 list("ordinal",     stats::as.formula("inc3 ~ race * age"))))  {
+    t <- suppressMessages(
+      tab_reg(d, f[[2]], family = f[[1]], cleannames = FALSE, stats = FALSE))
+    # the SAME row axis as the glm arm on the same RHS: the interaction is fitted and shown
+    expect_identical(as.character(t$var), as.character(ref$var))
+    expect_identical(as.character(t$levels), as.character(ref$levels))
+  }
+})
+
 test_that("formula errors: predictors both supplied, and a call-LHS with family='auto'", {
   skip_if_not_installed("broom")
   d <- reg_data()

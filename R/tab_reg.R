@@ -879,8 +879,18 @@ reg_skeleton <- function(data, predictors, shape_terms = NULL) {
 reg_skeleton_from_fit <- function(fit) {
   tt      <- stats::terms(fit)
   labels  <- attr(tt, "term.labels")
-  assign  <- attr(stats::model.matrix(fit), "assign")   # 0 = intercept, k = labels[k]
-  coefnms <- names(stats::coef(fit))
+  mm      <- stats::model.matrix(fit)
+  assign  <- attr(mm, "assign")                         # 0 = intercept, k = labels[k]
+  # ⚠ the coefficient names come off the MODEL MATRIX, which is the vector `assign` indexes -- NOT
+  # off coef(), whose shape is the FITTER's convention (Phase 20f-iiii, two measured defects):
+  # nnet::multinom returns a MATRIX for k > 2 outcome categories, so names() is NULL and every
+  # non-pure-factor term produced ZERO rows (`party3 ~ race*age` built 4 rows instead of 7 -- the
+  # numeric main effect and both interactions vanished in silence); MASS::polr drops the intercept
+  # from coef() but not from the model matrix, so the two vectors were off by one and every term
+  # after the first was mislabelled. For lm / glm / svyglm the two are identical, which is why this
+  # went unseen. broom::tidy() names its terms after the same model-matrix columns, so reg_column()
+  # still aligns exactly.
+  coefnms <- colnames(mm)
   xlev    <- fit$xlevels
 
   parts <- purrr::map(seq_along(labels), function(k) {
@@ -988,17 +998,36 @@ reg_wald_from_tidy <- function(td, conf_level, do_exp) {
 # Begg-Gray estimand, one set of coefficients per non-reference category (the tidy carries a `y.level`
 # column that reg_build splits into one OR column per category). The reference category is the outcome
 # factor's FIRST level (set via `reference` upstream, MNL only).
+# reg_fit_formula() -- THE model formula of the two 3+ level engines, and the one rule the glm arm
+# already applied inline: a compound `formula` is fitted VERBATIM (it controls its own RHS, so the
+# shape terms do not apply to it); otherwise the bare predictors plus any shape term, backticked.
+# ⚠ Phase 20f-iiii: both engines used to BUILD the formula and never see the user's, so
+# `tab_reg(d, party3 ~ race * age, family = "multinomial")` silently fitted `race + age` -- the
+# interaction was dropped from the model, not merely from the table. The escape hatch is documented
+# for every family, so it must reach every fitter.
+#' @keywords internal
+#' @noRd
+reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NULL) {
+  if (!is.null(formula)) return(formula)
+  stats::as.formula(paste0(
+    "`", outcome, "` ~ ",
+    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")))
+}
+
 reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, method,
-                             weighted = FALSE, make_design = NULL, add_terms = NULL) {
+                             weighted = FALSE, make_design = NULL, add_terms = NULL,
+                             formula = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
   }
   mdata[[outcome]] <- forcats::fct_drop(as.factor(mdata[[outcome]]))
   y_levels <- levels(mdata[[outcome]])
-  fml <- stats::as.formula(paste0(
-    "`", outcome, "` ~ ",
-    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")
-  ))
+  # ⚠ re-home the formula to THIS frame, which is where `fml` and `mdata` are: nnet::multinom and
+  # MASS::polr store their call and re-evaluate it (model.frame.multinom / model.matrix.polr, which
+  # reg_skeleton_from_fit() then reads), so a formula carrying the user's environment resolves
+  # `fml` nowhere. The built formula needs it too -- as.formula()'s environment is its caller's.
+  fml <- reg_fit_formula(outcome, predictors, add_terms, formula)
+  environment(fml) <- environment()
 
   if (weighted) {
     # svyVGAM::svy_vglm with VGAM's multinomial: refLevel = 1 makes the FIRST (reference) level the
@@ -1037,7 +1066,8 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
 # cut-point "scale" rows are dropped, so the skeleton "Constant" cell stays NA). The parallel-lines
 # assumption is diagnosed (Brant test) for the unweighted fit; the design-based fit degrades that.
 reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, method,
-                            weighted = FALSE, make_design = NULL, add_terms = NULL) {
+                            weighted = FALSE, make_design = NULL, add_terms = NULL,
+                            formula = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
   }
@@ -1050,10 +1080,12 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     y <- forcats::fct_drop(y)
   }
   mdata[[outcome]] <- y
-  fml <- stats::as.formula(paste0(
-    "`", outcome, "` ~ ",
-    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")
-  ))
+  # ⚠ re-home the formula to THIS frame, which is where `fml` and `mdata` are: nnet::multinom and
+  # MASS::polr store their call and re-evaluate it (model.frame.multinom / model.matrix.polr, which
+  # reg_skeleton_from_fit() then reads), so a formula carrying the user's environment resolves
+  # `fml` nowhere. The built formula needs it too -- as.formula()'s environment is its caller's.
+  fml <- reg_fit_formula(outcome, predictors, add_terms, formula)
+  environment(fml) <- environment()
 
   if (weighted) {
     # survey::svyolr: coef() also returns the cut-point ("zeta") thresholds -> read the SLOPES from
@@ -1254,11 +1286,11 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   # the CI <-> p <-> stars duality holds, but not the glm path.
   if (family == "multinomial") {
     return(reg_fit_multinom(mdata, outcome, predictors, do_exp, conf_level, method,
-                            weighted, make_design, add_terms = add_terms))
+                            weighted, make_design, add_terms = add_terms, formula = formula))
   }
   if (family == "ordinal") {
     return(reg_fit_ordinal(mdata, outcome, predictors, do_exp, conf_level, method,
-                           weighted, make_design, add_terms = add_terms))
+                           weighted, make_design, add_terms = add_terms, formula = formula))
   }
 
   positive_level <- NULL
@@ -2499,6 +2531,12 @@ reg_test_row <- function(test, col, var = "", statistic = NA_real_, df1 = NA_rea
 #' @keywords internal
 reg_interaction_types <- function() unname(test_row_types("interaction"))
 
+# ⚠ THE FOURTH FITTING SITE, and the one that cannot join a per-spec product (Phase 20f-iiii, stated
+# here so the next reader does not re-derive it). It fits the POOLED model -- every tab_vars group at
+# once, with the group interacted -- so it lives AFTER the split barrier in reg_stage_split(), where
+# the groups' own reg_build() calls have already returned. A per-spec builder runs inside ONE group
+# and can never see the others, which is why this is not a missed parallel axis but a different
+# question: reg_specs_independent() is about models of ONE table, this is about a test across tables.
 #' @keywords internal
 reg_interaction_rows <- function(reg_gof, data, specs, shared, tab_vars, fit_first_col) {
   weighted <- shared$weighted
@@ -2597,10 +2635,16 @@ reg_term_tests <- function(fit, preds, terms, use_f, use_wald, types, col_var, n
 # the item a gtsummary user reaches for first (`add_global_p`). tabxplor's audience is almost entirely
 # multi-level categorical predictors, so it is in the DEFAULT stats set.
 #
-# It costs NO extra fit: the model is already in hand (unlike the interaction test, which needs a
-# pooled one), so this is regTermTest() on the stored vcov where a design exists and drop1() on the
-# existing fit otherwise. Emitted only for terms carrying 2+ coefficients: a 1-df term's global p IS
-# the single cell's p, already starred, so a line for it would be noise.
+# Emitted only for terms carrying 2+ coefficients: a 1-df term's global p IS the single cell's p,
+# already starred, so a line for it would be noise.
+#
+# ⚠ IT DOES REFIT, and that is a DECLARED KEEP (Phase 20f-iiii, from 20f's routed item). The design
+# arm is regTermTest() on the stored vcov and refits nothing; the unweighted arm is drop1(), which
+# fits one reduced model per multi-coefficient term (~2 s at n = 200 000). The only cheaper route is
+# a Wald test -- which is a DIFFERENT NUMBER, not a faster way to the same one, and this is a TEST a
+# reader will quote, not a diagnostic. 20f's own precedent stands behind that: substituting anova()
+# for drop1() moved a quasipoisson F from 14.25 to 12.47. Unlike the model CHECKS (REG_CHECKS$cost),
+# it therefore stays in the default `stats` set and pays the fit.
 # Phase 20c: DERIVED from TEST_ROWS (`stat == "global"`).
 #' @keywords internal
 reg_global_types <- function() unname(test_row_types("global"))
@@ -2977,16 +3021,19 @@ new_reg_ctx <- function(
     compound = logical(0), builders = character(0),
     prefix_dep = FALSE, n_outcomes = 0L, is_comparison = FALSE, at_profile = FALSE,
     numeric_preds = character(0), factor_preds = character(0),
-    # `spec_plan` (want_n / n_names / want_emp / num_preds) is what the builder must be TOLD rather
-    # than work out: the two loop-carried de-duplications (a worker cannot know what an earlier unit
-    # already built) and the one predictor set whose rule is table-scalar. `want_global` and
-    # `share_crude` are the table-scalar gates it reads.
-    spec_plan = list(), want_global = TRUE, share_crude = FALSE,
+    # `spec_plan` (want_n / n_names / want_emp / want_crude / num_preds) is what the builder must be
+    # TOLD rather than work out: the de-duplications a worker cannot reproduce (it does not know
+    # what another unit built) and the one predictor set whose rule is table-scalar. `want_global`
+    # is the other table-scalar gate it reads.
+    spec_plan = list(), want_global = TRUE,
+    # --- reg_stage_crude: the ONE observed block of a one-outcome table ---------------------------
+    # NULL when the table has several outcomes (each spec builds its own) or no crude companion.
+    crude = NULL,
     # --- reg_stage_specs: one new_reg_spec_product() per spec, and the column LAYOUT -------------
     # `built` is the flattened VIEW of the products' `cols`, in order (`built_per_fit`'s old role).
     products = list(),
-    built = list(), labels = character(0), fit_ncol = integer(0),
-    fit_first_idx = integer(0), fit_first_col = character(0), fit_of_col = integer(0),
+    built = list(), labels = character(0),
+    fit_first_idx = integer(0), fit_first_col = character(0),
     emp_degraded = FALSE,
     # --- reg_stage_footer: the `test` tibble -----------------------------------------------------
     test = NULL,
@@ -3028,6 +3075,7 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
   # may inform or warn (dev/verify_reg_specs.R compares the message stream IN ORDER).
   if (!is.null(tab_vars)) return(reg_stage_split(ctx))
   ctx <- reg_stage_setup(ctx)      # the skeleton, the table's shape facts, the per-spec plan
+  ctx <- reg_stage_crude(ctx)      # the observed (crude) block of a ONE-outcome table, built once
   ctx <- reg_stage_specs(ctx)      # ONE reg_spec_build() per model (serial or pooled) + the layout
   ctx <- reg_stage_footer(ctx)     # the products' rows + the between-model comparison -> `test`
   ctx <- reg_stage_rows(ctx)       # the row axis: labels, relabels, sparklines, add_n -> `tab`
@@ -3065,6 +3113,7 @@ reg_stage_split <- function(ctx) {
                     .const = list(sl = sl, tab_vars = tab_vars, specs = specs,
                                   fit_cache = fit_cache),
                     .ship  = list(shared = shared, data = data),
+                    .names = as.character(sl),
                     workers = tab_parallel_workers(parallel, fit_cache))
   # Phase 18z5: `color = "between_groups"` scores each group's estimate against the REFERENCE
   # GROUP's on the same row. THIS is the only point where the groups exist as parallel, separately
@@ -3189,19 +3238,40 @@ reg_stage_setup <- function(ctx) {
   # default puts them on one population. The NAME is table-scalar too.
   want_n   <- isTRUE(add_n) & (n_outcomes > 1L | seq_along(specs) == 1L) & !duplicated(outcomes)
   n_names  <- if (n_outcomes > 1L) paste0("n [", outcomes, "]") else rep("n", length(specs))
-  # the crude block: in COMPARISON mode it is the SAME OBJECT for every spec (every input is
-  # table-wide or per-OUTCOME, and a models list is refused unless it has exactly ONE outcome), so
-  # spec 1 builds it and reg_stage_specs() hands it down. ⚠ the condition is `n_outcomes <= 1L`,
-  # NOT `is_comparison`: they differ for a single spec, which must keep its own block.
+  # THE CRUDE BLOCK BELONGS TO THE OUTCOME (Phase 20f-iiii). Every input to it is table-wide or
+  # per-OUTCOME, so a table with ONE outcome has ONE block: reg_stage_crude() builds it before any
+  # model (`want_crude`), and a table with SEVERAL builds each one with its own spec (`want_emp`) --
+  # which is also its outcome, so it stays on the parallel axis instead of serialising into a
+  # pre-pass. Before this, spec 1 built the single-outcome block and handed it down the loop, which
+  # is what made "compared models share an observed block" a reason to refuse the pooled branch.
   # Phase 18z9: numeric predictors get a crude column too, from their univariable fit -- EXCEPT in
   # compound-formula mode, where `var` is a bare RHS name whose model term may be an interaction or a
   # basis expansion (`age*race`, `poly(age, 2)`), so a univariable slope is not that row's estimand.
   # ⚠ `any(compound)` is deliberately table-scalar: one compound spec empties this for every block.
   num_e    <- if (any(compound)) character(0) else numeric_preds
-  want_emp <- isTRUE(empirical) & (length(factor_preds) > 0L || length(num_e) > 0L) &
-    (n_outcomes > 1L | seq_along(specs) == 1L) &
-    !is.na(purrr::map_chr(specs, ~ .$crude_key %||% NA_character_))
-  share_crude <- is_comparison && isTRUE(empirical)
+  has_pred <- length(factor_preds) > 0L || length(num_e) > 0L
+  crude_ok <- !is.na(purrr::map_chr(specs, ~ .$crude_key %||% NA_character_))
+  want_emp   <- isTRUE(empirical) & has_pred & (n_outcomes > 1L) & crude_ok
+  want_crude <- isTRUE(empirical) && has_pred && n_outcomes <= 1L && crude_ok[[1L]] &&
+    # a deferred skeleton is read back off the FIRST fit, so a stage that runs BEFORE the fits has
+    # nothing to align the crude columns to. Unreachable (the assert below says why), kept as the
+    # statement of what the stage needs.
+    !skeleton_deferred
+
+  # ⚠ THE TWO FACTS reg_stage_crude() RESTS ON, asserted rather than remembered:
+  #  (1) with one outcome every spec is built from deps[1, ] (reg_resolve_specs), so the estimand,
+  #      family, trials, crude_key and colour it reads off specs[[1]] are every spec's. Phase 20f-ii
+  #      relied on this silently ("true today, stated nowhere") to stop rebuilding the block.
+  #  (2) a deferred skeleton and a crude block cannot co-exist: `compound` is only ever
+  #      `formula_mode`, and reg_crude_key(compound = TRUE) is NA, which turns `empirical` off at
+  #      the argument boundary (R/reg-resolve.R). Without this, `want_emp` no longer covering spec 1
+  #      would silently drop a deferred table's crude block.
+  if (length(specs) > 1L && n_outcomes <= 1L) {
+    one <- function(f) length(unique(purrr::map(specs, f))) == 1L
+    stopifnot(one("outcome"), one("fit_family"), one("trials"), one("crude_key"),
+              one(~ .$est$effect), one(~ .$est$measure), one("color"))
+  }
+  stopifnot(!skeleton_deferred || !isTRUE(empirical))
 
   ctx_update(ctx, list(data = data, data_canon = data_canon, skeleton = skeleton,
                         skeleton_deferred = skeleton_deferred,
@@ -3209,9 +3279,123 @@ reg_stage_setup <- function(ctx) {
                         prefix_dep = prefix_dep, n_outcomes = n_outcomes,
                         is_comparison = is_comparison, at_profile = at_profile,
                         numeric_preds = numeric_preds, factor_preds = factor_preds,
-                        want_global = want_global, share_crude = share_crude,
+                        want_global = want_global,
                         spec_plan = list(want_n = want_n, n_names = n_names,
-                                         want_emp = want_emp, num_preds = num_e)))
+                                         want_emp = want_emp, want_crude = want_crude,
+                                         num_preds = num_e)))
+}
+
+
+# reg_stage_crude() -- THE OBSERVED (CRUDE) BLOCK OF A ONE-OUTCOME TABLE, built once, before any
+# model. It is the descriptive companion every model column is compared to: the crude % / mean /
+# rate and the crude effect, their intervals, the complete-case frame and the fitted univariable
+# legs the adjustment gap test needs.
+#
+# WHY IT IS A STAGE (Phase 20f-iiii). The block is a function of the OUTCOME, not of a model: every
+# input is table-wide or per-outcome, and reg_stage_setup()'s assert says so. Building it inside the
+# first spec and handing it down the loop made it look per-model, cost a `break`, and was one of the
+# three reasons the models could not be dispatched. A table with SEVERAL outcomes keeps its blocks
+# per spec (`want_emp`) -- there each spec IS an outcome, so nothing is shared and the work stays on
+# the parallel axis rather than serialising into this pre-pass.
+#
+# ⚠ IT IS FIT-FREE, and that is what makes it liftable. The block used to read two things off the
+# model object; both have exact producers of their own:
+#   * `positive_level` -- reg_positive_level() is the function reg_prep_binary() itself calls to
+#     order the levels, and `f$positive_level` is the attribute it writes. Same frame, same answer.
+#   * the outcome's reference CATEGORY -- reg_crude_yw() collapses any `ref_category` that is not a
+#     level of the crude frame to `cats[1]`, and the crude frame is a row-subset of the model frame,
+#     so `f$y_ref` and the first level here are the same value in both branches. (`f$y_ref` is
+#     written only by reg_fit_multinom(); it is NULL for every other family, and absent on the
+#     jamovi reref path.)
+#' @keywords internal
+#' @noRd
+reg_stage_crude <- function(ctx) {
+  list2env(reg_ctx_locals(ctx), environment())
+  if (!isTRUE(spec_plan$want_crude)) return(ctx)
+
+  sp     <- specs[[1L]]                     # every spec's, with one outcome (reg_stage_setup assert)
+  sp_fam <- sp$fit_family
+  inv_sp <- reg_outcome_level_of(sp$outcome_level) %||% outcome_level
+  key    <- sp$crude_key
+  mdata  <- reg_emp_frame(sp$outcome, ctx)  # the same complete-case frame as the model
+  pos    <- if (reg_fam_binary(sp_fam)) reg_positive_level(mdata, sp$outcome, inv_sp) else NULL
+  y_ref  <- levels(forcats::fct_drop(as.factor(mdata[[sp$outcome]])))[[1L]]
+  var_y  <- if (sp_fam == "gaussian")
+    suppressWarnings(stats::var(as.numeric(mdata[[sp$outcome]]), na.rm = TRUE)) else NA_real_
+
+  block <- reg_crude_block(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, ctx)
+  # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span, no
+  # border). NOT in comparison mode, where the crude block stays a distinct col_var beside the models.
+  if (!is_comparison && length(block$cols)) {
+    scv <- reg_shared_col_var(sp_fam, sp$outcome, pos, cleannames)
+    block$cols <- purrr::map(block$cols, ~ set_col_var(.x, scv))
+  }
+  # the numeric predictors' descriptive tooltip belongs to the BLOCK, not to a model: it keys the
+  # crude effect column, which every spec of a one-outcome table shares. Built here exactly once --
+  # letting each spec build it would re-emit the same rows, which is what Phase 20f-ii deleted.
+  block$tips_num <- reg_spec_tips_num(sp, pos, block, ctx)
+
+  ctx_update(ctx, list(crude = block))
+}
+
+
+# reg_crude_block() -- the arithmetic of one observed block: the crude grid, the univariable legs of
+# the predictors that have no closed form, and the columns they become. Shared by reg_stage_crude()
+# (one outcome) and reg_spec_build() (one block per spec, several outcomes), so the two cannot fork.
+#' @keywords internal
+#' @noRd
+reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, ctx) {
+  list2env(reg_ctx_locals(ctx), environment())
+  # ⚠ the two crude predictor sets are TABLE-scalar and come from the declared plan: `num_preds` is
+  # emptied when ANY spec has a compound formula (one such spec strips the numeric crude columns from
+  # every block, compound or not), so it is not derivable from `sp` alone.
+  fac_preds_e <- factor_preds
+  num_preds_e <- spec_plan$num_preds
+  emp <- reg_empirical(mdata, fac_preds_e, sp$outcome, key, pos, design_spec$wt,
+                       trials = sp$trials, ref_category = y_ref,
+                       conf_level = conf_level, design_spec = design_spec)
+  # Which predictors have no closed form and must be fitted? z9: the numeric ones. z10: EVERY
+  # predictor under an ordinal outcome (proportional odds is a constraint, so the univariable model
+  # is not saturated). reg_crude_saturated() states the rule; nothing here re-derives it.
+  fit_preds_e <- c(
+    num_preds_e,
+    if (!reg_crude_saturated(key, TRUE)) fac_preds_e else character(0))
+  # The crude fits take the FULL `data` + `drop_extra`, never the pre-filtered frame: a prebuilt
+  # survey design's keep_mask is computed from `data` itself (reg_resolve_design).
+  # `marginal`: reg_empirical_columns() swaps the crude shape for a marginal one only where the
+  # model's own estimand is marginal AND on a probability scale (a gaussian AME IS its coefficient;
+  # a poisson AME is additive while its crude shape stays a rate RATIO, which reg_same_estimand()
+  # then refuses), so the fit follows the shape it must fill.
+  fit_e <- reg_empirical_fit(
+    data, fit_preds_e, sp$outcome, sp_fam, design_spec,
+    outcome_level = inv_sp,
+    conf_level = conf_level, method = method, skeleton = skeleton, multiplier = multiplier,
+    other_preds = union_predictors, est = sp$est, wt = design_spec$wt,
+    # z17 (D2): always kept. `want_fit` does not decide whether the univariable crude models are
+    # FITTED (they are, to fill the crude column) -- only whether the fitted object survives for
+    # the gap test's crude leg. Build-time locals; they never reach the jamovi .fit_cache.
+    want_fit = TRUE, trials = sp$trials,
+    shape_terms = shape_terms,
+    marginal = !identical(sp$est$effect, "coefficient") &&
+      (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
+  out <- reg_empirical_columns(skeleton, emp, fac_preds_e, key, sp_fam, sp$est, var_y,
+                               conf_level = conf_level, color_signif = color_signif,
+                               color = sp$color, fit_est = fit_e,
+                               # W-D: `n_eff` is written only where something corrected it
+                               weighted = svy_weighted(design_spec, design_spec$wt),
+                               # z16-iiiii (D4): the design df the MODEL columns are already
+                               # referred to, so the crude bracket beside them matches
+                               degf = design_spec$degf %||% Inf)
+  # Phase 18z8-B: the block also carries what the GAP TEST needs -- the frame it was computed on,
+  # the factor predictors it covers and the fitted crude legs. None of them leaves reg_build():
+  # reg_emp_slim() drops everything but `$cols` on the way out of reg_spec_build().
+  out$frame     <- mdata
+  out$fac_preds <- fac_preds_e          # ⚠ live: reg_set_obs() -> reg_gap_se_columns(fac_preds =)
+  out$fit_preds <- fit_preds_e
+  out$fits      <- fit_e$fits
+  out$grid      <- emp
+  out$degraded  <- isTRUE(attr(emp, "degrade"))
+  out
 }
 
 
@@ -3368,23 +3552,19 @@ reg_stage_specs <- function(ctx) {
     cli::cli_inform(c("i" = "{.arg parallel}: the models are built one after another here -- {why}."))
 
   if (workers > 1L) {
-    # ⚠ the whole ctx is the shipped object: `data`, `skeleton_data` and a prebuilt survey design all
-    # live in it, and everywhere() sends it ONCE per dispatch (measured 0.05 s for a 200 000-row
-    # frame, dev/tabxplor_reg_performance.md 6.3). `emp_shared` is NULL by construction here -- a
-    # shared crude block is one of reg_specs_independent()'s refusals.
+    # ⚠ the whole ctx is the shipped object: `data`, `skeleton_data`, a prebuilt survey design and
+    # (on a one-outcome table) the crude block all live in it, and everywhere() sends it ONCE per
+    # dispatch (measured 0.05 s for a 200 000-row frame, dev/tabxplor_reg_performance.md 6.3).
     products <- tab_pmap(list(i = seq_along(specs)), "reg_spec_build",
-                         .const = list(emp_shared = NULL), .ship = list(ctx = ctx),
+                         .ship = list(ctx = ctx), .names = purrr::map_chr(specs, "label"),
                          workers = workers)
   } else {
     products <- vector("list", length(specs))
-    emp_shared <- NULL
     for (k in seq_along(specs)) {
-      products[[k]] <- reg_spec_build(k, ctx, emp_shared = emp_shared)
-      if (k == 1L) {
-        # the two facts a later spec takes from the first one, both declared refusals above
-        if (isTRUE(share_crude))       emp_shared <- products[[1]]$emp
-        if (isTRUE(skeleton_deferred)) ctx <- ctx_update(ctx, list(skeleton = products[[1]]$skeleton))
-      }
+      products[[k]] <- reg_spec_build(k, ctx)
+      # the ONE fact a later spec still takes from the first one, and the surviving refusal above
+      if (k == 1L && isTRUE(skeleton_deferred))
+        ctx <- ctx_update(ctx, list(skeleton = products[[1]]$skeleton))
     }
   }
   # ⚠ AFTER both branches, not inside the serial one: a table with ONE compound spec defers its
@@ -3401,19 +3581,20 @@ reg_stage_specs <- function(ctx) {
   # ⚠ every model owns at least one column, and the layout DEPENDS on it: two models with the same
   # fit_first_idx would collide in reg_stage_assemble()'s match(), silently dropping the second's
   # crude block. Every declared builder returns >= 1 column, so this is an assert, not a branch.
+  # `fit_ncol` stays a LOCAL: it feeds the assert and the offsets, and nothing downstream asks how
+  # many columns a model has. `fit_first_idx` is the key both consumers use -- reg_stage_assemble()
+  # (match(), so it is non-NA exactly at a fit's first column) and reg_stage_tips() (the within-spec
+  # column offset).
   fit_ncol      <- purrr::map_int(products, ~ length(.x$cols))
   if (any(fit_ncol == 0L)) cli::cli_abort("Internal: a model produced no column.")
   fit_first_idx <- cumsum(c(1L, utils::head(fit_ncol, -1L)))
   fit_first_col <- labels[fit_first_idx]
-  # a fit's columns, the other way round. Computed here, where the layout is: the assembler and the
-  # tooltip resolver both read it.
-  fit_of_col    <- rep(seq_along(fit_ncol), times = fit_ncol)
 
   ctx_update(ctx, list(products = products, skeleton = skeleton,
-                        built = built, labels = labels, fit_ncol = fit_ncol,
+                        built = built, labels = labels,
                         fit_first_idx = fit_first_idx, fit_first_col = fit_first_col,
-                        fit_of_col = fit_of_col,
-                        emp_degraded = any(purrr::map_lgl(products, ~ isTRUE(.x$degraded)))))
+                        emp_degraded = any(purrr::map_lgl(products, ~ isTRUE(.x$degraded))) ||
+                          isTRUE(crude$degraded)))
 }
 
 
@@ -3629,14 +3810,12 @@ reg_add_emp_cols <- function(tab, cols, suffix) {
 reg_stage_assemble <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
-  emp_of <- function(k) if (is.na(k)) NULL else products[[k]]$emp
   # one crude companion before all model columns when there is a single outcome (incl. a
-  # model-comparison list -- all its models share the outcome, and only the first builds a block);
-  # per-fit before each fit's first model column when several outcomes (names suffixed so they do
-  # not collide).
+  # model-comparison list -- all its models share the outcome, so reg_stage_crude() built ONE block
+  # for the table); per-fit before each fit's first model column when several outcomes (names
+  # suffixed so they do not collide).
   if (n_outcomes <= 1L) {
-    e1 <- emp_of(1L)
-    if (!is.null(e1)) tab <- reg_add_emp_cols(tab, e1$cols, "")
+    if (!is.null(crude)) tab <- reg_add_emp_cols(tab, crude$cols, "")
   } else {
     for (i in seq_along(built)) {
       # ⚠ match(), not fit_of_col: it is non-NA exactly at a fit's FIRST column, which is where that
@@ -3678,8 +3857,11 @@ reg_stage_tips <- function(ctx) {
                    level = disp_levels[fr$row],
                    tip   = fr$tip)
   }))
-  num <- purrr::compact(purrr::map(products, function(pr) {
-    fr <- pr$tips$num
+  # ⚠ the numeric fragments come from the BLOCKS, not the specs: one per outcome. With a single
+  # outcome that is reg_stage_crude()'s one block; with several it is each spec's own, which is
+  # why the products still carry theirs.
+  num <- purrr::compact(purrr::map(c(list(crude$tips_num), purrr::map(products, ~ .x$tips$num)),
+                                   function(fr) {
     if (is.null(fr) || nrow(fr) == 0L) return(NULL)
     tibble::tibble(col = fr$col, var = fr$var, level = disp_levels[fr$row], tip = fr$tip)
   }))
@@ -4304,10 +4486,9 @@ reg_stage_finalize <- function(ctx) {
 #'   uses an auto worker count; an integer sets the number of worker processes. Byte-identical to
 #'   the serial result. It pays off for **many, evenly sized** models against a survey-size data
 #'   frame, and is a loss otherwise (the pool costs about a second to start, and two uneven models
-#'   cannot gain much). Some shapes are always serial and say so when asked: a model comparison
-#'   (`stats = "compare_*"`) is a test *between* the fits, and compared models with
-#'   `empirical = TRUE` share one observed block. The worker pool persists for the session; release
-#'   it with [tab_parallel_stop()].
+#'   cannot gain much). One shape is always serial and says so when asked: a model comparison
+#'   (`stats = "compare_*"`) is a test *between* the fits, so they are built together. The worker
+#'   pool persists for the session; release it with [tab_parallel_stop()].
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / outcome.
 #'
 #' @seealso [forest_plot()] draws the finished table -- every effect with its interval, its stars and
@@ -4461,7 +4642,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     # table (its fit_spec is ~4 KB of strings) and there is no cross-unit step at all, which makes
     # this the cleanest of the three axes -- and, measured, a 1.82x ceiling on two outcomes x a
     # models list at survey scale (dev/tabxplor_reg_performance.md 6.2).
-    # ⚠ `parallel = FALSE` inside the unit: a worker never spawns nested daemons.
+    # ⚠ `parallel = FALSE` inside the unit: THE NESTING RULE, stated once in tab_pmap()'s
+    # everywhere() block, where it is also enforced for any site that forgets it.
     args <- purrr::map(seq_along(outcome), function(i) {
       d   <- outcome[[i]]
       tri <- if (is.null(trials) || isTRUE(trials)) trials
@@ -4482,6 +4664,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
            parallel = FALSE, .fit_cache = .fit_cache)
     })
     tabs <- tab_pmap(list(args = args), "reg_build_outcome", .ship = list(data = data),
+                     .names = outcome,
                      workers = tab_parallel_workers(parallel, .fit_cache))
     names(tabs) <- outcome
     return(new_tabxplor_tabs(tabs))

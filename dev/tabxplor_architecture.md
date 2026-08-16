@@ -1748,21 +1748,34 @@ columns, its GOF / global / check rows, its `add_n` count, its observed (crude) 
 the stages above it become cross-spec **assemblers**.
 
 **The payload rule** is what makes the S axis (several outcomes in one table, or a models list)
-dispatchable: *the product carries no fit and nothing referencing one*. Two exceptions, each
-declared and each identical to a reason that shape is serial anyway — `fit` (whose only consumer is
-`reg_compare_rows()`) and the crude block's 60–100 MB `$frame`/`$fits`, kept only for the block that
-is *shared* with the compared models (`reg_emp_slim()` drops them everywhere else). Two
-**placeholders** carry what a worker cannot know: the footer rows' `col` (rewritten wholesale per
-product, since every row of one model shares one) and the tooltips' `(column index, skeleton row)`
-pair — which also freed the tooltips from needing `reg_stage_rows()` to have run.
+dispatchable: *the product carries no fit and nothing referencing one*. Since 20f-iiii there is ONE
+exception — `fit`, whose only consumer is `reg_compare_rows()`, on a path that is serial anyway. A
+crude block leaves the builder as its **columns** and nothing else (`reg_emp_slim()`); the 60–100 MB
+`$frame`/`$fits` never travel. Two **placeholders** carry what a worker cannot know: the footer rows'
+`col` (rewritten wholesale per product, since every row of one model shares one) and the tooltips'
+`(column index, skeleton row)` pair — which also freed the tooltips from needing `reg_stage_rows()`
+to have run.
+
+**Phase 20f-iiii — the crude block belongs to the OUTCOME.** Building it inside the first spec and
+handing it down the loop made a per-outcome fact look per-model, cost the loop its last piece of
+carried state, and was one of the three reasons the models could not be dispatched. **`reg_stage_crude()`**
+builds it once, before any model, for every one-outcome table; a several-outcome table keeps its
+blocks per spec, where each spec *is* an outcome and the work stays on the parallel axis rather than
+serialising into a pre-pass. It is **fit-free**, which is what makes it liftable: the two facts it
+used to read off the model object have exact producers of their own — `reg_positive_level()` (the
+function `reg_prep_binary()` itself calls to order the levels) and the outcome's first level (which
+`reg_crude_yw()` already collapses any foreign `ref_category` to). `reg_crude_block()` is the shared
+arithmetic, so the one-outcome and several-outcome paths cannot fork.
 
 **`reg_specs_independent(ctx)`** is the one predicate: `NULL`, or the *reason*, reported when
-`parallel` was explicitly asked for. Its three reasons are facts about the statistics, not
-limitations — a model comparison is a test *between* fits (`stats::anova(m_lo, m_hi)`, or survey's
-own `regTermTest` Wald arm, so re-implementing it would make tabxplor a second producer of a survey
-quantity); compared models share spec 1's observed block; an all-coefficient table with a compound
-formula reads its shared skeleton off the first fit. Everything else — several outcomes, a default
-models list — is independent.
+`parallel` was explicitly asked for. **Two** reasons survive, both facts about the statistics and
+both *measured* (`dev/tabxplor_reg_performance.md` §8): a model comparison is a test *between* fits
+(`stats::anova(m_lo, m_hi)`, or survey's own `regTermTest` Wald arm — and returning the fits instead
+was measured at **162 MB each** at n = 200 000, so a `reg_compare_digest()` would have to
+re-implement a survey quantity); and an all-coefficient table with a compound formula reads its
+shared skeleton off the first fit — which is *unreachable* from `tab_reg()`, since a compound formula
+forces exactly one spec, and survives as the invariant for a direct `reg_build()` caller. Everything
+else — several outcomes, a models list, a crude block — is independent.
 
 `parallel` therefore becomes a shared argument of both producers, over the *same* option, worker
 count rule, pool and `tab_parallel_stop()`, and `R/tab-parallel.R` needed no change: `tab_pmap()`

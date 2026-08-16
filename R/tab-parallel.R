@@ -134,20 +134,53 @@ tab_parallel_stop <- function() {
 # cli_inform() or cli_warn() raised in a worker was simply LOST -- measured on tab_transform()'s
 # "several numeric col_vars with different references" notice, which prints under parallel = FALSE
 # and does not under parallel = TRUE. Conditions are collected here, muffled so the daemon's own
-# output stays clean, and returned with the value for tab_pmap() to replay in unit order. Errors are
-# NOT caught: mirai's [.stop] already re-throws the first one, which is the right behaviour.
+# output stays clean, and returned with the value for tab_pmap() to replay in unit order.
+#
+# ...AND ITS ERROR (Phase 20f-iiii). Letting mirai's [.stop] re-throw was measured to lose two
+# things: the CONDITION (what surfaced was a miraiError carrying the rendered text, so a caller's
+# tryCatch(class = ) could not see the worker's own rlang classes) and, worse, every message the
+# SUCCESSFUL units had already produced -- [.stop] aborts collection before tab_pmap() replays them,
+# so a failure silently swallowed the diagnostics that explain it. Caught here and returned on the
+# payload, the real condition crosses back and the replay still runs.
 #' @keywords internal
 #' @noRd
 tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
   f    <- get(.f_name, envir = asNamespace("tabxplor"))
   ship <- mget(.ship_names, envir = .GlobalEnv)
   cnds <- list()
-  value <- withCallingHandlers(
-    do.call(f, c(row, .const, ship)),
-    message = function(m) { cnds[[length(cnds) + 1L]] <<- m; invokeRestart("muffleMessage") },
-    warning = function(w) { cnds[[length(cnds) + 1L]] <<- w; invokeRestart("muffleWarning") }
-  )
-  list(value = value, conditions = cnds)
+  err  <- NULL
+  value <- tryCatch(
+    withCallingHandlers(
+      do.call(f, c(row, .const, ship)),
+      message = function(m) { cnds[[length(cnds) + 1L]] <<- m; invokeRestart("muffleMessage") },
+      warning = function(w) { cnds[[length(cnds) + 1L]] <<- w; invokeRestart("muffleWarning") }
+    ),
+    error = function(e) { err <<- tab_cnd_strip(e); NULL })
+  list(value = value, conditions = cnds, error = err)
+}
+
+
+# tab_cnd_strip() -- make a condition safe to send back from a daemon: same classes, same message,
+# same cli bullets, same `parent` chain, referencing nothing large.
+# ⚠ NOT optional. An rlang error carries a `trace` of calls, and a call can hold VALUES rather than
+# symbols -- reg_fit() builds its survey model with do.call(survey::svyglm, list(fml, design = ...)),
+# so the error's own call would drag the whole design back across the process boundary. cli bullets
+# survive because cli_abort() renders them eagerly and tab_pmap() ships the cli/width options.
+# Declared loss: a relayed error has no backtrace. The unit's name takes its place.
+#' @keywords internal
+#' @noRd
+tab_cnd_strip <- function(cnd) {
+  if (is.null(cnd)) return(NULL)
+  cnd$trace <- NULL
+  # keep only a call whose arguments are all symbols or small atomics; else keep its head alone
+  cl <- cnd$call
+  if (is.call(cl)) {
+    small <- vapply(as.list(cl)[-1L], function(a)
+      is.symbol(a) || is.null(a) || (is.atomic(a) && length(a) <= 10L), logical(1))
+    if (!all(small)) cnd$call <- as.call(list(cl[[1L]]))
+  }
+  cnd$parent <- tab_cnd_strip(cnd$parent)
+  cnd
 }
 
 
@@ -162,10 +195,12 @@ tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
 #   .f_name : name of the worker in the tabxplor namespace (looked up on both sides).
 #   .const  : small shared args, sent per task (parallel) / passed as constants (serial).
 #   .ship   : big shared objects (data, fine_fused), shipped ONCE (parallel) / passed as args (serial).
+#   .names  : what to CALL each unit when one of them fails (a row_var, a tab_vars level, a model
+#             label, an outcome). Display only; defaults to the unit's position.
 #   workers : 0/1 -> serial; N -> N daemons. Also serial below tabxplor.parallel_min units.
 #' @keywords internal
 #' @noRd
-tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
+tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL,
                      workers = 0L, compute = tabxplor_compute) {
   f    <- get(.f_name, envir = asNamespace("tabxplor"))
   # Recycle length-1 per-unit args to the common length (pmap does this; transpose() does not).
@@ -174,9 +209,15 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
   serial <- workers <= 1L ||
     length(rows) < tx_option("parallel_min") ||
     !requireNamespace("mirai", quietly = TRUE)
+  nms <- if (is.null(.names)) as.character(seq_along(rows)) else as.character(.names)
 
   if (serial) {
-    return(purrr::map(rows, ~ do.call(f, c(.x, .const, .ship))))
+    # ⚠ named the same way the parallel branch names it, and NOT left to purrr's `i In index: 2.`:
+    # which unit failed is the first question either way, and the two branches must answer it with
+    # the same sentence (Phase 20f-iiii). A worker that already named itself is re-thrown untouched.
+    return(lapply(seq_along(rows), function(i)
+      rlang::try_fetch(do.call(f, c(rows[[i]], .const, .ship)),
+                       error = function(cnd) tab_unit_abort(cnd, nms[[i]]))))
   }
 
   tab_pool_ensure(workers, compute)
@@ -190,22 +231,33 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
   # format with its own glyphs and its own wrap width and the relayed message would not match the
   # one the serial branch prints.
   keep <- "^tabxplor\\.|^datatable\\.|^cli\\.|^crayon\\.|^width$|^useFancyQuotes$"
+  opts <- options()[grepl(keep, names(options()))]
+  # ⚠ THE NESTING RULE, and the ONE place it is enforced. The parallel axes NEST -- a crosstab's
+  # `row_var`s, and a regression's `tab_vars` groups x models x outcomes -- and only the OUTERMOST
+  # one dispatches: a daemon must never spawn daemons. The unit-construction sites each pass
+  # `parallel = FALSE` (R/tab.R tab_rowvar_ctxs, R/reg-spec-build.R reg_build_group, R/tab_reg.R's
+  # outcome recursion), but the option ships too -- `^tabxplor\.` matches `tabxplor.parallel` -- so
+  # a future site forwarding NULL would read the user's TRUE inside the worker. Forced off here, for
+  # every producer, whatever the units do.
+  opts[["tabxplor.parallel"]] <- FALSE
   mirai::everywhere(
     {
       options(tabx_opts)
       data.table::setDTthreads(1L)
       list2env(tabx_ship, envir = .GlobalEnv)
     },
-    tabx_opts = options()[grepl(keep, names(options()))],
+    tabx_opts = opts,
     tabx_ship = .ship,
     .compute  = compute
   )
 
+  # ⚠ `[]`, NOT `[.stop]`: the trampoline catches its unit's error and returns it, so collection
+  # must complete for the replay below to run at all (Phase 20f-iiii).
   got <- mirai::mirai_map(
     rows, tab_pmap_trampoline,
     .args    = list(.f_name = .f_name, .const = .const, .ship_names = names(.ship)),
     .compute = compute
-  )[.stop]
+  )[]
 
   # Replay the workers' conditions on the main process, in UNIT order (Phase 20f). The serial branch
   # signals them live and in that same order, so what a user sees is the same set of messages, in the
@@ -213,8 +265,37 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
   # ⚠ Inherently NOT identical in one respect, and it cannot be: a worker's conditions can only be
   # replayed once the map has collected, so they land AFTER anything the caller signalled around
   # tab_pmap() rather than interleaved with it. That is the price of another process, not a defect.
-  for (g in got) for (cnd in g$conditions) rlang::cnd_signal(cnd)
+  # ⚠ AND WE STOP AT THE FIRST FAILING UNIT: serially the loop would have aborted there, so the
+  # units after it never ran. Replaying their messages would show output the serial branch cannot
+  # produce -- the opposite of the parity this relay exists for.
+  for (i in seq_along(got)) {
+    g <- got[[i]]
+    # a value mirai itself failed on (a dead daemon, an unserialisable return): it never reached the
+    # trampoline, so there is no payload to read and nothing to say but what mirai says.
+    if (mirai::is_error_value(g)) {
+      cli::cli_abort(c("Parallel build failed on {.val {nms[[i]]}}.",
+                       "x" = as.character(g)), call = NULL)
+    }
+    for (cnd in g$conditions) rlang::cnd_signal(cnd)
+    # a worker's own error, with its classes and bullets intact
+    if (!is.null(g$error)) tab_unit_abort(g$error, nms[[i]])
+  }
   purrr::map(got, "value")
+}
+
+
+# tab_unit_abort() -- "which unit failed", said the same way in both branches.
+# ⚠ the de-duplication is by NAME, not by class: the axes NEST (outcomes x models x tab_vars
+# groups), so an inner failure legitimately gains an outer name -- "the m1 model, of the `score`
+# outcome". Only a unit re-naming ITSELF is dropped, which is what happens when reg_spec_build()'s
+# own wrapper (the S axis, whose serial branch is a hand-written loop, not tab_pmap) is then seen
+# again by the parallel collector.
+#' @keywords internal
+#' @noRd
+tab_unit_abort <- function(cnd, nm) {
+  if (identical(cnd$tabxplor_unit, nm)) stop(cnd)
+  cli::cli_abort("Build failed on {.val {nm}}.", parent = cnd, call = NULL,
+                 class = "tabxplor_unit_named", tabxplor_unit = nm)
 }
 
 

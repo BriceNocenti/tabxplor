@@ -145,6 +145,14 @@ case("S 3-model comparison BALANCED, n = 200 000", "S",
      tab_reg(big, "married", list(M1 = P4, M2 = P5, M3 = P6)),
      lapply(list(P4, P5, P6), function(p) bquote(tab_reg(big, "married", .(p)))))
 
+# Phase 20f-iiii: the shape 20f-iii REFUSED -- several models on one outcome WITH a crude block.
+# `color = "adjustment"` is the everyday way in (it turns `empirical` on). The block is the
+# OUTCOME's now, built once by reg_stage_crude() before the models, so the specs are independent.
+case("S 3 models + crude block (20f-iiii), n = 200 000", "S",
+     tab_reg(big, "married", list(M1 = P4, M2 = P5, M3 = P6), color = "adjustment"),
+     lapply(list(P4, P5, P6),
+            function(p) bquote(tab_reg(big, "married", .(p), color = "adjustment"))))
+
 case("R 2 outcomes x a models list, n = 200 000", "R",
      tab_reg(big, c("married", "dem"), list(M1 = P4, M2 = P6)),
      lapply(c("married", "dem"),

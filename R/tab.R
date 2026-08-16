@@ -1154,11 +1154,11 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
 tab_build_tables <- function(ctx) {
   workers <- tab_parallel_workers(ctx$parallel, ctx$cache_env)
   units   <- tab_rowvar_ctxs(ctx)
+  rv_names <- as.character(ctx$row_vars)
   built   <- tab_pmap(list(ctx_i = units), "tab_build_one",
                       .ship = list(data = ctx$data, fine_fused = ctx$fine_fused,
                                    design = ctx$inference$design),
-                      workers = workers)
-  rv_names <- as.character(ctx$row_vars)
+                      .names = rv_names, workers = workers)
   # Name by row_var: tab_assemble_output()'s merge derives the merged `row_var` factor labels from
   # names(tabs), and jmv_cache_store_tests keys `tests` by row_var name.
   tabs  <- purrr::set_names(purrr::map(built, "tab"),  rv_names)
@@ -1203,7 +1203,7 @@ tab_rowvar_ctxs <- function(ctx) {
   shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused", "design_spec"))]
   shared$inference["design"] <- list(NULL)
   shared <- shared[!grepl("_quo$", names(shared))]
-  shared$parallel  <- FALSE     # the worker never spawns nested daemons
+  shared$parallel  <- FALSE     # THE NESTING RULE -- stated once, in tab_pmap()'s everywhere() block
   shared$cache_env <- NULL
 
   lapply(seq_len(n), function(i) {

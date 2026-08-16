@@ -364,6 +364,12 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     subtext      = opts$subtext,
     multiplier   = jmvtab_reg_mult_vector(opts$multiplicator),   # tab_reg skips mnl/ordinal specs per-spec
     trials       = tri_arg,
+    # ⚠ ALWAYS serial (Phase 20f-iiii). The live cache normally forces it -- tab_parallel_workers()
+    # returns 0 whenever a `cache_env` is present -- but in STAGED mode `use_cache` is FALSE, so
+    # `.fit_cache` is NULL and `parallel` would fall through to getOption("tabxplor.parallel"): a
+    # user who set that option once would have jamovi spawning daemons inside its own R process, for
+    # a UI that repaints on every click. The module never dispatches; it is the interactive path.
+    parallel     = FALSE,
     .fit_cache   = if (use_cache) cache_env else NULL
   )
 
