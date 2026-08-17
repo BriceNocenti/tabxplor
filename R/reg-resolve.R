@@ -14,8 +14,8 @@
 # the contract, the body is as.list(environment()), the globalVariables mirror is derived beneath).
 #
 #   S1 reg_validate_args()      the checks that are PURE
-#   S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / shape /
-#                               all_predictors / tab_vars -- and every rewrite of `data`
+#   S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / the level
+#                               merge / shape / all_predictors / tab_vars -- every rewrite of `data`
 #   S3 reg_resolve_estimands()  the PER-DEPENDENT TABLE (family / estimand / trials / level / crude)
 #   S4 reg_resolve_output()     display / colour / the empirical degrade -- and the notes, LAST
 #   S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms
@@ -116,13 +116,17 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
 #   H6  labelled BEFORE the trials stage: reg_trials_observed_max() answers NA for a factor.
 #   H18 shape BEFORE the frozen multiplier frame: a quantile-cut predictor's SD would otherwise be
 #       measured on the raw numeric.
+#   H25 the level MERGE (20g-ii) with `shape`, and before the family stage / the reference relevel /
+#       the frozen SD / the skeleton -- so every one of them sees the predictor as fitted. It cannot
+#       collide with `shape`: reg_resolve_shape() refuses a factor predictor, so `shape` acts on the
+#       numeric ones and a merge on the factor ones, and the two are disjoint by construction.
 #   H23 tab_vars validation BEFORE the family/estimand stages. It used to run 500 lines later, so
 #       "`tab_vars` is not a column of `data`" arrived after up to eight informs about families,
 #       colours and forcings the call was never going to produce.
 #' @keywords internal
 #' @noRd
 reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
-                             shape = NULL, family = "auto") {
+                             shape = NULL, family = "auto", levels_collapse = NULL) {
   # --- C: a PREBUILT survey design as `data` (Phase 12g / 18z14-i) ------------------------------
   # THE shared boundary (R/survey-design.R) extracts its model frame for family-detect / reference /
   # skeleton and materialises the design's own weights as a column; the design itself still drives
@@ -204,6 +208,17 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   var_labels <- capture_var_labels(data, reg_lbl_vars)
   data       <- tab_apply_val_labels(data, reg_lbl_vars)
   if (!is.null(design_obj)) design_obj$variables <- data
+
+  # --- G0: the level MERGE (Phase 20g-ii) -------------------------------------------------------
+  # tab()'s own pre-aggregate recode (R/tab.R), applied here for the same reason `shape` is: this is
+  # THE one boundary where `data` is rewritten, and it is before family detection, the reference
+  # relevel, the frozen multiplier SD and the skeleton -- so a merged predictor level is simply a
+  # level, and inherits the whole factor machinery with no code of its own. Like `shape`, the design's
+  # own `$variables` must be recoded too (svyglm reads its columns off the design, not off `data`).
+  if (!is.null(levels_collapse)) {
+    data <- tab_collapse_levels(data, levels_collapse)
+    if (!is.null(design_obj)) design_obj$variables <- data
+  }
 
   # --- G: `shape` (Phase 18z15) -----------------------------------------------------------------
   # Fit a continuous predictor as something other than a line. THE boundary, and there is only one:
@@ -790,7 +805,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                              multiplier = "sd", shape = NULL, stats = NULL,
                              na = "drop_by_outcome", na_explicit = FALSE,
                              display = "value", cleannames = TRUE, subtext = "",
-                             .fit_cache = NULL) {
+                             .fit_cache = NULL, levels_collapse = NULL) {
   # S1 -- the pure checks.
   # ⚠ H0 (Phase 20c): the `stats` SPLIT runs FIRST, before the validation that reads its parts and
   # before every stage that receives them. `stats` is one argument at the surface and the triple
@@ -807,7 +822,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 
   # S2 -- everything that touches `data`.
   prep <- reg_prepare_data(data, outcome, predictors, tab_vars = tab_vars, wt = wt,
-                           shape = shape, family = family)
+                           shape = shape, family = family,
+                           levels_collapse = levels_collapse)
 
   # ⚠ H24 (Phase 20f-ii): a between-model test compares two fits OF THE SAME OUTCOME, and nothing
   # said so. A models LIST already refuses several outcomes (block E), but the one-model-per-outcome

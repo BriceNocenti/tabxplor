@@ -387,7 +387,12 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     # user who set that option once would have jamovi spawning daemons inside its own R process, for
     # a UI that repaints on every click. The module never dispatches; it is the interactive path.
     parallel     = FALSE,
-    .fit_cache   = if (use_cache) cache_env else NULL
+    .fit_cache   = if (use_cache) cache_env else NULL,
+    # Phase 20g-ii: the per-predictor level-merge tick-boxes, folded by the SAME function jmvtab
+    # uses. It needs no cache entry of its own: jmvreg_fit_key() fingerprints the PREPARED frame's
+    # levels, and reg_prepare_data() merges before any fit -- so a merge changes the key by
+    # construction.
+    .levels_collapse = jmvtab_levels_collapse(opts$levels_collapse)
   )
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)

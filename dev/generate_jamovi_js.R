@@ -7,6 +7,10 @@
 #     // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
 #     // --- END GENERATED ---
 #   in each file. Everything outside the markers is untouched.
+#   Phase 20g-ii adds a SECOND pair, `BEGIN/END SHARED`, which is a verbatim COPY of a block of real
+#   UI code from jmvtab.js into jmvtabreg.js (the level list with the merge tick-boxes) -- the two
+#   analyses show the same widget, and ~120 lines of export/subtext/CSS helpers already sit in both
+#   files kept in step by a comment, which is exactly what this avoids repeating.
 #
 # USAGE (from the package root, unsandboxed):
 #   Rscript dev/generate_jamovi_js.R          # rewrite the blocks
@@ -30,6 +34,9 @@ suppressMessages(devtools::load_all(.root))
 
 BEGIN <- "// --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---"
 END   <- "// --- END GENERATED ---"
+# Phase 20g-ii: the second pair -- a block COPIED from jmvtab.js into jmvtabreg.js (shared_block()).
+BEGIN_SHARED <- "// --- BEGIN SHARED (dev/generate_jamovi_js.R: copied from jamovi/js/jmvtab.js) -- do not edit ---"
+END_SHARED   <- "// --- END SHARED ---"
 
 # --- tiny JS literal writers (no jsonlite dependency for a dev script) -----------------------
 js_str  <- function(x) paste0('"', gsub('"', '\\\\"', x), '"')
@@ -120,26 +127,43 @@ tab_block <- function() {
 
 
 # =============================================================================================
-splice <- function(path, block) {
-  lines <- readLines(path, warn = FALSE)
-  i <- which(lines == BEGIN)
-  j <- which(lines == END)
+# Phase 20g-ii: TWO marker pairs now, so `splice()` takes the pair it is replacing. The second one
+# is a COPY, not a generation -- see shared_block() below.
+splice <- function(lines, block, begin = BEGIN, end = END) {
+  i <- which(lines == begin)
+  j <- which(lines == end)
   if (length(i) != 1L || length(j) != 1L || j <= i)
-    stop("missing or malformed generated-block markers in ", path, call. = FALSE)
+    stop("missing or malformed markers (", begin, ")", call. = FALSE)
   c(lines[seq_len(i - 1L)], block, lines[seq(j + 1L, length(lines))])
 }
 
+# The SHARED block: the level list with the merge tick-boxes, written ONCE in jmvtab.js and copied
+# verbatim into jmvtabreg.js. It is a copy rather than a generation because it is real UI code, not
+# a rule table -- but it rides the same mechanism (markers + `check`) for the same reason the
+# generated blocks do: jamovi bundles jamovi/js/*.js itself, and whether it would resolve a
+# require() of a third module is not something this repo can test. Everything outside the markers in
+# either file stays hand-written.
+shared_block <- function() {
+  src <- readLines(file.path(.root, "jamovi", "js", "jmvtab.js"), warn = FALSE)
+  i <- which(src == BEGIN_SHARED)
+  j <- which(src == END_SHARED)
+  if (length(i) != 1L || length(j) != 1L || j <= i)
+    stop("missing or malformed SHARED markers in jmvtab.js", call. = FALSE)
+  src[seq(i, j)]                        # markers included: they become jmvtabreg.js's own
+}
+
 targets <- list(
-  reg_block(),
-  tab_block()
+  jmvtabreg.js = function(lines) splice(splice(lines, reg_block()),
+                                        shared_block(), BEGIN_SHARED, END_SHARED),
+  jmvtab.js    = function(lines) splice(lines, tab_block())
 )
-names(targets) <- file.path(.root, "jamovi", "js", c("jmvtabreg.js", "jmvtab.js"))
 
 mode <- if (length(commandArgs(TRUE))) commandArgs(TRUE)[[1]] else "write"
 stale <- character()
-for (path in names(targets)) {
-  new  <- splice(path, targets[[path]])
+for (nm in names(targets)) {
+  path <- file.path(.root, "jamovi", "js", nm)
   cur  <- readLines(path, warn = FALSE)
+  new  <- targets[[nm]](cur)
   if (identical(new, cur)) next
   if (identical(mode, "check")) stale <- c(stale, path)
   else { writeLines(new, path); message("rewrote generated block: ", path) }

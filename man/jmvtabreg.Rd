@@ -6,30 +6,33 @@
 \usage{
 jmvtabreg(
   data,
-  dependent = NULL,
+  outcome = NULL,
   predictors = NULL,
-  split_var = NULL,
+  tab_vars = NULL,
   wt = NULL,
-  depFamily = NULL,
-  depModelLevel = NULL,
-  depTrials = NULL,
+  family = NULL,
+  outcome_level = NULL,
+  trials = NULL,
   effect = "coefficient",
   measure = "auto",
   empirical = FALSE,
   models = NULL,
-  baseline = 1,
-  compare = "none",
+  stats_baseline = 1,
+  stats_compare = "none",
+  stats_checks = FALSE,
   na = "drop_by_outcome",
   run_compare = FALSE,
-  refLevels = NULL,
-  shapes = NULL,
-  multiplicator = NULL,
+  levels_collapse = NULL,
+  ref_levels = NULL,
+  shape = NULL,
+  multiplier = NULL,
   conf_level = 0.95,
-  method = "wald",
+  ci_method = "wald",
   stars = TRUE,
   color = "auto",
   color_signif = "grey_non_signif",
   display = "value",
+  add_n = TRUE,
   cleannames = TRUE,
   subtext = "",
   wrap_rows = 35,
@@ -45,26 +48,26 @@ jmvtabreg(
 \arguments{
 \item{data}{A data.frame.}
 
-\item{dependent}{The outcome variable(s). One model is built per dependent.
-Set each outcome's family (and, for a binomial outcome, its modelled level
-or number of trials) in the Model table.}
+\item{outcome}{The outcome variable(s). One model is built per outcome. Set
+each outcome's family (and, for a binomial outcome, its modelled level or
+number of trials) in the Model table.}
 
 \item{predictors}{The explanatory variables of the model. Factors are shown
 one line per level (the reference level as the neutral value); numeric
 predictors as a single line.}
 
-\item{split_var}{A grouping variable. The same model is fitted within each
+\item{tab_vars}{A grouping variable. The same model is fitted within each
 of its levels and the tables are stacked (like tab_vars for crosstables).}
 
 \item{wt}{A survey weight variable. Switches to design-based estimation
 (scale-invariant sandwich standard errors). Leave empty for unweighted
 results.}
 
-\item{depFamily}{.}
+\item{family}{.}
 
-\item{depModelLevel}{.}
+\item{outcome_level}{.}
 
-\item{depTrials}{.}
+\item{trials}{.}
 
 \item{effect}{WHICH CONTRAST the table reports.  \itemize{   \item
 \code{"coefficient"}: the model's native per-family effect.   \item
@@ -91,12 +94,17 @@ only.}
 
 \item{models}{.}
 
-\item{baseline}{.}
+\item{stats_baseline}{.}
 
-\item{compare}{With several models (a predictor-subset list), add a
-likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
-each model against the chosen baseline model, "sequential" against the
-previous one (an AIC difference when not nested).}
+\item{stats_compare}{With several models (a predictor-subset list), add a
+likelihood-ratio / F / Wald comparison-test footer row: "compare_baseline"
+tests each model against the chosen baseline model, "sequential" against
+the previous one (an AIC difference when not nested).}
+
+\item{stats_checks}{Also run the model checks that have to refit the model
+(linearity of a numeric predictor, proportional odds). They are off by
+default because they dominate the cost of a table; everything else in the
+model-summary footer is always shown.}
 
 \item{na}{"drop_by_outcome" (default) fits every model OF ONE OUTCOME on
 the same complete cases, which is what makes the observed columns
@@ -107,17 +115,19 @@ shares one population across every outcome as well.}
 
 \item{run_compare}{.}
 
-\item{refLevels}{.}
+\item{levels_collapse}{.}
 
-\item{shapes}{.}
+\item{ref_levels}{.}
 
-\item{multiplicator}{.}
+\item{shape}{.}
+
+\item{multiplier}{.}
 
 \item{conf_level}{The confidence level for intervals and the significance
 stars.}
 
-\item{method}{Wald intervals (also the only option for weighted models) or
-profile-likelihood intervals (unweighted binomial / poisson only; needs
+\item{ci_method}{Wald intervals (also the only option for weighted models)
+or profile-likelihood intervals (unweighted binomial / poisson only; needs
 MASS).}
 
 \item{stars}{Show per-cell significance stars (the colours read the
@@ -131,7 +141,7 @@ left to choose is what the estimate is compared  TO.  \itemize{   \item
 \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
 effect moved from the crude one --   needs \code{empirical}.   \item
 \code{"between_groups"}: how far each group's effect is from the first
-group's   -- needs \code{split_var}.  }}
+group's   -- needs \code{tab_vars}.  }}
 
 \item{color_signif}{How significance interacts with the colours: observed
 size + grey out non-significant cells, colour only the guaranteed
@@ -143,6 +153,9 @@ fold in another quantity of the SAME fit, it can never change the fit).
 probability / marginal effect into the OR cell (binomial coefficient models
 only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
 display grammar.}
+
+\item{add_n}{Add a column giving the number of observations behind each
+predictor level.}
 
 \item{cleannames}{Strip numeric prefixes from factor level labels.}
 

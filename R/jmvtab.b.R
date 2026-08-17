@@ -88,6 +88,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         function(e) { v <- e[["var"]]; !is.null(v) && as.character(v) %in% active_vars },
         self$options$ref_levels
       )
+      # Phase 20g-ii: the two level specs are folded TOGETHER, because the tick list shows the SOURCE
+      # levels (it must, or a merge could not be undone) and therefore writes a raw order, while the
+      # table's levels are the merged ones. jmv_order_after_collapse() is the one place they meet.
+      lvl_collapse <- jmvtab_levels_collapse(self$options$levels_collapse)
       list(
         row_vars = self$options$row_vars,
         col_vars = self$options$col_vars,
@@ -120,7 +124,12 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         ref2         = self$options$ref2,
         # Phase 7g-ii: per-variable level reordering (levels_order picker) -> a named list of ordered
         # levels; applied post-aggregate in jmv_cache_aggregate() (tier-3 rebuild, tiers 1-2 reused).
-        levels_order = jmvtab_levels_order(self$options$levels_order),
+        levels_order = jmv_order_after_collapse(
+          jmvtab_levels_order(self$options$levels_order), lvl_collapse),
+        # Phase 20g-ii: the level-MERGE tick-boxes, in the same control -> tab()'s internal
+        # `.levels_collapse`; applied PRE-aggregate in tab_prepare(), so it changes the cells, the
+        # bases and the test (a tier-1 cache miss, by design).
+        levels_collapse = lvl_collapse,
         comp         = self$options$comp,
         ci           = self$options$ci %||% "auto",
         conf_level   = self$options$conf_level,

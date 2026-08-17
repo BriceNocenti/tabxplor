@@ -241,7 +241,28 @@ options:
       title: "Run comparison"
       type: Action
 
-# ================= References and predictor scaling =================
+# ================= References, level merging and predictor scaling =================
+    # Phase 20g-ii: the per-predictor level-MERGE tick-boxes (merge only -- reordering is meaningless
+    # here, `ref` picks the baseline explicitly). Same shape and same folder as jmvtab's, and applied
+    # by the same tab_collapse_levels() in reg_prepare_data()'s stage G0, before family detection and
+    # the reference relevel -- so a merged level is simply a level.
+    - name: levels_collapse
+      title: "Merged levels (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: label
+                type: String
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
     - name: ref_levels
       title: "ref (per predictor)"
       type: Array

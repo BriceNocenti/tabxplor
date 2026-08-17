@@ -231,6 +231,10 @@
   gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and
   exports now show the per-cell hover tooltips (counts, confidence intervals, differences;
   `options(tabxplor.tab_kable_tooltips = FALSE)` to disable).
+* **Levels can be merged from the jamovi panels**: tick a level to fold it into the one above,
+  chain ticks to merge a run, and name the result. Available on every crosstab axis (beside the
+  existing level reordering) and on each factor predictor of a regression. In R, do the same with
+  `forcats::fct_collapse()` before calling `tab()` / `tab_reg()` — it is the very same operation.
 * **The jamovi panels now name every option after the R argument it drives** (`outcome`,
   `tab_vars`, `ci_method`, `multiplier`, `shape`, `ref`, `stats`…), so clicking through the module
   still teaches the R API. Two controls were added: the model checks that refit the model

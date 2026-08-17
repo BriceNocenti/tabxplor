@@ -63,7 +63,8 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 (\code{sup_cols}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{names_prefix}, \code{names_sort},
 \code{row_var}, \code{col_var}), the three total-label ones now carried by
 \code{options(tabxplor.total_names)} (\code{total_names}, \code{totaltab_name}, \code{other_level}), and the four
-jamovi-internal ones (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order}).
+jamovi-internal ones (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order},
+\code{.levels_collapse}).
 Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
 -- past the variable roles, every argument must be named.}
 

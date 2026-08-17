@@ -90,7 +90,8 @@ NULL
 #'   (`sup_cols`, `OR`, `chi2`, `method_cell`, `method_diff`, `names_prefix`, `names_sort`,
 #'   `row_var`, `col_var`), the three total-label ones now carried by
 #'   `options(tabxplor.total_names)` (`total_names`, `totaltab_name`, `other_level`), and the four
-#'   jamovi-internal ones (`.cache`, `.defer_level_merge`, `.return_armed`, `.levels_order`).
+#'   jamovi-internal ones (`.cache`, `.defer_level_merge`, `.return_armed`, `.levels_order`,
+#'   `.levels_collapse`).
 #'   Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
 #'   -- past the variable roles, every argument must be named.
 # ⚠ THE @param BLOCKS ARE GENERATED (Phase 20b, KEY 1). Every one of tab()'s arguments -- its
@@ -277,6 +278,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
   .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
   .levels_order      <- dots_value(.dots, ".levels_order")
+  .levels_collapse   <- dots_value(.dots, ".levels_collapse")
 
   # Phase 19i: THE argument boundary -- validation + every "one rule written N times" derivation --
   # runs once, here, in tab_resolve_common_args() (R/tab-resolve.R), shared with tab_many(),
@@ -502,8 +504,10 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
            # Phase 7g-ii: `.levels_order` (a per-variable named list of ordered levels) is jmvtab-only
            # (NULL for normal tab()); consumed post-aggregate in jmv_cache_aggregate() (design 4e).
+           # Phase 20g-ii: `.levels_collapse` is its twin one grain deeper -- a PRE-aggregate merge
+           # (tab_prepare), so it changes counts and the tier-1 keys name it.
            .cache = .cache, .defer_level_merge = .defer_level_merge,
-           .levels_order = .levels_order)
+           .levels_order = .levels_order, .levels_collapse = .levels_collapse)
 
   # Phase 7f: the jmvtab tier-3 cache stores the PRE-finalize armed table (field values + the
   # `legacy` colour), then applies finalize_color_spec() itself on every interaction, so a colour /
@@ -925,7 +929,10 @@ new_ctx <- function(...) {
     agg_only = FALSE,
     na = "keep", levels = "all",
     cleannames = NULL, output = "single",
-    other_if_less_than = 0, other_level = "Others",
+    # Phase 20g-ii: the user's own level merges, applied PRE-aggregate in tab_prepare(). It sits with
+    # the other level/label inputs, NOT with the three jmvtab seams below: those are there because
+    # their only reader is the cache hook, while this one is consumed by an ordinary tab() stage.
+    other_if_less_than = 0, other_level = "Others", levels_collapse = NULL,
     ref = "auto", ref2 = "first", comp = "tab",
     ci = "auto", conf_level = 0.95, stars = NULL,
     # tab_setup INPUTS: `conf_level`, `ci_method`, `design_effect`, `design_spec` and `agg_only` are
@@ -1065,7 +1072,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       .cache = NULL, .defer_level_merge = FALSE,
-                      .levels_order = NULL,
+                      .levels_order = NULL, .levels_collapse = NULL,
 
                       # Phase 19h: `filter` is a VALUE here (a quosure / a string / NULL), not an
                       # NSE argument -- see the WARNING at its use site below.
@@ -1122,6 +1129,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
+    levels_collapse = new_lvl_collapse(.levels_collapse),
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
     ci_method = ci_method, design_effect = design_effect,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
@@ -1765,7 +1773,8 @@ tab_prepare_pop <- function(ctx) {
       as.character(c(row_vars, col_vars, tab_vars)),
       na_drop_all = tidyselect::all_of(na_drop_all),
       cleannames = cleannames,
-      other_if_less_than = other_if_less_than, other_level = other_level
+      other_if_less_than = other_if_less_than, other_level = other_level,
+      levels_collapse = levels_collapse
     )
   # if (!missing(filter)) data <- dplyr::filter(data, {{filter}})
 
@@ -3073,6 +3082,40 @@ tab_lump_others <- function(data, vars_not_numeric, other_if_less_than = 0,
   data
 }
 
+# Merge chosen factor levels into one, PRE-AGGREGATE (Phase 20g-ii). The spec is R/row-model.R's
+# declared level operation (var -> merged label -> the levels it swallows), already validated by
+# new_lvl_collapse().
+#
+# WHY PRE-AGGREGATE, and what it costs. A collapse is a partition COARSENING, so it commutes with
+# the aggregate and could in principle be applied to the cached counts. It is not, for one reason:
+# the design-based n_eff (R/survey-variance.R) reads MICRODATA, so a post-aggregate route would need
+# the recode here anyway AND a second implementation over the aggregate keys. Doing it once on the
+# microdata makes the result identical to tab() on a frame the user collapsed themselves -- which is
+# the contract the tests assert -- and makes pct bases / tot_n / n_eff / the chi2 follow with no
+# code. The price is one tier-1 jamovi cache MISS per merge edit (an O(N) re-scan); the tier-1 keys
+# name the spec for exactly that reason (jmv_cache_aggregate).
+#
+# It runs BEFORE tab_lump_others(), so a merged level's COMBINED count faces `other_if_less_than`
+# (merge-then-lump, never the reverse), and before tab_cleannames_relabel(), so the spec keys on the
+# RAW source labels.
+# ⚠ forcats::fct_collapse() is measured, not assumed, on both counts this needs: it preserves the
+# `ordered` class (Phase 18z10 made ordered factors survive the whole pipeline, and new_lvl() derives
+# `ordered` from is.ordered() at stamp time) and it places the merged level at its FIRST
+# constituent's position. It WARNS on a level the column does not have, so drift is filtered here.
+tab_collapse_levels <- function(data, spec) {
+  if (length(spec) == 0L) return(data)
+  for (v in intersect(names(spec), names(data))) {
+    f <- data[[v]]
+    if (!is.factor(f)) next                     # a numeric column has no levels to merge
+    lv     <- levels(f)
+    groups <- lapply(spec[[v]], function(g) g[g %in% lv])
+    groups <- groups[lengths(groups) >= 2L]     # level drift: a group down to one level is a no-op
+    if (length(groups) == 0L) next
+    data[[v]] <- forcats::fct_collapse(f, !!!groups)
+  }
+  data
+}
+
 # Strip the cleannames regex (prefix numbers like "1-", parenthesised text) from factor labels.
 # Phase 7d-ii: extracted verbatim from tab_prepare(). The tab()/tab_build path runs it PRE-aggregate
 # (kept, cache-design §5 — summing cleannames); jmvtab (Phase 7e) will call it at DISPLAY instead.
@@ -3105,6 +3148,10 @@ tab_cleannames_relabel <- function(data, vars_not_numeric) {
 #' @param other_if_less_than When set to a positive integer, levels with less count
 #' than it will be merged into an "Others" level.
 #' @param other_level The name of the "Other" level, as a character vector of length one.
+#' @param levels_collapse A named list, one element per variable, each a named list of
+#'   character vectors: the levels to merge, named by the merged level's label (the shape
+#'   \code{\link[forcats:fct_collapse]{forcats::fct_collapse}} takes). Applied before
+#'   \code{other_if_less_than}. \code{NULL} merges nothing.
 #'
 #' @return A modified data.frame.
 #' @keywords internal
@@ -3117,7 +3164,7 @@ tab_cleannames_relabel <- function(data, vars_not_numeric) {
 tab_prepare <-
   function(data, ..., na_drop_all,
            cleannames = NULL, other_if_less_than = 0,
-           other_level = "Others") {
+           other_level = "Others", levels_collapse = NULL) {
     # Phase 20a: only a USER call is nudged -- tabxplor's own (tab_prepare_pop, below) is silent.
     # Released in CRAN 1.3.1, so it is deprecated for a cycle before being made internal in 2.1.0;
     # never silently un-exported.
@@ -3168,6 +3215,9 @@ tab_prepare <-
 
     # Phase 7d-ii: rare-level lump + cleannames relabel are now standalone helpers (callable by the
     # jmvtab cache); tab_prepare composes them here in the same lump-then-clean order (byte-identical).
+    # Phase 20g-ii: the user's own level merges run FIRST, so a merged level's combined count faces
+    # `other_if_less_than` and the spec keys on the raw labels (see tab_collapse_levels()).
+    data <- data |> tab_collapse_levels(levels_collapse)
     data <- data |> tab_lump_others(vars_not_numeric, other_if_less_than, other_level)
     if (cleannames == TRUE) data <- data |> tab_cleannames_relabel(vars_not_numeric)
 

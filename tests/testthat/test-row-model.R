@@ -110,3 +110,64 @@ testthat::test_that("tab_vars and several row_vars finally compose (the list fal
   testthat::expect_equal(rle(yr)$values, unique(yr))
   testthat::expect_silent(tab_md(t, print = FALSE))
 })
+
+
+# --- Phase 20g-ii: the declared LEVEL COLLAPSE spec ----------------------------------------
+# The row model owns the SPEC; tab_collapse_levels() (R/tab.R) applies it pre-aggregate. What is
+# checked here is the validation -- each refusal exists because the alternative is silently wrong.
+
+testthat::test_that("new_lvl_collapse(): the canonical shape, and an empty label defaults", {
+  s <- tabxplor:::new_lvl_collapse(
+    list(marital = list(`Not married` = c("Divorced", "Separated"),
+                        c("Married", "Widowed"))))                 # no label
+  testthat::expect_identical(names(s), "marital")
+  testthat::expect_identical(s$marital[["Not married"]], c("Divorced", "Separated"))
+  testthat::expect_identical(s$marital[["Married, Widowed"]], c("Married", "Widowed"))
+  testthat::expect_null(tabxplor:::new_lvl_collapse(NULL))
+  testthat::expect_null(tabxplor:::new_lvl_collapse(list()))
+  # a collapse never RENAMES: a group down to one level is dropped, not applied
+  testthat::expect_null(tabxplor:::new_lvl_collapse(list(marital = list(x = "Married"))))
+})
+
+testthat::test_that("new_lvl_collapse(): the two refusals", {
+  # one level in two groups -- fct_collapse() would silently give it to the LAST
+  testthat::expect_error(
+    tabxplor:::new_lvl_collapse(list(m = list(a = c("x", "y"), b = c("y", "z")))),
+    "more than one merged group")
+  # a merged label colliding with a label tab() mints itself
+  testthat::expect_error(
+    tabxplor:::new_lvl_collapse(list(m = list(Total = c("x", "y")))), "cannot name a merged level")
+  testthat::expect_error(
+    tabxplor:::new_lvl_collapse(list(m = list(Others = c("x", "y")))), "cannot name a merged level")
+})
+
+testthat::test_that("tab_collapse_levels(): drift is tolerated, `ordered` survives", {
+  d <- data.frame(f = factor(c("a", "b", "c", "a"), levels = c("a", "b", "c")),
+                  o = factor(c("a", "b", "c", "a"), levels = c("a", "b", "c"), ordered = TRUE),
+                  n = 1:4)
+  s <- tabxplor:::new_lvl_collapse(list(f = list(bc = c("b", "c", "gone")),
+                                        o = list(bc = c("b", "c")),
+                                        n = list(x = c("1", "2"))))
+  out <- tabxplor:::tab_collapse_levels(d, s)
+  testthat::expect_identical(levels(out$f), c("a", "bc"))     # the absent level is filtered out
+  testthat::expect_true(is.ordered(out$o))                     # Phase 18z10's ordered survival
+  testthat::expect_identical(levels(out$o), c("a", "bc"))      # merged AT the first constituent
+  testthat::expect_identical(out$n, 1:4)                       # a numeric column is left alone
+  # a group whose levels have ALL drifted away is a no-op, never an error
+  testthat::expect_identical(
+    tabxplor:::tab_collapse_levels(d, list(f = list(z = c("q", "r"))))$f, d$f)
+})
+
+testthat::test_that("tab(.levels_collapse=) is tab() on pre-collapsed data, and merges before lumping", {
+  sp <- list(marital = list(`Not married` = c("Never married", "Divorced", "Separated")))
+  pre <- dplyr::mutate(gss, marital = forcats::fct_collapse(
+    marital, `Not married` = c("Never married", "Divorced", "Separated")))
+  testthat::expect_equal(tab(gss, marital, race, pct = "row", test = TRUE, .levels_collapse = sp),
+                         tab(pre, marital, race, pct = "row", test = TRUE))
+  # merge-then-lump: the merged level's COMBINED count (9 542) clears a threshold its parts do not
+  testthat::expect_equal(
+    tab(gss, marital, race, pct = "row", other_if_less_than = 2000L, .levels_collapse = sp),
+    tab(pre, marital, race, pct = "row", other_if_less_than = 2000L))
+  testthat::expect_true("Not married" %in% levels(
+    tab(gss, marital, race, pct = "row", other_if_less_than = 2000L, .levels_collapse = sp)$marital))
+})

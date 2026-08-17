@@ -1011,6 +1011,36 @@ option wrapper (`ui.levelOrder.setValue(...)` or `insertValueAt`/`removeAt` with
 Row/column button clicks are just DOM handlers you attach in `_build` — full control over
 "the behaviour of the buttons", which is what earlier attempts could not achieve.
 
+### 13.2b Merging levels — BUILT (Phase 20g-ii), in the SAME control
+
+The reorder control became **`levelsCtrl`** and now does both, because they are one object: a merged
+run is a run of CONSECUTIVE levels *in the order the user chose*, so a separate widget would have had
+to mirror this one's order. The `<ul>` list became a **3-column CSS grid** `[level | merge tick |
+merged name]`, the name box placed with `grid-row: <start> / span k` so it spans its run; each axis
+now gets a **full-width row** (the old `1fr 1fr` grid halved the space the name box needs).
+
+Facts worth keeping:
+
+- **A tick belongs to the LEVEL, not the position.** Moving a level simply re-forms the runs — and
+  moving one INTO a run splits it and drops that merge, visibly. Keeping a non-contiguous group
+  behind a display that shows the levels apart would be worse.
+- **The option is order-INDEPENDENT groups** (`{var, label, levels}`, one entry per merged run,
+  `var` repeated — a jamovi option template cannot nest three deep). R applies it with
+  `forcats::fct_collapse()`; the order stays `levels_order`'s business.
+- **The list shows the SOURCE levels** (it must, or a merge could not be undone), so the JS writes a
+  RAW order while the table's levels are the merged ones. `jmv_order_after_collapse()` is the one
+  place the two specs meet — without it `jmv_relevel_cols()` would drop every merged level's raw
+  names and the reorder would silently revert.
+- **The name box writes on `change`/`blur`, never `input`** (§13.2's rule, and the subtext control's):
+  jamovi recomputes the analysis on every option write.
+- ⚠ **`var` in a `while` loop is ONE binding.** Every name box's handler must receive its own `box`
+  and `levels` through an IIFE, or they all edit the last run.
+- ⚠ **Guard the arrow-key handler on `e.target.tagName === "INPUT"`**, or typing a merged label
+  reorders the levels underneath it.
+- The whole list is a **SHARED block** copied into `jmvtabreg.js` by `dev/generate_jamovi_js.R`
+  (markers `BEGIN/END SHARED`, same `check` mode as the generated blocks). There it hangs off each
+  factor predictor's reference row, merge-only.
+
 ### 13.3 Arrow buttons via `ActionButton` (not `GridActionButton`)
 
 If you prefer declared controls over `CustomControl`, a paired ordered `ListBox` + up/down

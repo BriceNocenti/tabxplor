@@ -24,6 +24,10 @@ jmv_opts <- function(...) {
             ci_method_cell = "wilson", ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
+            # 20g-ii: `n_min` was MISSING here although .opts() sets it and it is in the tier-3
+            # `reapplied` set -- the fixture must carry every key that vector names, or the D12
+            # assertion below cannot see the real invariant.
+            n_min = 0,
             subtext = "", output_list = FALSE, cleannames = FALSE, display = "auto",
             anova = "welch",
             # 20g-i: ONE key of the option's own shape (it was three constants mirroring three
@@ -635,6 +639,96 @@ test_that("levels_order = NULL leaves the build byte-identical (no-op)", {
   o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE)
   expect_equal(jmvtab_build(gss, utils::modifyList(o, list(levels_order = NULL)), NULL)$tabs,
                jmvtab_build(gss, o, NULL)$tabs)
+})
+
+
+# --- Phase 20g-ii: level MERGING (pre-aggregate; the reorder's opposite in every cache respect) ---
+# Same free oracle as the reorder -- a plain tab() on microdata the user collapsed themselves -- but
+# the tier contract is INVERTED: a merge changes the counts, so it must MISS tier 1.
+mar_merge <- list(marital = list("Not married" = c("Never married", "Divorced", "Separated")))
+re_collapse <- function(d, spec) {
+  for (v in names(spec)) d[[v]] <- forcats::fct_collapse(d[[v]], !!!spec[[v]])
+  d
+}
+
+test_that("jmvtab_levels_collapse(): picker Array -> the fct_collapse spec, empties dropped", {
+  lc <- list(
+    list(var = "marital", label = "Not married", levels = list("Divorced", "Separated")),
+    list(var = "marital", label = "",            levels = list("Married", "Widowed")),
+    list(var = "",        label = "x",           levels = list("a", "b")),   # empty var -> dropped
+    list(var = "race",    label = "y",           levels = list("White")),    # a run of ONE -> dropped
+    list(var = "relig",   label = "z",           levels = list("None", ""))  # blank filtered -> one
+  )
+  spec <- jmvtab_levels_collapse(lc)
+  expect_identical(names(spec), "marital")
+  expect_identical(spec$marital[["Not married"]], c("Divorced", "Separated"))
+  # an empty label is defaulted in R, once (the JS only shows it as a placeholder)
+  expect_identical(spec$marital[["Married, Widowed"]], c("Married", "Widowed"))
+  expect_null(jmvtab_levels_collapse(list()))
+})
+
+test_that("a merge is byte-identical to tab() on pre-collapsed microdata", {
+  cases <- list(
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE),
+         spec = mar_merge),
+    list(o = jmv_opts(row_vars = "marital", col_vars = "tvhours"),               # factor x numeric
+         spec = mar_merge),
+    list(o = jmv_opts(row_vars = "relig", col_vars = "race", tab_vars = "marital", pct = "row"),
+         spec = mar_merge),                                                     # merged sub-table
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "col"),
+         spec = list(race = list("Non-white" = c("Black", "Other")))),          # a COLUMN merge
+    # a merged level's COMBINED count faces other_if_less_than: merge, THEN lump
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                      other_if_less_than = 2000L),
+         spec = mar_merge)
+  )
+  for (cs in cases) {
+    built <- jmvtab_build(gss, utils::modifyList(cs$o, list(levels_collapse = cs$spec)), NULL)
+    expect_equal(built$tabs, jmv_oracle(cs$o, re_collapse(gss, cs$spec)))
+  }
+})
+
+test_that("a merge MISSES tier 1 -- the declared cost of the pre-aggregate ruling", {
+  # ⚠ the inverse of the reorder's contract two tests up, and it is the point: the fingerprints in
+  # ce$fp_map are taken BEFORE tab() runs, so the tier-1 keys must name the merge spec themselves.
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE)
+  s <- jmvtab_build(gss, o, NULL)$store
+  r <- jmvtab_build(gss, utils::modifyList(o, list(levels_collapse = mar_merge)), s)
+  expect_false(r$hits$agg[["marital\rrace"]])      # the aggregate itself changed
+  expect_false(isTRUE(r$hits$tab3))
+})
+
+test_that("a merge composes with a reorder, and the displayed order is the merged one", {
+  # The JS writes the RAW order it shows; jmv_order_after_collapse() maps it onto the merged levels.
+  raw   <- list(marital = mar_ord)
+  built <- jmvtab_build(gss, utils::modifyList(
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row"),
+    list(levels_order = jmv_order_after_collapse(raw, mar_merge),
+         levels_collapse = mar_merge)), NULL)
+  lv <- levels(built$tabs$marital)
+  expect_identical(lv[1:3], c("Married", "Not married", "Widowed"))
+  expect_false("Divorced" %in% lv)
+})
+
+test_that("jmv_order_after_collapse(): a run becomes ONE label, first occurrence wins", {
+  expect_identical(jmv_order_after_collapse(list(marital = mar_ord), mar_merge)$marital,
+                   c("Married", "Not married", "Widowed", "No answer"))
+  expect_null(jmv_order_after_collapse(NULL, mar_merge))
+  expect_identical(jmv_order_after_collapse(list(marital = mar_ord), NULL)$marital, mar_ord)
+})
+
+test_that("levels_collapse = NULL leaves the build byte-identical (no-op)", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", test = TRUE)
+  expect_equal(jmvtab_build(gss, utils::modifyList(o, list(levels_collapse = NULL)), NULL)$tabs,
+               jmvtab_build(gss, o, NULL)$tabs)
+})
+
+test_that("every `reapplied` name is a key of the opts list (the D12 invariant)", {
+  # jmv_tab3_base_key()'s `structural` is the NEGATIVE set, so a name in JMV_TAB3_REAPPLIED that is
+  # not an opts key is silently ineffective and its option quietly rebuilds the whole table. That IS
+  # D12 (the four `method_*` keys); the ⚠ beside the vector has said so since 19k with nothing
+  # checking it. 20g-ii made it a constant so this one line can.
+  expect_identical(setdiff(JMV_TAB3_REAPPLIED, names(jmv_opts())), character(0))
 })
 
 

@@ -149,8 +149,16 @@ JMV_UI_ONLY_EXTRA <- list(
 test_that("every jamovi option is named after the argument it drives", {
   for (an in c("jmvtab", "jmvtabreg")) {
     o        <- yaml_opts(paste0(an, ".a.yaml"))
-    producer <- if (an == "jmvtab") tab else tab_reg
-    args     <- setdiff(names(formals(producer)), c("...", ""))
+    pname    <- if (an == "jmvtab") "tab" else "tab_reg"
+    producer <- get(pname, envir = asNamespace("tabxplor"))
+    # ⚠ Phase 20g-ii: the INTERNAL dot-arguments count too, de-dotted. They are declared in TAB_ARGS
+    # and ride `...`, so they are not formals -- `levels_order` passed this rule only because tab()
+    # happens to have a `levels` formal, i.e. by coincidence, and `levels_collapse` on tab_reg()
+    # (which has no such formal) is what exposed it. Reading the declaration makes both pass by
+    # INTENT, and makes a rename of `tab(levels =)` unable to silently remove the justification.
+    declared <- tabxplor:::tab_args_for(pname)
+    args     <- unique(c(setdiff(names(formals(producer)), c("...", "")),
+                         sub("^\\.", "", grep("^\\.", declared, value = TRUE))))
     allowed  <- c(names(JMV_UI_ONLY), names(JMV_UI_ONLY_EXTRA[[an]]))
     for (nm in names(o)) {
       ok <- nm %in% args || any(startsWith(nm, paste0(args, "_"))) || nm %in% allowed

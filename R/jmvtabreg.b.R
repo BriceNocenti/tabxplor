@@ -132,6 +132,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         empirical    = self$options$empirical,
         # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)
         ref          = jmvtab_reg_ref_vector(self$options$ref_levels),
+        # Phase 20g-ii: the per-predictor level-merge tick-boxes (raw Array; folded by
+        # jmvtab_levels_collapse() in jmvtab_reg_build, the SAME folder jmvtab uses).
+        levels_collapse = self$options$levels_collapse,
         conf_level   = self$options$conf_level,
         ci_method    = self$options$ci_method,
         stars        = self$options$stars,

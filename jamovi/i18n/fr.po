@@ -72,12 +72,16 @@ msgid "<b>References (points of comparison)</b>"
 msgstr "<b>Références (points de comparaison)</b>"
 
 #: jmvtabreg/ui[3].label
-msgid "<b>References and predictor scaling</b>"
-msgstr "<b>Références et échelle des prédicteurs</b>"
+msgid "<b>References, level merging and predictor scaling</b>"
+msgstr "<b>Références, fusion des modalités et échelle des prédicteurs</b>"
 
 #: jmvtab/ui[2][1][0].label
-msgid "<b>Reorder levels</b> <i>(click on a level, then move it up/down)</i>"
-msgstr "<b>Réordonner les modalités</b> <i>(cliquer, puis monter/descendre)</i>"
+msgid ""
+"<b>Reorder and merge levels</b> <i>(click on a level, then move it up/down; "
+"tick a level to merge it into the one above)</i>"
+msgstr ""
+"<b>Réordonner et fusionner les modalités</b> <i>(cliquer, puis monter/descendre ; "
+"cocher une modalité pour la fusionner avec celle du dessus)</i>"
 
 #: jmvtab/options/row_vars.title
 #: jmvtab/ui/variablesupplier[0].label
@@ -541,6 +545,14 @@ msgstr ""
 #: jmvtabreg/ui[1][1][0][1][0].label
 msgid "measure = <i>(which measure)</i>"
 msgstr ""
+
+#: jmvtabreg/options/levels_collapse.title
+msgid "Merged levels (per predictor)"
+msgstr "Modalités fusionnées (par prédicteur)"
+
+#: jmvtab/options/levels_collapse.title
+msgid "Merged levels (per variable)"
+msgstr "Modalités fusionnées (par variable)"
 
 #: jmvtab/options/ci_print/moe.title
 msgid "moe <i>(display: pct±margin of error)</i>"

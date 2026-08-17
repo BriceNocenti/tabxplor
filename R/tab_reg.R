@@ -4595,6 +4595,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # documented formal with four Rd lines describing a thing no user can build.
   .dots      <- list(...)
   .fit_cache <- .dots[[".fit_cache"]]
+  # Phase 20g-ii: the level-merge spec, jamovi-internal and shared with tab() (R/row-model.R declares
+  # it, tab_collapse_levels() applies it -- here in reg_prepare_data()'s stage G, beside `shape`).
+  .levels_collapse <- new_lvl_collapse(.dots[[".levels_collapse"]])
   reg_retired_args(.dots)
   # Phase 20c (KEY 4): ONE `ci_method` grammar for both producers -- the named vector `tab()` takes,
   # whose fifth slot is the regression's own. resolve_ci_method() validates every slot against
@@ -4661,7 +4664,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
            stats = stats,
            display = display, color = color, color_signif = color_signif,
            stars = stars, na = na, cleannames = cleannames, subtext = subtext,
-           parallel = FALSE, .fit_cache = .fit_cache)
+           parallel = FALSE, .fit_cache = .fit_cache,
+           .levels_collapse = .levels_collapse)
     })
     tabs <- tab_pmap(list(args = args), "reg_build_outcome", .ship = list(data = data),
                      .names = outcome,
@@ -4682,7 +4686,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     outcome_level = outcome_level, multiplier = multiplier,
     shape = shape, stats = stats,
     na = na, na_explicit = na_explicit, display = display, cleannames = cleannames,
-    subtext = subtext, .fit_cache = .fit_cache)
+    subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,
                    .fit_cache = .fit_cache, ref = ref, reref = a$reref, parallel = parallel)

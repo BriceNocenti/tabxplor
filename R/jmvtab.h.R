@@ -22,6 +22,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             cleannames = TRUE,
             ref_levels = NULL,
             levels_order = NULL,
+            levels_collapse = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -189,6 +190,27 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     elements=list(
                         jmvcore::OptionVariable$new(
                             "var",
+                            NULL),
+                        jmvcore::OptionArray$new(
+                            "levels",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "levels",
+                                NULL)))))
+            private$..levels_collapse <- jmvcore::OptionArray$new(
+                "levels_collapse",
+                levels_collapse,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "levels_collapse",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "label",
                             NULL),
                         jmvcore::OptionArray$new(
                             "levels",
@@ -379,6 +401,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..cleannames)
             self$.addOption(private$..ref_levels)
             self$.addOption(private$..levels_order)
+            self$.addOption(private$..levels_collapse)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
@@ -423,6 +446,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         cleannames = function() private$..cleannames$value,
         ref_levels = function() private$..ref_levels$value,
         levels_order = function() private$..levels_order$value,
+        levels_collapse = function() private$..levels_collapse$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
@@ -466,6 +490,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..cleannames = NA,
         ..ref_levels = NA,
         ..levels_order = NA,
+        ..levels_collapse = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
@@ -619,6 +644,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   this behaviour.
 #' @param ref_levels .
 #' @param levels_order .
+#' @param levels_collapse .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -740,6 +766,7 @@ jmvtab <- function(
     cleannames = TRUE,
     ref_levels = NULL,
     levels_order = NULL,
+    levels_collapse = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
@@ -801,6 +828,7 @@ jmvtab <- function(
         cleannames = cleannames,
         ref_levels = ref_levels,
         levels_order = levels_order,
+        levels_collapse = levels_collapse,
         ref = ref,
         ref2 = ref2,
         comp = comp,

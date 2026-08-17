@@ -181,7 +181,7 @@ children:
               change: ./jmvtabreg::run_compare_changed
 
   - type: CollapseBox
-    label: <b>References and predictor scaling</b>
+    label: <b>References, level merging and predictor scaling</b>
     stretchFactor: 1
     collapsed: true
     children:

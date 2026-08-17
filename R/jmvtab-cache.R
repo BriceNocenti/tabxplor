@@ -168,7 +168,11 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 18L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 19L   # bump on any store-shape change -> discard stale stores
+# 19 (Phase 20g-ii): the tier-1 and tier-2 keys gained the level-MERGE spec, so every key computed by
+#   an older version names a different aggregate than the same key does now. The stored VALUES are
+#   still readable, which is exactly why the stale entries must be discarded rather than left to be
+#   evicted: a pre-20g-ii entry would be served for a merged table.
 # 18 (Phase 19n): a tier-3 carrier stores a built table, and both its per-column attributes and its
 #   `test` tibble gained `col_group` -- so a stale entry would deserialize a column whose block
 #   identity is only half there.
@@ -318,6 +322,14 @@ jmv_cache_aggregate <- function(ctx) {
   pop_tag       <- jmv_pop_tag(ctx$cache_keys$tier0$population, fp, ce$nrow)
   grain_fp      <- lapply(grain, function(g) fp[[g]])
   wt_fp         <- if (weighted) fp[[wt_chr]] else NULL
+  # Phase 20g-ii: the level-MERGE spec. ⚠ It must be in the tier-1 keys, and this is the whole
+  # reason: `fp` is fingerprinted in jmvtab_build() BEFORE tab() runs, on the raw columns, while the
+  # merge is a PRE-aggregate recode in tab_prepare() -- so `data` here is already merged and no
+  # fingerprint moved. Without these entries a merge would serve the un-merged aggregate. It is the
+  # exact opposite of `levels_order`, which is post-aggregate and deliberately absent from every key.
+  # The consequence is declared and tested: a merge MISSES tier 1 (one O(N) re-scan per edit).
+  cl            <- ctx$levels_collapse
+  grain_cl      <- lapply(grain, function(g) cl[[g]])
 
   agg_hits  <- logical(0)
   test_hits <- logical(0)
@@ -333,7 +345,8 @@ jmv_cache_aggregate <- function(ctx) {
         # NULL -> tab_plain() raw-scans (the _colvarbis machinery only runs on the raw path).
         if (cv %in% c(rv, tab_vars)) next
         key <- jmv_hash(list("fct", pop_tag, rv, fp[[rv]], cv, fp[[cv]],
-                             grain, grain_fp, wt_chr, wt_fp, other))
+                             grain, grain_fp, wt_chr, wt_fp, other,
+                             cl[[rv]], cl[[cv]], grain_cl))
         fct_keys_by_rv[[rv]] <- c(fct_keys_by_rv[[rv]], key)
         got <- jmv_cache_fetch(store, "agg", key)
         store <- got$store
@@ -378,7 +391,8 @@ jmv_cache_aggregate <- function(ctx) {
       msr    <- sort(num_cols)
       msr_fp <- lapply(msr, function(v) fp[[v]])
       key    <- jmv_hash(list("num", pop_tag, rv, fp[[rv]], msr, msr_fp,
-                              grain, grain_fp, wt_chr, wt_fp, na_rv))
+                              grain, grain_fp, wt_chr, wt_fp, na_rv,
+                              cl[[rv]], grain_cl))   # a numeric measure has no levels to merge
       num_keys_by_rv[[rv]] <- key
       got <- jmv_cache_fetch(store, "agg", key)
       store <- got$store
@@ -422,8 +436,12 @@ jmv_cache_aggregate <- function(ctx) {
     # is a numeric-only table, whose test is the ANOVA computed outside this path.
     if (!isTRUE(chi2[[i]]) || identical(color[[i]], "auto") ||
         identical(measure_builds(color[[i]]), "contrib")) next
+    # Phase 20g-ii: the merge spec is named EXPLICITLY, not left to ride the tier-1 keys. It would
+    # ride them in every ordinary shape -- but not when every col_var is a self-crosstab (no tier-1
+    # key is generated at all), and a merge changes the chi2's df and p where a reorder does not.
     tkey <- jmv_hash(list("test", comp[[i]], na_scalar,
-                          sort(unlist(fct_keys_by_rv[[rv]])), num_keys_by_rv[[rv]]))
+                          sort(unlist(fct_keys_by_rv[[rv]])), num_keys_by_rv[[rv]],
+                          cl[unique(c(rv, col_vars, tab_vars))]))
     tier2_keys[[rv]] <- tkey
     got <- jmv_cache_fetch(store, "test", tkey)
     store <- got$store
@@ -624,6 +642,60 @@ jmvtab_levels_order <- function(levels_order) {
   if (length(out) == 0) NULL else out
 }
 
+# Build the internal `.levels_collapse` from the Phase 20g-ii level-MERGE tick-boxes. The jamovi
+# Array option is one entry per merged GROUP -- {var, label, levels} -- with `var` repeated across a
+# variable's groups, because a jamovi option template cannot nest three deep. This folds it into the
+# canonical shape (var -> merged label -> the levels it swallows) and validates it through
+# new_lvl_collapse(), which is where the refusals and the empty-label default live. Both producers
+# use it: jmvtab's ticks sit in the level list, jmvtabreg's off each factor predictor's row.
+#' @keywords internal
+#' @noRd
+jmvtab_levels_collapse <- function(levels_collapse) {
+  if (length(levels_collapse) == 0) return(NULL)
+  out <- list()
+  for (e in levels_collapse) {
+    v <- e[["var"]]
+    if (is.null(v) || !nzchar(as.character(v))) next
+    lv <- e[["levels"]]
+    if (is.null(lv) || length(lv) == 0) next
+    lv <- as.character(unlist(lv, use.names = FALSE))
+    lv <- lv[!is.na(lv) & nzchar(lv)]
+    if (length(lv) < 2L) next                      # a run of one is not a merge
+    lab <- e[["label"]]
+    lab <- if (is.null(lab)) "" else as.character(lab)[1]
+    if (is.na(lab)) lab <- ""
+    v <- as.character(v)
+    grp <- out[[v]] %||% list()
+    # An empty label is left empty on purpose: new_lvl_collapse() defaults it to the joined levels,
+    # ONE rule, in R -- the tick-box UI only ever shows that string as a placeholder.
+    grp[[length(grp) + 1L]] <- lv
+    names(grp)[length(grp)] <- lab
+    out[[v]] <- grp
+  }
+  new_lvl_collapse(out)
+}
+
+# The display order AFTER a merge: the user's raw level order with each merged run replaced by its
+# merged label, first occurrence winning. THE ONE PLACE THE TWO SPECS MEET, and the reason the tick
+# list can go on showing the SOURCE levels -- which it must, or a merge could not be undone: the JS
+# writes the raw order it displays, and this maps it onto the levels the table will actually have.
+# Without it `jmv_relevel_cols()`'s `ord[ord %in% levels(f)]` would drop every merged level's raw
+# names and the user's reorder would silently revert to the collapse's own positioning.
+#' @keywords internal
+#' @noRd
+jmv_order_after_collapse <- function(order, collapse) {
+  if (length(order) == 0 || length(collapse) == 0) return(order)
+  for (v in intersect(names(order), names(collapse))) {
+    grp <- collapse[[v]]
+    map <- stats::setNames(rep(names(grp), lengths(grp)), unlist(grp, use.names = FALSE))
+    o   <- as.character(order[[v]])
+    hit <- o %in% names(map)
+    o[hit] <- unname(map[o[hit]])
+    order[[v]] <- unique(o)
+  }
+  order
+}
+
 # Reorder the factor level order of `cols` in `x` to match `spec` (a named list var -> ordered levels).
 # forcats::fct_relevel is ABSOLUTE (it sets the given levels first, in order; unlisted levels trail in
 # their existing order) -> safe on a possibly stale-order cache hit and on partial specs (level drift).
@@ -650,6 +722,19 @@ jmv_relevel_cols <- function(x, spec, cols) {
 
 
 # === Tier 3: built-table cache (display / colour / reference re-use) =======================
+
+# The options that are RE-APPLIED to a cached carrier rather than baked into it -- the tier-4 paint
+# plus the transform tuple. `structural` (the tier-3 base key) is their complement.
+# ⚠ EVERY NAME HERE MUST BE A KEY OF THE `opts` LIST (that IS D12): `structural` is the NEGATIVE set,
+# so a misspelt or retired name silently sends its option into the base key and its toggle rebuilds
+# the whole table. Phase 20g-ii made it a constant so the test suite can assert exactly that against
+# the opts fixture -- it was a literal inside the function, with the warning and nothing checking it.
+# Phase 20g-i removed the retired `"OR"` and followed the four `method_*` -> `ci_method_*` renames.
+JMV_TAB3_REAPPLIED <- c("digits", "display", "cleannames", "color", "color_signif",
+                        "ref", "ref2", "comp", "ci", "conf_level",
+                        "ci_method_cell", "ci_method_diff", "ci_method_mean_diff",
+                        "ci_method_mean_ratio",
+                        "stars", "n_min", "anova")
 
 # The tier-3 BASE key: identifies the ref-INDEPENDENT base fields {n, wn, pct, tot_n, mean, var}. It
 # hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt + other) plus
@@ -682,18 +767,15 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   # Phase 19k: `anova` joins them. It is display intent now (tab()'s own argument, stored in
   # render_extras and read back at render from the `test` attribute, which holds BOTH F rows), so it
   # is re-applied at tier 4 -- it used to sit in `structural` and rebuild the whole table.
-  # ⚠ EVERY NAME HERE MUST BE A KEY OF `opts` (that IS D12): `structural` is the NEGATIVE set, so a
-  # misspelt or retired name silently sends its option into the base key and its toggle rebuilds.
-  # Phase 20g-i removed the retired `"OR"` and followed the four `method_*` -> `ci_method_*` renames.
-  reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
-                  "ref", "ref2", "comp", "ci", "conf_level",
-                  "ci_method_cell", "ci_method_diff", "ci_method_mean_diff", "ci_method_mean_ratio",
-                  "stars", "n_min", "anova")
   # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
   # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
   # 1-2 hit (design 4e). The rebuild also recomputes the reorder-driven ref shift (ref="first" /
   # common_base first-col), so no tier-3 tuple entry is needed.
-  structural <- opts[setdiff(names(opts), reapplied)]
+  # Phase 20g-ii: `levels_collapse` likewise -- and it needs no code AT ALL here, because `structural`
+  # is the NEGATIVE set. A merge is therefore a full rebuild, never a re-paint and never a re-ref,
+  # which is right: it changes the cells, the bases and the test. Its tier-1/2 keys are the ones that
+  # had to be told (jmv_cache_aggregate).
+  structural <- opts[setdiff(names(opts), JMV_TAB3_REAPPLIED)]
   jmv_hash(list("tab3", agg_id, structural))
 }
 
@@ -1010,7 +1092,8 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     subtext      = opts$subtext,
     output_list   = isTRUE(opts$output_list),
     .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE,
-    .levels_order = opts$levels_order          # Phase 7g-ii: post-aggregate reorder (jmv_cache_aggregate)
+    .levels_order = opts$levels_order,         # Phase 7g-ii: post-aggregate reorder (jmv_cache_aggregate)
+    .levels_collapse = opts$levels_collapse    # Phase 20g-ii: pre-aggregate merge (tab_prepare)
   ))
 }
 

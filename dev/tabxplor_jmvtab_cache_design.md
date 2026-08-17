@@ -169,6 +169,19 @@ Each maps to which tiers are reused vs recomputed. This is the acceptance spec f
   Driven by the internal `tab(.levels_order=)` arg (jmvtab-only; `jmvtab_levels_order()` folds the UI Array);
   `levels="first"` recomputes `remove_levels` against the reordered first. Byte-identical to `tab()` on
   pre-releveled microdata (`test-jmvtab-cache.R`).
+- **(f) Merge factor levels — BUILT (Phase 20g-ii), and the exact OPPOSITE of (e) in every cache
+  respect.** A merge changes the COUNTS, so it is a **pre-aggregate microdata recode**
+  (`tab_collapse_levels()` in `tab_prepare()`, one line before the `other_if_less_than` lump, driven by
+  the internal `tab(.levels_collapse=)` / `tab_reg(.levels_collapse=)` arg). That makes it provably
+  `tab()` on a frame the user collapsed themselves — pct bases, `tot_n`, the design-based `n_eff` and
+  both tests follow with no code of their own — at the price of a **tier-1 MISS per merge edit**, which
+  the tests assert rather than tolerate. ⚠ `ce$fp_map` is fingerprinted *before* `tab()` runs, so
+  nothing else would move: the tier-1 keys **and the tier-2 test key** name the merge spec themselves
+  (the test key explicitly, because a merge changes the χ²'s df and p and a self-crosstab-only table
+  generates no tier-1 key to ride). Tier 3 needs no code — `structural` is the negative set.
+  Why not post-aggregate, given §5's own "aggregation commutes with level merges": it would need the
+  aggregate keys re-summed **and** the microdata recoded anyway (the design variance reads microdata),
+  i.e. two implementations of one operation.
 
 ---
 

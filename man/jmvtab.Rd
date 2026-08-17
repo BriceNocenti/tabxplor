@@ -20,8 +20,9 @@ jmvtab(
   lvs = "all",
   other_if_less_than = 0,
   cleannames = TRUE,
-  refLevels = NULL,
-  levelOrder = NULL,
+  ref_levels = NULL,
+  levels_order = NULL,
+  levels_collapse = NULL,
   ref = "auto",
   ref2 = "first",
   comp = "tab",
@@ -29,10 +30,10 @@ jmvtab(
   conf_level = 0.95,
   ci_print = "ci",
   stars = FALSE,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  method_mean_diff = "welch",
-  method_mean_ratio = "robust",
+  ci_method_cell = "wilson",
+  ci_method_diff = "newcombe",
+  ci_method_mean_diff = "welch",
+  ci_method_mean_ratio = "robust",
   totaltab = "line",
   wrap_rows = 35,
   wrap_cols = 15,
@@ -140,9 +141,11 @@ count than that will be merged into an "Others" level.}
 numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 this behaviour.}
 
-\item{refLevels}{.}
+\item{ref_levels}{.}
 
-\item{levelOrder}{.}
+\item{levels_order}{.}
+
+\item{levels_collapse}{.}
 
 \item{ref}{The reference cell to calculate differences and ratios   (used
 to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
@@ -192,19 +195,20 @@ interval display. Set to "moe" to use pct +- moe instead.}
 Read from the same confidence interval that is displayed, so stars and
 bracket always agree.}
 
-\item{method_cell}{The proportion confidence-interval method for \code{ci =
-"cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
-(the normal approximation).}
+\item{ci_method_cell}{The proportion confidence-interval method for
+\code{ci = "cell"}: \code{"wilson"} (the score interval, default) or
+\code{"wald"} (the normal approximation).}
 
-\item{method_diff}{The proportion confidence-interval method for \code{ci =
-"diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
-score test, so the interval and the significance stars always agree.}
+\item{ci_method_diff}{The proportion confidence-interval method for
+\code{ci = "diff"}. \code{"newcombe"} (default) is the dual of the
+two-proportion score test, so the interval and the significance stars
+always agree.}
 
-\item{method_mean_diff}{The confidence-interval method for the difference
-of numeric means (means with \code{ci = "diff"}): Welch (default) or
-Student (pooled variance).}
+\item{ci_method_mean_diff}{The confidence-interval method for the
+difference of numeric means (means with \code{ci = "diff"}): Welch
+(default) or Student (pooled variance).}
 
-\item{method_mean_ratio}{The confidence-interval method for a ratio of
+\item{ci_method_mean_ratio}{The confidence-interval method for a ratio of
 numeric means (means with \code{ci = "ratio"}).}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when

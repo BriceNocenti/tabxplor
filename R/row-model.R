@@ -179,6 +179,73 @@ vec_cast.tabxplor_lvl.character <- function(x, to, ...) lvl_restore(vctrs::vec_c
 vec_cast.character.tabxplor_lvl <- function(x, to, ...) vctrs::vec_cast(unlvl(x), to, ...)
 
 
+# --- a declared LEVEL OPERATION: the collapse spec ----------------------------------------------------
+# Phase 20g-ii. The row model owns the SPEC of "merge these levels into one"; the APPLIER is
+# tab_collapse_levels() at the prepare stage (R/tab.R). The split is not cosmetic: `tabxplor_lvl`
+# exists only on a BUILT table's index columns, while a collapse must change COUNTS -- so it is a
+# pre-aggregate microdata recode, and what belongs here is the validated declaration of it.
+#
+# The canonical shape IS forcats::fct_collapse()'s own: a named list, one element per variable, each
+# a named list of character vectors (name = the merged label).
+#     list(marital = list(`Not married` = c("Never married", "Divorced", "Separated")))
+# That is the shape .levels_order already uses one grain shallower (var -> ordered labels), and it
+# is what a user would write by hand, which is the point: the internal argument and the forcats call
+# it is equivalent to read the same.
+
+# The labels a merged level may NOT take: the four synthetic ones tab() mints itself, plus "NA".
+# Reading the OPTION (not the English defaults) is what makes the refusal true in every locale.
+#' @keywords internal
+#' @noRd
+lvl_reserved_labels <- function() unname(c(tab_total_names_merge(tx_option("total_names")), "NA"))
+
+# new_lvl_collapse() -- normalise + validate a collapse spec, or NULL for "nothing to merge".
+# Refusals (each one a thing that would otherwise be silently wrong):
+#   - one level claimed by two groups: fct_collapse() gives it to the LAST, with no message
+#   - a merged label colliding with a synthetic one: leaf_rename_totals() and tab_lump_others()'s
+#     fct_relevel both key on those strings, so the merged level would be treated as a total/Others
+# An EMPTY label is defaulted here, once, to the constituent labels joined -- so the jamovi text box
+# can be left empty and only ever shows that string as a placeholder.
+#' @keywords internal
+#' @noRd
+new_lvl_collapse <- function(spec) {
+  if (length(spec) == 0L) return(NULL)
+  if (!is.list(spec) || is.null(names(spec)) || any(!nzchar(names(spec))))
+    cli::cli_abort(c("A level-collapse spec must be a NAMED list, one element per variable.",
+                     "i" = "e.g. {.code list(marital = list(`Not married` = c(\"Divorced\", \"Separated\")))}."),
+                   call = NULL)
+  reserved <- lvl_reserved_labels()
+  out <- list()
+  for (v in names(spec)) {
+    groups <- spec[[v]]
+    if (length(groups) == 0L) next
+    if (!is.list(groups)) groups <- list(groups)
+    labs <- names(groups) %||% rep("", length(groups))
+    keep <- list()
+    for (i in seq_along(groups)) {
+      lv <- as.character(unlist(groups[[i]], use.names = FALSE))
+      lv <- unique(lv[!is.na(lv) & nzchar(lv)])
+      if (length(lv) < 2L) next                      # a collapse never RENAMES: < 2 levels is a no-op
+      lab <- if (i <= length(labs) && !is.na(labs[[i]]) && nzchar(labs[[i]])) labs[[i]]
+             else paste(lv, collapse = ", ")
+      if (lab %in% reserved)
+        cli::cli_abort(c("{.val {lab}} cannot name a merged level of {.var {v}}.",
+                         "x" = "It is one of the labels {.fn tab} mints itself.",
+                         "i" = "Reserved: {.val {reserved}}."), call = NULL)
+      keep[[lab]] <- unique(c(keep[[lab]], lv))      # same label twice = one group
+    }
+    if (length(keep) == 0L) next
+    dup <- unlist(keep, use.names = FALSE)
+    dup <- unique(dup[duplicated(dup)])
+    if (length(dup))
+      # ⚠ cli::qty() -- one quantity per message, or "Multiple quantities for pluralization".
+      cli::cli_abort(c("{cli::qty(dup)}Level{?s} {.val {dup}} of {.var {v}}: in more than one merged group.",
+                       "i" = "Each level may be merged into one group only."), call = NULL)
+    out[[v]] <- keep
+  }
+  if (length(out) == 0L) NULL else out
+}
+
+
 # --- reading the declaration back off a table ---------------------------------------------------------
 
 # tab_index_cols() -- the DECLARED row-index block of a table: every tabxplor_lvl column, in column

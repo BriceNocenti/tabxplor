@@ -471,3 +471,38 @@ test_that("Phase 20f-iiii: jmvtab_reg_build() is serial in BOTH cache modes", {
                      info = paste("no daemon was spawned, use_cache =", use_cache))
   }
 })
+
+
+# --- Phase 20g-ii: level MERGING on a predictor --------------------------------------------------
+# Same tab_collapse_levels() the crosstab uses, applied in reg_prepare_data()'s stage G0 -- before
+# family detection, the reference relevel and the skeleton, so a merged level is simply a level.
+
+test_that("Phase 20g-ii: a merged predictor is tab_reg() on a pre-collapsed frame", {
+  gss <- gss_reg()
+  sp  <- list(list(var = "marital", label = "Not married",
+                   levels = list("Never married", "Divorced", "Separated")))
+  pre <- dplyr::mutate(gss, marital = forcats::fct_collapse(
+    marital, `Not married` = c("Never married", "Divorced", "Separated")))
+  # ⚠ NOT `married`: the fixture derives it FROM marital, so a merged predictor would be collinear
+  # with the outcome. `black` is independent of it.
+  o   <- reg_opts(outcome = "black", predictors = c("marital", "age"), ..family = "binomial")
+  a <- quiet(jmvtab_reg_build(gss, utils::modifyList(o, list(levels_collapse = sp)), NULL))$tabs
+  b <- quiet(jmvtab_reg_build(pre, o, NULL))$tabs
+  expect_equal(reg_render(a), reg_render(b))
+  expect_true("Not married" %in% as.character(a$levels))
+  expect_false("Divorced" %in% as.character(a$levels))
+})
+
+test_that("Phase 20g-ii: a merge changes the fit key, so the cached fit is not reused", {
+  gss <- gss_reg()
+  sp  <- list(list(var = "marital", label = "Not married",
+                   levels = list("Never married", "Divorced", "Separated")))
+  o   <- reg_opts(outcome = "black", predictors = c("marital", "age"), ..family = "binomial")
+  s <- quiet(jmvtab_reg_build(gss, o, NULL))$store
+  # a re-run of the SAME call hits (the control), while the merged one must not
+  expect_gte(quiet(jmvtab_reg_build(gss, o, s))$hits, 1L)
+  r <- quiet(jmvtab_reg_build(gss, utils::modifyList(o, list(levels_collapse = sp)), s))
+  # jmvreg_fit_key() fingerprints the PREPARED frame's levels, and the merge runs before any fit --
+  # so it invalidates by construction, with no cache code of its own.
+  expect_equal(r$hits, 0L)
+})

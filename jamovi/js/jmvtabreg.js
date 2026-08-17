@@ -177,9 +177,270 @@ var forceNaForCompare = function(ui) {
         ui.na.setValue("drop_by_outcome");
 };
 
+// --- BEGIN SHARED (dev/generate_jamovi_js.R: copied from jamovi/js/jmvtab.js) -- do not edit ---
+// Phase 20g-ii: THE level list, with the merge tick-boxes -- the ONE widget both analyses show.
+// jmvtab hosts it inside the level-order control (reorder + merge); jmvtabreg hosts it off each
+// factor predictor's reference row (merge only -- `ref` picks the baseline explicitly, so there is
+// nothing an order would mean there). It is copied verbatim into jmvtabreg.js by the generator, and
+// `check` mode fails on drift -- so it is SELF-CONTAINED: its own styles, its own state, and no
+// reference to either file's TABX object.
+//
+// THE MODEL. A tick on level i means "merge this level into the run above"; the first level of the
+// displayed order never has one, and chained ticks make a run. A tick belongs to the LEVEL, not to
+// the position, so moving a level up or down simply re-forms the runs and the list stays WYSIWYG.
+// The stored option is order-INDEPENDENT groups ({var, label, levels}), one entry per merged run, so
+// R can apply it with forcats::fct_collapse() and the order stays `levels_order`'s business.
+// The merged-name box writes on `change`/`blur`, NEVER on `input`: jamovi recomputes the analysis on
+// every option write, and a per-keystroke write would recompute per character. Left empty it shows
+// the joined level labels as a PLACEHOLDER -- the default itself lives in R (new_lvl_collapse), once.
+var TABXM_SEL = "#b5caef";       // jamovi's list-selection blue (.selected in analysisui.css)
+var TABXM = {
+    body:  "padding:2px 8px 8px 8px;",
+    // 3 columns: level | merge tick | merged name. The name cell spans its run with grid-row/span,
+    // which is why this is a grid and not the <ul> it replaced.
+    grid:  "display:grid;grid-template-columns:1fr auto minmax(96px,1fr);align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#fff;color:#000;max-height:220px;overflow-y:auto;outline:none;",
+    head:  "padding:2px 8px;font-size:0.9em;color:#555;background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.12);white-space:nowrap;",
+    lab:   "padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;",
+    tick:  "padding:2px 6px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
+    cell:  "padding:2px 4px;display:flex;align-items:center;border-left:1px solid rgba(0,0,0,0.10);",
+    input: "width:100%;min-width:0;box-sizing:border-box;padding:1px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
+    bar:   "display:flex;gap:6px;",
+    btn:   "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;"
+};
+var tabxmSel = {};      // var -> selected level label (persists across rebuilds)
+
+// --- the option: read, write, reconcile ---------------------------------------------------
+// The groups stored for `v`, as [{label, levels}] (the option is flat: `var` repeats per group).
+var tabxmGroups = function(ui, v) {
+    if (!ui.levels_collapse) return [];
+    var arr = utils.clone(ui.levels_collapse.value(), []), out = [];
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v && arr[i].levels && arr[i].levels.length > 1)
+            out.push({ label: arr[i].label || "", levels: arr[i].levels.slice() });
+    return out;
+};
+
+// Replace ALL of `v`'s groups (other variables' entries untouched). Store a COPY of every level
+// array -- setValue may keep it by reference, and a later in-place edit would then alias the option.
+var tabxmWrite = function(ui, v, groups) {
+    if (!ui.levels_collapse) return;
+    var arr = utils.clone(ui.levels_collapse.value(), []), kept = [];
+    for (var i = 0; i < arr.length; i++) if (arr[i].var !== v) kept.push(arr[i]);
+    groups.forEach(function(g) {
+        if (g.levels.length > 1)
+            kept.push({ var: v, label: g.label || "", levels: g.levels.slice() });
+    });
+    ui.levels_collapse.setValue(kept);
+};
+
+// Drop entries whose variable is no longer selected (guarded setValue -> no loop).
+var tabxmReconcile = function(ui, selected) {
+    if (!ui.levels_collapse) return;
+    var cur = utils.clone(ui.levels_collapse.value(), []), kept = [];
+    for (var i = 0; i < cur.length; i++)
+        if (selected.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
+    if (kept.length !== cur.length) ui.levels_collapse.setValue(kept);
+};
+
+// --- groups <-> ticks, and the post-merge display order ------------------------------------
+// A tick is per LEVEL: true when this level is in the same group as the one before it in `order`.
+var tabxmTicks = function(order, groups) {
+    var runOf = {};
+    groups.forEach(function(g, k) { g.levels.forEach(function(l) { runOf[l] = k; }); });
+    return order.map(function(l, i) {
+        return i > 0 && runOf[l] !== undefined && runOf[l] === runOf[order[i - 1]];
+    });
+};
+
+// Rebuild the groups from the ticks, carrying each run's typed label over: an exact level-set match
+// first, else the label of the group that held the run's first level (so extending a run keeps it).
+var tabxmFromTicks = function(order, ticks, old) {
+    var runs = [], cur = null;
+    order.forEach(function(l, i) {
+        if (i > 0 && ticks[i]) cur.push(l); else { cur = [l]; runs.push(cur); }
+    });
+    var labelFor = function(levels) {
+        var key = levels.slice().sort().join(""), byFirst = "";
+        for (var k = 0; k < old.length; k++) {
+            if (old[k].levels.slice().sort().join("") === key) return old[k].label || "";
+            if (!byFirst && old[k].levels.indexOf(levels[0]) >= 0) byFirst = old[k].label || "";
+        }
+        return byFirst;
+    };
+    return runs.filter(function(r) { return r.length > 1; })
+               .map(function(r) { return { label: labelFor(r), levels: r }; });
+};
+
+// The levels the TABLE will show, in display order: each run replaced by its merged label (its
+// joined levels when the box is empty -- the same default R applies). Used by the reference pickers,
+// whose choices must be levels that still exist after the merge.
+var tabxmDisplayOrder = function(order, groups) {
+    var labOf = {};
+    groups.forEach(function(g) {
+        var lab = g.label || g.levels.join(", ");
+        g.levels.forEach(function(l) { labOf[l] = lab; });
+    });
+    var out = [];
+    order.forEach(function(l) {
+        var lab = (labOf[l] !== undefined) ? labOf[l] : l;
+        if (out.indexOf(lab) < 0) out.push(lab);
+    });
+    return out;
+};
+
+// --- the widget ----------------------------------------------------------------------------
+// `onOrder(newOrder)` is supplied by a host that also offers reordering (jmvtab) and is null
+// otherwise (jmvtabreg); the ▲/▼ bar and the arrow keys appear only when it is given.
+var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
+    var wrap = document.createElement("div");
+    wrap.style.cssText = TABXM.body;
+    var order  = initialOrder.slice();
+    var groups = tabxmGroups(ui, v);
+    var ticks  = tabxmTicks(order, groups);
+    // ⚠ `R/jmvtab.h.R` is GENERATED, so between a `.a.yaml` edit and the maintainer's next
+    // jmvtools::prepare() the option simply does not exist. Show the level list WITHOUT the merge
+    // columns rather than tick-boxes that write nowhere -- the .js half of the `%||%` discipline.
+    var canMerge = !!ui.levels_collapse;
+
+    var grid = document.createElement("div");
+    grid.style.cssText = TABXM.grid; grid.tabIndex = 0;
+    if (!canMerge) grid.style.gridTemplateColumns = "1fr";
+
+    var selected = function() {
+        var s = tabxmSel[v];
+        return (s && order.indexOf(s) >= 0) ? s : order[0];
+    };
+    var paint = function() {
+        var sel = selected();
+        Array.prototype.forEach.call(grid.querySelectorAll("[data-lab]"), function(el) {
+            el.style.background = (el.getAttribute("data-lab") === sel) ? TABXM_SEL : "";
+        });
+    };
+    var commit = function() {
+        ticks[0] = false;                                  // the first level can never merge upwards
+        groups = tabxmFromTicks(order, ticks, groups);
+        tabxmWrite(ui, v, groups);
+    };
+    var cell = function(style, col, row, span) {
+        var d = document.createElement("div");
+        d.style.cssText = style;
+        d.style.gridColumn = String(col);
+        d.style.gridRow = span ? (String(row) + " / span " + String(span)) : String(row);
+        return d;
+    };
+    var renderRows = function() {
+        grid.innerHTML = "";
+        (canMerge ? ["level", "merge", "merged name"] : ["level"]).forEach(function(t, k) {
+            var h = cell(TABXM.head, k + 1, 1);
+            h.textContent = t;
+            grid.appendChild(h);
+        });
+        order.forEach(function(lab, i) {
+            var row = i + 2;
+            var l = cell(TABXM.lab, 1, row);
+            l.setAttribute("data-lab", lab);
+            l.textContent = lab;
+            l.addEventListener("click", function() { tabxmSel[v] = lab; paint(); grid.focus(); });
+            grid.appendChild(l);
+            if (!canMerge) return;
+
+            var t = cell(TABXM.tick, 2, row);
+            if (i > 0) {                      // the first level has nothing above to merge into
+                var cb = document.createElement("input");
+                cb.type = "checkbox"; cb.checked = !!ticks[i];
+                cb.title = "merge into the level above";
+                cb.addEventListener("change", function() {
+                    ticks[i] = cb.checked; commit(); renderRows();
+                });
+                t.appendChild(cb);
+            }
+            grid.appendChild(t);
+        });
+        if (!canMerge) { paint(); return; }
+        // the merged-name boxes: one per run, spanning it with grid-row/span. Runs of one get an
+        // empty cell, so the column's left border stays continuous.
+        var cur = tabxmFromTicks(order, ticks, groups);
+        var i = 0;
+        while (i < order.length) {
+            var j = i + 1;
+            while (j < order.length && ticks[j]) j++;
+            var len = j - i, c = cell(TABXM.cell, 3, i + 2, len);
+            if (len > 1) {
+                var levels = order.slice(i, j);
+                var box = document.createElement("input");
+                box.type = "text"; box.style.cssText = TABXM.input;
+                box.value = (cur.filter(function(g) { return g.levels[0] === levels[0]; })[0]
+                             || {}).label || "";
+                box.placeholder = levels.join(", ");
+                // ⚠ `box` and `levels` are BOTH passed into the closure. They are `var`s inside a
+                // while loop, i.e. one function-scoped binding shared by every handler -- so a
+                // handler reading them directly would edit the LAST run whichever box was typed in.
+                // `change` (commit on blur / Enter), NEVER `input`: see the header.
+                box.addEventListener("change", function(lv, b) {
+                    return function() {
+                        var val = b.value.trim();
+                        groups = tabxmFromTicks(order, ticks, groups);
+                        groups.forEach(function(g) { if (g.levels[0] === lv[0]) g.label = val; });
+                        tabxmWrite(ui, v, groups);
+                    };
+                }(levels, box));
+                c.appendChild(box);
+            }
+            grid.appendChild(c);
+            i = j;
+        }
+        paint();
+    };
+    var move = function(dir) {
+        var sel = selected();
+        var i = order.indexOf(sel), j = i + dir;
+        if (j < 0 || j >= order.length) return;
+        order[i] = order[j]; order[j] = sel;    // swap: the selected level moves to j
+        tabxmSel[v] = sel;                      // selection follows it, so repeated moves walk it
+        // A tick belongs to the LEVEL, so the runs simply re-form around the new order and a merge
+        // follows its levels. The one visible consequence, and it is the honest one: moving a level
+        // INTO a run splits it, and a run that is no longer contiguous stops being a merge -- the
+        // ticks disappear where the user can see them, rather than a non-contiguous group being
+        // kept behind a display that shows it as separate levels.
+        ticks = tabxmTicks(order, groups);
+        commit();
+        onOrder(order);
+        renderRows();
+    };
+    if (onOrder) {
+        // ⚠ ignore the arrow keys while a tick-box or the name box has focus, or typing a merged
+        // label would reorder the levels underneath it.
+        grid.addEventListener("keydown", function(e) {
+            if (e.target && e.target.tagName === "INPUT") return;
+            if (e.key === "ArrowUp")        { e.preventDefault(); move(-1); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+        });
+    }
+    renderRows();
+    wrap.appendChild(grid);
+
+    if (onOrder) {
+        var bar = document.createElement("div");
+        bar.style.cssText = TABXM.bar;
+        var mk = function(sym, dir) {
+            var b = document.createElement("button");
+            b.type = "button"; b.style.cssText = TABXM.btn; b.textContent = sym;
+            b.addEventListener("click", function(e) { e.preventDefault(); grid.focus(); move(dir); });
+            return b;
+        };
+        bar.appendChild(mk("▲", -1));
+        bar.appendChild(mk("▼",  1));
+        wrap.appendChild(bar);
+    }
+    return wrap;
+};
+// --- END SHARED ---
+
 // ---- Reference-level picker CustomControl (refPickerCtrl) ---------------------------------
 // One Material line per FACTOR predictor = a bold name + a native <select> over its levels (the
-// baseline the model contrasts against, default = the first level). Stored by LABEL in the hidden
+// baseline the model contrasts against, default = the first level), plus (Phase 20g-ii) a
+// "merge levels" expander carrying the SHARED tick-box list above -- merge only, because `ref`
+// picks the baseline explicitly and an order would mean nothing here. Stored by LABEL in the hidden
 // `ref_levels` option, read by jmvtab_reg_ref_vector() -> tab_reg(ref =). Numeric predictors have
 // no reference (a note). A reference change is reparametrized live from a cached fit (no refit).
 
@@ -189,6 +450,10 @@ var TABX = {
     refSel:  "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     refNote: "opacity:0.6;font-style:italic;",
     hint:    "padding:8px;opacity:0.65;font-style:italic;",
+    // 20g-ii: the "merge levels" expander hanging off a factor predictor's reference row -- indented
+    // under it, same width, so the two read as one block.
+    mergeBox: "width:74%;min-width:360px;box-sizing:border-box;margin:-2px 6px 6px 18px;border:1px solid rgba(0,0,0,0.10);border-radius:4px;background:rgba(0,0,0,0.02);",
+    mergeSum: "display:block;list-style:none;padding:3px 8px;cursor:pointer;font-size:0.9em;opacity:0.8;",
     // model-builder cards (one per model) + the numeric-predictor scaling input
     cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:100%;min-width:320px;box-sizing:border-box;",
     cardHead: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
@@ -213,9 +478,13 @@ var levelsCache = {};     // var -> [labels] | null (numeric/no-levels) | FETCHI
 var FETCHING = {};
 var lastRefSig = null;    // ref-picker signature (predictors)
 
+var mergeOpen = {};       // "<var>" -> is its "merge levels" expander open (persists across rebuilds)
+
 var refSig = function(ui) {
     var preds = utils.clone(ui.predictors.value(), []);
-    return JSON.stringify([preds]);
+    // 20g-ii: a merge changes which levels exist, so the reference drop-downs must be rebuilt on it.
+    var lc = ui.levels_collapse ? utils.clone(ui.levels_collapse.value(), []) : [];
+    return JSON.stringify([preds, lc]);
 };
 
 var afterFetch = function(ui) {
@@ -385,9 +654,35 @@ var renderRefVarCard = function(ui, frag, v) {
         return;
     }
     if (cached.length === 0) return;
+    // 20g-ii: the reference is chosen among the levels the MODEL will see -- a merged run is one
+    // level, under its merged name -- so the choices go through the same display-order rule the
+    // crosstab picker uses.
+    var levels = tabxmDisplayOrder(cached, tabxmGroups(ui, v));
     var stored = refSelected(ui, v);
-    var selRef = (stored && cached.indexOf(stored) >= 0) ? stored : cached[0];   // default = first level
-    frag.appendChild(refLineControl(v, cached, selRef, function(r) { writeRef(ui, v, r); }));
+    var selRef = (stored && levels.indexOf(stored) >= 0) ? stored : levels[0];   // default = first level
+    frag.appendChild(refLineControl(v, levels, selRef, function(r) { writeRef(ui, v, r); }));
+    // ... and, hanging off that row, the merge tick-boxes (collapsed by default: a predictor's
+    // levels are usually taken as they are, and the row must stay one line until asked).
+    // ⚠ absent until the maintainer's next jmvtools::prepare() regenerates the .h.R -- show nothing
+    // rather than an expander whose ticks write nowhere.
+    if (!ui.levels_collapse) return;
+    var det = document.createElement("details");
+    det.style.cssText = TABX.mergeBox;
+    det.open = !!mergeOpen[v];
+    var sum = document.createElement("summary");
+    sum.style.cssText = TABX.mergeSum;
+    var caret = document.createElement("span");
+    caret.style.cssText = "display:inline-block;width:1.1em;";
+    caret.textContent = det.open ? "▾" : "▸";
+    sum.appendChild(caret);
+    sum.appendChild(document.createTextNode("merge levels"));
+    det.appendChild(sum);
+    det.addEventListener("toggle", function() {
+        mergeOpen[v] = det.open;
+        caret.textContent = det.open ? "▾" : "▸";
+    });
+    det.appendChild(tabxmBuildList(ui, v, cached, null));   // null = no reordering here
+    frag.appendChild(det);
 };
 
 var renderRefPicker = function(ui) {
@@ -397,6 +692,7 @@ var renderRefPicker = function(ui) {
     reconcileRefLevels(ui, preds);
     reconcileMult(ui, preds);
     reconcileShapes(ui, preds);
+    tabxmReconcile(ui, preds);
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-refpick", "1");

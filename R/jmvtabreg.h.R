@@ -22,6 +22,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             stats_checks = FALSE,
             na = "drop_by_outcome",
             run_compare = FALSE,
+            levels_collapse = NULL,
             ref_levels = NULL,
             shape = NULL,
             multiplier = NULL,
@@ -194,6 +195,27 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..run_compare <- jmvcore::OptionAction$new(
                 "run_compare",
                 run_compare)
+            private$..levels_collapse <- jmvcore::OptionArray$new(
+                "levels_collapse",
+                levels_collapse,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "levels_collapse",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "label",
+                            NULL),
+                        jmvcore::OptionArray$new(
+                            "levels",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "levels",
+                                NULL)))))
             private$..ref_levels <- jmvcore::OptionArray$new(
                 "ref_levels",
                 ref_levels,
@@ -348,6 +370,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..stats_checks)
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
+            self$.addOption(private$..levels_collapse)
             self$.addOption(private$..ref_levels)
             self$.addOption(private$..shape)
             self$.addOption(private$..multiplier)
@@ -386,6 +409,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         stats_checks = function() private$..stats_checks$value,
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
+        levels_collapse = function() private$..levels_collapse$value,
         ref_levels = function() private$..ref_levels$value,
         shape = function() private$..shape$value,
         multiplier = function() private$..multiplier$value,
@@ -423,6 +447,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..stats_checks = NA,
         ..na = NA,
         ..run_compare = NA,
+        ..levels_collapse = NA,
         ..ref_levels = NA,
         ..shape = NA,
         ..multiplier = NA,
@@ -554,6 +579,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   model on a different population then gets no observed effect); "drop_all"
 #'   shares one population across every outcome as well.
 #' @param run_compare .
+#' @param levels_collapse .
 #' @param ref_levels .
 #' @param shape .
 #' @param multiplier .
@@ -626,6 +652,7 @@ jmvtabreg <- function(
     stats_checks = FALSE,
     na = "drop_by_outcome",
     run_compare = FALSE,
+    levels_collapse = NULL,
     ref_levels = NULL,
     shape = NULL,
     multiplier = NULL,
@@ -681,6 +708,7 @@ jmvtabreg <- function(
         stats_checks = stats_checks,
         na = na,
         run_compare = run_compare,
+        levels_collapse = levels_collapse,
         ref_levels = ref_levels,
         shape = shape,
         multiplier = multiplier,

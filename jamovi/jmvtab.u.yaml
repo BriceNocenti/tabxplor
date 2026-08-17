@@ -300,15 +300,15 @@ children:
         children:
           - type: Label
             label: >-
-              <b>Reorder levels</b> <i>(click on a level, then move it
-              up/down)</i>
+              <b>Reorder and merge levels</b> <i>(click on a level, then move it
+              up/down; tick a level to merge it into the one above)</i>
             children:
               - type: CustomControl
-                name: levelOrderCtrl
+                name: levelsCtrl
                 stretchFactor: 1
                 events:
-                  creating: ./jmvtab::levelOrderCtrl_creating
-                  updated: ./jmvtab::levelOrderCtrl_updated
+                  creating: ./jmvtab::levelsCtrl_creating
+                  updated: ./jmvtab::levelsCtrl_updated
       - type: LayoutBox
         margin: none
         children:

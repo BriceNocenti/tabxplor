@@ -10,7 +10,8 @@ tab_prepare(
   na_drop_all,
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others"
+  other_level = "Others",
+  levels_collapse = NULL
 )
 }
 \arguments{
@@ -28,6 +29,11 @@ prefix numbers like \code{"1-"}, and text in parentheses.}
 than it will be merged into an "Others" level.}
 
 \item{other_level}{The name of the "Other" level, as a character vector of length one.}
+
+\item{levels_collapse}{A named list, one element per variable, each a named list of
+character vectors: the levels to merge, named by the merged level's label (the shape
+\code{\link[forcats:fct_collapse]{forcats::fct_collapse}} takes). Applied before
+\code{other_if_less_than}. \code{NULL} merges nothing.}
 }
 \value{
 A modified data.frame.

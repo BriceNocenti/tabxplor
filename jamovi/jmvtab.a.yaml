@@ -300,7 +300,7 @@ options:
     # Un-reordered variables get no entry. Read into tab()'s internal `.levels_order` by
     # jmvtab_levels_order(); applied post-aggregate (tier-3) in jmv_cache_aggregate().
     # `hidden: true` -> the .u.yaml compiler does NOT auto-generate a default control for this option
-    # (uicompiler insertMissingControls skips hidden options); the `levelOrderCtrl` CustomControl in
+    # (uicompiler insertMissingControls skips hidden options); the `levelsCtrl` CustomControl in
     # .u.yaml is the sole UI and edits this option via ui.levels_order in js/jmvtab.js.
     - name: levels_order
       title: "Level order (per variable)"
@@ -312,6 +312,31 @@ options:
           elements:
               - name: var
                 type: Variable
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
+    # Phase 20g-ii: the level-MERGE tick-boxes, written by the SAME control (levelsCtrl). One entry
+    # per merged GROUP -- `var` repeats across a variable's groups, because a jamovi option template
+    # cannot nest three deep. An empty `label` is filled in R (the joined level labels), so the text
+    # box only ever shows that string as a placeholder. Folded by jmvtab_levels_collapse() into
+    # tab()'s internal `.levels_collapse`, applied PRE-aggregate in tab_prepare(): it changes counts,
+    # bases and the test, so it is a tier-1 cache miss by design (jmv_cache_aggregate names it).
+    # `hidden: true` for levels_order's reason: a CustomControl never claims its option, so without
+    # it the compiler auto-generates a second, broken default control.
+    - name: levels_collapse
+      title: "Merged levels (per variable)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: label
+                type: String
               - name: levels
                 type: Array
                 template:
