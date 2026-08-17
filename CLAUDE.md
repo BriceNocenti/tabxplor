@@ -486,12 +486,49 @@ I want you to **drastically** rewrite and simplify R scripts comments (including
 - Rewritten comments should focus on : what explains design decisions, architecture choices, caveats ; everything needed to explain all the subsystems of the package without losing focus on the overall goals and architecture ; the "why" of the code, the way it integrates in the global functions ecosystem of the package, the way to use this ecosystem to avoid re-adding evergrowing exceptions and white elephants in the future, the way to modify it in the future, etc.
 - Each subsystem must first come with a longer description of it’s currently implemented design choices and internal architecture, preferably at the beginning of the .R file: it should be more detailed than the subsystem description in the architecture document, but not too detailed as to take the place of proper before-functions or in-code comments. Do not hesisate to reorganise the .R files to make the subsystems clearer.
 - Comments must be clear, focused, understandable by both machine and **human**: avoid being over-technical as much as you can for this kind of documents.
+- The roxygen documentation part should also be reduced with the same logic (maybe not divided by 5, but divided as much as possible while staying clear and keeping enough explanation for beginners and literary students) : user-friendly = focused, hierarchy of documentation with references.
 
 ##### Phase 21b-i — comments rewrite roadmap
 
 Since the codebase is big, I first want you to create the roadmap of the work to do here and cut differents phases at the relevant seams.
 - The different phases "##### Phase 21b-ii – ...", "##### Phase 21b-iii – ..." etc. should be cut at natural seams : everything that needs the same context must be done in the same Phase, and .R files that are the more related to each-other should be done in the same session ; when a subsystem or a selection or subsystems or some .R files are better done in a fresh Claude Code session, with their’s own context, and is long enough, it gets it’s own phase ; but the number of phases should stay low enough (since multipliyng the number of phases would add exploring/planning/verifying context cost several time anyway and be slower for the same reason). The maintainer will manually commit between phases, and only push at the very end.
 - **The description of each phase should be focused and very short**: each Phase will itself starts in plan mode, so the content of the Phase itself should not be too detailed and too prescriptive, **the roadmap should not replace the proper plan of each Phase** (which is better done with the full right focused context).
+
+
+
+##### Phase 21b-i — comments rewrite roadmap (DONE)
+
+Cut the R-file documentation rewrite into **six** subsystem sub-phases (below), grouped by coherent context and balanced by measured load (internal comments ~15,420 lines = 32 % of the code, of which ~55–70 % is dev-history; roxygen ~5,040 lines). Roxygen is **folded into each sub-phase** (one documentation pass per file). The shared method is stated once here so the sub-phase entries stay short.
+
+**Method for every 21b-ii … -vii sub-phase** (do not repeat it per phase): re-read `dev/tabxplor_architecture.md` for the big picture; then, per file — (1) rewrite the header into a clean current-state subsystem description (keep the `# PURPOSE / ROLE / KEY CONSTRAINTS` skeleton, history-free; a longer subsystem essay is fine where warranted); (2) cut inline comments **≥5×** — delete ALL dev-history (phase tags, "was/now", post-mortems, "measured …", `dev/*.md` pointers) AND compress the surviving design/"why" prose to one-liners; (3) tighten the **roxygen** — a user-facing function's man page is about **USAGE, written with the main real-world use cases in mind; it never speaks of the build, the internals, or dev history**. Dedupe across pages and vs the code, defer detail/pedagogy DOWN to the vignettes and reference SIDEWAYS to `?tabxplor-vctrs` / `?tabxplor-options` / `?tabxplor-data.table`, but keep it clear for beginners/non-technical users (not a 5× target; preserve the CRAN arg/return contract; reduce generated `@eval` blocks via their fact-table `doc` fields, never the output); (4) run `devtools::document()` **unsandboxed** and confirm `man/` + `NAMESPACE` build. ⚠ Do NOT hard-wire vignette anchors — the roxygen→vignette pointers are finalized in Phase 23b, after 23a reorganizes the vignettes. Every `R/*.R` is covered exactly once; the two generated `jmvtab*.h.R` are untouched.
+
+Also plan for a reduction of the roxygen part, with the same logic : user-friendly = focused, hierarchy of documentation with references.
+- roxygen doc maybe not divided by 5, but divided as much as possible while staying clear and keeping enough explanation for beginners and literary students.
+- state clearly that main user-facing functions speaks about usage, with the main uses cases in mind ; they do not speak about build, internals, dev history, etc., and must be understandable by a litetary sociology researcher knowing almost nothing about programming and about R.
+
+##### Phase 21b-ii — Core type system & colour engine
+
+`fmt_class.R` · `tab_classes.R` · `row-model.R` · `table-spec.R` · `tab-shape.R`. The `fmt` record + arithmetic + colour engine + hosted fact tables; the table classes / dplyr / print / palettes; row & table identity; `?tabxplor-vctrs`. Heaviest phase; the `/vctrs-field` + `/color-mode` skills gate this area. (`fmt_class.R` centralizes package-wide NSE `globalVariables`; `row-model.R` also defines the pipeline's row axis.)
+
+##### Phase 21b-iii — Crosstab build pipeline & aggregate core
+
+`tab.R` · `tab-leaf.R` · `tab-agg.R` · `tab-chi2.R` · `tab-display.R` · `tab-resolve.R` · `tab-counts.R` · `tab-parallel.R` · `tab-deprecate.R` · `tab-steps-legacy.R`. How `tab()` builds a table end to end, plus the quarantined legacy step API; `?tab`.
+
+##### Phase 21b-iv — Regression
+
+`tab_reg.R` · `reg-resolve.R` · `reg-estimand.R` · `reg-empirical.R` · `reg-influence.R` · `reg-assumptions.R` · `reg-spec-build.R`. `tab_reg()` + the estimand / empirical-companion / influence / model-check machinery; `?tab_reg`, `reg_measures`. (`reg-estimand`'s `measure` vocabulary IS `fmt_class`'s `EST_SCALES` — note the bridge.)
+
+##### Phase 21b-v — Shared foundations: inference, arguments, options, integrity
+
+`survey-design.R` · `survey-variance.R` · `tab-args.R` · `tab-options.R` · `zzz-fact-keys.R` · `utils.R`. Cross-producer infrastructure: design-based inference · the declarative argument / option / foreign-key surface (`?tabxplor-options` generator) · utilities. Light; keep the survey-math and declarative-surface sub-groups distinct (`survey-variance` feeds the crosstab leaves but stays with its sibling; `zzz-fact-keys` is genuinely cross-cutting).
+
+##### Phase 21b-vi — Exporters & rendering
+
+`tab-export.R` · `tab-export-prep.R` · `tab-render-html.R` · `tab_md.R` · `tab_xl.R` · `tab-xl-backend.R` · `tab-css.R` · `tab-test-display.R` · `tab-transpose-render.R` · `tab-theme-detect.R` · `plots.R`. One shared prep model → the four backends + the footer / CSS / transpose / theme / plot support.
+
+##### Phase 21b-vii — Jamovi modules
+
+`jmvtab-cache.R` · `jmvtabreg-cache.R` · `jmvtab-export.R` · `jmvtab.b.R` · `jmvtabreg.b.R`. The two point-and-click modules + their live-UI caches (generated `*.h.R` untouched).
 
 
 ---
