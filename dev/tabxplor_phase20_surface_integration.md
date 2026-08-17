@@ -456,14 +456,17 @@ this document as well as its two sources.
     file-level line covers top-level calls only. **Measured after 20a: 57 deprecation warnings in the
     suite** — migrating those calls to `tab()` is the corpus sweep, and it belongs to **20h**.
 
-### 7.3 One stale defect note to verify before acting on it
+### 7.3 One stale defect note — CLOSED in 20g-i, it does not reproduce
 
-CLAUDE.md's draft 20d records: *"On the jamovi cache path a table built with `ci = "cell"` and MIXED
+CLAUDE.md's draft 20d recorded: *"On the jamovi cache path a table built with `ci = "cell"` and MIXED
 col_vars renders its numeric column with the `pct_ci` display token where plain `tab()` renders
 `mean_ci`."* That is the shape of **D11**, which 19k reports as closed (`jmv_apply_display()` was
 deleted for `tab_apply_display()`, and since 19j the leaf stamps that display itself).
-**Reproduce it first in 20g.** If it no longer reproduces, delete the note; if it does, it is a
-real defect with a fixture, and the two closures diverged again.
+
+**Reproduced in 20g-i, and it does not happen**: `tab()` and `jmvtab_build()` both give
+`pct_ci pct_ci pct_ci pct_ci mean_ci` on `marital × c(race, tvhours)`. The note is deleted, and the
+measurement is now a fixture (`test-jmvtab-cache.R`, "D11: ci = 'cell' with mixed col_vars stamps the
+same displays as tab()") so the question cannot come back as prose.
 
 ---
 

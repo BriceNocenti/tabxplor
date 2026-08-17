@@ -269,38 +269,20 @@ options:
            prefix numbers like "1-", and text in parenthesis.
            Set to `FALSE` to avoid this behaviour.
 
-# other_level = "Others",
-# totcol = "last",
-# totaltab_name = "Ensemble",
-# totrow = TRUE,
-# total_names = "Total",
+# NOT offered as controls, deliberately: the four synthetic labels are one option in R since
+# Phase 20b (`options(tabxplor.total_names)`) and the module installs the translated defaults for
+# the duration of a build (jmv_tab3_build_armed); `tot` / `totcol` are always on in the panel.
 
 
 # References (points of comparison)
-
-    # - name: ref
-    #   title: "ref = <i>(ref row/col for diff and OR)</i>"
-    #   type: List
-    #   options:
-    #     - title: auto
-    #       name:  auto
-    #     - title: tot
-    #       name:  tot
-    #     - title: first
-    #       name:  first
-    #     # - title: other
-    #     #   name:  other
-    #     # - title: no # "" ?
-    #     #   name:  no
-    #   default: auto
 
     # Phase 7g-iii: per-variable reference picker, driven by the `refPickerCtrl` CustomControl in
     # .u.yaml (a Material list). One {var, ref} entry per picked variable -- keyed by row_var under
     # pct="row"/means, by col_var under pct="col" (the .b.R filters to the active axis). `ref` is a
     # String (a chosen level label, "tot" for the total, or "" for the auto default), read into a
     # named `ref` vector by jmvtab_ref_vector(). `hidden: true` -> the compiler generates no default
-    # control (the CustomControl is the sole UI; edits the option via ui.refLevels in js/jmvtab.js).
-    - name: refLevels
+    # control (the CustomControl is the sole UI; edits the option via ui.ref_levels in js/jmvtab.js).
+    - name: ref_levels
       title: "Reference levels (per variable)"
       type: Array
       hidden: true
@@ -319,8 +301,8 @@ options:
     # jmvtab_levels_order(); applied post-aggregate (tier-3) in jmv_cache_aggregate().
     # `hidden: true` -> the .u.yaml compiler does NOT auto-generate a default control for this option
     # (uicompiler insertMissingControls skips hidden options); the `levelOrderCtrl` CustomControl in
-    # .u.yaml is the sole UI and edits this option via ui.levelOrder in js/jmvtab.js.
-    - name: levelOrder
+    # .u.yaml is the sole UI and edits this option via ui.levels_order in js/jmvtab.js.
+    - name: levels_order
       title: "Level order (per variable)"
       type: Array
       hidden: true
@@ -360,16 +342,6 @@ options:
               column or row, otherwise you get a warning message.
               \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
             }
-
-# - name: ref2
-#   title: "ref2 = <i>(2nd ref row/col for OR)</i>"
-#   type: List
-#   options:
-#     - title: first
-#       name:  first
-#     - title: tot
-#       name:  tot
-#   default: first
 
     # Phase 7g-iii: `ref2` (the OR 2nd reference) is now driven by the refPickerCtrl ref2 section
     # (shown only when OR is active); `hidden` so the compiler generates no default text box.
@@ -462,8 +434,8 @@ options:
            the difference of each cell from its reference. Read from the same confidence interval
            that is displayed, so stars and bracket always agree.
 
-    - name: method_cell
-      title: method_cell
+    - name: ci_method_cell
+      title: "ci_method = c(cell = )"
       type: List
       options:
         - title: "wilson <i>(score, default)</i>"
@@ -478,8 +450,8 @@ options:
            The proportion confidence-interval method for \code{ci = "cell"}: \code{"wilson"}
            (the score interval, default) or \code{"wald"} (the normal approximation).
 
-    - name: method_diff
-      title: method_diff
+    - name: ci_method_diff
+      title: "ci_method = c(diff = )"
       type: List
       options:
         - title: "newcombe <i>(hybrid score)</i>"
@@ -495,8 +467,8 @@ options:
            (default) is the dual of the two-proportion score test, so the interval and the
            significance stars always agree.
 
-    - name: method_mean_diff
-      title: method_mean_diff
+    - name: ci_method_mean_diff
+      title: "ci_method = c(mean_diff = )"
       type: List
       options:
         - title: "welch <i>(unequal variances, default)</i>"
@@ -509,8 +481,8 @@ options:
            The confidence-interval method for the difference of numeric means
            (means with \code{ci = "diff"}): Welch (default) or Student (pooled variance).
 
-    - name: method_mean_ratio
-      title: method_mean_ratio
+    - name: ci_method_mean_ratio
+      title: "ci_method = c(mean_ratio = )"
       type: List
       options:
         - title: "robust <i>(each group's variance, default)</i>"
@@ -569,7 +541,7 @@ options:
           R: >
            By default, colnames are wrapped when larger than 12 characters.
 
-# filter
+# ==================== Display and export ====================
 
     - name: display
       title: "" # Display

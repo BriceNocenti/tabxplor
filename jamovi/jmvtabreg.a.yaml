@@ -13,14 +13,14 @@ options:
           R: >
            A data.frame.
 
-    - name: dependent
-      title: "<b>dependent = <i>(outcome variable[s])</i></b>"
+    - name: outcome
+      title: "<b>outcome = <i>(dependent variable[s])</i></b>"
       type: Variables
       permitted: [numeric, factor]
       default: NULL
       description:
           R: >
-           The outcome variable(s). One model is built per dependent. Set each outcome's
+           The outcome variable(s). One model is built per outcome. Set each outcome's
            family (and, for a binomial outcome, its modelled level or number of trials) in
            the Model table.
 
@@ -35,8 +35,8 @@ options:
            level (the reference level as the neutral value); numeric predictors as
            a single line.
 
-    - name: split_var
-      title: "<b>split_var = <i>(fit within each group)</i></b>"
+    - name: tab_vars
+      title: "<b>tab_vars = <i>(fit within each group)</i></b>"
       type: Variable
       suggested:
         - nominal
@@ -63,10 +63,10 @@ options:
            sandwich standard errors). Leave empty for unweighted results.
 
 # ============================ Model ============================
-# Per-dependent Model table (family / modelled level / trials) -> the hidden arrays below,
-# driven by the `modelTableCtrl` CustomControl (one row per dependent).
-    - name: depFamily
-      title: "Family (per dependent)"
+# Per-outcome Model table (family / outcome_level / trials) -> the hidden arrays below,
+# driven by the `modelTableCtrl` CustomControl (one row per outcome).
+    - name: family
+      title: "family (per outcome)"
       type: Array
       hidden: true
       default:
@@ -78,8 +78,8 @@ options:
               - name: family
                 type: String
 
-    - name: depModelLevel
-      title: "Binomial modelled level (per dependent)"
+    - name: outcome_level
+      title: "outcome_level (per outcome)"
       type: Array
       hidden: true
       default:
@@ -91,8 +91,8 @@ options:
               - name: level
                 type: String
 
-    - name: depTrials
-      title: "Binomial trials (per dependent)"
+    - name: trials
+      title: "trials (per outcome)"
       type: Array
       hidden: true
       default:
@@ -181,26 +181,39 @@ options:
                 template:
                     type: Variable
 
-    - name: baseline
-      title: "Baseline model position"
+    - name: stats_baseline
+      title: "stats_baseline (model position)"
       type: Integer
       hidden: true
       min: 1
       default: 1
 
-    - name: compare
-      title: compare
+    - name: stats_compare
+      title: stats_compare
       type: List
       options:
         - { title: "none",                      name: none }
-        - { title: "vs a baseline model",       name: baseline }
-        - { title: "sequential (vs prev.)",     name: sequential }
+        - { title: "vs a baseline model",       name: compare_baseline }
+        - { title: "sequential (vs prev.)",     name: compare_sequential }
       default: none
       description:
           R: >
            With several models (a predictor-subset list), add a likelihood-ratio / F / Wald
-           comparison-test footer row: "baseline" tests each model against the chosen baseline
+           comparison-test footer row: "compare_baseline" tests each model against the chosen baseline
            model, "sequential" against the previous one (an AIC difference when not nested).
+
+    # Phase 20f made the two model checks that REFIT the model (linearity, proportional odds) opt-in:
+    # they were 81-94% of a default call. `stats = "all"` is the one value that asks for everything,
+    # and it composes with a comparison key -- reg_resolve_stats(c("all", "compare_baseline")).
+    - name: stats_checks
+      title: 'stats = <i>"all"</i> (slow model checks)'
+      type: Bool
+      default: false
+      description:
+          R: >
+           Also run the model checks that have to refit the model (linearity of a numeric
+           predictor, proportional odds). They are off by default because they dominate the cost
+           of a table; everything else in the model-summary footer is always shown.
 
     - name: na
       title: na
@@ -229,8 +242,8 @@ options:
       type: Action
 
 # ================= References and predictor scaling =================
-    - name: refLevels
-      title: "Reference levels (per predictor)"
+    - name: ref_levels
+      title: "ref (per predictor)"
       type: Array
       hidden: true
       default:
@@ -242,8 +255,8 @@ options:
               - name: ref
                 type: String
 
-    - name: shapes
-      title: "Predictor functional form (per numeric predictor)"
+    - name: shape
+      title: "shape (per numeric predictor)"
       type: Array
       hidden: true
       default:
@@ -255,8 +268,8 @@ options:
               - name: shape
                 type: String
 
-    - name: multiplicator
-      title: "Predictor scaling (per k units)"
+    - name: multiplier
+      title: "multiplier (per numeric predictor)"
       type: Array
       hidden: true
       default:
@@ -279,8 +292,8 @@ options:
           R: >
            The confidence level for intervals and the significance stars.
 
-    - name: method
-      title: method
+    - name: ci_method
+      title: ci_method
       type: List
       options:
         - title: "Wald"
@@ -327,7 +340,7 @@ options:
              \item \code{"adjustment"}: how far the ADJUSTED effect moved from the crude one --
              needs \code{empirical}.
              \item \code{"between_groups"}: how far each group's effect is from the first group's
-             -- needs \code{split_var}.
+             -- needs \code{tab_vars}.
             }
 
     - name: color_signif
@@ -367,6 +380,14 @@ options:
            fold the adjusted predicted probability / marginal effect into the OR cell
            (binomial coefficient models only). These four are shorthands over \code{tab_reg()}'s
            \code{\{\}} display grammar.
+
+    - name: add_n
+      title: add_n
+      type: Bool
+      default: true
+      description:
+          R: >
+           Add a column giving the number of observations behind each predictor level.
 
     - name: cleannames
       title: cleannames

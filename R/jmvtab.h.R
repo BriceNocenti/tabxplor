@@ -20,8 +20,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             lvs = "all",
             other_if_less_than = 0,
             cleannames = TRUE,
-            refLevels = NULL,
-            levelOrder = NULL,
+            ref_levels = NULL,
+            levels_order = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -29,10 +29,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             conf_level = 0.95,
             ci_print = "ci",
             stars = FALSE,
-            method_cell = "wilson",
-            method_diff = "newcombe",
-            method_mean_diff = "welch",
-            method_mean_ratio = "robust",
+            ci_method_cell = "wilson",
+            ci_method_diff = "newcombe",
+            ci_method_mean_diff = "welch",
+            ci_method_mean_ratio = "robust",
             totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
@@ -163,13 +163,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "cleannames",
                 cleannames,
                 default=TRUE)
-            private$..refLevels <- jmvcore::OptionArray$new(
-                "refLevels",
-                refLevels,
+            private$..ref_levels <- jmvcore::OptionArray$new(
+                "ref_levels",
+                ref_levels,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "refLevels",
+                    "ref_levels",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -178,13 +178,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "ref",
                             NULL))))
-            private$..levelOrder <- jmvcore::OptionArray$new(
-                "levelOrder",
-                levelOrder,
+            private$..levels_order <- jmvcore::OptionArray$new(
+                "levels_order",
+                levels_order,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "levelOrder",
+                    "levels_order",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -239,32 +239,32 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "stars",
                 stars,
                 default=FALSE)
-            private$..method_cell <- jmvcore::OptionList$new(
-                "method_cell",
-                method_cell,
+            private$..ci_method_cell <- jmvcore::OptionList$new(
+                "ci_method_cell",
+                ci_method_cell,
                 options=list(
                     "wilson",
                     "wald",
                     "beta"),
                 default="wilson")
-            private$..method_diff <- jmvcore::OptionList$new(
-                "method_diff",
-                method_diff,
+            private$..ci_method_diff <- jmvcore::OptionList$new(
+                "ci_method_diff",
+                ci_method_diff,
                 options=list(
                     "newcombe",
                     "ac",
                     "wald"),
                 default="newcombe")
-            private$..method_mean_diff <- jmvcore::OptionList$new(
-                "method_mean_diff",
-                method_mean_diff,
+            private$..ci_method_mean_diff <- jmvcore::OptionList$new(
+                "ci_method_mean_diff",
+                ci_method_mean_diff,
                 options=list(
                     "welch",
                     "student"),
                 default="welch")
-            private$..method_mean_ratio <- jmvcore::OptionList$new(
-                "method_mean_ratio",
-                method_mean_ratio,
+            private$..ci_method_mean_ratio <- jmvcore::OptionList$new(
+                "ci_method_mean_ratio",
+                ci_method_mean_ratio,
                 options=list(
                     "robust",
                     "quasipoisson",
@@ -377,8 +377,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
-            self$.addOption(private$..refLevels)
-            self$.addOption(private$..levelOrder)
+            self$.addOption(private$..ref_levels)
+            self$.addOption(private$..levels_order)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
@@ -386,10 +386,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..conf_level)
             self$.addOption(private$..ci_print)
             self$.addOption(private$..stars)
-            self$.addOption(private$..method_cell)
-            self$.addOption(private$..method_diff)
-            self$.addOption(private$..method_mean_diff)
-            self$.addOption(private$..method_mean_ratio)
+            self$.addOption(private$..ci_method_cell)
+            self$.addOption(private$..ci_method_diff)
+            self$.addOption(private$..ci_method_mean_diff)
+            self$.addOption(private$..ci_method_mean_ratio)
             self$.addOption(private$..totaltab)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
@@ -421,8 +421,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
-        refLevels = function() private$..refLevels$value,
-        levelOrder = function() private$..levelOrder$value,
+        ref_levels = function() private$..ref_levels$value,
+        levels_order = function() private$..levels_order$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
@@ -430,10 +430,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         conf_level = function() private$..conf_level$value,
         ci_print = function() private$..ci_print$value,
         stars = function() private$..stars$value,
-        method_cell = function() private$..method_cell$value,
-        method_diff = function() private$..method_diff$value,
-        method_mean_diff = function() private$..method_mean_diff$value,
-        method_mean_ratio = function() private$..method_mean_ratio$value,
+        ci_method_cell = function() private$..ci_method_cell$value,
+        ci_method_diff = function() private$..ci_method_diff$value,
+        ci_method_mean_diff = function() private$..ci_method_mean_diff$value,
+        ci_method_mean_ratio = function() private$..ci_method_mean_ratio$value,
         totaltab = function() private$..totaltab$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
@@ -464,8 +464,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..lvs = NA,
         ..other_if_less_than = NA,
         ..cleannames = NA,
-        ..refLevels = NA,
-        ..levelOrder = NA,
+        ..ref_levels = NA,
+        ..levels_order = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
@@ -473,10 +473,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..conf_level = NA,
         ..ci_print = NA,
         ..stars = NA,
-        ..method_cell = NA,
-        ..method_diff = NA,
-        ..method_mean_diff = NA,
-        ..method_mean_ratio = NA,
+        ..ci_method_cell = NA,
+        ..ci_method_diff = NA,
+        ..ci_method_mean_diff = NA,
+        ..ci_method_mean_ratio = NA,
         ..totaltab = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
@@ -617,8 +617,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param cleannames By default, clean levels names, by removing prefix
 #'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 #'   this behaviour.
-#' @param refLevels .
-#' @param levelOrder .
+#' @param ref_levels .
+#' @param levels_order .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -658,16 +658,17 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{**} \code{***}) for the difference of each cell from its reference.
 #'   Read from the same confidence interval that is displayed, so stars and
 #'   bracket always agree.
-#' @param method_cell The proportion confidence-interval method for \code{ci =
-#'   "cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
-#'   (the normal approximation).
-#' @param method_diff The proportion confidence-interval method for \code{ci =
-#'   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
-#'   score test, so the interval and the significance stars always agree.
-#' @param method_mean_diff The confidence-interval method for the difference
-#'   of numeric means (means with \code{ci = "diff"}): Welch (default) or
-#'   Student (pooled variance).
-#' @param method_mean_ratio The confidence-interval method for a ratio of
+#' @param ci_method_cell The proportion confidence-interval method for
+#'   \code{ci = "cell"}: \code{"wilson"} (the score interval, default) or
+#'   \code{"wald"} (the normal approximation).
+#' @param ci_method_diff The proportion confidence-interval method for
+#'   \code{ci = "diff"}. \code{"newcombe"} (default) is the dual of the
+#'   two-proportion score test, so the interval and the significance stars
+#'   always agree.
+#' @param ci_method_mean_diff The confidence-interval method for the
+#'   difference of numeric means (means with \code{ci = "diff"}): Welch
+#'   (default) or Student (pooled variance).
+#' @param ci_method_mean_ratio The confidence-interval method for a ratio of
 #'   numeric means (means with \code{ci = "ratio"}).
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
@@ -737,8 +738,8 @@ jmvtab <- function(
     lvs = "all",
     other_if_less_than = 0,
     cleannames = TRUE,
-    refLevels = NULL,
-    levelOrder = NULL,
+    ref_levels = NULL,
+    levels_order = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
@@ -746,10 +747,10 @@ jmvtab <- function(
     conf_level = 0.95,
     ci_print = "ci",
     stars = FALSE,
-    method_cell = "wilson",
-    method_diff = "newcombe",
-    method_mean_diff = "welch",
-    method_mean_ratio = "robust",
+    ci_method_cell = "wilson",
+    ci_method_diff = "newcombe",
+    ci_method_mean_diff = "welch",
+    ci_method_mean_ratio = "robust",
     totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,
@@ -798,8 +799,8 @@ jmvtab <- function(
         lvs = lvs,
         other_if_less_than = other_if_less_than,
         cleannames = cleannames,
-        refLevels = refLevels,
-        levelOrder = levelOrder,
+        ref_levels = ref_levels,
+        levels_order = levels_order,
         ref = ref,
         ref2 = ref2,
         comp = comp,
@@ -807,10 +808,10 @@ jmvtab <- function(
         conf_level = conf_level,
         ci_print = ci_print,
         stars = stars,
-        method_cell = method_cell,
-        method_diff = method_diff,
-        method_mean_diff = method_mean_diff,
-        method_mean_ratio = method_mean_ratio,
+        ci_method_cell = ci_method_cell,
+        ci_method_diff = ci_method_diff,
+        ci_method_mean_diff = ci_method_mean_diff,
+        ci_method_mean_ratio = ci_method_mean_ratio,
         totaltab = totaltab,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,

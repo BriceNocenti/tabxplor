@@ -6,30 +6,32 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Options,
     public = list(
         initialize = function(
-            dependent = NULL,
+            outcome = NULL,
             predictors = NULL,
-            split_var = NULL,
+            tab_vars = NULL,
             wt = NULL,
-            depFamily = NULL,
-            depModelLevel = NULL,
-            depTrials = NULL,
+            family = NULL,
+            outcome_level = NULL,
+            trials = NULL,
             effect = "coefficient",
             measure = "auto",
             empirical = FALSE,
             models = NULL,
-            baseline = 1,
-            compare = "none",
+            stats_baseline = 1,
+            stats_compare = "none",
+            stats_checks = FALSE,
             na = "drop_by_outcome",
             run_compare = FALSE,
-            refLevels = NULL,
-            shapes = NULL,
-            multiplicator = NULL,
+            ref_levels = NULL,
+            shape = NULL,
+            multiplier = NULL,
             conf_level = 0.95,
-            method = "wald",
+            ci_method = "wald",
             stars = TRUE,
             color = "auto",
             color_signif = "grey_non_signif",
             display = "value",
+            add_n = TRUE,
             cleannames = TRUE,
             subtext = "",
             wrap_rows = 35,
@@ -47,9 +49,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 requiresData=TRUE,
                 ...)
 
-            private$..dependent <- jmvcore::OptionVariables$new(
-                "dependent",
-                dependent,
+            private$..outcome <- jmvcore::OptionVariables$new(
+                "outcome",
+                outcome,
                 permitted=list(
                     "numeric",
                     "factor"),
@@ -61,9 +63,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "numeric",
                     "factor"),
                 default=NULL)
-            private$..split_var <- jmvcore::OptionVariable$new(
-                "split_var",
-                split_var,
+            private$..tab_vars <- jmvcore::OptionVariable$new(
+                "tab_vars",
+                tab_vars,
                 suggested=list(
                     "nominal",
                     "ordinal"),
@@ -78,13 +80,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 permitted=list(
                     "numeric"),
                 default=NULL)
-            private$..depFamily <- jmvcore::OptionArray$new(
-                "depFamily",
-                depFamily,
+            private$..family <- jmvcore::OptionArray$new(
+                "family",
+                family,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "depFamily",
+                    "family",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -93,13 +95,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "family",
                             NULL))))
-            private$..depModelLevel <- jmvcore::OptionArray$new(
-                "depModelLevel",
-                depModelLevel,
+            private$..outcome_level <- jmvcore::OptionArray$new(
+                "outcome_level",
+                outcome_level,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "depModelLevel",
+                    "outcome_level",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -108,13 +110,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "level",
                             NULL))))
-            private$..depTrials <- jmvcore::OptionArray$new(
-                "depTrials",
-                depTrials,
+            private$..trials <- jmvcore::OptionArray$new(
+                "trials",
+                trials,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "depTrials",
+                    "trials",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -163,20 +165,24 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             template=jmvcore::OptionVariable$new(
                                 "vars",
                                 NULL)))))
-            private$..baseline <- jmvcore::OptionInteger$new(
-                "baseline",
-                baseline,
+            private$..stats_baseline <- jmvcore::OptionInteger$new(
+                "stats_baseline",
+                stats_baseline,
                 hidden=TRUE,
                 min=1,
                 default=1)
-            private$..compare <- jmvcore::OptionList$new(
-                "compare",
-                compare,
+            private$..stats_compare <- jmvcore::OptionList$new(
+                "stats_compare",
+                stats_compare,
                 options=list(
                     "none",
-                    "baseline",
-                    "sequential"),
+                    "compare_baseline",
+                    "compare_sequential"),
                 default="none")
+            private$..stats_checks <- jmvcore::OptionBool$new(
+                "stats_checks",
+                stats_checks,
+                default=FALSE)
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -188,13 +194,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..run_compare <- jmvcore::OptionAction$new(
                 "run_compare",
                 run_compare)
-            private$..refLevels <- jmvcore::OptionArray$new(
-                "refLevels",
-                refLevels,
+            private$..ref_levels <- jmvcore::OptionArray$new(
+                "ref_levels",
+                ref_levels,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "refLevels",
+                    "ref_levels",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -203,13 +209,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "ref",
                             NULL))))
-            private$..shapes <- jmvcore::OptionArray$new(
-                "shapes",
-                shapes,
+            private$..shape <- jmvcore::OptionArray$new(
+                "shape",
+                shape,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "shapes",
+                    "shape",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -218,13 +224,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "shape",
                             NULL))))
-            private$..multiplicator <- jmvcore::OptionArray$new(
-                "multiplicator",
-                multiplicator,
+            private$..multiplier <- jmvcore::OptionArray$new(
+                "multiplier",
+                multiplier,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "multiplicator",
+                    "multiplier",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -239,9 +245,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 min=0.5,
                 max=0.999,
                 default=0.95)
-            private$..method <- jmvcore::OptionList$new(
-                "method",
-                method,
+            private$..ci_method <- jmvcore::OptionList$new(
+                "ci_method",
+                ci_method,
                 options=list(
                     "wald",
                     "profile"),
@@ -276,6 +282,10 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "prob",
                     "ame"),
                 default="value")
+            private$..add_n <- jmvcore::OptionBool$new(
+                "add_n",
+                add_n,
+                default=TRUE)
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
@@ -322,30 +332,32 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 xl_replace,
                 default=FALSE)
 
-            self$.addOption(private$..dependent)
+            self$.addOption(private$..outcome)
             self$.addOption(private$..predictors)
-            self$.addOption(private$..split_var)
+            self$.addOption(private$..tab_vars)
             self$.addOption(private$..wt)
-            self$.addOption(private$..depFamily)
-            self$.addOption(private$..depModelLevel)
-            self$.addOption(private$..depTrials)
+            self$.addOption(private$..family)
+            self$.addOption(private$..outcome_level)
+            self$.addOption(private$..trials)
             self$.addOption(private$..effect)
             self$.addOption(private$..measure)
             self$.addOption(private$..empirical)
             self$.addOption(private$..models)
-            self$.addOption(private$..baseline)
-            self$.addOption(private$..compare)
+            self$.addOption(private$..stats_baseline)
+            self$.addOption(private$..stats_compare)
+            self$.addOption(private$..stats_checks)
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
-            self$.addOption(private$..refLevels)
-            self$.addOption(private$..shapes)
-            self$.addOption(private$..multiplicator)
+            self$.addOption(private$..ref_levels)
+            self$.addOption(private$..shape)
+            self$.addOption(private$..multiplier)
             self$.addOption(private$..conf_level)
-            self$.addOption(private$..method)
+            self$.addOption(private$..ci_method)
             self$.addOption(private$..stars)
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
             self$.addOption(private$..display)
+            self$.addOption(private$..add_n)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
             self$.addOption(private$..wrap_rows)
@@ -358,30 +370,32 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..xl_replace)
         }),
     active = list(
-        dependent = function() private$..dependent$value,
+        outcome = function() private$..outcome$value,
         predictors = function() private$..predictors$value,
-        split_var = function() private$..split_var$value,
+        tab_vars = function() private$..tab_vars$value,
         wt = function() private$..wt$value,
-        depFamily = function() private$..depFamily$value,
-        depModelLevel = function() private$..depModelLevel$value,
-        depTrials = function() private$..depTrials$value,
+        family = function() private$..family$value,
+        outcome_level = function() private$..outcome_level$value,
+        trials = function() private$..trials$value,
         effect = function() private$..effect$value,
         measure = function() private$..measure$value,
         empirical = function() private$..empirical$value,
         models = function() private$..models$value,
-        baseline = function() private$..baseline$value,
-        compare = function() private$..compare$value,
+        stats_baseline = function() private$..stats_baseline$value,
+        stats_compare = function() private$..stats_compare$value,
+        stats_checks = function() private$..stats_checks$value,
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
-        refLevels = function() private$..refLevels$value,
-        shapes = function() private$..shapes$value,
-        multiplicator = function() private$..multiplicator$value,
+        ref_levels = function() private$..ref_levels$value,
+        shape = function() private$..shape$value,
+        multiplier = function() private$..multiplier$value,
         conf_level = function() private$..conf_level$value,
-        method = function() private$..method$value,
+        ci_method = function() private$..ci_method$value,
         stars = function() private$..stars$value,
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
         display = function() private$..display$value,
+        add_n = function() private$..add_n$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
         wrap_rows = function() private$..wrap_rows$value,
@@ -393,30 +407,32 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         resetPath = function() private$..resetPath$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
-        ..dependent = NA,
+        ..outcome = NA,
         ..predictors = NA,
-        ..split_var = NA,
+        ..tab_vars = NA,
         ..wt = NA,
-        ..depFamily = NA,
-        ..depModelLevel = NA,
-        ..depTrials = NA,
+        ..family = NA,
+        ..outcome_level = NA,
+        ..trials = NA,
         ..effect = NA,
         ..measure = NA,
         ..empirical = NA,
         ..models = NA,
-        ..baseline = NA,
-        ..compare = NA,
+        ..stats_baseline = NA,
+        ..stats_compare = NA,
+        ..stats_checks = NA,
         ..na = NA,
         ..run_compare = NA,
-        ..refLevels = NA,
-        ..shapes = NA,
-        ..multiplicator = NA,
+        ..ref_levels = NA,
+        ..shape = NA,
+        ..multiplier = NA,
         ..conf_level = NA,
-        ..method = NA,
+        ..ci_method = NA,
         ..stars = NA,
         ..color = NA,
         ..color_signif = NA,
         ..display = NA,
+        ..add_n = NA,
         ..cleannames = NA,
         ..subtext = NA,
         ..wrap_rows = NA,
@@ -487,20 +503,20 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'
 #' 
 #' @param data A data.frame.
-#' @param dependent The outcome variable(s). One model is built per dependent.
-#'   Set each outcome's family (and, for a binomial outcome, its modelled level
-#'   or number of trials) in the Model table.
+#' @param outcome The outcome variable(s). One model is built per outcome. Set
+#'   each outcome's family (and, for a binomial outcome, its modelled level or
+#'   number of trials) in the Model table.
 #' @param predictors The explanatory variables of the model. Factors are shown
 #'   one line per level (the reference level as the neutral value); numeric
 #'   predictors as a single line.
-#' @param split_var A grouping variable. The same model is fitted within each
+#' @param tab_vars A grouping variable. The same model is fitted within each
 #'   of its levels and the tables are stacked (like tab_vars for crosstables).
 #' @param wt A survey weight variable. Switches to design-based estimation
 #'   (scale-invariant sandwich standard errors). Leave empty for unweighted
 #'   results.
-#' @param depFamily .
-#' @param depModelLevel .
-#' @param depTrials .
+#' @param family .
+#' @param outcome_level .
+#' @param trials .
 #' @param effect WHICH CONTRAST the table reports.  \itemize{   \item
 #'   \code{"coefficient"}: the model's native per-family effect.   \item
 #'   \code{"marginal"}: the average marginal effect on the response scale,
@@ -522,11 +538,15 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   modelised quantity with a single predictor). Binomial / gaussian / poisson
 #'   only.
 #' @param models .
-#' @param baseline .
-#' @param compare With several models (a predictor-subset list), add a
-#'   likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
-#'   each model against the chosen baseline model, "sequential" against the
-#'   previous one (an AIC difference when not nested).
+#' @param stats_baseline .
+#' @param stats_compare With several models (a predictor-subset list), add a
+#'   likelihood-ratio / F / Wald comparison-test footer row: "compare_baseline"
+#'   tests each model against the chosen baseline model, "sequential" against
+#'   the previous one (an AIC difference when not nested).
+#' @param stats_checks Also run the model checks that have to refit the model
+#'   (linearity of a numeric predictor, proportional odds). They are off by
+#'   default because they dominate the cost of a table; everything else in the
+#'   model-summary footer is always shown.
 #' @param na "drop_by_outcome" (default) fits every model OF ONE OUTCOME on
 #'   the same complete cases, which is what makes the observed columns
 #'   comparable to the model beside them and lets the likelihood-ratio
@@ -534,13 +554,13 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   model on a different population then gets no observed effect); "drop_all"
 #'   shares one population across every outcome as well.
 #' @param run_compare .
-#' @param refLevels .
-#' @param shapes .
-#' @param multiplicator .
+#' @param ref_levels .
+#' @param shape .
+#' @param multiplier .
 #' @param conf_level The confidence level for intervals and the significance
 #'   stars.
-#' @param method Wald intervals (also the only option for weighted models) or
-#'   profile-likelihood intervals (unweighted binomial / poisson only; needs
+#' @param ci_method Wald intervals (also the only option for weighted models)
+#'   or profile-likelihood intervals (unweighted binomial / poisson only; needs
 #'   MASS).
 #' @param stars Show per-cell significance stars (the colours read the
 #'   confidence interval either way).
@@ -552,7 +572,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
 #'   effect moved from the crude one --   needs \code{empirical}.   \item
 #'   \code{"between_groups"}: how far each group's effect is from the first
-#'   group's   -- needs \code{split_var}.  }
+#'   group's   -- needs \code{tab_vars}.  }
 #' @param color_signif How significance interacts with the colours: observed
 #'   size + grey out non-significant cells, colour only the guaranteed
 #'   (error-adjusted) effect, ignore significance.
@@ -562,6 +582,8 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   probability / marginal effect into the OR cell (binomial coefficient models
 #'   only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
 #'   display grammar.
+#' @param add_n Add a column giving the number of observations behind each
+#'   predictor level.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
 #' @param wrap_rows .
@@ -588,30 +610,32 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @export
 jmvtabreg <- function(
     data,
-    dependent = NULL,
+    outcome = NULL,
     predictors = NULL,
-    split_var = NULL,
+    tab_vars = NULL,
     wt = NULL,
-    depFamily = NULL,
-    depModelLevel = NULL,
-    depTrials = NULL,
+    family = NULL,
+    outcome_level = NULL,
+    trials = NULL,
     effect = "coefficient",
     measure = "auto",
     empirical = FALSE,
     models = NULL,
-    baseline = 1,
-    compare = "none",
+    stats_baseline = 1,
+    stats_compare = "none",
+    stats_checks = FALSE,
     na = "drop_by_outcome",
     run_compare = FALSE,
-    refLevels = NULL,
-    shapes = NULL,
-    multiplicator = NULL,
+    ref_levels = NULL,
+    shape = NULL,
+    multiplier = NULL,
     conf_level = 0.95,
-    method = "wald",
+    ci_method = "wald",
     stars = TRUE,
     color = "auto",
     color_signif = "grey_non_signif",
     display = "value",
+    add_n = TRUE,
     cleannames = TRUE,
     subtext = "",
     wrap_rows = 35,
@@ -626,45 +650,47 @@ jmvtabreg <- function(
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
         stop("jmvtabreg requires jmvcore to be installed (restart may be required)")
 
-    if ( ! missing(dependent)) dependent <- jmvcore::resolveQuo(jmvcore::enquo(dependent))
+    if ( ! missing(outcome)) outcome <- jmvcore::resolveQuo(jmvcore::enquo(outcome))
     if ( ! missing(predictors)) predictors <- jmvcore::resolveQuo(jmvcore::enquo(predictors))
-    if ( ! missing(split_var)) split_var <- jmvcore::resolveQuo(jmvcore::enquo(split_var))
+    if ( ! missing(tab_vars)) tab_vars <- jmvcore::resolveQuo(jmvcore::enquo(tab_vars))
     if ( ! missing(wt)) wt <- jmvcore::resolveQuo(jmvcore::enquo(wt))
     if (missing(data))
         data <- jmvcore::marshalData(
             parent.frame(),
-            `if`( ! missing(dependent), dependent, NULL),
+            `if`( ! missing(outcome), outcome, NULL),
             `if`( ! missing(predictors), predictors, NULL),
-            `if`( ! missing(split_var), split_var, NULL),
+            `if`( ! missing(tab_vars), tab_vars, NULL),
             `if`( ! missing(wt), wt, NULL))
 
-    for (v in split_var) if (v %in% names(data)) data[[v]] <- as.factor(data[[v]])
+    for (v in tab_vars) if (v %in% names(data)) data[[v]] <- as.factor(data[[v]])
 
     options <- jmvtabregOptions$new(
-        dependent = dependent,
+        outcome = outcome,
         predictors = predictors,
-        split_var = split_var,
+        tab_vars = tab_vars,
         wt = wt,
-        depFamily = depFamily,
-        depModelLevel = depModelLevel,
-        depTrials = depTrials,
+        family = family,
+        outcome_level = outcome_level,
+        trials = trials,
         effect = effect,
         measure = measure,
         empirical = empirical,
         models = models,
-        baseline = baseline,
-        compare = compare,
+        stats_baseline = stats_baseline,
+        stats_compare = stats_compare,
+        stats_checks = stats_checks,
         na = na,
         run_compare = run_compare,
-        refLevels = refLevels,
-        shapes = shapes,
-        multiplicator = multiplicator,
+        ref_levels = ref_levels,
+        shape = shape,
+        multiplier = multiplier,
         conf_level = conf_level,
-        method = method,
+        ci_method = ci_method,
         stars = stars,
         color = color,
         color_signif = color_signif,
         display = display,
+        add_n = add_n,
         cleannames = cleannames,
         subtext = subtext,
         wrap_rows = wrap_rows,

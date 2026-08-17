@@ -231,6 +231,12 @@
   gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and
   exports now show the per-cell hover tooltips (counts, confidence intervals, differences;
   `options(tabxplor.tab_kable_tooltips = FALSE)` to disable).
+* **The jamovi panels now name every option after the R argument it drives** (`outcome`,
+  `tab_vars`, `ci_method`, `multiplier`, `shape`, `ref`, `stats`…), so clicking through the module
+  still teaches the R API. Two controls were added: the model checks that refit the model
+  (`stats = "all"`) and the N per predictor level (`add_n`). ⚠ jamovi keys an analysis's saved
+  settings by option name, so **a `.omv` file saved with an earlier development build loses the
+  values of the renamed options** and falls back to their defaults.
 
 ## Changes that may affect existing code
 

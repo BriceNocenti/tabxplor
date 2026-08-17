@@ -10,6 +10,12 @@
 #   - Phase 19k: `.run()` is weights -> build -> render. NO option travels as a global around the
 #     build any more (`anova` was the last; it is tab()'s own argument now). `ci_print` keeps its
 #     options()/on.exit, deliberately: it is read inside format(), i.e. around the RENDER.
+#   - Phase 20g-i: AN OPTION IS NAMED AFTER THE tab() ARGUMENT IT DRIVES -- exactly, or as
+#     `<argument>_<slot>` where several options fold into one (`ci_method_cell` ... -> `ci_method`,
+#     `ref` + `ref_levels` -> `ref`). `.opts()` is therefore a pass-through, not a translation
+#     table, and test-jamovi-vocabulary.R checks the rule (names, control names and `ui.<name>` in
+#     the .js alike). The declared exceptions are `lvs` (jmvcore::Options already has a levels()
+#     method) and the UI-only controls (export, wrap, models/run_compare, ci_print).
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
 #   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
@@ -78,9 +84,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       active_vars <- as.character(
         if (identical(self$options$pct, "col")) self$options$col_vars else self$options$row_vars
       )
-      refLevels_active <- Filter(
+      ref_levels_active <- Filter(
         function(e) { v <- e[["var"]]; !is.null(v) && as.character(v) %in% active_vars },
-        self$options$refLevels
+        self$options$ref_levels
       )
       list(
         row_vars = self$options$row_vars,
@@ -105,24 +111,24 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         design_effect = isTRUE(self$options$design_effect),
         na           = self$options$na,
         levels       = self$options$lvs,             # option named `lvs` (jmvcore has a levels() method)
-        # Phase 7g-iii: the reference-level picker (refLevels) drives `ref`, keyed by the ACTIVE axis
+        # Phase 7g-iii: the reference-level picker (ref_levels) drives `ref`, keyed by the ACTIVE axis
         # (col_vars under pct="col", else row_vars -- filtered above so a stale cross-axis entry can't
         # leak). tab_setup() dispatches by pct: a row reference (row%/means) vs a per-col_var column
         # reference (col%). A chosen level label is matched by exact equality in diff_index(). Falls
         # back to the (hidden) expert free-text `ref`. ref2 = the OR 2nd reference (a level / first / tot).
-        ref          = jmvtab_ref_vector(refLevels_active, self$options$ref),
+        ref          = jmvtab_ref_vector(ref_levels_active, self$options$ref),
         ref2         = self$options$ref2,
-        # Phase 7g-ii: per-variable level reordering (levelOrder picker) -> a named list of ordered
+        # Phase 7g-ii: per-variable level reordering (levels_order picker) -> a named list of ordered
         # levels; applied post-aggregate in jmv_cache_aggregate() (tier-3 rebuild, tiers 1-2 reused).
-        levels_order = jmvtab_levels_order(self$options$levelOrder),
+        levels_order = jmvtab_levels_order(self$options$levels_order),
         comp         = self$options$comp,
         ci           = self$options$ci %||% "auto",
         conf_level   = self$options$conf_level,
         stars        = self$options$stars,
-        method_cell       = self$options$method_cell,   # folded into ONE ci_method vector by
-        method_diff       = self$options$method_diff,   # jmv_ci_method() -- the UI keeps one
-        method_mean_diff  = self$options$method_mean_diff,  # ComboBox per interval kind
-        method_mean_ratio = self$options$method_mean_ratio,
+        ci_method_cell       = self$options$ci_method_cell,   # folded into ONE ci_method vector by
+        ci_method_diff       = self$options$ci_method_diff,   # jmv_ci_method() -- the UI keeps one
+        ci_method_mean_diff  = self$options$ci_method_mean_diff,  # ComboBox per interval kind
+        ci_method_mean_ratio = self$options$ci_method_mean_ratio,
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
         totaltab     = self$options$totaltab,
         digits       = as.integer(self$options$digits),  # `digits` is a List -> a "0".."6" string
@@ -133,9 +139,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         n_min        = self$options$n_min,           # Phase 7g: small-base display filter (tier 4)
         display      = self$options$display %||% "auto",
         output_list  = FALSE,
-        totaltab_name = gettext("Ensemble", domain = "R-tabxplor"),
-        total_names   = gettext("Total",    domain = "R-tabxplor"),
-        other_level   = gettext("Others",   domain = "R-tabxplor")
+        # Phase 20b: the four synthetic labels are ONE option (`tabxplor.total_names`), and 20g-i made
+        # them ONE key here -- they were three, mirroring three arguments that no longer exist and
+        # that no control ever offered. They are not a user choice; they are the module TRANSLATING
+        # its own defaults (the R option is seeded in English), which is why they are produced here
+        # rather than read from `self$options`. jmv_tab3_build_armed() installs them for one build.
+        total_names  = c(row = gettext("Total",    domain = "R-tabxplor"),
+                         col = gettext("Total",    domain = "R-tabxplor"),
+                         tab = gettext("Ensemble", domain = "R-tabxplor"),
+                         other = gettext("Others", domain = "R-tabxplor"))
       )
     },
 

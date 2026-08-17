@@ -21,11 +21,14 @@ jmv_opts <- function(...) {
             na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
             conf_level = 0.95, stars = TRUE,   # design_effect: absent -> the global option decides
             # the jamovi UI keeps one ComboBox per interval kind; jmv_ci_method() folds them
-            method_cell = "wilson", method_diff = "newcombe",
-            method_mean_diff = "welch", method_mean_ratio = "robust",
+            ci_method_cell = "wilson", ci_method_diff = "newcombe",
+            ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
-            subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
-            output_list = FALSE, cleannames = FALSE, display = "auto", anova = "welch")
+            subtext = "", output_list = FALSE, cleannames = FALSE, display = "auto",
+            anova = "welch",
+            # 20g-i: ONE key of the option's own shape (it was three constants mirroring three
+            # arguments that no longer exist). `.opts()` fills it with the module's translations.
+            total_names = c(row = "Total", col = "Total", tab = "Ensemble", other = "Others"))
   # WARNING: `modifyList()` keeps the FIRST of two same-named entries, and every `o0(...)`/`mk(...)`
   # wrapper below splices its own defaults beside the caller's `...` -- so a later override was
   # silently swallowed. Measured on the pre-fix tree: `o0(color = "ratio")` at L318 built with
@@ -48,13 +51,10 @@ jmv_oracle <- function(opts, data) {
                         if (length(opts$ref)) opts$ref else "auto")$ci
   wt_sym <- if (length(opts$wt)) rlang::sym(opts$wt) else NULL
   # Phase 19k: no translation left -- every option is passed under the name tab() gives it.
-  # 20b: the four synthetic labels are an option, exactly as jmv_tab3_build_armed() installs them.
-  .lbl <- c(row = opts$total_names[[1]],
-            col = opts$total_names[[min(2L, length(opts$total_names))]],
-            tab = opts$totaltab_name, other = opts$other_level)
-  .lbl <- .lbl[!vapply(.lbl, function(v) is.null(v) || !nzchar(v), logical(1))]
-  if (length(.lbl)) {
-    .old <- options(tabxplor.total_names = tabxplor:::tab_total_names_merge(.lbl))
+  # 20b/20g-i: the four synthetic labels are an option, installed exactly as jmv_tab3_build_armed()
+  # installs them.
+  if (length(opts$total_names)) {
+    .old <- options(tabxplor.total_names = tabxplor:::tab_total_names_merge(opts$total_names))
     on.exit(options(.old), add = TRUE)
   }
   rlang::inject(tab(
@@ -63,7 +63,7 @@ jmv_oracle <- function(opts, data) {
     color_signif = opts$color_signif, display = opts$display, test = opts$test, na = opts$na,
     levels = opts$levels, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp, ci = ci,
     conf_level = opts$conf_level, stars = opts$stars, anova = opts$anova,
-    ci_method = c(cell = opts$method_cell, diff = opts$method_diff),
+    ci_method = c(cell = opts$ci_method_cell, diff = opts$ci_method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
     other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
     subtext = opts$subtext, output_list = isTRUE(opts$output_list)
@@ -219,6 +219,23 @@ test_that("contrib coloring does NOT use the tier-2 cache (recomputes per-cell f
   r2 <- jmvtab_build(gss, o, r1$store)
   expect_equal(sum(r2$hits$test), 0)                       # never a test hit under contrib
   expect_equal(r2$tabs, jmv_oracle(o, gss))
+})
+
+
+# Phase 20g-i: what defect D11 was, pinned. A `ci = "cell"` table with MIXED col_vars must stamp
+# `pct_ci` on the factor columns and `mean_ci` on the numeric one, on BOTH paths -- jmv_apply_display()
+# used to write `pct_ci` on the mean column too (whose `pct` is NA -> an EMPTY cell) and to run AFTER
+# the display ComboBox, so it overrode the user. 19j moved that stamp into the leaf and 19k deleted
+# the copy; this is the fixture that says so, and the reason the standing "reproduce it in 20g" note
+# is closed rather than carried.
+test_that("D11: ci = 'cell' with mixed col_vars stamps the same displays as tab()", {
+  o  <- jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), pct = "row", ci = "cell")
+  jr <- suppressMessages(jmvtab_build(gss, o, NULL))$tabs
+  ot <- suppressMessages(jmv_oracle(o, gss))
+  disp <- function(t) vapply(t[vapply(t, is_fmt, logical(1))],
+                             function(x) get_display(x)[[1]], character(1))
+  expect_identical(disp(jr), disp(ot))
+  expect_identical(unname(disp(jr)), c(rep("pct_ci", 4L), "mean_ci"))
 })
 
 
@@ -384,8 +401,8 @@ test_that("Phase 9b-7: a reference change re-refs (tier-3 hit) and equals the re
     # tab_apply_reference()'s old `nm == "Total"` matched nothing here and the odds ratio's 2x2 was
     # built against the wrong column -- a real defect masked only because po/R-fr.po translates
     # "Total" -> "Total". The stored `totcol` attribute is the fact; this case is what proves it.
-    list(d = "gssb", a = o0(col_vars = "white", total_names = c("Total", "Ensemble")),
-                     b = o0(col_vars = "white", total_names = c("Total", "Ensemble"),
+    list(d = "gssb", a = o0(col_vars = "white", total_names = c(row = "Total", col = "Ensemble")),
+                     b = o0(col_vars = "white", total_names = c(row = "Total", col = "Ensemble"),
                             ref = "1"))                                            # renamed total col
   )
   for (cs in cases) {
@@ -419,10 +436,10 @@ test_that("Phase 19k: a CI-method change re-refs (and equals the rebuild)", {
   o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
                                color = "difference", ci = "ref", test = TRUE, ...)
   st <- suppressMessages(jmvtab_build(gss, o0(), NULL))$store
-  r  <- suppressMessages(jmvtab_build(gss, o0(method_diff = "ac"), st))
+  r  <- suppressMessages(jmvtab_build(gss, o0(ci_method_diff = "ac"), st))
   expect_true(isTRUE(r$hits$tab3))
-  expect_equal(r$tabs, suppressMessages(jmvtab_build(gss, o0(method_diff = "ac"), NULL))$tabs)
-  expect_equal(r$tabs, jmv_oracle(o0(method_diff = "ac"), gss))
+  expect_equal(r$tabs, suppressMessages(jmvtab_build(gss, o0(ci_method_diff = "ac"), NULL))$tabs)
+  expect_equal(r$tabs, jmv_oracle(o0(ci_method_diff = "ac"), gss))
 })
 
 test_that("Phase 9b-7: a re-ref'd table equals a plain tab() (independent anchor)", {

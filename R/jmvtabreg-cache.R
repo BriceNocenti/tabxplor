@@ -31,7 +31,10 @@
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 5L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 6L   # bump on any store-shape change -> discard stale stores
+# 6 (Phase 20g-i): jmvreg_fit_key()'s element for the singled-out outcome level is named
+#   `outcome_level` (it was `inverse`, the retired `inverse_two_level_factors` spelling). The key's
+#   VALUE is unchanged, but a member name is part of the hash, so every key moves.
 # 5 (Phase 19k): `shape` and the measure-valued `color` reach the build from the UI, so a stale store
 #   could serve a fit made under a different model.
 # 4 (Phase 19e): the raw-fit key's `extra` carries the ESTIMAND (effect, measure, display) instead of
@@ -84,10 +87,10 @@ jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
   used <- intersect(unique(c(sp$outcome, sp$predictors, reg_design_vars(design_spec))), names(data))
   jmv_hash(list(
     kind       = "jmvreg",
-    outcome  = sp$outcome,
+    outcome    = sp$outcome,
     predictors = sp$predictors,
     trials     = sp$trials,
-    inverse    = sp$outcome_level,
+    outcome_level = sp$outcome_level,
     formula    = if (!is.null(sp$formula)) paste(deparse(sp$formula), collapse = " ") else NULL,
     family     = family,
     nrow       = nrow(data),
@@ -98,20 +101,20 @@ jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
 }
 
 
-# === Reference picker -> tab_reg(reference =) ==============================================
+# === Reference picker -> tab_reg(ref =) ====================================================
 
-# Fold the per-predictor reference picker (the `refLevels` Array option) into tab_reg()'s `reference`
+# Fold the per-predictor reference picker (the `ref_levels` Array option) into tab_reg()'s `ref`
 # named vector. Each element is list(var, ref); an entry with an explicit level contributes
 # c(<var> = <level>). Returns NULL when nothing was picked (-> tab_reg() uses its default first-level
 # references). Mirrors jmvtab_ref_vector() but has no "auto"/"tot" sentinels (a regression reference is
 # always a factor LEVEL).
 #' @keywords internal
 #' @noRd
-jmvtab_reg_ref_vector <- function(refLevels) {
-  if (length(refLevels) == 0) return(NULL)
+jmvtab_reg_ref_vector <- function(ref_levels) {
+  if (length(ref_levels) == 0) return(NULL)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
-  vars <- vapply(refLevels, get1, character(1), k = "var")
-  refs <- vapply(refLevels, get1, character(1), k = "ref")
+  vars <- vapply(ref_levels, get1, character(1), k = "var")
+  refs <- vapply(ref_levels, get1, character(1), k = "ref")
   keep <- !is.na(vars) & nzchar(vars) & !is.na(refs) & nzchar(refs)
   if (!any(keep)) return(NULL)
   stats::setNames(refs[keep], vars[keep])
@@ -143,33 +146,37 @@ jmvtab_reg_models <- function(models, pool) {
   stats::setNames(built, labels)
 }
 
+# THE `stats =` folder -- three controls, one argument (Phase 20c made the footer set, the model
+# comparison and its baseline ONE `tab_reg(stats =)`; Phase 20g-i named the controls after it).
+#   stats_compare  : the comparison KEY the user picks; the ComboBox values ARE the R keys, so
+#                    "none" -> NULL = tab_reg()'s own default footer set, untouched.
+#   stats_baseline : the baseline model POSITION, carried in the key's NAME when it is not the first
+#                    (`c(compare_baseline = "2")` -- the grammar `ref = c(var = "level")` also uses).
+#   stats_checks   : Phase 20f made the two checks that REFIT the model (linearity, proportional
+#                    odds) opt-in, because they were 80-90 % of a build and the panel rebuilds on
+#                    every option change. `"all"` is the one value that asks for everything, and it
+#                    COMPOSES with a comparison key -- reg_resolve_stats() strips the comparison and
+#                    hands the rest on, so c("all", "compare_baseline") is a full footer plus a test.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_stats <- function(compare, baseline, checks = FALSE) {
+  cmp <- compare %||% "none"
+  key <- if (!nzchar(cmp) || identical(cmp, "none")) {
+    NULL
+  } else if (identical(cmp, "compare_sequential")) {
+    "compare_sequential"
+  } else {
+    # the spinner is a COLUMN POSITION; 1 is the default, and an unnamed key already means "the first"
+    bl <- suppressWarnings(as.integer(baseline %||% NA))
+    if (is.na(bl) || bl <= 1L) "compare_baseline" else c(compare_baseline = as.character(bl))
+  }
+  if (!isTRUE(checks)) return(key)
+  if (is.null(key)) "all" else c("all", key)
+}
+
 # Phase h: the staged-comparison gate. A model comparison (>=2 folded models) is heavy -- refitting
 # every model on each live edit is what froze the panel, so its table recomputes ONLY on the Run/Export
 # action (jmvtabreg.b.R). jmvtab_reg_staged() reuses jmvtab_reg_models() so the predicate matches the
-# jmvtab_reg_stats() -- the module's `compare` ComboBox + `baseline` spinner folded into tab_reg()'s
-# ONE `stats =` (Phase 20c). The jamovi options keep their own names until 20g regenerates the
-# .h.R, so this is the same kind of boundary translation `refLevels` -> `reference` already is:
-# the UI asks two questions, the R argument takes one key (optionally carrying its baseline model).
-# NULL = the picker is on "none" -> tab_reg()'s own default footer set, untouched.
-#
-# ⚠ 20g OWES A CONTROL HERE. Since Phase 20f the default footer set excludes the two checks that fit
-# a model (Linearity, Proportionality -- REG_CHECKS$cost), so a jamovi table no longer shows them and
-# the module offers no way to ask. That is deliberate for now: the panel rebuilds on every option
-# change and those two were 80-90 % of a build, so fast-by-default is the right jamovi behaviour --
-# but the teaching path needs the tick-box. It belongs in the .a.yaml / .u.yaml sweep (a "Model
-# checks" box -> `stats = "all"`, default off), which is inert until the owed jmvtools::prepare()
-# anyway, and reg_check_plots() already draws every panel meanwhile.
-#' @keywords internal
-#' @noRd
-jmvtab_reg_stats <- function(compare, baseline) {
-  cmp <- compare %||% "none"
-  if (!nzchar(cmp) || identical(cmp, "none")) return(NULL)
-  if (identical(cmp, "sequential")) return("compare_sequential")
-  # the spinner is a COLUMN POSITION; 1 is the default, and an unnamed key already means "the first"
-  bl <- suppressWarnings(as.integer(baseline %||% NA))
-  if (is.na(bl) || bl <= 1L) "compare_baseline" else c(compare_baseline = as.character(bl))
-}
-
 # model set tab_reg() actually sees. jmvtab_reg_compare_sig() fingerprints the resolved build/display
 # options (the `.opts()` list, which already excludes the action + export controls), so `.run()` can
 # tell an unchanged/just-computed table (re-serve) from an outdated one (banner + Run prompt).
@@ -184,7 +191,23 @@ jmvtab_reg_staged <- function(models, predictors) {
 #' @noRd
 jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 
-# Fold the per-numeric-predictor scaling picker (the jamovi `multiplicator` Array of Group{var, k})
+# Fold the per-numeric-predictor shape picker (the jamovi `shape` Array of Group{var, shape}) into
+# tab_reg()'s `shape`. Blank / "linear" entries are dropped (linear is the default and needs no
+# entry); NULL when nothing was picked. Values come from REG_SHAPES (R/reg-assumptions.R), which is
+# also what the .a.yaml offers -- one vocabulary, checked by test-jamovi-vocabulary.R.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_shape_vector <- function(shape) {
+  if (length(shape) == 0L) return(NULL)
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
+  vars <- vapply(shape, get1, character(1), k = "var")
+  shp  <- vapply(shape, get1, character(1), k = "shape")
+  keep <- !is.na(vars) & nzchar(vars) & !is.na(shp) & nzchar(shp) & shp != "linear"
+  if (!any(keep)) return(NULL)
+  stats::setNames(shp[keep], vars[keep])
+}
+
+# Fold the per-numeric-predictor scaling picker (the jamovi `multiplier` Array of Group{var, k})
 # into tab_reg()'s `multiplier`. Blank entries dropped; NULL when nothing set -> tab_reg's own default
 # ("sd") applies. Mirrors jmvtab_reg_ref_vector().
 # Phase 18z9: the keywords "sd" / "2sd" pass THROUGH as text (they used to be coerced with
@@ -192,27 +215,11 @@ jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 # A character vector is returned as soon as one entry is a keyword -- tab_reg() parses both.
 #' @keywords internal
 #' @noRd
-# Fold the per-numeric-predictor shape picker (the jamovi `shapes` Array of Group{var, shape}) into
-# tab_reg()'s `shape`. Blank / "linear" entries are dropped (linear is the default and needs no
-# entry); NULL when nothing was picked. Values come from REG_SHAPES (R/reg-assumptions.R), which is
-# also what the .a.yaml offers -- one vocabulary, checked by test-jamovi-vocabulary.R.
-#' @keywords internal
-#' @noRd
-jmvtab_reg_shape_vector <- function(shapes) {
-  if (length(shapes) == 0L) return(NULL)
+jmvtab_reg_mult_vector <- function(multiplier) {
+  if (length(multiplier) == 0L) return(NULL)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
-  vars <- vapply(shapes, get1, character(1), k = "var")
-  shp  <- vapply(shapes, get1, character(1), k = "shape")
-  keep <- !is.na(vars) & nzchar(vars) & !is.na(shp) & nzchar(shp) & shp != "linear"
-  if (!any(keep)) return(NULL)
-  stats::setNames(shp[keep], vars[keep])
-}
-
-jmvtab_reg_mult_vector <- function(multiplicator) {
-  if (length(multiplicator) == 0L) return(NULL)
-  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
-  vars <- vapply(multiplicator, get1, character(1), k = "var")
-  raw  <- trimws(vapply(multiplicator, get1, character(1), k = "k"))
+  vars <- vapply(multiplier, get1, character(1), k = "var")
+  raw  <- trimws(vapply(multiplier, get1, character(1), k = "k"))
   kw   <- tolower(raw) %in% REG_MULTIPLIER_KEYWORDS   # Phase 19k: THE set, R/tab_reg.R's own
   num  <- suppressWarnings(as.numeric(raw))
   keep <- !is.na(vars) & nzchar(vars) & (kw | !is.na(num))
@@ -223,29 +230,30 @@ jmvtab_reg_mult_vector <- function(multiplicator) {
 
 
 # === Per-outcome Model table -> tab_reg() args (Phase 15d / 15e) ==========================
-# The Model table (depFamily / depModelLevel / depTrials arrays) sets one family + modelled level +
-# trials per outcome. These three helpers resolve ONE outcome; jmvtab_reg_build() (Phase 15e) passes
-# the resolved per-outcome family / inverse / trials VECTORS to ONE tab_reg() call -- a mixed table
-# (several outcomes, different families) is now one table, one column-group per outcome (no more
-# grouping-by-family / tabxplor_tabs stacking).
+# The Model table (the `family` / `outcome_level` / `trials` arrays) sets one of each per outcome.
+# These three helpers resolve ONE outcome; jmvtab_reg_build() (Phase 15e) passes the resolved
+# per-outcome VECTORS to ONE tab_reg() call -- a mixed table (several outcomes, different families)
+# is one table, one column-group per outcome (no more grouping-by-family / tabxplor_tabs stacking).
 
 # The chosen family for `dep` (an explicit non-blank pick) else auto-detected from the outcome.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_dep_family <- function(depFamily, dep, data) {
-  if (length(depFamily)) for (e in depFamily) {
+jmvtab_reg_dep_family <- function(family, dep, data) {
+  if (length(family)) for (e in family) {
     if (identical(as.character(e$var), dep) && length(e$family) && nzchar(as.character(e$family)))
       return(as.character(e$family))
   }
   reg_detect_family(data, dep)
 }
 
-# TRUE (the default) = model the FIRST level of a 2-level factor outcome. depModelLevel stores a level
-# ONLY when the user picked a NON-first level as the modelled one -> FALSE.
+# The level the user singled out for this outcome, or NA = the family's own default. What the level
+# MEANS is the family's business (REG_FAMILIES$outcome_level: the MODELLED level for a binomial
+# outcome, the BASELINE category for a multinomial one), which is why it travels as a level and not
+# as a flag -- folding it into a logical is what made ANY pick model the SECOND level (Phase 20c).
 #' @keywords internal
 #' @noRd
-jmvtab_reg_dep_level <- function(depModelLevel, dep) {
-  if (length(depModelLevel)) for (e in depModelLevel) {
+jmvtab_reg_dep_level <- function(outcome_level, dep) {
+  if (length(outcome_level)) for (e in outcome_level) {
     if (identical(as.character(e$var), dep) && length(e$level) && nzchar(as.character(e$level)))
       return(as.character(e$level))
   }
@@ -259,8 +267,8 @@ jmvtab_reg_dep_level <- function(depModelLevel, dep) {
 # the jamovi one could not be reproduced from the R API.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_dep_trials <- function(depTrials, dep) {
-  if (length(depTrials)) for (e in depTrials) {
+jmvtab_reg_dep_trials <- function(trials, dep) {
+  if (length(trials)) for (e in trials) {
     if (identical(as.character(e$var), dep) && length(e$n) && nzchar(as.character(e$n))) {
       n <- suppressWarnings(as.integer(round(as.numeric(e$n))))
       if (!is.na(n) && n >= 1L) return(n)
@@ -273,9 +281,11 @@ jmvtab_reg_dep_trials <- function(depTrials, dep) {
 # === The engine-free build core ============================================================
 
 # Drive tab_reg() with the live fit cache injected. `opts` is the plain list the R6 backend's .opts()
-# produces (already in tab_reg() vocabulary: exponentiate mapped to nongaussian/TRUE/FALSE, color
-# "default" -> NULL, stats resolved, reference a named vector or NULL). Empty variable slots (jamovi
-# passes partial selections mid-interaction) yield a NULL table -> the backend renders a friendly hint.
+# produces -- since Phase 20g-i a PASS-THROUGH: every jamovi option is named after the tab_reg()
+# argument it drives, so what is left here is the folding of the per-variable picker ARRAYS into
+# named vectors, and the per-outcome Model table into the family / outcome_level / trials vectors.
+# Empty variable slots (jamovi passes partial selections mid-interaction) yield a NULL table -> the
+# backend renders a friendly hint.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
@@ -284,6 +294,15 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   # (~10 MB each). Once persisted into cache_state$state they re-serialize on every UI round-trip -> the
   # freeze at 4 models (~40 MB). use_cache=FALSE (set by the backend in staged mode) fits without a cache
   # env and returns store=NULL, so nothing heavy is stored/serialized. Single-model use keeps the cache.
+  #
+  # ⚠ AND `stats_checks` TURNS IT OFF TOO (Phase 20g-i), because the digest fast path DISTILS THE FIT
+  # AWAY: reg_check_rows() asks reg_checks_for(has_fit = !is.null(f$fit)), so with a live cache a
+  # single-model table carries only the reference-invariant glance rows (n / lr_null / mcfadden_r2 /
+  # aic / bic) and never the per-predictor global test or the model checks. That is the cache working
+  # as designed -- a KB digest instead of a 10 MB fit -- but it makes "ask for the slow checks" a
+  # promise the module could not keep. So the tick-box means what it says: the fit is kept, at the
+  # price of a refit per edit. Default off = today's fast behaviour, byte-unchanged.
+  use_cache <- use_cache && !isTRUE(opts$stats_checks)
   cache_env <- jmvreg_cache_env(if (use_cache) store else NULL)
 
   nz  <- function(x) if (length(x) && nzchar(as.character(x)[[1]])) as.character(x) else NULL
@@ -309,14 +328,14 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   # Phase 15e: resolve each outcome's family / modelled level / trials from the Model table, then pass them
   # to ONE tab_reg() call as per-outcome vectors -- so several outcomes with DIFFERENT families render as
   # one mixed table (tab_reg builds one column-group per outcome). No more family-grouping / stacking.
-  fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$depFamily, d, data), character(1))
+  fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$family, d, data), character(1))
   # Phase 20c: the picker asks for a LEVEL and tab_reg() now takes one, so it travels intact.
   # ⚠ it used to be folded into a logical ("did the user pick anything?"), which meant ANY pick
   # modelled the SECOND level -- so choosing the first one in the UI silently modelled the other.
-  lvls <- vapply(dep, function(d) jmvtab_reg_dep_level(opts$depModelLevel, d), character(1))
+  lvls <- vapply(dep, function(d) jmvtab_reg_dep_level(opts$outcome_level, d), character(1))
   # trials are binomial-only (grouped / summed-score); non-binomial outcomes never carry one.
   tris <- vapply(seq_along(dep), function(i) {
-    if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i])
+    if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$trials, dep[i])
     else NA_integer_
   }, integer(1))
 
@@ -341,8 +360,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     effect       = opts$effect  %||% "coefficient",
     measure      = opts$measure %||% "auto",
     conf_level   = opts$conf_level,
-    # ⚠ 20g: the yaml option is still `method`; tab_reg() takes `ci_method`'s `model` slot.
-    ci_method    = opts$method,
+    ci_method    = opts$ci_method,
     ref          = opts$ref,
     outcome_level = lvl_arg,
     tab_vars     = nz(opts$tab_vars),
@@ -351,18 +369,17 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     # keys. NULL keeps its old meaning -- "the model-fit statistics that make sense for this family",
     # which is what the picker wants and what tab_reg() computes by default -- so an unset comparison
     # sends NULL exactly as before, and only a chosen one adds a key.
-    # ⚠ 20g: the yaml still spells this pair `compare` / `baseline`; renaming the OPTIONS leaves the
-    # module inert until the next jmvtools::prepare(), so the translation lives here until then.
-    stats        = jmvtab_reg_stats(opts$compare, opts$baseline),
+    stats        = jmvtab_reg_stats(opts$stats_compare, opts$stats_baseline, opts$stats_checks),
     display      = opts$display %||% "value",
-    shape        = jmvtab_reg_shape_vector(opts$shapes),
+    shape        = jmvtab_reg_shape_vector(opts$shape),
     color        = opts$color,
     color_signif = opts$color_signif,
     stars        = isTRUE(opts$stars),
     na           = opts$na,
+    add_n        = opts$add_n %||% TRUE,
     cleannames   = opts$cleannames,
     subtext      = opts$subtext,
-    multiplier   = jmvtab_reg_mult_vector(opts$multiplicator),   # tab_reg skips mnl/ordinal specs per-spec
+    multiplier   = jmvtab_reg_mult_vector(opts$multiplier),   # tab_reg skips mnl/ordinal specs per-spec
     trials       = tri_arg,
     # ⚠ ALWAYS serial (Phase 20f-iiii). The live cache normally forces it -- tab_parallel_workers()
     # returns 0 whenever a `cache_env` is present -- but in STAGED mode `use_cache` is FALSE, so

@@ -577,7 +577,7 @@ jmv_coerce_numeric_cols <- function(data, col_vars) {
   data
 }
 
-# Build tab()'s `ref` argument from the Phase 7g-iii reference-level picker. `refLevels` is the jamovi
+# Build tab()'s `ref` argument from the Phase 7g-iii reference-level picker. `ref_levels` is the jamovi
 # Array option = a list of {var, ref} (one per selected axis variable; ref = a chosen level label, or
 # "tot" for the total, or NULL / "" when left on the default). If the user picked AT LEAST ONE explicit
 # reference, return a named character vector keyed by var (unset entries -> "auto"), read by
@@ -588,11 +588,11 @@ jmv_coerce_numeric_cols <- function(data, col_vars) {
 # stored `ref` attribute stays human-readable. Otherwise fall back to the expert free-text `ref`.
 #' @keywords internal
 #' @noRd
-jmvtab_ref_vector <- function(refLevels, free_text_ref = "auto") {
-  if (length(refLevels) == 0) return(free_text_ref)
+jmvtab_ref_vector <- function(ref_levels, free_text_ref = "auto") {
+  if (length(ref_levels) == 0) return(free_text_ref)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
-  vars <- vapply(refLevels, get1, character(1), k = "var")
-  refs <- vapply(refLevels, get1, character(1), k = "ref")
+  vars <- vapply(ref_levels, get1, character(1), k = "var")
+  refs <- vapply(ref_levels, get1, character(1), k = "ref")
   keep <- !is.na(vars) & nzchar(vars)
   vars <- vars[keep]; refs <- refs[keep]
   if (length(vars) == 0) return(free_text_ref)
@@ -601,17 +601,17 @@ jmvtab_ref_vector <- function(refLevels, free_text_ref = "auto") {
   stats::setNames(refs, vars)
 }
 
-# Build tab()'s internal `.levels_order` from the Phase 7g-ii level-reordering picker. `levelOrder` is
+# Build tab()'s internal `.levels_order` from the Phase 7g-ii level-reordering picker. `levels_order` is
 # the jamovi Array option = a list of {var, levels} (one per REORDERED variable; levels = the ordered
 # level labels). Return a named list var -> ordered character vector, dropping entries with an empty
 # var or no levels; NULL when nothing was reordered (-> tab() runs unchanged). Consumed post-aggregate
 # by jmv_cache_aggregate() (design 4e: a reorder is a tier-3 input, tiers 1-2 reused).
 #' @keywords internal
 #' @noRd
-jmvtab_levels_order <- function(levelOrder) {
-  if (length(levelOrder) == 0) return(NULL)
+jmvtab_levels_order <- function(levels_order) {
+  if (length(levels_order) == 0) return(NULL)
   out <- list()
-  for (e in levelOrder) {
+  for (e in levels_order) {
     v <- e[["var"]]
     if (is.null(v) || !nzchar(as.character(v))) next
     lv <- e[["levels"]]
@@ -682,9 +682,12 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   # Phase 19k: `anova` joins them. It is display intent now (tab()'s own argument, stored in
   # render_extras and read back at render from the `test` attribute, which holds BOTH F rows), so it
   # is re-applied at tier 4 -- it used to sit in `structural` and rebuild the whole table.
+  # ⚠ EVERY NAME HERE MUST BE A KEY OF `opts` (that IS D12): `structural` is the NEGATIVE set, so a
+  # misspelt or retired name silently sends its option into the base key and its toggle rebuilds.
+  # Phase 20g-i removed the retired `"OR"` and followed the four `method_*` -> `ci_method_*` renames.
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
-                  "ref", "ref2", "comp", "OR", "ci", "conf_level",
-                  "method_cell", "method_diff", "method_mean_diff", "method_mean_ratio",
+                  "ref", "ref2", "comp", "ci", "conf_level",
+                  "ci_method_cell", "ci_method_diff", "ci_method_mean_diff", "ci_method_mean_ratio",
                   "stars", "n_min", "anova")
   # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
   # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
@@ -720,8 +723,8 @@ jmv_tab3_arming <- function(color) {
 #' @keywords internal
 #' @noRd
 jmv_ci_method <- function(opts) {
-  ui <- list(cell = opts$method_cell, diff = opts$method_diff,
-             mean_diff = opts$method_mean_diff, mean_ratio = opts$method_mean_ratio)
+  ui <- list(cell = opts$ci_method_cell, diff = opts$ci_method_diff,
+             mean_diff = opts$ci_method_mean_diff, mean_ratio = opts$ci_method_mean_ratio)
   resolve_ci_method(unlist(purrr::compact(ui)), fn = "jmvtab")
 }
 
@@ -957,15 +960,12 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
 #' @noRd
 jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
                                  row_vars, col_vars, tab_vars, ce) {
-  # Phase 20b: the four synthetic labels are `options(tabxplor.total_names)` now, not three
-  # arguments. The UI still lets the user type them, so they are installed for the duration of THIS
-  # build and restored after -- the module speaks tab()'s current vocabulary, which is the whole
-  # point of the jamovi teaching path (differentiator 4).
-  .lbl <- c(row = opts$total_names[[1]], col = opts$total_names[[min(2L, length(opts$total_names))]],
-            tab = opts$totaltab_name, other = opts$other_level)
-  .lbl <- .lbl[!vapply(.lbl, function(v) is.null(v) || !nzchar(v), logical(1))]
-  if (length(.lbl)) {
-    .old <- options(tabxplor.total_names = tab_total_names_merge(.lbl))
+  # Phase 20b: the four synthetic labels are ONE `options(tabxplor.total_names)`, and since 20g-i ONE
+  # `opts` key of that same shape (they were three, mirroring three arguments that no longer exist).
+  # `.opts()` fills it with the module's TRANSLATED defaults; it is installed for the duration of THIS
+  # build and restored after, so the labels follow jamovi's locale without leaking into the session.
+  if (length(opts$total_names)) {
+    .old <- options(tabxplor.total_names = tab_total_names_merge(opts$total_names))
     on.exit(options(.old), add = TRUE)
   }
   rlang::inject(tab(

@@ -42,14 +42,20 @@ benchmark_small_ops <- function() {
 }
 
 # Default jmvtab option list (jamovi UI defaults) with overrides -- shared by the benchmark ops.
+# ⚠ Keep it in step with `jamovi/jmvtab.a.yaml`: an option this list spells wrongly is simply absent,
+# so the benchmark measures a DIFFERENT table without saying so. It had drifted since 19k (`OR` and
+# `chi2` were retired options, the four interval methods were renamed in 20g-i) -- which is exactly
+# the class of drift test-jamovi-vocabulary.R now checks on the module's own side.
 benchmark_jmvtab_opts <- function(...) {
   o <- list(row_vars = character(), col_vars = character(), tab_vars = character(), wt = character(),
-            pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
+            pct = "no", color = "no", color_signif = "ignore", test = FALSE, anova = "welch",
             na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
-            conf_level = 0.95, stars = TRUE, method_cell = "wilson", method_diff = "newcombe",
+            conf_level = 0.95, stars = TRUE,
+            ci_method_cell = "wilson", ci_method_diff = "newcombe",
+            ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
-            subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
-            output_list = FALSE, cleannames = TRUE, display = "auto")
+            subtext = "", output_list = FALSE, cleannames = TRUE, display = "auto",
+            total_names = c(row = "Total", col = "Total", tab = "Ensemble", other = "Others"))
   utils::modifyList(o, list(...))
 }
 

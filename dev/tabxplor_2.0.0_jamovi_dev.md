@@ -1576,3 +1576,79 @@ then run on defaults, never abort. **The new controls do nothing until that rebu
 `jmvtools::prepare()` + `jmvtools::install(home = "flatpak")`, then a live pass: the collapse boxes
 of both analyses, the reference / model / **shape** pickers (the shape select is a best guess against
 a DOM only the running app has), the `display` ComboBox in its new home beside `color`, and export.
+
+---
+
+## Phase 20g-i — the option NAME is the argument name (2026-08-17)
+
+19k made the module speak tabxplor's **values**. 20g-i finishes the sentence with its **names**.
+
+### The rule
+
+> A jamovi option is named after the producer argument it drives — exactly, or as
+> `<argument>_<slot>` when several options fold into one — or it is in a declared exception list
+> with its reason.
+
+`<argument>_<slot>` covers the three real many-to-one cases: `ci_method_cell` / `_diff` /
+`_mean_diff` / `_mean_ratio` → `ci_method`; `ref` (the expert free text) + `ref_levels` (the picker
+array) → `ref`; `stats_compare` / `stats_baseline` / `stats_checks` → `stats`. The declared
+exceptions are `data`, the export block (`export_*`, `exportExcel`, `resetPath`, `xl_replace`),
+`wrap_rows` / `wrap_cols` (renderer arguments), `models` / `run_compare` (the comparison builder),
+`ci_print` (an option, read at render time) and **`lvs`** — `jmvcore::Options` already defines a
+`levels()` method, so that one name can never be `levels`.
+
+### Why it needed a gate, not a convention
+
+`test-jamovi-vocabulary.R` compared List **values**. Every Phase 20b/20c rename moved an **argument
+name**, so the file stayed green while the Regressions panel showed `dependent`, `split_var`,
+`method`, `multiplicator`, `shapes` and `refLevels` for arguments that no longer existed — and
+`expect_true("shapes" %in% names(o))` pinned one of them in place. Since the UI shows R argument
+names *on purpose* (differentiator 4), that is the teaching path lying, silently, for six months.
+
+Three blocks were added:
+
+1. **option names** against `formals(tab)` / `formals(tab_reg)` + the prefix rule + the exception list;
+2. **every `.u.yaml` `optionName:`** must name a declared option;
+3. **every `ui.<name>` in the hand-written `.js`** must be a declared option, a control, or `view`.
+
+Block 3 is the only test `jamovi/js/*.js` has ever had, and it caught two live misses on its first
+run. ⚠ **A control naming a dead option fails silently in jamovi** — it renders inert, and every
+CustomControl guards with `if (!ui.x) return;` — which is precisely why this must be mechanical.
+
+### Two facts worth not rediscovering
+
+- **`jmvcore::Options` has no setter.** Its public methods are `asProtoBuf`, `check`, `clone`,
+  `compProtoBuf`, `eval`, `fromJSON`, `fromProtoBuf`, `get`, `has`, `initialize`, `levels`,
+  `option`, `read`, `translate`, `values`. So **R cannot write a value back into a control** — any
+  design that asks the backend to fill a text box (the resolved Documents folder, a detected level
+  list) is not buildable. What R *can* do is put the information in the results panel.
+- **PO escaping**: an *escaped* `\"` inside a **msgid** is fine (`other_if_less_than`'s title has
+  carried one for phases). An *unescaped* `"` inside a **msgstr** breaks the compiler outright with
+  `Error parsing PO data: Invalid key name ...`, and the module then builds with no translations at
+  all. When hand-editing `jamovi/i18n/fr.po`, escape.
+
+### The i18n cost of a rename, measured
+
+`jmvtools::i18nUpdate("fr")` re-keys `catalog.pot` + `fr.po` from the yaml titles, so **renaming an
+option's label discards its translation** (the msgid IS the key). Measured on this phase: 54
+translated msgids dropped — **31 already stale** (labels of options retired in 19e / 19k / z14 and
+never swept: `ids`, `strata`, `fpc`, `at`, `exponentiate`…) and **23 from these renames**. The 23
+were restored by hand: the French had always kept the English argument name and translated only the
+parenthetical, so carrying it across is mechanical. Compiled `inst/i18n/fr.json`: 203 → 172.
+
+### The digest fast path hides footer rows
+
+Not a defect, a declared consequence, but it decides UI design: with a live `.fit_cache` the
+single-model reref path stores a **digest**, not a fit, so `reg_check_rows()` sees
+`reg_checks_for(has_fit = FALSE)` and every fit-based row disappears. Measured: **9 footer rows
+without the cache, 5 with it** — a jamovi table has never shown `global_lr` / `dispersion` /
+`influence` / `collinearity`. So the `stats_checks` control turns the cache off for its build
+(`jmvtab_reg_build(use_cache =)`, the lever staged mode already uses). Any future control that needs
+the fit object must do the same.
+
+### Maintainer step
+
+Already run on the dev box for this phase (`prepare()` → `i18nUpdate("fr")` → `install(home =
+"flatpak")`), so the committed `.h.R` / `0000.yaml` / `inst/i18n/fr.json` are the compiler's own.
+What remains is the **live click-through**: both collapse-box trees, the model / reference / shape
+pickers, the new `stats = "all"` box and `add_n`, and export.

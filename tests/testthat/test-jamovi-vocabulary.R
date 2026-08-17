@@ -4,10 +4,16 @@
 # rule blocks are generated but could be edited by hand. So this file is the enforcement:
 #
 #   1. every List option's value set EQUALS the R vocabulary it names;
-#   2. every generated `.js` block is what dev/generate_jamovi_js.R would write today.
+#   2. every generated `.js` block is what dev/generate_jamovi_js.R would write today;
+#   3. (Phase 20g-i) every option NAME is the producer argument it drives;
+#   4. every `.u.yaml` control and every `ui.<name>` in the hand-written `.js` names something the
+#      `.a.yaml` or the `.u.yaml` declares.
 #
-# It is why "keep the UI in sync" is a checked property here and not a convention. When a vocabulary
-# legitimately moves, the yaml moves with it in the same commit -- that is the whole point.
+# ⚠ 3 and 4 exist because 1 could NOT see the Phase 20b/20c renames: it compares VALUES, and what
+# moved was ARGUMENT NAMES -- so this file stayed green through six months of the reg panel showing
+# `dependent` / `split_var` / `method` for arguments called `outcome` / `tab_vars` / `ci_method`.
+# The jamovi UI shows R argument names ON PURPOSE (a user learns the API by clicking), so a stale
+# name is the teaching path lying, and that has to be a checked property, not a convention.
 
 # ⚠ `jamovi/` is .Rbuildignore'd, so NONE of these files exists inside a built package -- this whole
 # file is a source-tree check. Guard on the FILE, exactly as the generated-block test below guards on
@@ -45,7 +51,7 @@ test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
   # `model` slot for tab_reg(), and a crosstab has no model interval -- CI_SLOT_PRODUCER declares
   # which slots belong where, so the loop asks instead of enumerating.
   for (slot in ci_slots_of("tab")) {
-    nm <- if (slot == "cell") "method_cell" else paste0("method_", slot)
+    nm <- paste0("ci_method_", slot)     # `<argument>_<slot>`: four boxes, one `ci_method =` vector
     expect_identical(opt_values(o, nm), CI_METHODS[[slot]], info = nm)
     expect_identical(o[[nm]]$default, CI_METHODS[[slot]][[1]], info = nm)
   }
@@ -86,9 +92,13 @@ test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   expect_identical(opt_values(o, "measure"), REG_MEASURES_VALUES)
   expect_identical(opt_values(o, "na"),      eval(formals(tab_reg)$na))
   # Phase 20c: `method` became `ci_method`'s `model` slot, so the vocabulary is CI_METHODS' -- a
-  # stricter single source than the formal's own default vector was.
-  # ⚠ 20g owns renaming the yaml OPTION to match; jmvtabreg-cache.R translates until then.
-  expect_identical(opt_values(o, "method"),  CI_METHODS$model)
+  # stricter single source than the formal's own default vector was. Phase 20g-i renamed the option.
+  expect_identical(opt_values(o, "ci_method"), CI_METHODS$model)
+
+  # `stats_compare` offers the model-comparison KEYS of `stats =` verbatim (plus the "none" sentinel),
+  # so what the picker shows is what a user would type. reg_resolve_stats() reads exactly these.
+  expect_identical(opt_values(o, "stats_compare"),
+                   c("none", "compare_baseline", "compare_sequential"))
 
   # `color` on a reg table: off / the column's own geometry / the own-reference measures. The last
   # two are DERIVED (measure_own_ref), so the yaml cannot offer a measure D25 refuses.
@@ -104,7 +114,90 @@ test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   expect_false("at"               %in% names(o))
   expect_false("estimate_display" %in% names(o))
   expect_true("display"           %in% names(o))
-  expect_true("shapes"            %in% names(o))   # the per-predictor functional-form picker
+  expect_true("shape"             %in% names(o))   # the per-predictor functional-form picker
+})
+
+
+# --- 3. THE NAME RULE (Phase 20g-i) --------------------------------------------------------
+# An option is named after the producer ARGUMENT it drives: exactly, or as `<argument>_<slot>` when
+# several options fold into one (`ci_method_cell` ... -> `ci_method`; `stats_compare` /
+# `stats_baseline` / `stats_checks` -> `stats`; `ref` + `ref_levels` -> `ref`). Anything else must be
+# declared HERE with its reason -- which is the whole list of things the panel asks that `tab()` /
+# `tab_reg()` do not.
+JMV_UI_ONLY <- c(
+  data            = "the jamovi dataset, not an argument",
+  wrap_rows       = "tab_html() / the renderer, not the producer",
+  wrap_cols       = "tab_html() / the renderer, not the producer",
+  export_format   = "the export block (R/jmvtab-export.R)",
+  export_dir      = "the export block",
+  export_filename = "the export block",
+  exportExcel     = "the export block: an Action button",
+  resetPath       = "the export block: an Action button",
+  xl_replace      = "the export block: number the file instead of overwriting"
+)
+JMV_UI_ONLY_EXTRA <- list(
+  jmvtab = c(
+    lvs      = "`levels`, renamed: jmvcore::Options already defines a levels() method",
+    ci_print = "options(tabxplor.ci_print) -- read inside format(), i.e. at RENDER time"
+  ),
+  jmvtabreg = c(
+    models      = "the model-comparison builder; folded into `predictors` by jmvtab_reg_models()",
+    run_compare = "an Action button: the staged-comparison trigger"
+  )
+)
+
+test_that("every jamovi option is named after the argument it drives", {
+  for (an in c("jmvtab", "jmvtabreg")) {
+    o        <- yaml_opts(paste0(an, ".a.yaml"))
+    producer <- if (an == "jmvtab") tab else tab_reg
+    args     <- setdiff(names(formals(producer)), c("...", ""))
+    allowed  <- c(names(JMV_UI_ONLY), names(JMV_UI_ONLY_EXTRA[[an]]))
+    for (nm in names(o)) {
+      ok <- nm %in% args || any(startsWith(nm, paste0(args, "_"))) || nm %in% allowed
+      expect_true(ok, info = paste0(
+        an, ".a.yaml: option `", nm, "` is neither an argument of ",
+        if (an == "jmvtab") "tab()" else "tab_reg()",
+        ", nor `<argument>_<slot>`, nor a declared UI-only control (JMV_UI_ONLY)."))
+    }
+  }
+})
+
+
+# --- 4. NOTHING NAMES SOMETHING UNDECLARED --------------------------------------------------
+# A half-done rename leaves a control or a `ui.<name>` pointing at an option that no longer exists,
+# and jamovi fails SILENTLY there (a control with no option renders inert; `ui.gone` is undefined,
+# and every CustomControl guards with `if (!ui.x) return;`). Both halves are checked here.
+test_that("the .u.yaml controls and the .js name declared options", {
+  skip_if_not_installed("yaml")
+  for (an in c("jmvtab", "jmvtabreg")) {
+    o   <- yaml_opts(paste0(an, ".a.yaml"))
+    ui  <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
+
+    # every `name:` / `optionName:` in the control tree
+    ctrl_names <- character(0); bound <- character(0)
+    walk <- function(node) {
+      if (!is.list(node)) return(invisible(NULL))
+      if (!is.null(node$name))       ctrl_names <<- c(ctrl_names, as.character(node$name))
+      if (!is.null(node$optionName)) bound      <<- c(bound, as.character(node$optionName))
+      for (el in node) if (is.list(el)) walk(el)
+      invisible(NULL)
+    }
+    walk(ui)
+    # an `optionName:` ALWAYS names an option (that is what it is for)
+    for (nm in unique(bound))
+      expect_true(nm %in% names(o),
+                  info = paste0(an, ".u.yaml: optionName `", nm, "` is not a declared option"))
+
+    # the hand-written .js may only reach for a declared option, a control, or the root view
+    js  <- readLines(testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js")), warn = FALSE)
+    hit <- unique(unlist(regmatches(js, gregexpr("(?<=\\bui\\.)[A-Za-z_][A-Za-z0-9_]*", js,
+                                                 perl = TRUE))))
+    known <- c(names(o), ctrl_names, "view")
+    for (nm in hit)
+      expect_true(nm %in% known,
+                  info = paste0("jamovi/js/", an, ".js: `ui.", nm,
+                                "` names neither an option nor a control (a stale rename?)"))
+  }
 })
 
 

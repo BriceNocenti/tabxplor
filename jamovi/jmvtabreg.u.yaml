@@ -12,10 +12,10 @@ children:
     stretchFactor: 1
     children:
       - type: TargetLayoutBox
-        label: <b>dependent = <i>(outcome variable[s])</i></b>
+        label: <b>outcome = <i>(dependent variable[s])</i></b>
         children:
           - type: VariablesListBox
-            name: dependent
+            name: outcome
             isTarget: true
             events:
               change: ./jmvtabreg::onChange_vars
@@ -28,10 +28,10 @@ children:
             events:
               change: ./jmvtabreg::onChange_vars
       - type: TargetLayoutBox
-        label: <b>split_var = <i>(fit within each group)</i></b>
+        label: <b>tab_vars = <i>(fit within each group)</i></b>
         children:
           - type: VariablesListBox
-            name: split_var
+            name: tab_vars
             maxItemCount: 1
             isTarget: true
             events:
@@ -51,7 +51,7 @@ children:
     stretchFactor: 1
     collapsed: false
     children:
-      # Per-dependent Model table: one row per outcome -> [name] [family] [modelled level / trials].
+      # Per-outcome Model table: one row per outcome -> [name] [family] [outcome_level / trials].
       - type: LayoutBox
         margin: none
         children:
@@ -141,12 +141,16 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: compare = <i>(nested-model LR/F test)</i>
+                label: stats = <i>(model-summary footer)</i>
                 children:
                   - type: ComboBox
-                    name: compare
+                    name: stats_compare
                     events:
                       change: ./jmvtabreg::onChange_compare
+                  # Phase 20g-i: the control 20f owes -- the two checks that REFIT the model are
+                  # opt-in since then, and nothing offered them.
+                  - type: CheckBox
+                    name: stats_checks
           - type: LayoutBox
             cell: { column: 1, row: 0 }
             stretchFactor: 1
@@ -239,18 +243,18 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: method = <i>(conf. interval)</i>
+                label: ci_method = <i>(conf. interval)</i>
           - type: LayoutBox
             cell: { column: 2, row: 0 }
             stretchFactor: 1
             children:
               - type: RadioButton
-                name: method_1
-                optionName: method
+                name: ci_method_1
+                optionName: ci_method
                 optionPart: wald
               - type: RadioButton
-                name: method_2
-                optionName: method
+                name: ci_method_2
+                optionName: ci_method
                 optionPart: profile
       # Row 3: the significance policy across the full width (greyed out when colours are off).
       - type: LayoutBox
@@ -328,6 +332,9 @@ children:
                   - type: TextBox
                     name: wrap_cols
                     format: number
+              - type: CheckBox
+                name: add_n
+                label: add_n = <i>(N per predictor level)</i>
               - type: CheckBox
                 name: cleannames
                 label: cleannames = <i>(tidy level names)</i>

@@ -436,7 +436,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: method_cell = <i>(cell proportion)</i>
+                    label: ci_method = c(<b>cell</b> = ) <i>(a cell proportion)</i>
               - type: LayoutBox
                 margin: none
                 cell:
@@ -445,7 +445,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: ComboBox
-                    name: method_cell
+                    name: ci_method_cell
                     enable: (ci:cell || ci:auto)
               - type: LayoutBox
                 margin: none
@@ -455,7 +455,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: method_diff = <i>(difference in proportion)</i>
+                    label: ci_method = c(<b>diff</b> = ) <i>(a difference in proportion)</i>
               - type: LayoutBox
                 margin: none
                 cell:
@@ -464,7 +464,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: ComboBox
-                    name: method_diff
+                    name: ci_method_diff
                     enable: (ci:ref || ci:auto)
               - type: LayoutBox
                 margin: none
@@ -474,7 +474,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: method_mean_diff = <i>(mean difference)</i>
+                    label: ci_method = c(<b>mean_diff</b> = ) <i>(a mean difference)</i>
               - type: LayoutBox
                 margin: none
                 cell:
@@ -483,7 +483,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: ComboBox
-                    name: method_mean_diff
+                    name: ci_method_mean_diff
                     enable: (ci:ref || ci:auto)
               - type: LayoutBox
                 margin: none
@@ -493,7 +493,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: method_mean_ratio = <i>(mean ratio)</i>
+                    label: ci_method = c(<b>mean_ratio</b> = ) <i>(a mean ratio)</i>
               - type: LayoutBox
                 margin: none
                 cell:
@@ -502,7 +502,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: ComboBox
-                    name: method_mean_ratio
+                    name: ci_method_mean_ratio
                     enable: (ci:ref || ci:auto)
   - type: CollapseBox
     label: <b>Other formatting</b>

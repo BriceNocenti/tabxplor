@@ -168,8 +168,8 @@ var onUpdate = function(ui) {
 // An open L2 shows a jamovi-styled selectable level list (click a level to SELECT it -- first selected by
 // default, highlighted in jamovi's list-selection blue #b5caef) plus an Up/Down button pair BELOW the list
 // acting on the selected level; the Up/Down ARROW KEYS do the same when the list is focused. The order is
-// stored back to the `levelOrder` Array option (one {var, levels} per reordered var); R reads it via
-// jmvtab_levels_order(). `levelOrder` is `hidden: true` in .a.yaml so the compiler does NOT auto-generate
+// stored back to the `levels_order` Array option (one {var, levels} per reordered var); R reads it via
+// jmvtab_levels_order(). `levels_order` is `hidden: true` in .a.yaml so the compiler does NOT auto-generate
 // a default control for it (this control is the only UI). Levels are read as LevelSelector does:
 // requestData('column', {properties:['measureType','levels']}). Numeric col_vars show a "no levels" note.
 
@@ -204,7 +204,7 @@ var openState = {};       // "<axis|var>:<key>" -> open bool
 var levelsCache = {};     // var -> [labels] natural order | null (numeric/no-levels) | FETCHING sentinel
 var FETCHING = {};
 var lastVarSig = null;    // reorder-tree variable signature
-var lastRefSig = null;    // ref-picker signature (vars + pct + color + OR + levelOrder)
+var lastRefSig = null;    // ref-picker signature (vars + pct + color + OR + levels_order)
 
 // A shared level-fetch completed (either control): re-render BOTH the reorder tree and the ref
 // picker, since they share `levelsCache` -- so a var whose levels one control fetched is not left
@@ -228,19 +228,19 @@ var makeTitledBox = function(boxStyle, titleStyle, titleText) {
     return d;
 };
 
-// Drop levelOrder entries whose variable is no longer selected (guarded setValue -> no loop).
+// Drop levels_order entries whose variable is no longer selected (guarded setValue -> no loop).
 var reconcileLevelOrder = function(ui, selected) {
-    var cur = utils.clone(ui.levelOrder.value(), []);
+    var cur = utils.clone(ui.levels_order.value(), []);
     var kept = [];
     for (var i = 0; i < cur.length; i++)
         if (selected.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
-    if (kept.length !== cur.length) ui.levelOrder.setValue(kept);
+    if (kept.length !== cur.length) ui.levels_order.setValue(kept);
 };
 
 // The order to display for `v`: the stored entry (kept for still-present levels, new levels
 // appended) if any, else the column's natural level order.
 var storedOrder = function(ui, v, natural) {
-    var arr = utils.clone(ui.levelOrder.value(), []);
+    var arr = utils.clone(ui.levels_order.value(), []);
     for (var i = 0; i < arr.length; i++) {
         if (arr[i].var === v && arr[i].levels && arr[i].levels.length) {
             var out = [];
@@ -254,17 +254,17 @@ var storedOrder = function(ui, v, natural) {
     return natural;
 };
 
-// Write the full ordered levels of `v` back to the levelOrder option (create/replace its entry). Store a
+// Write the full ordered levels of `v` back to the levels_order option (create/replace its entry). Store a
 // COPY of `lv` -- never the caller's live working array, else later in-place swaps would alias the option
 // value and setValue() could miss the change.
 var writeOrder = function(ui, v, lv) {
     var copy = lv.slice();
-    var arr = utils.clone(ui.levelOrder.value(), []);
+    var arr = utils.clone(ui.levels_order.value(), []);
     var found = false;
     for (var k = 0; k < arr.length; k++)
         if (arr[k].var === v) { arr[k] = { var: v, levels: copy }; found = true; break; }
     if (!found) arr.push({ var: v, levels: copy });
-    ui.levelOrder.setValue(arr);
+    ui.levels_order.setValue(arr);
 };
 
 var selectedByVar = {};   // var -> selected level label (persists across rebuilds)
@@ -367,7 +367,7 @@ var makeVarNode = function(ui, v, axisLabel, natural) {
 // the `updated` handler tell a jamovi $el re-render from a plain option write. Reorder MOVES update their
 // list in place (buildVarBody) and never come through here.
 var renderTree = function(ui) {
-    if (!ui.levelOrderCtrl || !ui.levelOrder || !ui.row_vars) return;
+    if (!ui.levelOrderCtrl || !ui.levels_order || !ui.row_vars) return;
     var rowV = utils.clone(ui.row_vars.value(), []);
     var colV = ui.col_vars ? utils.clone(ui.col_vars.value(), []) : [];
     var tabV = ui.tab_vars ? utils.clone(ui.tab_vars.value(), []) : [];
@@ -418,12 +418,12 @@ var renderTree = function(ui) {
 // ---- Phase 7g-iii: reference-level picker CustomControl (refPickerCtrl) --------------------
 // One Material card per axis variable (row_vars under pct="row"/means, col_vars under pct="col"),
 // each a SINGLE-SELECT list "[Total, ...levels in the reordered order...]" (radio dots; the selected
-// one highlighted #b5caef). Stored by LABEL in the `refLevels` option, so a level reorder keeps the
+// one highlighted #b5caef). Stored by LABEL in the `ref_levels` option, so a level reorder keeps the
 // reference and just re-orders the list. A ref2 section (the odds-ratio 2nd reference) is shown only
 // when OR is active. Distinct from the reorder tree: flat cards + radio dots, no Up/Down buttons, no
 // collapsible tree. Shares levelsCache / requestData / storedOrder with the reorder tree.
 
-// Signature that triggers a rebuild (vars + pct + color + OR + levelOrder). NOT refLevels / ref2 -- a
+// Signature that triggers a rebuild (vars + pct + color + OR + levels_order). NOT ref_levels / ref2 -- a
 // pick is an in-place repaint, so the user's own click never rebuilds (mirrors the reorder tree).
 var refSig = function(ui) {
     var rowV = utils.clone(ui.row_vars.value(), []);
@@ -432,7 +432,7 @@ var refSig = function(ui) {
     var pct    = ui.pct   ? ui.pct.value()   : "no";
     var colorV = ui.color ? ui.color.value() : "no";
     var dispV  = ui.display ? ui.display.value() : "auto";
-    var lo     = ui.levelOrder ? utils.clone(ui.levelOrder.value(), []) : [];
+    var lo     = ui.levels_order ? utils.clone(ui.levels_order.value(), []) : [];
     return JSON.stringify([rowV, colV, tabV, pct, colorV, dispV, lo]);
 };
 
@@ -451,32 +451,32 @@ var orIsActive = function(ui) {
     return false;
 };
 
-// The stored reference for variable `v` in refLevels ("" if the user has not picked one).
+// The stored reference for variable `v` in ref_levels ("" if the user has not picked one).
 var refSelected = function(ui, v) {
-    var arr = utils.clone(ui.refLevels.value(), []);
+    var arr = utils.clone(ui.ref_levels.value(), []);
     for (var i = 0; i < arr.length; i++)
         if (arr[i].var === v) return (arr[i].ref == null ? "" : String(arr[i].ref));
     return "";
 };
 
-// Set/replace variable `v`'s reference entry in refLevels.
+// Set/replace variable `v`'s reference entry in ref_levels.
 var writeRef = function(ui, v, refval) {
-    var arr = utils.clone(ui.refLevels.value(), []);
+    var arr = utils.clone(ui.ref_levels.value(), []);
     var found = false;
     for (var k = 0; k < arr.length; k++)
         if (arr[k].var === v) { arr[k] = { var: v, ref: refval }; found = true; break; }
     if (!found) arr.push({ var: v, ref: refval });
-    ui.refLevels.setValue(arr);
+    ui.ref_levels.setValue(arr);
 };
 
-// Drop refLevels entries whose var is not in the active axis (guarded setValue -> no loop): clears
+// Drop ref_levels entries whose var is not in the active axis (guarded setValue -> no loop): clears
 // stale entries after a pct row<->col switch or a removed variable.
 var reconcileRefLevels = function(ui, activeVars) {
-    var cur = utils.clone(ui.refLevels.value(), []);
+    var cur = utils.clone(ui.ref_levels.value(), []);
     var kept = [];
     for (var i = 0; i < cur.length; i++)
         if (activeVars.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
-    if (kept.length !== cur.length) ui.refLevels.setValue(kept);
+    if (kept.length !== cur.length) ui.ref_levels.setValue(kept);
 };
 
 var choicesHasRef = function(choices, ref) {
@@ -574,10 +574,10 @@ var renderRef2Section = function(ui, frag, pct, ref2var) {
         function(r) { if (ui.ref2) ui.ref2.setValue(r); }));
 };
 
-// Render the whole ref picker SYNCHRONOUSLY into $el (mirrors renderTree). refLevels/ref2 picks are
+// Render the whole ref picker SYNCHRONOUSLY into $el (mirrors renderTree). ref_levels/ref2 picks are
 // in-place repaints and never come through here.
 var renderRefPicker = function(ui) {
-    if (!ui.refPickerCtrl || !ui.refLevels || !ui.row_vars) return;
+    if (!ui.refPickerCtrl || !ui.ref_levels || !ui.row_vars) return;
     lastRefSig = refSig(ui);
     var pct  = ui.pct ? ui.pct.value() : "no";
     var rowV = utils.clone(ui.row_vars.value(), []);
@@ -650,8 +650,8 @@ module.exports = {
     },
 
     // refPickerCtrl: build on create. On `updated`, re-render ONLY when the signature (vars / pct /
-    // color / OR / levelOrder) changed OR jamovi replaced our $el subtree (marker gone). A reference
-    // PICK writes refLevels/ref2 -- not in the signature -- so it is SKIPPED and the in-place repaint
+    // color / OR / levels_order) changed OR jamovi replaced our $el subtree (marker gone). A reference
+    // PICK writes ref_levels/ref2 -- not in the signature -- so it is SKIPPED and the in-place repaint
     // stands; a level reorder IS in the signature, so the lists re-order while the by-label selection
     // is preserved.
     refPickerCtrl_creating: function(ui) { renderRefPicker(ui); },
