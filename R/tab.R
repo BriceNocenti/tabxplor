@@ -2610,7 +2610,7 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
     tabs[[nm]] <- set_col_group(tabs[[nm]], g)
     # the `n` column comes FIRST but is a row descriptor, never a model column, so keying a group's
     # footer block under it would put every statistic beneath its counts. Its stored role says so.
-    if (identical(get_role(tabs[[nm]]), "n")) next
+    if (fmt_has_role(tabs[[nm]], "n")) next
     if (is.na(col_of_group[[g]])) col_of_group[[g]] <- nm
   }
 
@@ -2853,6 +2853,17 @@ tab_transpose <- function(tabs, name = NULL) {
 # for the few callers that want them (the tab_xl title).
 
 
+# tab_last_factor_row_var() -- the ONE degraded "which factor is the row variable?" heuristic, shared
+# by tab_get_vars() and tab_render_vars() (20i). It fires only when a table carries NO declared index
+# (a hand-built frame / an older object); every table the package builds is read off its declaration
+# instead. The last factor NOT in the grouping is the row variable -- but with no groups, or when
+# every factor IS a group, the last factor overall. Returns character(0) when there is no factor.
+tab_last_factor_row_var <- function(fct_names, groups = character(0)) {
+  non_group <- setdiff(fct_names, groups)
+  if (!length(groups) || !length(non_group)) utils::tail(fct_names, 1L)
+  else                                        utils::tail(non_group, 1L)
+}
+
 
 #' The variables of a tabxplor table
 #' @description
@@ -2889,13 +2900,12 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 
   fct_cols <- purrr::map_lgl(tabs, is.factor)
 
-  # Phase 10c guard: with no factor column `tail()` returns a NULL name -> keep it a 0-length
-  # character so downstream `which()/%in%` stay well-defined (the crash is caught upstream by
-  # tab_render_vars(), but tab_get_vars() must not itself emit a stray NULL). See tab_render_vars().
-  if ("row_var" %in% vars) {
-    row_var <- if (!is.null(rec)) rec$row_var else names(utils::tail(fct_cols[fct_cols], 1L))
-    if (is.null(row_var)) row_var <- character(0)
-  }
+  # 20i: the degraded row-var pick is the shared tab_last_factor_row_var() (bare last factor here --
+  # no grouping is consulted), which returns character(0) with no factor, so the old stray-NULL guard
+  # is gone. See tab_render_vars() for the group-aware caller.
+  if ("row_var" %in% vars)
+    row_var <- if (!is.null(rec)) rec$row_var
+               else tab_last_factor_row_var(names(fct_cols)[fct_cols])
 
   if ("tab_vars" %in% vars) tab_vars <-
     if (!is.null(rec))            rec$tab_vars
@@ -2966,13 +2976,10 @@ tab_render_vars <- function(tabs) {
     row_var  <- rec$row_var
     tab_vars <- rec$tab_vars
   } else {
-    groups    <- intersect(dplyr::group_vars(tabs), fct_names)
-    non_group <- setdiff(fct_names, groups)
-    row_var   <- if (length(groups) == 0 || length(non_group) == 0) {
-      utils::tail(fct_names, 1L)
-    } else {
-      utils::tail(non_group, 1L)
-    }
+    # 20i: the group-aware degraded pick is the shared tab_last_factor_row_var() (tab_get_vars() calls
+    # it with no groups; here the grouping is passed, so a factor moved after the fmt columns is not
+    # miswritten). Byte-identical to both prior copies.
+    row_var  <- tab_last_factor_row_var(fct_names, intersect(dplyr::group_vars(tabs), fct_names))
     tab_vars <- setdiff(fct_names, row_var)
   }
 

@@ -232,6 +232,11 @@ TAB_OPS <- list(
     label    = function() gettext("tab_transpose()"),
     severity = "abort",
     checks   = list(
+      # `kind` FIRST, so a regression gets its own reason rather than failing the crosstab-shaped
+      # `!merged` check below (a reg table carries a `var`-role predictor column, so it reads as
+      # merged) with the misleading "it needs exactly one row variable".
+      list(ok = function(s) !identical(s$kind, "regression"),
+           why = function() gettext("it transposes a crosstab; a regression table transposes via tab_export(transpose = TRUE)")),
       list(ok = function(s) !isTRUE(s$grouped),
            why = function() gettext("it transposes a single table, with no sub-tables (tab_vars)")),
       list(ok = function(s) length(s$row_vars) == 1L && !isTRUE(s$merged),

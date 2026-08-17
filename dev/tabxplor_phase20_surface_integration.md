@@ -1285,7 +1285,7 @@ summary. ⚠ Bump `JMVTAB_CACHE_SCHEMA` for anything that changes what a carrier
 
 #### Phase 20h — Harvest 1: the deletion pass
 
-**Goal**: reap it. **Half 1 — the deletion pass.** Re-run the censuses, delete the shapes the new declarations made unnecessary.
+**Goal**: reap it. **Part 1 — the deletion pass.** Re-run the censuses, delete the shapes the new declarations made unnecessary.
 
 - **Re-run §2's censuses** and report the delta honestly, including **what did not shrink**. That
   report is the phase's primary product, not a footnote.
@@ -1326,31 +1326,16 @@ Targeted tests only; the full suite and `check()` belong to 20i.
 
 #### Phase 20i — Harvest 2: open integration
 
-**Goal**: reap it. **Half 2 — open integration.** ⚠ *Creative; ask before building. *Think freely about what the finished surface makes possible.
+**Goal**: reap it. **Part 2 — open integration.** ⚠ *Creative; ask before building.* Think freely about what the finished surface makes possible.
 
 Now that an argument is declared, a row and a column self-describe, a table states its kind, both
-producers speak one vocabulary and the footer has a model — **what becomes possible that was not?**
-The phase's job is to *look*, propose, and only then build. Prompts, not a specification:
+producers speak one vocabulary and the footer has a model — **what becomes possible that was not to further simplify and integrate the package code ecosystem ?**
 
-- what can now be **generated** that is still hand-written (the jamovi `.a.yaml` argument blocks
-  themselves? the `?tabxplor-options` page? a `tab_args()` runtime lister beside `reg_measures()`?);
-- what can now be **asked** that could not be (a user asking "why is this cell that colour?" — the
-  plan, the ladder, the break and the basis are all stored; a `tab_explain(x, row, col)`);
-- what can now be **checked** (a single `tab_validate()` walking every declared table and every
-  stored attribute of a built table — the runtime twin of KEY 2);
-- where the two producers are **still asymmetric** for no reason left (the transpose; `spread`;
-  `tab_compact()` on a regression; `tab_estimates()` on a crosstab);
-- what a **third producer** would need (the honest test of whether the model is really uniform);
-- and the standing question: is any declared table now derivable from another?
+#### Phase 20j — Harvest 3: open cleaning
 
-**Verification**: whatever the phase actually builds carries its own fixtures (rule 7) and declares
-its own golden delta — this is the one Phase 20 phase that is *allowed* to move a value, because it
-may add something. It closes Phase 20, so it also runs the **full suite** and **one
-`devtools::check()`**, leaving Phase 22 a known-good tree.
+**Goal**: reap it. **Part 3 — open cleaning.** Think freely about what the finished surface makes possible: what last cleaning steps needs to be done to remove trace of past implementation altogether, reduce code length, ? 
 
-#### Phase 20j — Harvest 3: performance analysis and further improvements ? 
 
-Redo a performance analysis, and assess if meaningfull speed-ups can be achieved. I it’s not worthwhile, state it clearly.
 
 ---
 
@@ -1360,27 +1345,6 @@ CLAUDE.md already carries **Phase 22 — documentation integration and simplific
 a release phase after it. The sequence is **Phase 20 → Phase 22 → release**. Nothing below is a new
 phase; each row names the *existing* home of an item Phase 20 deliberately does not do.
 
-### 10.1 To Phase 22
-
-| item                                                  | goes to       | note                                                                                                                                                                                                                                                                                                                                                                                |
-|-------------------------------------------------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **KEY 9 — `?tabxplor-model`**                         | **22b**       | A doc-only page on the `?tabxplor-options` precedent: the four-carrier table (cell / column / row / table), the declared relations, and **the graph between them** — which is KEY 2's foreign keys, drawn. `@eval`-generated from the tables so it cannot drift. Today the largest single description of the model is CLAUDE.md's ~400-line repository map, which a user never sees |
-| **one reader naming convention**                      | **22c**       | `measure_facts()` · `est_var_kind()` · `ci_geom()` · `reg_estimand()` · `fmt_col_block()` · `tab_supports()` — six shapes for one idea. ⚠ Renaming readers is churn: **state** the convention, apply it to new readers, rename only where a name actively misleads                                                                                                                  |
-| **the "Inspect a table" vignette section** (◆)        | **22b**       | `tab_shape()` · `tab_supports()` · `reg_measures()` · `tab_columns()` · `fmt_attr()` — five exports answering real user questions that appear in no vignette and no README. ~30 lines, and the right answer to "52 of 93 exports are untaught" for these five                                                                                                                       |
-| **the taught-surface sweep for every 20b/20c rename** | **22b + 22d** | ⚠ After KEY 1 the `@param` blocks and value lists are **generated**, so a rename documents itself. What lags is free prose: `?tab` / `?tab_reg` `@details`, both vignette pairs, README                                                                                                                                                                                             |
-| **the `family × effect × measure` table**             | **22b**       | already in the 22b brief; after 20c it can be **generated** from `REG_ESTIMANDS` rather than hand-written — `reg_measures_rd()` is most of it already                                                                                                                                                                                                                               |
-| **`NEWS.md`**                                         | **22e**       | ⚠ Phase 20 is the biggest deprecation batch of the cycle (9 formals into `...`, the three total-label formals, the step API, `tab_prepare`, `complete_partial_totals`). Each phase writes its `NEWS.md` lines **as it lands**; 22e then compresses the whole file. Do not defer the *writing*, only the *compression*                                                               |
-| **the tests**                                         | **22f**       | ⚠ Phase 20 adds fixtures (rule 7) and 20a adds two harnesses. 22f's "full suite below 20 s" target is measured **after** Phase 20, not against today's tree                                                                                                                                                                                                                         |
-| **`dev/`**                                            | **22g**       | this document and 19o/19p all become 2.0.0 archive material                                                                                                                                                                                                                                                                                                                         |
-
-⚠ **One gap in the Phase 22 plan, flagged rather than filled**: **i18n appears nowhere in 22a–22g
-nor in the release phase.** Every rename in 20b/20c and every new abort adds msgids, so
-`po/R-fr.po` + the `.mo` recompile + `inst/po/en@quot` need a home — 19n did them as one pass and
-the traps are recorded in its DONE summary (⚠ `inst/po/en@quot` is **derived**, step 5 of
-`dev/update_translations.R`; ⚠ `po_update()` carries near-matches over as fuzzy and **some are
-wrong** — rewrite each, never accept; ⚠ the extraction anchor in `R/reg-assumptions.R` is **not**
-deletable, verify with `potools::get_message_data()` before touching any anchor). Recommend adding
-it as **22h**, after 22c/22d have finished moving strings around.
 
 ### 10.2 To the release phase
 

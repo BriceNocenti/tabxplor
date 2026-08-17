@@ -262,8 +262,10 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
     lvl0 <- as.character(tab[[rv$row_var]])
     # 19l: the variable column is the DECLARED one (rv$var_col, used again at the label runs below),
     # not a column that happens to be named "var" -- this was the last consumer sniffing for the name.
+    # 20i: `emp_tips` exist only on a reg table, whose declared `var_col` is the single predictor-name
+    # column, so this reads that one declared column, never a positional guess among several.
     vcol <- intersect(rv$var_col, names(tab))
-    var0 <- if (length(vcol)) as.character(tab[[vcol[[1]]]]) else rep(NA_character_, nrow(tab))
+    var0 <- if (length(vcol)) as.character(tab[[vcol[[1L]]]]) else rep(NA_character_, nrow(tab))
     key0 <- paste(var0, lvl0, sep = "\r")
     emp_tips <- lapply(split(et_raw, et_raw$col), function(sub)
       sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])

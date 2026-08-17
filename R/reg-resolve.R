@@ -913,6 +913,11 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     families = stats::setNames(deps$family, deps$outcome),
     # NAMED by outcome: reg_call's `measures` / `effects` are per-outcome maps, and vapply over an
     # unnamed list silently drops those names.
+    # DESIGN (20i): `est`/`eff_word` are the table's REPRESENTATIVE estimand (the first outcome) --
+    # they feed the reg_call SUMMARY (title / legend fallback). The per-outcome facts live in `ests`
+    # and in the specs (each column carries its own scale/role, and the legend reads them per spec),
+    # so a mixed-family multi-outcome table is column-correct; only the one-line summary is the first
+    # outcome's.
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
     eff_word = reg_eff_word(deps$est[[1]], out$empirical),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,

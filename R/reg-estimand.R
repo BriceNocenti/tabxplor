@@ -613,8 +613,9 @@ local({
         all(vapply(fr$rows, function(r) r$status == "ok" || is.function(r$why), logical(1))),
       "every buildable row has an estimand phrase"  =
         all(vapply(fr$rows, function(r) r$status != "ok" || is.function(r$note), logical(1))),
-      # Phase 20h: `obs` gained its reader (reg_stage_setup()'s `at_profile`, which used to re-derive
-      # it from the string), so the equality it holds TODAY is asserted rather than assumed: a crude
+      # Phase 20h/20i: `obs` gained its reader (reg_set_obs(), per spec via `sp$est$obs`, which used
+      # to re-derive it from the string), so the equality it holds TODAY is asserted rather than
+      # assumed: a crude
       # value is withheld exactly at the reference profile. The day an estimand needs `obs = FALSE`
       # for another reason, this line is what must be relaxed -- deliberately, not silently.
       "obs is withheld exactly at the reference profile" =

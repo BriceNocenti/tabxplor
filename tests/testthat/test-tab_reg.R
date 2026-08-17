@@ -931,6 +931,28 @@ reg_2dep_data <- function() {
     )
 }
 
+# Phase 20i: the "attach a crude value?" decision is PER SPEC (the estimand's declared `obs`,
+# withheld exactly at the reference profile). A multi-outcome table with a MIXED per-outcome `effect`
+# must withhold `obs` only on the at_reference columns; a table-scalar `any(!obs)` gate used to blank
+# the crude value (and `color = "adjustment"`) on the coefficient columns too.
+test_that("per-spec obs: a mixed-effect multi-outcome table keeps `obs` on the coefficient columns", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d <- reg_2dep_data()
+  r <- suppressWarnings(tab_reg(
+    d, outcome = c("married", "widowed"), predictors = c("race", "age"),
+    family = "binomial", effect = c(married = "at_reference", widowed = "coefficient"),
+    empirical = TRUE, cleannames = FALSE))
+  expect_s3_class(r, "tabxplor_tab")   # ONE table (n_outcomes > 1, bracketed columns), not a list
+  model_cols <- names(r)[purrr::map_lgl(
+    r, ~ is_fmt(.) && identical(as.character(get_role(.))[1], "model"))]
+  has_obs <- purrr::map_lgl(model_cols, ~ any(!is.na(get_obs(r[[.]]))))
+  # the coefficient outcome (widowed) carries its crude OR -> FAILS before the per-spec fix (all
+  # blanked table-wide); the at_reference outcome (married) still withholds it.
+  expect_true(all(has_obs[grepl("widowed", model_cols)]))
+  expect_false(any(has_obs[grepl("married", model_cols)]))
+})
+
 test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per dependent", {
   skip_if_not_installed("broom")
   d <- reg_2dep_data()

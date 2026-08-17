@@ -281,8 +281,8 @@ effect (suppression), the other that it \strong{attenuated} it — measured from
 protective effect (OR < 1) and a risky one read the same way.
 \item \code{"between_groups"} — with \code{tab_vars}, how far each group's effect sits from the \strong{first}
 group's, on the same row: a per-predictor reading of effect modification, beside the global
-comparison a likelihood-ratio test gives. Pick the baseline group with \code{reference} keyed by the
-split variable (e.g. \code{reference = c(race = "Black")}). It also adds the \strong{aggregated}
+comparison a likelihood-ratio test gives. Pick the baseline group with \code{ref} keyed by the
+split variable (e.g. \code{ref = c(race = "Black")}). It also adds the \strong{aggregated}
 interaction test to the footer (see \code{stats}).
 }
 
@@ -725,9 +725,9 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
                 measure = "difference")
 # what this outcome can be modelled as, with the reason wherever it cannot:
   reg_measures(reg_data, "married")
-# multinomial (nominal 3+ level): one OR column per outcome category vs the reference
+# multinomial (nominal 3+ level): one OR column per outcome category vs the baseline
   tab_reg(reg_data, outcome = "party3", predictors = c("race", "age"),
-                family = "multinomial", reference = c(party3 = "3-Republican"))
+                family = "multinomial", outcome_level = c(party3 = "3-Republican"))
 # ordinal (proportional-odds): one cumulative-OR column
   tab_reg(reg_data, outcome = "rincome", predictors = c("race", "age"), family = "ordinal")
 }

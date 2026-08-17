@@ -60,6 +60,11 @@ utils::globalVariables(c("var", "name", "size", "color",
 # since Phase 20f-iiii: the trampoline catches its own error so that collection can complete.)
 utils::globalVariables(c("tabx_opts", "tabx_ship"))
 
+# Phase 20b's `...`-args: the superseded crosstab producers (tab_plain / tab_num / tab_counts) bind
+# their declared `...`-arguments at runtime via list2env(tab_dots_expand(), environment()) -- so the
+# few referenced bare (never also a formal) are invisible to R's static checker.
+utils::globalVariables(c("OR", "tot", "color_breaks"))
+
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
 
@@ -1210,10 +1215,16 @@ set_role <- function(x, role) {
 # has none, so every "not a real col_var" filter keeps working unchanged.
 #' @keywords internal
 #' @noRd
-fmt_is_helper_col <- function(x) {
-  if (is.data.frame(x)) return(purrr::map_lgl(x, fmt_is_helper_col))
-  is_fmt(x) && get_role(x) %in% c("n", "pct")
+# fmt_has_role() -- the ONE "is this fmt column one of these roles?" predicate (20i). The stored
+# `role` was compared three inconsistent ways (`%in% c("n","pct")` here, an `as.character()[1]`
+# coercion in plots.R, a bare `identical()` in tab.R); this normalises it once. data.frame-mapped,
+# so `names(x)[fmt_has_role(x, "n")]` finds the count column.
+fmt_has_role <- function(x, roles) {
+  if (is.data.frame(x)) return(purrr::map_lgl(x, fmt_has_role, roles))
+  is_fmt(x) && as.character(get_role(x))[1] %in% roles
 }
+
+fmt_is_helper_col <- function(x) fmt_has_role(x, c("n", "pct"))
 
 # Phase 18z13 (D3): the per-column `conf_level` attribute -- the level this column's stored interval
 # and its significance thresholds were computed at.

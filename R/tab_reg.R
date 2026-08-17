@@ -3019,7 +3019,7 @@ new_reg_ctx <- function(
     # frame the jamovi digest is fitted on (NULL off that path -- never a second copy of `data`).
     family = NA_character_, skeleton = NULL, skeleton_deferred = FALSE, data_canon = NULL,
     compound = logical(0), builders = character(0),
-    prefix_dep = FALSE, n_outcomes = 0L, is_comparison = FALSE, at_profile = FALSE,
+    prefix_dep = FALSE, n_outcomes = 0L, is_comparison = FALSE,
     numeric_preds = character(0), factor_preds = character(0),
     # `spec_plan` (want_n / n_names / want_emp / want_crude / num_preds) is what the builder must be
     # TOLD rather than work out: the de-duplications a worker cannot reproduce (it does not know
@@ -3218,15 +3218,11 @@ reg_stage_setup <- function(ctx) {
   factor_preds  <- reg_factor_preds(skeleton_data, union_predictors)
   # Phase 18z8 (a z5 defect): `effect = "at_reference"` makes the model cell a marginal effect AT THE
   # REFERENCE PROFILE, while the crude companion stays a MARGINAL effect over the whole sample -- two
-  # different estimands, so their difference is not "what adjustment did". The stratum-restricted crude
-  # effect would match the estimand but answers a different question (model FIT at one profile, not
-  # confounding) on a few percent of the rows, so no `obs` is attached at all: the cells stay
-  # uncoloured, `{obs}` blanks, and tab_reg() says why once. A shape fact of the SPECS, hence here.
-  # Phase 20h: it READS the estimand's declared `obs` ("may a crude value be attached cell by cell?")
-  # instead of re-deriving it from `effect == "at_reference"`. Byte-identical -- the two agree on all
-  # 43 rows, asserted where the table is declared (R/reg-estimand.R) -- and it is the difference
-  # between a rule re-derived downstream and a fact read where it is stated.
-  at_profile <- any(!vapply(specs, function(s) isTRUE(s$est$obs), logical(1)))
+  # different estimands, so their difference is not "what adjustment did", and no `obs` is attached:
+  # the cells stay uncoloured, `{obs}` blanks, and reg_color_notes() says why. Phase 20i: that
+  # decision reads the estimand's declared `obs` PER SPEC, in reg_set_obs() (`sp$est$obs`), so a mixed
+  # table withholds it only on the at_reference columns -- the table-scalar `any()` gate used to blank
+  # the whole table.
 
   # Phase 18z13 (SS7.2): the per-predictor global test is in the DEFAULT stats set, so NULL / "all" /
   # TRUE ask for it; FALSE / "none" and an explicit vector that omits it do not. (The interaction
@@ -3281,7 +3277,7 @@ reg_stage_setup <- function(ctx) {
                         skeleton_deferred = skeleton_deferred,
                         compound = compound, builders = builders,
                         prefix_dep = prefix_dep, n_outcomes = n_outcomes,
-                        is_comparison = is_comparison, at_profile = at_profile,
+                        is_comparison = is_comparison,
                         numeric_preds = numeric_preds, factor_preds = factor_preds,
                         want_global = want_global,
                         spec_plan = list(want_n = want_n, n_names = n_names,
@@ -3760,7 +3756,11 @@ reg_emp_frame <- function(dep, ctx) {
 reg_set_obs <- function(bi, e, f, sp, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   col <- bi$col
-  if (is.null(e) || at_profile) return(col)
+  # Phase 20i: the "may a crude value be attached?" decision is PER SPEC (the estimand's declared
+  # `obs`, withheld exactly at the reference profile -- R/reg-estimand.R). `sp` is this column's own
+  # spec, so a mixed table -- effect = c(a = "at_reference", b = "coefficient") -- withholds `obs`
+  # only on a's columns and keeps it on b's. A table-scalar `any(!obs)` used to blank the whole table.
+  if (is.null(e) || !isTRUE(sp$est$obs)) return(col)
   if (!reg_same_estimand(e$shape, col)) return(col)     # z5 defect: same scale, or nothing
   # Phase 18z13 (D1): ...and the same PEOPLE, or nothing. A model fitted on rows the crude block
   # does not cover has a "gap" that is listwise deletion, not adjustment -- the same predicate that
@@ -4393,8 +4393,8 @@ reg_stage_finalize <- function(ctx) {
 #'     protective effect (OR < 1) and a risky one read the same way.
 #'   * `"between_groups"` — with `tab_vars`, how far each group's effect sits from the **first**
 #'     group's, on the same row: a per-predictor reading of effect modification, beside the global
-#'     comparison a likelihood-ratio test gives. Pick the baseline group with `reference` keyed by the
-#'     split variable (e.g. `reference = c(race = "Black")`). It also adds the **aggregated**
+#'     comparison a likelihood-ratio test gives. Pick the baseline group with `ref` keyed by the
+#'     split variable (e.g. `ref = c(race = "Black")`). It also adds the **aggregated**
 #'     interaction test to the footer (see `stats`).
 #'
 #'   The two are mutually exclusive (they share one per-cell slot). The gap itself is readable as a
@@ -4540,9 +4540,9 @@ reg_stage_finalize <- function(ctx) {
 #'                 measure = "difference")
 #' # what this outcome can be modelled as, with the reason wherever it cannot:
 #'   reg_measures(reg_data, "married")
-#' # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
+#' # multinomial (nominal 3+ level): one OR column per outcome category vs the baseline
 #'   tab_reg(reg_data, outcome = "party3", predictors = c("race", "age"),
-#'                 family = "multinomial", reference = c(party3 = "3-Republican"))
+#'                 family = "multinomial", outcome_level = c(party3 = "3-Republican"))
 #' # ordinal (proportional-odds): one cumulative-OR column
 #'   tab_reg(reg_data, outcome = "rincome", predictors = c("race", "age"), family = "ordinal")
 #' }

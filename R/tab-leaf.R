@@ -1108,8 +1108,11 @@ leaf_chi2 <- function(tabs, test, comp, row_var, col_var, tab_vars, deff = NULL)
   col_vars_levels        <- stats::setNames(list(rlang::syms(lev_all)), cv)
   is_tot                 <- purrr::map_lgl(lev_all, ~ any(is_totcol(tabs[[.x]])))
   col_vars_levels_no_tot <- stats::setNames(list(rlang::syms(lev_all[!is_tot])), cv)
-  tot_nm                 <- if (any(is_tot)) lev_all[is_tot][[1]] else lev_all[[length(lev_all)]]
-  tot_cols               <- stats::setNames(rlang::syms(rep(tot_nm, length(lev_all))), lev_all)
+  # 20i: `tot_cols` names, per level column, the col_var's TOTAL column (where the chi2 marginals
+  # live). It is read only when a total column EXISTS (the `do_ctr && any(is_tot)` guard below), so
+  # it is built only then -- no last-column fallback pretending a total exists when none is flagged.
+  tot_cols               <- if (any(is_tot))
+    stats::setNames(rlang::syms(rep(lev_all[is_tot][[1]], length(lev_all))), lev_all) else NULL
 
   keep  <- dplyr::group_vars(tabs)
   work  <- leaf_test_view(tabs, comp, tab_vars)

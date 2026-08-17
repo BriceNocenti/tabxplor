@@ -186,6 +186,18 @@ testthat::test_that("the transposed model keeps every slot the flip does not tou
   testthat::expect_length(rd2$ann[[1]]$keep_black, nrow(rd2$tab))
 })
 
+# Phase 20i: TAB_OPS gained a `kind` predicate. The DEPRECATED object-level tab_transpose() refuses a
+# regression with a kind-specific reason (pointing at transpose = TRUE, which DOES support reg -- the
+# tests below) instead of the misleading crosstab "exactly one row variable" (a reg reads as `merged`
+# via its var-role predictor column).
+testthat::test_that("Phase 20i: tab_transpose() on a regression aborts with a kind-specific message", {
+  testthat::skip_if_not_installed("broom")
+  r <- suppressMessages(tab_reg(gss_cat_data_formatting(), "married", c("relig", "age"),
+                                family = "binomial", cleannames = FALSE))
+  testthat::expect_false(tab_supports(r, "transpose_object"))
+  testthat::expect_error(xpose(r), "transpose = TRUE", fixed = TRUE)
+})
+
 testthat::test_that("a transposed regression's footer cells stay black in HTML (D1)", {
   testthat::skip_if_not_installed("broom")
   d <- gss_cat_data_formatting()

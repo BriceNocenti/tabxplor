@@ -954,8 +954,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   if (identical(size, "n")) {
     nv <- e$n
     if (all(is.na(nv))) {
-      ncol_nm <- names(x)[vapply(x, function(c) is_fmt(c) &&
-                                  identical(as.character(get_role(c))[1], "n"), logical(1))]
+      ncol_nm <- names(x)[fmt_has_role(x, "n")]
       if (length(ncol_nm)) nv <- get_n(x[[ncol_nm[1]]])[e$row]
     }
     if (any(is.finite(nv))) {
