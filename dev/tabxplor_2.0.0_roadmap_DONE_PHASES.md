@@ -236,7 +236,7 @@ Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-inv
 - **Step 4e — background rendering.** `pillar_shaft` stacks the text-channel crayon + the bg-channel
   crayon (bg palette); `fmt_color_channels()` returns both slot vectors. Verified end-to-end.
 - **Batch A COMPLETE** (1068 tests green): findInterval engine + config + significance + ratio repoint
-  - two-channel storage/args/rendering, factor-`diff` byte-identical, 48-1290× faster.
+  + two-channel storage/args/rendering, factor-`diff` byte-identical, 48-1290× faster.
 
 #### Done (Batch B — Steps 5-6, 2026-07-09)
 
@@ -811,7 +811,7 @@ Full analysis + fresh profile: `dev/tabxplor_2.0.0_decisions.md` §30. The three
   (per-leaf relabel ~5 %, `tab_apply_tests` marshalling ~22 %) were left; the big one (leaf-math ~30 %)
   is **Phase 9d** below.
 - **Feature given up for simplicity — the tab()-level scan-fusion, REMOVED.** `options(tabxplor.fuse_min_rows)`
-  - the fused-`.fine` block in `tab_aggregate()` were a NET NEGATIVE (+1–7 % when on) and dead by
+  + the fused-`.fine` block in `tab_aggregate()` were a NET NEGATIVE (+1–7 % when on) and dead by
   default (fusing an O(N) scan buys nothing when the build is N-independent). Removed. **Kept**: the
   `.fine`/`fine_for_pair()`/`use_raw` seam in `tab_plain()` (now EXCLUSIVELY the jmvtab cache seam +
   `tab_counts()`'s injected aggregate + the numeric `fine_num`). `test-fuse-parity.R` rewritten to drive
@@ -1005,12 +1005,12 @@ aggressive simplification is welcome.
 
 `add_n`, `add_pct` and pvalue_lines add complexity in the whole workflow. I want to **study the possibility to only add these additional rows or columns at display time**, using `tabxplor_tab` level attributes to know it must be done (or column-attributes, or global options, what would be best ?) ? This is a design task : just study if it would possible possible and reliable.
 - Distinguish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding a new row or column efficiently, at the end ? Would it be a good idea to do it without redoing the whole fmt reconstruction, which is always a performance bottleneck ?).
-  - The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
-  - Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : {`{pct} ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of `add_n` in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
+  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
+  + Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : {`{pct} ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of `add_n` in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
 - Print at display/export. Is the data necessary for this already available ?
-  - `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now), or the interval min and max. Default to minimum. Global option to set min max instead ? Or would it be a good idea to do everything in a display spec like `{pct} [n:{n_min}-{n_max}]` (or is it a new white elephant that will reduce performance at display for nothing, since n_min and n_max does not even exist on the cell fields ?) ?
-  - `add_pct` : does it have every data needed ?
-  - pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
+  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now), or the interval min and max. Default to minimum. Global option to set min max instead ? Or would it be a good idea to do everything in a display spec like `{pct} [n:{n_min}-{n_max}]` (or is it a new white elephant that will reduce performance at display for nothing, since n_min and n_max does not even exist on the cell fields ?) ?
+  + `add_pct` : does it have every data needed ?
+  + pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
 - Since `add_n`, `add_pct` and pvalue_lines as actual rows and columns in the data were exceptions that added complexity to the pipeline, their removal at all steps before display/export calls for a **huge code simplication**.
 
 **DESIGN SETTLED (2026-07-12) — see `dev/tabxplor_2.0.0_decisions.md` §34 (the full findings + phasing).**
@@ -1354,14 +1354,14 @@ Color breaks and color palette management is very not user friendly (base is ok,
 - The default for factors is `pct_diff = c(2)`, but it implement both a x2 and a /2 rule : f want to be able to enforce my classic `only x2` ratio rule, I want a possibility to force asymmetrical breaks, for example `pct_diff = c(2, asymmetrical=TRUE)` (with should be default to factors ; default for numeric variables should be `mean_ratio = c(-1.5, -2, -4, 1.15, 1.5, 2, 4)` )
 - I would prefer the order to micmic that of the color palettes : first the negative values from closest to bound to farthest to bound, then the positive level from closest to bound to farthest to bound. If the order is wrong, the code should attempt to order it in the logical way for color management anyway.
 - The way I want it done : the user directly provides a list of breaks with possibly named arguments giving the color, either via set_color_breaks() or breaks argument (to be renamed `color_breaks` ; keep `breaks` soft-deprecated if it was already on tab() in 1.3.1, remove altogether if it was not) ; with `color_breaks` argument, the breaks are stored as a vctrs based column-level arguments ; with `color_breaks` argument, at display or export, tabxplor internally create a temp object with the vector, and compute the crayon styles too (both must be created and loaded first, and shall never be recreated for each cell in a table). Can you see some possible caveats here ? Some further simplifications ?
-  - For example `color_breaks = list(ratio_breaks = c(1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (3 under-represented, 4 over-represented). Here no names provide colors, so base palettes are used.
-  - Since color palettes have always 4 positive colors and 4 negative colors, passing `NA` should indicate which color is not used. Ex :  `color_breaks = list(ratio_breaks = c(NA, 1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (here negative color 1 is not used). When no NA is provided to tell what colors are used exactly, a graceful fallback should select colors nonetheless (first excluding color n°2, then color n°4, then color n°1).
-  - In `set_color_breaks()`, deprecate the old arguments (`set_color_breaks(pct_breaks = ...)`) and add the new ones (like `set_color_breaks(pct_diff = ..., pct_ratio = ...)`).
-  - Providing the names to override the palette, but of course that can only be done in positive + negative mode : `color_breaks = list(pct_diff = c("#cb0000" = -30, "#ff3d00" = -20, "#FF8138" = -10, "#ffb300" = -5, "#C7D62C" = 5, "#83BB3F" = 10, "#3BA240" = 20, "#1b6e20" = 30))` ?  Of course if at least one is provided, then a name should be provided for **all** breaks (error otherwise). Would it be reliable or another white elephant ?
-  - The function then auto-detects where is the boundary between over-represented and under-represented depending on the type (0 for additive, 1 for multiplicative), and handle robustly the creation of the relevant interval for each color, taking into account where is the boundary.
-  - only giving the positive / over-represented side should still mirror it depending of the type, minus sign for additive and 1/x for multiplicative).
-  - Rule should be : if no `color_breaks` are saved as column-level attributes (not NULL or empty) the current ones are used (so the user can save a table, load it in a fresh session, and use set_color_breaks() to choose how to display) ; if some `color_breaks` already exist at column-level they override any package level settings (to change that, the user can still remove columns attributes manually).
-  - Make testthat tests to ensure it handles edge cases, and user’s errors or imprecisions (ex. not ordered) well.
+  + For example `color_breaks = list(ratio_breaks = c(1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (3 under-represented, 4 over-represented). Here no names provide colors, so base palettes are used.
+  + Since color palettes have always 4 positive colors and 4 negative colors, passing `NA` should indicate which color is not used. Ex :  `color_breaks = list(ratio_breaks = c(NA, 1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (here negative color 1 is not used). When no NA is provided to tell what colors are used exactly, a graceful fallback should select colors nonetheless (first excluding color n°2, then color n°4, then color n°1).
+  + In `set_color_breaks()`, deprecate the old arguments (`set_color_breaks(pct_breaks = ...)`) and add the new ones (like `set_color_breaks(pct_diff = ..., pct_ratio = ...)`).
+  + Providing the names to override the palette, but of course that can only be done in positive + negative mode : `color_breaks = list(pct_diff = c("#cb0000" = -30, "#ff3d00" = -20, "#FF8138" = -10, "#ffb300" = -5, "#C7D62C" = 5, "#83BB3F" = 10, "#3BA240" = 20, "#1b6e20" = 30))` ?  Of course if at least one is provided, then a name should be provided for **all** breaks (error otherwise). Would it be reliable or another white elephant ?
+  + The function then auto-detects where is the boundary between over-represented and under-represented depending on the type (0 for additive, 1 for multiplicative), and handle robustly the creation of the relevant interval for each color, taking into account where is the boundary.
+  + only giving the positive / over-represented side should still mirror it depending of the type, minus sign for additive and 1/x for multiplicative).
+  + Rule should be : if no `color_breaks` are saved as column-level attributes (not NULL or empty) the current ones are used (so the user can save a table, load it in a fresh session, and use set_color_breaks() to choose how to display) ; if some `color_breaks` already exist at column-level they override any package level settings (to change that, the user can still remove columns attributes manually).
+  + Make testthat tests to ensure it handles edge cases, and user’s errors or imprecisions (ex. not ordered) well.
 - The aim is to **simplify** : please remove traces of the old implementation altogether, we do not need to soft-deprecate everything here (very small user-base + I think nobody ever used it).
 
 #### Phase 13b – meaningful color legends (DONE)
@@ -1370,10 +1370,10 @@ Color legends
 - Redesign color legends for simplicity : they should be understandable by non-experts, while at the same time having just the enough technical terms for the experts to know exactly what’s happening technically here.
 - Even in Excel export, use styles inside the color legend cells to color the breaks with the relevant text or background color (+bold), to make it really usable (otherwise a legend that does not say what color is what is incomprehensible), while keeping the rest of the text in the cell black (+ plain).
 - Make the color legend more easy to read for  non-expert users, and implement a French translation (detect OS language + override by optional argument in export functions ?) Here are meaningful exemples  in French, to generalise and translate (in every case, of course, it is only meaningful if each break is of the same color than in the table). They can be written via a script, knowing : ligne/colonne, reference Total or level name, type of ci ; and a string "Nuances de bleu"/"Nuance du jaune au rouge" that can be baked with tabxplor default color palette, and have a fallback to not saying which color it is in the sentence with custom palettes ?
-  - pct diff : "Nuances de bleu pour les cases >= à la ligne Total +5; +10 ; +20 ; +30 points. Nuances du jaune au rouge : <= à la ligne Total -5 ; -10 ; -20 ; -30 points."
-  - pct diff,  `color_signif="color_all_signif"` : "Nuances de bleu pour les cases >= à la ligne Total +0; +5 ; +15 ; +25 points, après soustraction de la marge d’erreur (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95 %). Nuances du jaune au rouge : <= à la ligne Total -0 ; -5 ; -15 ; -25 points. Grisé : chiffre non significativement différent de celui de la ligne Total après marge d’erreur."
-  - ratio : "Nuances de bleu pour les cases >= à la colonne Total ×1,15 ; ×1,5  ; ×2 ; ×4. Nuances du jaune au rouge pour les cases <= à la colonne Total ÷1,15 ; ÷1,5 ; ÷2 ; ÷4."
-  - OR, `color_signif="grey_non_signif"` : "Nuances de bleu : OR >= 1,15 ; 1,5 ; 2 ; 4. Nuances du jaune au rouge : OR <= 1/1,15 ; 1/1,5 ; 1/2 ; 1/4. Grisé : chiffre non significativement différent de celui de la modalité de référence (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95%)."
+  + pct diff : "Nuances de bleu pour les cases >= à la ligne Total +5; +10 ; +20 ; +30 points. Nuances du jaune au rouge : <= à la ligne Total -5 ; -10 ; -20 ; -30 points."
+  + pct diff,  `color_signif="color_all_signif"` : "Nuances de bleu pour les cases >= à la ligne Total +0; +5 ; +15 ; +25 points, après soustraction de la marge d’erreur (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95 %). Nuances du jaune au rouge : <= à la ligne Total -0 ; -5 ; -15 ; -25 points. Grisé : chiffre non significativement différent de celui de la ligne Total après marge d’erreur."
+  + ratio : "Nuances de bleu pour les cases >= à la colonne Total ×1,15 ; ×1,5  ; ×2 ; ×4. Nuances du jaune au rouge pour les cases <= à la colonne Total ÷1,15 ; ÷1,5 ; ÷2 ; ÷4."
+  + OR, `color_signif="grey_non_signif"` : "Nuances de bleu : OR >= 1,15 ; 1,5 ; 2 ; 4. Nuances du jaune au rouge : OR <= 1/1,15 ; 1/1,5 ; 1/2 ; 1/4. Grisé : chiffre non significativement différent de celui de la modalité de référence (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95%)."
 - Integrate `tab_reg()` into the colors legends reliably and usefully for the user. Currently the β legend shows the SD breaks as %, and the IRR legend says "OR".
 
 `tab_color_legend()` (`R/fmt_class.R`) rewritten into a **token-stream**: `legend_specs(x)` (per col_var
@@ -1550,7 +1550,7 @@ Two systemic findings worth naming once:
   `tab_get_vars()` report `tab_vars = "row_var"` on a table with no tab_vars, which is why
   `tab_transpose()` aborts with a misleading message and why `tab_xl()`'s title reads
   *"levels by multi (tabbed by row_var)"*.
-  - **This needs to be fixed at framework level, reliably**, by finding what solid and reliable property differenciate a table with a real tab_vars and several row_vars merged (the column currents names with several row_vars merged are one, but maybe not the most reliable).
+  + **This needs to be fixed at framework level, reliably**, by finding what solid and reliable property differenciate a table with a real tab_vars and several row_vars merged (the column currents names with several row_vars merged are one, but maybe not the most reliable).
 - **Positron has no supported theme API — but a workaround exists and is verified on this machine.**
   Two research passes (§14g) agree there is no supported route and none scheduled
   ([positron#2986](https://github.com/posit-dev/positron/issues/2986), open 2 years, milestone
@@ -2785,15 +2785,15 @@ legend wording is asserted directly). Browser sample: `dev/review_manual/phase14
   a MISMATCH: the empirical `Emp. %` column carries `ref_type = "tot"` yet marks its reference CATEGORY
   via `in_refrow`, so `get_reference("all_totals")` (which returns the total ROW under ref = "tot")
   returned empty and greyed the reference cells. Introduced ONE shared "black anchor" concept:
-  - `fmt_col_ann()` ([R/tab-export-prep.R](R/tab-export-prep.R)) now computes `keep_black = ref_alltot |
+  + `fmt_col_ann()` ([R/tab-export-prep.R](R/tab-export-prep.R)) now computes `keep_black = ref_alltot |
     is_refrow(col)` and drives `font`/`bold` off it (returns the mask too). For a crosstab `is_refrow`
     is a subset of `ref_alltot`, so byte-identical there — only reg reference columns change.
-  - The GOF FOOTER rows are un-greyed at the TABLE level in `prep_one_table()`: a footer row is one where
+  + The GOF FOOTER rows are un-greyed at the TABLE level in `prep_one_table()`: a footer row is one where
     EVERY fmt cell is a footer stat (display `gof`/`pvalue`/`blank`). A crosstab chi2 pvalue row is NOT
     (its other cells stay `pct`), so this never touches a crosstab and needs no reg gate — and it catches
     the `pvalue` footer rows (LR vs null) that a per-cell `%in% c("gof","blank")` rule would have missed.
     The whole footer row goes black + bold (font + keep_black + `bold_rows` union so LABELS bold too).
-  - The html engine ([R/tab-render-html.R](R/tab-render-html.R)) reads `a$keep_black` instead of
+  + The html engine ([R/tab-render-html.R](R/tab-render-html.R)) reads `a$keep_black` instead of
     `a$ref_alltot`; the console `pillar_shaft` greying ([R/fmt_class.R](R/fmt_class.R)) ORs `is_refrow(x)`
     into its `totals` exempt set. Deliberately kept `ann$ref_alltot` semantic (feeds the reference
     intercept + `tab_bold_rows`); the styling decision is the separate `keep_black`.
@@ -2863,9 +2863,9 @@ All four landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3238**; **NO golde
   polynomial terms (`x.L`/`x.Q`) that don't align → an all-NA OR column (the "remove ordered to not break
   the model" the maintainer did by hand in Pass 4). So both the roadmap's PRIMARY (de-order) and SECONDARY
   (robust split) are real and both needed:
-  - de-order in `reg_fit` ([R/tab_reg.R](R/tab_reg.R)): `factor(fct_drop(as.factor(.)), ordered = FALSE)`
+  + de-order in `reg_fit` ([R/tab_reg.R](R/tab_reg.R)): `factor(fct_drop(as.factor(.)), ordered = FALSE)`
     (was `as.factor()`, which KEEPS the ordered class). Predictors only; the ordinal outcome stays ordered.
-  - `reg_marginal()` strips the KNOWN prefix + reference suffix by `substr` instead of splitting on the
+  + `reg_marginal()` strips the KNOWN prefix + reference suffix by `substr` instead of splitting on the
     first `" - "` / first `")"` — handles a level containing `" - "` or `")"`. ⚠ The lnor contrast is
     `ln(odds(<Level>) / odds(<Ref>))` with a DOUBLE closing paren; the suffix must include both (a test
     caught the off-by-one).
@@ -2941,11 +2941,11 @@ fields (`/vctrs-field`). Do **after 14r** (correct AME + tooltip infra).
 - **Statistical framework — what is the "empirical" analogue per family?** The rule (maintainer): the
   empirical value is the crude quantity that *is* the modelised quantity when there is a single predictor.
   Web-research + settle, per family/effect (write the result into `dev/tabxplor_2.0.0_decisions.md` §37):
-  - binomial coefficient → crude OR + crude % per level, diff from ref (today's `empirical_OR`).
-  - binomial AME → observed % per level (predicted-prob analogue) + empirical diff from ref.
-  - gaussian → mean per level of the predictor + diff of means from ref.
-  - poisson/IRR → crude rate + rate-ratio from ref.
-  - multinomial → observed category % + empirical diff (per category).
+  + binomial coefficient → crude OR + crude % per level, diff from ref (today's `empirical_OR`).
+  + binomial AME → observed % per level (predicted-prob analogue) + empirical diff from ref.
+  + gaussian → mean per level of the predictor + diff of means from ref.
+  + poisson/IRR → crude rate + rate-ratio from ref.
+  + multinomial → observed category % + empirical diff (per category).
   Confirm this is the standard "unadjusted vs adjusted" comparison (good practice), not a bespoke thing.
 - **Placement (settled: auto columns-when-few / tooltip-when-many).** Binomial-coefficient, gaussian,
   poisson → explicit `"Emp. …"` columns (reuse `reg_empirical_columns`, `R/tab_reg.R:883-904`). AME and
@@ -3009,10 +3009,10 @@ list, each a model comparison, on a shared complete-case population).
    maintainer expects). If no complete model exists, keep first-appearance order. Everything downstream
    keys by `(var,level)`/`term` and follows the skeleton's `fct_inorder`, so reordering the union suffices.
 3. **Bidirectional nesting + `na="drop_all"`** (L2). Two fixes for the "not nested or N differs" warning:
-   - `reg_compare_guard()` (`R/tab_reg.R:1247-1253`) tests `all(t_ref %in% t_full)` only — also accept the
+   + `reg_compare_guard()` (`R/tab_reg.R:1247-1253`) tests `all(t_ref %in% t_full)` only — also accept the
      reverse (`all(t_full %in% t_ref)`), so `baseline="complet"` (the baseline is the *superset*) is
      recognised as nested. Pick the LR direction from whichever is the sub-model.
-   - Add opt-in **`na = "drop_all"`** (mirroring `tab()`): pre-compute a shared complete-case mask over the
+   + Add opt-in **`na = "drop_all"`** (mirroring `tab()`): pre-compute a shared complete-case mask over the
      union of all specs' predictors + dependent + design vars, and fit every model on that population
      (`reg_fit` currently drops NA per-model at `:631-632`). Equal N then holds for genuinely-nested specs,
      enabling the LR test. Document that it changes ALL estimates (shared population), hence opt-in.
@@ -3372,7 +3372,7 @@ footer materialisation that drops `test`). Full record + the flagged bare-header
   spec per coloured column + a `role` in `sig` (model + empirical get separate lines under a shared span).
 - **Headers (3)**: single-outcome model + empirical share one outcome col_var ("`<dep>`: `<level>`" /
   numeric = the dep name), model column named "Model `<eff>`"; multinomial keeps "`<dep>`: `<eff>`" span
-  - strips ": OR"/": AME" from category names; comparison keeps per-model col_vars. GOF/`empirical_tips`
+  + strips ": OR"/": AME" from category names; comparison keeps per-model col_vars. GOF/`empirical_tips`
   keys follow the renames. Crosstab goldens/snapshots byte-identical.
 
 Tests: new `test-tab_reg-14w.R`; existing reg tests updated to the "Model `<eff>`" / stripped names.
@@ -3512,11 +3512,11 @@ Export :
 - Put export format bellow the export button. For the second column, keep "save to" above "replace"
 - Ensure the "Save to" text box takes all the normal horizontal space left at it’s right.
 - I currently have an "Export failed: In index: 1." error on jmvtab with the default "~/Documents/Table".
-  - "D:/Documents/", "D:/Documents/Table" and "D:/Documents/Table.xlsx" also fails, the same between "" too.
-  - I would prefer path and filename to be two different text boxes.
-  - Add a button, below, to reset the default path and filename to user `Documents` folder, and "Table" for filename. Useful if the user is lost.
-  - It should handle edges cases : extension set or not set, wrong extensions (better if the user doesn’t choose extension but only type of export), path between brackets or not, filename cleaning with special characters not permitted by OS filesystem, etc. If jamovi Electron session cannot create new directory, a directory not existing should trigger a message, a path not found too. Most common errors should trigger a user-friendly message, concice, clear, understandable by people not expert in computers, with what to do to solve. If some R packages exists that handles this very robustly, we can add the best one in Suggests.
-  - It should be robust on all platforms : Windows 11, Linux, Mac OS. The default user profile `Documents` folder particularly, should be robust enough to be found on all platforms.
+  + "D:/Documents/", "D:/Documents/Table" and "D:/Documents/Table.xlsx" also fails, the same between "" too.
+  + I would prefer path and filename to be two different text boxes.
+  + Add a button, below, to reset the default path and filename to user `Documents` folder, and "Table" for filename. Useful if the user is lost.
+  + It should handle edges cases : extension set or not set, wrong extensions (better if the user doesn’t choose extension but only type of export), path between brackets or not, filename cleaning with special characters not permitted by OS filesystem, etc. If jamovi Electron session cannot create new directory, a directory not existing should trigger a message, a path not found too. Most common errors should trigger a user-friendly message, concice, clear, understandable by people not expert in computers, with what to do to solve. If some R packages exists that handles this very robustly, we can add the best one in Suggests.
+  + It should be robust on all platforms : Windows 11, Linux, Mac OS. The default user profile `Documents` folder particularly, should be robust enough to be found on all platforms.
 
 jmvtab :
 - `na="drop_all"` button not working  : "Error in ctx$na_num[[i]]: subscript out of bounds"
@@ -3595,19 +3595,19 @@ variable selector:
 
 New main collapsable boxes / main outline of the `jmvtabreg` UI :
 - `Model`:
-  - Start with a table-like user-friendly menu using aligned drop lists like in current "References and predictor scaling" ; dependent variable label in the first column ; to match the chosen family in drop list in the second column ; for a numeric variable, if binomial is chosen, then  a third column depending on the R class of the variable : reference level selection for factors, default the first level (remove "model the first level of a 2-level factor", it’s only R/internals, not jamovi UI), make a "trials" text box appear in this third column for numeric variables (default value the max observed value for this outcome, modifiable by user). In the second column, only the families that are possible for the R type of each variable that is selected must appear. Treat integer() and double() alike, since to avoid the bad jamovi behaviour to coerce all integers to ordinal factors by default, I turn all integers to doubles. Keep ordinal logreg a possibility for all 3+ levels factors, even not "ordered", since users often do not use ordered R class. Remember that several dependent variable is a real-world use case that is useful, so it must fully work with several dependant variable to get several models size by size (only predictors subset give the current message that it’s not possible with several row vars, otherwise it’s too much and will be laggy and long in jamovi live UI, user can do it one variable at a time an export).
-  - `effect` and `at` on the same UI row (two columns).
-  - Put `empirical` into the `Model` box too : "empirical = <i>(compare model estimates with observed values)</i>"
-  - `exponentiate` : would it be possible to transform this into a TRUE / FALSE variable, in `jmvtabreg` but also in `tab_reg()`, TRUE being "auto-exporentiate when it makes sense" (not for gaussian), FALSE being keep base model coefficient ?
-  - Put estimate_display in `Missing values and display`
+  + Start with a table-like user-friendly menu using aligned drop lists like in current "References and predictor scaling" ; dependent variable label in the first column ; to match the chosen family in drop list in the second column ; for a numeric variable, if binomial is chosen, then  a third column depending on the R class of the variable : reference level selection for factors, default the first level (remove "model the first level of a 2-level factor", it’s only R/internals, not jamovi UI), make a "trials" text box appear in this third column for numeric variables (default value the max observed value for this outcome, modifiable by user). In the second column, only the families that are possible for the R type of each variable that is selected must appear. Treat integer() and double() alike, since to avoid the bad jamovi behaviour to coerce all integers to ordinal factors by default, I turn all integers to doubles. Keep ordinal logreg a possibility for all 3+ levels factors, even not "ordered", since users often do not use ordered R class. Remember that several dependent variable is a real-world use case that is useful, so it must fully work with several dependant variable to get several models size by size (only predictors subset give the current message that it’s not possible with several row vars, otherwise it’s too much and will be laggy and long in jamovi live UI, user can do it one variable at a time an export).
+  + `effect` and `at` on the same UI row (two columns).
+  + Put `empirical` into the `Model` box too : "empirical = <i>(compare model estimates with observed values)</i>"
+  + `exponentiate` : would it be possible to transform this into a TRUE / FALSE variable, in `jmvtabreg` but also in `tab_reg()`, TRUE being "auto-exporentiate when it makes sense" (not for gaussian), FALSE being keep base model coefficient ?
+  + Put estimate_display in `Missing values and display`
 - `Model comparison (+predictor subsets)`: put the models selections and "+" menu first ; `compare =` below (not repeating the same legend in label and argument title both, useless, waste space ; making it clear to the user that it’s likelihood-ratio tests and the like) ; no `trials` here.
 - `References and predictor scaling`: good. Numeric predictors multiplier : just add a little more horizontal space so that "per unit (numeric)" appear in one line instead of being wrapped over too.
 - `Significance` : new box to merge confidence intervals (conf level, method and stars on the same line, concise, not ) + colors current boxes (use the same kind of radio button than jmvtab, and the same color_signif display and text than jmvtab ; `color` argument seems meaningless here, since colors are by family, and changing the color doesn’t compute the related quantity because most of the time it have to meaning for the current models ; unless you can see cases where it’s actually useful to the user to change color, and doable with the data in the vctrs field, maybe we just remove the complexity, only keeping TRUE (default, auto depending onfamily/effect/exp) and FALSE (no colors at all) ? Just in jmvtabreg ? Also in tabxplor `tab_reg()` ? )
 - `Missing values and display` :
-  - `na = "keep"` is a very misleading arguments here, because it’s actually equivalent to `tab()`’s `na = "keep"` (!) and models never keep na values. Change it in jmvtabreg and tab_reg both. Here we shall use : "drop_by_model", "drop_all_models". Use radio buttons instead of drop box for the user to always know what are the possibilities.
-  - remove "model-summary footer" button : always model-summary footer
-  - subtext : keep the `subtext =` form, and use the same kind of autogrowth text box than jmvtab exactly.
-  - put estimate_display here
+  + `na = "keep"` is a very misleading arguments here, because it’s actually equivalent to `tab()`’s `na = "keep"` (!) and models never keep na values. Change it in jmvtabreg and tab_reg both. Here we shall use : "drop_by_model", "drop_all_models". Use radio buttons instead of drop box for the user to always know what are the possibilities.
+  + remove "model-summary footer" button : always model-summary footer
+  + subtext : keep the `subtext =` form, and use the same kind of autogrowth text box than jmvtab exactly.
+  + put estimate_display here
 
 Model comparison and predictors subsets:
 - If I create 3 models and select out predictors, and I can change subsets live with no problem. This time compare with baseline or sequential works, but there’s something I don’t understand : I use `gss_simple`, dependent is `"married"`, predictors are `c(rincome, race, age)`, baseline is just `c(rincome)`, but when I add age inside a subset, LR test versus baseline pvalue disappear and is replaced with Delta-AIC, do you understand what happens ?
@@ -4915,21 +4915,21 @@ Read first: analysis §1 (hot/cold surface), §6 closing note; the three vignett
 Feature-by-vignette map (a paragraph or short subsection each — an example the reader can run, one sentence on when to reach for it, no internals):
 
 1. **Intro vignette (`tabxplor.Rmd`)**:
-   - `n_min=` — hiding cells with too-small bases (the small-sample companion to `guaranteed_effect`).
-   - `subtext=` and the new `set_caption()` (17b) — titling and annotating a table that survives the pipeline into every export.
-   - `transpose=` at export — the sanctioned answer to "col% with several row_vars" (settled §7), shown on `tab_kable`/`tab_xl`.
-   - `tab_css()` — one stylesheet for a whole document, dark-mode `theme = "auto"`, the fixed-width escape hatches (`?tab_css`).
-   - `output_list=` — when you want separate tables instead of one merged table.
-   - One honest sentence on `tab()`'s weighting rule (weighted estimate + unweighted n; Kish `n_eff` opt-in; `tab_reg()` is fully design-based) — the vignette layer currently doesn't state it (analysis, Tensions).
+   + `n_min=` — hiding cells with too-small bases (the small-sample companion to `guaranteed_effect`).
+   + `subtext=` and the new `set_caption()` (17b) — titling and annotating a table that survives the pipeline into every export.
+   + `transpose=` at export — the sanctioned answer to "col% with several row_vars" (settled §7), shown on `tab_kable`/`tab_xl`.
+   + `tab_css()` — one stylesheet for a whole document, dark-mode `theme = "auto"`, the fixed-width escape hatches (`?tab_css`).
+   + `output_list=` — when you want separate tables instead of one merged table.
+   + One honest sentence on `tab()`'s weighting rule (weighted estimate + unweighted n; Kish `n_eff` opt-in; `tab_reg()` is fully design-based) — the vignette layer currently doesn't state it (analysis, Tensions).
 2. **Programming vignette (`tabxplor-programming.Rmd`)**:
-   - `tab_counts()` — a real section: building tabxplor tables from pre-aggregated counts (long/wide/freq+N), what CI/chi2 can and cannot do on frequency-only input. A whole Phase-4 feature with zero doc presence today.
-   - `tab_spread()` / `spread_vars=` — pivoting tab_vars into columns, with the reg `split_var` cross-reference.
-   - `score_from_lv1()` — per the ruling: test + roxygen refresh land here too, with a worked example.
-   - A pointer paragraph: `tab_many()`'s list mode + `purrr::pmap` batch workflow (already in README) linked from here.
+   + `tab_counts()` — a real section: building tabxplor tables from pre-aggregated counts (long/wide/freq+N), what CI/chi2 can and cannot do on frequency-only input. A whole Phase-4 feature with zero doc presence today.
+   + `tab_spread()` / `spread_vars=` — pivoting tab_vars into columns, with the reg `split_var` cross-reference.
+   + `score_from_lv1()` — per the ruling: test + roxygen refresh land here too, with a worked example.
+   + A pointer paragraph: `tab_many()`'s list mode + `purrr::pmap` batch workflow (already in README) linked from here.
 3. **Regression vignette (`tabxplor-reg.Rmd`)**:
-   - `split_var=` — a real section: one model per subpopulation, side by side, `tab_spread`-able; how it appears in exports (the merged vertical first column).
-   - `trials=` — grouped-binomial outcomes (the jamovi Model table exposes it; R users currently have no example).
-   - `tab_logit()` / `multi_logit()` — one paragraph naming the curated wrappers and when they suffice.
+   + `split_var=` — a real section: one model per subpopulation, side by side, `tab_spread`-able; how it appears in exports (the merged vertical first column).
+   + `trials=` — grouped-binomial outcomes (the jamovi Model table exposes it; R users currently have no example).
+   + `tab_logit()` / `multi_logit()` — one paragraph naming the curated wrappers and when they suffice.
 4. **Placement sanity**: every example must use only exported functions (the Phase 18e-iiii lesson — vignettes build against the installed namespace); keep each addition short — these are discovery paragraphs, not reference docs (the reference lives in `?help`).
 
 Verification: all three vignettes render with colours (the fansi hook); `devtools::build_vignettes()` clean; no new unexported-function calls (grep the chunks); full suite untouched.
@@ -5394,7 +5394,7 @@ and left **uncommitted** (untracked, not `.gitignore`'d → Phase z publishes it
   every article into BOTH trees, so each config must index all six); and `set_caption` (exported in
   Phase 17b) missing from the reference index.
 - **Flag for maintainer**: a pre-existing `\Documents` unknown-Rd-macro warning in `man/jmvtab.Rd:258`
-  - `man/jmvtabreg.Rd:159` (should be `\\Documents` or escaped in the roxygen source — harmless, not
+  + `man/jmvtabreg.Rd:159` (should be `\\Documents` or escaped in the roxygen source — harmless, not
   fixed here). The three `dev/french_glossary.md` runtime-string rough-spots (reg-caption colon,
   comparison-title plural, ambient-locale tooltips) still await review — they are NOT vignette prose.
   Translations are **first drafts** for the maintainer's hand review.
@@ -6328,7 +6328,7 @@ delta, not only an fmt field/attr one) proving over 1787 cells that the only del
 - **Five checks, one fact table** (`R/reg-assumptions.R`, see the repo map). They ride the EXISTING
   `stats =` vocabulary in the default set, so ruling R7 ("always") needs no new argument and each is
   individually removable. Cost measured **+88 ms on a 157 ms build**: ~72 ms is the one Linearity refit
-  - its test, ~16 ms all four other checks (a multinomial pays ~780 ms for one numeric predictor --
+  + its test, ~16 ms all four other checks (a multinomial pays ~780 ms for one numeric predictor --
   ruling 4 accepted that).
 - **§16's "one-line" footer extension was not available** and the design doc is wrong there: `row_var`
   on a reg footer row already means the SPLIT-GROUP LEVEL, in `reg_footer_lines()`, in
@@ -7342,7 +7342,7 @@ and is keyed on the **resolved** `OR` route (display/ref/ref2), not the retired 
   carrying the new `color` / `ci` vocabulary into the UI.
 
 **FOLLOW-UPS.** 19e, in full, on this commit (nothing of it exists). Then: the tier-3 `or` recompute
-+ the two re-ref hit expectations (19k, at the latest); `?tab` + `NEWS.md` + the architecture guide
+- the two re-ref hit expectations (19k, at the latest); `?tab` + `NEWS.md` + the architecture guide
 (19d's debt); `dev/verify_color_attrs.R` and the golden cell review (19l); the deprecation-warning
 corpus migration (19l).
 
@@ -8106,7 +8106,7 @@ from markers on a table it did not build (`test-steps-legacy.R` calls `tab_ci()`
 saw a settings spine), so:
 
 | item | roadmap | reality |
-|---|---|---|
+| --- | --- | --- |
 | `detect_totcols` / `detect_refcol` / `detect_firstcol` | dies | **survives** in the wrapper + the exporters; stops running on the `tab()` path — that is the honest win |
 | the 8-branch `case_when` | dies | **survives** in the wrapper; **collapses to 5 scalar lines** in the leaf. Two encodings of *different questions* ("reconstruct" vs "state") |
 | the 2nd `ci = "ratio"` fold, the 3rd `stars`, the `degf` re-derivation | die | **survive** in the wrapper (that is what makes it self-contained); stop running on the pipeline |
@@ -8286,7 +8286,7 @@ prints **IDENTICAL** over its 293 cases against a baseline saved from the pre-ph
 (pre-19a), the package **grew**:
 
 | | before | after 19a–19k | after 19l |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | R/ total lines | 38 784 | 43 667 | **43 488** |
 | code | 19 853 | 21 691 | **21 650** |
 | comment (share) | 15 909 (41 %) | 18 700 (42.8 %) | **18 567 (42.7 %)** |
@@ -9055,7 +9055,7 @@ normaliser) and a fourth un-escaped it after `htmlEscape()` -- while `tab_wrap_t
 emits the same tag for an unrelated reason, which none of them could tell apart. It is the 16th
 column attribute **`col_group`** now (`get_col_group()` exported, the setter internal: writing is the
 pipeline's job), composed only where two lines are actually wanted -- html a `<br>`, Excel a newline
-+ wrap, markdown the one-line form it can draw. `<br>` in a header means exactly one thing.
+- wrap, markdown the one-line form it can draw. `<br>` in a header means exactly one thing.
 
 ⚠ **The roadmap's brief ("2 lines + move the span composition") understated it: the weld had THREE
 carriers, and the third is the one that bites.** The `test` tibble keys its rows on `col`, and
@@ -9344,5 +9344,1875 @@ in 22a–22g nor in the release phase**, although every Phase 20 rename adds msg
 ---
 
 
+### Phase 20 — the surface: how the package is asked, and what it exposes
+
+**The plan of plans is `dev/tabxplor_phase20_surface_integration.md`** — goals, design and
+architecture decisions, then the seven phases in full. **Read it at the start of every Phase 20
+session**, together with the two assessments it is built on (`dev/tabxplor_phase19_assessment.md`
+= 19o, `dev/tabxplor_phase19p_api_review.md` = 19p). The section below is the big picture only, so
+it can never be lost.
+
+---
+
+#### The mission — read this first, it governs every phase
+
+Phase 19 gave the package a complete, explicit data model and ~15 declared fact tables. It also
+grew `R/` by 11.9 % and never touched what makes the package feel large to a user:
+
+> **Phase 19 unified how facts are STORED and how rules are DECLARED. It did not unify how the
+> package is ASKED** — and every remaining duplication in the public surface is one shape:
+> **a fact is declared once in an R table, and re-typed by hand in the place a user meets it**
+> (a formal, a `@param` block, an option name, an accessor).
+
+The package has already solved that four times (`fmt_fields_rd`, `display_tokens_rd` ×2,
+`reg_measures_rd`), each because the hand-written copy had drifted. **Phase 20 applies the solution
+to the surface.** After it:
+
+- an **argument** is declared once — producers, legal values, option twin, one-line gloss — and the
+  signature, the reference page and the jamovi vocabulary all read that declaration;
+- a **producer variant** stops re-declaring the entry point's arguments (**83 of the 149 crosstab
+  formals are the same argument written a 2nd–4th time**);
+- the **two producers ask the same question with the same word**, everywhere they ask the same one;
+- an **exported name** exists because a user story reads it, not because a fact became stored;
+- a **fact table's cross-references are checked at load**, not remembered in a comment;
+- `tab_reg()` gains a staged build and stops paying for a variance it already computes
+  (**15.3 s → ~2 s**, measured).
+
+**Not a feature phase either**, with two deliberate exceptions: the jamovi level-collapse UI (20g)
+and — only if the measurement justifies it — `tab_reg()` parallelisation (20f).
+
+**The hard rules are Phase 19's nine, unchanged**: simplify and integrate, never add another ad hoc
+layer · never guess what something is · one resolver, taken to completion · **facts live in ONE
+table — and Phase 20 extends that to documentation: a value list written in roxygen beside the
+table that declares it is the same offence one level up** · never leave a representation
+half-migrated · internals redesigned as radically as needed (`tab_reg()`'s back-compat waived,
+`tab()`'s CRAN-released surface shimmed) · a claimed fix ships with the fixture that fails without
+it · golden discipline · the phase **"DONE" summary goes in CLAUDE.md and ONLY there**.
+
+⚠ **"Released" means CRAN 1.3.1** (commit `86320287`, **63 exports**) — not the only git tag
+`v1.2.0` (59), not the dev head. Check every removal against it.
+
+⚠ **Do not count lines as the simplification metric.** Phase 19 grew 11.9 % and got substantially
+better; Phase 20 will grow `R/` too (`TAB_ARGS`, `TEST_ROWS`, `outcome_level`, three generators, two
+harnesses). The metrics that track reality: *formals per producer · duplicated `@param` blocks ·
+`man/` lines · exports with zero external callers · cross-table keys unchecked · aborts vs informs*.
+`man/` is the one surface that shrinks unambiguously: **8 930 → ~7 300**.
+
+⚠ **Differentiator 4 is the one at risk**: the jamovi UI shows R argument names *on purpose*, so
+every rename must reach `jamovi/*.a.yaml` in 20g or the teaching path starts lying.
+`test-jamovi-vocabulary.R` goes red on any renamed value and stays red until then — that is the
+gate working, and it is why 20f cannot be skipped.
+
+---
+
+#### The nine keys
+
+19o and 19p each lettered their own (α–η and A–D); two schemes for one body of work is the disease
+this phase cures, so they are stated as one set.
+
+| key       | the missing fact / unstated rule                                                                                                                                           | lands in  |
+|-----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
+| **KEY 1** | *which producer takes which argument, what it means, what it may be, which option is its default* → `TAB_ARGS`, generated `@param`s and value lists, `...` on the variants | **20b**   |
+| **KEY 2** | *a key written in one declared table and read in another is a foreign key* → ~14 checks, at load time                                                                      | **20a**   |
+| **KEY 3** | *which accessors exist* → one generic `fmt_attr()` pair + a measured keep-list + `tab_columns()`                                                                           | **20a**   |
+| **KEY 4** | *if two producers ask the same question, they ask it with the same word* → `tab_vars`, `ref`, `ci_method`, `footer`                                                        | **20c**   |
+| **KEY 5** | *what kind of statistical row this is* → `TEST_ROWS`; the crosstab half of the footer finally declared                                                                     | **20c**   |
+| **KEY 6** | *which stage of a regression build produced which part of the table* → `new_reg_ctx()` + five named stages                                                                 | **20e**   |
+| **KEY 7** | *which estimands tabxplor can differentiate analytically* → a declared `se` column; the AME stops being computed twice                                                     | **20d**   |
+| **KEY 8** | *the export surface re-declares seven arguments five times* → `TAB_ARGS` covers the exporters too — **not** a `tab_style()` bundle                                         | **20b**   |
+| **KEY 9** | *a package whose whole value is a data model states it in one place* → `?tabxplor-model`                                                                                   | Phase 22b |
+
+**KEY 1 is this phase's keystone**, as KEY 5 was of Phase 19. Everything else is a prerequisite for
+it (2, 3), a second instance of it in another subsystem (4, 5) — or, in KEY 8's case, **the same
+instance**: the export surface's duplication turned out to be KEY 1's, one subsystem further out.
+Only 6 and 7 are independent of it.
+
+---
+
+#### Settled decisions — do not re-open
+
+Thirty rulings; full table + rationale in the plan of plans §4. The ones that change what
+gets built:
+
+| decision                                                                                                                                                                                                                                     | ruling                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **both proposed bundles**                                                                                                                                                                                                                    | **REJECTED.** No `tab_inference()`, no `tab_style()`. `ci_method` / `design_effect` / `anova` stay flat with their option twins (the only change is `tab_reg(method =)` → **`ci_method`** with a declared `model` slot); the exporters keep every formal. *A bundle must make the common call shorter, not only the signature* — the general test for every future one. And the lesson generalises: **a mirrored formal is not automatically a problem** — 7 defaulted arguments × 5 exporters cost a user nothing, the duplication was 35 hand-written `@param` blocks, which is KEY 1 |
+| `tab()`'s 9 deprecated formals                                                                                                                                                                                                               | **into `...`**, caught by name, with an **abort on an unnamed 6th argument**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| the legacy step API                                                                                                                                                                                                                          | **hard-deprecate now**, defunct in 2.1.0 — the exported *chaining API*, never the computations (those moved into the leaf in 19j). ⚠ removes nothing this cycle: `tab-steps-legacy.R`'s 1 433 lines stay                                                                                                                                                                                                                                                                                                                                                                                |
+| `tab_many()`                                                                                                                                                                                                                                 | **stays soft-deprecated**; only its 448-line `.Rd` is fixed (`@inheritDotParams` → plain `@param`, −390)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `tab_logit()` / `multi_logit()`                                                                                                                                                                                                              | **deleted** (genuinely unreleased) — ⚠ **59 test call sites** to migrate, not "nothing references them"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `tab_reg()` renames                                                                                                                                                                                                                          | `split_var` → **`tab_vars`** · `dependent` → **`outcome`** (package-wide) · `reference` → **`ref`** (`c(var = "level")`, **predictors only**) · `method` → **`ci_method`** · `stats`+`compare`+`baseline` → **`footer`** · `.fit_cache` → `...`                                                                                                                                                                                                                                                                                                                                         |
+| **`outcome_level`** (new)                                                                                                                                                                                                                    | `inverse_two_level_factors` is **deleted** for `outcome_level = c(outcome = "level")`. ⚠ NOT absorbed into `ref`: **`ref` names the level you compare AGAINST, `outcome_level` the level you MODEL** — opposite roles, so one argument would carry two meanings. binomial → the modelled level (the column header); multinomial → the baseline (taking over what `reference` does today); ordinal → **refused**. Precedent: SAS `PROC LOGISTIC` has exactly this pair, `EVENT=` beside `REF=`                                                                                           |
+| `tab(ref / ref2)` · `na`'s two vocabularies · the `color` default asymmetry · `pct = "no"`                                                                                                                                                   | **unchanged** — the last two deliberate; *state* `pct`'s default in `?tab` rather than change it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `TEST_ROWS` · reg parallelisation · the jamovi level-collapse UI                                                                                                                                                                             | **all inside Phase 20**, pre-release — parallelisation as its own phase (20f), gated on 20d and 20e and free to conclude "no"                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| accessors                                                                                                                                                                                                                                    | **generic mostly, a few named ones kept — the most used.** The keep-list is measured at plan time and must include `get_col_var()` and `set_row_kind()`                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `new_lvl()`/`is_lvl()` **stay exported** (a user meets the class) · `tab_prepare()` + `complete_partial_totals()` **off the public surface** · `tab_get_wrapped_dimensions()` → `@keywords internal` · `tabxplor.color_style_type` deleted   | ⚠ `tab_prepare` and `complete_partial_totals` **are CRAN 1.3.1**, so both take the deprecate-now / un-export-in-2.1.0 route — never a silent drop                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `tabxplor.stars` absorbs `signif_levels`+`signif_labels` **and becomes a per-call ladder** · new `options(tabxplor.total_names = c(row=, col=, tab=, other=))`, **and `total_names` / `totaltab_name` / `other_level` leave the signatures** | ⚠ all three are **CRAN 1.3.1 formals** of `tab()` (and of `tab_many()`), so they go through `...` with a deprecation, not out                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `@inheritDotParams`                                                                                                                                                                                                                          | **never** — it *inlines*; `tab_many.Rd` is the 448-line proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `...`                                                                                                                                                                                                                                        | on **wrappers and superseded producers only**; `tab()` and `tab_reg()` keep every live formal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| the `tab_kable_*` / `xl_font_*` option renames · a JS syntax gate · column-axis `ordered`                                                                                                                                                    | **stay dropped** — do not re-propose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+---
+
+#### Verification discipline
+
+- **Per phase, targeted** (`filter =`) plus the sentinels the phase entry names. **Not the full
+  suite after every edit.**
+- **Full suite** at three checkpoints: end of **20b**, end of **20e**, end of **20i** — plus one
+  **`devtools::check()` at the end of 20i**, so Phase 22 does not inherit a broken tree (19n found
+  three `check()`-only failures invisible to the suite). The CI-locale run is the release phase's.
+- **Six harnesses.** Four exist (`verify_golden_field_delta.R` · `verify_color_attrs.R` ·
+  `verify_reg_specs.R` · `verify_no_ghost_functions.R`); **two are new in 20a and gate 20b/20c**:
+  `dev/verify_tab_args.R` (every crosstab producer's *resolved* settings over a call grid) and the
+  export-usage census.
+- ⚠ Run every census under **`LC_ALL=C`** (fr collation does not group identifiers containing
+  `_`/`.`) and **never `grep -w` on a pattern ending in `(`** — both produced a wrong census while
+  19p was written.
+
+---
+
+#### The phases
+
+Nine. Each is *plan-then-implement*, starting in plan mode, in its own fresh session. The
+maintainer commits between phases and pushes at the end of Phase 20.
+
+**There is deliberately no documentation phase** — Phase 22 below already owns the architecture
+document, the vignettes, the roxygen sweep, the comment rewrite, `NEWS.md`, the tests and `dev/`.
+§10 of the plan of plans maps every documentation item to its 22a–22g home and the gate set to the
+release phase (⚠ flagging one gap: **i18n has no home in 22a–22g** — recommended as 22h). What each
+Phase 20 phase still owes is the standing rule 9: update the docstrings you changed, in the phase
+that changed them — and after KEY 1 most `@param` blocks are *generated*, so a rename documents
+itself.
+
+| phase        | title                                                                       | one line                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+|--------------|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **20a**      | The floor: referential integrity, the exposed surface, dead weight          | KEY 2's foreign keys · KEY 3's `fmt_attr()`/`tab_columns()` · the deletions and demotions · `tab_many.Rd` −390 · the two harnesses · the 2 live colour-engine `FIXME`s                                                                                                                                                                                                                                                                                          |
+| **20b**      | KEY 1 + KEY 8 — the argument surface as data, producers and exporters alike | `TAB_ARGS` + generated `@param`s and ~15 value lists, **the five exporters included** (part 1, byte-identical) → `...` + `tab_check_dots()`, `tab()` 52 → ~37, the `stars` ladder, `total_names` (part 2)                                                                                                                                                                                                                                                       |
+| **20c**      | KEY 4 + KEY 5 — one word per question, and the footer's model               | the `tab_reg()` renames incl. `dependent` → `outcome` and the new `outcome_level` · `footer =` with `TEST_ROWS` as its vocabulary                                                                                                                                                                                                                                                                                                                               |
+| **20d**      | KEY 7 — marginal effects, computed once and computed fast                   | 85 % of a 15.3 s call is an avoidable *numerical* jacobian, and tabxplor already owns the analytic SE. Then the research half: can `marginaleffects` leave the hot path entirely? ⚠ **web searches expected**                                                                                                                                                                                                                                                   |
+| **20e**      | KEY 6 — `reg_build()` becomes a staged build                                | the package's largest function (534 lines, 7 local closures, 11 unnamed phases) gets `new_reg_ctx()` + five named stages. **Pure refactor**: `verify_reg_specs.R` must print IDENTICAL                                                                                                                                                                                                                                                                          |
+| **20f**      | `tab_reg()` parallelisation: measure, then decide                           | ✅ **measured "no"** — the remaining cost was the model-check footer (81–94 % of a call), most of it computed several times and read once. No pool; three de-duplications + a declared `REG_CHECKS$cost` instead (2.6–6.0× on a default call). Study: `dev/tabxplor_reg_performance.md`                                                                                                                                                                          |
+| **20f-ii**   | the same question at the MODEL level: measure the three axes                | ✅ **measured** — the three axes are not the same shape. `tab_vars` (G) and outcomes × a models list (R) already return finished tables and are dispatchable today, but clear ≥2× only on an *even* axis at survey scale; the **S** axis (several outcomes in one table · a models list) holds the 2×+ shapes (2.86× at four outcomes) and cannot be dispatched as written. Shipped the crude-block de-duplication + the cross-outcome `compare` guard. Study §6 |
+| **20f-iii**  | the S axis: `reg_spec_build()`, and the parallelism it unlocks              | ✅ **done** — the six per-spec loops are ONE declared product (`R/reg-spec-build.R`), and `parallel` becomes a shared argument over all three model axes. ⚠ the message-order price it budgeted for was measured at **zero** reordered cases; what changed instead is 9 abort messages losing purrr's `In index:` wrapper                                                                                                                                        |
+| **20f-iiii** | the reg framework: finished, and CLEAN under parallelisation                | ✅ **done** — the crude block is the OUTCOME's (`reg_stage_crude()`), so one refusal is GONE; the other two are declared keeps **with their measurement** (a fit is 162 MB; the deferred skeleton is unreachable from `tab_reg()`). + the worker-error relay, the nesting rule enforced once, and three silent defects in the compound-formula path                                                                                                              |
+| **20g-i**    | jamovi: the boundary speaks the 2.0.0 vocabulary                            | ✅ **done** — an option is NAMED after the argument it drives, and the gate checks it (it only checked *values*, so it stayed green through six months of the reg panel showing `dependent` / `split_var` / `method`) · the two owed controls · `prepare()` + `install()` ran HERE, so nothing is left inert                                                                                                                                                     |
+| **20g-ii**   | jamovi: the level-collapse UI (★)                                           | ✅ **done** — the tick-box merge widget, in ONE control with the reorder (a run is consecutive *in the chosen order*), one full-width row per axis, merge-only in `jmvtabreg`. Pre-aggregate behind an internal `.levels_collapse` on BOTH producers, so it is provably `tab()` on a pre-collapsed frame; the tier-1/2 keys name it, which is a declared MISS. + the shared-JS COPY mechanism and two gate gaps                                                  |
+| **20h**      | Harvest 1: the deletion pass                                                | re-run the censuses, delete what the new declarations made unnecessary, and **report what did not shrink** — that report is the product                                                                                                                                                                                                                                                                                                                         |
+| **20i**      | Harvest 2: open integration                                                 | ⚠ creative, own session: what does the finished surface make *possible*? Look and propose first — **ask before building**                                                                                                                                                                                                                                                                                                                                       |
+
+**Dependencies**: 20a first · 20b and 20c need 20a's harnesses · 20d needs 20c · 20e needs 20d ·
+20f needs 20d+20e · 20f-ii needs 20f · 20f-iii needs 20f-ii · 20f-iiii needs 20f-iii ·
+20g-i needs 20b/20c/20d · 20g-ii needs 20g-i · 20h then 20i last.
+
+⚠ **The `tab_reg()` phases are deliberately separate sessions** — one story, several frames of
+mind: 20d is **numerical parity** (research, closed forms, tolerance fixtures), 20e is a **pure
+structural refactor** proved by one harness printing IDENTICAL, 20f and 20f-ii are **measurements**
+that may conclude "no" (and both did, in part), 20f-iii is a refactor that budgeted for trading
+the message-order half of that proof for a declared per-spec product -- and, measured, did not have
+to spend it -- and 20f-iiii is three different questions again (a numerical-parity one, a plumbing
+fix in a shared file, a census), which is why it too gets its own.
+Interleaving them is how a refactor and a numeric change land in one diff and
+neither can be verified.
+
+**Mapping from the old draft** (nothing lost): old 20d (jamovi UI) → **20g** · old 20e (the
+marginal-effects freeze) → **20d**, root-caused as KEY 7 · old 20f (parallelisation) → **20f**,
+unchanged in content but now gated on 20d and 20e.
+
+**At the end of each Phase,** add a `#### Phase 20{x} — <title>` header **here, in CLAUDE.md**, and
+write the **"DONE" summary** under it. Write it in **this file and nowhere else**. Update the
+Repository Map above in the same pass, yourself.
+
+
+#### Phase 20a — The floor: referential integrity, the exposed surface, the dead weight
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6626** — and every
+one of the 57 deprecation warnings is this phase's own, named below. Exports **93 → 94** (−`tab_logit`, −`multi_logit`, −`tab_md_css`;
++`fmt_attr`, +`fmt_attr<-`, +`tab_columns`, +`set_ref_type`) and **`man/` 8 930 → 7 318 (−18 %)** —
+the plan's estimate to within 20 lines. The three harnesses print the declared result:
+`dev/verify_color_attrs.R` **IDENTICAL** (293 cases), `dev/verify_tab_args.R` **IDENTICAL** on its
+own re-saved baseline, `dev/verify_golden_field_delta.R` **empty declaration set** over 1 788 cells ×
+36 goldens. `dev/census_exports.R` reports exactly the −3/+4.
+
+**The two harnesses, built and baselined FIRST — and they earned their keep before the phase's own
+work started.**
+
+- **`dev/verify_tab_args.R`** — three captures: `tab_resolve_common_args()` over a 167-case grid ·
+  52 built tables' per-column attributes + `meta`/`test` schema · and **the messages, in order**, of
+  30 deliberately invalid or legacy calls. That third capture is what 20b needs: moving nine formals
+  into `...` changes *what the package says* while every cell stays put.
+- **`dev/census_exports.R`** — per export: `released_in` (v1.2.0 / **CRAN 1.3.1** / dev) · callers in
+  `R/`, `tests/`, `vignettes/`, `README`, `dev/` · Rd lines · pkgdown section. Both traps are encoded
+  in the script rather than remembered: it does every set operation in R (so `LC_ALL` cannot reach
+  it) and matches `(^|[^a-zA-Z0-9._])name\(`, never `grep -w`.
+
+**Four defects, all found by the harnesses, all fixed with the fixture that fails without them.**
+
+1. ⚠ **Three deprecations had never fired.** `tab(OR = )`, `tab(ci = "diff"/"ratio")` and
+   `method_cell`/`method_diff` warn through `deprecate_soft(user_env = )`, and 19i's move of those
+   calls **into the shared boundary added a stack frame**: `caller_env(2)` now lands on `tab()`'s own
+   execution env, so lifecycle read a tabxplor frame as "the user" and stayed silent. `user_env` is
+   threaded explicitly now. ⚠ **`ci` is said at the boundary and rewritten downstream** — the first
+   attempt resolved it there, and `verify_color_attrs.R` caught that `ci = "ratio"` has a *second*
+   effect (it pins the Katz ratio scale) which the per-row_var resolvers read off the RAW word. Five
+   cases moved `mean_ratio → mean_diff`; the harness is the only thing that would have seen it.
+2. **`tab(total_names = )` was broken outright** — *any* non-default value aborted
+   (`forcats::fct_recode()` takes its pairs as NAMED `...` arguments, and the call spliced with `!!`
+   instead of `!!!`). It is a CRAN 1.3.1 formal whose only untested branch that was, and 20b is about
+   to move it onto an option.
+3. **`tab_many()`'s unnamed-argument guard aborted with a cli internal error** — cli takes a `{?s}`
+   quantity from the *last substitution before it*, so a message opening on `"Argument{?s}"` died
+   with *"Cannot pluralize without a quantity"*. The guard refused the call and said nothing
+   actionable. `cli::qty()` fixes it; 19h's safety net for positional calls now works.
+4. **`REG_EMPIRICAL$*$ci_method` carried `"wald_log"`, outside every declared vocabulary** — found by
+   KEY 2 on its first run, together with a wrong edge of mine.
+
+**KEY 2 — the foreign keys (`R/zzz-fact-keys.R`, new).** **`TAB_FOREIGN_KEYS`** declares **34 edges**
+(19o listed 12), read only through `tx_check_foreign_keys()`, which runs at **load**: a dangling key
+breaks the build at the moment it is made. ⚠ The file **must sort last** — `COLOR_SCALES` lives in
+`tab_classes.R` and `REG_EMPIRICAL` in `tab_reg.R`, both *after* `reg-estimand.R`, which is where 19o
+proposed putting it; `zzz-` is the only prefix that is last by construction. Its two readers
+(`tx_fk_scalar`/`tx_fk_all`) use `[[` exclusively — `MEASURES$adjustment` has `scale_from` and no
+`scale`, so `$scale` partial-matches to `"gap"`. Three `allow` entries, each a stated fact
+(`DISPLAY_TOKENS$field`'s `"ci"` is DERIVED, not a 22nd record field; `"katz"` / `"woolf"` /
+`"wald_log"` are the only interval of their geometry, so none is a `ci_method` a user picks). The two
+cross-FILE asserts moved in from `reg-estimand.R`, one of them **strengthened**: "every estimand's
+fit has model checks" is stated on `REG_ESTIMANDS$rows$fit` now, not on the three-entry
+`REG_FIT_FAMILY` subset it was written against. `tab.R` also gained the `SPINE_OWNED_INPUTS` ↔
+`CTX_SETTINGS_LOCALS` assert its own comment had promised since 19i and never had.
+
+**KEY 3 — the accessor surface stops growing with the attribute table.**
+
+- **`fmt_attr(x, name)` / `` `fmt_attr<-` ``** (exported), validated against `fmt_col_attrs`,
+  dispatching on an fmt column or a data.frame. **`fmt_attr_rules` gains a declared `write` column**
+  — the attribute's own setter — so the generic validates exactly as `set_scale()` does and a build-
+  time `stopifnot` refuses an attribute with no writer. **Adding a 17th attribute now needs no
+  accessor at all.** ⚠ The hot path stays hand-written (the `DISPLAY_TOKENS` precedent):
+  `get_col_var()` (33 sites), `is_totrow()` (44), `get_scale()` are untouched. ⚠ `fmt_attr()` is the
+  **raw** read; `get_conf_level()`/`get_degf()`/`get_basis()` are *resolvers* (option fallback, NA →
+  Inf, "" → "n") and stay internal — **the three named getters 19p asked for were NOT added**, per
+  the ruling: `fmt_attr()` + `tab_columns()` answer that user story with two names instead of three.
+- **`tab_columns(x)`** (exported) — one row per fmt column × its 19 stored facts, on `tab_shape()`'s
+  model and `fmt_attrs_of()`'s reader. The only place `conf_level` / `degf` / `basis` / `ci_method`
+  can be read side by side, which is what z13/z16 stored them per column *for*.
+- **`set_diff_type()` → `set_ref_type()`** (old name a soft-deprecated alias; it is in 1.3.1). The
+  pair did not share a stem, and the new name gets the validation the old one had **commented out**.
+- ⚠ **The planned `@keywords internal` sweep had no target, and that is reported rather than
+  faked**: the ~23 accessors are `@describeIn fmt`, i.e. **one** page already, so they occupy no
+  index line to demote. What the measurement *did* find is **53 S3-method Rd stubs** (12 accessor
+  generics × 3 arms), each a page restating its generic. Registered by `S3method()`, so `@noRd` beside
+  `@export` removes the page and keeps the registration: **36 pages, 803 `man/` lines, gone.**
+
+**The last unsurfaced Phase 19 fact.** ⚠ Correction to 19p §2.4: `basis` **is** already said —
+`tab_weight_line()` switches on all four values. Only **`degf`** was invisible, and it is exactly
+what makes a design-based interval differ from a flat one. `legend_method_phrase()` appends *"…, 42
+design df"* **only** when the basis is `design`/`design_partial` and `degf` is finite, so an ordinary
+table is byte-identical and only a real survey design gains the clause.
+
+**The two live `FIXME`s are answered, not restated.** They asked one question twice, and the answer is
+that the two arms of `vec_arith` ask *different* questions: `+`/`-` take two **symmetric** operands,
+so `row_kind` / `in_refrow` / `in_tottab` survive only where they AGREE (a sum of a total-row cell and
+a data cell sits in no row kind); `*`//` are **asymmetric** — "x per y" — so the metadata follows `x`,
+and`mean` is dropped because a ratio of two means is not a mean. No behaviour change; two `# DESIGN:`
+notes. `R/` now has **zero open FIXMEs**.
+
+**The deletions and demotions** (each checked against CRAN 1.3.1, commit `86320287`):
+
+- ⚠ **`tab_md_css()` is UNRELEASED** — absent from v1.2.0 *and* 1.3.1, which 19p §3.4 had wrong — so
+  it is **deleted**, not deprecated. And, per the maintainer's ruling, the argument that made it
+  necessary is fixed: **`tab_css(chrome = TRUE/FALSE)` → `tab_css(format = c("html", "md"))`**,
+  borrowing `tab_export(format =)`'s existing vocabulary, so `tab_css(format = "md")` reads like the
+  function it replaces. ⚠ `chrome` in `...` **aborts with the mapping** instead of being swallowed by
+  `tx_deprecate_inert()` — a silently ignored `chrome = FALSE` emits the wrong stylesheet. The
+  internal `chrome` word stays: it names a real CSS concept, and the translation happens once.
+- **`tab_logit()` / `multi_logit()` deleted** (unreleased): 523 Rd lines, 0 vignette uses, thin
+  forwarders that mirrored ~20 of `tab_reg()`'s formals and therefore **hid** `effect = "marginal"`,
+  `measure`, `compare`, `baseline`, `reference` and `color`. **62 test call sites migrated**;
+  `test-tab_logit.R` → `test-tab_reg-binomial.R`, coverage kept. ⚠ One assertion changed meaning
+  rather than moving: *"a 3+ level dependent errors cleanly"* was asserting the WRAPPER's forced
+  family — `tab_reg()` detects a 6-level nominal outcome and builds a multinomial table, which is the
+  capability the wrapper hid. It now pins both halves.
+- **`auto_or` and the `"or_table"` context deleted together** (rule 1): a `case_when` arm on a
+  constant `FALSE` and the allow-list value it was the only producer of.
+- **Soft-deprecated, released, never silently dropped**: `tab_prepare()` (+ `@keywords internal`, and
+  out of pkgdown's *"Superseded entry points and steps"*, which read as a verdict it had not been
+  given), `complete_partial_totals()`, `fct_recode_helper()`. `tab_get_wrapped_dimensions()` keeps its
+  export and gains `@keywords internal`. ⚠ **`tx_user_call()`** (new, `R/utils.R`) is why the first
+  two are silent from tabxplor's own build: `deprecate_soft()`'s "silent for same-package callers"
+  does **not** hold under testthat, which treats every call as direct — so without it every `tab()`
+  in the suite nudged about a call the user never made.
+- **The five legacy steps are HARD-deprecated** (`deprecate_warn`, defunct 2.1.0). ⚠ The message
+  distinguishes the deprecated **chaining API** from the **computations**, which moved into the leaf
+  in 19j and are shared — "tab_ci() is going away" would otherwise read as "the confidence interval
+  is". `test-steps-legacy.R` becomes the deprecation test. `R/tab-steps-legacy.R`'s 1 433 lines
+  **stay** this cycle.
+- **`tabxplor.color_style_type` deleted** — documented, never seeded, read at one place only to warn
+  about itself; `?tabxplor-options`' own "keep in sync with `.onLoad()`" promise is true now.
+  **`tabxplor.jmv_full_hash` → the internal constant `JMV_FULL_HASH`** (one seed, one read, no test,
+  both sites internal).
+- **`man/tab_many.Rd` 448 → 97**: `@inheritDotParams tab` does not link, it *inlines*.
+
+**Documentation truths**: `FMT_FIELD_DOC$var` states the **rule** ("which one is given by its
+`scale`") instead of the enumeration that drifts; `display_tokens_rd(user_only = FALSE)` stops
+re-glossing the eleven tokens named after a field (`?fmt` glossed them **twice**, 30 lines apart, in
+already-drifted wording); `?tab`'s `color_breaks` is one line; both reg vignettes' claim that
+*"`tab_reg()` has no `display` argument"* — contradicted by each file's own `display = "ci"` section
+430 lines later — is gone.
+
+**HONEST CONCERNS.**
+
+- ⚠ **Do not prefix a test run with `LC_ALL=C`.** Four `_snaps/render-html.md` failures appeared
+  under it and reproduced on a pristine `git worktree` of HEAD, which read as pre-existing drift;
+  the same tree is **FAIL 0** in the normal locale. `C` is a non-UTF-8 native encoding, harsher than
+  any CI runner — CLAUDE.md § Testing already says to use `C.UTF-8` for the CI-locale run, and this
+  is the second session to lose time to it. The `LC_ALL=C` rule belongs to the **censuses**
+  (`sort` / `uniq` / `comm` collation), never to the suite.
+- ⚠ **The planned "one `withr::local_options(lifecycle_verbosity = "quiet")` per test file" does not
+  work**, and the plan's cost estimate for the step hard-deprecation rested on it: testthat 3e runs
+  `local_reproducible_output()` inside **every** `test_that()`, which forces
+  `lifecycle_verbosity = "warning"` again. The file-level line covers **top-level** calls only (which
+  is real — `test-tab.R` builds its fixture with `tab_prepare()` there), and the comment in all 16
+  files says exactly that. So the deprecated calls inside test blocks **do** warn — measured: **57
+  warnings**, `tab_chi2` 14 · `tab_ci` 11 · `tab_tot` 9 · `tab_totaltab` 7 · `tab_pct` 7 ·
+  `tab_prepare` 6 · `fct_recode_helper` 3, and nothing else. Migrating those calls to `tab()` is the
+  corpus sweep, routed to **20h**.
+- **`tab_columns()` reports the STORED attributes**, so `conf_level = NA` honestly means "no interval
+  was stamped here" rather than "0.95 by default". One semantic, stated in `?tab_columns`.
+- **`fmt_attr()` beside 23 named accessors is two ways to say one thing** — legitimate only because
+  the header states the split (named = taught, generic = programmatic) *and* because the named family
+  stops growing. If that line is not held in 20b–20i it becomes duplication.
+
+**Routed to later phases** (measured here, not done here): `materialize_specs()$kind` has **no
+reader** and none of its five values is a `ROW_KINDS` value → **20h** · `REG_ESTIMANDS$builder` has no
+declared vocabulary (a bare `switch()` at `tab_reg.R:4144`) → **20e** · `TAB_ARG_VALUES$pct` says
+`"no"` where `PCT_BASES` says `"none"` → **20b** · `tab_totcol_range()` is an orphan producer kept
+alive only by its own test → **20h** · the deprecated-call corpus migration → **20h**.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild.
+
+**FOLLOW-UPS.** 20b and 20c can both start on this commit: `dev/verify_tab_args.R` and
+`dev/census_exports.R` are committed with baselines, and `TAB_FOREIGN_KEYS` protects every table edit
+they make.
+
+---
+
+#### Phase 20b — KEY 1 + KEY 8: the argument surface as data
+
+**DONE (2026-08-16), both parts.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6696**, against the
+inherited FAIL 0 / WARN 58 / PASS 6626 — same warning count, +70 assertions, nothing red.
+`dev/verify_tab_args.R` reports the **declared delta and nothing else**: two new keys on every
+resolver case (`totaltab_name`, `other_level`) and one changed message (`unused_arg`, which is the
+new suggestion) — ⚠ **`columns` is UNCHANGED across all 52 built tables**, which is the gate that
+matters: an argument that survives resolution but stops reaching a column shows up there and nowhere
+else. `dev/verify_color_attrs.R` **IDENTICAL** (293 cases), goldens untouched, `_snaps/` untouched,
+`document()` idempotent, `tools::checkDocFiles()` **silent**.
+
+**Formals: 149 → 80** across the five crosstab producers (`tab` 52 → 36 + `...`, `tab_plain` 29 → 9
+- `...`, `tab_num` 28 → 9 + `...`, `tab_counts` 40 → 10 + `...`, `tab_many` unchanged).
+**`man/` 7 318 → 6 801** (`tab_plain.Rd` 279 → 78, `tab_num.Rd` 208 → 70, `tab_counts.Rd` 137 → 92,
+`tab.Rd` 693 → 636). `R/` grows **+533 lines**, which is expected and is not the metric (§2).
+
+**The declaration (part 1, byte-identical to behaviour).**
+
+- **`R/tab-args.R`** — **`TAB_ARGS`**, 67 rows, one per public argument of the five producers. The
+  rule that keeps it from swallowing the fact tables is stated in its header: ***the fact table owns
+  the VOCABULARY, TAB_ARGS owns the ARGUMENT*** — `MEASURES` knows what `difference` is; `TAB_ARGS`
+  knows that `color` is an argument of four producers, which table names its values, and how to say
+  so in a help page.
+- **`TAB_ARG_VALUES` is DERIVED from it**, contents *and order* intact (the `DISPLAY_TOKENS`
+  precedent), so `tab_validate_args()`, `tab_deprecate_many()`, `tab_ci()`'s totcol guard and
+  `test-jamovi-vocabulary.R` did not move — and a frozen copy of the 19i literal is now a fixture.
+  `validate = FALSE` is what keeps `ci` and `input` out of it: both are DECLARED here (so
+  `resolve_ci_value()` stops spelling `c("auto","no","cell","ref")` twice in its own body) but
+  validated by their own resolvers, because one rewrites its values and the other partial-matches.
+- **`tab_args_rd(producer)`** — the fourth use of the `reg_measures_rd()` pattern, and the first to
+  emit `@param` tags rather than an `@section` (spiked first; roxygen2 8.0.0 processes markdown,
+  links and `\itemize{}` through `@eval` unchanged). The **order is `formals()`** — better than the
+  proposed `group` column, because it matches `\usage{}` *and* is self-checking. ⚠ Which is why
+  **there is deliberately no `group` column**: it was left with no reader, and a column with no
+  reader is weight, not a fact (19b's admission test), so it is not there.
+- **`color_measures_rd()` / `color_signif_rd()`** read `MEASURES` (which gains a `doc` member, in
+  its existing exhaustiveness `stopifnot`) and `COLOR_SIGNIF_VALUES`. A `"{VALUES}"` element in a
+  `doc` is *where* the generated list is spliced — an argument's value list sits mid-paragraph, with
+  the grammar explained after it, so appending would have been wrong. The `(default)` marker is
+  derived from the vocabulary's first entry, the convention `CI_METHODS` already uses.
+- **`R/tabxplor-options.R` → `R/tab-options.R`, and it stops being doc-only**: **`TAB_OPTIONS`**,
+  34 rows × (`default` · `section` · `arg` · `alias` · `seed` · `doc`). `.onLoad()` **seeds from
+  it** (−35 hand-written `options()` calls), `?tabxplor-options` is **`@eval`-generated** from it,
+  and the DEFAULT and the "Per-call `x =`" sentence are *rendered* rather than typed — which is what
+  the deleted *"keep this in sync with .onLoad()"* comment used to ask a reader to do by hand.
+  ~25 call sites that respelled a default (`getOption("tabxplor.anova", "welch")`) read
+  `tx_option()` now, and the three `tx_getOption()` alias chains read `tx_option_names()`.
+- ⚠ **The file name is load-bearing, and this cost two failed loads to find**: `tab.R` sorts
+  *before* `tabxplor-options.R` but *after* `tab-options.R`, and `tab.R`'s DERIVED
+  `globalVariables()` tail calls `new_ctx()` → `conf_level_default()` → `tx_option()` **at source
+  time**. That is also why every computed `default` is a **closure**, and why `tx_getOption()` moved
+  out of `utils.R` (which sorts last of all) into the option subsystem it belongs to.
+
+**The signatures (part 2).**
+
+- **`...` sits right after `wt`**, so **R itself** enforces "everything past the variable roles is
+  named" — §7.1's unnamed-6th-argument guard, with no hand-written guard. Nothing is lost: position
+  6 was `sup_cols`, so no *live* argument was ever reachable positionally past `wt`.
+- ⚠ **The plan-of-plans' leaf sketch was wrong and would have broken released positional calls** —
+  it moved `num`/`df` to positions 6/7 of `tab_plain()` (they are 20/21) and dropped
+  `row_var`/`col_var`/`tab_vars` from `tab_counts()`' first four slots. Every leading positional slot
+  is kept instead, and `...` begins exactly where the *shared* arguments begin.
+- **`tab_check_dots()`** is what makes `...` a net gain: an unnamed argument refused **by position**,
+  an unknown one refused **with a suggestion**. ⚠ The suggester must match **prefixes** as well as
+  edit distance — a formal sitting after `...` loses R's partial matching, so an abbreviation that
+  used to bind silently (`color_br =`) now arrives here and must be *named*, not merely refused.
+- **`tab_dots_expand()`** fills an unsupplied argument from its **declared** default. That column
+  exists because the mirrors documented themselves as "same meaning as in `tab()`" while their
+  DEFAULTS were not all the same and nothing said which: `tab_num()` alone starts from
+  `color = "auto"`, `ref = "tot"`, `comp = c("tab","all")`, `na = c("keep","drop")`, and both leaves
+  from `tot = NULL`. Moving the formals into `...` would have thrown that away silently.
+- **`options(tabxplor.total_names = c(row=, col=, tab=, other=))`** replaces three released formals
+  (caught by name, deprecated with a message that names the **option**, lossless). A partial vector
+  is completed from the declared default. The jamovi bridge installs it for the duration of one
+  build instead of passing three arguments — the module speaks `tab()`'s current vocabulary, which
+  is the point of the teaching path.
+- **`options(tabxplor.stars)` absorbs `signif_levels` + `signif_labels`** (3 → 1). `tx_stars_ladder()`
+  is the one reader; the retired pair is no longer seeded and still wins if a user set it.
+  ⚠ `stars = <numeric>` **aborts naming the option** rather than being ignored: the ladder is a
+  render-time reading of the stored p-value, so a per-call one would be a per-column stored fact —
+  deliberately not built (maintainer's ruling: re-reading every table you already have is the better
+  contract).
+- **`conf_level` is one idiom now**: every public producer says `NULL` and
+  `tab_resolve_common_args()` resolves it. `conf_level_default()` survives as the *internal* default.
+- **`?tab` states `pct`'s `"no"` default** and why (a bare `tab()` is a table of counts).
+
+**KEY 2 grows with the phase, which is the discipline it exists for**: 6 new edges into the argument
+surface (`values_from` / `values_rd` / `option` / `doc_with` / `pct$stored`, and `TAB_OPTIONS$arg`)
+plus **`tx_check_tab_args()`** — every covered producer's FORMALS and its declared rows are the same
+set, and every surviving formal's default **is** the declared one. ⚠ It lives in `zzz-fact-keys.R`
+and not beside `TAB_ARGS` because `formals(tab)` does not exist while `R/tab-args.R` is being
+sourced. Both halves are proved to bite by fixtures.
+
+**Three defects found and fixed, each with the fixture that fails without it.**
+
+1. ⚠ **`tab(row_var = )`'s deprecation silently stopped firing** — `row_var` is a **prefix** of the
+   live `row_vars`, and R matches a partial name against the formals **before** `...`, so it never
+   reached `.dots`: the argument still did exactly the right thing and only the nudge was lost. It is
+   read off `names(sys.call())` now. **This is 20a's first defect one level up** (three deprecations
+   that had stopped firing), and it is the reason the harness dumps messages at all.
+2. ⚠ **`as.character()` strips names**, so `tab_total_names_merge(c(other = "Autres"))` filled the
+   slots *positionally* and silently renamed the total **row**. Caught by its own fixture before it
+   could ship.
+3. **The `$` partial-matching trap the `zzz-fact-keys.R` header warns about, hit again**:
+   `r$values` matches `values_from`, so three rows leaked into the derived `TAB_ARG_VALUES`. Every
+   read of a `TAB_ARGS` row uses `[[` now, and the header says so.
+
+⚠ **And one guard fired that nobody had thought about**: `test-non-ascii.R` exempts comments and
+checks *string literals*, so moving 360 lines of `@param` prose out of roxygen and into a `doc =`
+vector moved an em-dash across that line. It is a real property of this migration — any prose that
+becomes data becomes ASCII-checked — and it is worth knowing before 20h moves the exporters'.
+
+**HONEST CONCERNS.**
+
+- ⚠ **KEY 8 is only half landed, and that is a coverage gap, not a half-migration.** `TAB_ARGS`
+  covers the five crosstab producers; the **seven exporters and `tab_reg()` have not joined**, so
+  their `@param` blocks are still hand-written — 35 blocks for 7 concepts on the export side, and
+  `?tab_reg`'s 101-line colour block. There is no *duplicate* encoding (an exporter's `color` is a
+  logical, a different argument that happens to share a name), so hard rule 5 is not breached; but
+  the plan's `?tab_reg` −90 and the exporters' −125 Rd lines are **not delivered**. `color_measures_rd()`
+  exists and is filtered by `producers`, so `?tab_reg` is one `@eval` away. **Routed to 20h**, which
+  is the pass that re-runs the censuses anyway.
+- ⚠ **`var_labels` did not get its per-call argument** (§2.6). Measured: 5 new formals + ~12
+  threading edits through `prep_one_table()` / `tab_export_prep()` / the transpose, for an argument
+  with **0 corpus uses** — surface growth in a phase about shrinking it. **Routed to 20h**, where it
+  lands with the exporters' `TAB_ARGS` rows and costs one row instead of five formals.
+- **`tab.Rd` is 636, not the plan's ~490.** Prose moved verbatim (ruling 3), so the only saving on
+  that page is the generated value lists. The rest is 22d's editorial pass — which will now edit
+  **one table** instead of five files.
+- **A user's abbreviation of an argument after `...` is a behaviour change.** `tab(pct = "row",
+  col = "difference")` used to partial-match `color`; it now aborts with the full name in the
+  message. Deliberate (silent partial matching is how a value reaches the wrong argument) and in
+  `NEWS.md`, but it is the one thing here that can break a working script.
+- **`test-jamovi-vocabulary.R` stays GREEN** — 20b renamed no *value*, only re-homed the table, so
+  the 20g gate the plan warned about was not triggered. No `.a.yaml` / `.u.yaml` was touched, so **no
+  `jmvtools::prepare()` is needed**; 20g still owns the outstanding rebuild.
+- **`tab_dots_expand()` re-derives defaults on every leaf call** (a `tab_args_for()` scan + a
+  `formals()` call). Measured as noise against a build, but it is on the leaf's hot path if someone
+  ever calls `tab_plain()` in a tight loop — memoise it there if a profile ever says so.
+
+**FOLLOW-UPS.** 20c can start on this commit: `TAB_ARGS`' idiom exists, and its `status` /
+`default_for` / `doc_with` columns are exactly what a rename needs. 20h: the exporters' and
+`tab_reg()`'s `TAB_ARGS` rows, `var_labels`, and the deprecated-call corpus sweep (still 58).
+
+---
+
+#### Phase 20c — KEY 4 + KEY 5: one word per question, and the footer's model
+
+**DONE (2026-08-16), both keys.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6777**, against the
+inherited FAIL 0 / WARN 58 / PASS 6696 — same warning count, +81 assertions, nothing red. All four
+harnesses print the declared delta and nothing else: `dev/verify_reg_specs.R` **IDENTICAL** on the
+mid-phase checkpoints and, at the end, **only** the `test` tibble's renamed column across 201 of 290
+cases (no `$call`, no `$cols`, no `$labels`, no message) · `dev/verify_color_attrs.R` **IDENTICAL**
+(293 cases) · `dev/verify_tab_args.R` changes **2** of 249 captures, both `ci_method`'s new slot, and
+⚠ **`columns` is UNCHANGED across all 52 built tables** · `dev/verify_golden_field_delta.R` reports
+*"Only the declared addition differs"* over **1 788 cells × 36 goldens**. The 36 goldens were
+regenerated for that one column rename, declared through the harness's own `RENAMED_TEST_COLS` slot
+so the mapping is **proved**, not tolerated.
+
+**`tab_reg()` 29 named formals + `...` → 25 + `...`. Six cross-producer name collisions → zero.**
+
+**KEY 5 — `TEST_ROWS`** (`R/tab-test-display.R`). The `test` attribute carried **39 kinds of row**
+under one discriminator and only the regression half had a declaring table (`reg_footer_spec()`, 31
+of them). Details in the Repository Map. What it deleted, beyond the four crosstab literal lists: the
+four **`paste0()`-generated** `compare_*` discriminators (hand-enumerated a second time in the footer
+spec — the package's last generated keys), three `types = c(wald=, f=, lr=)` maps, the `global_*`
+instrument switch, the `interact_*` label map, 21 hand-written labels, and `tab_kind()`'s need to
+know that a regression's interaction rows live outside the footer spec.
+
+⚠ **The one column the design pass and I both had to add back is `block`** ("which producer writes
+this row"). `stat` cannot serve: a single-instrument row's `stat` **is its own name**
+(`dispersion`, `compare_baseline`), so "the rows `reg_glance()` emits" is not expressible in it —
+`REG_GOF_KEYS` derived from `stat == name` silently picked up five extra rows.
+
+**KEY 4 — the renames.** `dependent` → **`outcome`** (package-wide, 200 R/ sites), `split_var` →
+**`tab_vars`**, `reference` → **`ref`**, `method` → **`ci_method`** (with `CI_METHODS`' 5th slot
+`model` and the new `CI_SLOT_PRODUCER`), `inverse_two_level_factors` → **`outcome_level`**,
+`stats`+`compare`+`baseline` → **`stats`**, `.fit_cache` → `...`. Every retired spelling **aborts
+naming its replacement**; there are no permanent aliases.
+
+⚠ **`stats =` was kept, `footer =` was not** — a maintainer ruling taken this session that
+*re-decides* the plan of plans (§4, §9 20c). `footer` is already the package's word for the whole
+bottom region (`tab_footer_streams()` / `rd_footer()` / `reg_footer_lines()`), while the argument
+governs only the model-summary block; `stats` is the narrow, correct word and already had a declared
+vocabulary. Recorded so the ledger stops carrying two answers.
+
+**Three defects found and fixed, each with the fixture that fails without it.**
+
+1. ⚠ **A design-based numeric test called itself a Welch F.** `test_pvalue_descriptor()` read
+   `if (any(num == "F_classic")) "ANOVA F" else "Welch F"`, and after the survey overlay a design
+   table carries **only** `F_design` — so it printed `pvalue (Chi2, Welch F; survey-design)` for a
+   test that is `svyglm` + `regTermTest(method = "Wald")`. Each row declares its own `word` now.
+   One-string golden delta; no existing test asserted it.
+2. ⚠ **`inverse_two_level_factors` was a SILENT NO-OP on a 0/1 numeric outcome** — that branch of
+   `reg_prep_binary()` (and of `reg_positive_level()`) returns before ever reaching the level
+   reversal. `outcome_level` works there, accepting either the synthesised label or the raw `"0"` /
+   `"1"`.
+3. ⚠ **The jamovi `depModelLevel` picker threw its answer away.** It asked for a LEVEL and folded it
+   into a logical "did the user pick anything?", so **any** pick modelled the SECOND level — choosing
+   the first one in the UI silently modelled the other. `tab_reg()` takes a level now, so the bridge
+   passes it through and got *simpler*.
+
+**And one design gap closed while migrating the harness**: `stats = "compare_baseline"` first meant
+"a footer with only the comparison in it", because the comparison keys were removed from `stats`
+before it reached `reg_footer_stats()`. A comparison key **restricts nothing** now — naming only it
+keeps the per-family default set, which is what `compare = "baseline"` always did. Caught because the
+10 migrated `compare.*` harness cases went red; nothing else would have seen it.
+
+**`tab_robust_overlay()`'s suspected defect is DENIED, and that is the phase's most useful negative
+result.** `chi2_compute_test()` emits `F_welch` **and** `F_classic` from the same table with the same
+`effect_size` / `es_type` / `min_e`, so `anova = "classic"` loses nothing: the `c("chi2", "F_welch")`
+literal is a **de-duplication device**, not a display choice. It is stated as one now (every classic
+crosstab row, `distinct()`-ed on the join key), which removes the latent hazard its `semi_join` had —
+a producer emitting `F_classic` without `F_welch` would have dropped the whole design row, p-value
+included, in silence.
+
+**HONEST CONCERNS.**
+
+- ⚠ **`tab_reg()` did NOT get `@eval tab_args_rd()`, and `man/tab_reg.Rd` GREW 721 → 739** where the
+  plan estimated ~550. All 25 formals are declared in `TAB_ARGS` — which is what lets
+  `tx_check_tab_args()` police that signature and makes "the two producers ask the same question" a
+  *checked* fact — but the prose stayed put, because the phase **measured** the thing that would have
+  justified moving it and it was not there: *the two producers share the NAME and the GRAMMAR of
+  `wt` / `ref` / `na` / `display` / `color` / `ci_method` / `tab_vars`, not the PROSE*. Every one of
+  those reads differently on a model, so emitting the crosstab text into `?tab_reg` would be **wrong**
+  documentation, not deduplicated documentation. The growth is `outcome_level`'s new block and
+  `stats`' comparison paragraph. Trimming `family`/`effect`/`measure` against
+  `@eval reg_measures_rd()` is a *prose* edit and belongs to **22d**.
+- ⚠ **The jamovi UI speaks the old vocabulary until 20g.** `jmvtabreg.b.R`'s `.opts()` translates
+  five yaml option names (`dependent`, `split_var`, `refLevels`, `method`, `compare`+`baseline`) into
+  `tab_reg()`'s; each carries a `# ⚠ 20g:` marker. Deferred **on purpose**: renaming the `.a.yaml`
+  now leaves the module inert (a stale generated `.h.R`) across 20d/20e/20f. No `.a.yaml` / `.u.yaml`
+  was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the outstanding rebuild.
+- ⚠ **`test-jamovi-vocabulary.R`'s two reg assertions changed shape in the same commit as the change
+  they gate** — `method` now asserts `CI_METHODS$model` instead of `formals(tab_reg)$method`, and the
+  ComboBox loop asks `ci_slots_of("tab")` instead of enumerating every slot. Both are *stricter*
+  single sources (the crosstab module must NOT have a `method_model` box), but a gate rewritten
+  beside its subject is worth saying out loud.
+- **`reg_resolve_args()` keeps its internal `method` formal** (the resolved scalar) while the public
+  argument is `ci_method` (the named vector). Deliberate — the internal one is one slot's value, and
+  `reg_fit(method =)` speaks the same word — but it is two names for related things, one layer apart.
+- **`R/tab-args.R`'s 25 `tab_reg` rows are read by exactly one consumer** (`tx_check_tab_args()`);
+  `tab_check_dots()` / `tab_dots_expand()` are not on this producer's path, which still uses
+  `reg_retired_args()`. Folding those two together is a candidate for **20h**.
+- ⚠ **`reg_retired_args()` now ignores every dot-prefixed name**, which is how `.fit_cache` rides
+  `...`. That is the package's own convention (`tab()`'s `.cache` / `.return_armed`), but it means a
+  typo'd `.fit_cach` is silently accepted rather than refused.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+**FOLLOW-UPS.** 20d can start on this commit — the surface has settled, and
+`dev/verify_reg_specs.R`'s baseline is re-saved with the phase's declared renames encoded in its new
+`SPEC_RENAMES` / `FIT_SPEC_RENAMES` / `CALL_RENAMES` maps (the twin of the golden harness's
+`RENAMED_TEST_COLS`, so a rename stays *provable* rather than re-baselined blind). 20g: the five
+yaml option renames and the owed `prepare()`. 20h: `tab_reg()` onto `tab_check_dots()`, and the
+`?tab_reg` prose trim.
+
+---
+
+#### Phase 20d — KEY 7: marginal effects, computed once and computed fast
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6894**, against the
+inherited FAIL 0 / WARN 58 / PASS 6777 — same warning count, +117 assertions, nothing red.
+`dev/verify_reg_specs.R` prints **IDENTICAL over all 290 cases** (every message, spec, column
+attribute, label and test key), against a baseline saved on the untouched tree.
+
+**The measured result.** `marginaleffects` leaves the hot path entirely on the `at = "average"` route:
+
+| case (gss, 21 483 rows; warm, min of 2)                | before        | after         |       |
+|--------------------------------------------------------|---------------|---------------|-------|
+| `effect = "marginal"` (binomial, 4 predictors)         | 8.69 s        | **0.59 s**    | 14.7x |
+| `effect = "marginal", measure = "ratio"`               | 8.46 s        | **0.42 s**    | 20.3x |
+| `effect = "marginal", empirical = TRUE`                | 9.21 s        | **0.66 s**    | 14.0x |
+| `display = "ame"` (the fold onto a coefficient column) | 6.61 s        | **0.40 s**    | 16.4x |
+| `effect = "marginal"` (3-level **multinomial**)        | 36.39 s       | **3.43 s**    | 10.6x |
+| `effect = "coefficient"` / `at_reference` (untouched)  | 0.27 / 1.23 s | 0.28 / 1.26 s | 1.0x  |
+
+**The brief's own route would have been a defect, and that is the phase's most important finding.**
+19o and the plan of plans both said "supply the SE from the influence function". Measured, that
+substitution moves printed standard errors by **up to 3.6 %** on a rare level — `reg_coef_if_maker()`
+is a *sandwich* variance (empirical information, not `vcov(fit)`) **and** the full IF adds the
+empirical-averaging term. The phase's own ruling is "a change in the last printed decimal is
+acceptable, a change anywhere else is a defect", so the printed interval takes the **analytic delta**,
+`sqrt(G' vcov(fit) G)`, which reproduces `marginaleffects` to **1e-8** on estimate, standard error,
+both bounds *and* the p-value, on `glm` and weighted `svyglm` alike. The full IF stays exactly where
+it was, in the adjustment-gap test. **Two different questions — *how uncertain is this AME* vs *is it
+different from its crude twin* — correctly answered by two different variances**, and that is now
+said in the code (`reg_delta_se()` beside `reg_if_se()`, each pointing at the other).
+
+**The producers (`R/reg-influence.R`).** An AME, its adjusted predictions and both variances are ONE
+counterfactual sweep read three ways, so the sweep became its own producer: **`reg_gcomp_maker()`**
+(lm/glm/svyglm) and **`reg_gcomp_cat_maker()`** (multinom/polr). The two influence makers are now
+their four-line wrappers — the single-equation one **byte-identical by construction** (same
+arithmetic, same order), locked by the existing 1e-10/1e-12 pins. Details in the Repository Map.
+
+**The 3+ level half was NOT in the brief.** A 3-level multinomial AME was measured at **45.2 s**
+(against 4.4 s for coefficients) — worse than the binomial case that motivated the phase — and its
+existing central-difference jacobian cost **2.4 s per contrast**, i.e. it was never a fast path. The
+analytic softmax / cumulative-logit jacobian is the derivative of the function `reg_prob_engine()`
+already implements, so it was validated against **both** oracles before being written into the plan:
+marginaleffects (multinomial SE 1.06e-09; ordinal 5.3e-09 … 3.0e-08, every category; estimates exact)
+and the package's own central-difference jacobian. `reg_prob_engine()` gained `dmean()` and now has
+three consumers instead of two.
+
+**`vcov = FALSE` wherever the interval is discarded** — byte-identical estimates, and it is what
+helps the routes that stay numeric: the prediction pass only ever reads `$estimate`, and
+`reg_apply_display()`'s fold pokes `pct`/`diff` into a column that keeps its own CI (a new
+`want_se = FALSE`).
+
+**Two defects found, each with the fixture that fails without it.**
+
+1. ⚠ **`reg_empirical_fit()` clobbered its own `est` argument.** Its marginal branch assigned the
+   per-predictor estimates to `est` — which is *also* the estimand-row argument. Harmless while
+   nothing read that argument twice; the moment the engine is read off it per predictor, **every
+   predictor after the first aborted inside a `tryCatch` and lost its `obs` in silence**. `obs` is
+   what `color = "adjustment"` scores, so nothing in the printed values showed it. Caught by
+   `verify_reg_specs.R` (one changed case), which is exactly what that harness is for.
+2. **`reg_build()`'s builder dispatch fell through to the coefficient builder** — the 20a-routed
+   item. Every arm is named now and the default aborts, with `REG_BUILDERS` + a foreign key
+   (⚠ `TAB_FOREIGN_KEYS` is 51 edges, +2).
+
+**And one latent trap hardened**: the counterfactual wrote `factor(lv, levels = levels(x))`, which
+**drops `ordered`** — an ordered predictor would then get treatment contrasts where the fit used
+polynomial ones (measured on gss `rincome`: AME 0.1038 instead of 0.0302). It cannot bite through
+`tab_reg()` (14r's `reg_fit()` de-orders predictors first), so this is a *contract* fix on a shared
+helper, with its own unit fixture rather than an end-to-end one.
+
+**HONEST CONCERNS.**
+
+- ⚠ **Three existing assertions were relaxed from `tolerance = 1e-10` to `1e-7`**
+  (`test-tab_reg-rr.R`, `test-tab_reg-numeric-crude.R` ×2), and a relaxed assertion always deserves
+  suspicion. The justification is measured, not asserted: on the same fit, **marginaleffects' own
+  step-size choice (`fdforward` vs `fdcenter`) moves that bound by 3.99e-9, while our analytic value
+  sits 2.74e-9 from its default** — our residual is *smaller than the oracle's own noise*, because
+  ours is the exact number and its is the approximation. Only the **bounds** were relaxed; every
+  ESTIMATE assertion stays at 1e-10 and passes with a relative difference of **0**.
+- ⚠ **`at_reference` and the MNL `vsrest` row stay on `marginaleffects`**, declared, not forgotten:
+  a one-row profile grid is not something g-computation builds, and the route costs 2.4 s, not 45.
+  `effect = "at_reference"` improved anyway (2.4 s → ~1.5 s) purely from the prediction pass.
+- **`engine` is `"auto"` on every row**, resolved by one rule in `reg_marginal_engine()` rather than
+  written out 36 times — the `crude_fam = "auto"` idiom from the same table. That is a *rule* wearing
+  a column's clothes; it is honest only because any row can override it and a fixture asserts that.
+  If a future family needs a per-row value, write it there rather than widening the rule.
+- **The fallback is per CALL, not per contrast** — deliberate (one column, one convention), but it
+  means a single refusing contrast pays the full numerical route for the whole table.
+- **`dev/verify_reg_specs.R` gained a third declared-delta shape**, `EST_ADDITIONS`, beside its two
+  rename tables: a new member on a `REG_ESTIMANDS` row rides `est` into every spec and into
+  `reg_call()`, so without it the run reports every non-aborting case as CHANGED. Its diff printer
+  was also fixed — it unlisted the first 12 elements, which for `cols` is always *column 1*, so it
+  printed two identical lines while a column-11 attribute had really moved.
+- **The crosstab harnesses were not run**: the diff touches `R/reg-*.R` and `R/tab_reg.R` only, no
+  `tab()` code path, and `test-golden.R` covers the goldens inside the suite anyway.
+- ⚠ **The timings are ext4/WSL2** and are not comparable to the committed Windows baselines.
+  Recorded in `dev/benchmarks/results_2.0.0/`.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild, and the jamovi Regressions panel's marginal option is no longer the one that
+freezes it.
+
+**FOLLOW-UPS.** 20e can start on this commit — the marginal path has settled, which is what a
+provably-pure `reg_build()` refactor needs, and `dev/verify_reg_specs.R`'s baseline should be re-saved
+past `EST_ADDITIONS` first. ⚠ **20f must re-measure**: the case for a process pool was built on a
+15.3 s call that is now ~1.2 s, and on a 45 s multinomial that is now 5.2 s — of which **4.4 s is the
+`multinom` fit itself**, so whatever remains to parallelise is the fitting, not the marginal pass.
+Routed to **20h**: the model AME interval uses `z` while its crude companion beside it uses
+`t(degf)` (a live asymmetry noted at `R/reg-resolve.R:843-851`; closing it changes printed numbers on
+a clustered design, which §6 forbids in this phase), and `REG_ESTIMANDS$obs` still has no reader.
+
+---
+
+
+
+#### Phase 20e — KEY 6: `reg_build()` becomes a staged build
+
+**DONE (2026-08-16).** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6894** — byte-for-byte the
+inherited numbers. `dev/verify_reg_specs.R` prints **IDENTICAL over all 290 cases** (every message
+*in order*, every spec, every column attribute, every label, every test key) against a baseline
+saved on the untouched tree, and it printed IDENTICAL at every one of the phase's four checkpoints.
+Zero golden churn, zero `_snaps/` churn, `document()` a no-op (everything new is internal).
+
+**`reg_build()` is 726 source lines → 20 deparsed lines over eight named stages.** It was the
+largest function in the package — 39 top-level locals, 7 local closures, eleven unnamed phases —
+while `tab_build()` has had a typed ctx and named stages since 17e/19i. The largest function is now
+`plain_core()` (482 deparsed); the largest stage is `reg_stage_tips()` at 103.
+
+- **`new_reg_ctx()`** — 32 declared keys, `new_ctx()`'s idiom on its fourth use (the FORMALS are the
+  contract, `as.list(environment())` the body, the `globalVariables()` mirror DERIVED), with 19i's
+  rule applied: **a stage product is DECLARED, never left to appear** — an undeclared key is
+  *absent*, so its own `is.null()` guard errors instead of firing. The keys are grouped and commented
+  **by the stage that writes them**, so "what may a stage find" is readable without running a build.
+- **`shared` stays ONE nested record and is PROJECTED**, never flattened. `reg_ctx_locals(ctx)` is
+  `ctx_settings_locals()`'s twin (`c(ctx, ctx$shared)`), so the ~200 bare-name reads inside the moved
+  bodies read exactly as before, and 19i's two-carriers problem is not recreated. Stages close with
+  the existing `ctx_update()`.
+- **The eight stages, each named after the part of the table it produces**: `_split` (the `tab_vars`
+  recursion, at the TOP, returning a finished TABLE — `tab_build_tables()`'s shape) · `_fit` ·
+  `_columns` · `_footer` · `_rows` · `_empirical` · `_assemble` · `_tips` · `reg_stage_finalize`.
+  The seven closures became **four top-level functions** — `reg_cols_coef` / `reg_cols_ame` /
+  `reg_cols_vsrest` (the three arms `REG_BUILDERS` declares), `reg_emp_frame` (needed by TWO
+  stages), `reg_set_obs`, `reg_add_emp_cols` — plus one one-line local.
+- **`R/reg-empirical.R`** (~1190 L), carved whole out of `tab_reg.R` (5630 → **4734**): the observed/
+  crude subsystem the brief calls the package's third biggest, until now spelled as an `if` block
+  plus two 200+-line functions in the middle of the largest file. The producers live there, the
+  stage that drives them stays in `tab_reg.R` — the `tab-leaf.R` / `tab.R` relationship.
+
+**⚠ Two corrections to the plan of plans, both measured rather than assumed.**
+
+1. **The stage ORDER is the source order, and `_footer` runs BEFORE `_empirical`** (the §9 sketch has
+   them the other way round). Reordering is not a refactor here: **FOUR sites fit models** — `_fit`,
+   `_footer`'s linearity refits, `_empirical`'s univariable fits, and `_split` →
+   `reg_interaction_rows()` — and every fit may inform or warn, so the stage order IS the message
+   order, which `verify_reg_specs.R` compares.
+2. **§5.4's "the ONE place a fit happens = the parallel seam" is false.** On a 5-predictor
+   `empirical = TRUE` table the model fits are a *minority* of the fits. Written into
+   `reg_stage_fit()`'s own header: **20f must measure all four sites** before parallelising one.
+
+**One defect, found the moment the ctx was introduced and fixed with the rename.** ⚠
+`as.list(environment())` — the idiom all four record constructors use — defaults to
+**`all.names = FALSE`**, so **a dot-prefixed key is silently dropped from the record**. Declaring
+`.fit_cache` as a ctx key therefore made the jamovi fit cache simply stop being threaded, with no
+error until a stage read it. The ctx key is `fit_cache`; `reg_build()`'s formal keeps its dot
+(it is the entry point's internal argument, `tab()`'s `.cache` convention). Stated in `new_reg_ctx()`
+and in the Repository Map, because it applies to `new_reg_shared()` / `new_reg_spec()` /
+`new_reg_args()` equally.
+
+**The three findings from the plan, all fixed:**
+
+1. **`mnl_vsrest` was assigned and never read** — dead local, deleted. (`compound`'s inline
+   re-derivation in the empirical block is `any(compound)` now.)
+2. **Two hand-written mini-records named `shared`.** `reg_global_rows()` and `reg_check_rows()` each
+   took a `list(weighted =, design_spec =, …)` literal whose every field is a **subset** of the real
+   `new_reg_shared()` record — two look-alikes of the one typed record, in the file that declares it.
+   Verified field by field (incl. `reg_check_linearity_rows()`'s five reads); both take the real
+   record now, as `reg_interaction_rows()` already did.
+3. ⚠ **`skeleton_data = data`'s lazy default was forced too late.** The promise was first forced
+   *after* `data` is releveled on the jamovi reref path, so on that one path it silently meant the
+   **post**-relevel frame rather than the full pre-relevel data its own comment describes. Forced at
+   the head now (`new_reg_ctx()` forces it). Behaviour-identical and it is stated why: a factor
+   relevel moves no predictor between `reg_numeric_preds()`/`reg_factor_preds()`, and `reg_curves()`
+   reads only the numeric predictors and the outcome. `test-jmvtabreg-cache.R` (the reref
+   byte-identity contract) is green.
+
+**Also landed**: `tx_check_reg_ctx()` in `R/zzz-fact-keys.R` — `new_reg_ctx()` and
+`new_reg_shared()` declare two record types that every stage binds into ONE scope, so a shared name
+would silently shadow (`c()` keeps both, `list2env()` lets the last win). It lives there for
+`tx_check_tab_args()`'s reason: neither constructor exists while the other's file is being sourced.
+
+**Already done, reported not repeated**: `REG_ESTIMANDS$builder`'s missing vocabulary — routed here
+by 20a — **landed in 20d** (`REG_BUILDERS`, named `switch()` arms, an aborting default, and a
+two-directional foreign key). The stage split only inherits it.
+
+**HONEST CONCERNS.**
+
+- **`R/` grew.** `tab_reg.R` −896, `reg-empirical.R` +1190, so the reg subsystem is ~+290 lines: the
+  ctx declaration, ten stage headers, four hoisted helpers with their own docstrings. That is the
+  phase's expected shape (§2: *do not count lines as the simplification metric*), and the metric that
+  did move is the one KEY 6 is about — the largest function in the package went from 534 deparsed
+  lines to 20, and "which stage produced this part of the table" is now answerable by reading one
+  screen.
+- ⚠ **`reg_stage_tips()` is 103 deparsed lines and does two unrelated things** (the multinomial
+  crude tooltip and the numeric-predictor distribution tooltip). They share only their carrier
+  (`meta$empirical_tips`) and the fact that neither number can honestly take a column. Splitting them
+  would have been a second, unproved edit inside a phase whose contract is IDENTICAL; **routed to
+  20h**, where the census runs anyway.
+- **`reg_set_obs()` re-projects the whole ctx per column** (`list2env(reg_ctx_locals(ctx), …)` inside
+  a loop over columns). Measured as noise against a build that fits models, but it is the one place
+  the projection idiom sits on a per-column path rather than a per-stage one.
+- **The three `reg_cols_*` builders take `(f, sp, ctx)`** and read their ~13 settings by projection
+  rather than by named argument. That is deliberate (it is what made the hoist byte-identical and it
+  matches the stage idiom), but it means their signatures do not state what they read.
+- **Not run**: `verify_color_attrs.R` / `verify_golden_field_delta.R` / `verify_tab_args.R`. The diff
+  touches `R/tab_reg.R`, `R/reg-empirical.R`, `R/reg-assumptions.R` and `R/zzz-fact-keys.R` only —
+  no `tab()` code path — and `test-golden.R` covers the goldens inside the suite, which is green.
+- **`dev/verify_reg_specs.R`'s `EST_ADDITIONS` is now empty** and its baseline re-saved past 20d's
+  `engine`, per 20d's own follow-up: that member is COMPARED again rather than dropped on both sides.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild.
+
+**FOLLOW-UPS.** 20f can start on this commit and **must re-measure first**: `reg_stage_fit()` is the
+seam, but it is one of four fitting sites and 20d already took the marginal path from 15.3 s to
+~1.2 s. 20h: `reg_stage_tips()`'s two halves, and `reg_build()`'s remaining `.fit_cache` threading
+(the ruling was *keep as is*, and it was kept).
+
+---
+
+#### Phase 20f — `tab_reg()` parallelisation: measure, then decide
+
+**DONE (2026-08-16). The verdict is NO POOL, and the phase's product is the measurement that says
+why — plus the four things the measurement found instead.** Full study:
+`dev/tabxplor_reg_performance.md`; re-runnable harness `dev/benchmarks/phase20f_reg_profile.R`,
+before/after in `dev/benchmarks/results_2.0.0/phase20f_reg_profile{_before,}.{txt,csv}`.
+
+**THE MEASUREMENT.** Post-20d/20e, **81–94 % of every default `tab_reg()` call is the model-check
+footer**, at every data size (binomial 4 preds: 0.65 s → 0.16 s with `stats = FALSE`; ordinal
+8.75 → 1.73; binomial 6 preds at n = 200 000 **12.27 → 1.29**). And a large part of that was the
+20d pathology one level down — *work computed several times and read once*, each traced by
+instrumenting the call, not inferred:
+
+1. **Linearity fitted the model TWICE per numeric predictor.** The augmented fit is the test; the
+   second was `drop1()` refitting the reduced model, which is `base_fit`, already in hand (1.02 s
+   against 0.028 s at n = 200 000).
+2. **`vcov()` recomputed FOUR times on one multinomial fit** — `nnet:::multinomHess` ran **7×** per
+   default table (1× at `stats = FALSE`) at **0.757 s each**, because `reg_check_model_se()` and
+   `reg_coef_if_maker()` each called it and `dispersion` and `influence` each called both.
+3. **The Brant test ran THREE times per ordinal table and was read once** (~1.1 s each):
+   `reg_fit_ordinal()` ran it on every polr fit — the reported one, both Linearity refits, every
+   crude univariable fit — and `attr(fit, "brant_po")` had exactly one reader.
+
+**WHY NO POOL**, five measured reasons: the work was redundant, not distributable · `tab_pmap()`
+**dropped worker conditions entirely** while `verify_reg_specs.R` compares messages *in order*, and
+three of the four fitting sites are unsuppressed or only message-suppressed — so parallelising them
+was a correctness regression · **jamovi can never use a pool** (`cache_env` forces serial,
+`.fit_cache` is an environment) and at teaching scale the checks were 94 % of the call, so the
+de-duplication is the only lever that reaches the interactive path · the common call was already
+0.16 s without the footer · and the one qualifying payload is now ~1 s of a 3.4 s call at
+n = 200 000. Also measured and declined, with the numbers, in the study: the Rao score test (z15's
+ruling holds — design-blind), `glm(start = )` (4 IRLS iterations either way), and
+`anova(base, aug, test = "F")` as the F engine (see the trap below).
+
+**WHAT LANDED INSTEAD** — no new option, no new formal, no new fact table, no concurrency.
+
+- **D1 — `reg_nested_test(base, aug, use_f)`** (`reg_nested_lr()` grown an F arm and promoted from
+  fallback to first choice): the Linearity check compares the two fits it holds. ⚠ It IS what
+  `drop1()` returns, **bit for bit on both arms** — and the F arm is the trap: `drop1.glm` at its
+  default `scale = 0` estimates the dispersion as `deviance/df.residual` of the AUGMENTED fit, which
+  is neither the Pearson dispersion `summary()` reports nor what `anova()` uses (12.47 against 14.25
+  on a quasipoisson fit). Pinned with `expect_identical()` on lm / gaussian glm / quasipoisson /
+  binomial, plus two refusal fixtures (not nested, different rows). `reg_term_tests()` stays the
+  design arm, where `regTermTest()` refits nothing anyway.
+- **D2 — `reg_check_influence_pass()`**: Dispersion and Influence are ONE decomposition read two
+  ways (one `vcov`, one influence closure, one sweep of the `p` unit contrasts). The two footer rows
+  stay two declared rows; only the arithmetic merged. `vcov()` per fit **4 → 1**, via a new
+  `reg_fit_vcov()` and a `V =` argument on `reg_check_model_se` / `reg_coef_if_maker` /
+  `reg_score_multinom` / `reg_score_polr`. ⚠ `reg_check_model_se` keeps its svy_vglm `fit$var`
+  degradation LOCAL: that is a sandwich, and handing it to `reg_score_polr` as the bread would
+  double-count the design.
+- **D3 — the Brant test moved to the row that reads it** (`reg_check_rows()`'s `proportionality`
+  branch); `attr(fit, "brant_po")` is deleted. One producer, one consumer, one warning.
+- **D4 — `REG_CHECKS$cost`** (`"free"` / `"refit"`) + `reg_checks_default()` / `reg_checks_costly()`
+  + two build-time `stopifnot`. The two fit-based checks leave the default `stats` set and are asked
+  for by name. ⚠ Default-set vs vocabulary, not vocabulary vs nothing: `reg_check_rows()` still asks
+  `reg_checks_for()`, and `reg_check_plots()` is untouched — a panel is always free, so `cost` is
+  independent of `panel`. **And `stats = "all"` starts meaning all**: it was a synonym of `NULL`,
+  i.e. of the default set, so it already lied and D4 would have made it worse. It is now the one
+  value to remember for the whole diagnostic footer (the maintainer's question, answered by fixing
+  the name rather than adding a `"checks"` group key).
+- **D5 — `tab_pmap()` relays worker conditions**, in unit order. Measured defect, not a
+  precaution: on `tab(parallel = 2)` with two numeric col_vars at different references, serial says
+  2 messages and parallel said **0**. The `everywhere()` options snapshot gained `cli.*` / `crayon.*`
+  / `width` for the same reason — cli renders its text AT SIGNAL TIME, so a daemon formatted with its
+  own glyphs and wrap width and the relayed message did not match the serial one (caught by the
+  fixture on its first run).
+
+**THE RESULT.** `stats = "all"` is the honest column — it computes strictly MORE than today's
+default did:
+
+| shape (gss_cat unless stated)       | before (default) | after (default) | after (`stats = "all"`) |
+|-------------------------------------|------------------|-----------------|-------------------------|
+| binomial, 4 predictors, n = 2 000   | 0.14 s           | **0.08 s**      | 0.12 s                  |
+| binomial, 4 predictors              | 0.65 s           | **0.32 s**      | 0.67 s                  |
+| binomial, 6 predictors, n = 200 000 | 12.27 s          | **3.44 s**      | 7.90 s                  |
+| multinomial (3 levels)              | 5.89 s           | **1.78 s**      | 3.95 s                  |
+| ordinal (16 levels)                 | 8.75 s           | **1.45 s**      | 4.13 s                  |
+| 3-model comparison, n = 200 000     | 13.55 s          | **4.61 s**      | 9.41 s                  |
+| `tab_vars` (4 groups), n = 200 000  | 4.93 s           | **1.73 s**      | 3.75 s                  |
+
+2.6–6.0× on the default call, and **1.3–2.1× even with every check asked for** — that second column
+is the pure de-duplication. Counts, before → after: `multinomHess` 7 → 2, `brant` 3 → 0 (1 when the
+check is asked for), the `drop1` refit 3 → 1 on a binomial table and 2 → 0 on a multinomial one.
+
+**VERIFICATION.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6920**, against the inherited FAIL 0 /
+WARN 58 / PASS 6894 — same warning count, +26 assertions, nothing red.
+`dev/verify_reg_specs.R`: **CHANGED in 188 of 290 cases, in exactly the two declared places** — the
+`test` tibble's rows (186 cases, D4) and the Brant warning (13 cases, D3). Every spec, every
+`reg_call()`, every column attribute and every label IDENTICAL, and every OTHER message identical
+**in order**. ⚠ The baseline must be re-saved past those two.
+`test-parallel-parity.R` green **unsandboxed** with its new fixture. No golden churn (no `tab()` code
+path is touched but `tab-parallel.R`, whose serial branch is unchanged), so
+`verify_golden_field_delta.R` / `verify_color_attrs.R` / `verify_tab_args.R` were not run.
+
+**HONEST CONCERNS.**
+
+- ⚠ **A default ordinal table no longer warns that the proportional-odds assumption is rejected.**
+  The warning is the Brant check's output, so it follows the check out of the default set. Declared,
+  ruled by the maintainer with that consequence stated, and in `NEWS.md` — but it is the one thing
+  here a user could miss rather than merely wait less for. Its own text says it over-rejects at
+  survey N, and `stats = "all"` / `stats = "proportionality"` brings it back.
+- ⚠ **`reg_nested_test()`'s ordinal arm is not bit-identical to `drop1.polr`** (which re-optimises
+  through `optim`), so an ordinal Linearity p can move in ~1e-6 — invisible at printed precision, and
+  the new number is the more accurate one. Not separately measured: no fixture pins an ordinal
+  Linearity p, and `verify_reg_specs.R` compares test KEYS, not values. Worth a look if 20h touches
+  the ordinal footer.
+- **D5's replay is necessarily late**: worker conditions land after anything the caller signalled
+  around `tab_pmap()`, rather than interleaved. Stated in the code and in the fixture, which asserts
+  the same set and the same relative order among worker conditions.
+- **The three `stats` migrations in the test corpus are a behaviour change made visible**: 6 blocks
+  now pass `stats = c("n", "linearity")` or `"proportionality"`. That is the argument working, but it
+  means a reader of those tests must know the default moved.
+- **`reg_global_rows()`'s `drop1` still refits** one reduced model per multi-coefficient term (~2 s
+  at n = 200 000). Left in the default set deliberately — it is a *test*, not a diagnostic, and the
+  only cheaper route (a Wald test) is a different number. Recorded in the study, routed to **20h**.
+- ⚠ The timings are ext4/WSL2 and are not comparable to the committed Windows baselines.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — but ⚠ **20g owes
+one UI item**: the Regressions panel's `stats` control must offer the two now-opt-in checks and an
+"all" entry, or the module silently loses them.
+
+**FOLLOW-UPS.** 20g can start on this commit (⚠ the `stats` control, above). 20h: the study's own
+routed item (`reg_global_rows()`'s refits), `reg_stage_tips()`'s two halves (from 20e), and the
+deprecated-call corpus sweep.
+
+---
+
+#### Phase 20f-ii — `tab_reg()` parallelisation at the model level
+
+**PARTLY DONE (2026-08-16): the measurement is complete and two fixes shipped; the S-axis
+restructure is NOT built and is a fresh-session piece.** Study: `dev/tabxplor_reg_performance.md`
+**§6** (extended, never a second file — it is *the* durable answer to "why is `tab_reg()` not
+parallel", and a second document answering it one axis out is the duplication this phase exists to
+remove). Re-runnable harness `dev/benchmarks/phase20f2_reg_model_axis.R`, before/after in
+`dev/benchmarks/results_2.0.0/phase20f2_*`.
+
+**THE STRUCTURAL FINDING, which decides more than the timings do: the three model axes are not the
+same shape.** `tab_vars` groups (**G**) and several outcomes × a models list (**R**) are the two
+places `tab_reg()` already recurses, and each unit returns a **finished table** — fit-free, KB-sized,
+with the cross-unit work already after the loop and the message stream already unit-major, so a
+`tab_pmap()` relay would preserve order exactly. Several outcomes in ONE table, or a models list
+(**S**), share one table: the unit returns the raw fit, and `emp_by_fit[[i]]` carries `$frame` +
+`$fits` — **60–100 MB at n = 200 000**, six to ten times the payload 20f-i's constraint was written
+about.
+
+**THE MEASUREMENT.** Ceilings (a perfect pool, zero overhead; clamped at the longest unit, since no
+number of cores shortens it): G 4 uneven race groups **1.23×** · G 8 even survey waves **2.28×** ·
+G 4 groups at n = 21 483 1.53× (0.29 s total) · S 2 outcomes 1.87× · S 4 outcomes **2.86×** ·
+S 3-model comparison unbalanced 1.32× / balanced **2.33×** · R 2 outcomes × a models list 1.89×.
+⚠ **Balance, not unit count, is the variable**: the same axis at the same size gives 1.23× over four
+uneven groups and 2.28× over eight even ones. And **transport is not the obstacle**, which had been
+assumed: shipping the 16 MB fixture is **0.05 s** and a warm 4-task round-trip **0.003 s** — the
+1.67 s is the first dispatch's connection setup, once per pool. So the axis is bounded by Amdahl and
+by balance, not by serialisation. (The decisions doc's "transfer is the killer", 6.8 s, is a 161 MB
+fixture.)
+
+**WHAT SHIPPED.** Both verified `IDENTICAL` by `dev/verify_reg_specs.R` over all 290 cases.
+
+- **The crude-block de-duplication — 20f-i's finding repeating one axis out.** In COMPARISON mode
+  every input to `reg_stage_empirical()`'s loop is table-wide or per-*outcome*, and a models list is
+  refused unless it has exactly one outcome — so specs 2..S recomputed spec 1 **exactly**, and only
+  spec 1 was read (`reg_stage_assemble()` takes `emp_by_fit[[1]]` as every column's `obs` *and* as
+  its gap-test crude leg). Its one other reader, `reg_stage_tips()`'s numeric block, emitted
+  duplicate rows for a column name every spec resolves identically, which `tab_export_prep()`'s
+  `match()` discarded first-wins. Fixed with the idiom the `add_n` loop 70 lines up already uses,
+  `if (i > 1L && n_outcomes <= 1L) break`. Measured on a 3-model comparison: **`reg_empirical`
+  3 → 1, `reg_empirical_fit` 3 → 1, `reg_fit` 9 → 5** — and **unchanged at 2 / 2 / 6** for two
+  outcomes, which is the half of the contract that says it did not over-reach (two outcomes are two
+  genuinely different crude blocks). Worth more than the pool would have been on that same shape.
+- **A latent defect beside it**: `compare` was gated **nowhere**, so
+  `outcome = c("a","b"), stats = "compare_baseline"` reached `reg_compare_rows()` with two different
+  responses — `anova.glmlist`'s own `sameresp` filter silently dropped a model and the surviving row
+  was labelled with `specs[[1]]`'s outcome. One `cli_abort` at H24 in `reg_resolve_args()`, the first
+  point `compare` (S1) and the resolved `prep$outcome` (S2) are both known. A models list already
+  refused several outcomes; this is the same fact for the one-model-per-outcome shape.
+
+**WHAT IS NOT BUILT, and what it would cost** (§6.5, each constraint read in the code): the S axis
+needs the six per-spec loop *bodies* lifted out of the table-scalar stages into one
+`reg_spec_build()` returning a declared product — "20e one grain finer", ~580 lines over 6 files.
+⚠ `reg_compare_rows()` **cannot be ported**: it needs two fit *objects*
+(`stats::anova(m_lo, m_hi)`, the `method = "Wald"` → `regTermTest` arm on a survey fit), and
+re-implementing survey's Wald arithmetic would make tabxplor a second producer of a survey quantity
+— the same class as 20f-i's measured `drop1` vs `anova` divergence (12.47 against 14.25). It stays
+and **forces the serial path**, which is a fact about the statistic, not a limitation: a
+between-model test needs the models together. It returns early on `compare == "none"` (the default),
+so that excludes much less than it sounds. Also serial: comparison mode *with* a crude block (spec
+1's block is every column's `obs` and carries the 60–100 MB frame) and a compound formula (the
+shared skeleton comes from `fits[[1]]`). ⚠ And any per-spec design turns the message stream
+**stage-major → spec-major**, so `verify_reg_specs.R` stops printing IDENTICAL for multi-spec cases
+and prints *"(same set, different ORDER)"* — detectable, not silent, but the one irreducible price.
+
+**HONEST CONCERNS.**
+
+- ⚠ **The phase's headline question got two answers, and the second is the one to act on.** Measured
+  against the ≥2× bar, G and R clear it only for an *even* axis at survey scale where the whole
+  saving is ~1 s, while **S — the axis that cannot be dispatched as written — is where the 2×+
+  shapes are** (2.86× at four outcomes). That is the opposite of the a-priori ranking, which had G
+  as the promising one because it was the easy one.
+- ⚠ **Every ceiling is an upper bound that no implementation reaches**, and the `sum units` term is
+  itself an over-estimate (a unit built alone re-runs the argument boundary the real call runs once —
+  it exceeds `whole` on five of the eight rows, which is why the ceiling is clamped at `max unit`).
+- **The harness cost three self-inflicted re-runs** and the reasons are in its header: `tab_vars`
+  needs a factor (`year` is integer), the S fixtures needed a `grepl("dem", ...)` that gss_cat's
+  lowercase levels actually match, and ⚠ **`Rscript` reads a file incrementally, so editing the
+  harness mid-run corrupts the run** — a whole measurement was discarded to that.
+- **No golden churn** (no `tab()` path is touched) and the jamovi path is untouched, so no
+  `jmvtools::prepare()` is needed — 20g still owns the outstanding rebuild.
+
+**FOLLOW-UPS.** The S-axis restructure is its own session, on 20e's precedent (a pure structural
+refactor proved by one harness) — and ⚠ it must re-save `dev/verify_reg_specs.R`'s baseline first and
+declare the message-order delta. 20h: `reg_global_rows()`'s `drop1` refits (still routed from 20f-i),
+`reg_stage_tips()`'s two halves, and the deprecated-call corpus sweep.
+
+---
+
+#### Phase 20f-iii — the S axis: `reg_spec_build()`, and the parallelism it unlocks
+
+**DONE (2026-08-16), both halves.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6959** — the
+inherited warning count exactly, and +39 assertions from this phase's own two fixtures.
+`dev/verify_reg_specs.R` reports **9 of 290 cases changed, all in ONE declared way** (below), and
+⚠ **ZERO cases with a message-ORDER change** — the price the plan of plans and the study both said
+was irreducible was not paid at all, and that is the phase's most useful negative result.
+`test-parallel-parity.R` green **unsandboxed** (PASS 20) with a new case per axis.
+
+**`reg_build()`'s per-MODEL half is ONE declared product.** Six stages carried their own
+`map(specs, …)`, plus `_assemble`'s per-column `reg_set_obs()` reading `fits[[fi]]`, so *"which
+parts of the table are per-model and which are between-models"* took four files to answer. Now
+**`R/reg-spec-build.R`**: `reg_spec_build(i, ctx, emp_shared)` → `new_reg_spec_product()` (the
+fourth record constructor, same idiom), doing in one place what one model contributes — fit,
+columns, GOF / global / check rows, its `add_n` count, its observed block, its `obs`/`gap_se`, its
+two tooltip fragments. `tab_reg.R` **4762 → 4573**; the stages above it are cross-spec **assemblers**,
+and `reg_stage_columns()` / `reg_stage_empirical()` are gone into it. Details in the Repository Map.
+
+**THE PAYLOAD RULE, and why it is what made the S axis dispatchable**: the product carries no fit
+and nothing referencing one. **Two exceptions, each declared and each identical to a reason that
+shape is serial anyway** — `fit` (sole consumer `reg_compare_rows()`) and the crude block's
+60–100 MB `$frame`/`$fits`, kept only for the block SHARED with the compared models
+(`reg_emp_slim()` drops them elsewhere). **`reg_specs_independent(ctx)`** is the one predicate —
+`NULL`, or the *reason*, reported only when `parallel` was explicitly asked for — and its three
+reasons are facts about the statistics: a comparison is a test BETWEEN fits · compared models share
+spec 1's observed block · an all-coefficient compound formula reads its skeleton off the first fit.
+
+**`parallel` is now a shared argument of both producers (KEY 4), over all three axes** — the models
+of one table (S), the `tab_vars` groups (G) and the outcomes of a multi-outcome recursion (R) — and
+`R/tab-parallel.R` **needed no change**: `tab_pmap()` was already generic, so the option, the worker
+count rule, the pool, `tab_parallel_stop()` and 20f's condition relay are the same ones. jamovi is
+serial by construction (`tab_parallel_workers(cache_env =)`), with no new rule.
+
+**Three producers became per-spec** — `reg_gof_tibble()` → **`reg_gof_rows()`**, `reg_global_rows()`,
+`reg_check_rows()`. Each had exactly ONE caller and each loop body was already a pure function of
+`i`; leaving them vectorised and calling them with singleton lists would have been a half-migrated
+representation.
+
+**Two loop-carried de-duplications became a DECLARED per-spec plan** (`reg_stage_setup()`'s
+`spec_plan`): `add_n`'s "one count column per distinct outcome" `break`/`next` pair, and 20f-ii's
+crude-block `break`. A worker cannot reproduce a loop-carried skip, and a reader had to simulate one.
+
+**Two placeholders**, because a worker cannot know post-`make.unique()` facts: the footer rows' `col`
+(rewritten wholesale per product — every row of one model shares one) and the tooltips'
+`(column index, skeleton row)` pair. The second also **freed the tooltips from needing
+`reg_stage_rows()` to have run**, which is what let the row axis move after the loop.
+
+**THE DECLARED DELTA, and it is not the one that was expected.** 9 of 290 harness cases changed, all
+in the same way: an ABORT inside the fit loop no longer wears purrr's `i In index: N. Caused by
+error in ...` wrapper, because that loop is no longer a `purrr::map()`. The message is strictly more
+direct (`"score" scores must lie in 0..4` instead of two frames of context), and all nine are
+self-identifying (each names the variable). ⚠ what is LOST is `i With name: m1.` on a models list —
+an error in the 2nd model of a comparison no longer says which model. Recorded rather than papered
+over. **No message ORDER moved**: the only per-spec emitters are the fit itself,
+`reg_marginal_basis_warn()` and the Brant test, and no harness case combines two of them across two
+specs.
+
+**MEASURED** (`dev/benchmarks/results_2.0.0/phase20f2_*_20fiii.*`, harness gained a section 1d
+"THE ACHIEVED SPEEDUP" beside 20f-ii's ceilings): the S axis delivers **2.93×** on four
+outcomes, **2.74×** on three balanced models, **2.20×** on the R axis (2 outcomes × a models list)
+and **2.03×** on two outcomes; the G axis **1.93×** over eight EVEN survey waves and **1.08×** over
+four uneven race groups — its balance figure, confirmed. ⚠ five of the eight rows come out ABOVE
+§6.2's ceiling, which is that ceiling's own conservatism (a unit built alone re-runs the argument
+boundary), not a contradiction. ⚠ at teaching scale the question is moot: 0.25 s → 0.23 s, which is
+why the doc sentence names the shape that pays.
+
+**HONEST CONCERNS.**
+
+- ⚠ **The product's `fit` slot is conditional** (populated only when `compare != "none"`). Declared
+  with its single consumer and single reason, and unreachable otherwise because the same condition
+  forces the serial path — but a conditional slot is the kind of thing that bites, and it is the one
+  place the record is not uniform.
+- ⚠ **A worker's ERRORS are not relayed like its messages.** `tab_pmap_trampoline()` catches
+  conditions deliberately and not errors (mirai's `[.stop]` re-throws the first). So under
+  `parallel`, a failing model surfaces with a different call stack than serially, and with several
+  units it may be a *different* model's error that is reported. Pre-existing on `tab()`, inherited
+  here.
+- ⚠ **`reg_stage_specs()` ships the WHOLE ctx** as `tab_pmap()`'s one `.ship` element. That is the
+  right split (everything big — `data`, `skeleton_data`, a prebuilt design — is inside it, sent once
+  per dispatch) but it means a future ctx key holding something enormous would travel silently.
+- **The parallel payoff stays narrow, and the doc sentence says so**: the pool costs ~1.6 s on its
+  first dispatch, so `parallel` is a loss below roughly 5 s of work, and two uneven units cannot
+  reach 2× at all. `parallel_min` stays `2L` — `tab_reg()` obeys the argument as `tab()` does
+  (maintainer's ruling) — so it is the doc, not a heuristic, that carries the caveat.
+- **`R/` grew ~+250 net** (+433 for the new file, −189 from `tab_reg.R`, ~+6 elsewhere).
+  Expected, and not the metric: what moved is that the per-model half of a regression table is one
+  declared object, and the file that used to hold it lost the six loops.
+- **The multinomial-comparison grid rebuild was left alone.** In a multinomial model comparison with
+  `empirical`, specs 2..S have no crude block of their own, so each tooltip block re-runs
+  `reg_empirical()` — 20f-ii's §6.4 redundancy, one shape further in. Reusing spec 1's grid would be
+  byte-identical only if every spec resolves the same `y_ref`, which holds today but is not stated
+  anywhere; **routed to 20f-iiii** rather than assumed -- where lifting the crude block out of the
+  loop entirely (it is the OUTCOME's, not spec 1's) would delete it for free.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — but ⚠ **20g owes
+one UI item**: nothing exposes `parallel` in the jamovi panels, and nothing should (the live cache
+forces serial), so what 20g must NOT do is add a checkbox for it.
+
+**FOLLOW-UPS.** 20g can start on this commit. **20f-iiii** (new, added this session) owns everything
+this phase routed and everything it left honest: the three refusals of `reg_specs_independent()`,
+the worker-error relay, the multinomial-comparison grid rebuild, `reg_global_rows()`'s `drop1`
+refits (from 20f), and the product-slot census. `reg_stage_tips()`'s two halves (routed here by 20e)
+are CLOSED — 20f-iii split them into `reg_spec_tips_mnl()` / `reg_spec_tips_num()`. 20h keeps the
+deprecated-call corpus sweep.
+
+---
+
+
+
+#### Phase 20f-iiii — the reg framework: finished, and CLEAN under parallelisation
+
+**DONE (2026-08-16), all three parts.** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 6987** — the
+inherited warning count exactly, +28 assertions. `dev/verify_reg_specs.R`: **3 of 290 cases changed,
+all in the ONE declared way** (below); every spec, `reg_call()`, column attribute, label and test key
+IDENTICAL, and every other message identical **in order**. `test-parallel-parity.R` green
+**unsandboxed** (PASS 26) with three new cases.
+
+**THE THREE REFUSALS, each MEASURED before it was kept or removed** — 20f's own rule that *"keep it,
+with the number written down" is a complete answer*. Study: `dev/tabxplor_reg_performance.md` **§8**.
+
+1. **`compare != "none"` — DECLARED KEEP, with the number.** 20f-ii measured *transport* at 0.05 s
+   for a 16 MB frame, which made the refusal look like caution. Measured on the fits themselves it
+   is not: **one `reg_fit()` result serialises to 162.4 MB at n = 200 000** — `$fit$model` 94.7 MB,
+   and `$fit$family` / `$formula` / `$terms` **87.8 MB each**, because a family object, a formula and
+   a terms object each close over the frame they were built in. Three fits ≈ half a gigabyte. The
+   `reg_compare_digest()` alternative would re-implement `anova.svyglm` → `regTermTest` (hard rule
+   5), so it was not attempted.
+2. **`skeleton_deferred` — KEPT, and UNREACHABLE from `tab_reg()`.** `compound` is only ever
+   `formula_mode`, which refuses `predictors` and takes one bare LHS ⇒ **exactly one spec** ⇒
+   `reg_specs_independent()` returns at its `length(specs) < 2L` guard first. And
+   `reg_crude_key(compound = TRUE)` is `NA` ⇒ `empirical` is turned off at the boundary, so a
+   deferred skeleton and a crude block **cannot co-exist** (now a build-time `stopifnot`). It stays
+   as the invariant for a direct `reg_build()` caller. A fit-free twin was measured and refused: it
+   diverges per fitter and would need a second producer of `reg_fit()`'s frame preparation.
+3. **the crude block — REMOVED**, and it was a *modelling* mistake, not a payload one.
+
+**A2 — the observed (crude) block belongs to the OUTCOME.** `reg_stage_crude()` builds it once,
+before any model, for every one-outcome table; a several-outcome table keeps its blocks per spec,
+where each spec IS an outcome and the work stays on the parallel axis instead of serialising into a
+pre-pass. It is **fit-free**, which is what makes it liftable — the two facts it read off the model
+have exact producers of their own (`reg_positive_level()`, the function `reg_prep_binary()` itself
+calls to order the levels; and the outcome's first level, which `reg_crude_yw()` already collapses
+any foreign `ref_category` to, so **`y_ref` moves no number, provably**). Details in the Repository
+Map. What it deleted: `share_crude` · the `emp_shared` argument and hand-down · the loop's last piece
+of carried state · `reg_emp_slim()`'s three-slot allow-list (a block leaves as its COLUMNS, so the
+payload rule has **one** exception left) · refusal 2 · and **§7.4's first routed redundancy**,
+`reg_spec_tips_mnl()`'s second `reg_empirical()` producer, whose "byte-identical only if every spec
+resolves the same `y_ref` — true today, stated nowhere" caveat is a `stopifnot` now.
+
+⚠ **Two traps the design pass caught before they shipped**: the NUMERIC tooltip must stay on the
+block (reading `own %||% crude` would make specs 2..S re-emit identical `Obs_*` rows — exactly what
+20f-ii deleted), and `want_crude` must **not** be gated on `!at_profile` (under
+`effect = "at_reference"` the block is still built; only `obs` is withheld).
+
+**THREE SILENT DEFECTS, found by measuring refusal 3** — all in the compound-formula path, all with
+fixtures. Measured through `tab_reg()`: `party3 ~ race * age` built **4 rows instead of 7** and
+`inc3 ~ race * age` **5**, both losing `age` and both interactions.
+
+- ⚠ **`reg_fit_multinom()` / `reg_fit_ordinal()` never saw the user's formula.** They BUILT one from
+  the bare predictors, so a compound formula was silently reduced to main effects — the interaction
+  left the **model**, not merely the table. `reg_fit_formula()` is the one rule now (the glm arm's,
+  which fitted `formula` verbatim all along). ⚠ both then need `environment(fml) <- environment()`:
+  they store their call and re-evaluate it (`model.frame.multinom`, which `reg_skeleton_from_fit()`
+  reads), so a formula carrying the user's environment resolves `fml` nowhere.
+- ⚠ **`reg_skeleton_from_fit()` indexed `names(coef(fit))` with the model matrix's `assign`.**
+  `coef()` is a **matrix** for `nnet::multinom` (`names()` NULL → every non-pure-factor term produced
+  zero rows) and **one short** for `MASS::polr` (no intercept, while `model.matrix()` has one). It
+  reads `colnames(model.matrix(fit))` now — the vector `assign` indexes by construction, identical
+  for lm/glm/svyglm, which is why this went unseen.
+
+**B — the worker error relay** (`R/tab-parallel.R`, both producers). `mirai_map(...)[.stop]` re-threw
+mirai's own wrapper *before* the condition replay, so a failure **discarded every message the
+successful units had already produced** — the diagnostics that explain it — and what surfaced was a
+`miraiError`, not the worker's condition. The trampoline catches its unit's error and returns it on
+the payload; `[]` collects; the replay runs up to and **including** the failing unit (serially the
+ones after it never ran, so replaying them would show output the serial branch cannot produce).
+`tab_cnd_strip()` makes a condition safe to send back — ⚠ non-optional, `reg_fit()`'s
+`do.call(survey::svyglm, list(fml, design = ...))` puts the whole design in the error's own `call`.
+`reg_spec_build()` wraps its body and names the **model's label**; `tab_pmap(.names =)` names the
+unit, **in the serial branch too**, so purrr's `i In index: N` is gone and both branches say one
+sentence. ⚠ the de-duplication is by NAME, not by class: the axes nest, so an inner failure
+legitimately gains an outer name (`Build failed on "score". Caused by: Model "m1" could not be
+built.`).
+
+**C — the declarations.** The **nesting rule** is stated and enforced once, in `tab_pmap()`'s
+`everywhere()` block (the option snapshot's `^tabxplor\.` regex was **shipping the user's
+`tabxplor.parallel` into every daemon**; the three `parallel = FALSE` unit sites masked it only
+because an argument beats an option — they stay as defence in depth, each a one-line pointer).
+⚠ A helper function was rejected: the three sites assign three different shapes, so it would be
+three overloads of one word. Two **declared keeps** where they sit: `reg_global_rows()`'s `drop1`
+refits (the only cheaper route is a Wald test, a *different number* — 20f's `drop1` 12.47 vs `anova`
+14.25 precedent) and `reg_interaction_rows()`, the fourth fitting site, which lives after the split
+barrier and needs the POOLED data, so it is a different question rather than a missed axis. **Census
+deletions**: product slots `nobs` / `y_ref`, ctx keys `fit_ncol` / `fit_of_col` (zero readers
+package-wide), `emp$crude_key` (write-only), and a stale comment claiming two consumers read
+`fit_of_col` — both use `fit_first_idx`. ⚠ `emp$fac_preds` was a census candidate and is **alive**
+(`reg_set_obs()` reads it); said so in one line.
+
+**A real jamovi hole, closed**: in **staged** mode `jmvtab_reg_build(use_cache = FALSE)` passes
+`.fit_cache = NULL`, so `parallel` fell through to the option — a user who had set
+`tabxplor.parallel` would have jamovi spawning daemons inside its own R process, for a UI that
+repaints on every click. One word, plus a fixture pinning both cache modes.
+
+**THE DECLARED DELTA: 3 of 290 harness cases, all multi-spec aborts**, each now naming the model
+(`Model "m2" could not be built. Caused by: …`) instead of an anonymous error or purrr's
+`i In index: 2.`. All three are strictly more informative, and the nested case now names **both**
+the outcome and the model.
+
+**MEASURED** on the shape A2 un-refuses (three models on one outcome with `color = "adjustment"`,
+n = 200 000): **9.06 s serial → 6.08 s with `parallel = 3`, 1.49×**. ⚠ Lower than the 2.74× the same
+three models reach *without* a crude block, and the reason is Amdahl, not the dispatch: the block is
+now a serial pre-pass, so the univariable crude fits do not ride the pool. Building it per spec
+instead would parallelise three identical copies of one answer — which is what 20f-ii deleted. The
+honest reading is *refused → 1.5×*, with the remaining serial share the correct answer to "how many
+times should this be computed".
+
+**HONEST CONCERNS.**
+
+- ⚠ **The compound-formula fix CHANGES NUMBERS** on multinomial and ordinal tables that use the
+  escape hatch: they now fit the model the user wrote. Nothing pinned the old behaviour (it would
+  have been pinning a bug) and no harness case covers that combination, so the fixture in
+  `test-tab_reg.R` is the only guard — it asserts the row axis matches the glm arm's on the same RHS.
+  This was **not in the phase brief**; it was found by measuring refusal 3 and fixed because leaving
+  it would have made the skeleton fix "work" only by matching a wrong model.
+- ⚠ **`reg_stage_crude()`'s block rides the shipped ctx** to every daemon (`$frame` + `$fits`,
+  60-100 MB at survey scale) whenever a models list dispatches with `empirical`. Shipped whole and
+  measured rather than pre-emptively slimmed — the 1.49× above is *with* that cost. A
+  table-scalar slimming rule is written down in the plan if a future measurement wants it.
+- **`reg_specs_independent()` still names two reasons**, not one. The phase's metric asked for
+  "NULL for every shape a user actually builds, or ONE reason with a measurement" — refusal 2 is
+  provably unreachable from the public API, so a *user* meets exactly one; the second survives as an
+  internal invariant, which is a different thing from a user-facing exception.
+- **A worker error has no backtrace** (`tab_cnd_strip()` removes it, and it must). The unit's name
+  replaces it. Stated where the stripping happens.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is needed** — 20g still owns the
+outstanding rebuild, and ⚠ still must NOT add a `parallel` control (the module is serial by
+construction, now in code rather than in a comment).
+
+**FOLLOW-UPS.** 20g can start on this commit. 20h: the deprecated-call corpus sweep, and the two
+items this phase re-declared rather than removed (`reg_global_rows()`'s refits, and whether the
+shipped crude block ever needs slimming).
+
+---
+
+#### Phase 20g-ii — jamovi: the level-collapse UI (★)
+
+**DONE (2026-08-17).** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 7182**, against the inherited
+FAIL 0 / WARN 58 / PASS 7138 — same warning count, +44 assertions, nothing red. All four harnesses
+print the declared result: `dev/verify_reg_specs.R` **IDENTICAL** over 290 cases (against a baseline
+saved from a pristine worktree of HEAD) · `dev/verify_color_attrs.R` **IDENTICAL** (293) ·
+`dev/verify_tab_args.R` **IDENTICAL** (167 resolver cases + 52 tables + 30 messages) ·
+`dev/verify_golden_field_delta.R` *"only the declared addition differs"* over 1 788 cells × 36
+goldens — i.e. **zero golden churn**. `Rscript dev/generate_jamovi_js.R check` clean.
+**And the module is not left inert**: `jmvtools::prepare()`, `i18nUpdate("fr")` and
+`install(home = "flatpak")` all ran on this box, so the `.h.R`, `0000.yaml` and `inst/i18n/fr.json`
+in this commit are the compiler's own. Only the live click-through is the maintainer's.
+
+**THE FEATURE**: a tick-box beside each level meaning *"merge this level into the one above"*,
+chained ticks collapsing a run, and one text box spanning the run to name the merged level — the
+last ★ of Phase 20, and one of the two things every real crosstab user does (the other, lumping by
+count, has been `other_if_less_than` since 1.x).
+
+**THE R HALF IS ONE OPERATION, PRE-AGGREGATE** (the maintainer's ruling, and it earns its keep):
+`R/row-model.R` owns the declared spec (`new_lvl_collapse()`, in `forcats::fct_collapse()`'s own
+shape), `R/tab.R` the applier (`tab_collapse_levels()`), called from `tab_prepare()` one line
+**before** `tab_lump_others()`. Details in the Repository Map. Two consequences worth stating:
+
+- **it is provably `tab()` on a frame the user collapsed themselves** — the fixture is an
+  `expect_equal` against exactly that, on both producers — so pct bases / `tot_n` / `n_eff` / the χ²
+  all follow with no code of their own;
+- **it costs a tier-1 jamovi cache MISS per merge edit**, and that is asserted, not tolerated. The
+  alternative (collapse the aggregate keys *and* the microdata) is two implementations of one
+  operation, and the design-based `n_eff` path reads microdata anyway.
+
+⚠ **The cache hazard, and it would have been silent.** `ce$fp_map` is fingerprinted in
+`jmvtab_build()` **before `tab()` runs**, on the raw columns, so a pre-aggregate merge moves no
+fingerprint: without naming the spec in the tier-1 keys the module would have served the un-merged
+aggregate. The tier-2 test key names it too, explicitly — it would ride the tier-1 keys in every
+ordinary shape but not when every col_var is a self-crosstab, and **a merge changes the χ²'s df and
+p where a reorder does not**. Tier 3 needed nothing (`structural` is a negative set), which is the
+same property that made `levels_order` free in 7g-ii.
+
+**THE UI IS ONE CONTROL, because reorder and merge are one object**: a merged run is a run of
+CONSECUTIVE levels *in the order the user chose*, so a separate widget would have had to mirror this
+one's order. `levelOrderCtrl` → **`levelsCtrl`** (a control that merges cannot go on being called
+"levelOrder"), its list is now a 3-column CSS grid `[level | tick | merged name]` with the name box
+placed by `grid-row: … / span k`, and **`renderTree()` gives each axis a FULL-WIDTH row** instead of
+the two-column grid — the "whole-panel change" the brief flagged, and what gives the name box room.
+A tick belongs to the **LEVEL**, not the position, so a move simply re-forms the runs.
+
+**THE SHARED BLOCK.** `dev/generate_jamovi_js.R` gains a second marker pair, `BEGIN/END SHARED`, and
+`splice()` is generalised to named blocks: the merge list is written once in `jmvtab.js` and
+**copied verbatim** into `jmvtabreg.js`, where it hangs off each factor predictor's reference row
+(merge only — `ref` picks the baseline explicitly). It is the first *copied* rather than *generated*
+block, and it rides the same `check` mode, which is why ~120 lines of export/subtext/CSS helpers
+already duplicated between the two files did not become ~230.
+
+**FIVE DEFECTS / GAPS, each with the fixture that fails without it.**
+
+1. ⚠ **The name rule passed `levels_collapse` only by COINCIDENCE**, and the gate said so on its
+   first run: `startsWith(nm, "levels_")` matches because `tab()` has a `levels` formal, not because
+   `.levels_order` exists — and `tab_reg()`, which has no such formal, made it fail. The rule reads
+   the **declaration** now (`TAB_ARGS`' internal dot-args, de-dotted), so both pass by intent and a
+   rename of `tab(levels =)` cannot silently remove the justification.
+2. ⚠ **`JMV_TAB3_REAPPLIED ⊆ names(opts)` was asserted nowhere**, although the ⚠ beside that vector
+   has said since 19k that a misspelt name silently sends its option into the base key — which *is*
+   D12. Hoisted to a constant, one fixture — **and it immediately found `n_min` missing from the
+   `jmv_opts()` test fixture**, i.e. the fixture's tier-3 key was not the real one's.
+3. ⚠ **A `var` capture in a `while` loop**: every merged-name box's `change` handler would have read
+   the LAST box created, so typing in one run's name would have renamed another's. Caught on review
+   (there is no JS engine on this box); both `box` and `levels` ride the IIFE now.
+4. **`man/jmvtab.Rd` / `man/jmvtabreg.Rd` were stale since 20g-i** — that phase ran `prepare()` but
+   not `document()`, so the reference pages still listed `refLevels` / `levelOrder` / `method_*`.
+   Fixed by this phase's own `document()`.
+5. **`jmv_order_after_collapse()`** — not a defect but the design's sharpest point, and it would have
+   been one if missed: the tick list shows the **SOURCE** levels (it must, or a merge could not be
+   undone), so the JS writes a RAW order, while the table's levels are the merged ones. Without the
+   mapping, `jmv_relevel_cols()`'s `ord[ord %in% levels(f)]` would drop every merged level's raw
+   names and a reorder would silently revert to the collapse's own positioning.
+
+**HONEST CONCERNS.**
+
+- ⚠ **The JS is unverified by any engine.** No `node`, no `V8` on this box (the standing "there is no
+  JS syntax gate and there cannot be one here"). What was done instead: a bracket-balance check, a
+  full re-read, and the two `var`-scope traps fixed by inspection. **The live click-through is the
+  real gate**, and it is the maintainer's — specifically: tick a level, chain two, type a merged
+  name, move a level into a run, and check the reference drop-down offers the merged label.
+- ⚠ **Moving a level INTO a merged run splits it and drops the merge.** Deliberate: a run must be
+  contiguous in the displayed order, and keeping a non-contiguous group behind a display that shows
+  the levels apart is worse. The ticks disappear where the user can see them. Stated in the code.
+- ⚠ **`grid-row: … / span k`** is the one genuinely new DOM technique here. If it misbehaves in the
+  Electron panel the fallback is the name box on the run's first row with a bracket down its side —
+  decide by looking, not by guessing.
+- **`.levels_collapse` is INTERNAL**, on both producers (the maintainer's ruling, confirmed this
+  session against the differentiator-4 argument). The R route is `forcats::fct_collapse()` before
+  the call, which the pre-aggregate placement makes *exactly* equivalent — and `?tab`'s `.cache`
+  block now says so, as `.levels_order`'s sentence already did for `fct_relevel()`.
+- **Merging every level of a variable** leaves a 1-level factor (χ² df 0). Allowed, not aborted.
+- **`JMVTAB_CACHE_SCHEMA` 18 → 19**: the stored VALUES are still readable, which is precisely why
+  stale entries must be discarded rather than evicted — a pre-20g-ii entry would be served for a
+  merged table.
+- The 58 warnings are the pre-existing step-API deprecations; the corpus sweep is still **20h**'s.
+
+**FOLLOW-UPS.** 20h can start on this commit. Owed to it: the live click-through's findings, and
+`test-jamovi-vocabulary.R`'s remaining blind spot — `ui[nm]` bracket access (`applyVarEnables`,
+`bottomAlignInRow`, `arrGet`/`arrWrite`, `applyModelEnables`) is invisible to the `ui.<name>` regex,
+so a rename of `totaltab_*` / `comp` / `xl_replace` would still no-op in silence.
+
+---
+
+#### Phase 20g-i — jamovi: the boundary speaks the 2.0.0 vocabulary
+
+**DONE (2026-08-17).** Full suite **FAIL 0, WARN 58, SKIP 4, PASS 7138**, against the inherited
+FAIL 0 / WARN 58 / PASS 6987 — same warning count, +151 assertions, nothing red.
+`Rscript dev/generate_jamovi_js.R check` clean. **And the module is not left inert**:
+`jmvtools::prepare()`, `i18nUpdate("fr")` and `install(home = "flatpak")` all ran on this box, so
+the `.h.R`, `0000.yaml` and `inst/i18n/fr.json` in this commit are the compiler's own and the
+renames are LIVE. Only the live click-through is the maintainer's.
+
+**THE RULE THIS PHASE INSTALLS**: *a jamovi option is named after the producer argument it drives* —
+exactly, or as `<argument>_<slot>` when several options fold into one — or it is in a declared
+exception list with its reason. That is KEY 1 one layer out, and it is now **checked**.
+
+⚠ **Why it had to be: the gate could not see the Phase 20b/20c renames.** `test-jamovi-vocabulary.R`
+compares List **values**; what moved was **argument names** — so it stayed green (166 assertions)
+through the reg panel showing `dependent` / `split_var` / `method` / `multiplicator` / `shapes` /
+`refLevels` for arguments called `outcome` / `tab_vars` / `ci_method` / `multiplier` / `shape` /
+`ref`, and `expect_true("shapes" %in% names(o))` actively PINNED one of them. CLAUDE.md's "goes red
+on any rename" was true of renamed *values* only. The differentiator-4 promise — *the UI shows R
+argument names on purpose, so a user learns the API by clicking* — was quietly false for six months.
+The gate is 304 assertions now and grew three blocks: option NAMES · every `.u.yaml` `optionName:` ·
+**every `ui.<name>` in the hand-written `.js`** (the only test that file has ever had).
+
+**It caught two of my own misses on its first run** — `ui.refLevels` / `ui.levelOrder` in
+`jamovi/js/jmvtab.js`, which my rename regex had excluded by construction (a negative lookbehind on
+`.`). A control naming a dead option fails SILENTLY in jamovi: it renders inert, and every
+CustomControl guards with `if (!ui.x) return;`.
+
+**THE RENAMES.** `jmvtabreg`: `dependent`→**`outcome`** · `split_var`→**`tab_vars`** ·
+`method`→**`ci_method`** · `multiplicator`→**`multiplier`** · `shapes`→**`shape`** ·
+`refLevels`→**`ref_levels`** · `depFamily`/`depModelLevel`/`depTrials`→**`family`** /
+**`outcome_level`** / **`trials`** · `compare`+`baseline`→**`stats_compare`** + **`stats_baseline`**,
+whose ComboBox values are now the R keys themselves (`compare_baseline`, `compare_sequential`).
+`jmvtab`: the four `method_*`→**`ci_method_<slot>`** (⚠ they are named in `jmv_tab3_base_key()`'s
+`reapplied` vector, which is D12's exact trap — `structural` is the NEGATIVE set, so a name that is
+not an `opts` key silently sends its option into the base key) · `refLevels`→**`ref_levels`** ·
+`levelOrder`→**`levels_order`** (the internal argument it drives). `lvs` stays, declared: `jmvcore::
+Options` already defines a `levels()` method. ⚠ **A rename discards that option's value in
+already-saved `.omv` files** — 19k's accepted precedent, in `NEWS.md`.
+
+**THE TWO OWED CONTROLS.** `stats_checks` (20f's explicit debt: the two checks that refit the model
+have been opt-in since 20f and nothing offered them) and `add_n`. `jmvtab_reg_stats()` grew a third
+argument and stays the one folder — measured, not assumed: `reg_resolve_stats(c("all",
+"compare_baseline"))` already returns `list(stats = "all", compare = "baseline")`, so `"all"`
+composes with a comparison key and **no R change was needed**.
+
+⚠ **But the tick-box would have been INERT, and that is this phase's real finding.** The digest fast
+path *distils the fit away*, so `reg_check_rows()` asks `reg_checks_for(has_fit = FALSE)` and drops
+every fit-based row. Measured on the same model: **9 footer rows without the cache, 5 with it** — so
+a single-model jamovi table has never shown `global_lr` / `dispersion` / `influence` /
+`collinearity`, and `stats = "all"` would have added nothing. `stats_checks = TRUE` now turns the
+live fit cache off for that build (the `use_cache` lever staged mode already uses): the control
+means what it says, at the price of a refit per edit, and default-off is byte-unchanged.
+
+**THE SWEEP.** The four `# ⚠ 20g` translation lines and their shims · the retired `"OR"` inside
+`reapplied` · `jmvreg_fit_key()`'s `inverse =` member (the retired `inverse_two_level_factors`
+spelling — a member NAME is part of the hash, so **`JMVREG_CACHE_SCHEMA` 5 → 6**) · the three
+constant label keys, which became ONE `total_names` of the option's own shape (the module
+*translates* them — the R option is seeded in English — it does not ask) · two dead commented-out
+option blocks and a `# filter` section header sitting over the display+export block · five
+commented-out result items in `jmvtab.r.yaml` · two interleaved roxygen blocks in
+`jmvtabreg-cache.R` (`jmvtab_reg_mult_vector()` had none at all; half of `jmvtab_reg_staged()`'s sat
+above a different function) · the hint reading *"Select a **outcome** (outcome) variable"* · stale
+prose naming `reference` / `exponentiate` / `tab_reg(multiplicator =)`.
+
+**THE STALE-NOTE VERDICTS**, both measured rather than carried:
+
+- **The `ci = "cell"` + mixed col_vars divergence does NOT reproduce.** `tab()` and `jmvtab_build()`
+  both give `pct_ci pct_ci pct_ci pct_ci mean_ci`. 19j/19k closed it; the note (plan of plans §7.3)
+  is deleted and a fixture pins it.
+- **`jmvcore::Options` has no setter** (`get`/`has`/`values`/`levels`/`option`/`read`/`eval`, and no
+  `set`), so the brief's *"resolve the Documents folder at load and write the actual path into the
+  text box"* is **not buildable** from R. Maintainer's ruling: leave the export path alone — the
+  Phase-o routing fix already resolves a redirected/UNC Documents and the status line already prints
+  the path actually written.
+
+**THE REBUILD, and what it closed.** `jmvtab.a.yaml` declared **13** `display` values while the
+generated `.h.R` carried **9**: `{or} ({pct})`, `ctr`, `mean` and `var` were added in 19k *after* the
+2026-08-13 `prepare()` and were unreachable in the running module. All 13 are live now.
+**i18n, measured rather than waved at**: `i18nUpdate("fr")` pruned **54** translated msgids — **31
+already stale** (options retired in 19e/19k/z14 and never swept: `ids`, `strata`, `fpc`, `at`,
+`exponentiate`, `AME`…) and **23 from this phase's label renames**, of which I restored all 23 by
+carrying the old French across (the translation always kept the English argument name and translated
+only the parenthetical, so it is mechanical). Compiled `fr.json`: 203 → **172** translated strings,
+the delta being exactly the 31 stale ones. ⚠ One landmine found doing it: an **unescaped** `"` in a
+`msgstr` breaks the compiler's PO parser outright (*"Invalid key name"*) — an escaped one in a
+`msgid` has always been fine (`other_if_less_than`'s title proves it), so the fix is escaping, not
+avoiding the character.
+
+**HONEST CONCERNS.**
+
+- ⚠ **`tests/testthat/helper-benchmark.R` had drifted since 19k** — it still built its jmvtab opts
+  with `OR` and `chi2`, options retired then, so the benchmark was silently measuring a *different*
+  table. Fixed here, and it is the same disease one layer out: the new gate polices the module's own
+  files, not a test helper that hand-mirrors them.
+- ⚠ **`test-jmvtabreg-cache.R`'s `reg_opts()` helper needed restructuring**, because an ARRAY option
+  and the helper's scalar convenience field now share a name (`family`, `trials`, `multiplier`). The
+  convenience ones are `..`-prefixed. A helper rewritten in the same commit as its subject is worth
+  saying out loud — the parity assertions themselves are untouched.
+- **Nothing was added to `jmvtab`.** Measured: no argument added in 19d–19m lacks a control there.
+  The ones still absent — `tot`, `common_totrow`, `spread_vars`, `color_breaks` — are *teaching*
+  decisions, not mechanical gaps, so they are reported here for the maintainer rather than added on
+  my judgement. `parallel` must **not** get one (the live cache forces serial).
+- **The live click-through is still owed** (the maintainer's): both collapse-box trees, the model /
+  reference / shape pickers, the new `stats = "all"` box and `add_n`, and export.
+
+**FOLLOW-UPS.** **20g-ii** owns the ★ level-collapse UI, and its design is settled — recorded here
+so the planning is not lost:
+
+- **R half — a pre-aggregate microdata recode** (maintainer's ruling). One `fct_collapse()` in
+  `tab_prepare()` beside `tab_lump_others()`, i.e. the mechanism `levels = "first"` already uses,
+  and **before** the lump so a merged level's combined count faces `other_if_less_than`. ONE
+  implementation, provably identical to `tab()` on pre-collapsed data, and pct bases / `tot_n` /
+  `n_eff` / the tests all follow. The carrier is an internal `.levels_collapse` beside
+  `.levels_order` (in R you write `forcats::fct_collapse()` — the reorder's own precedent).
+  ⚠ The brief's *"it is a `tabxplor_lvl` operation"* is not literally right: `tabxplor_lvl` exists
+  only on a BUILT table's index columns, while a collapse must change counts. `R/row-model.R` owns
+  the SPEC (a declared level operation); the applier belongs to the prepare stage.
+- **Cache**: tier 3 is free (`structural` is a negative set, so a new key lands there automatically —
+  and the collapse must NOT join `reapplied`); the tier-1 keys and the **tier-2 test key** must gain
+  it, the last being the correctness hazard (a collapse changes the χ², a reorder does not).
+- **Caveats to state**: a *total* level is synthetic and minted after the collapse (safe under this
+  seam); `"Others"` is created by `tab_lump_others()`, so collapse-then-lump ≠ lump-then-collapse
+  and the order must be declared; under `levels = "first"` the kept level may become a merged run; a
+  stored spec keys on RAW labels (jamovi cleans names at display, `tab()` pre-aggregate).
+- **UI**: fold into `levelOrderCtrl` — reorder and merge are ONE object, because the chain follows
+  the chosen order — extending `buildVarBody()`, and re-laying `renderTree()` as **one full-width
+  row per axis** instead of today's 2-column grid (that is the "whole-panel change" the brief
+  flags). `jmvtabreg` gets **merge only**, off the per-predictor `refPickerCtrl` row: reorder is
+  meaningless there because `ref` picks the reference explicitly. The shared half is synced between
+  the two `.js` by `dev/generate_jamovi_js.R` (a marked block copied from one source of truth, gated
+  by its existing `check` mode), never written twice.
+
+20h also inherits: the `tot` / `spread_vars` teaching decisions above, and the deprecated-call
+corpus sweep (58 warnings, unchanged).
+
+---
+
+#### Phase 20h — Harvest 1: the deletion pass
+
+**DONE (2026-08-17), all eight steps.** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 7279**, against the
+inherited FAIL 0 / WARN **58** / SKIP 4 / PASS 7182 — and the surviving warning is not deprecation
+noise but a real over-dispersion notice on a poisson fit, which is exactly what a suite should
+surface. **All four harnesses print IDENTICAL** — `verify_golden_field_delta.R` clean over 1 788
+cells × 36 goldens **with every declaration block EMPTY**, `verify_color_attrs.R` 293 cases,
+`verify_tab_args.R` 167 resolver cases + 52 tables + 30 messages, `verify_reg_specs.R` 290 cases —
+so the phase met its own contract: *a deletion pass that moves a value has stopped being a deletion
+pass*. `document()` idempotent, `tools::checkDocFiles()` silent, `generate_jamovi_js.R check` clean.
+
+**THE CENSUS, including what did not shrink.** That report is the phase's product, so it leads.
+
+|                                      | before | after         |                                             |
+|--------------------------------------|--------|---------------|---------------------------------------------|
+| suite warnings                       | **58** | **1**         | the 1 is a real statistical warning         |
+| `TAB_OPTIONS$arg` FK `allow` entries | **11** | **0**         | the checkable KEY 8 reward                  |
+| inert public arguments               | **3**  | **0**         | all three found by this phase's sweeps      |
+| dead formals                         | **15** | **0**         | proved unread, every call site fixed        |
+| exports                              | 94     | **94**        | nothing added, nothing removed              |
+| `man/`                               | 6 863  | **6 886**     | **+23 — it GREW**, see the KEY 8 correction |
+| `R/`                                 | 47 629 | 47 829        | +200, expected (§2: not the metric)         |
+| formals per producer                 | —      | **unchanged** | no signature moved this phase               |
+| ghost-comment sites                  | 164    | 164           | **routed to 22c**, not this phase's work    |
+
+⚠ **The KEY 8 correction, measured rather than assumed.** The plan's "exporters −125 Rd lines" was
+the rejected `tab_style()` bundle's saving and died with it: the exporters keep every formal by
+ruling, so each page still documents each argument, and replacing the drifted *short* texts with the
+canonical *fuller* ones made `man/` grow. **KEY 8's reward is anti-drift, not size** — 26 hand-written
+blocks became 9 declarations, five texts that were wrong or incomplete were corrected, and the
+foreign key's eleven-name exception list is empty.
+
+**THE PHASE'S REAL FIND: three inert public arguments** — documented behaviour that did not happen.
+Two of them were sitting in the "dead formal, delete it" pile, so the brief's own deletion list would
+have buried them. This is the strongest argument for doing the sweeps before the deletions.
+
+1. ⚠ **`tab_plain()` was the ONE crosstab producer of four that never finalised colour.** Measured:
+   `tab_plain(color = "difference", color_signif = "grey_non_signif")` stored `"ignore"`, while
+   `tab()` and `tab_num()` stored the real value. `finalize_color_tail()` is run by `tab()`,
+   `tab_counts()` and `tab_num()`; `tab_plain()` ended at `tab_apply_display()`, so the `color_spec`
+   its own argument boundary had already resolved was computed and dropped — and `plain_core()`
+   hard-coded `color_signif = "ignore"` while carrying the resolved value in an unread formal, which
+   is *why* that formal looked dead. Three declared behaviours silently did not happen: the policy ·
+   a legacy composite's POLICY half (`color = "diff_ci"` coloured by the difference and tested
+   nothing — 20b's decode-then-normalise warning one layer down) · a two-channel
+   `color = c(text, bg)`, which **aborted** inside `plain_resolve()` on a length-2 `if`. Byte-identical
+   on all seven pre-existing shapes, and the `df`/`num` escape hatch keeps `num_core`'s early return
+   (the tail would otherwise stamp `color_breaks` on a plain frame). The stale comment claiming
+   *"tab_plain never finalises colour — the outer wrapper is the sole finaliser"* documented the defect.
+2. ⚠ **`lang` was inert on `tab_md()` and `tab_xl()`.** `rd_footer(lang =)` exists and only
+   `tab_html()`, `tab_plot()` and `forest_plot()` passed it; `tab_md()` handed it to
+   `md_render_one()`, which dropped it under a comment saying so, and `tab_xl()` never read it at
+   all. Both now thread it — it fires only when supplied, and nothing in the corpus supplies it, so
+   zero churn.
+3. ⚠ **A source level literally named `"Total"` was silently turned into a total ROW.** `"Total"` is
+   the leaf's declared internal pre-rename sentinel, and `leaf_totrow_tottab()` derives its role
+   vectors by matching it — measured, the data row came back with `row_kind = "total"`,
+   `is_totrow() == TRUE`, bold, out of the percentage base, and the table printed **two** identically
+   labelled "Total" rows. There is no right reading of that table, so it aborts. ⚠ Two homes, both
+   needed: `tab_prepare()`'s tail (post-recode, so a collision a recode *created* is caught) and
+   `leaf_defuse_vars()` (a direct `tab_plain()` / `tab_num()` / `tab_counts()` call never reaches
+   `tab_prepare()` — the gate's own fixture caught that). ⚠ **NOT `"NA"` or `"Others"`**: measured, an
+   `"NA"` level renders correctly unless the column *also* holds real NAs, so refusing it would be a
+   false positive on an ordinary survey label ("NA" = "not applicable").
+
+**THE DELETIONS**, each re-proved before it was touched and done call-site-by-call-site (19l dropped
+one and the i18n tests caught it):
+
+- **the whole DORMANT total-column-range block** — `tab_totcol_range()`, the `range_totcol` model
+  slot, both commented-out call sites, four breadcrumbs, the `TAB_OPTIONS` note and the test section
+  that existed only to keep the helper alive. With it, `tab_fold_addn_incell()`'s `rng` branch
+  collapses to two lines.
+- **`materialize_specs()`'s `kind`** — zero readers, and its header claimed it "matched the stored
+  row-role vocabulary" when no `ROW_KINDS` value matched. The list is NAMED instead: a name costs
+  nothing and cannot make that claim.
+- **`tab_transpose()`'s unreachable duplicate abort** — `tab_check_shape()` one call earlier already
+  refuses it, and the declared `row_var`/`row_vars` move together, so the "degraded table" case it
+  guarded is caught there too.
+- **15 dead formals** across 14 functions. ⚠ **One cascade, and it is the hazard of this work**:
+  deleting `reg_checks_for(grouped)` made `reg_checks_default(grouped)` dead too, and its call site
+  passed three positional arguments — so a naive deletion would have silently bound `grouped`'s old
+  value to `has_fit`. **Three KEPT with their reason**: `color_signif_rd(producer)` (the `values_rd`
+  calling convention — the formal is the interface), `set_color_style(html_24_bit)` (deprecated-inert,
+  documented), `.onLoad/.onUnload(libname, libpath)` (R's contract). ⚠ `jmv_store_fetch()` losing its
+  `cfg` makes it the one kernel function without that first argument, so the asymmetry is now
+  **declared**: `cfg` is the schema and the byte budget, and only the functions that *decide*
+  something read it — a read does not.
+- **`REG_ESTIMANDS$obs` was NOT deleted; it got its reader.** It was `FALSE` on exactly the 13
+  `at_reference` rows of 43 and the rule was re-derived from the string downstream, so
+  `reg_stage_setup()`'s `at_profile` reads the declared column now, with the proven equality asserted
+  beside the table. Byte-identical; it turns 19b's "a column with no reader is weight" into a fact
+  and removes a re-derivation.
+
+**KEY 8 — `EXPORT_ARGS`** (Repository Map for the design). Two facts worth keeping: a **second table**
+is forced, not chosen (three names mean something else on the render side, and a named list cannot
+hold two rows per key), and only **9 of 24 rows carry prose** because the table's own admission test
+was applied honestly — `@param theme` is written seven times but `allow_auto = TRUE` is passed by only
+three backends, so seven texts describe five value sets and are not one duplicate. ⚠ The scope gate
+**caught my own error on its first run**: I gave `print` a row on the strength of a `tab_css` formal
+that is actually `print_rules`.
+
+**Also landed**: `fmt_materialize_wn()` names the `set_wn(col, get_wn(col))` round-trip, with the rule
+(`get_wn()` is the only getter with a fallback, so the write *fixes* it into the record) stated once
+instead of twice — 19o §7.4's "state the rule or drop the write", answered without dropping a write
+the goldens pin. And **the jamovi gate's bracket blind spot is closed**: `test-jamovi-vocabulary.R`
+saw `ui.<name>` but not `ui[...]`, so a rename of `totaltab_*` / `comp` / `xl_replace` / `family` /
+`trials` would have no-op'd in silence. The three forms are DERIVED from the sources' own convention
+(a literal after `ui`, an array literal whose `.forEach` indexes `ui[...]`, `Object.keys(OBJ)` with
+`ui[...]`), never a hand list — 304 → 323 assertions, and every name resolves.
+
+**THE SWEEP, and what it de-duplicated.** 58 → 1. `test-steps-legacy.R`'s 31 are quieted per block
+(its subject *is* the deprecated call, and the two blocks that assert the warning keep it); the nine
+`tab_chi2` sites in `test-calculations.R` are migrated to `tab(test = TRUE)` after measuring the chi2
+row, the ANOVA rows and the contribution sums identical — so those assertions now cover the LIVE
+path; and the identical `tab_prepare()` starwars fixture, **written six times in four files**, is
+hoisted to each file's top level, where the existing file-level lifecycle line actually bites. Four
+blocks keep an in-block quiet with a one-line reason (the step is half the subject).
+
+**HONEST CONCERNS.**
+
+- ⚠ **`man/` grew.** Stated above and in the architecture doc, because the plan predicted a −125 and
+  the measurement is +23. The pages that grew are the ones whose documentation was worst
+  (`tab_plot` +10: its `color_legend` was "Print colors legend below the table ?" and its `theme` had
+  a comma splice and denied `"print"`).
+- ⚠ **Three of the four surviving `EXPORT_ARGS` prose decisions are judgement calls**, not
+  measurements: `caption` genuinely renders five ways, but `css`, `format`, `file` and `path` are
+  *two* texts each and I read them as different rather than drifted. If 22d disagrees, moving them is
+  one `doc` each — the row already exists.
+- ⚠ **The `"Total"` abort is a behaviour change on data that previously "worked"** — it produced a
+  wrong table, but a script that fed such a level now stops. It is in `NEWS.md`. It also fires for a
+  pre-aggregated `tab_counts()` input carrying a Total row, which is correct (it would inflate every
+  base) but is the one shape a user might not expect.
+- ⚠ **The jamovi gate is a regex over source, not a parse.** No `node`, no `V8` on this box (declined
+  in 19n); the limit is stated in the test. It gates the NAMING, not the behaviour.
+- **`tab_plain()` still has no `color_breaks` formal** (it is declared for `tab`/`tab_num`/
+  `tab_counts`), so its new tail passes `NULL`. Deliberate — adding it is surface growth — but the
+  four producers are not yet uniform on that one argument.
+- **`plain_core()` is still 426 deparsed lines.** The phases are declared, not extracted; the header
+  says what the extraction would cost and why it needs its own session.
+- **`var_labels` per-call: DECLINED with the number** — 11 functions to thread, 0 corpus uses, and
+  the option already works. `pct`'s `"no"`/`"none"` item needed **nothing**: 20b's `stored = "none"`
+  field and its foreign key already declare that mapping.
+
+**ROUTED TO 20i** (which is allowed to move a value), all from the guess sweep: `tab-leaf.R`'s
+last-level-guessed-as-total fallback when nothing carries the flag · `tab.R:1491`'s
+`names() |> last()` picking the total column · the transposed "representative column" chosen by
+position, twice · `reg-resolve.R`'s `deps$est[[1]]` choosing the estimand for a whole table · and
+**per-row `obs`** (today one `at_reference` spec suppresses the crude value for the *entire* table,
+which is over-broad). **Routed to 22c**: 164 ghost-comment sites naming 107 dead functions, almost
+all legitimate historical notes. Declared keeps, with their measurements, from 20f/20f-iiii:
+`reg_global_rows()`'s `drop1` refits and the shipped crude block.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is owed**.
+
+**FOLLOW-UPS.** 20i can start on this commit; every harness baseline is current
+(`verify_reg_specs.R`'s is re-saved, and `verify_golden_field_delta.R`'s declaration blocks are empty
+and should stay so unless 20i adds something). 20i also owns the full-suite + `devtools::check()`
+checkpoint that closes Phase 20.
+
+---
+
+#### Phase 20i — Harvest 2: open integration
+
+**DONE (2026-08-17). The honest headline is the phase's product: Phases 19–20 already spent the
+large integration refactors — this IS the final 2.0.0 architecture.** Three parallel Explore agents
+plus direct reads converged on it: raw-attr discipline is total (zero fmt-attr `attr()` reads outside
+the getters), the exported inspectors are legitimate user-views over already-dogfooded machinery
+(`tab_supports` twins `tab_check_shape`, `tab_columns` twins `fmt_attrs_of`, `reg_measures` delegates
+to `reg_estimand`), the row model is fully exploited, the parallel-rule copies were collapsed in
+17i/19i/19k, and the export/plot pipeline is producer-uniform. **There is no missing key to a further
+big simplification.** So 20i CLEANS and reaps the framework's simplification rewards. All four
+harnesses print the declared result: `verify_color_attrs` **IDENTICAL** (293) · `verify_tab_args`
+**IDENTICAL** (167 resolver + 52 tables + 30 messages) · `verify_golden_field_delta` "no new field"
+over 1 788 cells × 36 goldens (**zero golden churn**) · `verify_reg_specs` IDENTICAL over 290 cases
+(the 3 flagged were a package-dir substring artifact of the baseline method, not a behaviour change).
+
+**Site 5 — per-column `obs` (the one real reachable bug).** `reg_set_obs()` gated on the table-scalar
+`at_profile <- any(!... s$est$obs)`, so a multi-outcome table with a MIXED per-outcome `effect`
+(`effect = c(a = "at_reference", b = "coefficient")` — `effect` IS per-outcome,
+`reg-resolve.R:337`) blanked `{obs}` and `color = "adjustment"` on **b's coefficient columns too**.
+Now the gate reads the column's OWN spec (`sp = specs[[i]]`, `reg-spec-build.R:253`):
+`if (is.null(e) || !isTRUE(sp$est$obs)) return(col)`. The `at_profile` ctx field is **removed
+entirely** (producer / assignment / default — the reward), and `reg_color_notes()` needs no change
+(its at_reference note describes the at_reference columns, still accurate). Measured: on a two-outcome
+`married`(at_reference) × `widowed`(coefficient) table, `Model_OR [widowed]` keeps `obs`,
+`Model_MER…[married]` withholds it; before, both were blanked. Fixture in `test-tab_reg.R`.
+
+**The load-bearing cleanups.** ⚠ **Site 3b** (`tab-export-prep.R:266`): the `emp_tips` var column
+already reads the declared `rv$var_col` (19l) — the `[[1]]` extracts the single reg-only column;
+comment now states the invariant so it is not a bare positional guess. **Site 1**
+(`tab-leaf.R:1111`): `leaf_chi2`'s `tot_cols` was built from a last-column fallback when NO total
+column exists, though read only under `if (do_ctr && any(is_tot))` — now built only when a total
+exists (the inert guess is gone). **Site 4** (`reg-resolve.R:916`): `deps$est[[1]]` is documented as
+the table's REPRESENTATIVE estimand (the per-outcome facts live in `ests`/the specs, so columns and
+legend are already per-outcome-correct; only the `reg_call` one-line summary is the first outcome's)
+— no code change, columns were never wrong. **Site 2** (`tab.R:1491`) skipped: a resolve-time
+decision that PRODUCES the total-column identity, with no earlier declared fact to substitute.
+
+**Two byte-identical DRYs (the reward).** **`fmt_has_role(x, roles)`** (`fmt_class.R`) — the ONE
+"is this fmt column one of these roles?" predicate; `get_role` was compared three inconsistent ways
+(`%in%` here, `as.character()[1]` in plots, bare `identical()` in tab.R). `fmt_is_helper_col` is now
+`fmt_has_role(x, c("n","pct"))`; the `plots.R` count-column scan and the `tab.R` footer-key skip both
+route through it. **`tab_last_factor_row_var(fct_names, groups)`** (`tab.R`) — the ONE degraded
+"which factor is the row variable?" heuristic, shared by `tab_get_vars()` (no groups → bare last
+factor) and `tab_render_vars()` (group-aware); byte-identical to both prior copies, and it fires only
+for a table with no declared index.
+
+**TAB_OPS gains a `kind` predicate.** `transpose_object` now refuses a regression FIRST, with a
+kind-specific reason pointing at `tab_export(transpose = TRUE)` (which DOES support reg), instead of
+the misleading crosstab "needs exactly one row variable" (a reg reads as `merged` via its var-role
+predictor column). Message-only on the deprecated object-level `tab_transpose()`; fixture in
+`test-transpose.R`. This is the one change that extends 19h/20a's "read it, don't discover it" to the
+`kind` axis.
+
+**DEFERRED / NOT DONE — stated clearly:** a further big refactor (**none exists**) · actually
+transposing a regression object (a product decision, not integration) · `plain_core()` extraction
+(its ~13 `tabs_*` intermediates are a wide data-flow bus all consumed at the Phase-16 carrier build,
+not a chain — the declared model gives no leverage; needs a carried struct, a separate measured
+session) · the reader-naming convention (doc/cosmetic → **22c**) · the `tab_export()` ↔
+`jmvtab_export()` twin switches (cross a deliberately thin boundary) · the `tab_kind()` sniff and
+last-factor heuristics (intended degraded contracts, unreachable by the package's own producers).
+
+**THE CLOSE-OUT `check()` EARNED ITS KEEP** — it surfaced **two pre-existing Phase 20b defects
+invisible to the test suite** (exactly the 19n lesson: examples and static analysis are not run by
+`devtools::test()`), both fixed here:
+- ⚠ a **stale `@example` in `?tab_reg`** used `reference = c(party3 = "3-Republican")`, retired in
+  20c → for an OUTCOME's baseline that is **`outcome_level`** (the multinomial pivot), so
+  `--run-donttest` **ERROR**ed. Fixed (and the one stale usage-prose spot at `tab_reg.R:4397`,
+  `reference` → `ref`; the retired-name LIST at `:4578` is correct as-is). `man/tab_reg.Rd`
+  regenerated.
+- ⚠ a **"no visible binding for global variable" NOTE** (`OR` / `tot` / `color_breaks` in
+  `tab_counts`/`tab_num`/`tab_plain`): 20b's `...`-args are bound at runtime by
+  `list2env(tab_dots_expand(), environment())`, invisible to R's static checker — declared via
+  `utils::globalVariables()` beside the existing `list2env`-pattern declarations.
+
+**HONEST CONCERNS.**
+- ⚠ **Site 5 changes numbers on a rare shape** (a mixed per-outcome `effect` multi-outcome table) —
+  the coefficient columns now correctly carry `obs`/`color = "adjustment"`. Nothing pinned the old
+  (buggy) behaviour and no golden/harness case uses that shape, so the fixture is the only guard.
+- **Sites 3b/1/4 are hygiene, not fixes** — 3b was already reading the declared identity, 1 was
+  inert, 4 was never wrong. Reported as such rather than dressed up.
+- **`man/tab_reg.Rd` moved** (the example fix); exports unchanged — no new `@export`
+  (`fmt_has_role`/`tab_last_factor_row_var` are internal).
+
+**VERIFICATION.** Targeted (`transpose|tab_reg|forest-plot|tab-estimates|calculations|fmt_class|
+adjustment-gap|between-groups-gap`) **FAIL 0, WARN 0, PASS 1550**. Full suite **FAIL 0, WARN 1,
+SKIP 4, PASS 7284** (vs inherited 20h PASS 7279; the 1 warning is the pre-existing real poisson
+over-dispersion notice, +5 from the two new fixtures) and **`devtools::check()` Status OK — 0 errors,
+0 warnings, 0 notes** on the final tree (after the two 20b fixes above), the close-out that means
+Phase 22 does not inherit a broken tree. `document()` regenerated only `man/tab_reg.Rd` (the example
+fix). No `.a.yaml` / `.u.yaml` touched → no `jmvtools::prepare()` owed.
+
+**FOLLOW-UPS.** Phase 20 is closed. To Phase 22: reader-naming convention (22c), and the `?tab_reg`
+prose trim / `family × effect × measure` generated table (22b/22d) inherited from 20c.
+
+---
+
+#### Phase 20j — Harvest 3: open cleaning
+
+**DONE (2026-08-17). The honest finding leads: there is NO further big simplification key** — 20i
+established that from the integration side, and a fresh deletion census confirms it. The biggest
+"trace of past implementation", `R/tab-steps-legacy.R` (1 425 L), is CRAN-released and kept until
+2.1.0; every legacy-decode path (`color_decode_legacy`/`COLOR_ALIASES`) and `tab_deprecate_*` shim
+serves the released 1.3.1 API; ghost/tombstone comments are 22c's declared domain. **Exactly one
+bounded set was removable, and only because `tab_reg()`/jamovi are UNRELEASED**: the retired-argument
+machinery that 20a–20i had to keep while the renames were being introduced. So 20j is a **~90-line
+deletion plus one integration**, not a new refactor.
+
+**THE INTEGRATION (KEY 4, the 20c/20h "reg onto tab_check_dots" follow-up).** `tab_reg()`'s bespoke
+`...` guard is gone; its `...` now validates through the SHARED **`tab_check_dots()`** — one
+dots-validator for both producers. The one generalisation it needed: **skip dot-prefixed names**
+(internal plumbing — `.fit_cache`, `.levels_collapse`). ⚠ MEASURED as the right split: `tab()`'s five
+dot-args (`.cache`/`.levels_order`/…) are DECLARED known in `TAB_ARGS`, so the skip is a **pure no-op
+for the crosstab producers** (verify_tab_args IDENTICAL), while `tab_reg()`'s `.fit_cache` is NOT
+declared — the skip is exactly what lets it ride `...`. A retired spelling (`dependent`/`split_var`/
+`method`/`reference`/`compare`/`baseline`/`inverse_two_level_factors`/`at`/`exponentiate`/
+`estimate_display`) now aborts as an **unknown argument** (with a suggestion), and a retired `effect`
+VALUE (`ame`/`mer`/`ame_ratio`) as an **unknown effect value** — the abort no longer NAMES the
+replacement, but a removed name still ERRORS: **no silent no-op**, which is the safety property the
+tests now pin.
+
+**THE DELETION (`R/reg-estimand.R`, −92 net).** `REG_RETIRED_ARGS` (44-line message table, 10 retired
+spellings + the dead `exponentiate_` placeholder), `reg_retired_args()`, `REG_RETIRED_EFFECTS`, and
+the retired-value block inside `reg_effect_key()`. ⚠ `reg_effect_key()` itself STAYS — its live
+validation and its `"Unknown effect value"` abort remain. `R/` net **−84 lines** (28 ins / 112 del).
+
+**WHAT WAS NOT TOUCHED, and why (the census IS the product).** `tab-steps-legacy.R` (released, 2.1.0);
+`color_decode_legacy`/`COLOR_ALIASES` and all four `tab_deprecate_*` (released 1.3.1); `set_diff_type`
+→ `set_ref_type` alias (released `fmt` export); `reg_stage_tips()` split (already done in 20f-iii);
+`tab_plain()`'s `color_breaks` (intentional factor-leaf-vs-numeric-leaf design, not a remnant). Only
+Category 1 yielded code, and only under the unreleased lever.
+
+**TEST CHURN (small, mechanical).** Five `expect_error` sites across `test-tab_reg.R` /
+`test-reg-resolve.R` (×3) / `test-reg-estimand.R` moved from asserting the old "renamed to X" message
+to asserting `[Uu]nknown argument` / `[Uu]nknown .*effect` — i.e. they now pin *"a removed spelling
+still aborts (no silent no-op)"*, which is the preserved safety property.
+
+**VERIFICATION.** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 7284** — byte-identical to the inherited
+20i numbers (the 1 warning is the pre-existing poisson over-dispersion notice); no snapshot churn.
+`dev/verify_golden_field_delta.R` **zero field churn** (1 788 cells × 36 goldens). `dev/verify_reg_specs.R`
+**IDENTICAL over 290 cases** — the 3 flagged differ ONLY in the worktree directory name inside an
+error backtrace (`tx-head/` vs `tabxplor/`), the same baseline-method artifact 20i documented; every
+spec, column attribute, label, test key and other message IDENTICAL in order. `verify_color_attrs.R`
+/ `verify_tab_args.R` provably unaffected (dot-skip a no-op for `tab`; colour engine untouched).
+`document()` produced **no man/NAMESPACE drift**. No `.a.yaml` / `.u.yaml` touched → **no
+`jmvtools::prepare()` owed**.
+
+**HONEST CONCERNS.**
+- ⚠ **The abort no longer names the replacement.** A dev typing the old `dependent =` gets "Unknown
+  argument `dependent`" (+ a fuzzy suggestion — for `at =` it unhelpfully suggests `wt`), not "it is
+  now `outcome`". Acceptable because `tab_reg()` is unreleased and no user is protected; the migration
+  aid was scaffolding, now spent. In `NEWS.md` terms this is invisible (nothing shipped).
+- ⚠ **The dot-skip introduces one narrow new silent no-op**: a MISTYPED dot-arg (`tab(d, x, .cach = e)`)
+  is now skipped instead of refused. Negligible — dot-prefixed names are internal plumbing (jamovi/
+  tests), never user surface, which is the package's own stated convention.
+- **`reg_effect_key()` now always returns `measure = ""`** (the retired block was its only non-empty
+  source). The slot is kept because callers destructure the shape; the docstring states it.
+- **This is a ~90-line phase.** That is the honest close to the Harvest trilogy, not a shortfall:
+  20h deleted, 20i integrated, 20j removed the last unreleased scaffolding. The code harvest is spent.
+
+**FOLLOW-UPS.** Phase 20 is closed (again — 20j was appended after 20i). To Phase 22: the
+tombstone/ghost comments narrating deleted shims (incl. this phase's) → 22c; everything 20i routed
+forward is unchanged.
+
+---
 
 
