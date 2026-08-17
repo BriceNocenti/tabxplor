@@ -116,11 +116,16 @@ testthat::test_that("math (sum and mean) between fmt and fmt works", {
   testthat::expect_equal(get_n(mean(fmt(1, "level_n", 2), fmt(1, "level_n", 2))), 1)
 })
 
+# Phase 20h: the prepared starwars fixture, built ONCE at top level -- where the file-level
+# lifecycle line above actually bites (testthat re-enables the warning inside every
+# test_that()). It was written verbatim in each block below.
+sw_prepared <- dplyr::starwars |>
+  tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
+              other_if_less_than = 5)
+
 testthat::test_that("fmt vectors works with mutate", {
 
-  data <- dplyr::starwars |>
-    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                other_if_less_than = 5)
+  data <- sw_prepared
 
   tab_num(data, sex, c(height, birth_year), gender, comp = "all") |>
     dplyr::mutate(dplyr::across(

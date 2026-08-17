@@ -329,6 +329,7 @@ testthat::test_that("all tab functions works with no col_var", {
 })
 
 testthat::test_that("all tab functions works with no row_var", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # it chains the steps ON PURPOSE
   data |>
     tab_plain(col_var = hair_color, tot = c("row", "col"), pct = "row") |>
     #tab_totaltab() |> error

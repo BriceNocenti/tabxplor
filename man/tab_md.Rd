@@ -28,9 +28,9 @@ tab_md(
 }
 \arguments{
 \item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
-A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any other
-list --- several \code{row_vars} and/or \code{tab_vars} (e.g. \code{tab()} with several row variables and a
-\code{tab_vars}) --- is rendered one table after another, each keeping its own sub-tables.}
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{bold_references}{Bold reference/total rows with markdown \verb{**...**}.}
 
@@ -39,21 +39,23 @@ When \code{TRUE}, shows "ref:" prefix on diff reference cells, "mean:" on ctr
 totals, sigma on means.}
 
 \item{wrap_rows}{Max width for row labels before truncation. \code{NULL} (default) never truncates
-(lossless -- the column grows); set a number to cap the label width. A markdown pipe cell cannot
-hold a raw newline, so md "wrapping" means "do not truncate".}
+(lossless -- the column grows); set a number to cap the label width. A markdown pipe
+cell cannot hold a raw newline, so md "wrapping" means "do not truncate".}
 
 \item{subtext}{Print chi2/footnotes below the table.}
 
 \item{color}{When \code{TRUE} (default) and the table carries colours (e.g. built with
-\code{tab(..., color = "difference")}), each fmt cell is wrapped in a short pandoc bracketed span
-\verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
-companion \code{\link[=tab_css]{tab_css(format = "md")}} styles the classes). \code{FALSE} produces plain monochrome
-markdown. Uncoloured tables never get spans.}
+\code{tab(..., color = "difference")}), each fmt cell is wrapped in a short pandoc
+bracketed span \verb{[value]\{.class\}} so the markdown renders coloured in Quarto /
+RMarkdown / pandoc (and \code{\link[=tab_css]{tab_css(format = "md")}} styles the
+classes). \code{FALSE} produces plain monochrome markdown. Uncoloured tables never get
+spans.}
 
-\item{color_legend}{When \code{TRUE} (default) and the table is coloured, prepend a colour-legend prose
-line (its break-words in the same pandoc classes as the cells) above the subtext.}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{theme}{Colour palette selector (as in \code{\link{tab_html}}); it only affects the CSS
 emitted by \code{css = TRUE} / \code{\link{tab_css}}, since the span \emph{class names} are palette- and
@@ -65,11 +67,10 @@ the first table of a list).}
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
-\code{"rows"}, \code{"cols"} or \code{"none"}. The column variables' names are written as an italic body row
-above their level columns; the row-variable name is the leading column a table with several
-\code{row_vars} uses to name each block (written once per block, in italics). See
-\code{\link{tab_kable}}.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{css}{When \code{TRUE} (the \strong{default}), prepend an inline \verb{<style>} block (from
 \code{\link{tab_css}}), so the exported markdown is self-contained -- it renders coloured and

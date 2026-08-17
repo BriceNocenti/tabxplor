@@ -649,6 +649,138 @@ TAB_ARGS <- list(
     doc = "Internal. The shape tab_build() returns: one merged table, or a list.")
 )
 
+# --- EXPORT_ARGS: the RENDER surface (Phase 20h, KEY 8) -------------------------------------------
+# The exporters' half of the argument surface, in the same shape and read through the same functions.
+#
+# WHY IT IS A SECOND TABLE AND NOT MORE ROWS OF TAB_ARGS -- three names mean something ELSE here, and
+# a named list cannot hold two rows under one key:
+#   `color`   on a producer is a MEASURE spec ("difference"); on an exporter a logical ("render in
+#             colour at all").
+#   `subtext` on a producer is the character vector of legend lines; on an exporter a logical
+#             ("print the footer").
+#   `stars`   likewise (a ladder vs "draw them"). It stays LOCAL to forest_plot -- see the scope rule.
+# So this is not a duplicate of TAB_ARGS; it is the other producer family's surface.
+#
+# THE SCOPE RULE (this table's own admission test -- narrower than TAB_ARGS', deliberately):
+# a row for an exporter argument that is EITHER
+#   (i)  shared by >= 2 exporters, OR
+#   (ii) the per-call twin of an option (TAB_OPTIONS$arg) that has no TAB_ARGS row.
+# A single-backend geometry argument (`sheets`, `titles`, `colwidth`, `colnames_rotation`, the text
+# sizes, `get_data`, `style_tag`, and forest_plot's ten plot controls) stays in its own roxygen: the
+# table owns what is SHARED or CROSS-REFERENCED, not everything an exporter takes. That is why
+# tx_check_tab_args() checks the exporters SCOPED (R/zzz-fact-keys.R), the way it already checks
+# tab_build().
+#
+# ⚠ WHICH ROWS CARRY PROSE, AND WHY MOST DO NOT. The rule for moving prose is the one the header
+# above states: *it must remove a DUPLICATE*. Measured across the seven exporters, that is true of
+# nine concepts (`lang`, `var_names`, `color`, `color_legend`, `transpose`, `wrap_rows`, `wrap_cols`,
+# `whitespace_only`, `tabs`/`x`), whose ~26 hand-written blocks said one thing in up to five
+# wordings. It is NOT true of the rest, and one case is worth recording because it looks like the
+# worst duplication in the package and is not:
+#
+#     `@param theme` is written seven times, but the ACCEPTED VALUES differ by backend --
+#     `allow_auto = TRUE` is passed only by tab_html(), tab_md() and tab_css(), the three that ship a
+#     stylesheet, so only they take "auto"; tab_plot() and tab_xl() resolve it to "light".
+#     Seven texts describing five value sets are not one duplicate, so `theme` keeps its prose
+#     per backend and takes `doc_in_producer = TRUE` -- a DECLARED row (which is what empties the
+#     foreign key) with its documentation left where it is true.
+#
+# Same verdict, same mechanism, for `caption` (five different renderings: a pandoc caption line, an
+# Excel title, an html caption needing CSS, a ggplot caption, "NULL keeps the table's own"), `css`,
+# `format`, `file`, `path`, `subtext`, and every option twin whose prose is one backend's business.
+#' @keywords internal
+#' @noRd
+EXPORT_ARGS <- list(
+  # --- the table itself -------------------------------------------------------------------------
+  tabs = list(
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot"),
+    doc = c("A table made with \\code{\\link{tab}} or \\code{\\link{tab_reg}}, or a `list` of tab.",
+            "A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any",
+            "other list --- several `row_vars` and/or `tab_vars` --- is rendered one table after",
+            "another, each keeping its own sub-tables.")),
+  # tab_export() and forest_plot() name the same thing `x`; one prose, each producer's own tag.
+  x = list(producers = c("tab_export", "forest_plot"), doc_with = "tabs"),
+
+  # --- the shared render controls ---------------------------------------------------------------
+  color = list(
+    producers = c("tab_html", "tab_xl", "tab_plot", "tab_export"), option = NULL,
+    doc = "Set to \\code{FALSE} to render the table without colours (monochrome).",
+    # md wraps each cell in a pandoc span, and a forest plot colours POINTS -- two real differences.
+    doc_for = list(
+      tab_md = c("When `TRUE` (default) and the table carries colours (e.g. built with",
+                 "`tab(..., color = \"difference\")`), each fmt cell is wrapped in a short pandoc",
+                 "bracketed span `[value]{.class}` so the markdown renders coloured in Quarto /",
+                 "RMarkdown / pandoc (and \\code{\\link[=tab_css]{tab_css(format = \"md\")}} styles the",
+                 "classes). `FALSE` produces plain monochrome markdown. Uncoloured tables never get",
+                 "spans."),
+      forest_plot = "Set to \\code{FALSE} for a plain plot with no colour measure.")),
+  color_legend = list(
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"),
+    doc = c("Print the colour legend below the table (with the subtext). `TRUE` by default, and a",
+            "no-op on a table that carries no colours.")),
+  lang = list(
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export", "forest_plot"),
+    option = "lang",
+    doc = c("Colour-legend language: \\code{NULL} (auto from the R/OS locale, English fallback),",
+            "\\code{\"en\"} or \\code{\"fr\"}.")),
+  transpose = list(
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"),
+    doc = c("Set to \\code{TRUE} to transpose each table before export (rows become columns) --",
+            "the col-percentages-with-several-row-variables use case.")),
+  var_names = list(
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"), option = "var_names",
+    doc = c("Which variable names to write beside the table: `\"both\"` (the default), `\"rows\"`,",
+            "`\"cols\"` or `\"none\"`. The row-variable name is the leading column a table with several",
+            "`row_vars` uses to name each block (written once per block); the column-variable names",
+            "are the spanning row above their level columns. Level headers always keep their name.")),
+  wrap_rows = list(
+    producers = c("tab_html", "tab_md", "tab_plot"),
+    doc = "By default, rownames are wrapped when larger than 30 characters.",
+    # a markdown pipe cell cannot hold a raw newline, so md can only truncate.
+    doc_for = list(
+      tab_md = c("Max width for row labels before truncation. `NULL` (default) never truncates",
+                 "(lossless -- the column grows); set a number to cap the label width. A markdown pipe",
+                 "cell cannot hold a raw newline, so md \"wrapping\" means \"do not truncate\"."))),
+  wrap_cols = list(
+    producers = c("tab_html", "tab_plot"),
+    doc = "By default, colnames are wrapped when larger than 12 characters."),
+  whitespace_only = list(
+    producers = c("tab_html", "tab_plot"),
+    doc = "Set to `FALSE` to wrap also on non whitespace characters."),
+
+  # --- DECLARED, prose stays home (see the header) ------------------------------------------------
+  theme = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export", "tab_css",
+                             "forest_plot"),
+               option = "theme", doc_in_producer = TRUE),
+  caption = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export",
+                               "forest_plot"), doc_in_producer = TRUE),
+  css = list(producers = c("tab_html", "tab_md"), option = "css", doc_in_producer = TRUE),
+  format = list(producers = c("tab_export", "tab_css"), doc_in_producer = TRUE),
+  file = list(producers = c("tab_md", "tab_css"), doc_in_producer = TRUE),
+  path = list(producers = c("tab_xl", "tab_export"), doc_in_producer = TRUE),
+  subtext = list(producers = c("tab_md", "forest_plot"), doc_in_producer = TRUE),
+  tooltips = list(producers = "tab_html", option = "tooltips", doc_in_producer = TRUE),
+  popover  = list(producers = "tab_html", option = "popover",  doc_in_producer = TRUE),
+  print_rules = list(producers = "tab_css", option = "print_rules", doc_in_producer = TRUE),
+  or_numeric  = list(producers = "tab_xl",  option = "or_numeric",  doc_in_producer = TRUE),
+  font_text = list(producers = "tab_xl", option = "font_text", doc_in_producer = TRUE),
+  font_num  = list(producers = "tab_xl", option = "font_num",  doc_in_producer = TRUE),
+  font_num_stars = list(producers = "tab_xl", option = "font_num_stars", doc_in_producer = TRUE)
+)
+
+# EXPORT_PRODUCERS -- DERIVED, never a hand-written mapping: it is what tells the shared readers which
+# of the two tables declares a given producer.
+#' @keywords internal
+#' @noRd
+EXPORT_PRODUCERS <- sort(unique(unlist(lapply(EXPORT_ARGS, `[[`, "producers"))))
+
+# THE table that declares a producer's arguments. One line, so `tab_args_rd()` / `tab_args_for()` /
+# `tab_arg()` / `tab_arg_status()` serve both surfaces without knowing there are two.
+#' @keywords internal
+#' @noRd
+arg_table_of <- function(producer)
+  if (producer %in% EXPORT_PRODUCERS) EXPORT_ARGS else TAB_ARGS
+
 # --- the derived vocabulary view ------------------------------------------------------------------
 # TAB_ARG_VALUES survives, DERIVED, with its contents AND ORDER intact (the DISPLAY_TOKENS
 # precedent, 19m-iii): tab_validate_args(), tab_deprecate_many(), tab_ci()'s totcol guard and
@@ -671,14 +803,16 @@ TAB_ARG_VALUES <- local({
 # --- the readers ----------------------------------------------------------------------------------
 #' @keywords internal
 #' @noRd
-tab_arg <- function(name) TAB_ARGS[[name]]
+tab_arg <- function(name, producer = NULL)
+  if (is.null(producer)) TAB_ARGS[[name]] else arg_table_of(producer)[[name]]
 
 # Every argument a producer declares. `formals()` is the ORDER (it matches \usage{}) and the
 # declared set is the CHECK: the two must agree, which is asserted at load in R/zzz-fact-keys.R.
 #' @keywords internal
 #' @noRd
 tab_args_for <- function(producer) {
-  names(TAB_ARGS)[vapply(TAB_ARGS, function(r) producer %in% r[["producers"]], logical(1))]
+  tb <- arg_table_of(producer)
+  names(tb)[vapply(tb, function(r) producer %in% r[["producers"]], logical(1))]
 }
 
 # An argument's status FOR ONE PRODUCER: a bare string applies everywhere, a named one overrides
@@ -686,7 +820,7 @@ tab_args_for <- function(producer) {
 #' @keywords internal
 #' @noRd
 tab_arg_status <- function(name, producer = NULL) {
-  st <- TAB_ARGS[[name]][["status"]]
+  st <- (if (is.null(producer)) TAB_ARGS else arg_table_of(producer))[[name]][["status"]]
   if (is.null(st)) return("live")
   if (is.null(names(st))) return(st[[1]])
   if (!is.null(producer) && producer %in% names(st)) st[[producer]] else "live"
@@ -697,9 +831,13 @@ tab_arg_status <- function(name, producer = NULL) {
 # produced R's bare "unused argument"; now it produces a suggestion, and an UNNAMED extra argument is
 # refused by name rather than silently bound to whatever formal happened to sit at that position.
 #
-# ⚠ SCOPE: the crosstab producers only. The EXPORTERS keep a pass-through `...` -- they forward it to
-# a backend, and tx_deprecate_inert() (R/utils.R) already names the retired ones. Two contracts, on
-# purpose.
+# ⚠ SCOPE -- and Phase 20h made the distinction matter, since the exporters now have declared rows too
+# (EXPORT_ARGS). The two readers do NOT have the same reach:
+#   tab_args_rd()   serves BOTH surfaces (via arg_table_of): a declaration is documentation either way.
+#   tab_check_dots() and tab_dots_expand() serve the CROSSTAB producers only. An exporter's `...` is a
+#     pass-through to its backend -- refusing an unknown name there would refuse a legitimate backend
+#     argument -- and tx_deprecate_inert() (R/utils.R) already names the retired ones.
+# Two contracts, on purpose; EXPORT_ARGS' narrower scope rule (its header) is why the second one holds.
 #' @keywords internal
 #' @noRd
 tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
@@ -752,10 +890,11 @@ dots_value <- function(dots, name, default = NULL) {
 #' @keywords internal
 #' @noRd
 tab_args_rd <- function(producer) {
+  tb  <- arg_table_of(producer)
   fn  <- get(producer, envir = asNamespace("tabxplor"))
   nms <- setdiff(names(formals(fn)), "...")
-  nms <- intersect(nms, names(TAB_ARGS))
-  owner <- function(k) TAB_ARGS[[k]][["doc_with"]] %||% k
+  nms <- intersect(nms, names(tb))
+  owner <- function(k) tb[[k]][["doc_with"]] %||% k
   out <- character(0)
   done <- character(0)
   for (k in nms) {
@@ -767,7 +906,7 @@ tab_args_rd <- function(producer) {
     # `row_vars` this function does not have (checkDocFiles catches it, but only after the fact).
     tag <- nms[vapply(nms, owner, character(1)) == o]
     tag <- c(intersect(o, tag), setdiff(tag, o))
-    r   <- TAB_ARGS[[o]]
+    r   <- tb[[o]]
     # a row may hold ONE prose per producer (`doc_for`) where the same argument genuinely reads
     # differently -- `na`'s two vocabularies, `color`'s two channel sets. `default_for`'s idiom.
     body <- r[["doc_for"]][[producer]] %||% r[["doc"]]
@@ -821,6 +960,9 @@ COLOR_SIGNIF_DOC <- c(
 
 # The FIRST value is the default -- the convention CI_METHODS already uses ("first = the default"),
 # so the marker is derived rather than typed into the prose beside it.
+# ⚠ `producer` is UNREAD here and KEPT: it is the `values_rd` calling convention (tab_args_rd() passes
+# it to every renderer), so the formal is the INTERFACE, not weight. The policies are the same on both
+# producers -- unlike the measures, which color_measures_rd() really does filter.
 #' @keywords internal
 #' @noRd
 color_signif_rd <- function(producer = "tab") {
@@ -856,6 +998,26 @@ stopifnot(
            c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova"))
 )
 
+# ...and the SAME shape rules on the render surface (Phase 20h). Stated as its own block rather than a
+# loop over both tables: the two differ in what they may declare, and the differences are the point.
+stopifnot(
+  all(vapply(EXPORT_ARGS, function(r)
+    !is.null(r[["producers"]]) && is.character(r[["producers"]]), logical(1))),
+  all(vapply(EXPORT_ARGS, function(r) !is.null(r[["doc"]]) || !is.null(r[["doc_with"]]) ||
+               isTRUE(r[["doc_in_producer"]]), logical(1))),
+  all(vapply(EXPORT_ARGS, function(r)
+    is.null(r[["doc_with"]]) || r[["doc_with"]] %in% names(EXPORT_ARGS), logical(1))),
+  # ⚠ no `values` on this table, so it CANNOT feed TAB_ARG_VALUES (whose derived set is asserted
+  # exactly above). A render argument's vocabulary lives with its resolver (tx_theme_resolve,
+  # resolve_export_opts), not here.
+  all(vapply(EXPORT_ARGS, function(r) is.null(r[["values"]]), logical(1))),
+  # the two surfaces may share a NAME (`color` / `subtext` / `stars`) but must not share a producer:
+  # one function's arguments are declared in exactly one table, or arg_table_of() would be a coin toss.
+  length(intersect(
+    EXPORT_PRODUCERS,
+    unique(unlist(lapply(TAB_ARGS, `[[`, "producers"))))) == 0L
+)
+
 # tab_dots_expand() -- a superseded producer's `...` becomes the arguments it declares, each
 # unsupplied one filled from its DECLARED default.
 #
@@ -869,6 +1031,8 @@ stopifnot(
 #' @keywords internal
 #' @noRd
 tab_dots_expand <- function(dots, producer) {
+  # ⚠ crosstab producers ONLY (see tab_check_dots()'s SCOPE note): an exporter's `...` is a
+  # pass-through to its backend, so nothing there is filled from a declared default.
   keys <- setdiff(tab_args_for(producer), names(formals(get(producer, envir = asNamespace("tabxplor")))))
   out  <- list()
   for (k in keys) {

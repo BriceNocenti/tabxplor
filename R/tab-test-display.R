@@ -878,7 +878,7 @@ mk_align <- function(w, side) {
 #   footer_groups : the groups that actually GET a footer block (default all). A crosstab subtable with
 #                   no computable test (e.g. a total-table group) is excluded, so it keeps its data rows
 #                   with no p-value row appended.
-tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, regroup,
+tab_append_footer <- function(tabs, group_of, fmt_cell, nonfmt_val, attrs, regroup,
                               footer_groups = unique(group_of), row_role = NULL) {
   grp_lv  <- unique(group_of)
   fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]

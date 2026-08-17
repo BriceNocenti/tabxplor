@@ -1609,7 +1609,7 @@ reg_display_folds <- function(display) {
 # Apply the resolved `display` to ONE coefficient column. Stars ride the primary token and its CI
 # drives the colour; the (annotation) is a descriptive companion.
 reg_apply_display <- function(col, display, skeleton, f, sp, family, design_spec, conf_level,
-                              numeric_preds, model_predictors, multiplier = NULL) {
+                              model_predictors, multiplier = NULL) {
   if (identical(display, "value")) return(col)
   if (identical(display, "est_ci")) return(set_display(col, "est_ci"))
   if (!reg_display_folds(display)) return(set_display(col, display))
@@ -1911,7 +1911,7 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
 # OR at the profile) the multiplicative "or" shape (reference -> 1, no prediction). Reference levels +
 # the Constant carry no effect; predictors ABSENT from this model stay NA (empty cells).
 reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds, shape, var_y,
-                                nobs, group, color, color_signif, col_var, or_tip = NULL,
+                                group, color, color_signif, col_var, or_tip = NULL,
                                 model_family = "") {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
@@ -2025,7 +2025,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
 # them to the shared predictor skeleton unchanged. Label = "<j> vs <ref>: OR" (prefixed by the
 # outcome when several outcomes / models coexist, to disambiguate). Returns a list of {label, col}.
 reg_columns_multinom <- function(skeleton, f, sp, est, color, color_signif,
-                                 eff_word, cleannames, prefix_dep, model_family = "multinomial",
+                                 cleannames, prefix_dep, model_family = "multinomial",
                                  method = "wald") {
   y_ref <- reg_cleanup(f$y_ref, cleannames)
   purrr::map(f$y_levels, function(j) {
@@ -2319,8 +2319,8 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
   # Phase 18z15 put the five model CHECKS there too; Phase 20f keeps the three that cost nothing and
   # makes the two that fit a model opt-in (REG_CHECKS$cost). `stats` already IS the footer
   # vocabulary, so each is individually addable and `stats = FALSE` still hides everything.
-  checks  <- reg_checks_for(family, weighted, grouped)
-  default <- c(default, "global", reg_checks_default(family, weighted, grouped))
+  checks  <- reg_checks_for(family, weighted)
+  default <- c(default, "global", reg_checks_default(family, weighted))
   # "all" MEANS ALL (Phase 20f). It used to be a synonym of NULL, i.e. of the default set -- already
   # a misnomer, and one that D4 would have made worse: it is now the one value a user has to
   # remember to see every statistic and every check this family allows, fit-based ones included.
@@ -2403,7 +2403,7 @@ reg_compare_extract <- function(an, use_f) {
 # Distinct discriminators per test kind keep each footer row homogeneous (all LR / F / Wald / Delta-AIC)
 # so the row label alone names the test -- no in-cell label needed.
 reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_col,
-                             compare = "none", baseline = NULL, conf_level = 0.95) {
+                             compare = "none", baseline = NULL) {
   if (identical(compare, "none")) return(reg_gof)
   n <- length(fits)
   if (n < 2L) {
@@ -2727,7 +2727,7 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_leve
 # first level = a 0 column); the intercept at the display profile is e_0 + sum_p e_{p r_p}; a numeric
 # predictor is the identity. estimate = L'b, se = sqrt(L' V L); then the SAME Wald finalize reg_fit()
 # uses (phi scaling, z/t crit, p as the CI's dual, exp) -> byte-identical to a real refit-at-r.
-reg_reref_fit_res <- function(digest, ref, sp, skeleton, conf_level, multiplier = NULL) {
+reg_reref_fit_res <- function(digest, skeleton, conf_level, multiplier = NULL) {
   coef_v <- digest$coef
   V      <- digest$vcov
   cn     <- names(coef_v)
@@ -3222,7 +3222,11 @@ reg_stage_setup <- function(ctx) {
   # effect would match the estimand but answers a different question (model FIT at one profile, not
   # confounding) on a few percent of the rows, so no `obs` is attached at all: the cells stay
   # uncoloured, `{obs}` blanks, and tab_reg() says why once. A shape fact of the SPECS, hence here.
-  at_profile <- any(purrr::map_lgl(specs, ~ identical(.$est$effect, "at_reference")))
+  # Phase 20h: it READS the estimand's declared `obs` ("may a crude value be attached cell by cell?")
+  # instead of re-deriving it from `effect == "at_reference"`. Byte-identical -- the two agree on all
+  # 43 rows, asserted where the table is declared (R/reg-estimand.R) -- and it is the difference
+  # between a rule re-derived downstream and a fact read where it is stated.
+  at_profile <- any(!vapply(specs, function(s) isTRUE(s$est$obs), logical(1)))
 
   # Phase 18z13 (SS7.2): the per-predictor global test is in the DEFAULT stats set, so NULL / "all" /
   # TRUE ask for it; FALSE / "none" and an explicit vector that omits it do not. (The interaction
@@ -3440,7 +3444,7 @@ reg_cols_ame <- function(f, sp, ctx) {
       lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc)
       list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
            col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                       var_y, f$nobs, g, sp_col, color_signif, sp$label,
+                                       var_y, g, sp_col, color_signif, sp$label,
                                        model_family = sp_fam))
     })
   } else {
@@ -3459,7 +3463,7 @@ reg_cols_ame <- function(f, sp, ctx) {
     list(list(
       label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
       col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                  var_y, f$nobs, NA_character_, sp_col, color_signif,
+                                  var_y, NA_character_, sp_col, color_signif,
                                   cv, or_tip = or_tip, model_family = sp_fam)))
   }
 }
@@ -3487,7 +3491,7 @@ reg_cols_vsrest <- function(f, sp, ctx) {
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
     list(label = lab,
          col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, "or",
-                                     NA_real_, f$nobs, g, sp_col, color_signif, sp$label,
+                                     NA_real_, g, sp_col, color_signif, sp$label,
                                      model_family = sp_fam))
   })
 }
@@ -3505,7 +3509,7 @@ reg_cols_coef <- function(f, sp, ctx) {
   sp_col   <- sp$color
   if (sp_fam == "multinomial") {
     cols <- reg_columns_multinom(skeleton, f, sp, sp$est, sp_col, color_signif,
-                                 sp_eff, cleannames, prefix_dep, model_family = sp_fam,
+                                 cleannames, prefix_dep, model_family = sp_fam,
                                  method = method)
     # Phase 12h: display = "ci" adds the visible interval to each category's OR column
     # (the folds are degraded to "ci" for MNL in tab_reg()).
@@ -3522,7 +3526,7 @@ reg_cols_coef <- function(f, sp, ctx) {
     col <- reg_column(skeleton, f, model_predictors, cv, sp$est, sp_col, color_signif,
                       model_family = sp_fam, method = method)
     col <- reg_apply_display(col, display, skeleton, f, sp, sp_fam,
-                             design_spec, conf_level, numeric_preds, model_predictors,
+                             design_spec, conf_level, model_predictors,
                              multiplier = multiplier)
     list(list(label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
               col = col))
@@ -3629,8 +3633,7 @@ reg_stage_footer <- function(ctx) {
 
   reg_gof <- rekey("gof_rows") %||% new_test_tibble()
   reg_gof <- reg_compare_rows(reg_gof, purrr::map(products, "fit"), specs, family, weighted = weighted,
-                              fit_first_col = fit_first_col, compare = compare, baseline = baseline,
-                              conf_level = conf_level)
+                              fit_first_col = fit_first_col, compare = compare, baseline = baseline)
   gl <- rekey("global_rows"); if (!is.null(gl)) reg_gof <- dplyr::bind_rows(reg_gof, gl)
   ck <- rekey("check_rows");  if (!is.null(ck)) reg_gof <- dplyr::bind_rows(reg_gof, ck)
 

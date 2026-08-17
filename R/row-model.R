@@ -192,11 +192,56 @@ vec_cast.character.tabxplor_lvl <- function(x, to, ...) vctrs::vec_cast(unlvl(x)
 # is what a user would write by hand, which is the point: the internal argument and the forcats call
 # it is equivalent to read the same.
 
-# The labels a merged level may NOT take: the four synthetic ones tab() mints itself, plus "NA".
-# Reading the OPTION (not the English defaults) is what makes the refusal true in every locale.
+# The labels a level may NOT take, for the TWO questions that ask (Phase 20h). Reading the OPTION (not
+# the English defaults) is what makes both refusals true in every locale.
+#   "merge" -- a label new_lvl_collapse() may not mint: the four synthetic ones tab() makes itself,
+#              plus "NA" (the explicit level `na = "keep"` adds).
+#   "data"  -- a level the SOURCE DATA may not already carry: the three TOTAL labels, plus the leaf's
+#              internal pre-rename sentinel "Total" (R/tab-leaf.R, the 19m-iii block). NOT "NA" and
+#              NOT "Others": measured, a data level named "NA" renders correctly unless the column
+#              also holds real NAs, and a pre-existing "Others" merely joins the lump -- refusing
+#              either would be a false positive on ordinary survey labels ("NA" = "not applicable").
 #' @keywords internal
 #' @noRd
-lvl_reserved_labels <- function() unname(c(tab_total_names_merge(tx_option("total_names")), "NA"))
+lvl_reserved_labels <- function(what = c("merge", "data")) {
+  what <- match.arg(what)
+  tn <- tab_total_names_merge(tx_option("total_names"))
+  if (identical(what, "merge")) unname(c(tn, "NA"))
+  else unique(unname(c(tn[c("row", "col", "tab")], "Total")))
+}
+
+# lvl_check_reserved() -- Phase 20h: REFUSE a source level that collides with a label tab() mints.
+# WHY IT ABORTS RATHER THAN WARNS. "Total" is the leaf's internal pre-rename key for every total row,
+# total tab and the total column it mints (the declaration at R/tab-leaf.R's name round-trip), and
+# leaf_totrow_tottab() derives `totrow_vector` / `tottab_vector` by matching it. So a DATA level of
+# that name is not merely confusing -- measured, it is read back as a total row: the cell gets
+# `row_kind = "total"` and `is_totrow() == TRUE`, it renders bold, it leaves the percentage base, and
+# the table shows two identically-labelled "Total" rows. There is no reading of that table that is
+# right, so it cannot be produced. Renaming the level, or moving tab()'s own labels with
+# `options(tabxplor.total_names = )`, both fix it.
+# ⚠ It runs at the END of tab_prepare(), on the levels that will reach the leaf, so it also catches a
+# collision a recode created (cleannames, or a merge) rather than only one the raw data carried.
+#' @keywords internal
+#' @noRd
+lvl_check_reserved <- function(data, vars, call = NULL) {
+  if (length(vars) == 0L) return(invisible(data))
+  reserved <- lvl_reserved_labels("data")
+  for (v in intersect(as.character(vars), names(data))) {
+    x  <- data[[v]]
+    lv <- if (is.factor(x)) levels(x) else unique(as.character(x))
+    bad <- intersect(lv, reserved)
+    if (length(bad) == 0L) next
+    cli::cli_abort(c(
+      "{.var {v}} has {cli::qty(length(bad))}{?a level/levels} named {.val {bad}}, which
+       {.fn tab} uses for its own total {cli::qty(length(bad))}{?row/rows}.",
+      "x" = "Left alone, {cli::qty(length(bad))}{?that level/those levels} would be read as a
+             total {cli::qty(length(bad))}{?row/rows}: bold, out of the percentage base, and
+             printed twice.",
+      "i" = "Rename the level, or move {.fn tab}'s own labels with
+             {.code options(tabxplor.total_names = c(row = \"...\"))}."), call = call)
+  }
+  invisible(data)
+}
 
 # new_lvl_collapse() -- normalise + validate a collapse spec, or NULL for "nothing to merge".
 # Refusals (each one a thing that would otherwise be silently wrong):
@@ -213,7 +258,7 @@ new_lvl_collapse <- function(spec) {
     cli::cli_abort(c("A level-collapse spec must be a NAMED list, one element per variable.",
                      "i" = "e.g. {.code list(marital = list(`Not married` = c(\"Divorced\", \"Separated\")))}."),
                    call = NULL)
-  reserved <- lvl_reserved_labels()
+  reserved <- lvl_reserved_labels("merge")
   out <- list()
   for (v in names(spec)) {
     groups <- spec[[v]]

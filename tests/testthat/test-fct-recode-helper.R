@@ -11,6 +11,7 @@ withr::local_options(lifecycle_verbosity = "quiet", .local_envir = testthat::tea
 
 
 testthat::test_that("fct_recode_helper() works with freq = FALSE", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   out <- fct_recode_helper(forcats::gss_cat, tidyselect::all_of("marital"),
                            freq = FALSE, cat = FALSE)
   testthat::expect_s3_class(out, "data.frame")
@@ -21,6 +22,7 @@ testthat::test_that("fct_recode_helper() works with freq = FALSE", {
 })
 
 testthat::test_that("fct_recode_helper() works with freq = TRUE (Phase 14p)", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   # the reported crash: a single ordered-looking income factor
   testthat::expect_no_error(
     out <- fct_recode_helper(forcats::gss_cat, tidyselect::all_of("rincome"),
@@ -34,6 +36,7 @@ testthat::test_that("fct_recode_helper() works with freq = TRUE (Phase 14p)", {
 })
 
 testthat::test_that("fct_recode_helper(freq = TRUE) handles several factors at once (Phase 14p)", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   testthat::expect_no_error(
     out <- fct_recode_helper(forcats::gss_cat, tidyselect::all_of(c("marital", "race", "relig")),
                              freq = TRUE, cat = FALSE)

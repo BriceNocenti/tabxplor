@@ -23,6 +23,7 @@ step_nums <- function(t) unlist(lapply(t[vapply(t, is_fmt, logical(1))], get_num
 
 
 testthat::test_that("the step chain reproduces tab() exactly, row and column percentages", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   chain <- function(pct) {
     tab_plain(gss, marital, race) |> tab_totaltab() |> tab_tot() |> tab_pct(pct)
   }
@@ -34,6 +35,7 @@ testthat::test_that("the step chain reproduces tab() exactly, row and column per
 
 
 testthat::test_that("tab_tot() adds the total row / column, with the true counts", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   plain <- tab_plain(gss, marital, race)                    # 6 x 4, no totals yet
   testthat::expect_identical(dim(plain), c(6L, 4L))
 
@@ -52,6 +54,7 @@ testthat::test_that("tab_tot() adds the total row / column, with the true counts
 
 
 testthat::test_that("tab_totaltab() adds the 'Ensemble' total table over tab_vars", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   gt <- tab_plain(gss, marital, race, year) |> tab_totaltab() |> tab_tot() |> tab_pct("row")
   testthat::expect_s3_class(gt, "tabxplor_grouped_tab")
   testthat::expect_true("Ensemble" %in% as.character(gt$year))
@@ -64,6 +67,7 @@ testthat::test_that("tab_totaltab() adds the 'Ensemble' total table over tab_var
 
 
 testthat::test_that("the step chain composes with tab_ci() / tab_chi2() in every table shape", {
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   # Restores the four cases that had been commented out in test-tab.R (:272-307).
   #
   # WARNING -- why those lines were commented out, and the rule this file now pins:

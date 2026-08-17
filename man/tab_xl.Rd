@@ -33,8 +33,10 @@ tab_xl(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_reg}} or
-\code{\link{tab_plain}}, or a list of such tables.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{path, replace, open}{The name, and possibly the path, of the Excel file to
 create (possibly without the .xlsx extension). Default path to temporary directory.
@@ -56,7 +58,8 @@ Set to \code{FALSE} to keep them.}
 \item{colwidth}{The standard width for numeric columns, as a number.
 Set to \code{"auto"} to let Excel choose.}
 
-\item{color_legend}{Should the color legends be printed with the subtexts ?}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
 \item{sheets}{The Excel sheets options :
 \itemize{
@@ -90,15 +93,15 @@ for a black table with white text (the colours follow the theme).
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 readable in a greyscale print, where the colour palette's two directions become the same shade.}
 
-\item{color}{Set to \code{FALSE} to export without colours (monochrome).}
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
-columns). Useful for column percentages tables with several row variables.}
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
+the col-percentages-with-several-row-variables use case.}
 
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
-\code{"rows"}, \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with
-several \code{row_vars} uses to name each block (merged over it and rotated 90 degrees); the
-column-variable names are the merged row above their level columns. See \code{\link{tab_kable}}.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{or_numeric}{Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
 below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option

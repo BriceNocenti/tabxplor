@@ -327,13 +327,6 @@ TAB_OPTIONS <- list(
       "(fewer runs serially, since the setup would outweigh the gain)."))
 )
 
-# DORMANT, and deliberately without a row: `tabxplor.totcol_range` ("off"/"range"/"min") -- how a
-# Total column's in-cell base is shown when col_vars have DIFFERING bases (e.g. na = "drop").
-# Retired pre-2.0.0 release: the per-row literal templates it emitted defeat the composite-token
-# padding (format() groups alignment by unique template), and its render-model compute
-# (range_totcol) had no consumer. It is neither seeded nor read, so it needs no declaration -- the
-# dormant sites are tab-display.R tab_fold_addn_incell() and tab-export-prep.R tab_totcol_range().
-
 stopifnot(
   all(vapply(TAB_OPTIONS, function(r) r$section %in% names(TAB_OPTION_SECTIONS), logical(1))),
   all(vapply(TAB_OPTIONS, function(r) r$seed %in% c("always", "if_unset", "elsewhere", "no"),

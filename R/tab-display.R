@@ -632,9 +632,9 @@ tab_is_or_display <- function(tab) {
 # display grammar), reading the base from the Total column's OWN `n` field. Phase 17g: text no longer
 # builds the separate `n` COLUMN at all (tab_add_n_pct skips it), so the leading select(-any_of("n"))
 # is now a no-op guard (it still runs for any stray column). Each Total cell shows its OWN base
-# `{n}`. DORMANT: the retired option `tabxplor.totcol_range` ("range"/"min") once swapped in the
-# cross-col_var base via tab_totcol_range() (a per-row literal `[min;max]` / smallest) -- see the
-# commented branch below and the DORMANT note in utils.R .onLoad.
+# `{n}`, which is the only base it can honestly show: a per-row literal `[min;max]` across col_vars
+# with differing bases was tried and retired (Phase 20h deleted the last of it) -- format() aligns
+# per unique template, so per-row literals defeat the composite-token padding.
 # Phase 16c: for an OR/RRR table the "100%" is dropped -> the cell shows only `n={n}` (the base).
 # NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
 tab_fold_addn_incell <- function(tab) {
@@ -643,24 +643,8 @@ tab_fold_addn_incell <- function(tab) {
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
   is_or <- tab_is_or_display(tab)
 
-  # DORMANT (possible future implementation): the retired tabxplor.totcol_range option.
-  # Re-enabling = uncomment these lines (and the option seed in utils.R .onLoad):
-  # style <- getOption("tabxplor.totcol_range", "off")
-  # rng <- if (!identical(style, "off")) {
-  #   fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
-  #   tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)), style = style)
-  # } else NULL
-  rng <- NULL
-
-  tmpl <- if (is_or) {                                # OR/RRR: show only the base n, drop the "100%"
-    if (is.null(rng)) rep("n={n}", nrow(tab))
-    else dplyr::if_else(is.na(rng$text), "", paste0("n=", rng$text))
-  } else if (is.null(rng)) {
-    NULL                                              # uniform "{pct} (n={n})"
-  } else {
-    # per-row literal: "{pct} (n=<base>)"; a row with no base falls back to "{pct}".
-    dplyr::if_else(is.na(rng$text), "{pct}", paste0("{pct} (n=", rng$text, ")"))
-  }
+  # OR/RRR shows only the base n and drops the "100%"; everything else is the uniform composite.
+  tmpl <- if (is_or) rep("n={n}", nrow(tab)) else NULL
 
   tab <- dplyr::select(tab, -tidyselect::any_of("n"))   # drop the xl-style `n` column
   dplyr::mutate(tab, dplyr::across(tidyselect::all_of(tot_nm), function(col) {

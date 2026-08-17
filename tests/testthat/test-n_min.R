@@ -73,9 +73,11 @@ testthat::test_that("pct='col': weak columns are dropped, totals kept", {
   testthat::expect_lt(ncol(out), ncol(base))
 })
 
+# Phase 20h: built at top level, where the file-level lifecycle line bites.
+sw_mass <- dplyr::starwars |> tab_prepare("sex", "mass", other_if_less_than = 0)
+
 testthat::test_that("means use the n base (not tot_n) for the drop", {
-  sw <- dplyr::starwars |>
-    tab_prepare("sex", "mass", other_if_less_than = 0)
+  sw <- sw_mass
   # Drop sex groups whose n is below the threshold; the numeric mean column drives it.
   out <- tab(sw, sex, mass, pct = "no", n_min = 5)
   # "hermaphroditic"/"none" are tiny groups -> dropped; "male" (large) survives; Total kept.

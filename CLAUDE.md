@@ -613,7 +613,18 @@ R/
 │                              new_spec/get_spec/set_spec_field (which never invents a `kind` --
 │                              materialising the degraded guess would break absent-when-unset) +
 │                              spec_bind (the declared meta_bind_rules entry, slot by slot).
-├── row-model.R      (~320 L) 20g-ii: it also owns the declared LEVEL OPERATIONS -- **new_lvl_collapse()**
+├── row-model.R      (~370 L) 20h: **lvl_reserved_labels(what = "merge"|"data")** = the labels a
+│                              level may not take, for the TWO questions that ask, and
+│                              **lvl_check_reserved()** = the refusal. A SOURCE level named "Total"
+│                              collides with the leaf's internal pre-rename sentinel and was read back
+│                              as a total ROW (measured: row_kind "total", is_totrow TRUE, bold, out
+│                              of the pct base, and the table printed TWO "Total" rows) -- so it
+│                              ABORTS, at tab_prepare()'s tail (post-recode, on the levels that reach
+│                              the leaf) AND in leaf_defuse_vars() (a direct leaf call never reaches
+│                              tab_prepare). ⚠ NOT "NA"/"Others": measured, an "NA" level renders
+│                              correctly unless the column also holds real NAs, so refusing it would
+│                              be a false positive on an ordinary survey label.
+│                              20g-ii: it also owns the declared LEVEL OPERATIONS -- **new_lvl_collapse()**
 │                              = the validated "merge these levels into one" spec, in
 │                              forcats::fct_collapse()'s own shape (var -> merged label -> the levels
 │                              it swallows). The SPEC is here, the APPLIER is tab_collapse_levels()
@@ -766,7 +777,27 @@ R/
 ├── tab-export.R      (~100 L) Phase 10j-A: the tab_export(format=) facade over the four exporters +
 │                              forest_plot. 19h: its `theme` / `color_legend` blocks stopped naming
 │                              `format = "kable"`, a value `match.arg()` rejects.
-├── tab-leaf.R      (~2595 L) Phase 19l: THE AGGREGATE CORE, carved out of tab.R (whole functions,
+├── tab-leaf.R      (~2700 L) 20h: **tab_plain() runs finalize_color_tail()** -- it was the ONE
+│                              crosstab producer of four that skipped the shared colour tail, so the
+│                              `color_spec` its own argument boundary had resolved was computed and
+│                              DROPPED, and three documented behaviours silently did not happen:
+│                              `color_signif` stored "ignore" whatever was asked (measured against
+│                              tab()/tab_num(), which were right) · a legacy composite kept its
+│                              MEASURE and lost its POLICY (`color = "diff_ci"` coloured and tested
+│                              nothing) · a two-channel `color = c(text, bg)` ABORTED inside
+│                              plain_resolve() on a length-2 `if`. Byte-identical on all 7
+│                              pre-existing shapes; the df/num escape hatch keeps num_core's early
+│                              return (the tail would stamp color_breaks on a plain frame).
+│                              + **plain_core()'s 20 PHASES are declared** (one numbered head per
+│                              sequential block, naming WHAT IT PRODUCES -- 652 source lines ran
+│                              with 2 of them marked). Comments only, PROVED: 2 of 390 deparsed
+│                              lines differ and both are 20h's own dead-formal drops. ⚠ the
+│                              EXTRACTION into leaf_reshape()/_compare()/_infer()/_totals() is NOT
+│                              done and the header says why: the ~14 optional `tabs_*` tables cross
+│                              most boundaries, so each helper would take and return most of them.
+│                              The orphan `Region B`/`C`/`E` lettering is GONE (there was never an
+│                              A or a D anywhere in R/).
+│                              Phase 19l: THE AGGREGATE CORE, carved out of tab.R (whole functions,
 │                              no behaviour change). tab_plain()/tab_num() (the public superseded
 │                              leaves) + plain_resolve/plain_core + num_resolve/num_core + every
 │                              leaf_* + tab_apply_reference + leaf_ci_plain + calculate_refrows +
@@ -1117,7 +1148,27 @@ R/
 │                              globalVariables() tail calls new_ctx() -> conf_level_default() ->
 │                              tx_option() AT SOURCE TIME -- which is also why every computed
 │                              `default` is a CLOSURE.
-├── tab-args.R      (~1000 L) Phase 20b (KEY 1 + KEY 8): THE argument surface as data.
+├── tab-args.R      (~1165 L) Phase 20b (KEY 1 + KEY 8): THE argument surface as data.
+│                              20h: +**EXPORT_ARGS**, the RENDER surface -- the exporters' half, same
+│                              shape, same readers via **arg_table_of()** (DERIVED from
+│                              EXPORT_PRODUCERS). A SECOND table because 3 names mean something else
+│                              there (`color` a logical not a measure, `subtext`, `stars`) and a named
+│                              list cannot hold two rows per key. Its scope rule is NARROWER: a row
+│                              for an argument shared by >=2 exporters OR an option's per-call twin;
+│                              a single-backend geometry one (`sheets`/`titles`/`colwidth`/the fonts)
+│                              stays home, so tx_check_tab_args() checks the exporters SCOPED (the
+│                              `tab_build` idiom already in its body). ⚠ only 9 of 24 rows carry
+│                              PROSE, by the table's own test: `@param theme` is written 7 times but
+│                              the ACCEPTED VALUES differ per backend (`allow_auto = TRUE` only in
+│                              tab_html/tab_md/tab_css, so only they take "auto") -- 7 texts for 5
+│                              value sets are not one duplicate, so it and `caption`/`css`/`format`/
+│                              `file`/`path`/`subtext` + the single-backend twins are DECLARED with
+│                              `doc_in_producer = TRUE` (which is what empties the FK) and documented
+│                              where they are true. ⚠ the reward is ANTI-DRIFT, not man/ lines: the
+│                              exporters keep every formal, so man/ GREW 23 lines -- what it bought is
+│                              26 blocks -> 9 declarations, 5 corrected texts, and TAB_OPTIONS$arg's
+│                              11-name `allow` list -> EMPTY. ⚠ tab_check_dots()/tab_dots_expand()
+│                              stay CROSSTAB-only: an exporter's `...` is a backend pass-through
 │                              **TAB_ARGS** = one row per public argument of the crosstab producers
 │                              (`producers` · `status`, which may be NAMED when an argument is
 │                              deprecated on ONE producer -- `row_var` is a deprecated alias on
@@ -3689,6 +3740,167 @@ so the planning is not lost:
 
 20h also inherits: the `tot` / `spread_vars` teaching decisions above, and the deprecated-call
 corpus sweep (58 warnings, unchanged).
+
+---
+
+#### Phase 20h — Harvest 1: the deletion pass
+
+**DONE (2026-08-17), all eight steps.** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 7279**, against the
+inherited FAIL 0 / WARN **58** / SKIP 4 / PASS 7182 — and the surviving warning is not deprecation
+noise but a real over-dispersion notice on a poisson fit, which is exactly what a suite should
+surface. **All four harnesses print IDENTICAL** — `verify_golden_field_delta.R` clean over 1 788
+cells × 36 goldens **with every declaration block EMPTY**, `verify_color_attrs.R` 293 cases,
+`verify_tab_args.R` 167 resolver cases + 52 tables + 30 messages, `verify_reg_specs.R` 290 cases —
+so the phase met its own contract: *a deletion pass that moves a value has stopped being a deletion
+pass*. `document()` idempotent, `tools::checkDocFiles()` silent, `generate_jamovi_js.R check` clean.
+
+**THE CENSUS, including what did not shrink.** That report is the phase's product, so it leads.
+
+| | before | after | |
+|---|---|---|---|
+| suite warnings | **58** | **1** | the 1 is a real statistical warning |
+| `TAB_OPTIONS$arg` FK `allow` entries | **11** | **0** | the checkable KEY 8 reward |
+| inert public arguments | **3** | **0** | all three found by this phase's sweeps |
+| dead formals | **15** | **0** | proved unread, every call site fixed |
+| exports | 94 | **94** | nothing added, nothing removed |
+| `man/` | 6 863 | **6 886** | **+23 — it GREW**, see the KEY 8 correction |
+| `R/` | 47 629 | 47 829 | +200, expected (§2: not the metric) |
+| formals per producer | — | **unchanged** | no signature moved this phase |
+| ghost-comment sites | 164 | 164 | **routed to 22c**, not this phase's work |
+
+⚠ **The KEY 8 correction, measured rather than assumed.** The plan's "exporters −125 Rd lines" was
+the rejected `tab_style()` bundle's saving and died with it: the exporters keep every formal by
+ruling, so each page still documents each argument, and replacing the drifted *short* texts with the
+canonical *fuller* ones made `man/` grow. **KEY 8's reward is anti-drift, not size** — 26 hand-written
+blocks became 9 declarations, five texts that were wrong or incomplete were corrected, and the
+foreign key's eleven-name exception list is empty.
+
+**THE PHASE'S REAL FIND: three inert public arguments** — documented behaviour that did not happen.
+Two of them were sitting in the "dead formal, delete it" pile, so the brief's own deletion list would
+have buried them. This is the strongest argument for doing the sweeps before the deletions.
+
+1. ⚠ **`tab_plain()` was the ONE crosstab producer of four that never finalised colour.** Measured:
+   `tab_plain(color = "difference", color_signif = "grey_non_signif")` stored `"ignore"`, while
+   `tab()` and `tab_num()` stored the real value. `finalize_color_tail()` is run by `tab()`,
+   `tab_counts()` and `tab_num()`; `tab_plain()` ended at `tab_apply_display()`, so the `color_spec`
+   its own argument boundary had already resolved was computed and dropped — and `plain_core()`
+   hard-coded `color_signif = "ignore"` while carrying the resolved value in an unread formal, which
+   is *why* that formal looked dead. Three declared behaviours silently did not happen: the policy ·
+   a legacy composite's POLICY half (`color = "diff_ci"` coloured by the difference and tested
+   nothing — 20b's decode-then-normalise warning one layer down) · a two-channel
+   `color = c(text, bg)`, which **aborted** inside `plain_resolve()` on a length-2 `if`. Byte-identical
+   on all seven pre-existing shapes, and the `df`/`num` escape hatch keeps `num_core`'s early return
+   (the tail would otherwise stamp `color_breaks` on a plain frame). The stale comment claiming
+   *"tab_plain never finalises colour — the outer wrapper is the sole finaliser"* documented the defect.
+2. ⚠ **`lang` was inert on `tab_md()` and `tab_xl()`.** `rd_footer(lang =)` exists and only
+   `tab_html()`, `tab_plot()` and `forest_plot()` passed it; `tab_md()` handed it to
+   `md_render_one()`, which dropped it under a comment saying so, and `tab_xl()` never read it at
+   all. Both now thread it — it fires only when supplied, and nothing in the corpus supplies it, so
+   zero churn.
+3. ⚠ **A source level literally named `"Total"` was silently turned into a total ROW.** `"Total"` is
+   the leaf's declared internal pre-rename sentinel, and `leaf_totrow_tottab()` derives its role
+   vectors by matching it — measured, the data row came back with `row_kind = "total"`,
+   `is_totrow() == TRUE`, bold, out of the percentage base, and the table printed **two** identically
+   labelled "Total" rows. There is no right reading of that table, so it aborts. ⚠ Two homes, both
+   needed: `tab_prepare()`'s tail (post-recode, so a collision a recode *created* is caught) and
+   `leaf_defuse_vars()` (a direct `tab_plain()` / `tab_num()` / `tab_counts()` call never reaches
+   `tab_prepare()` — the gate's own fixture caught that). ⚠ **NOT `"NA"` or `"Others"`**: measured, an
+   `"NA"` level renders correctly unless the column *also* holds real NAs, so refusing it would be a
+   false positive on an ordinary survey label ("NA" = "not applicable").
+
+**THE DELETIONS**, each re-proved before it was touched and done call-site-by-call-site (19l dropped
+one and the i18n tests caught it):
+
+- **the whole DORMANT total-column-range block** — `tab_totcol_range()`, the `range_totcol` model
+  slot, both commented-out call sites, four breadcrumbs, the `TAB_OPTIONS` note and the test section
+  that existed only to keep the helper alive. With it, `tab_fold_addn_incell()`'s `rng` branch
+  collapses to two lines.
+- **`materialize_specs()`'s `kind`** — zero readers, and its header claimed it "matched the stored
+  row-role vocabulary" when no `ROW_KINDS` value matched. The list is NAMED instead: a name costs
+  nothing and cannot make that claim.
+- **`tab_transpose()`'s unreachable duplicate abort** — `tab_check_shape()` one call earlier already
+  refuses it, and the declared `row_var`/`row_vars` move together, so the "degraded table" case it
+  guarded is caught there too.
+- **15 dead formals** across 14 functions. ⚠ **One cascade, and it is the hazard of this work**:
+  deleting `reg_checks_for(grouped)` made `reg_checks_default(grouped)` dead too, and its call site
+  passed three positional arguments — so a naive deletion would have silently bound `grouped`'s old
+  value to `has_fit`. **Three KEPT with their reason**: `color_signif_rd(producer)` (the `values_rd`
+  calling convention — the formal is the interface), `set_color_style(html_24_bit)` (deprecated-inert,
+  documented), `.onLoad/.onUnload(libname, libpath)` (R's contract). ⚠ `jmv_store_fetch()` losing its
+  `cfg` makes it the one kernel function without that first argument, so the asymmetry is now
+  **declared**: `cfg` is the schema and the byte budget, and only the functions that *decide*
+  something read it — a read does not.
+- **`REG_ESTIMANDS$obs` was NOT deleted; it got its reader.** It was `FALSE` on exactly the 13
+  `at_reference` rows of 43 and the rule was re-derived from the string downstream, so
+  `reg_stage_setup()`'s `at_profile` reads the declared column now, with the proven equality asserted
+  beside the table. Byte-identical; it turns 19b's "a column with no reader is weight" into a fact
+  and removes a re-derivation.
+
+**KEY 8 — `EXPORT_ARGS`** (Repository Map for the design). Two facts worth keeping: a **second table**
+is forced, not chosen (three names mean something else on the render side, and a named list cannot
+hold two rows per key), and only **9 of 24 rows carry prose** because the table's own admission test
+was applied honestly — `@param theme` is written seven times but `allow_auto = TRUE` is passed by only
+three backends, so seven texts describe five value sets and are not one duplicate. ⚠ The scope gate
+**caught my own error on its first run**: I gave `print` a row on the strength of a `tab_css` formal
+that is actually `print_rules`.
+
+**Also landed**: `fmt_materialize_wn()` names the `set_wn(col, get_wn(col))` round-trip, with the rule
+(`get_wn()` is the only getter with a fallback, so the write *fixes* it into the record) stated once
+instead of twice — 19o §7.4's "state the rule or drop the write", answered without dropping a write
+the goldens pin. And **the jamovi gate's bracket blind spot is closed**: `test-jamovi-vocabulary.R`
+saw `ui.<name>` but not `ui[...]`, so a rename of `totaltab_*` / `comp` / `xl_replace` / `family` /
+`trials` would have no-op'd in silence. The three forms are DERIVED from the sources' own convention
+(a literal after `ui`, an array literal whose `.forEach` indexes `ui[...]`, `Object.keys(OBJ)` with
+`ui[...]`), never a hand list — 304 → 323 assertions, and every name resolves.
+
+**THE SWEEP, and what it de-duplicated.** 58 → 1. `test-steps-legacy.R`'s 31 are quieted per block
+(its subject *is* the deprecated call, and the two blocks that assert the warning keep it); the nine
+`tab_chi2` sites in `test-calculations.R` are migrated to `tab(test = TRUE)` after measuring the chi2
+row, the ANOVA rows and the contribution sums identical — so those assertions now cover the LIVE
+path; and the identical `tab_prepare()` starwars fixture, **written six times in four files**, is
+hoisted to each file's top level, where the existing file-level lifecycle line actually bites. Four
+blocks keep an in-block quiet with a one-line reason (the step is half the subject).
+
+**HONEST CONCERNS.**
+
+- ⚠ **`man/` grew.** Stated above and in the architecture doc, because the plan predicted a −125 and
+  the measurement is +23. The pages that grew are the ones whose documentation was worst
+  (`tab_plot` +10: its `color_legend` was "Print colors legend below the table ?" and its `theme` had
+  a comma splice and denied `"print"`).
+- ⚠ **Three of the four surviving `EXPORT_ARGS` prose decisions are judgement calls**, not
+  measurements: `caption` genuinely renders five ways, but `css`, `format`, `file` and `path` are
+  *two* texts each and I read them as different rather than drifted. If 22d disagrees, moving them is
+  one `doc` each — the row already exists.
+- ⚠ **The `"Total"` abort is a behaviour change on data that previously "worked"** — it produced a
+  wrong table, but a script that fed such a level now stops. It is in `NEWS.md`. It also fires for a
+  pre-aggregated `tab_counts()` input carrying a Total row, which is correct (it would inflate every
+  base) but is the one shape a user might not expect.
+- ⚠ **The jamovi gate is a regex over source, not a parse.** No `node`, no `V8` on this box (declined
+  in 19n); the limit is stated in the test. It gates the NAMING, not the behaviour.
+- **`tab_plain()` still has no `color_breaks` formal** (it is declared for `tab`/`tab_num`/
+  `tab_counts`), so its new tail passes `NULL`. Deliberate — adding it is surface growth — but the
+  four producers are not yet uniform on that one argument.
+- **`plain_core()` is still 426 deparsed lines.** The phases are declared, not extracted; the header
+  says what the extraction would cost and why it needs its own session.
+- **`var_labels` per-call: DECLINED with the number** — 11 functions to thread, 0 corpus uses, and
+  the option already works. `pct`'s `"no"`/`"none"` item needed **nothing**: 20b's `stored = "none"`
+  field and its foreign key already declare that mapping.
+
+**ROUTED TO 20i** (which is allowed to move a value), all from the guess sweep: `tab-leaf.R`'s
+last-level-guessed-as-total fallback when nothing carries the flag · `tab.R:1491`'s
+`names() |> last()` picking the total column · the transposed "representative column" chosen by
+position, twice · `reg-resolve.R`'s `deps$est[[1]]` choosing the estimand for a whole table · and
+**per-row `obs`** (today one `at_reference` spec suppresses the crude value for the *entire* table,
+which is over-broad). **Routed to 22c**: 164 ghost-comment sites naming 107 dead functions, almost
+all legitimate historical notes. Declared keeps, with their measurements, from 20f/20f-iiii:
+`reg_global_rows()`'s `drop1` refits and the shipped crude block.
+
+No `.a.yaml` / `.u.yaml` was touched, so **no `jmvtools::prepare()` is owed**.
+
+**FOLLOW-UPS.** 20i can start on this commit; every harness baseline is current
+(`verify_reg_specs.R`'s is re-saved, and `verify_golden_field_delta.R`'s declaration blocks are empty
+and should stay so unless 20i adds something). 20i also owns the full-suite + `devtools::check()`
+checkpoint that closes Phase 20.
 
 ---
 

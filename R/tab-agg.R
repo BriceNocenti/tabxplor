@@ -900,7 +900,7 @@ agg_chi2 <- function(table_id, row_id, col_id, o, correct = TRUE) {
 # or var <= 0 are dropped (outside the F domain); a table left with k < 2 groups yields NA.
 # Returns one row per table_id with both tests. Welch matches oneway.test(var.equal = FALSE);
 # classic (pooled) matches oneway.test(var.equal = TRUE) / aov.
-agg_anova <- function(table_id, group_id, n, mean, var) {
+agg_anova <- function(table_id, n, mean, var) {
   DT <- data.table::data.table(table_id = table_id, n = as.double(n),
                                mean = as.double(mean), var = as.double(var))
   DT <- DT[is.finite(mean) & is.finite(var) & var > 0 & n >= 2]

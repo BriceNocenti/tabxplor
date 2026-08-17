@@ -27,8 +27,10 @@ forest_plot(
 )
 }
 \arguments{
-\item{x}{A table from \code{\link{tab}} or \code{\link{tab_reg}} (or a list
-of them, giving a list of plots).}
+\item{x}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{columns}{Value columns to draw, by name. \code{NULL} (the default) draws the model columns of
 a regression table and every value column of a cross-table.}
@@ -61,7 +63,8 @@ breaks -- the teaching mode) or \code{"none"}.}
 \item{theme}{\code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication
 palette). \code{NULL} follows \code{getOption("tabxplor.export_theme")}.}
 
-\item{lang}{Legend language: \code{NULL} (the locale), \code{"en"} or \code{"fr"}.}
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{caption}{A caption. \code{NULL} keeps the table's own.}
 

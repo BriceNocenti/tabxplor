@@ -176,3 +176,42 @@ test_that("a forest plot's axis and guide follow lang =", {
   expect_match(nm(p_en), "^Difference vs ")
   expect_match(nm(p_fr), "^Diff\u00e9rence p\\. r\\. \u00e0 ")
 })
+
+
+# === Phase 20h: `lang` was INERT on two exporters ============================
+# `lang` is documented on tab_html / tab_plot / forest_plot / tab_md / tab_xl and rd_footer() takes
+# it, but only the first three ever passed it: tab_md() handed it to md_render_one(), which dropped
+# it, and tab_xl() never read it at all. Both fixtures fail on the pre-20h tree.
+
+test_that("20h: tab_md(lang =) reaches the colour legend (English, runs everywhere)", {
+  d <- gss_cat_data_formatting()
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = "difference")
+  en <- tab_md(t, lang = "en")
+  # the legend is rendered, in English, whatever the ambient locale
+  expect_match(en, "Shades of blue", fixed = TRUE, all = FALSE)
+})
+
+test_that("20h: tab_md(lang = 'fr') renders the French legend", {
+  skip_if_no_gettext()
+  d <- gss_cat_data_formatting()
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = "difference")
+  fr <- tab_md(t, lang = "fr")
+  expect_match(fr, "Nuances de bleu", fixed = TRUE, all = FALSE)
+  # ...and it is genuinely the argument, not the ambient locale
+  expect_false(identical(fr, tab_md(t, lang = "en")))
+})
+
+test_that("20h: tab_xl(lang =) reaches the Excel colour legend", {
+  skip_if_not_installed("openxlsx2")
+  d <- gss_cat_data_formatting()
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = "difference")
+  sub_of <- function(lg) {
+    p <- withr::local_tempfile(fileext = ".xlsx")
+    tab_xl(t, path = p, open = FALSE, replace = TRUE, lang = lg)
+    paste(unlist(openxlsx2::read_xlsx(p, col_names = FALSE, skip_empty_rows = FALSE)),
+          collapse = " ")
+  }
+  expect_match(sub_of("en"), "Shades of blue", fixed = TRUE)
+  skip_if_no_gettext()
+  expect_match(sub_of("fr"), "Nuances de bleu", fixed = TRUE)
+})

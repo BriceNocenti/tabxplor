@@ -29,8 +29,7 @@
 #' @description The Excel exporter behind \code{\link{tab_export}}: `tab_export(x, format = "xl")`
 #' calls this. To modify the colors used into the Excel table, you can change the
 #' global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
-#' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_reg}} or
-#' \code{\link{tab_plain}}, or a list of such tables.
+#' @eval tab_args_rd("tab_xl")
 #' @param path,replace,open The name, and possibly the path, of the Excel file to
 #' create (possibly without the .xlsx extension). Default path to temporary directory.
 #' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
@@ -44,8 +43,6 @@
 #' Set to \code{FALSE} to keep them.
 #' @param colwidth The standard width for numeric columns, as a number.
 #' Set to \code{"auto"} to let Excel choose.
-#' @param transpose Set to \code{TRUE} to transpose each table before export (rows become
-#'   columns). Useful for column percentages tables with several row variables.
 #' @param or_numeric Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
 #'   below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
 #'   \code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.
@@ -68,15 +65,7 @@
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
-#' @param color Set to \code{FALSE} to export without colours (monochrome).
-#' @param color_legend Should the color legends be printed with the subtexts ?
-#' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
-#'   \code{"en"} or \code{"fr"}.
 #' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
-#' @param var_names Which variable names to write beside the table: `"both"` (the default),
-#'   `"rows"`, `"cols"` or `"none"`. The row-variable name is the leading column a table with
-#'   several `row_vars` uses to name each block (merged over it and rotated 90 degrees); the
-#'   column-variable names are the merged row above their level columns. See \code{\link{tab_kable}}.
 #' @param sheets The Excel sheets options :
 #' \itemize{
 #'   \item \code{"tabs"}: a new sheet is created for each table
@@ -247,8 +236,11 @@ tab_xl <-
     # plain black on its own rows below (subtext = character(0) here, merged next).
     # Phase 17g: shared rd_footer(); xl passes the whole run set (no color_cols guard -- legend = the
     # color_legend arg) and no user subtext here (merged plain, below).
+    # Phase 20h: `lang` IS threaded now. It was a documented formal of tab_xl() that the body never
+    # read at all, so tab_xl(lang = "fr") wrote an English colour legend. Byte-identical when NULL
+    # (= follow the ambient locale), which is every golden and every export-parity fixture.
     legend_runs <- purrr::map(tabs_src, function(t)
-      rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend)))
+      rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend), lang = lang))
     if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
         ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))

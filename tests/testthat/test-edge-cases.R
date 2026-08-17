@@ -564,3 +564,41 @@ testthat::test_that("a logical col_var works and a Date col_var errors clearly",
   testthat::expect_error(tab(dd, r, dt),
                          "must be a factor, character or numeric")
 })
+
+
+# === Phase 20h: a source level that collides with a total label ==============
+# "Total" is the leaf's internal pre-rename key for every total row/tab/column, and
+# leaf_totrow_tottab() derives its role vectors by matching it -- so a DATA level of that name used to
+# be read back as a total row (measured: row_kind "total", is_totrow TRUE, bold, out of the percentage
+# base, and the table printed two "Total" rows). It is refused now.
+
+testthat::test_that("20h: a level named like a total label is refused, on every axis", {
+  d <- tibble::tibble(g = factor(rep(c("A", "Total", "B"), each = 20)),
+                      q = factor(rep(c("yes", "no"), 30)))
+  testthat::expect_error(tab(d, g, q, pct = "row"), "own total")
+  testthat::expect_error(tab(d, q, g, pct = "row"), "own total")          # as a col_var
+  testthat::expect_error(tab(d, q, q, tab_vars = g, pct = "row"), "own total")
+  # the leaves take the same route through tab_prepare()
+  testthat::expect_error(tab_plain(d, g, q, pct = "row"), "own total")
+  # the message names the level and offers the way out
+  testthat::expect_error(tab(d, g, q, pct = "row"), "tabxplor.total_names")
+})
+
+testthat::test_that("20h: the refusal follows the OPTION, not the English default", {
+  d <- tibble::tibble(g = factor(rep(c("A", "Ensemble", "B"), each = 20)),
+                      q = factor(rep(c("yes", "no"), 30)))
+  # "Ensemble" is the default total-TAB label, so it is reserved out of the box...
+  testthat::expect_error(tab(d, g, q, pct = "row"), "own total")
+  # ...and moving tab()'s own labels is what makes the level legal again.
+  withr::local_options(tabxplor.total_names = c(row = "TOT", col = "TOT", tab = "ALL"))
+  testthat::expect_s3_class(tab(d, g, q, pct = "row"), "tabxplor_tab")
+})
+
+testthat::test_that("20h: a level named \"NA\" or \"Others\" is NOT refused", {
+  # measured: an "NA" level renders correctly unless the column also holds real NAs, and a
+  # pre-existing "Others" merely joins the lump -- refusing either would be a false positive on
+  # ordinary survey labels ("NA" = "not applicable").
+  d <- tibble::tibble(h = factor(rep(c("x", "NA", "Others"), each = 20)),
+                      q = factor(rep(c("yes", "no"), 30)))
+  testthat::expect_s3_class(tab(d, h, q, pct = "row", na = "keep"), "tabxplor_tab")
+})

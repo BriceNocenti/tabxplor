@@ -44,8 +44,10 @@ tab_kable(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}},
-or a \code{list} of tab with the same \code{col_vars} and no \code{tab_vars}.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 table with white text; \code{"auto"} (opt-in) to follow whoever is \strong{reading} the table:
@@ -87,22 +89,22 @@ $(document).ready(function(){
 </script>
 }}
 
-\item{color_legend}{Print colors legend below the table ?}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
-You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{caption}{The table caption. For formatting, you need to use a \code{css}
 with \verb{caption\{\}}in rmarkdown.}
 
-\item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns) --
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
-\code{"rows"}, \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with
-several \code{row_vars} uses to name each block (written once per block, vertically); the
-column-variable names are the spanning row above their level columns. Level headers always
-keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{get_data}{Get the transformed data instead of the html table.}
 

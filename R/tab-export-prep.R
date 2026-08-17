@@ -212,67 +212,6 @@ tab_label_runs <- function(tab, label_names) {
 }
 
 
-# === SECTION: total-column base range [min;max] -- DORMANT (block B, decisions.md Sec 10) =======
-
-# DORMANT -- possible future implementation. The retired option `tabxplor.totcol_range` once drove
-# this: when col_vars have differing percentage bases (chiefly na="drop" with different NA rates),
-# one Total column must summarise K row bases. This TABLE-LEVEL pre-pass (format() sees one column
-# at a time and cannot) returns, per data row, the scalar base when all col_vars agree, else the
-# range. base per cell = get_tot_n() for row/col/all types, get_n() for means.
-# `style`: "range" (default) -> "[min;max]", "min" -> the smallest (safest) base, "off" -> uniform
-# (no per-row range). NO site reads the option any more: the console fold branch
-# (tab.R tab_fold_addn_incell) and the render-model compute (range_totcol, below) are both
-# commented out -- the per-row literal templates it emitted defeated the composite-token padding
-# (format.tabxplor_fmt aligns per unique template) and no renderer ever consumed range_totcol.
-# The helper is kept honest by direct tests in test-export-prep.R.
-#' @keywords internal
-tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
-                             style = "range") {
-  n_row <- nrow(tab)
-  empty <- list(col = totcols, text = character(0), differ = logical(0))
-  if (identical(style, "off")) return(empty)
-  if (length(fmt_cols) == 0 || length(totcols) == 0) return(empty)
-
-  # One representative base per col_var per row: within a col_var+row the base is constant, so read
-  # each col_var's total column (or its first fmt column) once. NA bases (mean cells with no base)
-  # are ignored in the min/max.
-  cvs <- unique(col_var_map[fmt_cols])
-  cvs <- cvs[is_real_col_var(cvs)]
-  if (length(cvs) == 0) return(empty)
-
-  base_of <- function(col) {
-    if (fmt_var_kind(col) == "mean") get_n(col) else get_tot_n(col)
-  }
-
-  # a matrix of bases: rows = table rows, cols = col_vars
-  base_mat <- vapply(cvs, function(cv) {
-    cols_cv  <- names(col_var_map)[col_var_map == cv]
-    cols_cv  <- intersect(cols_cv, names(fmt_cols))
-    if (length(cols_cv) == 0) return(rep(NA_real_, n_row))
-    # prefer this col_var's total column, else its first column
-    tcol <- intersect(names(totcols), cols_cv)
-    pick <- if (length(tcol) > 0) tcol[[1]] else cols_cv[[1]]
-    as.numeric(base_of(tab[[pick]]))
-  }, numeric(n_row))
-  if (is.null(dim(base_mat))) base_mat <- matrix(base_mat, nrow = n_row)
-
-  row_min <- suppressWarnings(apply(base_mat, 1, min, na.rm = TRUE))
-  row_max <- suppressWarnings(apply(base_mat, 1, max, na.rm = TRUE))
-  fin     <- is.finite(row_min) & is.finite(row_max)
-  differ  <- fin & (row_max != row_min)
-
-  text <- rep(NA_character_, n_row)
-  text[fin & !differ] <- as.character(round(row_min[fin & !differ]))
-  if (identical(style, "min")) {
-    text[differ] <- as.character(round(row_min[differ]))
-    differ[]     <- FALSE
-  } else {
-    text[differ] <- paste0("[", round(row_min[differ]), ";", round(row_max[differ]), "]")
-  }
-  list(col = totcols, text = text, differ = differ)
-}
-
-
 # === SECTION: the render-model builder ==============================================
 
 # Resolve the input into the list of tables to render.
@@ -298,7 +237,7 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 #' @keywords internal
-prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
+prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                            theme_cols, var_names = "both") {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
@@ -511,13 +450,6 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     }
   }
 
-  # DORMANT (possible future implementation, retired tabxplor.totcol_range): no renderer ever
-  # consumed range_totcol, so the compute is off. The named NULL slot stays in the model below.
-  # range_totcol <- if ("range" %in% compute) {
-  #   tab_totcol_range(tab, fmt_cols, col_var_map, totcols)
-  # } else NULL
-  range_totcol <- NULL
-
   # Phase 13c-iii: the shared col_var HEADER model (spanning variable-name row + suffix-stripped level
   # labels), consumed by every exporter so the two header rows stay in sync (console is unchanged).
   # Phase 14i: `name_cols` is the col-side twin of the `var_names` row-side drop above. A blank `label`
@@ -558,7 +490,6 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     ann = ann,
     bold_rows = bold_rows,
     bold_cols = bold_cols,
-    range_totcol = range_totcol,
     col_var_header = col_var_header,
     subtext = subtext,
     # Phase 16e: the plain footer one-liners (weight / Model: / stars) are no longer pre-computed here --
@@ -886,7 +817,7 @@ tab_export_prep <- function(tabs,
   if (is.null(what)) what <- paste0("tab_", backend, "()")
   if (is.null(compute)) {
     compute <- if (backend %in% c("kable", "plot")) {
-      c("refs", "colors", "bold")  # "range" DORMANT (retired totcol_range)
+      c("refs", "colors", "bold")
     } else c("refs", "bold")  # md / xl
   }
 
@@ -921,7 +852,7 @@ tab_export_prep <- function(tabs,
 
   tables <- purrr::map(
     resolved,
-    ~ prep_one_table(.x, backend = backend, drop_tab_vars = drop_tab_vars,
+    ~ prep_one_table(.x, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
                      var_names = var_names)
   )

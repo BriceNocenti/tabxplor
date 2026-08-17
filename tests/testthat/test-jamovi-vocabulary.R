@@ -26,6 +26,38 @@ yaml_opts <- function(file) {
   y <- yaml::read_yaml(path)
   stats::setNames(y$options, vapply(y$options, function(o) o$name, character(1)))
 }
+# ui_bracket_names() -- Phase 20h: the names the .js reaches through `ui[...]` rather than `ui.<name>`.
+# ⚠ THE LIMIT, stated: this is a regex over the SOURCE. There is no `node` and no `V8` on the dev box,
+# so the .js is never parsed or executed (declined in 19n, recorded so it is not re-proposed) -- what
+# is gated is the naming, not the behaviour. Three forms, each the sources' own convention:
+#   (1) a string literal passed right after `ui`   bottomAlignInRow(ui, "xl_replace")
+#                                                  arrGet(ui, "family", v, "family")
+#   (2) an ARRAY literal whose .forEach indexes it ["totaltab_1", ...].forEach(... ui[nm] ...)
+#   (3) Object.keys(OBJ).forEach with ui[...]      -> OBJ's declared keys (MEASURE_OF_RADIO ...)
+ui_bracket_names <- function(js) {
+  s <- paste(js, collapse = "\n")
+  out <- character(0)
+  h <- regmatches(s, gregexpr("\\w+\\s*\\(\\s*ui\\s*,\\s*[\"'][^\"']+[\"']", s, perl = TRUE))[[1]]
+  out <- c(out, gsub("[\"']", "", sub("^.*,\\s*", "", h)))
+  for (m in regmatches(s, gregexpr("\\[[^][]*\\][[:space:]]*\\.forEach", s, perl = TRUE))[[1]]) {
+    i <- regexpr(m, s, fixed = TRUE)
+    if (!grepl("ui\\[", substr(s, i, i + nchar(m) + 200L), perl = TRUE)) next
+    out <- c(out, gsub("[\"']", "",
+                       regmatches(m, gregexpr("[\"'][^\"']+[\"']", m, perl = TRUE))[[1]]))
+  }
+  obs <- unique(gsub("[^A-Za-z0-9_]", "", sub("^Object\\.keys\\(", "", regmatches(s,
+    gregexpr("Object\\.keys\\(\\s*\\w+\\s*\\)", s, perl = TRUE))[[1]])))
+  for (ob in obs) {
+    i <- regexpr(paste0("Object\\.keys\\(\\s*", ob, "\\s*\\)"), s, perl = TRUE)
+    if (i < 0 || !grepl("ui\\[", substr(s, i, i + 400L), perl = TRUE)) next
+    d <- regmatches(s, regexpr(paste0("var\\s+", ob, "\\s*=\\s*\\{[^}]*\\}"), s, perl = TRUE))
+    if (!length(d)) next
+    out <- c(out, sub("\\s*:$", "", gsub("[\"']", "", regmatches(d,
+      gregexpr("[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?\\s*:", d, perl = TRUE))[[1]])))
+  }
+  sort(unique(trimws(out)))
+}
+
 # The declared value set of one List option, in declaration order.
 opt_values <- function(opts, name) {
   o <- opts[[name]]
@@ -200,10 +232,15 @@ test_that("the .u.yaml controls and the .js name declared options", {
     js  <- readLines(testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js")), warn = FALSE)
     hit <- unique(unlist(regmatches(js, gregexpr("(?<=\\bui\\.)[A-Za-z_][A-Za-z0-9_]*", js,
                                                  perl = TRUE))))
+    # Phase 20h: ...and by BRACKET access, which the `ui.<name>` regex above cannot see. A rename of
+    # `totaltab_*` / `comp` / `xl_replace` / `family` / `trials` would have no-op'd in SILENCE, since
+    # every CustomControl guards with `if (!ui.x) return;`. The three forms are derived from the
+    # sources' own convention, never from a hand-kept list.
+    hit <- unique(c(hit, ui_bracket_names(js)))
     known <- c(names(o), ctrl_names, "view")
     for (nm in hit)
       expect_true(nm %in% known,
-                  info = paste0("jamovi/js/", an, ".js: `ui.", nm,
+                  info = paste0("jamovi/js/", an, ".js: `", nm,
                                 "` names neither an option nor a control (a stale rename?)"))
   }
 })

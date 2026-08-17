@@ -66,12 +66,17 @@ testthat::test_that("tab_kable works with chi2 subtext", {
   testthat::expect_no_error(tab_kable(tabs))
 })
 
+# Phase 20h: the prepared starwars fixture, built ONCE at top level -- where the file-level
+# lifecycle line above actually bites (testthat re-enables the warning inside every
+# test_that()). It was written verbatim in each block below.
+sw_prepared <- dplyr::starwars |>
+  tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
+              other_if_less_than = 5)
+
 testthat::test_that("tab_kable works with numeric tables", {
   testthat::skip_if_not_installed("kableExtra")
 
-  sw <- dplyr::starwars |>
-    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                other_if_less_than = 5)
+  sw <- sw_prepared
   tabs <- tab_num(sw, sex, height, na = "drop", color = "diff")
   testthat::expect_no_error(tab_kable(tabs))
 })
@@ -114,9 +119,7 @@ testthat::test_that("tab_plot works with numeric tables", {
   testthat::skip_if_not_installed("ggpubr")
   testthat::skip_if_not_installed("cowplot")
 
-  sw <- dplyr::starwars |>
-    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                other_if_less_than = 5)
+  sw <- sw_prepared
   tabs <- tab_num(sw, sex, height, na = "drop", color = "diff")
   testthat::expect_no_error(tab_plot(tabs))
 })
@@ -170,9 +173,7 @@ testthat::test_that("tab_xl works with grouped tables", {
 testthat::test_that("tab_xl works with numeric tables", {
   testthat::skip_if_not_installed("openxlsx2")
 
-  sw <- dplyr::starwars |>
-    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                other_if_less_than = 5)
+  sw <- sw_prepared
   tabs <- tab_num(sw, sex, height, na = "drop", color = "diff")
   tmp <- tempfile(fileext = ".xlsx")
   on.exit(unlink(tmp))

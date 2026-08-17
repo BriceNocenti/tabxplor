@@ -14,39 +14,18 @@
 #' @description
 #' The Markdown exporter behind \code{\link{tab_export}}: `tab_export(x, format = "md")` calls this.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a `list` of tab.
-#'   A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any other
-#'   list --- several `row_vars` and/or `tab_vars` (e.g. `tab()` with several row variables and a
-#'   `tab_vars`) --- is rendered one table after another, each keeping its own sub-tables.
+#' @eval tab_args_rd("tab_md")
 #' @param bold_references Bold reference/total rows with markdown `**...**`.
 #' @param special_formatting Passed to \code{\link[=format.tabxplor_fmt]{format()}}.
 #'   When `TRUE`, shows "ref:" prefix on diff reference cells, "mean:" on ctr
 #'   totals, sigma on means.
-#' @param wrap_rows Max width for row labels before truncation. `NULL` (default) never truncates
-#'   (lossless -- the column grows); set a number to cap the label width. A markdown pipe cell cannot
-#'   hold a raw newline, so md "wrapping" means "do not truncate".
 #' @param subtext Print chi2/footnotes below the table.
-#' @param color When `TRUE` (default) and the table carries colours (e.g. built with
-#'   `tab(..., color = "difference")`), each fmt cell is wrapped in a short pandoc bracketed span
-#'   `[value]{.class}` so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
-#'   companion \code{\link[=tab_css]{tab_css(format = "md")}} styles the classes). `FALSE` produces plain monochrome
-#'   markdown. Uncoloured tables never get spans.
-#' @param color_legend When `TRUE` (default) and the table is coloured, prepend a colour-legend prose
-#'   line (its break-words in the same pandoc classes as the cells) above the subtext.
-#' @param lang Colour-legend language: `NULL` (auto from the R/OS locale, English fallback), `"en"` or `"fr"`.
 #' @param theme Colour palette selector (as in \code{\link{tab_html}}); it only affects the CSS
 #'   emitted by `css = TRUE` / \code{\link{tab_css}}, since the span *class names* are palette- and
 #'   theme-independent. Accepts `"auto"` (follow the reader's colour scheme).
 #' @param caption Optional table caption, rendered as a pandoc caption line `: caption` (captions only
 #'   the first table of a list).
-#' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
-#'   the col-percentages-with-several-row-variables use case.
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
-#' @param var_names Which variable names to write beside the table: `"both"` (the default),
-#'   `"rows"`, `"cols"` or `"none"`. The column variables' names are written as an italic body row
-#'   above their level columns; the row-variable name is the leading column a table with several
-#'   `row_vars` uses to name each block (written once per block, in italics). See
-#'   \code{\link{tab_kable}}.
 #' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
 #'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
 #' @param css When `TRUE` (the **default**), prepend an inline `<style>` block (from
@@ -223,11 +202,15 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # call tx_slot_class(), so tab_css() colours them identically). The source is the fmt table -- rd$color_src
   # for a transposed model (whose rd$tab is plain character), so weight/stars/legend all read the right
   # attributes (previously weight/stars read the stripped rd$tab). Legend only when coloured.
-  # Phase 17g: rd_footer() folds the shared render_footer(tab_footer_streams(...)) call (md historically
-  # does not thread `lang` into the footer -- kept byte-identical, so lang is omitted here).
+  # Phase 17g: rd_footer() folds the shared render_footer(tab_footer_streams(...)) call.
+  # Phase 20h: `lang` IS threaded now. It was documented on tab_md() and dropped here -- so
+  # tab_md(lang = "fr") rendered an English colour legend, while tab_html() / tab_plot() /
+  # forest_plot() (which pass it) honoured it. Byte-identical when lang is NULL, which is every
+  # golden and every snapshot: NULL means "follow the ambient locale", the former behaviour.
   src         <- if (is.null(rd$color_src)) tabs else rd$color_src
   want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
-  subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend, subtext = subtext_text)
+  subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend,
+                            subtext = subtext_text, lang = lang)
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group

@@ -2514,16 +2514,32 @@ get_wn     <- function(x) { #If there is no weighted counts, take counts
   out
 }
 
-# as.list(vec_data(col)) with the `wn` field MATERIALISED -- the frame shape vec_cast produces via the
-# getters. Raw vec_data() keeps wn's NAs, but get_wn() is the only getter with a fallback (NA -> the n
-# field); every other field is a raw read, so only wn needs the fixup. Shared by tab_stack_tables()
-# (tab_classes.R) and the test-display column stacker (tab-test-display.R).
+# THE `wn` MATERIALISATION, in the two shapes that need it (Phase 20h named the second).
+#
+# THE RULE, stated once: `get_wn()` is the ONLY getter with a fallback -- it answers the `n` field
+# wherever `wn` is NA (an unweighted table stores no weighted count). So reading through it and
+# writing back is NOT a no-op: it FIXES the fallback into the record, turning NA into the unweighted
+# count for good. Everything that combines fmt vectors does that implicitly (vec_ptype2 / vec_cast go
+# through the getters), which is why the two callers below have to do it explicitly to match.
+#
+# fmt_data_wn(col)        -- the FRAME shape (as.list(vec_data()) with wn fixed), for a caller that
+#                            rebuilds a column field by field: tab_stack_tables() (tab_classes.R) and
+#                            the test-display column stacker (tab-test-display.R).
+# fmt_materialize_wn(col) -- the COLUMN shape, for a caller that writes fields in place. Its two
+#                            callers (chi2_write_contrib() in R/tab-chi2.R, tab_ci() in
+#                            R/tab-steps-legacy.R) both reproduce a pre-Phase-9b-5 path whose
+#                            `dplyr::if_else()` over fmt columns combined them -- and therefore
+#                            materialised wn -- where the plain field setter they use now does not.
+#                            The goldens pin that value, so the write stays and the reason is here
+#                            rather than restated at each site.
 #' @keywords internal
 fmt_data_wn <- function(col) {
   fr <- as.list(vctrs::vec_data(col))
   fr$wn <- get_wn(col)
   fr
 }
+#' @keywords internal
+fmt_materialize_wn <- function(col) set_wn(col, get_wn(col))
 # @describeIn fmt get the "pct" field
 #' @keywords internal
 # @export

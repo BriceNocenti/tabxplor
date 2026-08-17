@@ -255,7 +255,7 @@ tx_transpose_render <- function(rd, backend) {
   # Phase 19h (D1): rd2 MODIFIES rd; it is not re-typed. The literal this replaces enumerated ~39
   # slots, had already lost two silently, and was losing `ann$keep_black` when this was written --
   # masked by a length-check fallback in the html engine. Every slot the flip does not touch
-  # (`subtext`, `reg_title`, `caption`, `empirical_tips`, `range_totcol`, and anything a later phase
+  # (`subtext`, `reg_title`, `caption`, `empirical_tips`, and anything a later phase
   # adds) now survives by construction, because it is never mentioned. Only what genuinely changes
   # axes is assigned below.
   rd2 <- rd

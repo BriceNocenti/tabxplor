@@ -92,6 +92,10 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
   stars <- .a$stars ; display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   total_names <- .a$total_names ; ci_method <- .a$ci_method ; conf_level <- .a$conf_level
   totaltab_name <- .a$totaltab_name
+  # Phase 20h: ...and the COLOUR SPEC, which this leaf alone used to leave on the floor. `.a$color` is
+  # the normalised scalar measure the compute core takes; `color_spec` is the full grammar the shared
+  # tail applies. See the tail below for the three things that were silently lost.
+  color <- .a$color ; color_spec <- .a$color_spec
 
   # Phase 19l: THE shared NSE preamble (leaf_defuse_vars, below) -- one rule for the three producers.
   .v <- leaf_defuse_vars(data, rlang::enquo(row_var), rlang::enquo(col_var),
@@ -101,8 +105,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
 
 
   # Phase 17f: resolve the leaf's validation + forcing cascade ONCE (shared with tab_transform),
-  # then hand the resolved bundle to the compute core. tab_plain never finalises colour -- the outer
-  # tab()/tab_many() wrapper is the sole finaliser -- so the core returns the built table directly.
+  # then hand the resolved bundle to the compute core.
   # Phase 19d/19e: the ONE `OR` retirement route ran at the boundary above. The leaf carries a real
   # `display` of its own, so it is LOSSLESS here as on the pipeline (`OR = "OR"` -> `display =
   # "{or}"`): the leaf and the wrapper speak one grammar.
@@ -118,7 +121,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
   ci_scale <- if (identical(comparison, "ratio")) "ratio" else "diff"
   r <- plain_resolve(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
                      digits, totaltab, tab_vars, comparison = comparison)
-  tab_apply_display(plain_core(
+  result <- plain_core(
     data, row_var, col_var, tab_vars, wt,
     pct = r$pct, color = color, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
     totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
@@ -130,7 +133,24 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
     # same inference object tab_setup() builds for the pipeline (no design -> "weights"/"n" from
     # `design_effect` or its option, byte-identical to the leaf's former inline read).
     inference = new_inference(wt, svy$spec, conf_level, ci_method, design_effect = design_effect)
-  ), display)
+  )
+
+  # Phase 17f: df/num returns plain numbers (no fmt), so skip the colour finalise entirely -- the
+  # same early return num_core's wrapper takes, and the reason tab_apply_display() never ran on it.
+  if (df || num) return(result)
+
+  # Phase 20h: THE SHARED COLOUR TAIL, which this leaf was the only producer of four to skip. It ran
+  # tab_apply_display() alone, so `color_spec` -- the whole grammar the argument boundary had already
+  # resolved -- was computed and dropped, and THREE documented behaviours silently did not happen:
+  #   * `color_signif` was stored as "ignore" whatever the user asked (plain_core writes the cells'
+  #     policy from its own literal, and nothing overwrote it afterwards as tab()/tab_num() do);
+  #   * a legacy composite kept its measure and lost its POLICY half (`color = "diff_ci"` coloured
+  #     by the difference and tested nothing) -- 20b's decode-then-normalise warning, one layer down;
+  #   * a two-channel `color = c(<text>, <bg>)` ABORTED inside plain_resolve(), because the raw
+  #     vector reached a scalar `if (color != "no")` instead of the resolved scalar measure.
+  # The tail also carries `display`, so it subsumes the tab_apply_display() call it replaces.
+  # `color_breaks` is NULL: it is declared for tab()/tab_num()/tab_counts(), not for this leaf.
+  finalize_color_tail(result, color_spec, NULL, display)
 }
 
 
@@ -193,6 +213,15 @@ leaf_defuse_vars <- function(data, row_var_quo, col_quo, tab_vars_quo, wt_quo,
     svy_abort_wt_design(length(wt) != 0L)
     wt <- rlang::sym(svy$spec$wt)
   }
+
+  # Phase 20h: refuse a source level that collides with a label the leaf mints. THIS is the leaf
+  # route's home for the check -- a direct tab_plain() / tab_num() / tab_counts() call never reaches
+  # tab_prepare(), where the pipeline's copy lives (and where it must ALSO run, on the post-recode
+  # levels). No false positive on the pipeline: "Total" is minted INSIDE plain_core(), so the prepared
+  # frame handed to a leaf never carries it. See lvl_check_reserved() (R/row-model.R).
+  lvl_check_reserved(data, c(rlang::as_name(row_var),
+                             vapply(if (plural) col else list(col), rlang::as_name, character(1)),
+                             vapply(tab_vars, rlang::as_name, character(1))))
 
   list(data = data, row_var = row_var, col = col, pos_col_vars = pos_col_vars,
        tab_vars = tab_vars, wt = wt)
@@ -316,9 +345,32 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 
 
 # plain_core() -- Phase 17f: the factor leaf's compute core. Consumes ALREADY-RESOLVED scalar settings
-# (from plain_resolve) + the resolved NSE syms; does the count aggregate + pct/diff/ratio/OR + fmt build
-# + totals + reference + the tab_var_1lv wrap, and returns the built table. Colour is NOT finalised here
-# (tab_plain never was) -- the outer tab()/tab_many() wrapper finalises once.
+# (from plain_resolve) + the resolved NSE syms, and returns the built table. Colour is finalised by its
+# CALLER, which is every crosstab producer's shared tail (finalize_color_tail).
+#
+# THE PHASES (Phase 20h). This is the aggregate core, so its length is largely inherent -- but it ran
+# for twenty sequential blocks with two of them marked, so "where does `tabs_pct` come from" meant
+# reading four hundred lines. Each block below carries a numbered head naming WHAT IT PRODUCES; the
+# list is the map, and the numbers are the order (they are not stages -- there is no ctx, and no
+# reordering is implied or safe):
+#
+#    1 the settled facts          11 the effective base   (tabs_neff)
+#    2 direct-entry prep          12 the cells + the comparison
+#    3 the name round-trip        13 the column roles
+#    4 the aggregate  (`long`)    14 the per-cell interval (ci_res)
+#    5 reshape        (`tabs`)    15 the fmt spec
+#    6 the NA policy              16 the carrier build     (one fmt column per value column)
+#    7 the total rows and tabs    17 the label columns + the ONE "Total" rename
+#    8 the row roles              18 the no_col_var special case
+#    9 the OPTIONAL leaf tables   19 the whole-table test  (leaf_test)
+#   10 the count tables          20 the result             (leaf_finish)
+#
+# 9 is the declaration block Phase 19l added -- the ~14 `tabs_*` tables this leaf MAY or may not
+# compute. It is the one phase that produces nothing: it says what the others may.
+# ⚠ EXTRACTING the phases into leaf_reshape() / leaf_compare() / leaf_infer() / leaf_totals() was
+# considered and NOT done: those `tabs_*` tables cross most of the boundaries, so each helper would
+# take and return most of them -- four signatures restating one list. Declaring the phases is what
+# 19o §7.1 actually asked for ("readable" -> "navigable"); the split needs its own measurement.
 #' @keywords internal
 #' @noRd
 plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref, ref2, comp,
@@ -336,6 +388,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # EVERY per-cell interval now, the Woolf one and the cell/contrast one alike (they are mutually
   # exclusive: `or_ci` is TRUE only where `ci` is "no"). They come straight off the settings spine.
   # `test` ("no" | "p" | "ctr") and `deff` are the same for the WHOLE-TABLE test (see leaf_chi2()).
+  # ---------------------------------------------------------------------------------------------
+  # 1. THE SETTLED FACTS -> the locals every phase below reads.
   or_compare <- identical(comparison, "odds_ratio")
   # Phase 19a: `inference` is REQUIRED (it was `= new_inference()`). A lazy default could only
   # fire on a caller that forgot to thread the build-time object, and would then silently
@@ -350,6 +404,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   list2env(leaf_inference_setup(inference, .fine, .by_table), environment())
   des_rows <- NULL
 
+  # ---------------------------------------------------------------------------------------------
+  # 2. DIRECT-ENTRY PREP -> `data` fit for the scan (labelled -> factor, select, weight coercion).
   if (use_raw) {
     # Phase k: convert labelled (haven/labelled) row/col/tab columns to value-label factors for the
     # DIRECT tab_plain() entry (no tab_prepare upstream). Idempotent on the tab()/tab_many() path
@@ -373,6 +429,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
 
+  # ---------------------------------------------------------------------------------------------
+  # 3. THE data.table NAME ROUND-TRIP -> internal names (see the sentinel note below).
   tab_row_names  <- as.character(c(tab_vars, row_var))
 
   # DESIGN: data.table name round-trip (how user column names survive dcast). We (1) rename
@@ -414,6 +472,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
 
+  # ---------------------------------------------------------------------------------------------
+  # 4. THE AGGREGATE -> `long` (one row per cell), from the raw scan or a pre-aggregate...
   #Make all calculations with data.table to gain time
   if (use_raw) {
     # Phase 18z14-ii: lift `.svy_row` (each prepared row's position in the ORIGINAL design) out of
@@ -472,6 +532,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # Phase 18z16-iiiii: read off the AGGREGATE, on both branches -- byte-identical to the former
   # `nrow(data)` on the raw path (`.N` partitions the frame), and the only definition that also works
   # when the leaf was handed a pre-aggregate. It is the convention num_core() already used.
+  # ---------------------------------------------------------------------------------------------
+  # ...and 4b. THE SCAN FACTS -> n_obs / weighted / has_w2 / unserved / can_neff.
   n_obs <- sum(as.double(long$n))
 
   # Phase 18s: Sigma w^2 comes from the microdata scan, or (z16-iiiii) from a pre-aggregate that
@@ -493,6 +555,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # alone, which is correct and deliberate: a non-flat design whose variance degrades falls THROUGH.
   can_neff  <- has_w2 || design_on
 
+  # ---------------------------------------------------------------------------------------------
+  # 5. RESHAPE -> `tabs`: one row per (tab_vars x row_var), one column per col_var level.
   tabs <-
     data.table::dcast(
       long,
@@ -520,6 +584,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   }
 
 
+  # ---------------------------------------------------------------------------------------------
+  # 6. THE NA POLICY -> `tabs` with the NA column and rows kept or dropped.
   na_cols <- names(tabs) %in% c("n_NA", "wn_NA", "w2_NA", "NA")
   if (any(na_cols)) {
     if (na == "drop") {
@@ -545,21 +611,23 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     }
   }
 
+  # ---------------------------------------------------------------------------------------------
+  # 7. THE TOTAL ROWS AND TABS -> `tabs` with them appended (the two blocks below).
   num_cols <- tabs |> purrr::map_lgl(is.numeric)
   num_cols <- names(num_cols)[num_cols]
 
-  # Region B (Phase 9d): total-TABLE row(s) via base-R group-sum. "table" = one total row per row_var
+  # Phase 9d: total-TABLE row(s) via base-R group-sum. "table" = one total row per row_var
   # level (tab_vars set to "Total"); "line" = one grand total row (all tab_row_names "Total").
   if (totaltab %in% c("table", "line")) {
     if (totaltab[1] == "table") { bt_keys <- as.character(row_var); bt_totvars <- as.character(tab_vars) }
     else                        { bt_keys <- character();           bt_totvars <- tab_row_names }
-    tabs_totaltab <- build_total_rows(tabs, bt_keys, bt_totvars, tab_row_names, num_cols)
+    tabs_totaltab <- build_total_rows(tabs, bt_keys, tab_row_names, num_cols)
     tabs <- finalize_total_rows(tabs, tabs_totaltab, bt_totvars, tab_row_names)
   }
 
 
 
-  # Region C (Phase 9d): total ROWS via base-R group-sum, one build_total_rows() per tab_vars
+  # Phase 9d: total ROWS via base-R group-sum, one build_total_rows() per tab_vars
   # accumulation level (subtable totals + grand total), deduped (identical duplicate rows collapse,
   # order-independent -> the final setorderv dominates), then the totaltab=="line" grand-line drop.
   if ("row" %in% tot) {
@@ -573,8 +641,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
       total_vars <- list(as.character(row_var))
     }
 
-    parts    <- purrr::map2(group_vars, total_vars,
-                            ~ build_total_rows(tabs, .x, .y, tab_row_names, num_cols))
+    parts    <- purrr::map(group_vars,
+                           ~ build_total_rows(tabs, .x, tab_row_names, num_cols))
     tabs_tot <- do.call(rbind, parts)
     tabs_tot <- tabs_tot[do.call(order, tabs_tot[tab_row_names]), , drop = FALSE]
     tabs_tot <- tabs_tot[!duplicated(tabs_tot), , drop = FALSE]
@@ -587,6 +655,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     tabs <- finalize_total_rows(tabs, tabs_tot, unique(unlist(total_vars)), tab_row_names)
   }
 
+  # ---------------------------------------------------------------------------------------------
+  # 8. THE ROW ROLES -> totrow_vector / tottab_vector / kind_vector, declared not re-derived.
   tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
   totrow_vector <- tt$totrow; tottab_vector <- tt$tottab; kind_vector <- tt$kind
 
@@ -600,6 +670,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # spelled the call differently. That is the same disease `new_ctx()` cured for the build context in
   # 19i: an undeclared name is indistinguishable from a mistyped one, and a typo reads as "absent"
   # instead of erroring. This list IS the documentation of what the leaf may or may not compute.
+  # ---------------------------------------------------------------------------------------------
+  # 9. THE OPTIONAL LEAF TABLES -> nothing; it DECLARES what the phases below may compute.
   tabs_wn <- tabs_w2 <- tabs_pct <- tabs_totn <- tabs_neff <- NULL
   tabs_diff <- tabs_mean <- tabs_rr <- tabs_or <- NULL
   tabs_or_ci_inf <- tabs_or_ci_sup <- tabs_or_pvalue <- NULL
@@ -608,6 +680,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # Phase 17f: df/num build the normal table like any other and extract get_num() at the very end
   # (leaf_extract_raw), so this is now the SINGLE aggregation-shaping path (the former df/num early
   # return + count-only branch are gone).
+  # ---------------------------------------------------------------------------------------------
+  # 10. THE COUNT TABLES -> tabs_n / tabs_wn / tabs_w2, and `cols` (which columns hold values).
   if (length(wt) == 0) {
     if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
 
@@ -671,6 +745,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # the DISPLAYED proportion, so the interval provably inverts the number printed.
   # z4: a COUNTS table (pct = "no") never reaches leaf_wide_pct(), so its base is computed on the
   # "all" selector -- the subtable itself, which is exactly the base its chi2 cell residual needs.
+  # ---------------------------------------------------------------------------------------------
+  # 11. THE EFFECTIVE BASE -> tabs_neff (design-based or the flat closed form; NULL if not asked).
   neff_dt <- function(Ne) {
     Ne[!is.finite(Ne)] <- NA_real_
     out <- data.table::copy(tabs_n)
@@ -717,6 +793,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     if (!is.null(ne_0)) tabs_neff <- ne_0
   }
 
+  # ---------------------------------------------------------------------------------------------
+  # 12. THE CELLS AND THE COMPARISON -> tabs_pct / tabs_totn, then tab_apply_reference()'s
+  #     diff / ratio / or / the Woolf interval / refcols / refrows.
   if (pct != "no") {
     # Phase 9d: percentages + the tot_n base on a numeric matrix (base-R) via leaf_wide_pct(),
     # replacing the copy() + switch(pct) + purrr::map(.SD, ~ ./eval(sym("Total"))) per column.
@@ -793,6 +872,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   if (!is.null(tabs_totn)) tabs_totn[, names(text_vars) := NULL]
   if (!is.null(tabs_neff)) tabs_neff[, names(text_vars) := NULL]
 
+  # ---------------------------------------------------------------------------------------------
+  # 13. THE COLUMN ROLES and the reference defaults -> totcol_vector / refrows.
   totcol_vector <- names(tabs_n) == "Total"
   NA_reals <- rep(NA_real_, nrow(tabs_n))
 
@@ -805,6 +886,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # this point (the text columns are dropped just above, so each data.table's columns ARE `cols`).
   # `ref = "tot"` zeroes `refrows` above (the total row is not a "reference row" marker), which is
   # exactly the distinction tab_ci()'s ref_mask() drew by reading `ref` back off the column.
+  # ---------------------------------------------------------------------------------------------
+  # 14. THE PER-CELL INTERVAL -> ci_res (cell or contrast; ONE geometry, via ci_dispatch()).
   ci_res <- leaf_ci_plain(
     P     = if (!is.null(tabs_pct))
               as.matrix(tabs_pct)  * 1.0 else matrix(NA_real_, nrow(tabs_n), ncol(tabs_n)),
@@ -871,6 +954,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   ref_1    <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
   comp_1   <- dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA)
   colvar_1 <- rlang::as_name(col_var)
+  # ---------------------------------------------------------------------------------------------
+  # 15. THE fmt SPEC -> the per-column scalars every cell below is built with.
   digits_v <- vctrs::vec_recycle(as.integer(digits), nrow(tabs_n))
 
   # Phase 19j: ONE SLOT, ONE INTERVAL. The Woolf log-OR bounds when the odds ratio IS the comparison
@@ -878,6 +963,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # mutually exclusive, which is the whole reason the geometry had to be settled before either was
   # asked for. `or_from_leaf` also keeps the ci_method stamp honest: under `or_ci` a column whose own
   # 2x2 was degenerate carries all-NA bounds and therefore names no method (D19).
+  # ---------------------------------------------------------------------------------------------
+  # 16. THE CARRIER BUILD -> one fmt column per value column, from the spec above.
   or_from_leaf <- !is.null(tabs_or_ci_inf)
   mat_cols     <- function(M) lapply(seq_len(ncol(M)), function(j) M[, j])
   ci_inf_1     <- if (or_from_leaf) tabs_or_ci_inf else
@@ -934,6 +1021,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
       )
     })
 
+  # ---------------------------------------------------------------------------------------------
+  # 17. THE LABEL COLUMNS, and the ONE rename "Total" -> total_names (leaf_rename_totals).
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
 
   tabs <- leaf_rename_totals(tabs, row_var, tab_vars, tot, total_names, totaltab, totaltab_name,
@@ -941,6 +1030,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
   # with no col_var
+  # ---------------------------------------------------------------------------------------------
+  # 18. THE no_col_var SPECIAL CASE -> the lone count/mean column, named as a table of `n`.
   no_col_vars_cols <- get_col_var(tabs) == "no_col_var" #& pct %in% c("row", "col", "all", "all_tabs")
   if (any(no_col_vars_cols) ) {
     tabs <- tabs |>
@@ -948,8 +1039,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
       dplyr::relocate("n", .after = tidyselect::last_col())
 
     if (pct %in% c("row", "col", "all", "all_tabs")) {
+      # Phase 20h: the total column by its STORED role -- which is what the `else` branch below has
+      # always done (`where(is_totcol)`). This branch read the RENDERED label instead
+      # (`any_of(c(pct = total_names[2]))`), and it runs AFTER leaf_rename_totals(), so it had to
+      # know what that rename produced; `any_of()` then made a mismatch silent. One fact, one reader.
+      tot_nm <- names(tabs)[is_totcol(tabs)]
       tabs <- tabs |>
-        dplyr::rename(tidyselect::any_of(c("pct" = total_names[2]))) |> # if (total_names[2] == "Total")
+        dplyr::rename(pct = tidyselect::all_of(tot_nm)) |>
         dplyr::mutate(pct = as_totcol(pct, FALSE))
          } else {
       tabs <- tabs |> dplyr::select(-dplyr::where(is_totcol))
@@ -963,6 +1059,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # Phase 19j (KEY 5): the WHOLE-TABLE TEST, here, on this leaf's own col_var -- which is its natural
   # grain (`chi2_compute_test()` already produces one row per subtable x col_var, and the residual is
   # a property of ONE contingency table). See leaf_chi2().
+  # ---------------------------------------------------------------------------------------------
+  # 19. THE WHOLE-TABLE TEST -> leaf_test (chi2 / ANOVA F, on this leaf's own col_var).
   leaf_test <- NULL
   if (!identical(test, "no")) {
     lt        <- leaf_chi2(tabs, test, comp, row_var, col_var, tab_vars, deff)
@@ -970,6 +1068,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     leaf_test <- lt$test
   }
 
+  # ---------------------------------------------------------------------------------------------
+  # 20. THE RESULT -> the shared leaf tail (row index, class, inference stamp, df/num extract).
   leaf_finish(tabs, row_var, tab_vars, wt, subtext, inference, unserved, degraded, df, num,
               test = leaf_test)
 }
@@ -1119,7 +1219,7 @@ leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
   result <- tab_stamp_inference(result, inference$conf_level, inf$degf, inf$basis)
 
   # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else the fmt table.
-  if (df || num) leaf_extract_raw(result, df, num, row_var) else result
+  if (df || num) leaf_extract_raw(result, num, row_var) else result
 }
 
 
@@ -1206,7 +1306,7 @@ leaf_inference <- function(inf, unserved = FALSE, degraded = FALSE) {
 }
 
 
-# leaf_wide_pct() -- Phase 9d: tab_plain()'s Region E (percentages + the tot_n base) on a numeric
+# leaf_wide_pct() -- Phase 9d: tab_plain()'s percentages + the tot_n base, on a numeric
 # matrix (base-R) instead of copy() + switch(pct) + purrr::map(.SD, ~ ./eval(rlang::sym("Total")))
 # per column. `pct` = the value matrix / denominator matrix `D` (row -> the row's Total; col -> the
 # tab_vars-group's last (= total) row; all/all_tabs -> that row's / the grand Total), then NA/NaN ->
@@ -1255,16 +1355,17 @@ leaf_dmat <- function(M, pct, grp_last, n, k) switch(
   "all_tabs" = matrix(M[n,        "Total"], n, k))
 
 
-# build_total_rows() / finalize_total_rows() -- Phase 9d: tab_plain()'s total-TABLE (Region B) and
-# total-ROW (Region C) group-sums via base-R instead of data.table `keyby`. DECISIVE: sum with
+# build_total_rows() / finalize_total_rows() -- Phase 9d: tab_plain()'s total-TABLE and total-ROW
+# group-sums via base-R instead of data.table `keyby`. DECISIVE: sum with
 # base::sum() per split() group -- NOT rowsum()/data.table-gforce, whose plain-double accumulator
 # drifts 1 ULP from the `purrr::map(.SD, sum, na.rm=TRUE)` (long-double accumulator) the old code
 # used, breaking identical(). finalize_total_rows() appends the "Total" level to exactly the columns
-# that receive it (totvars) before rbind + setorderv, matching data.table's factor-union. Byte-
+# that receive it (`totvars` -- ITS argument, never build_total_rows', which sums by `keys` alone)
+# before rbind + setorderv, matching data.table's factor-union. Byte-
 # identical across 648 shapes (dev/benchmarks/phase9d_leaf_math_parity.R).
 #' @keywords internal
 #' @noRd
-build_total_rows <- function(tabs, keys, totvars, tab_row_names, num_cols) {
+build_total_rows <- function(tabs, keys, tab_row_names, num_cols) {
   n <- nrow(tabs)
   if (length(keys) == 0) { idx <- list(seq_len(n)); kf <- NULL } else {
     key <- do.call(paste, c(lapply(keys, function(v) as.character(tabs[[v]])), sep = "\r"))

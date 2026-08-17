@@ -155,7 +155,7 @@ reg_spec_build_one <- function(i, ctx) {
       fit_cache, "digest", jmvreg_fit_key(sp, data_canon, sp_fam, design_spec),
       function() reg_build_digest(data_canon, sp, sp_fam, design_spec, sp_dox,
                                   inv_sp, conf_level, weighted))
-    f <- reg_reref_fit_res(digest, ref, sp, skeleton, conf_level, multiplier = multiplier)
+    f <- reg_reref_fit_res(digest, skeleton, conf_level, multiplier = multiplier)
   } else {
     thunk <- function() reg_fit(data, sp$outcome, sp$predictors, sp_fam, design_spec, sp_dox,
                                 inv_sp, conf_level, method,

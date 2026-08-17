@@ -148,7 +148,7 @@ reg_check_types <- function() unlist(lapply(REG_CHECKS, function(ck) names(ck$ty
 # `has_fit` is FALSE on the jamovi digest path, which deliberately keeps no model frame -- every
 # check reads the fit, so they degrade to absent there rather than to a wrong number.
 #' @keywords internal
-reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = TRUE,
+reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
                            what = c("footer", "panel")) {
   what <- match.arg(what)
   if (!isTRUE(has_fit)) return(character(0))
@@ -165,8 +165,8 @@ reg_checks_for <- function(family, weighted = FALSE, grouped = FALSE, has_fit = 
 # check named in `stats =` is still computed and still shown. Default set vs vocabulary, not
 # vocabulary vs nothing.
 #' @keywords internal
-reg_checks_default <- function(family, weighted = FALSE, grouped = FALSE, has_fit = TRUE) {
-  keys <- reg_checks_for(family, weighted, grouped, has_fit, what = "footer")
+reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
+  keys <- reg_checks_for(family, weighted, has_fit, what = "footer")
   keys[vapply(keys, function(k) identical(REG_CHECKS[[k]]$cost, "free"), logical(1))]
 }
 
@@ -526,7 +526,7 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
   rows <- (function() {
     if (is.null(f)) return(NULL)
     keep <- reg_footer_stats(sp$fit_family, weighted, grouped, stats)
-    keys <- reg_checks_for(sp$fit_family, weighted, grouped, has_fit = !is.null(f$fit))
+    keys <- reg_checks_for(sp$fit_family, weighted, has_fit = !is.null(f$fit))
     keys <- keys[vapply(keys, function(k) any(names(REG_CHECKS[[k]]$types) %in% keep), logical(1))]
     if (length(keys) == 0L) return(NULL)
     cv  <- col_var

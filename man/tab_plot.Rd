@@ -20,10 +20,15 @@ tab_plot(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
-\item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
-black table with white text.
+\item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"} for a
+black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
+(which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
+\code{\link{tab_css}} do.
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
 cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 readable in a greyscale print, where the colour palette's two directions become the same shade.
@@ -31,16 +36,21 @@ readable in a greyscale print, where the colour palette's two directions become 
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{color_legend}{Print colors legend below the table ?}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{caption}{The table caption.}
 
-\item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns).}
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
+the col-percentages-with-several-row-variables use case.}
 
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
-\code{"rows"}, \code{"cols"} or \code{"none"}. See \code{\link{tab_kable}}.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 

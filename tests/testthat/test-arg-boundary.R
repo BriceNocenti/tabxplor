@@ -136,8 +136,12 @@ testthat::test_that("tab_counts() refuses the ci_method slots it cannot honour",
 # --- tab_ci()'s vocabulary is declared, and stays the STEP one ----------------------------------
 testthat::test_that("tab_ci() aborts on an unknown `ci`, but `diff` is its own native word", {
   t <- tab_plain(ab_gss(), marital, race, pct = "row")
-  testthat::expect_error(tab_ci(t, ci = "bogus"), "Unknown .*ci")
-  testthat::expect_error(tab_ci(t, ci = "bogus"), "cell")
+  # Phase 20h: suppressWarnings on these two ONLY -- the block below deliberately asserts the
+  # deprecation warning, so it cannot be quieted wholesale.
+  suppressWarnings({
+    testthat::expect_error(tab_ci(t, ci = "bogus"), "Unknown .*ci")
+    testthat::expect_error(tab_ci(t, ci = "bogus"), "cell")
+  })
   # Phase 20a: tab_ci() ITSELF is deprecated now, so the call warns -- but not about its `ci` VALUE.
   # "diff" is this step's own native word (the pipeline called it that way), and only the public
   # anchor vocabulary soft-deprecates it. Collect every warning and check what they are about.
@@ -300,4 +304,119 @@ testthat::test_that("20b: tab_args_rd() documents exactly the formals, in signat
   tags <- sub("^@param ([^ ]+) .*$", "\\1", grep("^@param ", rd, value = TRUE))
   documented <- unlist(strsplit(tags, ",", fixed = TRUE))
   testthat::expect_setequal(documented, setdiff(names(formals(tab)), "..."))
+})
+
+
+# === Phase 20h: the leaf that never finalised colour =========================
+# tab_plain() was the one crosstab producer of four that skipped finalize_color_tail(), so the colour
+# SPEC its argument boundary had already resolved was computed and dropped. Three declared behaviours
+# silently did not happen; each assertion below fails on the pre-20h tree.
+
+testthat::test_that("20h: tab_plain() stores the color_signif policy it was given", {
+  gss <- ab_gss()
+  t <- tab_plain(gss, marital, race, pct = "row", ci = "ref",
+                 color = "difference", color_signif = "grey_non_signif")
+  fc <- names(t)[vapply(t, tabxplor:::is_fmt, logical(1))]
+  testthat::expect_gt(length(fc), 0L)
+  # was "ignore" on every column: plain_core() writes its own literal and nothing overwrote it.
+  testthat::expect_true(all(vapply(t[fc], tabxplor:::get_color_signif, character(1)) ==
+                              "grey_non_signif"))
+  # ...and the same call through tab() has always been right -- the two producers now agree.
+  tt <- tab(gss, marital, race, pct = "row", ci = "ref",
+            color = "difference", color_signif = "grey_non_signif")
+  fct <- names(tt)[vapply(tt, tabxplor:::is_fmt, logical(1))]
+  testthat::expect_setequal(unname(vapply(t[fc], tabxplor:::get_color_signif, character(1))),
+                            unname(vapply(tt[fct], tabxplor:::get_color_signif, character(1))))
+})
+
+testthat::test_that("20h: tab_plain() keeps BOTH halves of a legacy composite colour", {
+  gss <- ab_gss()
+  # `diff_ci` decodes to (measure = difference, policy = grey_non_signif). The measure landed; the
+  # policy was lost -- 20b's decode-then-normalise warning one layer down.
+  t <- suppressWarnings(tab_plain(gss, marital, race, pct = "row", color = "diff_ci"))
+  fc <- names(t)[vapply(t, tabxplor:::is_fmt, logical(1))]
+  testthat::expect_true(all(vapply(t[fc], tabxplor:::get_color, character(1)) == "difference"))
+  testthat::expect_true(all(vapply(t[fc], tabxplor:::get_color_signif, character(1)) ==
+                              "grey_non_signif"))
+})
+
+testthat::test_that("20h: tab_plain() takes a two-channel colour instead of aborting", {
+  gss <- ab_gss()
+  # the raw vector used to reach plain_resolve()'s scalar `if (color != "no")` -> a length-2 condition.
+  t <- tab_plain(gss, marital, race, pct = "row", ci = "ref",
+                 color = c("difference", "difference"))
+  fc <- names(t)[vapply(t, tabxplor:::is_fmt, logical(1))]
+  testthat::expect_true(all(vapply(t[fc], tabxplor:::get_color, character(1)) == "difference"))
+  testthat::expect_true(all(vapply(t[fc], tabxplor:::get_color_bg, character(1)) == "difference"))
+})
+
+testthat::test_that("20h: the df / num escape hatch takes no colour tail", {
+  gss <- ab_gss()
+  # finalize_color_tail() would stamp a color_breaks attribute on a plain frame; the early return is
+  # the same one tab_num()'s wrapper takes.
+  d <- tab_plain(gss, marital, race, pct = "row", df = TRUE)
+  testthat::expect_false("color_breaks" %in% names(attributes(d)))
+  n <- tab_plain(gss, marital, race, pct = "row", num = TRUE)
+  testthat::expect_null(tabxplor:::get_color_breaks_attr(n))
+})
+
+
+# === Phase 20h (KEY 8): the RENDER surface is declared too ===================
+# EXPORT_ARGS is TAB_ARGS' sibling for the exporters. It exists as a second table because three names
+# mean something else there (`color` a logical vs a measure, `subtext`, `stars`), and it is read
+# through the same functions via arg_table_of().
+
+testthat::test_that("20h: arg_table_of() partitions the producers, never overlaps", {
+  tab_prod <- unique(unlist(lapply(tabxplor:::TAB_ARGS, `[[`, "producers")))
+  testthat::expect_length(intersect(tabxplor:::EXPORT_PRODUCERS, tab_prod), 0L)
+  for (p in tabxplor:::EXPORT_PRODUCERS)
+    testthat::expect_identical(tabxplor:::arg_table_of(p), tabxplor:::EXPORT_ARGS, info = p)
+  for (p in c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"))
+    testthat::expect_identical(tabxplor:::arg_table_of(p), tabxplor:::TAB_ARGS, info = p)
+})
+
+testthat::test_that("20h: every exporter's declared rows ARE its formals (scoped both ways)", {
+  testthat::expect_true(tabxplor:::tx_check_tab_args())
+  for (p in tabxplor:::EXPORT_PRODUCERS) {
+    f <- setdiff(names(formals(get(p, envir = asNamespace("tabxplor")))), "...")
+    d <- tabxplor:::tab_args_for(p)
+    # a declared row that is not a formal is the drift this table exists to refuse
+    testthat::expect_length(setdiff(d, f), 0L)
+  }
+})
+
+testthat::test_that("20h: EXPORT_ARGS cannot leak into TAB_ARG_VALUES", {
+  # the derived vocabulary view is the crosstab producers' -- a render argument's values live with
+  # its own resolver (tx_theme_resolve / resolve_export_opts), so no row here may declare `values`.
+  testthat::expect_true(all(vapply(tabxplor:::EXPORT_ARGS,
+                                   function(r) is.null(r[["values"]]), logical(1))))
+  testthat::expect_setequal(names(tabxplor:::TAB_ARG_VALUES),
+                            c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol",
+                              "output", "anova"))
+})
+
+testthat::test_that("20h: every option's per-call twin is a DECLARED argument (no allow list)", {
+  # the TAB_OPTIONS$arg foreign key used to carry an eleven-name exception, all of them exporter
+  # arguments with no row. It is checked outright now.
+  twins <- unlist(lapply(tabxplor:::TAB_OPTIONS, function(r) r$arg))
+  twins <- twins[!is.na(twins)]
+  known <- c(names(tabxplor:::TAB_ARGS), names(tabxplor:::EXPORT_ARGS))
+  testthat::expect_length(setdiff(twins, known), 0L)
+  # it returns the checked edges and ABORTS on a dangling one, so calling it is the assertion
+  testthat::expect_no_error(tabxplor:::tx_check_foreign_keys())
+})
+
+testthat::test_that("20h: the generated exporter blocks emit only the deduplicated concepts", {
+  # a row whose prose stays in its producer's own roxygen (doc_in_producer) must NOT be emitted --
+  # that is what keeps `theme`'s per-backend value set (only 3 of 7 take "auto") documented truly.
+  for (p in tabxplor:::EXPORT_PRODUCERS) {
+    rd  <- tabxplor:::tab_args_rd(p)
+    tags <- sub("^@param ([^ ]+) .*$", "\\1", grep("^@param ", rd, value = TRUE))
+    gen  <- unlist(strsplit(tags, ",", fixed = TRUE))
+    for (g in gen)
+      testthat::expect_false(isTRUE(tabxplor:::EXPORT_ARGS[[g]][["doc_in_producer"]]),
+                             info = paste(p, g))
+  }
+  testthat::expect_true(isTRUE(tabxplor:::EXPORT_ARGS$theme$doc_in_producer))
+  testthat::expect_length(tabxplor:::tab_args_rd("tab_css"), 0L)   # all four rows stay home
 })

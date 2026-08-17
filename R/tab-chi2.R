@@ -153,7 +153,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       }
     ))
     if (nrow(longA) > 0) {
-      resA  <- tibble::as_tibble(agg_anova(longA$table_id, longA$group_id,
+      resA  <- tibble::as_tibble(agg_anova(longA$table_id,
                                            longA$n, longA$mean, longA$var))
       mapA  <- dplyr::distinct(longA, .data$table_id, .data$col_var, .data$subtab)
       baseA <- dplyr::left_join(mapA, resA, by = "table_id")
@@ -448,11 +448,9 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     col <- set_var(col, var_after[[nm]])
     if (do_ctr) {
       col <- set_ctr(col, ctr_final[[nm]])
-      # Reproduce a byte-identity quirk of the pre-9b-5 path: its ctr writes used dplyr::if_else() over
-      # fmt columns, and combining fmt vectors MATERIALISES the `wn` field (NA -> the n fallback). The
-      # plain set_ctr here does not, so fill wn from get_wn() (a no-op when wn is already set / weighted;
-      # matters only for an unweighted table built via tab_plain() |> tab_chi2(), where wn was NA).
-      col <- set_wn(col, get_wn(col))
+      # The pre-9b-5 path's ctr writes combined fmt columns and so materialised `wn`; the plain
+      # set_ctr above does not. See fmt_materialize_wn() (R/fmt_class.R) for the rule.
+      col <- fmt_materialize_wn(col)
       # Phase 18a bug-fix: the standardized-residual p-value (contrib significance gate). A no-op on
       # non-eligible columns (pval_after there is the original get_pvalue); the residual on contrib cells.
       col <- set_pvalue(col, pval_after[[nm]])

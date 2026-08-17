@@ -269,12 +269,13 @@ TAB_FOREIGN_KEYS <- list(
         function() names(TAB_ARGS)),
   tx_fk("TAB_ARGS$pct$stored",     function() TAB_ARGS[["pct"]][["stored"]],
         function() PCT_BASES),
+  # Phase 20h: the `allow` list is GONE. Every option's per-call twin now HAS a declared row --
+  # the crosstab ones in TAB_ARGS since 20b, the eleven render ones in EXPORT_ARGS since 20h -- so
+  # this edge is checked outright instead of carrying an eleven-name exception whose only reason was
+  # "those `@param`s are still hand-written".
   tx_fk("TAB_OPTIONS$arg",         function() tx_fk_scalar(TAB_OPTIONS, "arg"),
-        function() unique(c(names(TAB_ARGS), tx_fk_all(TAB_OPTIONS, "arg_extra"))),
-        # an option whose per-call twin belongs to an exporter or to tab_reg(), neither of which is
-        # in TAB_ARGS yet (their `@param`s are still hand-written -- see the file header there)
-        allow = c("theme", "css", "tooltips", "popover", "font_text", "font_num",
-                  "font_num_stars", "or_numeric", "lang", "print_rules", "var_names"))
+        function() unique(c(names(TAB_ARGS), names(EXPORT_ARGS),
+                            tx_fk_all(TAB_OPTIONS, "arg_extra"))))
 )
 
 
@@ -328,6 +329,8 @@ tx_check_foreign_keys <- function(keys = TAB_FOREIGN_KEYS) {
 #' @noRd
 tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_counts",
                                             "tab_many", "tab_build",
+                                            # 20h (KEY 8): the render surface, SCOPED -- see below
+                                            EXPORT_PRODUCERS,
                                             # 20c (KEY 4): the regression producer joined TAB_ARGS,
                                             # so a `tab_reg()` formal is checked against its
                                             # declaration exactly like a crosstab one -- the first
@@ -337,7 +340,11 @@ tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_
     fn <- get(p, envir = asNamespace("tabxplor"))
     f  <- setdiff(names(formals(fn)), "...")
     d  <- tab_args_for(p)
-    if (p == "tab_build") f <- intersect(f, d)     # tab_build is internal: only `output` is declared
+    # SCOPED producers: the table owns SOME of the signature, not all of it, so only the declared
+    # rows are checked. tab_build is internal (only `output` is declared); an exporter's private
+    # geometry arguments stay in its own roxygen by EXPORT_ARGS' scope rule. The other direction --
+    # a declared row that is no longer a formal -- is still checked for every producer below.
+    if (p == "tab_build" || p %in% EXPORT_PRODUCERS) f <- intersect(f, d)
     if (length(setdiff(f, d)))
       stop("tabxplor: ", p, "() has formals with no TAB_ARGS row: ",
            paste(setdiff(f, d), collapse = ", "), call. = FALSE)
@@ -348,8 +355,9 @@ tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_
         stop("tabxplor: ", p, "() declares ", paste(setdiff(d, f), collapse = ", "),
              " but takes neither the formal nor `...`.", call. = FALSE)
     }
+    tb <- arg_table_of(p)
     for (k in intersect(f, d)) {
-      r  <- TAB_ARGS[[k]]
+      r  <- tb[[k]]
       if (is.null(r[["default"]]) && is.null(r[["default_for"]])) next
       ov <- r[["default_for"]]
       dd <- if (!is.null(ov) && p %in% names(ov)) ov[[p]] else r[["default"]]

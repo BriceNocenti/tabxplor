@@ -881,8 +881,7 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' when the estimators are correlated, which is why the crude interval is not drawn by default;
 #' \code{observed = "ci"} restores that classic figure if you want it.
 #'
-#' @param x A table from \code{\link{tab}} or \code{\link{tab_reg}} (or a list
-#'   of them, giving a list of plots).
+#' @eval tab_args_rd("forest_plot")
 #' @param columns Value columns to draw, by name. \code{NULL} (the default) draws the model columns of
 #'   a regression table and every value column of a cross-table.
 #' @param what \code{"auto"} (the quantity the table's own interval is centred on), \code{"effect"}
@@ -892,7 +891,6 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #'   (the observed value with the margin of error of the gap), \code{"point"}, \code{"ci"} (the classic
 #'   two-interval figure) or \code{"none"}.
 #' @param facet \code{NULL} for one panel per estimate column, \code{FALSE} for a single panel.
-#' @param color Set to \code{FALSE} for a plain plot with no colour measure.
 #' @param guide \code{"gridlines"} (the default), \code{"bands"} (shade the panel between the colour
 #'   breaks -- the teaching mode) or \code{"none"}.
 #' @param labels Print the formatted estimate beside each point: \code{"none"}, \code{"estimate"}.
@@ -902,7 +900,6 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param size \code{NULL} for constant point size, or \code{"n"} to map the sample size.
 #' @param theme \code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication
 #'   palette). \code{NULL} follows \code{getOption("tabxplor.export_theme")}.
-#' @param lang Legend language: \code{NULL} (the locale), \code{"en"} or \code{"fr"}.
 #' @param caption A caption. \code{NULL} keeps the table's own.
 #' @param legend Print the colour legend (as a guide, or in the caption when several ladders apply).
 #' @param subtext Include the table's subtext and footer lines in the caption.

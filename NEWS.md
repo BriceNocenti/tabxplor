@@ -244,6 +244,11 @@
 
 ## Changes that may affect existing code
 
+* **A variable with a level named `"Total"` (or `"Ensemble"`) is now refused**, naming the level.
+  `tab()` uses those labels for its own total rows and read such a level back AS one — bold, out of
+  the percentage base, and printed twice, with no warning. Rename the level, or move tabxplor's
+  labels with `options(tabxplor.total_names = c(row = "..."))`. A level named `"NA"` or `"Others"` is
+  still fine.
 * **`tab_reg(stats =)`: the two model checks that fit a model are now opt-in**, and `"all"` means
   all. Linearity refits once per continuous predictor and the Brant proportional-odds test fits its
   own auxiliary logits; between them they were most of the cost of a regression table (a
@@ -370,6 +375,12 @@
 
 ## Bug fixes
 
+* **`tab_plain(color_signif =)` did nothing.** The superseded factor leaf never applied the colour
+  spec it resolved, so the significance policy was stored as `"ignore"` whatever you asked, a
+  composite like `color = "diff_ci"` kept its measure and lost its test, and a two-channel
+  `color = c(<text>, <background>)` failed outright. `tab()` and `tab_num()` were unaffected.
+* **`tab_md(lang =)` and `tab_xl(lang =)` did nothing.** The colour legend followed the ambient
+  locale whatever you passed. `tab_html()`, `tab_plot()` and `forest_plot()` were unaffected.
 * **A survey-design ANOVA row called itself a Welch F.** On a weighted / `svydesign` table the
   numeric p-value row printed `pvalue (Chi2, Welch F; survey-design)` for a test that is a
   design-based Wald F. It now says `F`, the `; survey-design` suffix naming the estimator.

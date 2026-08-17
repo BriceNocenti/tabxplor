@@ -719,8 +719,10 @@ testthat::test_that("mean diff CI (stars on) matches Welch t.test", {
 
 testthat::test_that("chi2 statistic and p-value match stats::chisq.test", {
   # Phase 3b: the `test` attribute is a TIDY tibble (one row per subtable x col_var x test-type);
-  # the chi2 stats live in the row where `test == "chi2"`. tab_plain() |> tab_chi2() keeps it.
-  tabs      <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
+  # the chi2 stats live in the row where `test == "chi2"`.
+  # Phase 20h: built by `tab(test = TRUE)`, not by the deprecated step chain -- since 19j both call
+  # chi2_compute_test(), so the assertion is the same and it now covers the LIVE path.
+  tabs      <- tab(gss, race, marital, pct = "row", test = TRUE)
   chi2_row  <- get_test(tabs) |> dplyr::filter(.data$test == "chi2")
 
   ct  <- table(gss$race, gss$marital)
@@ -739,7 +741,7 @@ testthat::test_that("vectorised chi2 applies the Yates correction on 2x2 like ch
   d <- gss |>
     dplyr::filter(marital %in% c("Married", "Divorced"), race %in% c("Black", "White")) |>
     dplyr::mutate(marital = forcats::fct_drop(marital), race = forcats::fct_drop(race))
-  tabs     <- tab_plain(d, race, marital, pct = "row") |> tab_chi2()
+  tabs     <- tab(d, race, marital, pct = "row", test = TRUE)
   chi2_row <- get_test(tabs) |> dplyr::filter(.data$test == "chi2")
   ref      <- suppressWarnings(stats::chisq.test(table(d$race, d$marital)))  # Yates on 2x2 (default)
 
@@ -749,10 +751,10 @@ testthat::test_that("vectorised chi2 applies the Yates correction on 2x2 like ch
 })
 
 testthat::test_that("chi2 is unaffected by add_n (now a display-only column)", {
-  ref_tab  <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
+  ref_tab  <- tab(gss, race, marital, pct = "row", test = TRUE)
   ref_row  <- get_test(ref_tab) |> dplyr::filter(.data$test == "chi2")
   # Phase 10i-B: add_n is display-only, so `tab(add_n = TRUE)` builds the SAME core table chi2 sees.
-  addn_tab <- tab(gss, race, marital, pct = "row", add_n = TRUE) |> tab_chi2()
+  addn_tab <- tab(gss, race, marital, pct = "row", add_n = TRUE, test = TRUE)
   addn_row <- get_test(addn_tab) |> dplyr::filter(.data$test == "chi2")
 
   testthat::expect_equal(addn_row$statistic, ref_row$statistic, tolerance = 1e-6)
@@ -763,7 +765,7 @@ testthat::test_that("chi2 is unaffected by add_n (now a display-only column)", {
 
 testthat::test_that("ANOVA Welch F matches stats::oneway.test(var.equal = FALSE)", {
   d    <- gss |> dplyr::filter(!is.na(tvhours))
-  tabs <- tab(d, marital, tvhours, pct = "row") |> tab_chi2()   # chi2 default FALSE -> clean attr
+  tabs <- tab(d, marital, tvhours, pct = "row", test = TRUE)
   w    <- get_test(tabs) |> dplyr::filter(.data$test == "F_welch")
   ow   <- stats::oneway.test(tvhours ~ marital, data = d, var.equal = FALSE)
 
@@ -775,7 +777,7 @@ testthat::test_that("ANOVA Welch F matches stats::oneway.test(var.equal = FALSE)
 
 testthat::test_that("ANOVA classic F matches stats::oneway.test(var.equal = TRUE)", {
   d    <- gss |> dplyr::filter(!is.na(tvhours))
-  tabs <- tab(d, marital, tvhours, pct = "row") |> tab_chi2()
+  tabs <- tab(d, marital, tvhours, pct = "row", test = TRUE)
   cl   <- get_test(tabs) |> dplyr::filter(.data$test == "F_classic")
   oc   <- stats::oneway.test(tvhours ~ marital, data = d, var.equal = TRUE)
 
@@ -788,7 +790,7 @@ testthat::test_that("ANOVA classic F matches stats::oneway.test(var.equal = TRUE
 testthat::test_that("ANOVA Welch F matches oneway.test on another variable (3 groups)", {
   d    <- gss |> dplyr::filter(!is.na(tvhours), race != "Not applicable") |>
     dplyr::mutate(race = forcats::fct_drop(race))
-  tabs <- tab(d, race, tvhours, pct = "row") |> tab_chi2()
+  tabs <- tab(d, race, tvhours, pct = "row", test = TRUE)
   w    <- get_test(tabs) |> dplyr::filter(.data$test == "F_welch")
   ow   <- stats::oneway.test(tvhours ~ race, data = d, var.equal = FALSE)
 
@@ -800,7 +802,7 @@ testthat::test_that("ANOVA Welch F matches oneway.test on another variable (3 gr
 testthat::test_that("the tabxplor.anova option selects the displayed F (welch vs classic) (Phase 7g)", {
   d    <- gss |> dplyr::filter(!is.na(tvhours), race != "Not applicable") |>
     dplyr::mutate(race = forcats::fct_drop(race))
-  tt   <- get_test(tab(d, race, tvhours, pct = "row") |> tab_chi2())
+  tt   <- get_test(tab(d, race, tvhours, pct = "row", test = TRUE))
 
   welch   <- test_display_rows(tt, anova = "welch")
   classic <- test_display_rows(tt, anova = "classic")
@@ -813,9 +815,9 @@ testthat::test_that("the tabxplor.anova option selects the displayed F (welch vs
 # === SECTION: Variance contributions (chi2 contributions) =====================
 
 testthat::test_that("variance contributions match (O-E)^2/E / total_chi2", {
-  # Use pipe approach for chi2 (tab_many chi2=TRUE doesn't populate chi2 attr)
-  tabs <- tab_plain(gss, race, marital, pct = "row") |>
-    tab_chi2(color = TRUE)
+  # Phase 20h: `color = "contrib"` is what asks the build for the contributions (the step chain's
+  # tab_chi2(color = TRUE) did the same through chi2_write_contrib(); measured identical).
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
 
   ct <- table(gss$race, gss$marital)
   # Remove columns/rows with 0 marginal (would cause NaN in expected)

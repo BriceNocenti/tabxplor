@@ -31,11 +31,9 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 20a: the intended delta is NOTHING. This phase adds no field, no attribute and no `test`
-# column -- it adds a load-time foreign-key check, a generic attribute accessor, and deletes
-# unreleased exports. An empty declaration set is the assertion, and a single reported change is a
-# defect (19n's `col_group` is landed and its goldens are regenerated; leaving that declaration here
-# would compare two copies of the new attribute -- the reset hazard named at the top).
+# Phase 20h: the intended delta is NOTHING, and here that is the phase's CONTRACT rather than a
+# happy accident -- a deletion pass that moves a value has stopped being a deletion pass. Every
+# declaration below is empty; a single reported change is a defect.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
@@ -67,13 +65,9 @@ RENAMED_FIELDS <- list()
 # demands bit-identity of every other column.
 # Phase 19d-tail: nothing renamed (19g's re-key is landed and its goldens are regenerated; leaving
 # the rules here would compare two copies of the new schema -- the reset hazard named at the top).
-# Phase 20c (KEY 4): the `test` tibble's declared `dep` column is `outcome`, renamed with the
-# argument -- so ONE word says "which outcome is this about" from the signature to the schema.
-# ⚠ it had to move IN new_test_tibble(): test_group_cols() reads every undeclared column as a
-# grouping variable, which is the defect class 19g and 19m-ii each hit once.
-RENAMED_TEST_COLS <- list(
-  dep = list(to = "outcome", map = function(v, tt) v)
-)
+# Phase 20h: nothing renamed. (20c's `dep` -> `outcome` is landed and its goldens are regenerated;
+# leaving that rule here would compare two copies of the new schema -- the reset hazard at the top.)
+RENAMED_TEST_COLS <- list()
 # DECLARED_INDEX_COLS -- the non-fmt label columns that GAIN the tabxplor_lvl class in this phase.
 # Their VALUES must be identical (a declaration is not data); only class/role/var/ordered may appear.
 # Phase 19g: FALSE -- 19f's declaration is landed and its goldens are regenerated, so leaving this on

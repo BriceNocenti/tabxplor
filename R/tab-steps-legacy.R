@@ -1075,12 +1075,11 @@ tab_ci <- function(tabs,
           col <- set_pvalue(set_ci_sup(set_ci_inf(col, ci_inf[[nm]]), ci_sup[[nm]]), pvalue[[nm]])
         if (diff_row_any)         col <- set_comp_all(col, comp_all_val)
         if (nm %in% visible_cols) col <- set_display(col, display[[nm]])
-        # Byte-identity quirk (as in chi2_write_contrib): the pre-9b-5 comp_all / visible writes were
-        # GROUPED mutates, whose per-group recombine MATERIALISES the `wn` field (NA -> n). Reproduce
-        # it for exactly those columns (comp_all = all fmt on diff_row; visible = its own columns) when
-        # the table is grouped; a no-op when wn is already set / weighted, or the table is ungrouped.
+        # The pre-9b-5 comp_all / visible writes were GROUPED mutates, whose per-group recombine
+        # materialised `wn`. Reproduce it for exactly those columns (comp_all = all fmt on
+        # diff_row; visible = its own) when the table is grouped. See fmt_materialize_wn().
         if (length(grp) > 0L && (diff_row_any || nm %in% visible_cols))
-          col <- set_wn(col, get_wn(col))
+          col <- fmt_materialize_wn(col)
         col
       }))
     if (length(grp)) tabs <- dplyr::group_by(tabs, dplyr::across(dplyr::all_of(grp)), .drop = drp)

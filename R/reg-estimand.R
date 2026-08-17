@@ -612,7 +612,14 @@ local({
       "every impossible row says why"               =
         all(vapply(fr$rows, function(r) r$status == "ok" || is.function(r$why), logical(1))),
       "every buildable row has an estimand phrase"  =
-        all(vapply(fr$rows, function(r) r$status != "ok" || is.function(r$note), logical(1)))
+        all(vapply(fr$rows, function(r) r$status != "ok" || is.function(r$note), logical(1))),
+      # Phase 20h: `obs` gained its reader (reg_stage_setup()'s `at_profile`, which used to re-derive
+      # it from the string), so the equality it holds TODAY is asserted rather than assumed: a crude
+      # value is withheld exactly at the reference profile. The day an estimand needs `obs = FALSE`
+      # for another reason, this line is what must be relaxed -- deliberately, not silently.
+      "obs is withheld exactly at the reference profile" =
+        all(vapply(fr$rows, function(r)
+          isTRUE(r$obs) == !identical(r$effect, "at_reference"), logical(1)))
     )
   }
 })
@@ -698,7 +705,7 @@ reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
 # the line that WOULD work, the standard `reg_detect_family()` and `ref2 = "cumulative"` already set.
 #' @keywords internal
 #' @noRd
-reg_estimand_abort <- function(res, outcome = NULL, arg = "measure") {
+reg_estimand_abort <- function(res, outcome = NULL) {
   who <- if (is.null(outcome)) "" else cli::format_inline(" for {.val {outcome}}")
   fam <- res$family
   if (identical(res$status, "unknown_family"))

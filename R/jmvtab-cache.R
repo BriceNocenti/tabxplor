@@ -47,6 +47,9 @@
 #   * jmv_store_cached     = ENV-MUTATING fetch-or-compute, clock bumped only on a hit or a store (NOT
 #     a bare miss). The reg store uses this -- its hit/miss tallies + eviction are byte-locked by
 #     test-jmvtabreg-cache.R to this exact semantics.
+# `cfg` is the SCHEMA and the BYTE BUDGET, so only the functions that decide something take it:
+# jmv_store_fetch() is the one that does not (a read bumps the clock and looks a key up), which is why
+# it alone has no `cfg` first argument. Phase 20h deleted the one it carried and never read.
 
 # Config for one store: `entry_bytes` is a NAMED numeric vector (names = the tiers); the tier name
 # selects the per-entry ceiling, so no per-put max_bytes argument is needed.
@@ -92,7 +95,7 @@ jmv_store_env <- function(cfg, store = NULL) {
 # Returns list(hit, value, store) so the (bumped) store is threaded back.
 #' @keywords internal
 #' @noRd
-jmv_store_fetch <- function(cfg, store, tier, key) {
+jmv_store_fetch <- function(store, tier, key) {
   store$clock <- store$clock + 1L
   e <- store[[tier]][[key]]
   if (is.null(e)) return(list(hit = FALSE, value = NULL, store = store))
@@ -217,7 +220,7 @@ jmv_cache_migrate <- function(store) jmv_store_migrate(JMVTAB_CFG, store)
 
 #' @keywords internal
 #' @noRd
-jmv_cache_fetch <- function(store, tier, key) jmv_store_fetch(JMVTAB_CFG, store, tier, key)
+jmv_cache_fetch <- function(store, tier, key) jmv_store_fetch(store, tier, key)
 
 #' @keywords internal
 #' @noRd

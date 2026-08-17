@@ -2691,11 +2691,11 @@ tab_transpose <- function(tabs, name = NULL) {
   tab_check_shape(tabs, "transpose_object")
 
   vars    <- tab_get_vars(tabs)
+  # Phase 20h: no local re-check of `row_var`. tab_check_shape() above reads the DECLARED index
+  # (tab_declared_vars), whose `row_var` (the level COLUMN) and `row_vars` (the source variable
+  # names) move together -- one level column, one name -- so "exactly one row variable" is already
+  # refused there, degraded tables included (no declaration -> row_vars is empty -> it aborts).
   row_var <- vars$row_var
-  # not a shape fact: a table so degraded that the role detector finds no row-variable column at all.
-  if (length(row_var) != 1) {
-    cli::cli_abort("{.fn tab_transpose} needs a table with exactly one row variable.")
-  }
 
   fmt_mask <- purrr::map_lgl(tabs, is_fmt)
   fmtc     <- names(tabs)[fmt_mask]
@@ -3221,6 +3221,11 @@ tab_prepare <-
     data <- data |> tab_lump_others(vars_not_numeric, other_if_less_than, other_level)
     if (cleannames == TRUE) data <- data |> tab_cleannames_relabel(vars_not_numeric)
 
+    # Phase 20h: LAST, on the levels that will reach the leaf -- so a collision a recode above created
+    # is caught too, not only one the raw data carried. See lvl_check_reserved() (R/row-model.R) for
+    # why a source level named "Total" is an abort and not a warning.
+    lvl_check_reserved(data, vars_not_numeric)
+
     data
   }
 
@@ -3469,8 +3474,9 @@ leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totalt
 # get_num() at the very end (mean for numeric columns, count for pct = "no", the percentage for a
 # pct table). df -> a plain data.frame with the factor columns merged into rownames (for FactoMineR
 # & co.); num -> a tabxplor_tab of plain numeric columns (grouping preserved).
+# ⚠ it takes `num` only: `df` is the implicit else, so the caller's gate is `if (df || num)`.
 #' @keywords internal
-leaf_extract_raw <- function(result, df, num, row_var) {
+leaf_extract_raw <- function(result, num, row_var) {
   fmt_cols <- names(result)[purrr::map_lgl(result, is_fmt)]
   nums <- dplyr::mutate(result, dplyr::across(tidyselect::all_of(fmt_cols), get_num))
   if (num) return(nums)

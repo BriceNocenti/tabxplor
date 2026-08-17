@@ -163,10 +163,15 @@ testthat::test_that("tab_md works with counts display", {
   testthat::expect_gt(nchar(md), 0)
 })
 
+# Phase 20h: the prepared starwars fixture, built ONCE at top level -- where the file-level
+# lifecycle line above actually bites (testthat re-enables the warning inside every
+# test_that()). It was written verbatim in each block below.
+sw_prepared <- dplyr::starwars |>
+  tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
+              other_if_less_than = 5)
+
 testthat::test_that("tab_md works with numeric tables (tab_num)", {
-  sw <- dplyr::starwars |>
-    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                other_if_less_than = 5)
+  sw <- sw_prepared
   tabs <- tab_num(sw, sex, height, na = "drop")
   md <- tab_md(tabs, print = FALSE)
   testthat::expect_type(md, "character")

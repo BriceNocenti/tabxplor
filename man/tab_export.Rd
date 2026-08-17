@@ -19,7 +19,10 @@ tab_export(
 )
 }
 \arguments{
-\item{x}{A table (or list of tables) made with \code{\link{tab}} or \code{\link{tab_reg}}.}
+\item{x}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{format}{One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel),
 \code{"plot"} (an image OF THE TABLE) or \code{"forest"} (a forest plot of its estimates, see
@@ -39,12 +42,12 @@ cells in bold, under-represented ones in italic, a grey fill for the second colo
 readable in a greyscale print, where the colour palette's two directions become the same shade.
 Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 
-\item{color}{Set to \code{FALSE} to render without colours (monochrome).}
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{color_legend}{Print the colour legend with the subtext
-(\code{"html"}/\code{"md"}/\code{"xl"}/\code{"plot"}).}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{lang}{Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
@@ -52,9 +55,10 @@ the col-percentages-with-several-row-variables use case.}
 
 \item{caption}{A single caption / title for the table.}
 
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
-\code{"rows"}, \code{"cols"} or \code{"none"}. Defaults to \code{getOption("tabxplor.var_names", "both")}.
-See \code{\link{tab_html}}.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{...}{Format-specific arguments passed to the underlying exporter. Retired arguments
 (\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}) are caught here, reported

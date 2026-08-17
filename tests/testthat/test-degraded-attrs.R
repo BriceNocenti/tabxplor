@@ -161,6 +161,10 @@ test_that("binding tables tolerates a missing `test` attribute", {
 })
 
 test_that("a table stripped of `meta` still refers its intervals to the design df", {
+  # Phase 20h: tab_ci() IS the subject here -- what this pins is the STEP's degf fallback (it
+  # reconstructs the plan from the columns, which is what a wrapper is for), so there is nothing
+  # to migrate it to.
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   # Phase 18z16-iiiii: THE reason `degf` and `basis` left meta$inference for the fmt columns.
   # A number must not depend on a table attribute: `meta` is dropped by any rebuild that does not
   # carry it (two such sites were found in this very phase) and by plenty of ordinary data-frame

@@ -772,8 +772,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' The HTML exporter behind \code{\link{tab_export}}: `tab_export(x, format = "html")` calls this, and
 #' `tab_kable()` is a permanent alias of `tab_html()`. Use it directly for HTML-specific arguments.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}},
-#'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
+#' @eval tab_args_rd("tab_html")
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 #' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
 #' \itemize{
@@ -814,23 +813,9 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' });
 #' </script>
 #'}
-#' @param color Set to \code{FALSE} to render the table without colours (monochrome).
-#' @param color_legend Print colors legend below the table ?
-#' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
-#' You can then use a `css` chunk in rmarkdown to change popovers colors.
-#' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns) --
-#' the col-percentages-with-several-row-variables use case.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
-#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
-#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
-#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
-#' @param var_names Which variable names to write beside the table: `"both"` (the default),
-#'  `"rows"`, `"cols"` or `"none"`. The row-variable name is the leading column a table with
-#'  several `row_vars` uses to name each block (written once per block, vertically); the
-#'  column-variable names are the spanning row above their level columns. Level headers always
-#'  keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 #' @param get_data Get the transformed data instead of the html table.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
 #'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`. The table is rendered by one
@@ -870,7 +855,7 @@ tab_html <- function(tabs,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE)
   theme <- o$theme
   color_legend <- o$color_legend
-  compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
+  compute <- c("refs", "bold")
   if (o$color) compute <- c(compute, "colors")
   # 20b: NULL means "take the option", and the option's name, alias chain and default are declared
   # once in TAB_OPTIONS (R/tabxplor-options.R).
@@ -1206,45 +1191,47 @@ tab_materialize <- function(tab, backend, ctx) {
   tab
 }
 
-# Phase 17g: the declared inventory of display-time synthetic rows/cols. Each spec names WHAT it adds
-# (kind, matching the stored row-role vocabulary where it adds rows), WHEN it applies (a predicate over
-# tab + backend + intent), and HOW (apply). Reading this list IS the map of every synthetic extra and
-# its per-backend policy -- replacing the old imperative if/else passes.
+# Phase 17g: the declared inventory of display-time synthetic rows/cols. Each spec says WHEN it applies
+# (a predicate over tab + backend + intent) and HOW (apply); the list NAME says what it adds. Reading
+# this list IS the map of every synthetic extra and its per-backend policy -- replacing the old
+# imperative if/else passes.
+# Phase 20h: the name is a list name, not a member. It used to be a `kind =` string, described here as
+# "matching the stored row-role vocabulary" -- which nothing read and which no ROW_KINDS value matched.
 #' @keywords internal
 #' @noRd
 materialize_specs <- function() list(
   # add_n / add_pct: the base-n column/row + the col%/row% companions. xl keeps the real `n` COLUMN;
   # text folds the base into the Total cell (mat_add_n_pct). Clears the consumed render_extras intent.
-  list(kind = "add_n_pct",
-       when  = function(tab, backend, ctx) ctx$add_n || ctx$add_pct,
-       apply = mat_add_n_pct),
+  add_n_pct = list(
+    when  = function(tab, backend, ctx) ctx$add_n || ctx$add_pct,
+    apply = mat_add_n_pct),
   # Phase 16c: an OR/RRR table's "100%" total column is meaningless. Console+add_n keeps it as a base-n
   # cell (folded by add_n_pct); Excel exports only the base-n column, and console add_n=FALSE has no base
   # -> drop the % total column in both. No-op on a non-OR table.
-  list(kind = "or_total",
-       when  = function(tab, backend, ctx) tab_is_or_display(tab),
-       apply = function(tab, backend, ctx) tab_or_total_col(tab, backend, ctx$add_n)),
+  or_total = list(
+    when  = function(tab, backend, ctx) tab_is_or_display(tab),
+    apply = function(tab, backend, ctx) tab_or_total_col(tab, backend, ctx$add_n)),
   # Excel-only mean + sd twin column (Phase 13c-v): console/md/kable show sd inline as "mean (sigma sd)".
-  list(kind = "sd_twin",
-       when  = function(tab, backend, ctx) identical(backend, "xl"),
-       apply = function(tab, backend, ctx) mat_sd_twin(tab)),
+  sd_twin = list(
+    when  = function(tab, backend, ctx) identical(backend, "xl"),
+    apply = function(tab, backend, ctx) mat_sd_twin(tab)),
   # p-value / GOF footer rows from the kept `test` attribute. tab_pvalue_lines no-ops on a regression
   # table, so a crosstab gets its chi2 row and a reg table its GOF footer (Phase 12f).
-  list(kind = "footer",
-       when  = function(tab, backend, ctx) ctx$pvalue,
-       apply = function(tab, backend, ctx) {
-         tab <- tab_pvalue_lines(tab)
-         if (tab_is_reg(tab)) tab <- reg_footer_lines(tab)
-         tab
-       }),
+  footer = list(
+    when  = function(tab, backend, ctx) ctx$pvalue,
+    apply = function(tab, backend, ctx) {
+      tab <- tab_pvalue_lines(tab)
+      if (tab_is_reg(tab)) tab <- reg_footer_lines(tab)
+      tab
+    }),
   # Phase 14n / Phase 18m: collapse the redundant per-block Total rows of a compacted several-row_vars
   # table into ONE shared Total, shown in its OWN group (a display slice needing the "as displayed"
   # equality). OPT-IN via `common_totrow` (default FALSE = one Total per row_var, no collapse). Run LAST,
   # so every role recomputes on the collapsed table; the core tab() object keeps every total row.
-  list(kind = "collapse_totals",
-       when  = function(tab, backend, ctx) isTRUE(ctx$common_totrow),
-       apply = function(tab, backend, ctx)
-         tab_collapse_total_rows(tab, ref_bold = isTRUE(ctx$common_totrow_ref)))
+  collapse_totals = list(
+    when  = function(tab, backend, ctx) isTRUE(ctx$common_totrow),
+    apply = function(tab, backend, ctx)
+      tab_collapse_total_rows(tab, ref_bold = isTRUE(ctx$common_totrow_ref)))
 )
 
 # add_n / add_pct spec apply. Reuses tab_add_n_pct() (byte-identical field construction; its grouped
@@ -1526,7 +1513,7 @@ tab_pvalue_lines <- function(tabs) {
   }
 
   # Phase 17b: the whole `meta` list is threaded through the rebuild in one shot (was six getters).
-  tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
+  tab_append_footer(tabs, grp_of, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr,
     footer_groups = unique(disp$.grp),   # only subtables with a displayed test get a p-value row
@@ -1600,7 +1587,7 @@ reg_footer_lines <- function(tabs) {
   # (z15: the `global` rows no longer ride through -- they became footer ROWS, so they are consumed
   # here like every other spec'd discriminator.)
   it <- test_tbl[test_tbl$test %in% reg_interaction_types(), , drop = FALSE]
-  tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
+  tab_append_footer(tabs, grp_of, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs),
                  test = if (nrow(it) > 0) it else NULL),
     regroup = group_chr,
@@ -1626,23 +1613,16 @@ reg_footer_lines <- function(tabs) {
 #' It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
 #' confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_reg}}.
-#' @param theme By default, a white table with black text, Set to \code{"dark"} for a
-#' black table with white text.
+#' @eval tab_args_rd("tab_plot")
+#' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"} for a
+#' black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
+#' (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
+#' \code{\link{tab_css}} do.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #' (\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)
-#' @param color Set to \code{FALSE} to render the table without colours (monochrome).
-#' @param color_legend Print colors legend below the table ?
-#' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
-#' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns).
 #' @param caption The table caption.
-#' @param var_names Which variable names to write beside the table: `"both"` (the default),
-#'  `"rows"`, `"cols"` or `"none"`. See \code{\link{tab_kable}}.
-#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
-#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
-#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`, `html_24_bit`).
@@ -1709,7 +1689,7 @@ tab_plot <- function(tabs,
                            transpose = transpose, var_names = var_names)
   theme <- o$theme
   color_legend <- o$color_legend
-  compute <- c("refs", "bold")  # "range" DORMANT (retired totcol_range)
+  compute <- c("refs", "bold")
   if (o$color) compute <- c(compute, "colors")
 
   # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---

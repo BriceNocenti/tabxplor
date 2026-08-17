@@ -14,7 +14,7 @@
 #' estimates). They share one set of display-option names and defaults; \code{tab_export()} forwards
 #' them and passes any format-specific argument through \code{...}.
 #'
-#' @param x A table (or list of tables) made with \code{\link{tab}} or \code{\link{tab_reg}}.
+#' @eval tab_args_rd("tab_export")
 #' @param format One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel),
 #'   \code{"plot"} (an image OF THE TABLE) or \code{"forest"} (a forest plot of its estimates, see
 #'   \code{\link{forest_plot}}). The HTML backend engine (home-built or kableExtra) is chosen with
@@ -30,17 +30,7 @@
 #'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
 #'   readable in a greyscale print, where the colour palette's two directions become the same shade.
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.
-#' @param color Set to \code{FALSE} to render without colours (monochrome).
-#' @param color_legend Print the colour legend with the subtext
-#'   (\code{"html"}/\code{"md"}/\code{"xl"}/\code{"plot"}).
-#' @param lang Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
-#'   \code{"en"} or \code{"fr"}.
-#' @param transpose Set to \code{TRUE} to transpose each table before export (rows become columns) --
-#'   the col-percentages-with-several-row-variables use case.
 #' @param caption A single caption / title for the table.
-#' @param var_names Which variable names to write beside the table: `"both"` (the default),
-#'   `"rows"`, `"cols"` or `"none"`. Defaults to \code{getOption("tabxplor.var_names", "both")}.
-#'   See \code{\link{tab_html}}.
 #' @param ... Format-specific arguments passed to the underlying exporter. Retired arguments
 #'   (`color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`) are caught here, reported
 #'   once, and not forwarded.

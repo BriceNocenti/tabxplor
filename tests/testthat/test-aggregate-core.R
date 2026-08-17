@@ -59,6 +59,8 @@ test_that("the leaf stamps the scale and the method the bounds were actually bui
 })
 
 test_that("ci_dispatch() is the ONE engine rule, shared by the leaves and the superseded step", {
+  # Phase 20h: the step is HALF the subject (leaf vs step parity), so its call stays.
+  withr::local_options(lifecycle_verbosity = "quiet")   # the subject IS the deprecated call
   # the step must reach the same numbers as the build it supersedes
   built <- tab(gss, marital, race, pct = "row", ci = "cell")
   stepd <- tab_plain(gss, marital, race, pct = "row", tot = c("row", "col")) |> tab_ci(ci = "cell")
