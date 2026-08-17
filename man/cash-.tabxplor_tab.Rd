@@ -5,7 +5,7 @@
 \alias{[[.tabxplor_tab}
 \alias{pull.tabxplor_tab}
 \alias{pull.tabxplor_grouped_tab}
-\title{Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)}
+\title{Extract a column of a tabxplor tab (with the add_n/add_pct back-compat shim)}
 \usage{
 \method{$}{tabxplor_tab}(x, name)
 
@@ -33,6 +33,6 @@ to use to name the result -- see its documentation.}
 The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.
 }
 \description{
-Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)
+Extract a column of a tabxplor tab (with the add_n/add_pct back-compat shim)
 }
 \keyword{internal}

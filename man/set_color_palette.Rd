@@ -168,7 +168,7 @@ is inert (exports are always 24-bit).
 
 \item \code{set_color_breaks()}: set the breaks used to print colors.
 
-\item \code{get_color_breaks()}: get the color breaks currently in use, in the canonical Phase-5 shape.
+\item \code{get_color_breaks()}: get the color breaks currently in use, in the canonical shape.
 
 }}
 \examples{

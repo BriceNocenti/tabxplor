@@ -34,8 +34,7 @@ or \code{\link{tab_plain}}.}
 \item{subtext}{A character vector to print legend lines under the table.}
 
 \item{test}{A tidy tibble storing whole-table test results (Chi2 for factor columns,
-ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
-in tabxplor 2.0.0.}
+ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
@@ -43,8 +42,8 @@ in tabxplor 2.0.0.}
 when unset):
 \itemize{
 \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-\code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
-print/export time from this attribute rather than baked into the table.
+\code{list(add_n =, add_pct =)}, materialised at print/export time from this attribute rather
+than baked into the table.
 \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
 (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the

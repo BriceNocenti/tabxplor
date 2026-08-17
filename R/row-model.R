@@ -1,58 +1,40 @@
-# =====================================================================================================
-# R/row-model.R -- THE ROW MODEL (Phase 19f, KEY 1)
-# =====================================================================================================
-# A tabxplor COLUMN is exhaustively self-describing (15 attributes: what it estimates, what it is for,
-# how it was computed, how it is coloured). Before this file a ROW had nothing, and "what is this row"
-# was re-derived from four unrelated sources: a per-cell logical `in_totrow`, a DISPLAY-TIME positional
-# character vector (`meta$vars$row_roles`), a magic-named label column with three naming conventions,
-# and comparisons of rendered `format()` strings. This module gives the row axis the same treatment.
+# PURPOSE: The row model -- rows describe themselves the way columns do, so "what is this row" reads
+#   stored facts instead of re-deriving them from labels or render-time vectors.
+# ROLE: Feeds the crosstab pipeline's row axis; read by the colour engine (is_totrow()), the shape
+#   model (R/tab-shape.R) and every exporter.
+# KEY CONSTRAINTS:
+#   - `role` says what the COLUMN is; `var` says which VARIABLE its labels belong to. On a merged
+#     `levels` column `var` is NA. Never infer either from a column NAME.
+#   - `row_kind` must live on the fmt FIELD, not the table: fmt_color_plan() calls is_totrow() on a
+#     lone extracted column with no table in scope (locked by test-degraded-attrs.R).
+# See: dev/tabxplor_architecture.md (row model); R/fmt_class.R (the row_kind field).
 #
-# TWO facts, TWO carriers -- and the split is load-bearing:
-#
-#   1. WHAT KIND OF ROW IS THIS  ->  the `row_kind` FIELD of tabxplor_fmt (R/fmt_class.R).
-#      It cannot live anywhere else: fmt_color_plan() calls is_totrow() on a LONE extracted column
-#      with no table in scope, and test-degraded-attrs.R locks that contract. `row_kind` replaces the
-#      two-valued `in_totrow` with the seven values the fact actually has (ROW_KINDS below), so the
-#      synthetic n / pct / p-value / GOF rows stop needing a parallel vector that only existed during
-#      one render pass.
-#
-#   2. WHAT IS THIS LABEL COLUMN FOR  ->  `tabxplor_lvl`, a factor SUBCLASS carrying two ordinary
-#      column attributes (`role`, `var`) plus `ordered` (per variable, so a merged column stops losing
-#      it). It IS a factor -- is.factor(), levels(), as.character(), arrange()'s factor order,
-#      filter(levels == "Total"), group_by() and printing all keep working with no method written --
-#      which is why the four label-block shapes could be migrated instead of a fifth being added.
-#      Measured: `[`, filter, arrange, mutate, slice, as.data.frame, group_by, vec_slice and forcats'
-#      fct_drop/fct_rev/fct_relevel preserve class AND attributes with ZERO code; only vec_c/bind_rows
-#      and droplevels() need a method (they rebuild the factor from scratch).
-#
-# WARNING: `role` says what the COLUMN is; `var` says which VARIABLE its labels belong to. On a merged
-# `levels` column `var` is NA -- several variables' levels live there, and that is exactly what the
-# `var`-role column beside it spells out per row. Never infer either from a column NAME.
-# =====================================================================================================
+# TWO facts, TWO carriers:
+#   1. WHAT KIND OF ROW  ->  the `row_kind` FIELD of tabxplor_fmt (ROW_KINDS below): data / total, and
+#      the synthetic n / pct / p-value / gof / blank display rows.
+#   2. WHAT IS THIS LABEL COLUMN FOR  ->  `tabxplor_lvl`, a factor SUBCLASS carrying `role`, `var`, and
+#      a per-variable `ordered` map. It stays a factor, so base / dplyr / forcats operations keep
+#      working; only vec_c / bind_rows and droplevels() need a method (they rebuild the factor).
 
 
 # --- the declared row-kind vocabulary ----------------------------------------------------------------
-# Every value `row_kind` may take, in reading order. "data" is the neutral (a real body row);
-# everything else is a synthetic or summary row some producer added:
-#   total    a total row (what `in_totrow` used to say, and the only kind is_totrow() asks about)
+# Every value `row_kind` may take, in reading order. "data" is the neutral (a real body row); the rest
+# are synthetic or summary rows a producer added:
+#   total    a total row (the only kind is_totrow() asks about)
 #   n        the add_n base-count row
-#   pct      the add_pct row percentage row
+#   pct      the add_pct percentage row
 #   pvalue   an appended test row (crosstab chi2/F, or a reg per-term test line)
 #   gof      a regression goodness-of-fit / model-summary footer row
 #   blank    a spacer row between footer blocks
-# The ORDER matters: fmt_row_kind() reduces several columns' kinds to one per row by "first non-data
-# wins", and a row is never two kinds at once in practice, so the order is a tie-break that never fires.
+# ORDER matters: fmt_row_kind() reduces several columns' kinds to one per row by "first non-data wins".
 ROW_KINDS <- c("data", "total", "n", "pct", "pvalue", "gof", "blank")
 
 
 # --- the declared label-column roles -----------------------------------------------------------------
 # "level"    the column holding the row LEVELS (`marital`, or the literal `levels` when merged)
 # "var"      the column naming, per row, WHICH variable that row's level belongs to (merged tables,
-#            and a regression's predictor column -- which is why tab_reg() stops punning it as a
-#            fake sub-table variable)
+#            and a regression's predictor column)
 # "tab_var"  a sub-table variable (`tab_vars =`), which is ALSO a dplyr grouping column
-# (Phase 19l deleted the `LVL_ROLES` vector that used to sit here: it had no reader anywhere -- the
-# three roles are compared as literals at every site -- so it was a declaration nothing consulted.)
 
 
 # --- the class ----------------------------------------------------------------------------------------
@@ -88,8 +70,6 @@ new_lvl <- function(x, role = "level", var = NA_character_, ordered = NULL) {
 #' @keywords internal
 is_lvl <- function(x) inherits(x, "tabxplor_lvl")
 
-# Strip the declaration back to a plain factor. The inverse of new_lvl(); used by every vctrs method
-# below so the factor machinery does the real work and this file only re-stamps the facts.
 #' @keywords internal
 #' @noRd
 unlvl <- function(x) {
@@ -105,9 +85,9 @@ lvl_role <- function(x) if (is_lvl(x)) attr(x, "role", exact = TRUE) else NA_cha
 #' @keywords internal
 #' @noRd
 lvl_var  <- function(x) if (is_lvl(x)) attr(x, "var" , exact = TRUE) else NA_character_
-# The per-variable `ordered` map. On a merged `levels` column this is the ONLY surviving record that
-# some of the stacked variables were ordinal: the factor itself must be plain (vctrs rightly refuses
-# to combine two ordered factors with different level sets), so the fact moves to the declaration.
+# The per-variable `ordered` map. On a merged `levels` column it is the only record that some stacked
+# variables were ordinal -- the factor itself must be plain (vctrs refuses to combine differently
+# ordered factors), so the fact moves to the declaration.
 #' @keywords internal
 #' @noRd
 lvl_ordered <- function(x) {
@@ -116,8 +96,6 @@ lvl_ordered <- function(x) {
   if (is.null(o)) logical(0) else o
 }
 
-# Re-stamp `to` with `from`'s declaration (used by the `[` method and by every producer that rebuilds
-# a label column from scratch).
 #' @keywords internal
 #' @noRd
 lvl_restore <- function(to, from) {
@@ -125,9 +103,9 @@ lvl_restore <- function(to, from) {
   new_lvl(to, lvl_role(from), lvl_var(from), lvl_ordered(from))
 }
 
-# Reconcile two declarations on a bind: the same fact survives, differing facts fall back to the
-# neutral (role "level", no single variable). The `ordered` maps UNION -- that is what lets a merged
-# table remember which of its stacked variables were ordinal after the factor itself went plain.
+# Reconcile two declarations on a bind: a shared fact survives, differing facts fall back to the
+# neutral (role "level", no single var). The `ordered` maps UNION, so a merged table remembers which
+# stacked variables were ordinal.
 #' @keywords internal
 #' @noRd
 lvl_reconcile <- function(x, y) {
@@ -139,9 +117,9 @@ lvl_reconcile <- function(x, y) {
 }
 
 
-# --- the ~4 methods a factor subclass needs -----------------------------------------------------------
+# --- the methods a factor subclass needs --------------------------------------------------------------
 # Everything else (filter / arrange / mutate / slice / group_by / as.data.frame / forcats) preserves
-# both class and attributes with no code -- measured, see the header.
+# class and attributes with no code; only these rebuild the factor from scratch.
 
 #' @export
 `[.tabxplor_lvl` <- function(x, ..., drop = FALSE) {
@@ -180,27 +158,19 @@ vec_cast.character.tabxplor_lvl <- function(x, to, ...) vctrs::vec_cast(unlvl(x)
 
 
 # --- a declared LEVEL OPERATION: the collapse spec ----------------------------------------------------
-# Phase 20g-ii. The row model owns the SPEC of "merge these levels into one"; the APPLIER is
-# tab_collapse_levels() at the prepare stage (R/tab.R). The split is not cosmetic: `tabxplor_lvl`
-# exists only on a BUILT table's index columns, while a collapse must change COUNTS -- so it is a
-# pre-aggregate microdata recode, and what belongs here is the validated declaration of it.
-#
-# The canonical shape IS forcats::fct_collapse()'s own: a named list, one element per variable, each
-# a named list of character vectors (name = the merged label).
+# The row model owns the SPEC of "merge these levels into one"; the APPLIER is tab_collapse_levels() at
+# the prepare stage (R/tab.R) -- a collapse changes COUNTS, so it is a pre-aggregate microdata recode,
+# while `tabxplor_lvl` exists only on a built table's index columns.
+# The canonical shape IS forcats::fct_collapse()'s: a named list, one element per variable, each a
+# named list of character vectors (name = merged label):
 #     list(marital = list(`Not married` = c("Never married", "Divorced", "Separated")))
-# That is the shape .levels_order already uses one grain shallower (var -> ordered labels), and it
-# is what a user would write by hand, which is the point: the internal argument and the forcats call
-# it is equivalent to read the same.
 
-# The labels a level may NOT take, for the TWO questions that ask (Phase 20h). Reading the OPTION (not
-# the English defaults) is what makes both refusals true in every locale.
-#   "merge" -- a label new_lvl_collapse() may not mint: the four synthetic ones tab() makes itself,
-#              plus "NA" (the explicit level `na = "keep"` adds).
-#   "data"  -- a level the SOURCE DATA may not already carry: the three TOTAL labels, plus the leaf's
-#              internal pre-rename sentinel "Total" (R/tab-leaf.R, the 19m-iii block). NOT "NA" and
-#              NOT "Others": measured, a data level named "NA" renders correctly unless the column
-#              also holds real NAs, and a pre-existing "Others" merely joins the lump -- refusing
-#              either would be a false positive on ordinary survey labels ("NA" = "not applicable").
+# The labels a level may NOT take, for the two questions that ask. Reading the OPTION (not the English
+# defaults) keeps both refusals true in every locale.
+#   "merge" -- a label new_lvl_collapse() may not mint: the four synthetic labels tab() makes, plus "NA".
+#   "data"  -- a level the source data may not already carry: the three TOTAL labels, plus the leaf's
+#              pre-rename sentinel "Total". NOT "NA" / "Others" -- those render fine and refusing them
+#              would be a false positive on ordinary survey labels.
 #' @keywords internal
 #' @noRd
 lvl_reserved_labels <- function(what = c("merge", "data")) {
@@ -210,17 +180,11 @@ lvl_reserved_labels <- function(what = c("merge", "data")) {
   else unique(unname(c(tn[c("row", "col", "tab")], "Total")))
 }
 
-# lvl_check_reserved() -- Phase 20h: REFUSE a source level that collides with a label tab() mints.
-# WHY IT ABORTS RATHER THAN WARNS. "Total" is the leaf's internal pre-rename key for every total row,
-# total tab and the total column it mints (the declaration at R/tab-leaf.R's name round-trip), and
-# leaf_totrow_tottab() derives `totrow_vector` / `tottab_vector` by matching it. So a DATA level of
-# that name is not merely confusing -- measured, it is read back as a total row: the cell gets
-# `row_kind = "total"` and `is_totrow() == TRUE`, it renders bold, it leaves the percentage base, and
-# the table shows two identically-labelled "Total" rows. There is no reading of that table that is
-# right, so it cannot be produced. Renaming the level, or moving tab()'s own labels with
-# `options(tabxplor.total_names = )`, both fix it.
-# ⚠ It runs at the END of tab_prepare(), on the levels that will reach the leaf, so it also catches a
-# collision a recode created (cleannames, or a merge) rather than only one the raw data carried.
+# lvl_check_reserved() -- REFUSE a source level colliding with a label tab() mints. It aborts rather
+# than warns because "Total" is the leaf's pre-rename key for every total row/tab/column: a data level
+# of that name is read back as a total row (bold, out of the percentage base, printed twice), which has
+# no correct reading. Runs at the END of tab_prepare(), so it also catches a collision a recode created
+# (cleannames, a merge), not only one the raw data carried.
 #' @keywords internal
 #' @noRd
 lvl_check_reserved <- function(data, vars, call = NULL) {
@@ -243,13 +207,12 @@ lvl_check_reserved <- function(data, vars, call = NULL) {
   invisible(data)
 }
 
-# new_lvl_collapse() -- normalise + validate a collapse spec, or NULL for "nothing to merge".
-# Refusals (each one a thing that would otherwise be silently wrong):
+# new_lvl_collapse() -- normalise + validate a collapse spec, or NULL for "nothing to merge". Refusals,
+# each a thing that would otherwise be silently wrong:
 #   - one level claimed by two groups: fct_collapse() gives it to the LAST, with no message
-#   - a merged label colliding with a synthetic one: leaf_rename_totals() and tab_lump_others()'s
-#     fct_relevel both key on those strings, so the merged level would be treated as a total/Others
-# An EMPTY label is defaulted here, once, to the constituent labels joined -- so the jamovi text box
-# can be left empty and only ever shows that string as a placeholder.
+#   - a merged label colliding with a synthetic one: leaf_rename_totals() / tab_lump_others() key on
+#     those strings, so the merged level would be treated as a total/Others
+# An empty label defaults here to the constituent labels joined (so the jamovi text box can be blank).
 #' @keywords internal
 #' @noRd
 new_lvl_collapse <- function(spec) {
@@ -294,11 +257,9 @@ new_lvl_collapse <- function(spec) {
 # --- reading the declaration back off a table ---------------------------------------------------------
 
 # tab_index_cols() -- the DECLARED row-index block of a table: every tabxplor_lvl column, in column
-# order, with its role and variable. This is what replaced `tab_get_vars()`'s "the last factor column
-# is the row variable, the others are tab_vars" heuristic and `tab_vars_recorded()`'s stored
-# `meta$vars` triple. Returns a 0-row tibble on a table that declares nothing (a hand-built frame, an
-# object from an older version, or a column re-created by `mutate(levels = as.character(levels))`) --
-# the callers then fall back, exactly as they did before, and say so.
+# order, with its role and variable. Returns NULL on a table that declares nothing (a hand-built frame,
+# an old-version object, or a column re-created by `mutate(levels = as.character(levels))`), so callers
+# fall back.
 #' @keywords internal
 #' @noRd
 tab_index_cols <- function(tabs) {
@@ -312,17 +273,16 @@ tab_index_cols <- function(tabs) {
        var  = vapply(cols[keep], lvl_var , character(1), USE.NAMES = FALSE))
 }
 
-# tab_declared_vars() -- the variable model DERIVED from the declared columns, in the shape every
-# consumer already asks for. NULL when the table declares nothing.
+# tab_declared_vars() -- the variable model DERIVED from the declared columns, NULL when the table
+# declares nothing:
 #   row_var    the COLUMN holding the row levels (role "level")
 #   tab_vars   the sub-table columns (role "tab_var"), in column order
 #   var_col    the column NAMING each row's variable (role "var"), if any
-#   row_vars   the SOURCE variable names -- the `var` column's values on a merged table, the level
-#              column's own `var` attribute otherwise
-#   compacted  several row_vars merged into one table == a "var"-role column exists
-# WARNING: `row_var` (singular, a column name) and `row_vars` (plural, source variable names) differ
-# on a merged table and always have. Keep the two apart; a title wants the plural, an index the
-# singular.
+#   row_vars   the SOURCE variable names -- the `var` column's values (merged), else the level column's
+#              own `var` attribute
+#   compacted  several row_vars merged into one table (a "var"-role column exists)
+# WARNING: `row_var` (singular, a column name) and `row_vars` (plural, source variable names) differ on
+# a merged table. A title wants the plural, an index the singular.
 #' @keywords internal
 #' @noRd
 tab_declared_vars <- function(tabs) {
@@ -345,14 +305,10 @@ tab_declared_vars <- function(tabs) {
        compacted = length(var_col) == 1L)
 }
 
-# tab_stamp_index() -- declare a table's row-index columns in ONE call, at the point the producer
-# knows the truth, so no producer assembles a `vars` list any more.
-# WHO CALLS IT: the two leaves, through their shared tail leaf_finish() (R/tab.R) -- and therefore
-# every table tab() / tab_many() / tab_counts() build, since all of them route through a leaf. The
-# producers that BUILD a row index of their own rather than inheriting one (tab_compact(),
-# tab_reg(), the transpose) call new_lvl() directly on the one or two columns they create; they have
-# no full index to declare. (Phase 19f's header claimed six callers of this function; there was
-# never more than one route per producer, and 19i's shared leaf tail made it literally one.)
+# tab_stamp_index() -- declare a table's row-index columns in ONE call, at the point the producer knows
+# the truth. Called by the two leaves through their shared tail leaf_finish() (R/tab.R), so every
+# tab() / tab_many() / tab_counts() table gets it; producers that build their own index (tab_compact(),
+# tab_reg(), the transpose) call new_lvl() directly on the columns they create.
 #   level    the column holding the row levels
 #   var      the source variable name that column's levels belong to (NA on a merged column)
 #   tab_vars the sub-table columns

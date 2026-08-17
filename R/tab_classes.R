@@ -9,52 +9,7 @@
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
 # See: CLAUDE.md § Design Decisions > dplyr Integration.
 
-# Special tibble class needed for printing, even if the most meaningful attributes
-#  where passed to fmt class variables (only chi2 and subtext remains at tab level) :
-#  the implementation relies on "grouped_df" class structure, and to manage it, it is
-#  necessary to add one method for class "tabxplor_grouped_tab" for each dplyr function...
-#  (Thank to Giulia Pais, Davis Vaughan and Hadley Wickham,
-#   https://github.com/tidyverse/dplyr/issues/5480).
-
-# grouped_tab class still don't handle [] ----
-
-# Problem with methods for dplyr::filter, because it replaces base::filter,
-# which cannot be detached in namespace
-
-# #Import dplyr in NAMESPACE :
-# # dplyr is imported as a "Depends" package, otherwise dplyr::filter, needed for methods,
-# # cannot be found by roxygen2 because it replaces base::filter.
-#
-# #' Internal dplyr methods
-# #' @rawNamespace import(dplyr, except = data_frame)
-# #  otherwise, conflict with vctrs. Thanks to Thomas :
-# #  https://stackoverflow.com/questions/51899220/import-all-the-functions-of-a-package-except-one-when-building-a-package
-# #' @keywords internal
-# #' @name tabxplor-dplyr
-# NULL
-
-# #' To allow dplyr::filter to be used for methods
-# #' @rawNamespace import(base, except = filter)
-# #' @keywords internal
-# #' @name no_base_filter
-# NULL
-
-
 # Create class tabxplor_tab --------------------------------------------------------------
-# sloop::s3_methods_class("tbl")
-# sloop::s3_get_method(print.tbl)
-# cli::cat_line()
-# sloop::s3_get_method(format.tbl)
-# tibble::trunc_mat #Gives classes :
-# c("trunc_mat_single_tab", "trunc_mat_tbl_df", "trunc_mat_tbl", "trunc_mat_data.frame", "trunc_mat")
-# sloop::s3_methods_class("tibble::trunc_mat")
-# sloop::s3_get_method(format.tibble::trunc_mat)
-# sloop::s3_get_method(print.tibble::trunc_mat)
-# sloop::s3_methods_class("pillar_colonnade")
-# sloop::s3_get_method(format.pillar_colonnade)
-# sloop::s3_get_method(print.pillar_colonnade)
-# pillar::squeeze
-# sloop::s3_methods_class("single_tab")
 
 #' A constructor for class tabxplor_tab
 #'
@@ -63,15 +18,14 @@
 #' or \code{\link{tab_plain}}.
 #' @param subtext A character vector to print legend lines under the table.
 #' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
-#' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
-#' in tabxplor 2.0.0.
+#' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.
 #' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
 #' @param meta The table's metadata, as a single named list gathering (all optional, \code{NULL}
 #' when unset):
 #' \itemize{
 #'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-#'   \code{list(add_n =, add_pct =)}. Since tabxplor 2.0.0 those rows/columns are materialised at
-#'   print/export time from this attribute rather than baked into the table.
+#'   \code{list(add_n =, add_pct =)}, materialised at print/export time from this attribute rather
+#'   than baked into the table.
 #'   \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 #'   (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
 #'   (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
@@ -94,26 +48,17 @@
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}.
 #' @export
-#  @examples
 new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
            test = new_test_tibble(), chi2 = NULL,
            meta = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
-    #vec_assert(subtext    , character())
 
-    # Soft-deprecated `chi2` arg (renamed `test` in 2.0.0): if supplied, it feeds `test`.
     if (!is.null(chi2)) test <- chi2
 
     out <- tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
                               nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
-    # Phase 17b: every 2.0.0-new table attribute (render_extras / vars / empirical_tips /
-    # reg_meta / color_breaks) is now ONE `meta` named list -- one formal, one attribute, one tab_attrs()
-    # line, one bind reconcile (was six of each). Sub-fields left NULL are dropped, so a table given
-    # nothing carries no `meta` attribute at all (raw tab_plain / hand-built / older objects stay clean).
-    # The former per-field prose lives on the `@param meta` roxygen; the accessors below (get_vars_attr,
-    # get_vars_attr, ...) keep their names and read straight into this list.
     if (!is.null(meta)) meta <- meta[!vapply(meta, is.null, logical(1))]
     if (length(meta)) attr(out, "meta") <- meta
     out
@@ -132,7 +77,6 @@ new_grouped_tab <-
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
 
-    # Soft-deprecated `chi2` arg (renamed `test` in 2.0.0): if supplied, it feeds `test`.
     if (!is.null(chi2)) test <- chi2
 
     new_tab(tabs, groups = groups,
@@ -145,7 +89,6 @@ new_grouped_tab <-
 
 # Functions to work with class tabxplor_tab ----------------------------------------------
 
-# Useful test fonction :
 #' Is this a tabxplor table?
 #' @description
 #' \code{TRUE} for a table built by \code{\link{tab}}, \code{\link{tab_reg}} or any of their
@@ -162,32 +105,19 @@ is_tab <- function(x) {
 
 get_subtext <- purrr::attr_getter("subtext")
 
-# Phase 3b: the whole-table test results (Chi2 for factor col_vars, ANOVA F for mean col_vars,
-# future tests) live in the `test` table attribute -- a TIDY tibble, one row per
-# (subtable x col_var x test-type). Renamed from the pre-2.0.0 `chi2` attribute (§16/§17: the old
-# `chi2` attribute is an accepted break -- 2.0.0 tabs are re-created from code, never deserialized).
-# (Phase 19l deleted the `get_chi2()` alias that sat here. Its comment claimed it kept pre-2.0.0 user
-# code running, but it was never in NAMESPACE and has no man page, so no user could ever call it --
-# its only callers were five lines of our own tests.)
 get_test <- function(x) attr(x, "test", exact = TRUE)
 
-# set_test() -- write the whole-table `test` tibble attribute on a built table. Used by the
-# jmvtab tier-2 cache (Phase 7e) to inject a cached chi2/ANOVA result instead of recomputing it.
 set_test <- function(x, test) {
   attr(x, "test") <- test
   x
 }
 
-# Phase 17b: the `meta` table attribute -- ONE named list gathering every 2.0.0-new table attribute
-# (render_extras / vars / empirical_tips / reg_meta / color_breaks). get_meta() returns
-# NULL when absent, so every get_meta(x)[["field"]] yields NULL exactly like the old attr_getter did.
+# `meta` -- ONE named list gathering every table-level attribute (spec / render_extras / empirical_tips
+# / assumptions / color_breaks). NULL when absent.
 get_meta <- function(x) attr(x, "meta", exact = TRUE)
 
-# set_meta_field() -- write ONE meta sub-field, preserving the others. Assigning NULL REMOVES the field
-# (base-R list semantics), and an emptied meta drops the whole attribute -- this is what keeps the
-# "absent when unset" property (a table given nothing carries no `meta` attribute) AND makes
-# set_render_extras(x, NULL) (tab_materialize_extras) clear render_extras WITHOUT touching
-# vars. So every set_* below is one call, and byte-identity at the attribute level is preserved.
+# Write ONE meta sub-field. Assigning NULL removes the field, and an emptied meta drops the whole
+# attribute -- the "absent when unset" property.
 set_meta_field <- function(x, field, value) {
   m <- get_meta(x)
   if (is.null(m)) m <- list()
@@ -197,54 +127,18 @@ set_meta_field <- function(x, field, value) {
   x
 }
 
-# Phase 10i-B: `render_extras` -- the DISPLAY-only intent for the add_n / add_pct extras, a small
-# list `list(add_n = <lgl>, add_pct = <lgl>)`. The built tab() no longer carries the add_n `n` column /
-# add_pct `col_pct` column-or-rows; it stores this intent (born in tab_assemble_tables) and
-# tab_materialize_extras() re-creates the rows/cols at display. NULL -> no extras.
 get_render_extras <- function(x) get_meta(x)[["render_extras"]]
 set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras", render_extras)
 
-# Phase 19b deleted `ci_settings` (with get/set_ci_settings, default_ci_settings and ci_method_of):
-# WHICH interval method a column's bounds were built with is a per-COLUMN fact now (`ci_method`,
-# beside `conf_level` / `degf` / `basis`), stamped where the interval is computed. Storing it
-# table-wide meant the legend had to pick a slot back out of the vector BY MEASURE, through an
-# eight-branch chain -- which is how it could name a method the bounds were never built with (D8).
-
-# `vars` -- what NO column can carry: the weight name, a user caption, the variable-label map.
-# Phase 19f (KEY 1) emptied it of the variable MODEL. `row_vars` / `col_vars` / `tab_vars` /
-# `compacted` / `row_roles` all lived here and are DERIVED now:
-#   row_vars / tab_vars / compacted  <- the declared tabxplor_lvl index columns (tab_declared_vars())
-#   col_vars                         <- the fmt columns' own `col_var` attribute (it always was)
-#   row_roles                        <- the `row_kind` field (fmt_row_kind())
-# WHY that matters: the roles were STORED but the columns are the truth, so every consumer had to
-# validate the store against the real columns and fall back when a dplyr chain had renamed them --
-# and `row_roles` was worse, a positional character vector that existed only during one render pass,
-# so every consumer OUTSIDE that pass (tab_estimates(), anything added later) fell back to matching
-# ENGLISH row labels. A column that declares itself needs neither.
-# Phase 19g (KEY 6): it is a slot of the ONE `meta$spec` now -- beside the table's `kind` and the
-# producer's `call` -- so "which table is this, what is in it, how was it made" is one object rather
-# than a crosstab attribute plus a parallel regression one. See R/table-spec.R.
+# `vars` (a slot of `meta$spec`) -- what NO column can carry: the weight name, a caption, variable labels.
+# The variable MODEL is NOT stored here but DERIVED from the columns (row/tab vars from the declared
+# tabxplor_lvl index columns, col_vars from each fmt column's `col_var`, row roles from `row_kind`).
 get_vars_attr <- function(x) get_spec(x)[["vars"]]
 set_vars_attr <- function(x, vars) set_spec_field(x, "vars", vars)
 
-# Phase 18z16-iiiii: `inference` is NO LONGER a `meta` sub-field. "How were this table's intervals
-# computed" is now two per-COLUMN attributes, `basis` and `degf` (R/fmt_class.R), read back through the
-# DERIVED tab_inference_basis() / tab_inference_degf(). A table attribute is the fragile carrier: two
-# rebuild sites dropped the whole of `meta` (tab_spread(), reg_build()'s split branch), so a
-# design-based table printed the footer of an unweighted one and tab_ci() on the step path silently
-# fell back to z. The bind rule went with it -- "the weakest claim wins" now lives in the fmt ptype2
-# reconcile, where it fires on every c() / bind / group without anyone having to call it.
-
-# Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 
-# Phase 18z15: `assumptions` -- the observed curve of each continuous predictor (see new_tab()),
-# the data behind the row sparklines and behind reg_check_plots()' linearity panel.
 get_assumptions <- function(x) get_meta(x)[["assumptions"]]
-
-# Phase 14w: a regression table's model record. Phase 19g (KEY 6): it IS the producer's `call`
-# recipe -- `meta$spec$call`, read through reg_call() (R/table-spec.R), which is gated on the kind so
-# a crosstab's recipe can never be mistaken for a model record.
 
 #' Store a caption on a tabxplor table
 #'
@@ -274,13 +168,8 @@ set_caption <- function(x, caption) {
 get_caption <- function(x) get_spec(x)[["vars"]][["caption"]]
 new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
   out <- list()
-  # Phase 16d: the weight column NAME drives the footer "Weighted by <wt>." line. It is stored ONLY when
-  # there IS a weight -- an unweighted table's `vars` attribute is unchanged (no field), so no golden /
-  # serialized table churns and get_vars_attr(x)$wt is simply NULL. (get_weight_name reads it either way.)
   wt <- if (length(wt)) as.character(wt)[1] else NA_character_
   if (!is.na(wt) && nzchar(wt)) out$wt <- wt
-  # Phase k: variable labels (name -> label, haven/labelled) for the opt-in name display-swap. Stored
-  # ONLY when non-empty (same absent-when-unset rule as `wt`), so a label-free table churns nothing.
   if (length(var_labels) && !is.null(names(var_labels))) {
     keep       <- !is.na(var_labels) & nzchar(names(var_labels))
     var_labels <- var_labels[keep]
@@ -288,13 +177,11 @@ new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
   }
   out
 }
-# === SECTION: the ONE table-attribute carry (Phase 14d / 17b) ======================================
-# Every table-level attribute is listed HERE, once. Before this, each of the ~34 dplyr S3 methods /
-# vctrs reconcilers named all of them by hand, so each attribute paid the same ~34-site edit; a table
-# that lost an attribute lost it silently, in one verb only. Phase 17b collapsed the six 2.0.0-new
-# attrs into ONE `meta` list, so tab_attrs() now carries just THREE things.
-# WARNING: `test` is ROW-BOUND (one row per subtable x col_var), so a bind must vec_rbind it -- that
-# is why the vctrs reconcilers still name it explicitly and only take tab_attrs() for the rest.
+# === SECTION: the ONE table-attribute carry =======================================================
+# Every table-level attribute is listed HERE, once, so a new dplyr S3 method / vctrs reconciler carries
+# all three by taking tab_attrs() rather than naming each by hand and dropping one it forgot.
+# WARNING: `test` is ROW-BOUND (one row per subtable x col_var), so a bind must vec_rbind it -- which is
+# why the vctrs reconcilers still name it explicitly and only take tab_attrs() for the rest.
 #' @keywords internal
 tab_attrs <- function(from) {
   list(subtext = get_subtext(from),
@@ -302,8 +189,6 @@ tab_attrs <- function(from) {
        meta    = get_meta(from))
 }
 
-# Rebuild `out` as the right tab class, carrying every table attribute of `from`. `lv1_group_vars()`
-# is the auto-downgrade: one grouping level left -> a plain tab.
 #' @keywords internal
 tab_restore <- function(out, from, attrs = tab_attrs(from)) {
   if (lv1_group_vars(out)) {
@@ -314,25 +199,17 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
 }
 
 # THE per-sub-field merge rules of `meta`. Any field NOT listed takes the default "first non-NULL, x
-# wins" -- right for a display-only fact, wrong for an inferential one. Declaring them makes the loop
-# exhaustive by construction: the `color_breaks` special case used to sit OUTSIDE it, which is the
-# shape of mistake that lost meta$inference in tab_compact() (Phase 18z16-iv, W-A).
+# wins" (right for a display-only fact). Declaring the rest here keeps the merge loop exhaustive.
 #' @keywords internal
 #' @noRd
 meta_bind_rules <- list(
-  # a partial per-scale override on either side survives (push_color_breaks() precedence)
   color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m },
-  # Phase 19g (KEY 6): the table identity reconciles SLOT BY SLOT (kind / vars / call). A plain
-  # first-non-NULL on the whole `spec` would drop one side's recipe merely because the other side
-  # declared its kind first -- the shape of drift this key exists to end.
-  # (a closure, not the bare symbol: this table is built at LOAD time and R/table-spec.R is sourced
-  # after this file, so the reference must be deferred to call time.)
+  # the table identity reconciles SLOT BY SLOT (kind / vars / call), so a bind can't drop one side's
+  # recipe just because the other declared its kind first. A closure, not the bare `spec_bind` symbol:
+  # this table is built at LOAD time before R/table-spec.R is sourced, so defer the reference.
   spec = function(x, y) spec_bind(x, y)
 )
 
-# The attribute reconcile for a BIND of two tables (the vctrs ptype2/cast pair). `subtext` unions;
-# `test` is ROW-BOUND (one row per subtable x col_var) so it rbinds; the `meta` sub-fields reconcile
-# element-wise, through meta_bind_rules above.
 #' @keywords internal
 tab_meta_bind <- function(mx, my) {
   if (is.null(mx) && is.null(my)) return(NULL)
@@ -347,14 +224,10 @@ tab_meta_bind <- function(mx, my) {
   if (length(out)) out else NULL
 }
 
-# THE way to rebuild a `meta` when a table is re-created from SEVERAL inputs: reduce their metas
-# through tab_meta_bind() -- so every sub-field is carried, declared or not -- then overwrite only the
-# fields the caller genuinely recomputes. The left fold keeps `metas[[1]]`'s priority on every generic
-# field. Assigning NULL REMOVES a field (base-R list semantics), so "absent when unset" survives.
-# WARNING: a rebuilder must call THIS, never a fresh `meta = list(...)` literal -- a literal drops
-# every sub-field it does not name, which is exactly how a >=2 row_var tab_compact() lost
-# meta$inference (the footer then stated the opposite of what was computed, and the exported step path
-# lost `degf`). Locked by the field-AGNOSTIC probe in test-meta-attr.R.
+# Rebuild a `meta` from SEVERAL inputs: reduce their metas through tab_meta_bind(), then overwrite only
+# what the caller recomputes.
+# WARNING: a rebuilder (tab_compact / tab_spread / ...) must call THIS, never a fresh `meta = list(...)`
+# literal -- a literal silently drops every sub-field it does not name. Locked by test-meta-attr.R.
 #' @keywords internal
 #' @noRd
 tab_meta_merge <- function(metas, ...) {
@@ -376,13 +249,9 @@ tab_bind_attrs <- function(x, other) {
 }
 
 
-# Phase 10i-B back-compat shim -- `tabs$n` / `tabs[["n"]]` / `pull(tabs, "n")` (and `col_pct`). add_n /
-# add_pct are now DISPLAY-only, so the built tab has no `n` / `col_pct` column; old user code reading
-# that column would get NULL. When the column is ABSENT but WAS requested (the render_extras intent),
-# reconstruct it from the Total column -- byte-identical to the old add_n/add_pct column -- with a
-# soft-deprecation (removed in a future version). Only a genuine COLUMN reconstruction applies (pct=
-# "row"); under pct="col" add_n/add_pct were ROWS, so there was never an `n`/`col_pct` column -> NULL.
-# The accessors below GATE on `%in% names(x)`, so the normal fast path pays nothing.
+# Back-compat shim for `tabs$n` / `tabs[["n"]]` (and `col_pct`): add_n / add_pct are DISPLAY-only, so the
+# built tab has no such column -- reconstruct it from the Total column with a soft-deprecation (only under
+# pct="row", where they were columns; pct="col" made them ROWS -> NULL).
 #' @keywords internal
 tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2)) {
   if (length(name) != 1L || is.na(name) || !name %in% c("n", "col_pct")) return(NULL)
@@ -391,7 +260,6 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
   if (!want) return(NULL)
   hyd  <- tryCatch(tab_materialize_extras(x, backend = "xl", pvalue = FALSE),
                    error = function(e) NULL)
-  # `nrow` guard: pct="col" add_n/add_pct is a ROW (name not a column) -> fall through to NextMethod.
   if (is.null(hyd) || !name %in% names(hyd) || nrow(hyd) != nrow(x)) return(NULL)
   lifecycle::deprecate_soft(
     "2.0.0", I(paste0("`$", name, "` on a tabxplor tab")),
@@ -403,7 +271,7 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
   hyd[[name]]
 }
 
-#' Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)
+#' Extract a column of a tabxplor tab (with the add_n/add_pct back-compat shim)
 #' @param x A \code{tabxplor_tab}.
 #' @param i A column name.
 #' @param name For \code{$}, a column name. For \code{\link[dplyr:pull]{dplyr::pull}}, the column
@@ -438,10 +306,9 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
 #' @method pull tabxplor_tab
 #' @export
 pull.tabxplor_tab <- function(.data, var = -1, name = NULL, ...) {
-  # Capture `var` as a quosure and inspect its name. Only a bare/`"..."` name of a DEPRECATED, ABSENT
-  # display-only column is intercepted; everything else DELEGATES to dplyr's pull on the DECLASSED
-  # tibble with the quosure RE-INJECTED (`!!vq`) -- this preserves tidy-select's NSE, which a plain
-  # NextMethod() would break (the quosure environment gets rebound).
+  # Only a bare/`"..."` name of a DEPRECATED, ABSENT display-only column is intercepted; everything else
+  # delegates to dplyr's pull with the quosure RE-INJECTED (`!!vq`), which preserves tidy-select's NSE
+  # (a plain NextMethod() rebinds the quosure environment and breaks it).
   vq  <- rlang::enquo(var)
   lbl <- tryCatch(rlang::as_name(vq), error = function(e) NULL)
   if (!is.null(lbl) && lbl %in% c("n", "col_pct") && !lbl %in% names(.data)) {
@@ -456,25 +323,14 @@ pull.tabxplor_tab <- function(.data, var = -1, name = NULL, ...) {
 #' @export
 pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 
-# The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
-# test type = adding rows (never a schema change); tab_var columns are added when populated.
-# Phase 18j: two COMPANION columns `effect_size` (double) + `es_type` (character, e.g. "cramer_v"/
-# "phi"/"eta2") ride each omnibus row -- an effect size belongs ON its test's row, so it is a column,
-# not a separate row. Reg-footer / older rows carry NA/"" there (vec_rbind fills, but the uniform
-# schema keeps binds clean).
-# Phase 19g (KEY 6): the key is UNIFORM across the two producers, and `row_var` is gone with its
-# overload. A row says WHICH VARIABLE it is about (`var`: the row variable of a crosstab, the
-# predictor of a regression, "" = the whole table / whole model) and WHICH COLUMN it keys under
-# (`col`: a col_var for a crosstab, the fmt column name for a regression). The SUB-POPULATION it was
-# computed on rides a column NAMED AFTER THE GROUPING VARIABLE -- the tab_vars for a crosstab, the
-# `tab_vars` for a regression -- so both arms read it the same way, through test_group_cols().
-# That is what deleted the 13th column `term` (Phase 18z15 added it because `row_var` already meant
-# the split-group LEVEL on a reg row, so a predictor name there flipped a plain table into "split"
-# mode and was silently dropped on a spread one). One dimension, one column.
-# Phase 9b-3: memoized -- tibble() validation is ~1.4 ms/call and this placeholder is built several
-# times per table (~3% of the build). The empty tibble is STATELESS, so the cached copy is shared
-# safely (R copy-on-modify: any caller edit -- bind_rows / mutate / attr<- -- copies first, never
-# touching the base). Byte-identical: same object tibble() produced.
+# The empty-placeholder `test` tibble -- and the schema of the `test` attribute. Tidy: a new test type
+# is new ROWS, never a schema change. The key is UNIFORM across both producers: `var` = which variable
+# the row is about (crosstab row_var / reg predictor / "" = whole table), `col` = which column it keys
+# under (a col_var / the fmt column name); `effect_size` + `es_type` ride each omnibus row as columns.
+# The sub-population rides a column NAMED AFTER THE GROUPING VARIABLE, read by both arms through
+# test_group_cols() -- which is why every companion column below MUST be declared here: test_group_cols()
+# treats any UNdeclared column as a grouping variable, splitting the footer. Memoized: the placeholder is
+# stateless and R's copy-on-modify makes the shared cached copy safe.
 new_test_tibble <- local({
   cached <- NULL
   function() {
@@ -485,42 +341,27 @@ new_test_tibble <- local({
                                 n         = double()   , min_e       = double()   ,
                                 effect_size = double() , es_type     = character(),
                                 pvalue_exact = double(),
-                                # Phase 18z16-i (W8): `n` is ALWAYS the raw count; `deff` is the
-                                # mean design effect this row's test corrected by (NA on basis "n").
+                                # `n` is ALWAYS the raw count; `deff` is the mean design effect this
+                                # row's test corrected by (NA on basis "n").
                                 deff       = double(),
-                                # Phase 19m-ii: WHICH OUTCOME this row is about. NA on a crosstab
-                                # row (`var = ""` already means "the whole table", so "" is a taken
-                                # meaning). It MUST be declared here: test_group_cols() reads
-                                # `setdiff(names(tt), names(new_test_tibble()))` as the GROUPING
-                                # variables, so an undeclared column would split the footer into one
-                                # block per outcome (19g's own defect, one file over).
-                                # Phase 20c (KEY 4): `outcome`, renamed with the argument. It MUST
-                                # stay declared here for the reason 19m-ii gave it a name at all --
-                                # test_group_cols() reads every UNdeclared column as a grouping
-                                # variable, so an undeclared one splits the footer per outcome.
+                                # WHICH OUTCOME this row is about (NA on a crosstab row). Declared here,
+                                # not a grouping column: test_group_cols() would else split the footer.
                                 outcome    = character(),
-                                # Phase 19n: WHICH SUB-POPULATION BLOCK this row keys under, after a
-                                # spread -- the twin of the fmt columns' own `col_group`. `col` alone
-                                # identified a block only while the level was WELDED into `col_var`;
-                                # once the two are stored apart, two spread blocks of one variable
-                                # share a `col` and the grid would emit ONE p-value column for both.
-                                # Declared for the same reason `dep` is (test_group_cols()).
+                                # WHICH SUB-POPULATION BLOCK this row keys under after a spread -- the
+                                # twin of the fmt columns' own `col_group`. Declared for the same reason.
                                 col_group  = character())
     }
     cached
   }
 })
 
-# Phase 16a: test_display_rows / pvalue_line_fmt / test_cell_label / reg_footer_spec+siblings /
-# the fmt-cell builders (reg_gof_cell/reg_pvalue_cell/reg_blank_cell/stat_line_fmt) MOVED to
-# R/tab-test-display.R (all `test`-attribute display in one module).
+# All `test`-attribute display lives in R/tab-test-display.R.
 
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
-# Why this exists: THE one predicate for "does options(tabxplor.print) ask for an html render?".
-# "html" is the taught value (the engine has been html-first since Phase 18g renamed tab_kable ->
-# tab_html); "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
+# THE one predicate for "does options(tabxplor.print) ask for an html render?". "html" is the taught
+# value; "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
 tx_print_html <- function() {
   getOption("tabxplor.print") %in% c("html", "kable")
 }
@@ -542,7 +383,6 @@ tx_print_html <- function() {
 #' @keywords internal
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
-  # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (tx_print_html()) {
     x <- tab_html(x)
@@ -550,18 +390,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
     return(invisible(x))
   }
 
-  # Phase 10i-B: materialise the add_n (in-cell {pct} (n={n})) / add_pct (col_pct) display extras for
-  # the console (backend "text"); p-value stays the summary BLOCK (pvalue = FALSE), NOT body rows.
   x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
 
-  # Phase 16a (was 10i-B decision 2): the console shows the summary block -- a GFM-aligned table of the
-  # `test` attribute (chi2 / ANOVA-F for a crosstab, the GOF footer for a regression), printed above the
-  # tibble -- NOT p-value body rows. It sits AFTER the kable branch so `print = "kable"` renders p-value
-  # ROWS (via tab_kable -> tab_export_prep materialize) instead. Nothing prints without a test attribute.
   test_render_console(test_summary_grid(x))
 
-  # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
-  # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
   rv        <- tab_render_vars(x)
   row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
   n_row_var <- which(names(x) == row_var)
@@ -574,11 +406,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # DESIGN: pillar::char(min_chars=) above is used only to force a minimum width on the
-  # row_var column, but it makes pillar print that column's type as <char>. Rewrite it back
-  # to <fct> in the header line so the displayed type stays correct. The type-tag line is out[3]
-  # for a plain tabxplor_tab, out[4] for a grouped_tab (which prints one extra header line) --
-  # this ONE method serves both classes (print.tabxplor_grouped_tab is an alias below).
+  # DESIGN: pillar::char(min_chars=) above forces a minimum width on the row_var column, but makes
+  # pillar print its type as <char>. Rewrite it back to <fct> in the header line. The type-tag line is
+  # out[3] for a plain tab, out[4] for a grouped_tab (one extra header line) -- so this ONE method
+  # serves both classes (print.tabxplor_grouped_tab is an alias below).
   if (length(n_row_var) != 0) {
     regular_ex <-
       paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
@@ -589,8 +420,6 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   }
 
 
-  # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
-  #                   max_footer_lines = max_footer_lines))
   if (get_text) {
     out
   } else {
@@ -615,25 +444,16 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 #' @return A printed grouped table.
 #' @method print tabxplor_grouped_tab
 #' @keywords internal
-# The grouped print is byte-identical to print.tabxplor_tab except the <char>->
-# <fct> header-line index (out[4] vs out[3]), which that method now derives from
-# inherits(x, "grouped_df"). So it is the SAME function (Phase 17a merge).
 print.tabxplor_grouped_tab <- print.tabxplor_tab
 
 
-# === SECTION: tabxplor_tabs -- the multi-table list class (Phase 13c-iv) =========================
+# === SECTION: tabxplor_tabs -- the multi-table list class ========================================
 
-# A lightweight S3 wrapper over the LIST that tab()/tab_many() return for a multi-table result (>= 2
-# row_vars, tab_vars present, or output_list = TRUE). It IS a list (inherits "list") -- is.list(),
-# `[[`, length(), lapply(), purrr::map() all keep working -- and only adds a print / knit_print that
-# renders like a single tab (kable -> Viewer, or the tibble list) plus `[` / `c` that keep the class.
-# A single tab is returned bare (a tabxplor_tab), never wrapped, so the common case is unchanged.
 #' @keywords internal
 new_tabxplor_tabs <- function(x) {
   structure(x, class = c("tabxplor_tabs", "list"))
 }
 
-# Wrap a multi-table list; no-op on a single tab (data.frame) or an already-wrapped / kable object.
 #' @keywords internal
 as_tabxplor_tabs <- function(x) {
   if (is.list(x) && !is.data.frame(x) && !inherits(x, "tabxplor_tabs")) new_tabxplor_tabs(x) else x
@@ -648,8 +468,6 @@ as_tabxplor_tabs <- function(x) {
 #' @export
 #' @keywords internal
 print.tabxplor_tabs <- function(x, ...) {
-  # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "html" renders all tables joined
-  # (routed to the Viewer, like a single tab); otherwise print each element's tibble in sequence.
   if (tx_print_html()) {
     print(tab_html(x))
     return(invisible(x))
@@ -667,16 +485,13 @@ print.tabxplor_tabs <- function(x, ...) {
 #' @export
 c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
 
-# knit_print so a `tabxplor_tabs` embedded in an Rmd/Quarto chunk renders as the joined kable.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tabs <- function(x, ...) {
   knitr::knit_print(tab_html(x), ...)
 }
 
-# knit_print for a SINGLE tab: without it, knitr's default auto-print captures print()'s html as
-# escaped text, so options(tabxplor.print = "html") could never render a bare `tab(...)` chunk as a
-# real table in Rmd/Quarto. Honours the option: html/kable -> as-is html; else the default text
-# capture (which the fansi output hooks can colour).
+# Without this, knitr's default auto-print escapes print()'s html, so options(tabxplor.print = "html")
+# could not render a bare `tab(...)` chunk as a real table. Honours the option.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tab <- function(x, ...) {
   if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
@@ -690,9 +505,6 @@ knit_print.tabxplor_grouped_tab <- function(x, ...) {
   NextMethod()
 }
 
-
-# Phase 16a: print_chi2() + print_reg_footer() were REPLACED by the shared, aligned GFM summary block
-# test_render_console(test_summary_grid(x)) in R/tab-test-display.R (called from both print methods).
 
 
 #' Table headers for class tab
@@ -733,9 +545,6 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 #' @keywords internal
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
-  # Phase 16e: the whole below-table footer (weight -> Model: -> colour legend -> stars -> user subtext) is
-  # ONE shared model now -- tab_footer_streams() builds the ordered typed streams, render_footer() applies
-  # the console "# " subtle prefix (role-aware: a legend keeps its colours, the plain lines are subtle whole).
   streams <- suppressWarnings(tab_footer_streams(
     x, style = "terse", subtext = get_subtext(x) |> purrr::discard(\(s) s == "")))
   c(default_footer, render_footer(streams, medium = "console"))
@@ -845,29 +654,21 @@ tab_html <- function(tabs,
                      whitespace_only = TRUE,
                      css = NULL,
                      ...) {
-  # Phase 19l: `color_type` / `html_24_bit` / `engine` / `html_font` / `full_width` are retired --
-  # absorbed by `...`, warned about once, never forwarded (tx_deprecate_inert, R/utils.R).
+  # Retired args (`color_type`/`html_24_bit`/`engine`/`html_font`/`full_width`) are absorbed by `...`,
+  # warned about once, never forwarded.
   tx_deprecate_inert(rlang::list2(...), "tab_html")
-  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  # Phase 10j: the theme/color/color_legend preamble is the shared resolver.
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE)
   theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold")
   if (o$color) compute <- c(compute, "colors")
-  # 20b: NULL means "take the option", and the option's name, alias chain and default are declared
-  # once in TAB_OPTIONS (R/tabxplor-options.R).
   tooltips <- if (is.null(tooltips)) tx_option("tab_kable_tooltips") else tooltips
   popover  <- if (is.null(popover))  tx_option("kable_popover")      else popover
   css      <- if (is.null(css))      isTRUE(tx_option("tab_kable_css")) else isTRUE(css)
 
-  # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
-  # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
-  # detection, the per-column colour codes (fmt_channel_codes) and the bold-row set are the ONE shared
-  # tab_export_prep(). `list_method = TRUE`: a non-mergeable list (several row_vars / tab_vars) is
-  # rendered table-after-table instead of erroring (Phase 10e, like tab_md()).
+  # `list_method = TRUE`: a non-mergeable list is rendered table-after-table instead of erroring.
   prep <- tab_export_prep(
     tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
@@ -876,20 +677,14 @@ tab_html <- function(tabs,
     color_legend = color_legend, what = "tab_html()"
   )
 
-  # Phase 10e: render each prepared table through the render seam. The colour legend is CONTENT (a
-  # measure summary), so it is prepended per table to `subtext` here; the seam styles everything else.
   parts <- purrr::map(prep$tables, function(rd) {
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
-      # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars -> user subtext) via the
-      # ONE shared builder. Phase 17g: shared rd_footer(). This backend ships a tabxplor stylesheet, so
-      # its legend break-words carry slot CLASSES (theme-toggle-safe) rather than inline hex.
       src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
       want_legend <- color_legend && length(rd$roles$color_cols) != 0
       subtext <- rd_footer(src, "html", theme = theme[1], want_legend = want_legend,
                            subtext = rd$subtext, lang = lang, classes = TRUE)
     }
-    # Phase 14w (item 1) / 17b / 17g: user caption= -> stored set_caption() -> reg_title (shared).
     cap <- rd_caption(rd, caption)
     render_kable_html(rd, prep$meta, subtext = subtext, caption = cap,
                       tooltips = tooltips, popover = popover, get_data = get_data)
@@ -897,12 +692,11 @@ tab_html <- function(tabs,
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
 
-  # Phase 13d: the cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is
-  # table-independent (see tab_css()), hence built once per call -- or not at all, when a document
-  # emitted tab_css() itself (options("tabxplor.tab_kable_css" = FALSE)).
+  # The cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is table-independent
+  # (see tab_css()), built once per call -- or not at all when a document emitted tab_css() itself.
   style <- if (css) tab_css(theme = theme, format = "html", style_tag = FALSE) else ""
-  # Phase 14k: `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's
-  # page to match -- and, under "auto", resolve it from the editor (the browser cannot see Positron).
+  # `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's page to match --
+  # and, under "auto", resolve it from the editor (the browser cannot see Positron).
   tab_kable_join(parts, css = style, theme = theme)
 }
 
@@ -937,11 +731,8 @@ kable_tabxplor_style <- function(tabs, ...) {
 
 
 
-# Why: tab_compact() promotes a merged sub-table's total row to its reference row when that
-# sub-table has no explicit reference (so each stacked sub-table colours against its OWN
-# total). Byte-identical to if_else(is_totrow & !any(is_refrow), as_refrow(.), .) but writes
-# the in_refrow field DIRECTLY, skipping the per-column vec_case_when ptype2/cast round-trip
-# that was tab_compact()'s single biggest cost (Phase 9b-1; decisions.md §29).
+# Promote a merged sub-table's total row to its reference row when it has no explicit reference, so each
+# stacked sub-table colours against its OWN total.
 promote_totrow_to_refrow <- function(col) {
   in_refrow <- vctrs::field(col, "in_refrow")
   if (any(in_refrow)) return(col)             # sub-table already has a reference row
@@ -952,40 +743,21 @@ promote_totrow_to_refrow <- function(col) {
   col
 }
 
-# tab_stack_tables() -- Phase 9b-6 (Boundary B): row-bind a list of prepared per-row_var tables (same
-# columns, the tab_compact() same-col_vars contract) on PLAIN field-frames, byte-identical to
-# purrr::imap_dfr() / vec_rbind but without the per-row tabxplor_fmt reconstruction. Per column name:
-#   - non-fmt (the "levels" / "row_var" factors): vctrs::vec_c() -> factor level union, like bind_rows.
-#   - fmt: vctrs::vec_ptype_common() across the tables reconciles the fmt_col_attrs via the SAME
-#     vec_ptype2.tabxplor_fmt reduce vec_rbind would use (L3: differing attr -> neutral) but is
-#     O(#tables x #attrs), not O(#rows) (a ptype is length-0). promote_totrow_to_refrow runs per table
-#     (L4, per subtable) before the field read.
-# Row order = tables stacked in list order. Column order = the UNION, first-table order then each new
-# name where it first appears.
-#
-# Phase 19m-i: the union, and the per-table padding that goes with it. `nms <- names(tables[[1]])`
-# made the declared NESTING rule (TAB_OPS$compact: "every table's col_vars a subset of the widest")
-# depend on LIST ORDER, and neither answer was the rule: narrow-first silently DROPPED the wider
-# table's extra columns, wide-first ERRORED ("Corrupt rcrd: not a list", from `.[[nm]]` returning
-# NULL). A table that simply has fewer columns now contributes NA cells under the ones it lacks --
-# which is what "fewer columns still merges" has always claimed to mean.
+# tab_stack_tables() -- row-bind a list of prepared per-row_var tables on PLAIN field-frames, without the
+# per-row tabxplor_fmt reconstruction. Column order = the UNION; a table with fewer columns contributes
+# NA cells under the ones it lacks (merge by name, not by list position).
 tab_stack_tables <- function(tables) {
   nms  <- unique(unlist(lapply(tables, names)))
   nrows <- purrr::map_int(tables, nrow)
   cols <- purrr::map(purrr::set_names(nms, nms), function(nm) {
-    # unname: the table (list) names would otherwise be taken by vec_c()/vec_ptype_common() as outer
-    # names and error on length > 1 vectors ("Can't merge the outer name ...").
+    # unname: list names would else be taken as outer names and error ("Can't merge the outer name ...").
     pieces <- unname(purrr::map(tables, ~ .[[nm]]))
     have   <- !purrr::map_lgl(pieces, is.null)
     if (is_fmt(pieces[have][[1]])) {
-      # the ptype comes from the tables that HAVE the column; the others are padded from it, so a
-      # padded block carries the merged column attributes and not a second, invented set.
-      common <- do.call(vctrs::vec_ptype_common, pieces[have])  # L3 reconcile via ptype2, O(#tables)
+      common <- do.call(vctrs::vec_ptype_common, pieces[have])
       frames <- purrr::map(seq_along(pieces), function(i) {
         col <- if (have[[i]]) promote_totrow_to_refrow(pieces[[i]]) else
-          vctrs::vec_init(common, nrows[[i]])   # L4, per subtable (one in_refrow field write, cheap)
-        # The old imap_dfr / vec_rbind cast each column via vec_cast.tabxplor_fmt.tabxplor_fmt, reading
-        # fields through the GETTERS; fmt_data_wn() reproduces that frame (only wn needs materialising).
+          vctrs::vec_init(common, nrows[[i]])
         fmt_data_wn(col)
       })
       meta   <- purrr::set_names(
@@ -994,14 +766,9 @@ tab_stack_tables <- function(tables) {
     } else {
       pieces <- purrr::map(seq_along(pieces), function(i)
         if (have[[i]]) pieces[[i]] else vctrs::vec_init(pieces[have][[1]], nrows[[i]]))
-      # Phase 18z10: stacking several row_vars puts DIFFERENT variables' levels in one display
-      # column, so an `ordered` class on it would claim an order across variables that does not exist
-      # -- and vctrs rightly refuses to combine two ordered factors with different level sets (or an
-      # ordered one with a plain factor). Drop the class here, at the one place the axes are merged;
-      # a single-row_var table keeps its ordered column untouched.
-      # Phase 19f: the class goes, the FACT stays. Each piece's declared `ordered` map (one entry per
-      # variable) is carried through the flattening and UNIONED by the vec_c reconcile, so a merged
-      # table still knows which of its stacked variables were ordinal -- it used to lose that outright.
+      # Stacking several row_vars puts different variables' levels in one column, so an `ordered` class
+      # would claim an order across variables that does not exist (and vctrs refuses to combine ordered
+      # factors with different level sets). Drop it here; the declared `ordered` map still carries the fact.
       if (length(pieces) > 1L && any(purrr::map_lgl(pieces, is.ordered)))
         pieces <- purrr::map(pieces, function(p)
           if (is.ordered(p)) lvl_restore(factor(p, levels = levels(p), ordered = FALSE), p) else p)
@@ -1030,38 +797,23 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
   if (is.data.frame(tabs)) {tabs <- list(tabs) |> purrr::set_names(names(tabs)[1]) }
 
-  # Phase 14d: an already-merged table is a no-op. It used to be caught by accident -- the heuristic
-  # read its synthetic `row_var` meta column as a tab_var and took the bail below. Now that the roles
-  # are recorded, that table truthfully reports NO tab_vars, so the guard has to be explicit or it
-  # would merge a second time (col 1 "row_var" -> "levels", a new `row_var` on top).
+  # An already-merged table is a no-op: it declares `compacted`, so guard explicitly or it would merge
+  # a second time (col 1 "row_var" -> "levels", a new `row_var` on top).
   if (any(purrr::map_lgl(tabs, ~ isTRUE(tab_declared_vars(.)$compacted)))) return(tabs_base)
 
-  # Phase 19f (KEY 1): merging several row_vars BESIDE tab_vars is no longer deferred. It used to be
-  # impossible because both needed the single dplyr grouping slot -- `can_merge <- length(tab_vars)
-  # == 0` in tab_assemble_output() was the surrender, and `tab(d, c(marital, relig), race,
-  # tab_vars = black)` silently returned a LIST instead of a table. The row-variable axis is a
-  # DECLARED column now, so the two compose: group by (tab_vars, row_var). The only thing still
-  # refused is a set of tables that disagree about WHICH tab_vars they have -- there is no one
-  # sub-table axis to merge them on.
-  # Phase 19h (KEY 7): the two shape refusals are DECLARED (TAB_OPS, R/tab-shape.R), not written out
-  # here -- so `tab_supports(x, "compact")` answers them before the call, and both read one rule.
+  # The shape refusals are DECLARED (TAB_OPS, R/tab-shape.R), so tab_supports(x, "compact") answers them
+  # before the call. What is refused: tables that disagree about WHICH tab_vars they have (no common axis).
   if (!tab_check_shape(tabs, "compact")) return(tabs_base)
   merge_tab_vars <- tab_get_vars(tabs[[1]])$tab_vars
 
 
   subtext <- get_subtext(tabs[[1]])
-  # Phase 18z16-iv (W-A): captured HERE, while `tabs` is still the LIST -- tab_stack_tables() below
-  # rebinds it to a plain tibble carrying no table attributes at all, which is why this merge was the
-  # one place in the package that could lose a `meta` sub-field.
+  # Captured HERE while `tabs` is still the LIST: tab_stack_tables() below rebinds it to a plain tibble
+  # carrying no table attributes, so this is where a `meta` sub-field could be lost (hence tab_meta_merge).
   metas_in <- purrr::map(tabs, get_meta)
 
-  # Phase 19f: the row-variable NAMES are no longer harvested here -- they are the levels of the
-  # declared "var"-role column the merge creates below, read back by tab_declared_vars(). What is
-  # left is what no column can carry.
   vars_merged <- new_vars_attr(
-    wt        = get_vars_attr(tabs[[1]])$wt,  # Phase 16d: the weight survives a compact merge
-    # Phase k: the per-tab variable labels (each row_var's + the shared col_vars') survive the merge
-    # too -- union across the merged tables, first name wins, so the opt-in name swap still works.
+    wt        = get_vars_attr(tabs[[1]])$wt,
     var_labels = {
       vl <- do.call(c, unname(purrr::map(tabs, ~ get_vars_attr(.)[["var_labels"]])))
       if (length(vl)) vl[!duplicated(names(vl))] else character(0)
@@ -1074,26 +826,19 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
 
-  # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to
-  # reference so each stacked sub-table colors its cells against its OWN total (Phase 9b-1's
-  # promote_totrow_to_refrow, a direct in_refrow field write). Phase 9b-6 (Boundary B): the
-  # per-row_var tables are row-bound on PLAIN field-frames via tab_stack_tables() instead of an
-  # imap_dfr / vec_rbind over the tabxplor_fmt records -- the promotion is folded onto each table's
-  # field frame there (still per sub-table, so `any(in_refrow)` stays grouped per row_var), and the
-  # cross-table attribute reconcile reuses vec_ptype_common (L3). The per-tab prep (rename col 1 ->
-  # "levels", add the row_var meta factor) is cheap (no row-reconstruction).
-  # Phase 19f (KEY 1): the merged table DECLARES its two-column index -- `row_var` is the column that
-  # names, per row, which variable that row belongs to (role "var"), `levels` holds the levels (role
-  # "level", `var` NA: several variables live there). No consumer sniffs for a column NAMED "row_var"
-  # any more, and `compacted` is the mere presence of the "var"-role column.
-  # WARNING: rename the DECLARED level column, never "column 1" -- with tab_vars the first column is
-  # a sub-table variable, and `.cols = 1` renamed THAT to "levels" (which is why the composition was
-  # impossible to see working even once the grouping slot was freed).
+  # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to reference
+  # (promote_totrow_to_refrow) so each stacked sub-table colours against its OWN total. The per-row_var
+  # tables are row-bound on PLAIN field-frames via tab_stack_tables(), the promotion folded onto each
+  # field frame there (still per sub-table, so `any(in_refrow)` stays grouped per row_var).
+  # The merged table DECLARES its two-column index -- `row_var` (role "var") names per row which variable
+  # that row belongs to, `levels` (role "level", `var` NA) holds the levels. `compacted` is the mere
+  # presence of the "var"-role column.
+  # WARNING: rename the DECLARED level column, never "column 1" -- with tab_vars the first column is a
+  # sub-table variable, and `.cols = 1` would rename THAT to "levels".
   prepped <- tabs |> purrr::imap(
     ~ dplyr::rename_with(.x, ~"levels",
                          .cols = tidyselect::all_of(tab_get_vars(.x)$row_var)) |>
       dplyr::mutate(row_var = new_lvl(as.factor(.y), "var")) |>
-      # the index block leads, sub-table axis first: [tab_vars] row_var levels
       dplyr::relocate(tidyselect::all_of(c(merge_tab_vars, "row_var")))
   )
   tabs <- tab_stack_tables(prepped)
@@ -1104,14 +849,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
     tabs <- tabs[do.call(order, unname(lapply(merge_tab_vars,
                                               function(v) as.integer(tabs[[v]])))), ]
 
-  # tabs$Danser |> vctrs::vec_data()
-  # tabs |> tab_kable()
-
-
-  # Lone total column -> drop its "_<col_var>" qualifier. Phase 19l: found by its STORED flag, and
-  # unsuffixed through its own `col_var`. The `"^Total_"` regex that stood here hardcoded the ENGLISH
-  # default, so a table built with `total_names = "Ensemble"` silently kept the qualified name --
-  # while tab.R's sibling site (leaf_rename_totals) does the same job through `total_names[2]`.
+  # Lone total column -> drop its "_<col_var>" qualifier (via its stored `col_var`, language-independent).
   tot_i <- which(is_totcol(tabs))
   if (length(tot_i) == 1L) {
     nm <- names(tabs)[[tot_i]]
@@ -1120,17 +858,6 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
     if (!identical(base, nm) && !base %in% names(tabs)) names(tabs)[[tot_i]] <- base
   }
 
-  # Phase 18z16-iv (W-A): CARRY the merged tables' whole `meta` (tab_meta_merge = reduce through
-  # tab_meta_bind) and overwrite only what this merge genuinely recomputes. The fresh
-  # `meta = list(...)` literal that stood here dropped every sub-field it did not name -- so a
-  # >=2 row_var table lost `inference`, printed the OPPOSITE footer sentence, and lost `degf` on the
-  # exported tab_ci() step path (measured: intervals 9 % too narrow at 13 PSUs).
-  # Phase 18z16-iiiii: `spec` is the ONLY genuine recompute (its `vars` slot; `kind` and the
-  # producer's `call` ride through from the first merged table). The explicit
-  # `render_extras = <tabs[[1]]'s>` overwrites that stood beside it
-  # were the left fold's own output written out by hand -- except when tabs[[1]] alone lacked the
-  # field, where the overwrite DELETED what a later table carried. Reachable only through the
-  # exported tab_compact() on a hand-assembled list; carrying it is the better answer.
   tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
                   meta = tab_meta_merge(
                     metas_in,
@@ -1143,45 +870,21 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 }
 
 
-# tab_materialize_extras() -- the SINGLE display-time materializer for the synthetic table extras
-# (Phase 10i-B). The built tab() is the "core" table: no add_n / add_pct columns, no p-value rows. It
-# carries only the INTENT -- the `test` attribute (whole-table chi2/ANOVA) and, from Increment 2, a
-# `render_extras` attribute (the add_n/add_pct flags). This helper hydrates a core table into the
-# rendered shape and is the ONE place the extras are built, called by every DISPLAY path:
-# tab_export_prep() (kable/md/plot/xl), tab_xl() before tab_transpose(), and -- for add_n/add_pct
-# only, NOT p-value -- the console print methods (the console shows the summary block instead of
-# p-value body rows; Phase 10i-B decision 2).
-#
-# `backend`: "text" (console/kable/md) folds add_n into the Total cell (in-cell {pct} (n={n})); "xl"
-# emits a real `n` column (Increment 2). `pvalue`: when TRUE, bake the p-value rows from the kept
-# `test` attribute (reused via tab_pvalue_lines(), which drops the attribute after baking).
-#
-# IDEMPOTENT: tab_pvalue_lines() early-returns on an empty/absent `test` and drops it on success (and,
-# Increment 2, the add_n/add_pct arm clears `render_extras` after consuming), so a second call is a
-# no-op -- tab_xl can materialize before tab_transpose() while tab_export_prep()'s later re-materialize
-# stays inert.
+# The SINGLE display-time materializer. The built tab() is the "core" table (no add_n / add_pct columns,
+# no p-value rows): it carries only the INTENT (the `test` attribute and `render_extras` flags), and this
+# is the ONE place every DISPLAY path hydrates it. IDEMPOTENT: each spec clears the intent it consumed.
 #' @keywords internal
 #' @noRd
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
   backend <- match.arg(backend)
 
-  # Phase 19f (KEY 1): nothing to seed. Every row already carries its own kind in the record
-  # (`row_kind`), so the row-adding specs below stamp the rows they create and the slicing ones just
-  # slice -- where 17c had to seed, extend and re-slice a positional vector that lived one render.
-
-  # Phase 17g: the synthetic extras are now DECLARED specs run by tab_materialize(). The add_n / add_pct
-  # display intent is read ONCE here into `ctx` (a spec cannot re-read it after add_n_pct clears
-  # render_extras), and threaded to every spec. The two former build-then-undo cycles are gone: the
-  # add_n `n` COLUMN is built ONLY for xl (text folds directly, no throwaway), and collapse_totals is a
-  # declared display slice reading the stored roles.
+  # `ctx` reads the display intent ONCE (a spec cannot re-read it after add_n_pct clears render_extras).
   re  <- get_render_extras(tab)
   ctx <- list(add_n = isTRUE(re$add_n), add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
               common_totrow = isTRUE(re$common_totrow), common_totrow_ref = isTRUE(re$common_totrow_ref))
   tab_materialize(tab, backend, ctx)
 }
 
-# Phase 17g: run the applicable materialize specs in order. `ctx` carries the shared add_n/add_pct/
-# pvalue intent so specs stay independent of render_extras (which add_n_pct clears mid-run).
 #' @keywords internal
 #' @noRd
 tab_materialize <- function(tab, backend, ctx) {
@@ -1191,12 +894,9 @@ tab_materialize <- function(tab, backend, ctx) {
   tab
 }
 
-# Phase 17g: the declared inventory of display-time synthetic rows/cols. Each spec says WHEN it applies
-# (a predicate over tab + backend + intent) and HOW (apply); the list NAME says what it adds. Reading
-# this list IS the map of every synthetic extra and its per-backend policy -- replacing the old
-# imperative if/else passes.
-# Phase 20h: the name is a list name, not a member. It used to be a `kind =` string, described here as
-# "matching the stored row-role vocabulary" -- which nothing read and which no ROW_KINDS value matched.
+# The declared inventory of display-time synthetic rows/cols. Each spec says WHEN it applies (a predicate
+# over tab + backend + intent) and HOW (apply); the list NAME says what it adds. Reading this list IS the
+# map of every synthetic extra and its per-backend policy.
 #' @keywords internal
 #' @noRd
 materialize_specs <- function() list(
@@ -1205,18 +905,17 @@ materialize_specs <- function() list(
   add_n_pct = list(
     when  = function(tab, backend, ctx) ctx$add_n || ctx$add_pct,
     apply = mat_add_n_pct),
-  # Phase 16c: an OR/RRR table's "100%" total column is meaningless. Console+add_n keeps it as a base-n
-  # cell (folded by add_n_pct); Excel exports only the base-n column, and console add_n=FALSE has no base
-  # -> drop the % total column in both. No-op on a non-OR table.
+  # An OR/RRR table's "100%" total column is meaningless: console+add_n keeps it as a base-n cell, Excel
+  # exports only the base-n column, console add_n=FALSE drops it. No-op on a non-OR table.
   or_total = list(
     when  = function(tab, backend, ctx) tab_is_or_display(tab),
     apply = function(tab, backend, ctx) tab_or_total_col(tab, backend, ctx$add_n)),
-  # Excel-only mean + sd twin column (Phase 13c-v): console/md/kable show sd inline as "mean (sigma sd)".
+  # Excel-only mean + sd twin column: console/md/kable show sd inline as "mean (sigma sd)".
   sd_twin = list(
     when  = function(tab, backend, ctx) identical(backend, "xl"),
     apply = function(tab, backend, ctx) mat_sd_twin(tab)),
   # p-value / GOF footer rows from the kept `test` attribute. tab_pvalue_lines no-ops on a regression
-  # table, so a crosstab gets its chi2 row and a reg table its GOF footer (Phase 12f).
+  # table, so a crosstab gets its chi2 row and a reg table its GOF footer.
   footer = list(
     when  = function(tab, backend, ctx) ctx$pvalue,
     apply = function(tab, backend, ctx) {
@@ -1224,9 +923,8 @@ materialize_specs <- function() list(
       if (tab_is_reg(tab)) tab <- reg_footer_lines(tab)
       tab
     }),
-  # Phase 14n / Phase 18m: collapse the redundant per-block Total rows of a compacted several-row_vars
-  # table into ONE shared Total, shown in its OWN group (a display slice needing the "as displayed"
-  # equality). OPT-IN via `common_totrow` (default FALSE = one Total per row_var, no collapse). Run LAST,
+  # Collapse the redundant per-block Total rows of a compacted several-row_vars table into ONE shared
+  # Total in its own group. OPT-IN via `common_totrow` (default FALSE = one Total per row_var). Run LAST,
   # so every role recomputes on the collapsed table; the core tab() object keeps every total row.
   collapse_totals = list(
     when  = function(tab, backend, ctx) isTRUE(ctx$common_totrow),
@@ -1234,10 +932,6 @@ materialize_specs <- function() list(
       tab_collapse_total_rows(tab, ref_bold = isTRUE(ctx$common_totrow_ref)))
 )
 
-# add_n / add_pct spec apply. Reuses tab_add_n_pct() (byte-identical field construction; its grouped
-# outer-mutate reproduces the per-subtable scoping on the final merged / grouped table). `backend` = xl
-# builds the real `n` COLUMN; text skips it (tab_add_n_pct) and folds the base into the Total cell from
-# its OWN `n` field (tab_fold_addn_incell -- no throwaway column). Clears render_extras (idempotent).
 #' @keywords internal
 #' @noRd
 mat_add_n_pct <- function(tab, backend, ctx) {
@@ -1257,9 +951,7 @@ mat_sd_twin <- function(tab) {
   means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
   for (nm in means) {
     sdc <- tab[[nm]]
-    # Phase 19l: the twin DECLARES itself (role "sd"). The prep and the col_var header used to find
-    # it by parsing its own name back apart ("<col_var>_sd"), a convention minted here and read three
-    # functions away -- the name is a layout detail, the role is the fact.
+    # The twin DECLARES itself (role "sd"); the name is a layout detail, the role is the fact.
     tab[[paste0(nm, "_sd")]] <-
       set_role(set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"),
                          "no"), "sd")
@@ -1276,21 +968,11 @@ mat_sd_twin <- function(tab) {
   tab
 }
 
-# Phase 14n: on a COMPACTED several-row_vars table (tab_compact() stacked one standalone table per
-# row_var, each with its own Total row) the col_var marginal -- and its base n -- is a property of the
-# shared population, not the row_var. So under na = "keep"/"drop_all"/"common_base" every block's Total
-# is identical by construction; only na = "drop" (each row_var drops its OWN missing values) makes them
-# genuinely differ. This DISPLAY-ONLY step drops the redundant Total rows (keeping the LAST block's) when
-# every block's total renders identically, else keeps them all + one message naming na = "drop". Called
-# as the final step of tab_materialize_extras(), so bold / totblock borders / new_group / references /
-# tooltips all recompute on the collapsed table with zero per-backend code. A single-row_var table is
-# never compacted, so the guard leaves it untouched. ⚠ a tab_vars table CAN be compacted since 19f
-# (several row_vars beside tab_vars compose now), which is why the block sweep below keys on the
-# declared variable column and not on the first grouping variable.
-#
-# The comparison unit is the whole TOTAL BLOCK -- the Total row + its trailing add_n base `n` row -- not
-# just the Total row: under pct = "col" the Total row is ALWAYS "100%" and the real base lives in the `n`
-# row, so comparing the Total row alone would silently collapse col% tables with a genuinely different N.
+# Drops the redundant per-block Total rows of a COMPACTED table when they render identically (only
+# na = "drop" makes blocks differ; else keeps them all + a message). WARNING: the comparison unit is the
+# whole TOTAL BLOCK (Total row + its trailing add_n `n` row), not the Total row alone -- under pct = "col"
+# the Total row is always "100%" and the real base lives in the `n` row. The sweep keys on the declared
+# variable column (a tab_vars table can be compacted), never the first grouping variable.
 #' @keywords internal
 #' @noRd
 tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
@@ -1304,17 +986,10 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   n_row   <- nrow(tab)
   fmt_nms <- names(tab)[purrr::map_lgl(tab, is_fmt)]
 
-  # A block's total BLOCK = its Total row + the contiguous add_n / add_pct SUMMARY rows that follow it
-  # (the add_n / add_pct base/pct rows -- tab_materialize_extras()'s "n" / "row_pct" rows, drawn as
-  # "Total | row_pct | n"). A p-value row is block-SPECIFIC (a different test per row_var), so it is NOT
-  # swept in and survives the collapse. Phase 17c: read the STORED role (seeded/extended in materialise)
-  # instead of matching the English row label; the sweep is still gated to the SAME grouping value so it
-  # can never cross into the next block.
-  # Phase 19m-i: the sweep is gated on the DECLARED variable column, not on `group_vars()[1]`.
-  # tab_compact() groups by `c(merge_tab_vars, "row_var")`, so with tab_vars the first grouping
-  # variable is the TAB_VAR -- the sweep then stopped distinguishing row_var blocks and could absorb
-  # the next variable's summary rows. The shape is reachable since 19f lifted the tab_vars x several
-  # row_vars refusal; `var_col` is the fact, and it is read from the same call the guard above makes.
+  # A block's total BLOCK = its Total row + the contiguous add_n / add_pct SUMMARY rows that follow it. A
+  # p-value row is block-SPECIFIC, so it is NOT swept in and survives the collapse. The sweep reads the
+  # STORED row role and is gated on the DECLARED variable column (not group_vars()[1], which with tab_vars
+  # is the TAB_VAR), so it can never cross into the next variable's block.
   grp <- if (length(var_col) && var_col %in% names(tab)) as.character(tab[[var_col]]) else
     rep(NA_character_, n_row)
   is_summary <- tab_row_roles(tab) %in% c("n", "pct")
@@ -1326,14 +1001,9 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   }
   blocks <- lapply(tot, block_rows)
 
-  # Phase 19f: the block signature is a KEY, not a rendered format() pass over every fmt column.
-  # The question the collapse asks is "do these blocks describe the same population?", and its own
-  # answer says so: under na = "keep" / "drop_all" / "common_base" every block's total is identical
-  # BY CONSTRUCTION (same base), only na = "drop" (each row_var drops its own missing values) makes
-  # them differ. So the key is the block's counts and the marginals computed from them --
-  # n / wn / pct / mean, four fields, read straight off the record. It is also STRICTER in the right
-  # direction than the string it replaces: two blocks with genuinely different bases that happened to
-  # round to the same printed cell were collapsed into one Total whose N was only one of theirs.
+  # The block signature is a KEY over the raw record fields (n / wn / pct / mean), not a rendered format()
+  # pass -- so two blocks with genuinely different bases that round to the same printed cell are NOT
+  # collapsed. The question is "do these blocks describe the same population?", which these fields answer.
   sig_fields <- c("n", "wn", "pct", "mean")
   sig <- vapply(blocks, function(rows)
     paste(unlist(lapply(fmt_nms, function(nm) {
@@ -1342,12 +1012,8 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
     })), collapse = "\r"),
     character(1))
 
-  # Phase 19m-i: "the SHARED population" is the SUB-population when there are tab_vars -- each
-  # sub-table has its own col_var marginal, so the blocks are compared and collapsed WITHIN a
-  # tab_vars key, never across it. Without tab_vars this is one group and everything below is
-  # byte-identical to what it replaced; with them, comparing globally made the function report
-  # "the variables have different total rows" (blaming na = "drop") on every table whose sub-tables
-  # merely differ from each other -- so `common_totrow` was inert on the shape 19f made possible.
+  # "The SHARED population" is the SUB-population when there are tab_vars: each sub-table has its own
+  # col_var marginal, so blocks are compared and collapsed WITHIN a tab_vars key, never across it.
   tv_key <- if (length(dv$tab_vars))
     do.call(paste, c(lapply(dv$tab_vars, function(v) as.character(tab[[v]])), sep = "\r")) else
       rep("", n_row)
@@ -1369,19 +1035,17 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   drop_rows <- unlist(blocks[setdiff(seq_along(blocks), surv_blocks)])
   keep <- setdiff(seq_len(n_row), drop_rows)
   out  <- tab[keep, ]                                       # global indices -> class/attrs/grouping kept
-  # Phase 19f: nothing to re-slice -- each row's kind rides its own cells.
 
-  # Phase 18m: the shared Total gets its OWN group (a blank row_var, its level stays "Total") after a
-  # blank-line separator -- not tucked under the last row_var. Reassign the surviving total block (Total
-  # row + its trailing n/row_pct rows) to a distinct blank sentinel in the grouping column and regroup, so
-  # the render-time separator (group_indices) sees it. When the total is a reference for some row_var
-  # (ref = "tot" -> ref_bold), mark the Total row bold (in_refrow -- the shared bold anchor signal).
+  # The shared Total gets its OWN group (a blank row_var, level "Total") after a blank-line separator, not
+  # tucked under the last row_var: reassign the surviving total block to a distinct blank sentinel in the
+  # grouping column and regroup, so the render-time separator (group_indices) sees it. When the total is a
+  # reference for some row_var (ref_bold), mark the Total row bold (in_refrow).
   surv_pos <- match(unlist(blocks[surv_blocks]), keep)
   surv_pos <- surv_pos[!is.na(surv_pos)]
   tot_pos  <- match(vapply(blocks[surv_blocks], function(r) r[[1]], integer(1)), keep)
   tot_pos  <- tot_pos[!is.na(tot_pos)]                     # one surviving Total row per tab_vars group
-  # The blank goes in the VARIABLE column (19m-i, as above); the REGROUP keeps the whole key, which
-  # with tab_vars is (tab_var, row_var) -- blanking the tab_var instead corrupted the sub-table key.
+  # The blank goes in the VARIABLE column; the REGROUP keeps the whole key, which with tab_vars is
+  # (tab_var, row_var) -- blanking the tab_var instead would corrupt the sub-table key.
   grp_col  <- dplyr::group_vars(out)
   if (length(surv_pos) && length(var_col) && var_col %in% names(out)) {
     gc <- var_col
@@ -1408,15 +1072,6 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
 #'
 #' @return A tabxplor_tab.
 #' @keywords internal
-# @export
-#
-# @examples
-# \donttest{
-# forcats::gss_cat |>
-#   tab_many(race, marital, pct = "row", color = "diff", add_n = FALSE) |>
-#   tab_chi2() |>
-#   tab_pvalue_lines()
-# }
 tab_pvalue_lines <- function(tabs) {
   test_tbl <- get_test(tabs)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
@@ -1424,58 +1079,46 @@ tab_pvalue_lines <- function(tabs) {
   group_chr <- purrr::map_chr(dplyr::groups(tabs), rlang::as_name)
   gv        <- tab_get_vars(tabs)
   row_var   <- gv$row_var
-  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected
-  # with the test tibble -- the tab_vars for a tab_vars table, the synthetic variable column for a
-  # COMPACTED several-row_vars table (== group_chr on a crosstab, so it also drives the placement).
-  # Phase 19g (KEY 6): a tab_var keeps its own name in the `test` tibble, but a COMPACTED table's
-  # grouping column is the declared "var"-role column -- the dimension the test tibble keys as `var`.
-  # `disc` is the table's spelling, `disc_tt` the test tibble's; they differ in exactly that one slot.
+  # Key the p-value rows by the table's GROUPING columns intersected with the test tibble -- the tab_vars,
+  # or the declared "var"-role column for a COMPACTED table (which the test tibble keys as `var`). `disc`
+  # is the table's spelling, `disc_tt` the test tibble's; they differ in exactly that one slot.
   var_col <- tab_declared_vars(tabs)$var_col
   disc    <- intersect(group_chr, c(names(test_tbl), var_col))
   disc_tt <- ifelse(disc %in% var_col, "var", disc)
   disc    <- disc[disc_tt %in% names(test_tbl)]
   disc_tt <- disc_tt[disc_tt %in% names(test_tbl)]
 
-  # first-level column of each col_var (where the p-value cell is placed): col_var <-> column name
   first_lv  <- gv$col_vars_levels |> purrr::map_chr(~ rlang::as_name(dplyr::first(.)))
   cv_to_col <- purrr::set_names(unname(first_lv), names(first_lv))
   col_to_cv <- purrr::set_names(names(cv_to_col), unname(cv_to_col))
 
-  # one displayed test per (subtable x col_var): chi2 (factors) / chosen F (means)
   disp <- test_display_rows(test_tbl, tab_anova(tabs))
   disp <- dplyr::filter(disp, .data$col %in% names(cv_to_col), !is.na(.data$pvalue))
   if (nrow(disp) == 0) return(tabs)
 
-  # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
-  # GOF footer). Phase 18m: rows in display ORDER = p-value, then effect size; the STATISTIC row is
-  # gone from the default (ambiguous once effect size shares the block) -- it returns only under
-  # `tabxplor.test_lines = "stat"`/"all". The test TYPE ("Chi2, Welch F; survey-design") and the effect-size
-  # MEASURE ("Cramér's V, eta2") move into the row NAMES (per group, via the descriptors), so the p-value
-  # CELL is now the bare p (no in-cell "(Chi2)" suffix). Modes: "summary" (default) = p-value + effect
-  # size; "all" = + statistic; "stat" = p-value + statistic; "pvalue" = p-value only.
+  # Rows in display ORDER = p-value, then effect size (STATISTIC only under test_lines = "stat"/"all").
+  # The test TYPE and the effect-size MEASURE live in the row NAMES (per group, via the descriptors), so
+  # the p-value CELL is the bare p. Modes: "summary" (default) = p-value + effect size; "all" = + statistic;
+  # "stat" = p-value + statistic; "pvalue" = p-value only.
   mode       <- tx_option("test_lines")
   add_stat   <- mode %in% c("stat", "all")
   add_es     <- mode %in% c("all", "summary")
   row_keys   <- c("pvalue", if (add_es) "effect size", if (add_stat) "statistic")
   K          <- length(row_keys)
 
-  # group id per existing row + per displayed-test row (the disc-key tuple; "" when ungrouped)
   gid <- function(df, cols) if (length(cols))
       do.call(paste, c(lapply(cols, function(d) as.character(df[[d]])), sep = "\r"))
     else rep("", nrow(df))
   grp_of      <- gid(tabs, disc)
   disp$.grp   <- gid(disp, disc_tt)
-  # a weak chi2 with a Fisher-exact companion (Phase 18j): show the exact p (labelled "Fisher" in the
-  # row-name descriptor now, not the cell).
+  # a weak chi2 with a Fisher-exact companion shows the exact p (labelled "Fisher" in the descriptor).
   has_exact   <- if (!is.null(disp[["pvalue_exact"]])) !is.na(disp$pvalue_exact) else rep(FALSE, nrow(disp))
   disp$.pshow <- if (any(has_exact)) ifelse(has_exact, disp$pvalue_exact, disp$pvalue) else disp$pvalue
   key         <- paste(disp$col, disp$.grp, sep = "\r")
-  # per-group row NAME for each row key (the test type / measure descriptor, computed from that group's
-  # displayed tests -- one row per subtable can carry a different mix of factor/numeric col_vars).
   row_label_for <- function(key, g) {
     ing <- disp$.grp == g
     d   <- disp[ing, , drop = FALSE]
-    # Phase 20c: the threshold is test_weak_min_e (R/tab-test-display.R), not a second literal 5.
+    # the threshold is test_weak_min_e (R/tab-test-display.R), not a second literal 5.
     weak <- !is.null(d[["min_e"]]) &&
       any(!is.na(d$min_e) & d$min_e < test_weak_min_e & !has_exact[ing])
     switch(key,
@@ -1484,8 +1127,6 @@ tab_pvalue_lines <- function(tabs) {
            "statistic"   = "statistic")
   }
 
-  # the per-column fill for a non-value / no-test-here position: the column's first display token with
-  # n = NA (byte-identical to the pre-16a masked fill, locked by test-golden / export-parity).
   fill_cell <- function(nm) {
     f <- fmt0(dplyr::first(get_display(tabs[[nm]])), scale = get_scale(tabs[[nm]]))
     vctrs::field(f, "n") <- NA_integer_
@@ -1505,14 +1146,12 @@ tab_pvalue_lines <- function(tabs) {
   }
   fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_keys, one_cell, nm = nm, g = g))
   nonfmt_val <- function(nm, g) {
-    # the row-label column: the per-group test-type / effect-size descriptors (Phase 18m)
     if (nm == row_var) return(vapply(row_keys, row_label_for, character(1), g = g))
     i <- match(nm, disc)                                  # a grouping column: its group level
     if (!is.na(i)) return(rep(strsplit(g, "\r", fixed = TRUE)[[1]][i], K))
     rep(NA_character_, K)
   }
 
-  # Phase 17b: the whole `meta` list is threaded through the rebuild in one shot (was six getters).
   tab_append_footer(tabs, grp_of, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr,
@@ -1520,16 +1159,11 @@ tab_pvalue_lines <- function(tabs) {
     row_role = function(g) dplyr::if_else(row_keys == "pvalue", "pvalue", "gof"))  # es/statistic row -> gof
 }
 
-# Phase 12f: materialise the regression GOF footer as appended rows (one row per stat, a "Model fit"
-# group). Each stat cell is placed under its model column (the fit's first output column; MNL/ordinal
-# blank the other category columns), and the row-label column carries the stat label. Phase 16a: a THIN
-# config over the shared tab_append_footer() engine (R/tab-test-display.R) -- exactly like the crosstab
-# tab_pvalue_lines(); it only supplies `grp_of` (per split group), the per-cell builder and the non-fmt
-# labels. Idempotent: `test` is dropped, so a second call no-ops. Renders nothing on a crosstab.
+# The regression GOF footer, as a THIN config over the shared tab_append_footer() engine (like the
+# crosstab tab_pvalue_lines()). Idempotent (`test` dropped); renders nothing on a crosstab.
 reg_footer_lines <- function(tabs) {
   test_tbl <- get_test(tabs)
-  # Phase 19g: the KIND is stored, so it no longer doubles as the "is there anything to render"
-  # guard the dropped `test` tibble used to provide (that is what made a second call a no-op).
+  # the stored KIND is the "is this a reg table" guard; the dropped `test` gives idempotency.
   if (!tab_is_reg(tabs) || is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
   spec <- reg_footer_spec()
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
@@ -1539,22 +1173,18 @@ reg_footer_lines <- function(tabs) {
   group_chr <- purrr::map_chr(groups, rlang::as_name)
 
   nonfmt  <- names(tabs)[!purrr::map_lgl(tabs, is_fmt)]
-  # the row-label column = the non-grouping factor (reg groups by `var`; the label column is `levels`).
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
 
-  # Phase 18z15: one row per (stat, TERM) -- a check / overall-association row is about one
-  # predictor, so the plan is the shared reg_footer_plan(), not a bare list of discriminators.
   plan <- reg_footer_plan(reg)
   K    <- if (is.null(plan)) 0L else nrow(plan)
   if (K == 0) return(tabs)
   reg$.term     <- test_key_col(reg, "var")
   footer_labels <- plan$label
 
-  # tab_vars (Phase 12h): a split table carries per-group GOF, tagged in the `test` column NAMED
-  # after the split variable (Phase 19g -- the same rule the crosstab arm reads its tab_vars by).
-  # It gets one "Model fit" footer block PER group; a plain table gets one block at the end (a single
-  # pseudo-group ""). tab_append_footer interleaves in row order.
+  # A split table carries per-group GOF, tagged in the `test` column NAMED after the split variable (the
+  # same rule the crosstab arm reads its tab_vars by): one "Model fit" block per group, else one block at
+  # the end (pseudo-group ""). tab_append_footer interleaves in row order.
   gcols     <- test_group_cols(reg)
   reg_rv    <- if (!length(gcols)) rep("", nrow(reg)) else test_key_col(reg, gcols[1])
   is_split  <- any(nzchar(reg_rv))
@@ -1576,16 +1206,10 @@ reg_footer_lines <- function(tabs) {
     else if (identical(nm, split_col)) rep(g, K)
     else                               rep("Model fit", K)
 
-  # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
-  # vars / empirical_tips / reg_meta named one by one; the legend reads the stored spec, and all must
-  # survive the footer materialisation. Phase 19g: the KIND is stored too, so the arm detection no
-  # longer depends on the dropped `test` at all -- reg_footer_lines() carries its own emptiness guard).
-  # Phase 18z8: `test` is dropped (idempotency), but the pooled interaction rows are NOT rendered as
-  # rows -- they feed the table-wide footer LINE, which every backend builds AFTER materialisation. So
-  # they are the one part of `test` that must ride through. Re-entry stays a no-op: with only these
-  # rows left, `reg` above is empty and this function returns early.
-  # (z15: the `global` rows no longer ride through -- they became footer ROWS, so they are consumed
-  # here like every other spec'd discriminator.)
+  # `test` is dropped for idempotency, but the pooled interaction rows are NOT rendered as rows -- they
+  # feed the table-wide footer LINE that every backend builds AFTER materialisation, so they are the one
+  # part of `test` that rides through. Re-entry stays a no-op: with only these rows left, `reg` is empty
+  # above and this returns early. The whole `meta` list threads through the rebuild (the legend reads it).
   it <- test_tbl[test_tbl$test %in% reg_interaction_types(), , drop = FALSE]
   tab_append_footer(tabs, grp_of, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs),
@@ -1649,9 +1273,7 @@ tab_plot <- function(tabs,
                      var_names = NULL,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE, ...) {
-  # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
   tx_deprecate_inert(rlang::list2(...), "tab_plot")
-  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
     stop(paste0("Package \"ggpubr\" needed for this function to work. ",
@@ -1673,10 +1295,6 @@ tab_plot <- function(tabs,
                 "You can install it with : install.packages('cowplot')"),
          call. = FALSE)
   }
-  # Phase 10j: list-method parity. A list renders each table as its OWN plot (matching
-  # tab_kable/tab_md/tab_xl, which render a list table-after-table), returning a list of ggplots.
-  # Phase 14d: a list is never merged at export any more (see tab_resolve_tables), so `length > 1` is
-  # the whole condition -- the mergeable probe it used to run is gone.
   if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L) {
     return(purrr::map(tabs, tab_plot, theme = theme,
                       color = color, color_legend = color_legend,
@@ -1684,7 +1302,6 @@ tab_plot <- function(tabs,
                       wrap_cols = wrap_cols, whitespace_only = whitespace_only))
   }
 
-  # Phase 10j: shared option resolver (theme/color/color_legend/transpose).
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names)
   theme <- o$theme
@@ -1692,10 +1309,6 @@ tab_plot <- function(tabs,
   compute <- c("refs", "bold")
   if (o$color) compute <- c(compute, "colors")
 
-  # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---
-  # tab_plot has no list->compact preamble; everything else (role detection, refs2/refs3, the colour
-  # loop) is the ONE shared tab_export_prep(). Plot drops tab_vars, wraps with exdent = 1 /
-  # unbreakable_spaces = FALSE (the "\n" break). Output is a ggplot -> no golden lock; A/B-verified.
   prep <- tab_export_prep(
     tabs, backend = "plot", compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
@@ -1730,7 +1343,6 @@ tab_plot <- function(tabs,
   grey_color  <- prep$meta$theme_cols$grey
   grey_color2 <- prep$meta$theme_cols$grey2
 
-  # Per-fmt-column colour vectors (derive-once) from the prep's `ann`, keyed by column name.
   color_selection <- purrr::map(rd$ann, "font")
   bg_selection    <- purrr::map(rd$ann, "back")
 
@@ -1746,14 +1358,10 @@ tab_plot <- function(tabs,
     bg_selection    <- bg_selection    |> dplyr::bind_cols()
   }
 
-  # Phase 18z11: the face comes from the PALETTE, not from guessing at the hex. The old test was
-  # `!font %in% c(text_color, grey_color, grey_color2)` -- true exactly where text_hex is non-NA, which
-  # is exactly `ann$face_bold` under every colour palette (a palette hex can never equal a chrome hex:
-  # fmt_channel_codes upper-cases, tx_chrome_hex is lower-case), so this is byte-identical there. It is
-  # NOT `ann$bold`, which folds in the per-CELL keep_black, while tab_plot's structural bolding is the
-  # row/column SETS refs2/refs3 -- those two terms are kept verbatim.
-  # ggplot2's `fontface` has no underline, so the print palette's second intensity level degrades to
-  # its first here (bold / italic only). tab_plot is frozen legacy; that is the accepted loss.
+  # The face comes from the PALETTE (`ann$face_bold`), not from guessing at the hex, and NOT from
+  # `ann$bold` (which folds in the per-CELL keep_black) -- tab_plot's structural bolding is the row/column
+  # SETS refs2/refs3, kept as separate terms below. ggplot2's `fontface` has no underline, so the print
+  # palette's second intensity level degrades to bold/italic only here (accepted loss on frozen legacy).
   face_of <- function(field) {
     sel <- purrr::map(rd$ann, field)
     if (length(other_cols) != 0) {
@@ -1770,27 +1378,21 @@ tab_plot <- function(tabs,
     dplyr::case_when(b & i ~ "bold.italic", b ~ "bold", i ~ "italic", TRUE ~ "plain")
   }) |> dplyr::bind_cols()
 
-  # Phase 14i: name each block once (the prep's shared run model, as md blanks and html rowspans). No
-  # rotation: a ggtexttable cell is a grob, not a table cell. `var_names` (the name column's drop and
-  # the col_var span suppression) is already honoured upstream, in the prep.
   for (cl in names(rd$roles$label_cols)) {
     if (!cl %in% names(tabs)) next
     show <- rd$roles$label_runs[[cl]]$show
     tabs[[cl]] <- as.character(tabs[[cl]])
     tabs[[cl]][!show] <- ""
   }
-  # Phase 18z15: a graphics device has no block glyphs, so a reg row's sparkline would be one
-  # "conversion failure in mbcsToSbcs" per label and a row of garbage. THE plot medium's answer, once,
-  # over every text column (the html engine's is the <svg>; every other medium keeps the glyphs).
+  # a graphics device has no block glyphs, so strip a reg row's sparkline over every text column (else
+  # "conversion failure in mbcsToSbcs" and a row of garbage). Only the plot medium needs this.
   for (cl in other_cols) if (cl %in% names(tabs))
     tabs[[cl]] <- tx_spark_strip(as.character(tabs[[cl]]))
 
-  # Phase 14m-ii (rework): a monospace body font ONLY when the table SHOWS significance stars (so the
-  # stars align); a plain table keeps the ggpubr default (proportional). WARNING: ggpubr 1.0.0 exposes
-  # no per-COLUMN font (table_cell_font() takes no family and replaces the cell gpar), so when it does
-  # apply it hits the WHOLE body -- the row labels turn monospace too, a small deviation confined to a
-  # STARRED, superseded tab_plot(). Revert with options("tabxplor.plot_num_font" = ""). "Cascadia Mono"
-  # must be available to the graphics device (else it substitutes).
+  # A monospace body font ONLY when the table SHOWS significance stars (so the stars align); a plain
+  # table keeps the ggpubr default. WARNING: ggpubr exposes no per-COLUMN font, so when applied it hits
+  # the WHOLE body (row labels turn monospace too) -- a small deviation confined to a starred tab_plot().
+  # Revert with options("tabxplor.plot_num_font" = ""). "Cascadia Mono" must be on the graphics device.
   plot_num_font <- tx_num_font("plot", rd$roles$has_stars)
   tbody_args <- list(color = "black", size = 11, fill = "white", linewidth = 0,
                      linecolor = "black", hjust = 0.98, x = 0.95) # x/hjust = right-adjust
@@ -1811,12 +1413,6 @@ tab_plot <- function(tabs,
         where(is.character),
         ~ stringi::stri_replace_all_regex(., unbrk, " ")
       ),
-      # # unbreakable space at the starting of names, otherwise doesn't fit with hjust = "right"
-      # dplyr::across(
-      #   1,
-      #   ~ forcats::fct_relabel(., ~ paste0(paste0(rep(unbrk, 4), collapse = ""),
-      #                                      .))
-      # )
     ) |>
 
     ggpubr::ggtexttable(
@@ -1827,16 +1423,7 @@ tab_plot <- function(tabs,
     )
 
 
-  # c("default", "blank", "classic", "minimal", "light",
-  #   "lBlack", "lBlue", "lRed", "lGreen", "lViolet", "lCyan", "lOrange", "lBlackWhite", "lBlueWhite", "lRedWhite", "lGreenWhite", "lVioletWhite", "lCyanWhite", "lOrangeWhite",
-  #   "mBlack", "mBlue", "mRed", "mGreen", "mViolet", "mCyan", "mOrange", "mBlackWhite", "mBlueWhite", "mRedWhite", "mGreenWhite", "mVioletWhite", "mCyanWhite", "mOrangeWhite"
-  #   )
 
-
-
-
-  # Phase 5: unified per-cell rendering. Text channel -> font colour; background channel -> cell
-  # fill (only applied where a bg-channel colour exists; other cells keep the ggtexttable default).
   for(j in 1:ncol(tabs)) {
     for(i in 1:nrow(tabs)) {
       tabs_gg <- tabs_gg |> ggpubr::table_cell_font(
@@ -1855,13 +1442,9 @@ tab_plot <- function(tabs,
       }
     }
   }
-# tabs_gg
-
-
 
   tabs_gg <- tabs_gg |>
     ggpubr::tab_add_border(from.row = 1, linetype = 1, linewidth = 2, linecolor = "black") |>
-    #ggpubr::thead_add_border(linetype = 1, linewidth = 2, linecolor = "black") |>
     ggpubr::tab_add_hline(
       at.row = unique(c(1, totrows, totrows + 1, new_group)), row.side = "bottom",
       linetype = 1, linewidth = 2, linecolor = "black",
@@ -1873,37 +1456,15 @@ tab_plot <- function(tabs,
     ggpubr::tab_add_vline(
       at.column = unique(c(other_cols, totcols)), column.side = "left",
       linetype = 1, linewidth = 2, linecolor = "black",
-     ) #|>
-    # ggpubr::tab_add_vline(
-    #   at.column = totcols - 1L, column.side = "right",
-    #   linetype = 1, linewidth = 2, linecolor = "black",
-    # )
+     )
 
-    ## bold
-    # kableExtra::row_spec(refs2, bold = TRUE) |>
-
-    ## wrap
-    # kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
-
-
-
-# Phase 16e: the FULL footer below the plot (weight -> Model: -> colour legend -> stars -> user subtext) via
-# the ONE shared builder -- previously the plot showed ONLY the colour legend, silently dropping the weight,
-# Model:, stars and user subtext lines. Each footer RUN line (text + hex per token) folds into one
-# ggtexttable row (a plain line is a single black cell). "runs" is the medium built for this: draw-as-text,
-# no fill (a background break-word borrows the darker bg_legend palette, as in Excel). The colour legend is
-# included only when colouring is on; the plain lines always.
 {
   footer_src  <- if (is.null(rd$color_src)) tabs else rd$color_src
   footer_runs <- rd_footer(footer_src, "runs", theme = theme[1],
                            want_legend = color_legend && length(color_cols) != 0,
                            subtext = subtext, lang = lang)
-  # Phase 19h: tab_plot TRANSLATES the footer model's typography instead of overriding it. The
-  # "runs" medium already carries bold / italic / underline per token (fmt_class.R), and tab_xl reads
-  # them; this backend dropped them, grouped by COLOUR alone and then forced face = "bold" on every
-  # cell -- so under theme = "print", whose palette encodes direction as bold-vs-italic on black
-  # text, the whole legend collapsed into one uniform run and said nothing. ggpubr has no underline,
-  # so that one is dropped (with a comment) rather than silently mapped to something else.
+  # tab_plot translates the footer model's per-token typography; ggpubr has no underline, so that
+  # face is dropped.
   color_legend <- purrr::map(footer_runs, function(line) {
     text   <- purrr::map_chr(line, "text")
     color  <- purrr::map_chr(line, "color")
@@ -1912,9 +1473,8 @@ tab_plot <- function(tabs,
     color[is.na(color)] <- text_color
     face <- dplyr::case_when(bold & italic ~ "bold.italic", bold ~ "bold",
                              italic ~ "italic", TRUE ~ "plain")
-    # one ggtexttable column per token is wasteful (and the separators are their own tokens): fold
-    # each run of same-LOOKING tokens into one cell -- same colour AND same face, or the fold would
-    # flatten the typography it is meant to carry.
+    # fold each run of same-looking tokens (same colour AND face) into one cell, else one column per
+    # token is wasteful.
     key <- paste(color, face)
     grp <- cumsum(key != dplyr::lag(key, default = ""))
     tibble::tibble(
@@ -2006,13 +1566,10 @@ tab_plot <- function(tabs,
   }
 
 
-  # Align the whole plot top left
   tabgrob <- get_tablegrob(tabs_gg)
   tabgrob <- justify_grob(tabgrob)
   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
 
-  # Phase 16e: draw the caption as a bold title row ABOVE the plot (the `caption` arg was accepted but never
-  # drawn). Phase 17g: user caption= -> stored set_caption() -> reg_title via the shared rd_caption().
   cap <- rd_caption(rd, caption)
   if (!is.null(cap) && length(cap) == 1L && !is.na(cap) && nzchar(cap)) {
     titlegrob <- grid::textGrob(cap, x = 0, hjust = 0,
@@ -2037,16 +1594,9 @@ tab_plot <- function(tabs,
 
 
 #' @keywords internal
-# Phase 10e: each `out_*` fragment is now any()-gated -- the expensive format(set_display(x, ...)) pass
-# runs ONLY when at least one cell of the column carries that field (a pct column has no or/mean/sd; a
-# mean column has no rr/or/pct). When the gate fails the fragment is rep("", n), which is exactly what
-# the original if_else/case_when produced (all-FALSE condition), so the tooltip string is BYTE-IDENTICAL
-# -- only the discarded format() calls are skipped. `.ref` (the prep's precomputed ref_cells) skips the
-# get_reference() re-derivation.
-# Phase 14b: TEXT only -- it used to also wrap its output in kableExtra::spec_popover() when
-# `popover = TRUE`, i.e. return HTML attributes from a text builder. The html engine passed that
-# through and wrapped it AGAIN, so `tab_html(popover = TRUE)` rendered the escaped
-# attribute string as its own popover content. Attributes now live in tab_tooltip_attrs() alone.
+# Builds the hover-tooltip TEXT for a column. Each `out_*` fragment is any()-gated: the format() pass
+# runs only when some cell carries that field (a pct column has no or/mean/sd). TEXT only -- popover
+# HTML attributes live in tab_tooltip_attrs().
 tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   n       <- length(x)
@@ -2055,38 +1605,23 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   tottabs <- is_tottab(x)
-  # Phase 19b: the tooltip asks the same two questions of the column as everything else -- what it
-  # summarises (`var_kind`) and, for the interval lines, what it estimates (the scale row).
   scl     <- fmt_scale_row(x)
   vkind   <- scl$var_kind
   digits  <- get_digits(x)
-  # Phase 10i-A: a composite cell ("{pct} (n={n})") suppresses the tooltip line for its PRIMARY
-  # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
   disp    <- display_primary(get_display(x))
-  # Phase 18z10: `shows(field)` = "the cell ALREADY prints this field", tested over the WHOLE
-  # template rather than its first token -- so a composite ("{diff} ({pct})", "{or} ({obs})") no longer
-  # repeats its own bracket on hover. `disp` stays for the tokens that are not fmt FIELDS (pct_ci,
-  # mean_ci, gof, blank), which a template can never contain.
+  # shows(field) = "the cell already prints this field" (over the whole template), so a composite does
+  # not repeat its own bracket on hover.
   shows   <- function(field) fmt_display_shows(get_display(x), field)
 
-  # Phase 14b: format() right-pads a column to its widest cell so the numbers align in the TABLE; in
-  # a prose tooltip that pad is noise ("ratio:   x1"). Every interpolated value goes through this.
+  # format() right-pads to align in the table; trim that pad for prose tooltips.
   tip_num <- function(v) stringi::stri_trim(format(v))
 
-  # Phase 14b: diff and ratio are ONE comparison group -- one gate, one "ref" token.
-  # `comparable` is the exclusion the diff line always had (a Total-column / total-row cell that IS
-  # its own base has nothing to compare itself to); it now gates the ratio line too, which used to
-  # print a vacuous "ratio: x1" down every Total column. NA-safe: a contrib table writes onto the
-  # Total column, whose pct is NA -- and an NA pct is not a 100% base (mirrors cond_pct / cond_ctr).
+  # `comparable`: a Total-column/total-row cell that IS its own 100% base has nothing to compare to.
+  # NA-safe (an NA pct is not a 100% base).
   comparable <- !((totcol | totrows) & !is.na(get_pct(x)) & get_pct(x) == 1)
   ok_diff    <- !is.na(get_diff(x))  & comparable
-  # `type == "mean"` was excluded, so a mean column showed no ratio line at all -- though under the
-  # default color = TRUE the ratio is exactly what colours it.
   ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% "ratio" &
     (get_pct_base(x) %in% c("col", "row") | vkind == "mean")
-  # A reference cell's whole comparison group collapses to ONE "ref": its diff is 0 and its ratio 1
-  # by construction, so "diff: ref ; ratio: x1" said nothing, twice. The cell already prints
-  # "ref:38%" -- the tooltip only has to name the role, and keep the load-bearing "n:".
   ref_grp    <- ref & (ok_diff | ok_rr)
   show_rr    <- ok_rr & !ref_grp
 
@@ -2098,12 +1633,8 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     )
   } else blank
 
-  # Phase 14b: a mean column is coloured by the sd-standardized difference (Glass's delta =
-  # diff / sd_ref) against the mean_diff breaks, but the cell shows the RAW difference in the
-  # variable's own units -- so the legend's "+0.2; +0.5; +0.8 standard deviations" had no per-cell
-  # counterpart. Surface it on hover, next to the `sd:` it is measured in. Only where sd_ref
-  # resolves: an absent / zero-variance reference row leaves the ratio undefined (and the cell
-  # uncoloured), so it earns no line.
+  # a mean column is coloured by the sd-standardized difference (diff / sd_ref) but shows the RAW diff;
+  # surface the standardized value on hover. Only where sd_ref resolves.
   ok_std  <- ok_diff & !ref_grp & vkind == "mean"
   out_std <- if (any(ok_std)) {
     std <- get_diff(x) / suppressWarnings(sqrt(get_ref_var(x)))
@@ -2128,10 +1659,9 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     )
   } else blank
 
-  # str_trim: on a reference cell out_diff is the bare "ref" and out_ci is empty (a reference is
-  # never compared to itself -> NA bounds), which would otherwise leave a trailing space.
-  # the difference / ratio scales fold their bracket into the diff line; the odds-ratio one does not
-  # (its bracket rides the `or` display), and a level scale keeps its own "ci:" line.
+  # difference / ratio scales fold their CI bracket into the diff line; the odds-ratio one does not (its
+  # bracket rides the `or` display), and a level scale keeps its own "ci:" line. str_trim drops the
+  # trailing space left when a reference cell has "ref" diff and empty ci.
   if (scl$geometry %in% c("difference", "ratio") && !identical(scl$est_field, "or"))
     out_diff <- stringi::stri_trim(paste0(out_diff, " ",
                                           stringi::stri_replace_first_regex(out_ci, "%$", "")))
@@ -2161,27 +1691,20 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
       "")
   } else blank
 
-  # Phase 13c-i: the ratio tooltip line was mislabelled ("rr:") and formatted the OR field, so a
-  # color = c("diff","ratio") table (a ratio but no OR) showed an empty value. Format the rr field
-  # (the ×/÷ ratio display) under a clearer "ratio:" label. Gate: `show_rr` (Phase 14b, above).
   out_rr <- if (any(show_rr)) {
     dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "ratio")) ), "")
   } else blank
 
-  # WARNING (Phase 19d): the gate is the column's DECLARED scale, never "the `or` field is populated".
-  # Since 19d the odds ratio is computed on every row/col-% column, so the field being non-NA says
-  # nothing about whether this table compares on it -- and the old gate hung a stray "OR: 1.00" line
-  # on the hover of every ordinary percentage table.
-  # ... but on a REGRESSION column the odds ratio is not a by-product at all: it is the model's own
-  # estimate, deliberately attached beside an AME (Phase 12h item E) so the hover carries both
-  # readings of one fit. `role` is the stored fact that separates the two producers.
+  # WARNING: gate on the column's DECLARED scale, never on "the `or` field is populated" -- the odds
+  # ratio is computed on every row/col-% column, so a non-NA field says nothing about whether this table
+  # compares on it. On a REGRESSION column the OR is the model's own estimate (attached beside an AME),
+  # which `role` distinguishes.
   cond_or <- (get_scale(x) == "odds_ratio" | nzchar(get_role(x))) & !is.na(get_or(x)) &
     !shows("or") & !disp %in% c("or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")
   } else blank
 
-  # `comparable` (Phase 14b) is the same base-cell exclusion this line had spelled out for itself.
   cond_ctr <- !is.na(get_ctr(x)) & !(get_ctr(x) == Inf) & comparable
   out_ctr <- if (any(cond_ctr)) {
     mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
@@ -2191,25 +1714,17 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                    "")
   } else blank
 
-  # Phase 18z4: the adjusted standardized residual beside the contribution it gates. Derived from
-  # the stored p-value (fmt_resid), so it exists exactly where a chi2 contribution was computed --
-  # the same cells as `out_ctr`, minus the total rows (a margin has no residual, hence the NA p).
   cond_resid <- is.finite(fmt_resid(x)) & comparable & !shows("resid")
   out_resid <- if (any(cond_resid)) {
     dplyr::if_else(cond_resid,
                    paste0(gettext("std. residual"), ": ", tip_num(set_display(x, "resid"))), "")
   } else blank
 
-  # Phase 18z5: the value this cell is COMPARED TO by `color = "adjustment"` / "between_groups".
-  # A stored field, so it exists exactly where tab_reg wrote a counterpart -- NA on every cross-table
-  # and on a Constant / compound-formula cell. Phase 18z10: a MULTINOMIAL cell now has one, printed
-  # IN-CELL as "{or} ({obs})", so `shows("obs")` suppresses this line there and the `empirical_tips`
-  # fragment appended downstream (the crude PERCENTAGE) stays the only extra hover text.
-  # The LABEL is read off the column's own stored measure, never guessed from a name.
+  # `obs` (the value the cell is COMPARED TO by color = "adjustment"/"between_groups") exists only where
+  # tab_reg wrote one. A multinomial cell prints it in-cell, so shows("obs") suppresses this line there.
   cond_obs <- !is.na(get_obs(x)) & !shows("obs")
   out_obs <- if (any(cond_obs)) {
-    # Phase 19c: WHICH baseline `obs` holds is the measure's declared `ref_kind` ("group" = the
-    # reference tab_vars group, "observed" = the crude effect), not the measure's name.
+    # WHICH baseline `obs` holds is the measure's declared `ref_kind` ("group" / "observed").
     ks  <- vapply(c(get_color(x), get_color_bg(x)), measure_key, character(1))
     ks  <- ks[!is.na(ks) & nzchar(ks)]
     lbl <- if (any(vapply(ks, function(k) identical(MEASURES[[k]]$ref_kind, "group"), logical(1))))
@@ -2217,10 +1732,8 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_obs, paste0(lbl, ": ", tip_num(set_display(x, "obs"))), "")
   } else blank
 
-  # Phase 18z8: the GAP itself -- its size, its confidence interval and its p-value -- wherever
-  # tab_reg wrote a `gap_se`. This is where the interval belongs: three numbers are too much for a
-  # cell, and the colour IS the display (no `{}` token was added). Read through the very helpers the
-  # colour engine reads, so the hover and the fill can never disagree.
+  # the GAP (size, CI, p) wherever tab_reg wrote a `gap_se` -- too much for a cell, and the colour IS
+  # its display. Read through the same helpers the colour engine reads, so hover and fill cannot disagree.
   cond_gap <- !is.na(get_gap_se(x)) & !is.na(get_obs(x))
   out_gap <- if (any(cond_gap)) {
     sc   <- fmt_adjustment_score(x)
@@ -2240,12 +1753,6 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
   } else blank
 
-  # Phase 14b: join the NON-EMPTY fragments per cell. The old chain pasted all of them with a fixed
-  # " ; " separator and then rewrote the result to collapse the empty slots -- str_replace_all(";  ; ",
-  # "; ") three times, plus head/tail trims and an "NA ;" scrub. Non-overlapping matching means one
-  # pass cannot collapse adjacent empties, which is why it was repeated: it silently assumed no cell
-  # ever leaves >4 in a row. Adding a 10th fragment would have broken that assumption. This is exact,
-  # for any number of fragments, and drops the NA scrub (an NA fragment is simply not joined).
   frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
                 out_ci, out_ctr, out_resid, out_obs, out_gap, out_n)
   out <- rep("", n)
@@ -2255,13 +1762,10 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     out[k] <- paste0(out[k], ifelse(nzchar(out[k]), " ; ", ""), f[k])
   }
 
-  # Phase 14r (L6): the GOF / blank footer cells carry model-fit numbers in fields never meant to be
-  # compared (e.g. AIC 63 785 lives in `diff` -> a nonsense "diff: +6378526%"). No tooltip for them.
+  # GOF / blank footer cells carry model-fit numbers in fields never meant to be compared, so no tooltip.
   out[disp %in% c("gof", "blank")] <- ""
-  # Phase 18w: the field-name labels (ref/diff/ci/OR/n/sd/...) are gettext'd. This builder runs at
-  # HTML render, NOT under with_legend_lang(), so they follow the AMBIENT locale (a French-locale user
-  # gets French tooltips automatically; the per-call lang= override reaches the footer, not tooltips).
-  # enc2utf8 keeps the French accents (e.g. "réf.") well-formed. English is byte-identical.
+  # the field-name labels are gettext'd and follow the AMBIENT locale, NOT the per-call lang= (which
+  # reaches the footer, not tooltips). enc2utf8 keeps French accents well-formed.
   enc2utf8(out)
 }
 
@@ -2359,7 +1863,6 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
     dplyr::bind_rows(
       tibble::tibble(!!!purrr::set_names(names(tabs), names(tabs))),
       tabs |> # heigth depend on the number of line breaks in each column
-        #dplyr::select(tidyselect::where(~ is.character(.) | is.factor(.))) |>
         dplyr::ungroup() |>
         dplyr::mutate(dplyr::across(
           tidyselect::everything(),
@@ -2375,10 +1878,6 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
     dplyr::rowwise() |>
     dplyr::mutate(n = max(dplyr::c_across(cols = tidyselect::everything()))) |>
     dplyr::pull("n") |> sum()
-
-  #length(get_subtext(tabs)) +
-
-  #length(unique(get_color(tabs)[!get_color(tabs) %in% c("", "no")])) # color legend length
 
   width <- tabs_with_colnames |>
     purrr::map(
@@ -2471,18 +1970,15 @@ group_by.tabxplor_tab <- function(.data,
     }
 
     if (.only_main_display) {
-      # (19l: the `row_var <- tab_get_vars(.data)$row_var` that stood here was never read -- the row
-      #  match it once fed became tab_row_roles() below, a stored fact needing no variable name.)
       several_displays <- purrr::map_lgl(
         dplyr::select(dplyr::ungroup(.data), dplyr::where(is_fmt)),
         ~ length(unique(get_display(.))) > 1
       )
       several_displays <- names(several_displays)[several_displays]
 
-      # Phase 17c: the synthetic add_n / add_pct / p-value rows are found by their STORED role, injected
-      # as a temp column (grouped-transmute needs a per-group-subsettable column, not an env vector) --
-      # byte-identical to the old row-label match on a materialised table, but robust to a relabelled UI.
-      # Compute the flag OUTSIDE add_column: inside it, `.data` resolves to the rlang pronoun, not the table.
+      # the synthetic n / pct / p-value rows are found by their STORED role, injected as a temp column
+      # (grouped-transmute needs a subsettable column, not an env vector). Compute the flag OUTSIDE
+      # add_column: inside, `.data` is the rlang pronoun, not the table.
       .srole <- tab_row_roles(.data) %in% c("pct", "n", "pvalue")
       .data <- .data |>
         dplyr::select(-tidyselect::any_of(".__srole")) |>
@@ -2565,13 +2061,10 @@ rowwise.tabxplor_tab <- function(data, ...) {
 
 
 
-# (from vctrs documentation)
-# The coercion methods for data frames operate in two steps:
-# They check for compatible subclass attributes. In our case the tibble colour has to
-# be the same, or be undefined.
-# They call their parent methods, in this case tib_ptype2() and tib_cast() because we
-# have a subclass of tibble. This eventually calls the data frame methods df_ptype2() and
-# tib_ptype2() which match the columns and their types.
+# === SECTION: tab coercion wall ===================================================================
+# The vctrs ptype2/cast methods that keep a tabxplor_tab (the richer type) through every c()/bind with a
+# tibble, data.frame or another tab. All route through tab_cast()/tab_ptype2(), which reconcile the table
+# attributes via tab_bind_attrs(). One near-identical @describeIn stub per type pair follows.
 
 #' Coercion between two tab
 #' @param x,y,to Subclasses of data frame.
@@ -2602,7 +2095,6 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 }
 
 
-#Let's now implement the coercion methods, starting with the self-self methods.
 #' @return A tibble of class \code{tabxplor_tab}.
 #' @describeIn tab_cast find common ptype between tabxplor_tab and tabxplor_tab
 #' @export
@@ -2615,9 +2107,6 @@ vec_ptype2.tabxplor_tab.tabxplor_tab <- function(x, y, ...) {
 vec_cast.tabxplor_tab.tabxplor_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
-
-# The methods for combining our class with tibbles follow the same pattern.
-# For ptype2 we return our class in both cases because it is the richer type
 
 #' @describeIn tab_cast find common ptype between tabxplor_tab and tbl_df
 #' @export
@@ -2674,13 +2163,8 @@ vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
 
 #Methods for class grouped_tab------------------------------------------------------------
 
-# just modify the methodes currently used by dplyr class "grouped_df" (not relative to groups)
-# .S3methods(class = "grouped_df")
-
-# dplyr_col_modify      dplyr_reconstruct     dplyr_row_slice
-# ungroup               distinct_        rename_     select_     summarise
-# [                     [<-          [[<-
-# cbind                 rbind  rowwise
+# Every dplyr verb used on a grouped_df needs a tabxplor_grouped_tab twin below, or the class silently
+# downgrades. (.S3methods(class = "grouped_df") lists them.)
 
 #' ungroup method for class tabxplor_grouped_tab
 #' @importFrom dplyr ungroup
@@ -2705,34 +2189,23 @@ ungroup.tabxplor_grouped_tab <- function (x, ...)
 
 #' @keywords internal
 lv1_group_vars <- function(tabs) {
-  # TRUE when at most one group remains -> caller downgrades grouped_tab to plain tab. Uses
-  # n_groups()<=1 (simple); the commented alternative counted single-level group vars.
+  # TRUE when at most one group remains -> caller downgrades grouped_tab to plain tab.
   dplyr::n_groups(tabs) <= 1
 
 }
 
 
-# DESIGN: dplyr_row_slice + dplyr_col_modify + dplyr_reconstruct form the core trio.
-#   Each: (1) calls NextMethod() for the actual operation, (2) checks lv1_group_vars()
-#   to decide if result has enough groups to stay grouped_tab or must downgrade to tab,
-#   (3) re-attaches subtext / test / meta via tab_restore().
-# WARNING: they do NOT all read the attributes off the same argument, and the difference is
-#   load-bearing. dplyr_row_slice and dplyr_col_modify dispatch on `data`, so `data` IS the rich
-#   object. dplyr_reconstruct dispatches on `template`, and its generic runs `data` through
-#   dplyr_new_data_frame() BEFORE dispatch -- so by the time the method is reached, `data` carries
-#   only names/row.names/class. Restoring from `data` there (which is what it did until Phase 19a)
-#   silently returned a correctly-CLASSED table with no subtext, no test and no meta at all: no
-#   weight footer, no CI legend, no inference basis, no test summary, no caption. It survived the
-#   in-place verbs only because they hand the reconstruct a modified copy that still carries the
-#   attributes, and failed the moment a verb built a fresh frame -- bind_rows() on two GROUPED tabs
-#   (§11 D16). This method is the ONLY carrier on that path: dplyr registers its own
-#   vec_ptype2.grouped_df.grouped_df into vctrs' table and it wins unconditionally once `grouped_df`
-#   is in the class vector, so vec_ptype2/vec_cast.tabxplor_grouped_tab.* are never reached by a bind
-#   (verified) and no extra vctrs registration can change that.
-# WARNING: every dplyr verb a user might call needs its own S3 method following this same
-#   pattern (see the group_by/select/rename/relocate/summarise/[/[<- clones below and in
-#   NAMESPACE). A missing method silently downgrades the table to a plain tbl_df, losing the
-#   class, subtext, chi2 and colored printing. See CLAUDE.md § dplyr Integration.
+# DESIGN: dplyr_row_slice + dplyr_col_modify + dplyr_reconstruct are the core trio. Each: NextMethod()
+# for the operation, lv1_group_vars() to decide grouped-vs-downgraded, tab_restore() to reattach
+# subtext / test / meta. The `/dplyr-method` skill gates changes here.
+# WARNING: they do NOT read the attributes off the same argument. row_slice / col_modify dispatch on
+# `data`, so `data` is the rich object; dplyr_reconstruct dispatches on `template` and its generic strips
+# `data` to names/row.names/class BEFORE dispatch -- so it MUST restore from `template`, or a bind of two
+# grouped tabs silently loses subtext / test / meta. It is the ONLY carrier on the bind path: dplyr's own
+# vec_ptype2.grouped_df wins once `grouped_df` is in the class vector, so the
+# vec_ptype2/vec_cast.tabxplor_grouped_tab.* methods are never reached by a bind.
+# WARNING: every dplyr verb a user might call needs its own method following this pattern, or the table
+# silently downgrades to a plain tbl_df (losing class, attributes, coloured print). See CLAUDE.md § dplyr.
 #' dplyr_row_slice method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_row_slice
 #' @method dplyr_row_slice tabxplor_grouped_tab
@@ -2746,7 +2219,6 @@ dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
   tab_restore(out, data)
 }
-# dplyr:::dplyr_row_slice.grouped_df
 
 #' dplyr_col_modify method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_col_modify
@@ -2761,7 +2233,6 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
   tab_restore(out, data)
 }
-# dplyr:::dplyr_col_modify.grouped_df
 
 #' dplyr_reconstruct method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_reconstruct
@@ -2773,11 +2244,9 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 #' @keywords internal
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
-  # Phase 19a (D16): the attributes come from `template`, per dplyr's contract -- `data` is stripped
-  # before dispatch (see the WARNING above). `out` still decides the grouped/plain downgrade.
+  # attributes come from `template` (`data` is stripped before dispatch -- see the WARNING above).
   tab_restore(out, template)
 }
-# dplyr:::dplyr_reconstruct.grouped_df
 
 #' subset method for class tabxplor_grouped_tab
 #' @param x A tabxplor_grouped_tab object.
@@ -2792,10 +2261,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   tab_restore(out, x)
 }
-# dplyr:::`[.grouped_df`
-
-# #' @rdname `[.tabxplor_grouped_tab`
-# `[` <- `[.tabxplor_grouped_tab`
 
 
 #' set subset method for class tabxplor_grouped_tab
@@ -2809,10 +2274,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   tab_restore(out, x)
 }
-# dplyr:::`[<-.grouped_df`
-
-# #' @rdname `[<-.tabxplor_grouped_tab`
-# `[<-` <- `[<-.tabxplor_grouped_tab`
 
 #' set sub-subset method for class tabxplor_grouped_tab
 #' @param x A tabxplor_grouped_tab object.
@@ -2825,10 +2286,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   tab_restore(out, x)
 }
-# dplyr:::`[[<-.grouped_df`
-
-# #' @rdname `[[<-.tabxplor_grouped_tab`
-# `[[<-` <- `[[<-.tabxplor_grouped_tab`
 
 #' rowwise method for class tabxplor_grouped_tab
 #' @importFrom dplyr rowwise
@@ -2904,11 +2361,9 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
 #' @export
 #' @keywords internal
 rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
-  # `.cols` is a tidyselect selection, so it cannot go through NextMethod(): that forwards it as the
-  # bare symbol `.cols`, dplyr's enquo(.cols) captures THAT, and tidyselect then resolves it as an
-  # external vector -- deprecated since tidyselect 1.1.0 (and a future error). Re-inject the quosure
-  # and dispatch by dropping our own class, the same fix pull.tabxplor_tab() uses for `var`.
-  # `.data` keeps its grouped_df class, so the next method sees exactly what NextMethod() gave it.
+  # `.cols` is a tidyselect selection, so it cannot go through NextMethod() (which forwards the bare
+  # symbol, resolved as an external vector -- deprecated). Re-inject the quosure and dispatch by dropping
+  # our own class, the same fix pull.tabxplor_tab() uses for `var`.
   cols_quo <- rlang::enquo(.cols)
   bare     <- .data
   class(bare) <- setdiff(class(bare), "tabxplor_grouped_tab")
@@ -2930,7 +2385,7 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
 relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
   out <- NextMethod()
   tab_restore(out, .data)
-} # dplyr:::relocate.grouped_df
+}
 
 
 
@@ -2947,7 +2402,6 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
 #' @keywords internal
 # @export
 gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
-  #based upon vctrs:::gdf_cast()
   df <- vctrs::df_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
   vars <- dplyr::group_vars(to)
   drop <- dplyr::group_by_drop_default(to)
@@ -2961,7 +2415,6 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 #' @keywords internal
 # @export
 gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
-  #based upon vctrs:::gdf_ptype2
   common <- vctrs::df_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
   x_vars <- dplyr::group_vars(x)
   y_vars <- dplyr::group_vars(y)
@@ -2973,7 +2426,6 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   rlang::exec(new_grouped_tab, gdf, groups, !!!tab_bind_attrs(x, y))
 }
 
-#Self-self
 #' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tabxplor_grouped_tab
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
@@ -2987,7 +2439,6 @@ vec_cast.tabxplor_grouped_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 
-#grouped_tab / grouped_df
 #' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and grouped_df
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
@@ -3010,14 +2461,12 @@ vec_cast.tabxplor_grouped_tab.grouped_df <- function(x, to, ...) {
 #' @return An object of class \code{grouped_df}.
 #' @export
 vec_cast.grouped_df.tabxplor_grouped_tab <- function(x, to, ...) {
-  #vctrs:::gdf_cast
   df <- vctrs::df_cast(x, to, ...)
   vars <- dplyr::group_vars(to)
   drop <- dplyr::group_by_drop_default(to)
   dplyr::grouped_df(df, vars, drop = drop)
 }
 
-#grouped_tab / tab
 #' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tabxplor_tab
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
@@ -3043,7 +2492,6 @@ vec_cast.tabxplor_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 
-#grouped_tab / tbl_df
 #' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tbl_df
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
@@ -3069,7 +2517,6 @@ vec_cast.tbl_df.tabxplor_grouped_tab <- function(x, to, ...) {
   vctrs::tib_cast(x, to, ...)
 }
 
-#grouped_tab / data.frame
 #' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and data.frame
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
@@ -3099,10 +2546,9 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #Colors for printing fmt in tabs -------------------------------------------------------
 
 ## 8-BIT FALLBACK PALETTES (RStudio console only) ----
-# The console default is the 24-bit OKLCH palette (below). RStudio's console does not render
-# 24-bit truecolor, so there we fall back to these curated 256-colour palettes -- 4 over + 4 neg
-# each, trimmed from the historical tabxplor palettes (the old faint pos1/neg1 and the ratio slot
-# dropped, to match the 4-intensity model). Positron / modern terminals get the 24-bit palette.
+# The console default is the 24-bit OKLCH palette (below). RStudio's console cannot render 24-bit
+# truecolor, so there we fall back to these curated 256-colour palettes (4 over + 4 neg). Positron /
+# modern terminals get the 24-bit palette.
 #' @keywords internal
 palette_8bit <- list(
   text_light = c("#33FFFF", "#00CCFF", "#0066FF", "#0000FF",   # over (faint -> strong)
@@ -3116,7 +2562,7 @@ palette_8bit <- list(
 )
 
 
-## NEW COLOR PALETTES (to wire to the code) ----
+## 24-BIT OKLCH PALETTES ----
 
 # OKLCH Chroma Peaks
 # - Blue            H265 / L45  ; H180 to 265
@@ -3129,27 +2575,21 @@ palette_8bit <- list(
 #### Text colors ----
 default_text_colors <- c(
   "#02a5b3", # oklch(0.66 0.1124 205) # better for color blindness
-  #"#03ab86", # oklch(0.66 0.13 167)   # "#20a89b", # oklch(0.66 0.11 185)  "#0ba6ba", # "oklch(0.67 0.11 210)",
-  "#0891c9", # oklch(0.62 0.13 235)   # "#0890a2", # "oklch(0.6 0.1 210)",
-  "#0267c7", # oklch(0.52 0.17 255)   # "#027ad2", # "oklch(0.57 0.16 250)",
-  "#300dfd"  # oklch(0.47 0.30 270)   # "#265aff"  # "#2f60ee"  # "oklch(0.55 0.22 265)",
+  "#0891c9", # oklch(0.62 0.13 235)
+  "#0267c7", # oklch(0.52 0.17 255)
+  "#300dfd"  # oklch(0.47 0.30 270)
 )
 default_text_colors_neg <- c( 
   # more ligthness differences for color blinds
-  "#dca331", # oklch(0.75 0.1400 80)   # "#d6a54d", # oklch(0.75 0.1197 80)    
-  "#de7c01", # oklch(0.68 0.1596 60)   # "#de7c01", # oklch(0.68 0.1596 60)
-  "#dd5301", # oklch(0.62 0.1868 42)   # "#dd5301", # oklch(0.62 0.1868 42)
-  "#d60103"#,# oklch(0.55 0.2253 29)   # "#d60103"#,# oklch(0.55 0.2253 29) 
-  # "#b58629", # oklch(0.65 0.12 80)    # neg2 = "#c38c46", # oklch(0.68 0.11  70)   # "#d08747", # "oklch(0.69 0.12 60)",
-  # "#c46d02", # oklch(0.62 0.1449 60)  # neg3 = "#d26c28", # oklch(0.64 0.15  50)   # "#c8692d", # "oklch(0.62 0.14 50)",
-  # "#cf4e01", # oklch(0.59 0.1775 42)  # neg4 = "#da4c01", # oklch(0.61 0.19  40)   # "#d04b0c", # "oklch(0.59 0.18 40)",
-  # "#dc0204"#,# oklch(0.56 0.23  29)   # neg5 = "#dc0204"#,# oklch(0.56 0.23  29)   # "#e61301"  # "#d10f00"  # "oklch(0.54 0.22 30)",
+  "#dca331", # oklch(0.75 0.1400 80)
+  "#de7c01", # oklch(0.68 0.1596 60)
+  "#dd5301", # oklch(0.62 0.1868 42)
+  "#d60103"#,# oklch(0.55 0.2253 29)
 )
 
 #### Background colors ----
 default_background_colors <-  c(
   "#dffcff", # oklch(0.97 0.0304 205)  # better for color blindness
-  # "#e3fcf1", # oklch(0.97 0.0300 167) # "#e3fcf1", # oklch(0.97 0.0300 167)   # "#F6F3FF", # oklch(0.97 0.016 295)
   "#d7efff", # oklch(0.94 0.0336 235) # "#d4f0ff", # oklch(0.94 0.0358 230)   # "#E9E3FF", # oklch(0.93 0.038 295)
   "#cee3ff", # oklch(0.91 0.0439 255) # "#d3e2ff", # oklch(0.91 0.0429 265)   # "#DED3FF", # oklch(0.89 0.060 295)
   "#bbccff"  # oklch(0.85 0.0733 270) # "#c8c7ff"  # oklch(0.85 0.0771 285)   # "#D2C3FF"# # oklch(0.85 0.084 295)
@@ -3161,21 +2601,11 @@ default_background_colors_neg <- c(
   "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90)
 )
 
-#### Background-legend colors (Phase 14c, rebaked 14l) ----
-# WHY: a colour legend break-word that describes the BACKGROUND channel cannot be drawn with a fill in
-# every medium -- an Excel rich-text run and a ggpubr text label carry a font colour only. Drawn as
-# text, the background palette above (L 0.85-0.97) is invisible on a white sheet. These are the same
-# hues at -0.30 OKLCH lightness and 2x chroma (capped to gamut), so the ladder and the visual link to
-# the fills survive. Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
-# DESIGN (Phase 14l): the 14c bake was -0.2 L at 1x chroma and read as faint. The fix needed BOTH
-# levers, and the reason is measured (see darken_for_legend's header): APCA Lc is driven by lightness
-# almost alone, so chroma alone would have fixed the greyness and left Lc at 39.6-60.8 -- 3 of the 4
-# slots below the >= 60 bar these palettes were designed against. -0.30/2x gives Lc 55.3-75.3 and is
-# fully in-gamut on all 8 slots, so the chroma proportions inherited from the fills survive exactly
-# (a bigger boost caps the strong slots out and flattens the ladder instead).
-# NOTE: light only. The dark background palette (L 0.20-0.35) already reads as text on the white sheet
-# an Excel legend cell sits on, and darkening would collapse it to black -- build_palettes() uses it
-# as-is.
+#### Background-legend colors ----
+# A colour legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an
+# Excel run / ggpubr label carry a font colour only), and the pale background fills are invisible as text
+# on white. These are the same hues darkened to read as text. Light only (the dark bg palette already
+# reads as text). Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
 default_bg_legend_colors <- c(
   "#67A1A7", # oklch(0.67 0.0611 204)  <- #dffcff
   "#6492B0", # oklch(0.64 0.0674 238)  <- #d7efff
@@ -3197,21 +2627,13 @@ default_dark_text_colors <- c(
   "#0286b1", # oklch(0.58 0.1151 230)
   "#4687d8", # oklch(0.62 0.1400 255)
   "#6987ff"#,# oklch(0.66 0.1797 270)
-  # "#288463", # oklch(0.55 0.1000 165)   "#03ab86", # oklch(0.66 0.13 167)   
-  # "#0190a3", # oklch(0.60 0.1037 210)   "#0891c9", # oklch(0.62 0.13 235)   
-  # "#078fd1", # oklch(0.62 0.1406 240)   "#0267c7", # oklch(0.52 0.17 255)   
-  # "#5b8bff"#,# oklch(0.66 0.1798 265)   "#300dfd"  # oklch(0.47 0.30 270)   
 )
 default_dark_text_colors_neg <- c(
   # more ligthness differences for color blinds
   "#867002", # oklch(0.55 0.1124 95)
   "#b87501", # oklch(0.62 0.1341 70)
-  "#ec6f02", # oklch(0.68 0.1792 50)  
-  "#ff626b"# # oklch(0.70 0.1906 20)  
-  # "#977e05", # oklch(0.60 0.1221 95)  "#7a6001", # oklch(0.50 0.102 90),  # "#b58629", # oklch(0.65 0.12 80)    
-  # "#c17b01", # oklch(0.64 0.1384 70)  "#a65c01", # oklch(0.55 0.129 60),  # "#c46d02", # oklch(0.62 0.1449 60)  
-  # "#ec6f02", # oklch(0.68 0.1792 50)  "#d74b01", # oklch(0.60 0.188 40),  # "#cf4e01", # oklch(0.59 0.1775 42)  
-  # "#ff626b"# # oklch(0.70 0.1906 20)  "#fe4a36"#,# oklch(0.67 0.220 30),  # "#dc0204"#,# oklch(0.56 0.23  29)   
+  "#ec6f02", # oklch(0.68 0.1792 50)
+  "#ff626b"# # oklch(0.70 0.1906 20)
 )
 
 
@@ -3221,10 +2643,6 @@ default_dark_background_colors <-  c(
   "#012d3f", # oklch(0.28 0.0553 230)   # "#002537", # oklch(0.25 0.0526 235)
   "#122e5d", # oklch(0.31 0.09   260)   # "#132d5c", # oklch(0.30 0.0900 261)
   "#202e7a"#,# oklch(0.34 0.13   270)   # "#17226d"#,# oklch(0.30 0.1300 270)
-  #"#001c11", # oklch(0.20 0.0418 165)  # "#002115", # oklch(0.22 0.0461 165) # "#001c12", # oklch(0.20 0.0407 167)    # "#e3fcf1", # oklch(0.97 0.0300 167) 
-  #"#00272d", # oklch(0.25 0.0429 210)  # "#00272d", # oklch(0.25 0.0429 210) # "#002538", # oklch(0.25 0.0543 236.97)   # "#d7efff", # oklch(0.94 0.0336 235) 
-  #"#00314c", # oklch(0.30 0.0684 240)  # "#002c45", # oklch(0.28 0.0640 240) # "#002d5c", # oklch(0.30 0.0961 254.26)   # "#cee3ff", # oklch(0.91 0.0439 255) 
-  #"#0d246e"#,# oklch(0.30 0.1300 265)  # "#0d246e"#,# oklch(0.30 0.1300 265) # "#243278"#,# oklch(0.35 0.12 270.4)   # "#bbccff"  # oklch(0.85 0.0733 270) 
 )
 default_dark_background_colors_neg <- c(
   "#292100", # oklch(0.25 0.051  95)   # "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
@@ -3236,52 +2654,33 @@ default_dark_background_colors_neg <- c(
 #' @keywords internal
 tabxplor_palette_env <- new.env(parent = emptyenv())
 
-# Phase 18z11 -- THE black-and-white publication palette (`theme = "print"`).
-# WHY it cannot be derived from the colour palettes: converted to CIE L*, the shipped light background
-# ramps are 97/93/90/82 (over) and 97/93/89/82 (under) -- THE SAME GREYSCALE RAMP -- and on the text
-# channel over-1 and under-2 are both L* 62. Desaturating is exactly that conversion, so it destroys the
-# direction. See dev/black_and_white_publication_palette.md SS1.
-# DESIGN: CURATED, not user-tunable, and composed independently of `e$base` -- so set_color_palette()
-# provably cannot alter print output. Its correctness is a MEASUREMENT (L* separation + WCAG contrast)
-# that set_color_palette()'s validator (is.character && length 4) has no way to check; a formal that
-# cannot enforce its own invariant would let a user silently reintroduce the very defect this cures.
-# A user who wants other greys writes CSS after tab_css() -- the documented restyling contract.
+# THE black-and-white publication palette (`theme = "print"`).
+# It CANNOT be derived from the colour palettes: desaturating them collapses both direction ramps to the
+# same greyscale. DESIGN: CURATED and composed independently of `e$base`, so set_color_palette() provably
+# cannot alter print output (its validator could not check the L*-separation/contrast this relies on). A
+# user who wants other greys writes CSS after tab_css().
 #' @keywords internal
 default_print_palette <- function() {
   list(
-    # Typographic: every text slot is BLACK -- direction and magnitude ride the FACE (tx_palette_faces).
-    # NOT NA/"": fmt_col_ann()'s `font` falls back to grey wherever text_hex is NA, which would grey
-    # every coloured cell.
+    # every text slot is BLACK -- direction/magnitude ride the FACE (tx_palette_faces). NOT NA: fmt_col_ann's
+    # `font` falls back to grey where text_hex is NA, which would grey every coloured cell.
     text_colors     = rep("#000000", 4L),
     text_colors_neg = rep("#000000", 4L),
-    # ONE ordered grey ramp, THE SAME on both sides. Greyscale cannot diverge (a diverging scale needs a
-    # neutral in the middle, i.e. shading every cell mid-grey), so the fill carries its own measure's
-    # MAGNITUDE only and direction is read off the cell's own bold/italic -- Bertin's rule: the ordered
-    # variable for quantity, the selective one for direction. L* 96.5/90.6/83.5/74.8 (adjacent dL*
-    # 5.9/7.1/8.7, all above the ~5.0 discrimination bar); black on the darkest = 10.6:1 (AAA).
+    # ONE ordered grey ramp, the SAME on both sides: greyscale cannot diverge, so the fill carries
+    # MAGNITUDE only and direction is read off the cell's bold/italic.
     background_colors     = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),
     background_colors_neg = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),
-    # The FONT stand-in where a fill is impossible (an Excel run, a ggpubr label) -- see
-    # default_bg_legend_colors. The fill ramp itself is invisible as text on white, so this is a DARK
-    # ramp: 4.5 / 7.0 / 10.5 / 17.4 on white.
+    # the FONT stand-in where a fill is impossible (an Excel run, a ggpubr label); a DARK ramp, since the
+    # fill ramp is invisible as text on white.
     bg_legend_colors     = c("#767676", "#595959", "#3F3F3F", "#1A1A1A"),
     bg_legend_colors_neg = c("#767676", "#595959", "#3F3F3F", "#1A1A1A")
   )
 }
 
-# THE face fact table: the 8 slot renderings of each (family, theme) in the TYPOGRAPHIC vocabulary,
-# beside the 8 hex codes. Phase 18z11.
-# WHY it exists: five places used to derive "this cell is bold" from "this cell has a colour hex"
-# (tx_css_render's static bold_slots rule, fmt_col_ann's `bold`, tab_xl's hard-wired bold = TRUE,
-# tab_plot's hex-membership test, legend_render_line's is_bold_tok). In a palette whose every text hex
-# is black they all collapse silently. The palette DECLARES the face now and the backends read it, so
-# those five heuristics are gone rather than duplicated.
-# The light/dark rows are today's behaviour AS DATA -- `text_*` being all-bold is exactly what makes
-# tx_css_render()'s static bold_slots rule correct, which is why tx_face_decls() can treat the light
-# face as the CSS baseline and emit only the divergences. Locked by test-print-palette.R.
-# `semantic`: emit the face as MARKUP (<b>/<i>/<u>), not only as CSS. TRUE for print because the two
-# destinations that matter -- GitHub's markdown sanitizer (strips class AND style) and an HTML -> Word
-# paste (keeps character formatting, drops stylesheets) -- carry tags and nothing else.
+# THE face fact table: the 8 slot renderings of each (family, theme) in the TYPOGRAPHIC vocabulary
+# (bold/italic/underline), so a backend reads the face rather than deriving "bold" from "has a colour hex"
+# (which collapses in the all-black print palette). `semantic`: emit the face as MARKUP (<b>/<i>/<u>),
+# not only CSS -- TRUE for print, whose destinations (GitHub markdown, HTML->Word) carry tags, not styles.
 #' @keywords internal
 tx_palette_faces <- function() {
   none  <- list(bold = rep(FALSE, 8L), italic = rep(FALSE, 8L), underline = rep(FALSE, 8L),
@@ -3291,10 +2690,8 @@ tx_palette_faces <- function() {
   list(
     text_light = bold8, text_dark = bold8, bg_light = none, bg_dark = none,
     bg_legend_light = none, bg_legend_dark = none,
-    # over = BOLD, under = ITALIC (direction, a selective variable); the second intensity level
-    # (slots 3-4 over / 7-8 under) adds an UNDERLINE (magnitude, ordered by convention). Slots 1&2
-    # (and 3&4) share a face ON PURPOSE: typography honestly supports 2 levels per side, not 4 -- the
-    # legend collapses identically-rendered break-words to match (legend_break_tokens).
+    # over = BOLD, under = ITALIC (direction); the second intensity level adds an UNDERLINE (magnitude).
+    # Slots share a face ON PURPOSE: typography supports 2 levels per side, not 4 (the legend collapses to match).
     text_print = list(bold      = c(TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE),
                       italic    = c(FALSE, FALSE, FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE ),
                       underline = c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE,  TRUE ),
@@ -3303,7 +2700,6 @@ tx_palette_faces <- function() {
   )
 }
 
-# The ten OKLCH defaults (defined above as default_*_colors), as the seed base palette.
 #' @keywords internal
 default_palette_base <- function() {
   list(
@@ -3320,9 +2716,6 @@ default_palette_base <- function() {
   )
 }
 
-# Compose the base palettes into the 8-slot hex vectors + pre-built ANSI style functions (cli). The
-# console uses 24-bit OKLCH, except in the RStudio console (no truecolor) where the curated 8-bit
-# fallback is used; exports (mode = "color_code") always use the 24-bit hex.
 #' @keywords internal
 build_palettes <- function() {
   e <- tabxplor_palette_env
@@ -3334,14 +2727,10 @@ build_palettes <- function() {
     text_dark  = c(b$dark_text_colors,       b$dark_text_colors_neg),
     bg_light   = c(b$background_colors,       b$background_colors_neg),
     bg_dark    = c(b$dark_background_colors,  b$dark_background_colors_neg),
-    # Phase 14c: the FONT stand-in for the background palette, used where a fill is impossible (an
-    # Excel rich-text run / a ggpubr text label -> the colour legend). See default_bg_legend_colors.
-    # There is no dark variant to bake: the legend cell's page is white whatever the theme, and the
-    # dark fills already read there.
     bg_legend_light = c(b$bg_legend_colors,        b$bg_legend_colors_neg),
     bg_legend_dark  = c(b$dark_background_colors,  b$dark_background_colors_neg),
-    # Phase 18z11: the print palette reads from its OWN literal, never from `b` -- that is the
-    # byte-property making set_color_palette() unable to touch print output.
+    # the print palette reads from its OWN literal, never from `b` -- that is what makes set_color_palette()
+    # unable to touch print output.
     text_print      = c(p$text_colors,       p$text_colors_neg),
     bg_print        = c(p$background_colors, p$background_colors_neg),
     bg_legend_print = c(p$bg_legend_colors,  p$bg_legend_colors_neg)
@@ -3350,20 +2739,17 @@ build_palettes <- function() {
   bit8 <- isTRUE(Sys.getenv("RSTUDIO") == "1")
   ncol <- if (bit8) 256L else cli::num_ansi_colors()
   mk <- function(key, is_bg) {
-    # z11: palette_8bit has no print key -- without the is.null guard the RStudio console would build
-    # an EMPTY style list and every slot lookup would abort with "subscript out of bounds".
+    # palette_8bit has no print key -- without the is.null guard the RStudio console would build an EMPTY
+    # style list and every slot lookup would abort ("subscript out of bounds").
     src <- if (bit8 && !is.null(palette_8bit[[key]])) palette_8bit[[key]] else e$hex[[key]]
     purrr::map(src, ~ cli::make_ansi_style(., bg = is_bg, colors = ncol))
   }
   e$ansi <- list(
     text_light = mk("text_light", FALSE), text_dark = mk("text_dark", FALSE),
     bg_light   = mk("bg_light",   TRUE),  bg_dark   = mk("bg_dark",   TRUE),
-    # Built so get_color_style("crayon", theme = "print") cannot error. The console never SELECTS
-    # print (set_color_palette(theme=) stays light/dark/auto and the console reads a different option),
-    # but a hand-set options(tabxplor.console_theme = "print") then gets a defensible answer.
-    # The FACE is deliberately NOT baked in here: the console applies bold separately through
-    # options(tabxplor.console_bold) -- auto-detected because RStudio draws bold wider and breaks
-    # column alignment -- so baking it would double-apply and defeat that option.
+    # Built so get_color_style("crayon", theme = "print") cannot error (the console never selects print).
+    # The FACE is deliberately NOT baked here: the console applies bold separately via
+    # options(tabxplor.console_bold), so baking it would double-apply.
     text_print = mk("text_print", FALSE), bg_print  = mk("bg_print",  TRUE)
   )
   invisible()
@@ -3432,19 +2818,16 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
   set1("dark_background_colors_neg", dark_background_colors_neg)
   set1("bg_legend_colors", bg_legend_colors)
   set1("bg_legend_colors_neg", bg_legend_colors_neg)
-  # A custom background palette must not keep the DEFAULT legend hues (a green fill described by a
-  # blue break-word). Deriving them would need an OKLCH gamut mapper (farver, dev-only), so the
-  # honest fallback is the fills themselves -- set bg_legend_colors explicitly for a readable one.
+  # A custom background palette must not keep the DEFAULT legend hues; deriving them needs an OKLCH gamut
+  # mapper (dev-only), so fall back to the fills themselves (set bg_legend_colors for a readable legend).
   if (!is.null(background_colors)     && is.null(bg_legend_colors))
     e$base$bg_legend_colors <- unname(background_colors)
   if (!is.null(background_colors_neg) && is.null(bg_legend_colors_neg))
     e$base$bg_legend_colors_neg <- unname(background_colors_neg)
 
-  # Phase 14g: `theme = "auto"` detects the console's colour scheme (tx_detect_theme(): RStudio's
-  # getThemeInfo(), Positron's cached settings, COLORFGBG; anything unresolved -> "light"). The
-  # RESOLVED value is stored, so no per-print cost -- and so a mid-session theme switch needs another
-  # set_color_palette(theme = "auto"). NULL keeps the current setting, detecting only if there is none
-  # (what .onLoad does).
+  # `theme = "auto"` detects the console's colour scheme and stores the RESOLVED value (no per-print cost;
+  # a mid-session theme switch needs another set_color_palette(theme = "auto")). NULL keeps the current
+  # setting, detecting only if there is none.
   if (is.null(theme)) {
     if (is.null(getOption("tabxplor.color_style_theme"))) {
       options("tabxplor.color_style_theme" = tx_detect_theme())
@@ -3458,9 +2841,9 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
   invisible()
 }
 
-# === COMPAT (Phase 13a) — deprecated colour surface wired to the new behaviour, no error ==========
-# Thin shims mapping the removed 1.3.x/Phase-5 API onto set_color_palette() / the new options / the
-# new grammar, each with lifecycle::deprecate_soft(). Grep "COMPAT (Phase 13a)" to find/remove them.
+# === COMPAT — deprecated colour surface wired to the new behaviour, no error ======================
+# Thin shims mapping the removed 1.3.x API onto set_color_palette() / the new options / the new grammar,
+# each with lifecycle::deprecate_soft().
 
 #' Set the color style (deprecated)
 #' @describeIn set_color_palette `r lifecycle::badge("deprecated")` Superseded by \code{set_color_palette()}.
@@ -3474,9 +2857,8 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
 set_color_style <- function(type = c("text", "bg"), theme = NULL,
                             html_24_bit = NULL, custom_palette = NULL) {
   lifecycle::deprecate_soft("2.0.0", "set_color_style()", "set_color_palette()")
-  # Phase 14l: the `tabxplor.color_style_type` option is deprecated (it never chose a family; it
-  # repointed the text channel into the fill palette). `type` stays LOAD-BEARING below -- it routes
-  # `custom_palette` to the text vs background slot -- but it no longer writes the option.
+  # `type` stays LOAD-BEARING (it routes `custom_palette` to the text vs background slot) but no longer
+  # writes the deprecated `tabxplor.color_style_type` option.
   if (!is.null(theme)) set_color_palette(theme = theme[1])
   if (length(custom_palette) >= 10L) {
     # old order pos1..pos5, neg1..neg5[, ratio] -> new 4 over + 4 under (drop the faintest pos1/neg1)
@@ -3490,7 +2872,7 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
   }
   invisible()
 }
-# === end COMPAT (Phase 13a) ======================================================================
+# === end COMPAT ==================================================================================
 
 #' @describeIn set_color_palette get the color palette as terminal (ANSI) style functions or html codes: an
 #' 8-element vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
@@ -3515,20 +2897,15 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' @return A list of 8 terminal (ANSI) color-style functions, a vector of 8 color html codes, or
 #' (\code{mode = "face"}) the palette's typography record.
 #' @export
-# The public value "crayon" is frozen for back-compat (it once returned crayon functions); the styles
-# are now built with cli (crayon is superseded) and stored in the internal `e$ansi` slot.
+# The public value "crayon" is frozen for back-compat; the styles are now built with cli and stored in
+# the internal `e$ansi` slot.
 get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NULL, theme = NULL, ...) {
-  # `type` (the palette-FAMILY selector) stays. Phase 20a DELETED the option
-  # `tabxplor.color_style_type` and the warning that was its only reader: it was never seeded, so
-  # ?tabxplor-options documented a knob that did not exist, and the whole of it was a branch that
-  # existed to say it should not be used. The CHANNEL is chosen by `color = c(text, background)`.
+  # `type` (the palette-FAMILY selector) stays; the CHANNEL is chosen by `color = c(text, background)`.
   theme <- if (is.null(theme)) tx_theme_option("console") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"
-  # Phase 13d: a palette is always light/dark. "auto" is an EXPORT render intent (`theme = "auto"`
-  # means "follow the reader"), and it reaches here whenever a caller forwards its own theme -- e.g.
-  # the exported fmt_get_color_code(theme = "auto"). Without this it would build the key "text_auto",
-  # find NULL, and error on a length-0 vector further down. Resolve at the one chokepoint.
+  # a palette is always light/dark. "auto" is an EXPORT render intent that reaches here when a caller
+  # forwards its own theme; resolve it here or the key "text_auto" is NULL and errors downstream.
   theme <- tx_palette_theme(theme)
   fam <- switch(type[1], "bg" = "bg", "bg_legend" = "bg_legend", "text")
   key <- paste0(fam, "_", theme[1])
@@ -3549,8 +2926,8 @@ get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NUL
 
 #Color breaks for printing fmt in tabs ------------------------------------------------
 
-# PURPOSE: the canonical color-break representation (Phase 13a) and its accessors.
-# The stored option "tabxplor.color_breaks" is a named list of the six measure scales
+# PURPOSE: the canonical color-break representation and its accessors.
+# The stored option "tabxplor.color_breaks" is a named list of the measure scales
 #   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib, zscore
 #   (odds_ratio is the dedicated OR scale, read by the "or" colour measure in fmt_color_plan)
 # each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
@@ -3565,7 +2942,6 @@ get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NUL
 #   - std    : mean_diff only -- TRUE colors the sd-standardized difference (Glass's delta),
 #              FALSE colors the raw difference in data units.
 # The findInterval engine (fmt_color_plan/fmt_color_slots) reads this shape directly.
-# See: dev/new_colors_UI.md ; CLAUDE.md > 2.0.0 roadmap > Phase 13a.
 
 # Default intensity-slot selection for k thresholds on one side, mapped into the 4 palette
 # intensities. Fewer than 4 breaks drop the 2nd intensity first, then the 4th, then the 1st,
@@ -3610,7 +2986,7 @@ parse_color_side <- function(v, name) {
 
 # Validate one user scale and wrap it into the canonical
 #   list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)).
-# Input forms (see dev/new_colors_UI.md / Phase 13a):
+# Input forms:
 #   - a plain numeric vector of SIGNED / RECIPROCAL literals: negatives (additive) or values < 1
 #     (multiplicative) are the under-represented side; a one-sided vector auto-mirrors, a two-sided
 #     one is used as-is. `NA` entries skip an intensity slot (one-sided vectors only).
@@ -3627,8 +3003,6 @@ mk_color_scale <- function(name, values) {
   }
   center <- sc$center; strict <- sc$strict; std <- sc$std
 
-  # NULL / empty: drop the measure -- unless the scale DECLARES a null_default (mean_diff, whose
-  # empty arm restores the standardized Glass's-delta ladder rather than switching colouring off).
   if (is.null(values) || (is.numeric(values) && length(values) == 0L)) {
     if (!is.null(sc$null_default)) {
       side <- parse_color_side(sc$null_default$breaks, name)
@@ -3639,7 +3013,6 @@ mk_color_scale <- function(name, values) {
     return(list(center = center, strict = strict, std = std, over = empty, under = empty))
   }
 
-  # over/under list form: explicit per-side magnitudes, no mirror.
   if (is.list(values)) {
     nms <- names(values)
     if (is.null(nms) || !all(nzchar(nms)) || !all(nms %in% c("over", "under"))) {
@@ -3690,12 +3063,8 @@ mk_color_scale <- function(name, values) {
   list(center = center, strict = strict, std = std, over = over, under = under)
 }
 
-# Phase 19c (KEY 4): THE colour-break scale fact table. Before it, a scale's identity was four
-# name-keyed lists inside mk_color_scale() (`valid` / the centre `%in%` / the strict `!=` / the std
-# `identical`) plus a second hand-written enumeration in default_color_scales() and two more name maps
-# in set_color_breaks()/get_color_breaks() -- so adding a scale meant editing seven places, and the
-# two DERIVED scales (log_odds / adj_diff_log) could not be declared at all: they lived as a `switch`
-# arm inside fmt_color_plan().
+# THE colour-break scale fact table: one row per measure scale, so adding a scale is a row (a derived
+# scale too) rather than edits across mk_color_scale / default_color_scales / set_/get_color_breaks.
 #   center     the neutral value the engine folds around: 0 (additive) or 1 (multiplicative).
 #   strict     `>` at a break (TRUE) or `>=` (contrib, whose ladder counts multiples of the mean).
 #   std        the breaks are in SD units.
@@ -3703,7 +3072,7 @@ mk_color_scale <- function(name, values) {
 #   default    the default breaks, in mk_color_scale()'s own input grammar (NULL = "use null_default").
 #   null_default  what an empty/NULL value restores instead of switching the scale off.
 #   derive     for a NON-settable scale: how the plan builds it from another (`log` = log_odds_scale).
-#   legacy     the pre-13a flat argument that set it; `alias` the short name get_color_breaks() takes.
+#   legacy     the pre-2.0 flat argument that set it; `alias` the short name get_color_breaks() takes.
 #' @keywords internal
 COLOR_SCALES <- list(
   pct_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
@@ -3711,13 +3080,12 @@ COLOR_SCALES <- list(
   pct_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)),
                     legacy = "pct_breaks"),
-  # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so
-  # pct_ratio / mean_ratio are free to be set asymmetrically without changing OR breaks. pct_ratio
-  # stays symmetric by default as a design choice, not a constraint.
+  # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it, so pct_ratio / mean_ratio can
+  # be set asymmetrically without changing OR breaks.
   odds_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4))),
-  # `mean_diff` is standardized only on its NULL-default arm -- supplying data-unit values there is
-  # how a user asks for absolute colouring, which is why `std` is FALSE here and TRUE in null_default.
+  # `mean_diff` is standardized only on its NULL-default arm -- supplying data-unit values is how a user
+  # asks for absolute colouring, so `std` is FALSE here and TRUE in null_default.
   mean_diff  = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE, default = NULL,
                     null_default = list(breaks = c(0.2, 0.5, 0.8), std = TRUE)),
   mean_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
@@ -3725,45 +3093,30 @@ COLOR_SCALES <- list(
                     legacy = "mean_breaks", alias = "mean"),
   contrib    = list(center = 0, strict = FALSE, std = FALSE, settable = TRUE,
                     default = c(1, 2, 5, 10), legacy = "contrib_breaks"),
-  # Phase 18z4: the ABSOLUTE z scale, read by color = "contrib" under
-  # color_signif = "guaranteed_effect" (the SPSS reading). Written in confidence levels so the ladder
-  # documents itself: 95 %, 99 %, 99.99 % and (essentially) certainty -> 1.96, 2.58, 3.89, 6. Unlike
-  # `contrib` (a share of the table's own chi2) these thresholds mean the same thing in every table,
-  # which is the whole point of the scale.
+  # the ABSOLUTE z scale, read by color = "contrib" under color_signif = "guaranteed_effect". Written in
+  # confidence levels (95/99/99.99 % -> 1.96/2.58/3.89/6) so it means the same thing in every table,
+  # unlike `contrib` (a share of the table's own chi2).
   zscore     = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)))),
-  # Phase 18z5: the two scales of `color = "adjustment"` / "between_groups" -- how far a model
-  # estimate sits from the value it is compared to. SHARED by both measures because they score the
-  # same quantity: measured on gss_simple, real between-group effect ratios land at x1.1-x1.75 and
-  # adjustment gaps at x1.03-x1.12, so one ladder reads both. The multiplicative anchor is the
-  # epidemiological 10 % change-in-estimate rule; the additive one is in the effect's OWN units
-  # (2 / 5 / 10 / 20 points on an AME or a risk difference) -- a RELATIVE change would explode near
-  # the null (measured: a +0.016 shift on a -0.026 crude AME reads as -60 %).
+  # the two scales of `color = "adjustment"` / "between_groups" -- how far a model estimate sits from
+  # the value it is compared to. The multiplicative anchor is the epidemiological 10 % change-in-estimate
+  # rule; the additive one is in the effect's OWN units (a RELATIVE change would explode near the null).
   adj_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = list(over = c(1.10, 1.25, 1.50, 2.00),
                                    under = c(1.10, 1.25, 1.50, 2.00))),
   adj_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = c(0.02, 0.05, 0.10, 0.20)),
-  # Phase 18z13 (D2): the additive gap of an outcome whose units are ARBITRARY -- a gaussian beta,
-  # a count AME. `adj_diff`'s absolute ladder is calibrated on a PROBABILITY (2/5/10/20 points) and
-  # applying it verbatim to a beta made the reading depend on the unit: measured on the same model,
-  # tvhours in minutes saturated every cell at the deepest break while the same variable in days left
-  # the whole feature dark. Standardized by SD(Y) it means the same thing in every table.
-  # The ladder is the probability one re-expressed in SD units: a probability's SD is at most 0.5, so
-  # 2/5/10/20 points is 0.04/0.10/0.20/0.40 SD -- rounded to 0.05 at the first step, which keeps the
-  # 1:2:4:8 doubling and agrees with `adj_ratio`'s x1.10 anchor (a 10 % move on a typical 0.5 SD
-  # effect IS 0.05 SD). NOT Cohen's 0.2/0.5/0.8: that measures an EFFECT, while this measures the gap
-  # between two effects, which z5 measured at x1.03-x1.12 -- entirely below Cohen's first break.
+  # the additive gap for an outcome whose units are ARBITRARY (a gaussian beta, a count AME): `adj_diff`'s
+  # probability ladder would make the reading depend on the unit, so this one is standardized by SD(Y).
+  # NOT Cohen's 0.2/0.5/0.8 (that measures an effect; this measures the gap BETWEEN two effects).
   adj_diff_std = list(center = 0, strict = TRUE, std = TRUE, settable = TRUE,
                       default = c(0.05, 0.10, 0.20, 0.40)),
-  # DERIVED at plan time from a settable sibling, never stored and never user-settable: the LOG of a
-  # multiplicative ladder. A log coefficient's colour and the log twin of a gap both read one of
-  # these, so a user's set_color_breaks(odds_ratio =) / (adj_ratio =) reaches both readings.
+  # DERIVED at plan time from a settable sibling (never stored, never user-settable): the LOG of a
+  # multiplicative ladder, so set_color_breaks(odds_ratio=)/(adj_ratio=) reaches the log readings too.
   log_odds     = list(settable = FALSE, derive = list(from = "odds_ratio", how = "log")),
   adj_diff_log = list(settable = FALSE, derive = list(from = "adj_ratio",  how = "log"))
 )
 
-# The user-settable scale names -- what set_color_breaks() accepts and default_color_scales() builds.
 #' @keywords internal
 color_scale_names <- function()
   names(COLOR_SCALES)[vapply(COLOR_SCALES, function(s) isTRUE(s$settable), logical(1))]
@@ -3827,10 +3180,9 @@ set_color_breaks <- function(breaks = NULL, ...) {
   if (is.null(cur) || is.null(cur$pct_diff)) cur <- default_color_scales()
 
   dots <- list(...)
-  # COMPAT (Phase 13a): the old flat args pct_breaks / mean_breaks / contrib_breaks, mapped onto the
-  # new scales (pct_breaks splits <=1 -> pct_diff, >1 -> pct_ratio) with a soft-deprecation.
-  # Phase 19c: the legacy argument names are the scales' own declared `legacy` field, so the compat
-  # list cannot drift from the table (pct_breaks legitimately names two scales -- it is SPLIT below).
+  # COMPAT: the old flat args (pct_breaks / mean_breaks / contrib_breaks) mapped onto the new scales
+  # (pct_breaks splits <=1 -> pct_diff, >1 -> pct_ratio) with a soft-deprecation. The legacy names are the
+  # scales' own declared `legacy` field, so this cannot drift from COLOR_SCALES.
   old_args <- intersect(names(dots), unique(unlist(purrr::map(COLOR_SCALES, "legacy"))))
   if (length(old_args)) {
     lifecycle::deprecate_soft("2.0.0", I(paste0("set_color_breaks(", old_args[1], ")")),
@@ -3865,14 +3217,11 @@ set_color_breaks <- function(breaks = NULL, ...) {
 }
 
 
-# --- Per-table color_breaks override (Phase 13a / 17b) --------------------------------------------
-# `tab(color_breaks = list(...))` validates the user scales into a PARTIAL canonical list and stores
-# it as `meta$color_breaks` (set at the very END of tab()). At render time, push_color_breaks() merges
-# that partial list OVER the live global option for the duration of the render, then pop restores.
-# Robust by design: a missing / NULL / malformed field simply falls back to the global breaks.
-# Phase 17b: color_breaks joined the carried `meta` list, so it now SURVIVES a dplyr chain between build
-# and render (was dropped before -> silent global fallback; that was defect 7). Still set last, so the
-# change is purely additive survival. The global set_color_breaks() option path is unchanged.
+# --- Per-table color_breaks override -------------------------------------------------------------
+# `tab(color_breaks = list(...))` validates the user scales into a PARTIAL canonical list and stores it
+# as `meta$color_breaks` (so it survives a dplyr chain). At render time push_color_breaks() merges that
+# partial list OVER the live global option for the render, then pop restores. Robust: a missing / NULL /
+# malformed field simply falls back to the global breaks.
 
 #' @keywords internal
 resolve_color_breaks_arg <- function(color_breaks) {
@@ -3919,12 +3268,8 @@ pop_color_breaks <- function(state) {
 
 
 
-#calculate pct breaks based on the number of levels ? ----
-
-
-
 #' Get the breaks currently used to print colors
-#' @describeIn set_color_palette get the color breaks currently in use, in the canonical Phase-5 shape.
+#' @describeIn set_color_palette get the color breaks currently in use, in the canonical shape.
 #' @param brk When missing, return the full named list of break scales (\code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{zscore}) -- the same shape
 #' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
@@ -3951,7 +3296,7 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
 
   if (missing(brk)) return(purrr::map(scales, as_form))
 
-  # Phase 19c: the short aliases are the scales' own declared `alias` field.
+  # the short aliases are the scales' own declared `alias` field.
   aliases <- purrr::compact(purrr::map(COLOR_SCALES, "alias"))
   ali     <- rlang::set_names(names(aliases), unlist(aliases, use.names = FALSE))
   if (brk %in% names(ali)) brk <- unname(ali[[brk]])

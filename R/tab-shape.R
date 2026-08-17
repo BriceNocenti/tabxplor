@@ -1,26 +1,20 @@
-# =====================================================================================================
-# R/tab-shape.R -- WHAT SHAPE IS THIS TABLE, AND WHICH OPERATIONS ACCEPT IT (Phase 19h, KEY 7)
-# =====================================================================================================
-# The package has several ways to say "more than one table": a merged table (several `row_vars`
-# stacked, one declared `var` column), a grouped table (`tab_vars`, i.e. sub-tables), and a list of
-# tables. Which operation accepts which combination was written down NOWHERE, and enforced by five
-# scattered aborts in three files -- so "can I transpose a grouped table?" had no single answer to
-# read, only an answer to discover by hitting it.
+# PURPOSE: What shape a tabxplor result has (merged / grouped / a list), and which reshape operations
+#   accept it -- so "can I transpose a grouped table?" is read, not discovered by hitting an abort.
+# ROLE: The single reader every shape-sensitive operation (tab_compact, tab_transpose, the exporters'
+#   transpose = TRUE) consults before refusing a table.
+# KEY CONSTRAINTS:
+#   - Shape is read from the DECLARED model only -- the index columns (R/row-model.R) and
+#     `meta$spec$kind` (R/table-spec.R). Never a column NAME, never a heuristic.
+#   - Not every refusal is a shape fact: tab_transpose() also refuses duplicated row keys and multiple
+#     total rows/columns, which are properties of the CONTENT and stay local to that function.
+# See: dev/tabxplor_architecture.md (declarative architecture); TAB_OPS below.
 #
 # THE MODEL -- one reader, one declared table:
-#
-#   tab_shape(x)        the FACTS, read from the declared model and nothing else: the index columns
-#                       (R/row-model.R) and `meta$spec$kind` (R/table-spec.R). Never a column NAME,
-#                       never a heuristic. Exported, because "what have I got?" is a user question.
-#   TAB_OPS             one ROW per operation, stating which facts it requires and why. Adding an
-#                       operation is one row; a new shape fact is one column.
-#   tab_supports(x, op) the predicate. Exported, so a caller can ASK instead of trying.
+#   tab_shape(x)        the shape facts. Exported ("what have I got?" is a user question).
+#   TAB_OPS             one ROW per operation: which facts it requires and why. A new operation is a
+#                       row; a new shape fact is a column.
+#   tab_supports(x, op) the predicate, so a caller can ASK instead of trying. Exported.
 #   tab_check_shape()   the internal enforcer every abort site calls.
-#
-# WARNING: not every refusal is a shape fact. tab_transpose() also refuses duplicated row keys, more
-# than one total row and more than one total column; those are properties of the CONTENT, they have
-# nothing to do with the row/column model, and they stay local to that function.
-# =====================================================================================================
 
 
 # --- the facts ---------------------------------------------------------------------------------------
@@ -60,9 +54,8 @@ tab_shape <- function(x) {
     parts <- lapply(x, tab_shape)
     keep  <- vapply(parts, function(p) !is.null(p), logical(1))
     parts <- parts[keep]
-    # `tab_vars` must MATCH (there is no one sub-table axis to merge otherwise); `col_vars` need only
-    # be nested -- every table's set a subset of the widest one -- which is the rule tab_compact()
-    # has always applied, so a table with fewer columns still merges.
+    # `tab_vars` must MATCH (there is no one sub-table axis to merge otherwise); `col_vars` need only be
+    # nested -- every table's set a subset of the widest one -- so a table with fewer columns still merges.
     same <- function(field) {
       vs <- lapply(parts, `[[`, field)
       if (length(vs) < 2L) return(TRUE)
@@ -87,8 +80,7 @@ tab_shape <- function(x) {
     ))
   }
   if (!is.data.frame(x)) return(NULL)
-  # the row axis: the DECLARED index columns; the degraded reader is tab_render_vars()'s job, not
-  # this one's -- a table with no declared index simply reports an empty model.
+  # the row axis: the DECLARED index columns. A table with no declared index reports an empty model.
   dv <- tab_declared_vars(x)
   if (is.null(dv)) dv <- list(row_vars = character(0), tab_vars = character(0), compacted = FALSE)
   list(
@@ -98,7 +90,7 @@ tab_shape <- function(x) {
     grouped   = length(dv$tab_vars) != 0L,
     row_vars  = as.character(dv$row_vars),
     tab_vars  = as.character(dv$tab_vars),
-    # the column axis is, as always, the fmt columns' own attribute
+    # the column axis is the fmt columns' own attribute
     col_vars  = unique(Filter(is_real_col_var, unique(get_col_var(x)))),
     same_col_vars = TRUE,
     same_tab_vars = TRUE
@@ -106,15 +98,11 @@ tab_shape <- function(x) {
 }
 
 
-# tab_columns() -- the COLUMN-axis mirror of tab_shape() (Phase 20a, KEY 3). tab_shape() answers
-# "what have I got" about the table; this answers it about the columns, which is the question ~12
-# individual getters were being composed to ask -- and the only place the four inference facts
-# (conf_level / degf / basis / ci_method) can be read side by side, which is what z13/z16 stored them
-# per column FOR.
-#
-# It reports the STORED attributes (fmt_attrs_of(), the same bulk reader the vctrs reconcilers use),
-# never a resolved or defaulted-at-render value: `conf_level = NA` honestly means "no interval was
-# stamped on this column".
+# tab_columns() -- the COLUMN-axis mirror of tab_shape(): one row per fmt column with the attributes
+# that decide what it shows, estimates, colours and how its interval was computed. The only place the
+# four inference facts (conf_level / degf / basis / ci_method) can be read side by side. It reports the
+# STORED attributes (fmt_attrs_of()), never a render-time default: `conf_level = NA` honestly means
+# "no interval was stamped on this column".
 
 #' Every `fmt` column of a table, and what it carries
 #'
@@ -190,9 +178,7 @@ tab_columns <- function(x) {
 
 
 # rd_shape() -- the SAME record, read off a finished render model (R/tab-export-prep.R) instead of a
-# table. Two producers, one record type, one checker: the render stack works on `rd`, whose `$vars`
-# already IS the variable model, so re-deriving it from a table it no longer holds would be the
-# second encoding this key exists to delete.
+# table, whose `$vars` already IS the variable model. One record type, one checker for both producers.
 #' @keywords internal
 #' @noRd
 rd_shape <- function(rd) {

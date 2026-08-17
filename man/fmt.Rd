@@ -179,9 +179,7 @@ null value is, whether the scale is additive or multiplicative, and which colour
 \item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
 \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
 \item \code{"mixed"}: what binding columns of unlike scales collapses to
-}
-Replaces the \code{type} and \code{ci_type} arguments of tabxplor 1.x, together with
-\code{pct_base}.}
+}}
 
 \item{digits}{The number of digits, as an integer, or an integer vector the length
 of \code{n}.}
@@ -201,31 +199,28 @@ Calculate with \code{\link{tab_pct}}.}
 
 \item{diff}{The differences (from totals or first cells),
 as a double vector the length of \code{n}. Used to set colors for means and
-row or col percentages. Calculate with \code{\link{tab_pct}}.}
+row or col percentages. Built by \code{\link{tab}}.}
 
 \item{ratio}{The ratio to the reference (relative risk for percentages, mean ratio for
-means), as a double vector the length of \code{n}. Renamed from the former \code{rr}
-field.}
+means), as a double vector the length of \code{n}.}
 
 \item{ctr}{The contributions of cells to (sub)tables variances,
 as a double vector the length of \code{n}. Used to print colors when
 \code{color = "contrib"}. The mean contribution of each (sub)table is written on
 total rows (then, colors don't print well without total rows).
-Calculate with \code{\link{tab_chi2}}. The cell's adjusted standardized residual is not a
+Built by \code{\link{tab}}. The cell's adjusted standardized residual is not a
 field of its own: it is recovered from \code{pvalue} and this field's sign, and readable with
 \code{display = "resid"} (see \code{\link{tab}}).}
 
 \item{var}{The cells variances, as a double vector the length of \code{n}.
-Used with \code{scale = "level_mean"} to calculate confidence intervals.
-Calculate with \code{tab_plain}.}
+Used with \code{scale = "level_mean"} to calculate confidence intervals.}
 
 \item{ci}{The confidence interval half-width (margin of error), as a double vector the
 length of \code{n}. Kept for backward compatibility: it is stored as the symmetric
-bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.
-Calculate with \code{tab_ci}.}
+bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.}
 
 \item{ci_inf, ci_sup}{The lower and upper bounds of the confidence interval, as double
-vectors the length of \code{n}. Calculate with \code{tab_ci}.}
+vectors the length of \code{n}. Built by \code{\link{tab}}.}
 
 \item{pvalue}{The per-cell significance p-value, as a double vector the length of
 \code{n}.}
@@ -238,38 +233,25 @@ of \code{n}.}
 
 \item{n_eff}{The effective sample size used for this cell's confidence interval,
 \code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
-\code{survey::svyrecvar} when a \code{survey::svydesign} was passed as \code{data},
-from the closed-form flat-design variance when the weighted basis is asked for
-(\code{tab(design_effect = TRUE)}, or \code{options(tabxplor.design_effect = TRUE)}), else
-\code{NA} (the CI then falls back to the raw unweighted base).
-It records \emph{the base that was used}, so it has three conventions and all three are
-deliberate: a finite value where the design or the weights corrected the base; \code{NA} where
-nothing did (basis \code{"n"}, or a column that has no cell base); and the \strong{raw count}
-where a correction was asked for and this cell could not carry one (a degenerate cell, a design
-variance that had to fall back) --- writing \code{NA} there would say "no interval was computed",
-which is not what happened.
-Populated for \strong{descriptive} cells --- a crosstab or mean cell, and a \code{tab_reg}
-\code{Obs_*} crude column, each carrying the base \emph{its own} interval used. A
-\code{Model_*} coefficient column carries none (a coefficient has no cell base), like
-\code{n} and \code{tot_n}.
-A double vector the length of \code{n}. Non-displayed.}
+\code{survey::svyrecvar} under a \code{survey::svydesign}, from the closed-form flat-design
+variance when the weighted basis is asked for (\code{tab(design_effect = TRUE)}), else \code{NA}
+(the CI falls back to the raw unweighted base). It records \emph{the base that was used}: a finite
+value where the design or weights corrected it, \code{NA} where nothing did, and the \strong{raw
+count} where a correction was asked for but this cell could not carry one. Populated for
+descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column); a coefficient
+column carries none. A double vector the length of \code{n}. Non-displayed.}
 
-\item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour
-measures \code{"adjustment"} and \code{"between_groups"}, on the cell's own scale: the
-observed (crude, unadjusted) effect beside a model effect, or -- under
-\code{tab_vars} with \code{color = "between_groups"} -- the reference group's estimate.
-\code{NA} on cross-tables and wherever there is no counterpart (the Constant, numeric
-predictors, multinomial / ordinal outcomes), which leaves those cells uncoloured.
-A double vector the length of \code{n}; displayable as \code{display = "\{obs\}"}.}
+\item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour measures
+\code{"adjustment"} / \code{"between_groups"}, on the cell's own scale: the observed (crude)
+effect beside a model effect, or -- under \code{tab_vars} with \code{color = "between_groups"} --
+the reference group's estimate. \code{NA} on cross-tables and wherever there is no counterpart
+(leaving those cells uncoloured). A double vector the length of \code{n}; displayable as
+\code{display = "\{obs\}"}.}
 
-\item{gap_se}{The standard error of the GAP between this cell's estimate and \code{obs},
-on the estimate's own test scale (the log-ratio on a multiplicative \code{scale} --
-\code{odds_ratio} / \code{pct_ratio} / \code{mean_ratio} -- the plain difference otherwise).
-Written by \code{tab_reg} where
-the two estimates are independent (\code{tab_vars} groups), so that
-\code{color = "between_groups"} can honour \code{color_signif}; \code{NA} everywhere
-else, which leaves the significance policies inert there.
-A double vector the length of \code{n}. Non-displayed.}
+\item{gap_se}{The standard error of the GAP between this cell's estimate and \code{obs}, on the
+estimate's own test scale. Written by \code{tab_reg} where the two estimates are independent
+(\code{tab_vars} groups), so \code{color = "between_groups"} can honour \code{color_signif};
+\code{NA} elsewhere. A double vector the length of \code{n}. Non-displayed.}
 
 \item{row_kind}{The kind of row a cell sits in (see \code{\link{get_row_kind}}).}
 
@@ -302,21 +284,21 @@ sub-populations, and exports head them on two lines.}
 
 \item{refcol}{\code{TRUE} when the vector is a reference column}
 
-\item{color}{The type of color to print :
+\item{color}{The colour measure, as a single string --- how a cell's value is compared to colour
+it (significance is handled separately by \code{color_signif}):
 \itemize{
 \item \code{"no"}: no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables). Under
+\item \code{"diff"} (\code{"difference"}): the cell's difference from the reference (a total, or
+the first cell when \code{ref = "first"}) --- percentage points for factors, a standardized
+difference for means.
+\item \code{"ratio"}: the ratio to the reference (relative risk for percentages, mean ratio).
+\item \code{"or"} (\code{"odds_ratio"}): the odds ratio, for row/col percentages.
+\item \code{"contrib"}: the cell's contribution to the table's variance. Under
 \code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
-residual instead -- see \code{\link{tab}}.
-}}
+residual --- see \code{\link{tab}}.
+}
+The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
+superseded by the \code{color} + \code{color_signif} pair.}
 
 \item{color_signif}{How significance gates the color, as a single string
 (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.}
@@ -330,33 +312,28 @@ different families, each column keeping its own effect wording.}
 model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
 on cross-tables. Read by the colour legend to name each column's effect without matching its label.}
 
-\item{conf_level}{The confidence level this column's stored interval and its significance
-thresholds were computed at, as a single number in (0, 1). \code{NA} (the default) means
-"unknown": every threshold in the colour engine then falls back to
-\code{options("tabxplor.conf_level")}. It is stored per COLUMN because colours are resolved per
-column at print time and cannot see the table's \code{conf_level} argument -- without it a table
-built at a 99 percent level would be greyed at 95 percent.}
+\item{conf_level}{The confidence level this column's interval and thresholds were computed at, as
+a single number in (0, 1). \code{NA} (default) means "unknown" --- the colour engine then falls
+back to \code{options("tabxplor.conf_level")}. Stored per COLUMN, because colours are resolved per
+column at print time and cannot see the table's \code{conf_level} argument.}
 
-\item{degf}{The degrees of freedom this column's interval is referred to: a survey design's
-\code{#PSU - #strata}, which matters below about 30 primary sampling units. \code{NA} (the
-default) means "refer to the normal quantile", which is every unweighted and every
-weights-only table.}
+\item{degf}{The degrees of freedom this column's interval is referred to (a survey design's
+\code{#PSU - #strata}, which matters below ~30 primary sampling units). \code{NA} (default) means
+"refer to the normal quantile".}
 
 \item{basis}{How this column's interval and significance were computed --- \code{"n"} (the raw
-sample size), \code{"weights"} (the exact design effect of the weights), \code{"design"} (a full
-\code{survey} design: strata, clusters, \code{fpc}, calibration), or \code{"design_partial"} (a
-design was given but its variance could not be computed). Default \code{"n"}. Like
-\code{conf_level} it is a per-COLUMN fact, which is what lets a table state honestly, in its
-footer and in every export, what its numbers actually carry --- even after a pipeline that keeps
-the columns but drops the table's metadata. Binding columns keeps the WEAKEST basis.}
+sample size), \code{"weights"} (the design effect of the weights), \code{"design"} (a full
+\code{survey} design), or \code{"design_partial"} (a design was given but its variance could not
+be computed). Default \code{"n"}. A per-COLUMN fact, so a table states honestly what its numbers
+carry even after a pipeline drops the table's metadata; binding columns keeps the WEAKEST basis.}
 
 \item{ci_method}{Which interval ENGINE built this column's bounds --- \code{"wilson"},
 \code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
 proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"} (a
 difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
-means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (the default) when the
-column carries no interval. Stamped where the interval is computed, and read back by the colour
-legend, so the method it names is always the one the bounds were built with.}
+means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (default) when the column
+carries no interval. Read back by the colour legend, so it always names the method the bounds were
+built with.}
 
 \item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
 2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
@@ -521,7 +498,7 @@ with the getter \code{\link[=get_ref_type]{get_ref_type()}} and with the \code{r
 
 \item \code{get_model_family()}: get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
 
-\item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (Phase 15e: the per-column
+\item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (the per-column
 regression family, "" on crosstabs)
 
 \item \code{get_ci_method()}: get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
