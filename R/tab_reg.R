@@ -4592,16 +4592,16 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     display = "value",
                     cleannames = NULL, subtext = "", parallel = NULL, ...) {
-  # Phase 19e: the retired estimand arguments (`exponentiate` / `at` / `estimate_display`) are caught
-  # here rather than by R's "unused argument", so the error names the spelling that replaced them.
-  # Phase 20c: `.fit_cache` is jamovi-internal (a mutable cache env) and rides `...` -- it was a
-  # documented formal with four Rd lines describing a thing no user can build.
+  # `.fit_cache` (the jamovi live-UI cache env) and `.levels_collapse` (the level-merge spec, shared
+  # with tab() -- R/row-model.R declares it, tab_collapse_levels() applies it in reg_prepare_data()'s
+  # stage G beside `shape`) are jamovi-internal and ride `...`; neither is a user argument.
   .dots      <- list(...)
   .fit_cache <- .dots[[".fit_cache"]]
-  # Phase 20g-ii: the level-merge spec, jamovi-internal and shared with tab() (R/row-model.R declares
-  # it, tab_collapse_levels() applies it -- here in reg_prepare_data()'s stage G, beside `shape`).
   .levels_collapse <- new_lvl_collapse(.dots[[".levels_collapse"]])
-  reg_retired_args(.dots)
+  # One dots-validator for both producers (Phase 20j): every declared formal is a known name, a
+  # dot-prefixed one is internal plumbing, and anything else aborts with a suggestion. tab_reg() is
+  # unreleased, so a removed spelling is simply an unknown argument -- no retired-name table to carry.
+  tab_check_dots(.dots, "tab_reg")
   # Phase 20c (KEY 4): ONE `ci_method` grammar for both producers -- the named vector `tab()` takes,
   # whose fifth slot is the regression's own. resolve_ci_method() validates every slot against
   # CI_METHODS and returns the full vector; only `model` is read here. A bare "profile" is accepted

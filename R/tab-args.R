@@ -831,13 +831,17 @@ tab_arg_status <- function(name, producer = NULL) {
 # produced R's bare "unused argument"; now it produces a suggestion, and an UNNAMED extra argument is
 # refused by name rather than silently bound to whatever formal happened to sit at that position.
 #
-# ⚠ SCOPE -- and Phase 20h made the distinction matter, since the exporters now have declared rows too
-# (EXPORT_ARGS). The two readers do NOT have the same reach:
-#   tab_args_rd()   serves BOTH surfaces (via arg_table_of): a declaration is documentation either way.
-#   tab_check_dots() and tab_dots_expand() serve the CROSSTAB producers only. An exporter's `...` is a
-#     pass-through to its backend -- refusing an unknown name there would refuse a legitimate backend
-#     argument -- and tx_deprecate_inert() (R/utils.R) already names the retired ones.
-# Two contracts, on purpose; EXPORT_ARGS' narrower scope rule (its header) is why the second one holds.
+# ⚠ SCOPE -- three surfaces, two reaches:
+#   tab_args_rd()   serves BOTH the crosstab producers and the exporters (via arg_table_of): a
+#     declaration is documentation either way.
+#   tab_check_dots() validates the `...` of the crosstab producers AND tab_reg() (Phase 20j: one
+#     dots-validator for both, replacing tab_reg()'s own retired-arg guard) -- every declared formal
+#     is a known name, and a dot-prefixed name is skipped as internal plumbing. It does NOT serve the
+#     exporters: a backend's `...` is a pass-through, so refusing an unknown name would refuse a
+#     legitimate backend argument, and tx_deprecate_inert() (R/utils.R) already names the retired ones.
+#   tab_dots_expand() serves the CROSSTAB leaves only (it fills an unsupplied formal from its default;
+#     tab_reg() declares every argument as a real formal, so it needs no expansion).
+# The exporters' narrower scope (EXPORT_ARGS' header) is why tab_check_dots() stops at them.
 #' @keywords internal
 #' @noRd
 tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
@@ -852,7 +856,11 @@ tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
   }
   if (!length(dots)) return(invisible(TRUE))
   known <- tab_args_for(producer)
+  # A DOT-PREFIXED name is internal plumbing, never a user argument: `.fit_cache` /
+  # `.levels_collapse` (tab_reg's jamovi-live cache + level-merge spec) ride `...`, as do tab()'s
+  # `.cache` / `.return_armed`. The convention is the whole package's, so the validator honours it.
   bad   <- setdiff(nms, known)
+  bad   <- bad[!startsWith(bad, ".")]
   if (!length(bad)) return(invisible(TRUE))
   # Two kinds of near miss, and the second matters more than it looks: an argument sitting AFTER
   # `...` is matched EXACTLY, so an ABBREVIATION that R's partial matching used to accept silently

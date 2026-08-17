@@ -308,8 +308,9 @@ ratio of means in the `ratio` field) unrepresentable.
 ### One word per question (Phase 20c, KEY 4)
 
 `tab_reg()` is unreleased, so the six questions the two producers asked with two words each were
-**renamed**, not aliased --- every retired spelling aborts naming its replacement
-(`REG_RETIRED_ARGS`, `R/reg-estimand.R`).
+**renamed**, not aliased. A retired spelling lands in `...` and aborts as an unknown argument through
+the shared `tab_check_dots()` (Phase 20j deleted the retired-name table --- the abort no longer names
+the replacement, but a removed name still errors: no silent no-op).
 
 | the question | was | is |
 |---|---|---|

@@ -556,8 +556,10 @@ R/
 │                              column: the ladder comes from its stored `scale`, so only the
 │                              own-ref measures remain, a DERIVED allow-list; `TRUE` in the text
 │                              slot = "the column's own geometry", so c(TRUE, "adjustment") replaces
-│                              c("OR", "adjustment")), reg_retired_args / reg_effect_key (the
-│                              retired spellings abort with their mapping -- 19b's fmt(type=) idiom),
+│                              c("OR", "adjustment")), reg_effect_key (validates ONE `effect` value;
+│                              20j deleted its retired-value block, so a removed spelling aborts as an
+│                              unknown effect value -- reg_retired_args/REG_RETIRED_ARGS/EFFECTS GONE,
+│                              `...` now goes through the shared tab_check_dots()),
 │                              reg_per_dep (THE per-dependent slicer shared by family / effect /
 │                              measure and the multi-dependent recursion, D6),
 │                              20c: REG_FAMILIES gains **`outcome_level`** = WHAT
@@ -1170,8 +1172,11 @@ R/
 │                              where they are true. ⚠ the reward is ANTI-DRIFT, not man/ lines: the
 │                              exporters keep every formal, so man/ GREW 23 lines -- what it bought is
 │                              26 blocks -> 9 declarations, 5 corrected texts, and TAB_OPTIONS$arg's
-│                              11-name `allow` list -> EMPTY. ⚠ tab_check_dots()/tab_dots_expand()
-│                              stay CROSSTAB-only: an exporter's `...` is a backend pass-through
+│                              11-name `allow` list -> EMPTY. ⚠ tab_check_dots() validates the `...`
+│                              of the crosstab producers AND tab_reg() (20j: ONE dots-validator for
+│                              both, a dot-prefixed name skipped as internal plumbing); tab_dots_expand()
+│                              stays crosstab-leaf-only. Both stop at the exporters (a backend `...` is
+│                              a pass-through).
 │                              **TAB_ARGS** = one row per public argument of the crosstab producers
 │                              (`producers` · `status`, which may be NAMED when an argument is
 │                              deprecated on ONE producer -- `row_var` is a deprecated alias on
@@ -1320,9 +1325,11 @@ R/
 │                              `reference`->**`ref`**, `method`->**`ci_method`**,
 │                              `inverse_two_level_factors`->**`outcome_level`**,
 │                              `stats`+`compare`+`baseline`->**`stats`**, `.fit_cache`->`...`.
-│                              25 named formals + `...` (was 29 + `...`); every retired spelling
-│                              ABORTS naming its replacement (REG_RETIRED_ARGS, the 19e idiom -- no
-│                              permanent aliases, `tab_reg()` being unreleased).
+│                              25 named formals + `...` (was 29 + `...`); a retired spelling lands in
+│                              `...` and ABORTS as an unknown argument (20j deleted REG_RETIRED_ARGS/
+│                              _EFFECTS and routed the guard through the shared tab_check_dots() -- no
+│                              permanent aliases, `tab_reg()` being unreleased; the abort no longer
+│                              names the replacement, but a removed name still errors: no silent no-op).
 │                              **`reg_resolve_stats()`** is `stats =`'s grammar: a `stats` element is
 │                              always a KEY, carried in the NAME when it has a parameter and in the
 │                              value when it does not (`ref = c(var = "level")`'s grammar) --
@@ -4001,6 +4008,75 @@ fix). No `.a.yaml` / `.u.yaml` touched → no `jmvtools::prepare()` owed.
 
 **FOLLOW-UPS.** Phase 20 is closed. To Phase 22: reader-naming convention (22c), and the `?tab_reg`
 prose trim / `family × effect × measure` generated table (22b/22d) inherited from 20c.
+
+---
+
+#### Phase 20j — Harvest 3: open cleaning
+
+**DONE (2026-08-17). The honest finding leads: there is NO further big simplification key** — 20i
+established that from the integration side, and a fresh deletion census confirms it. The biggest
+"trace of past implementation", `R/tab-steps-legacy.R` (1 425 L), is CRAN-released and kept until
+2.1.0; every legacy-decode path (`color_decode_legacy`/`COLOR_ALIASES`) and `tab_deprecate_*` shim
+serves the released 1.3.1 API; ghost/tombstone comments are 22c's declared domain. **Exactly one
+bounded set was removable, and only because `tab_reg()`/jamovi are UNRELEASED**: the retired-argument
+machinery that 20a–20i had to keep while the renames were being introduced. So 20j is a **~90-line
+deletion plus one integration**, not a new refactor.
+
+**THE INTEGRATION (KEY 4, the 20c/20h "reg onto tab_check_dots" follow-up).** `tab_reg()`'s bespoke
+`...` guard is gone; its `...` now validates through the SHARED **`tab_check_dots()`** — one
+dots-validator for both producers. The one generalisation it needed: **skip dot-prefixed names**
+(internal plumbing — `.fit_cache`, `.levels_collapse`). ⚠ MEASURED as the right split: `tab()`'s five
+dot-args (`.cache`/`.levels_order`/…) are DECLARED known in `TAB_ARGS`, so the skip is a **pure no-op
+for the crosstab producers** (verify_tab_args IDENTICAL), while `tab_reg()`'s `.fit_cache` is NOT
+declared — the skip is exactly what lets it ride `...`. A retired spelling (`dependent`/`split_var`/
+`method`/`reference`/`compare`/`baseline`/`inverse_two_level_factors`/`at`/`exponentiate`/
+`estimate_display`) now aborts as an **unknown argument** (with a suggestion), and a retired `effect`
+VALUE (`ame`/`mer`/`ame_ratio`) as an **unknown effect value** — the abort no longer NAMES the
+replacement, but a removed name still ERRORS: **no silent no-op**, which is the safety property the
+tests now pin.
+
+**THE DELETION (`R/reg-estimand.R`, −92 net).** `REG_RETIRED_ARGS` (44-line message table, 10 retired
+spellings + the dead `exponentiate_` placeholder), `reg_retired_args()`, `REG_RETIRED_EFFECTS`, and
+the retired-value block inside `reg_effect_key()`. ⚠ `reg_effect_key()` itself STAYS — its live
+validation and its `"Unknown effect value"` abort remain. `R/` net **−84 lines** (28 ins / 112 del).
+
+**WHAT WAS NOT TOUCHED, and why (the census IS the product).** `tab-steps-legacy.R` (released, 2.1.0);
+`color_decode_legacy`/`COLOR_ALIASES` and all four `tab_deprecate_*` (released 1.3.1); `set_diff_type`
+→ `set_ref_type` alias (released `fmt` export); `reg_stage_tips()` split (already done in 20f-iii);
+`tab_plain()`'s `color_breaks` (intentional factor-leaf-vs-numeric-leaf design, not a remnant). Only
+Category 1 yielded code, and only under the unreleased lever.
+
+**TEST CHURN (small, mechanical).** Five `expect_error` sites across `test-tab_reg.R` /
+`test-reg-resolve.R` (×3) / `test-reg-estimand.R` moved from asserting the old "renamed to X" message
+to asserting `[Uu]nknown argument` / `[Uu]nknown .*effect` — i.e. they now pin *"a removed spelling
+still aborts (no silent no-op)"*, which is the preserved safety property.
+
+**VERIFICATION.** Full suite **FAIL 0, WARN 1, SKIP 4, PASS 7284** — byte-identical to the inherited
+20i numbers (the 1 warning is the pre-existing poisson over-dispersion notice); no snapshot churn.
+`dev/verify_golden_field_delta.R` **zero field churn** (1 788 cells × 36 goldens). `dev/verify_reg_specs.R`
+**IDENTICAL over 290 cases** — the 3 flagged differ ONLY in the worktree directory name inside an
+error backtrace (`tx-head/` vs `tabxplor/`), the same baseline-method artifact 20i documented; every
+spec, column attribute, label, test key and other message IDENTICAL in order. `verify_color_attrs.R`
+/ `verify_tab_args.R` provably unaffected (dot-skip a no-op for `tab`; colour engine untouched).
+`document()` produced **no man/NAMESPACE drift**. No `.a.yaml` / `.u.yaml` touched → **no
+`jmvtools::prepare()` owed**.
+
+**HONEST CONCERNS.**
+- ⚠ **The abort no longer names the replacement.** A dev typing the old `dependent =` gets "Unknown
+  argument `dependent`" (+ a fuzzy suggestion — for `at =` it unhelpfully suggests `wt`), not "it is
+  now `outcome`". Acceptable because `tab_reg()` is unreleased and no user is protected; the migration
+  aid was scaffolding, now spent. In `NEWS.md` terms this is invisible (nothing shipped).
+- ⚠ **The dot-skip introduces one narrow new silent no-op**: a MISTYPED dot-arg (`tab(d, x, .cach = e)`)
+  is now skipped instead of refused. Negligible — dot-prefixed names are internal plumbing (jamovi/
+  tests), never user surface, which is the package's own stated convention.
+- **`reg_effect_key()` now always returns `measure = ""`** (the retired block was its only non-empty
+  source). The slot is kept because callers destructure the shape; the docstring states it.
+- **This is a ~90-line phase.** That is the honest close to the Harvest trilogy, not a shortfall:
+  20h deleted, 20i integrated, 20j removed the last unreleased scaffolding. The code harvest is spent.
+
+**FOLLOW-UPS.** Phase 20 is closed (again — 20j was appended after 20i). To Phase 22: the
+tombstone/ghost comments narrating deleted shims (incl. this phase's) → 22c; everything 20i routed
+forward is unchanged.
 
 ---
 

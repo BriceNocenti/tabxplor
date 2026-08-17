@@ -725,91 +725,6 @@ reg_estimand_abort <- function(res, outcome = NULL) {
     stats::setNames(offered, rep("i", length(offered)))))
 }
 
-# The arguments Phase 19e retired, and the (effect, measure) spelling each becomes. `tab_reg()` was
-# never released, so there is nothing to deprecate -- but "unused argument (exponentiate = FALSE)" is
-# not a teachable error, so the `...` catches them and the mapping IS the message. This is the idiom
-# Phase 19b established for fmt(type =): the error is the documentation, delivered where the mistake
-# is made. NOTE the entries are phrases, not code to run: nothing here changes behaviour.
-#' @keywords internal
-#' @noRd
-REG_RETIRED_ARGS <- list(
-  exponentiate = function()
-    c("i" = "{.code exponentiate = FALSE} is now {.code measure = \"log\"}; {.code TRUE} is the default estimand.",
-      "i" = "The measure is now named: {.code measure = \"odds_ratio\" / \"ratio\" / \"difference\" / \"log\"}."),
-  at = function()
-    c("i" = "{.code at = \"reference\"} is now {.code effect = \"at_reference\"}.",
-      "i" = "{.code at = \"average\"} is the default {.code effect = \"marginal\"}."),
-  estimate_display = function()
-    c("i" = "{.arg estimate_display} is now {.arg display}, which also takes a {.code {\"{or} ({pct})\"}} template."),
-  # Phase 20c (KEY 5): three arguments for one concept -- WHAT RIDES THE MODEL-SUMMARY FOOTER --
-  # became one. The comparison is a footer key like any other, and the baseline model is the one
-  # parameter that key carries.
-  compare = function()
-    c("i" = "{.code compare = \"baseline\"} is now {.code stats = c(..., \"compare_baseline\")}.",
-      "i" = "{.code compare = \"sequential\"} is now {.code stats = c(..., \"compare_sequential\")}.",
-      "i" = "The comparison is a footer row like any other, so it is named in {.arg stats}."),
-  baseline = function()
-    c("i" = "{.arg baseline} is now the VALUE of the comparison key: {.code stats = c(compare_baseline = \"Model 1\")}.",
-      "i" = "An index works too: {.code stats = c(compare_baseline = 2)}. Omit it for the first model."),
-  # Phase 20c: a 25-character LOGICAL that toggled the outcome's level ORDER became an argument that
-  # NAMES the level -- checkable, readable in a sentence, and working on the 0/1 numeric path where
-  # the logical was a silent no-op.
-  inverse_two_level_factors = function()
-    c("i" = '{.arg inverse_two_level_factors} is now {.code outcome_level = c(<outcome> = "<level>")}, which NAMES the level modelled.',
-      "i" = "{.code TRUE} was \"model the first level\", which is still the default -- so drop the argument.",
-      "i" = '{.code FALSE} was "model the other one": name it, e.g. {.code outcome_level = c(married = "Not married")}.'),
-  # Phase 20c (KEY 4): both producers ask "how is this interval computed" with the same word now.
-  method = function()
-    c("i" = '{.arg method} is now {.arg ci_method}, the named vector {.fn tab} already takes.',
-      "i" = '{.code method = "profile"} is {.code ci_method = c(model = "profile")}, or just {.code ci_method = "profile"}.'),
-  # Phase 20c (KEY 4): four questions the two producers asked with two words each. `tab_reg()` is
-  # unreleased, so these are RENAMES -- the old spelling aborts naming the new one rather than
-  # living on as a permanent second vocabulary.
-  dependent = function()
-    c("i" = "{.arg dependent} is now {.arg outcome}, the word the rest of the package uses.",
-      "i" = 'It pairs with {.arg outcome_level}: {.code tab_reg(d, outcome = "married", outcome_level = c(married = "Married"))}.'),
-  split_var = function()
-    c("i" = "{.arg split_var} is now {.arg tab_vars}, as in {.fn tab} --- one table per group.",
-      "i" = "The STORAGE has said so since 19f: a split group is stamped as a `tab_var` on the index column."),
-  reference = function()
-    c("i" = "{.arg reference} is now {.arg ref}, as in {.fn tab}: {.code ref = c(race = \"White\")}.",
-      "i" = "For the level of the OUTCOME, that is {.arg outcome_level} --- `ref` names what you compare AGAINST."),
-  exponentiate_ = function() character(0)
-)
-
-# reg_retired_args() -- the `...` guard. A retired name gets its mapping; anything else gets the
-# ordinary "unknown argument", which R's own message would not have named either.
-#' @keywords internal
-#' @noRd
-reg_retired_args <- function(dots, fn = "tab_reg") {
-  if (!length(dots)) return(invisible(NULL))
-  nms <- names(dots) %||% rep("", length(dots))
-  old <- intersect(nms, names(REG_RETIRED_ARGS))
-  if (length(old)) {
-    cli::cli_abort(c(
-      "{.arg {old[[1]]}} was removed from {.fn {fn}} in tabxplor 2.0.0.",
-      REG_RETIRED_ARGS[[old[[1]]]]()))
-  }
-  # Phase 20c: a DOT-PREFIXED name is internal, never a user argument -- `.fit_cache` (the jamovi
-  # live UI's cache environment) rides `...` since it stopped being a documented formal. Same
-  # convention as tab()'s `.cache` / `.return_armed` and test_group_cols()' scratch keys.
-  nms <- nms[!startsWith(nms, ".")]
-  if (!length(nms)) return(invisible(NULL))
-  bad <- nms[!nzchar(nms)]
-  cli::cli_abort(c("Unknown argument{?s} passed to {.fn {fn}}.",
-                   "x" = "{.val {if (length(bad)) 'unnamed' else nms}}."))
-}
-
-# The retired `effect` VALUES, mapped to their (effect, measure) pair. Same contract as above: the
-# concept behind `ame_ratio` -- a marginal risk ratio -- is fully kept; only its spelling moved.
-#' @keywords internal
-#' @noRd
-REG_RETIRED_EFFECTS <- list(
-  ame       = c(effect = "marginal",     measure = ""),
-  ame_ratio = c(effect = "marginal",     measure = "ratio"),
-  mer       = c(effect = "at_reference", measure = "")
-)
-
 # reg_estimand_note() -- the estimand phrase of the "Model:" footer line, plus the one clause that
 # depends on the CELL's layout rather than on the estimand: what the parenthetical in the cell is.
 # `reg_model_note()`'s six family arms x `do_exp` are the rows' own `note` closures; only this
@@ -939,26 +854,19 @@ reg_per_outcome <- function(x, d, i, default) {
   if (is.null(v) || (length(v) == 1L && is.na(v))) default else v
 }
 
-# reg_effect_key() -- validate ONE `effect` value, naming the new spelling of a retired one. Returns
-# list(effect =, measure =) because `ame_ratio` carried a measure inside the contrast: that
-# conflation is the disease, so unpicking it here is the whole point.
+# reg_effect_key() -- validate ONE `effect` value. Returns list(effect =, measure =): `effect` says
+# WHICH CONTRAST and `measure` WHICH MEASURE, two orthogonal questions the caller reads apart. The
+# measure slot stays empty here (an effect never carries one), which is exactly the separation the
+# argument surface enforces -- unpicking the two is the whole point.
 #' @keywords internal
 #' @noRd
 reg_effect_key <- function(x) {
   if (is.null(x) || length(x) != 1L || is.na(x)) return(list(effect = "coefficient", measure = ""))
   x <- as.character(x)
   if (x %in% REG_EFFECTS_VALUES) return(list(effect = x, measure = ""))
-  old <- REG_RETIRED_EFFECTS[[tolower(x)]]
-  if (!is.null(old)) {
-    cli::cli_abort(c(
-      "{.code effect = {.val {x}}} was removed in tabxplor 2.0.0.",
-      "i" = if (nzchar(old[["measure"]]))
-        "It is now {.code effect = \"{old[['effect']]}\", measure = \"{old[['measure']]}\"} -- the marginal risk ratio, unchanged."
-        else "It is now {.code effect = \"{old[['effect']]}\"}.",
-      "i" = "{.arg effect} says WHICH CONTRAST, {.arg measure} says WHICH MEASURE: {.or {.val {REG_EFFECTS_VALUES}}} x {.or {.val {REG_MEASURES_VALUES}}}."))
-  }
   cli::cli_abort(c("Unknown {.arg effect} value {.val {x}}.",
-                   "i" = "Valid: {.or {.val {REG_EFFECTS_VALUES}}}."))
+                   "i" = "Valid: {.or {.val {REG_EFFECTS_VALUES}}}.",
+                   "i" = "{.arg effect} says WHICH CONTRAST, {.arg measure} says WHICH MEASURE: {.or {.val {REG_EFFECTS_VALUES}}} x {.or {.val {REG_MEASURES_VALUES}}}."))
 }
 
 # "here is what this outcome DOES offer" -- one line per legal measure of the asked contrast, plus a

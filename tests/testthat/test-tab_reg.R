@@ -889,23 +889,23 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   expect_true(all(get_or(t1[["Ind vs rest"]])[ref] == 1))    # reference predictor level -> OR 1
 })
 
-# Phase 19e: `at` is retired. `at = "reference"` used to be a NO-OP on a non-multinomial coefficient
-# (a message, then the ordinary coefficients); asking for the reference profile is now a CONTRAST,
-# `effect = "at_reference"`, which on a binomial outcome gives the marginal effect there (MER).
-test_that("the retired `at` argument aborts naming its replacement", {
+# `at` / `exponentiate` / `estimate_display` were removed in 2.0.0. tab_reg() is unreleased, so they
+# are not deprecated: each lands in `...` and aborts as an unknown argument (the shared tab_check_dots
+# guard), and a removed `effect` VALUE aborts as an unknown effect value. The point is no silent no-op.
+test_that("a removed argument or effect value aborts (no silent no-op)", {
   skip_if_not_installed("broom")
   d <- reg_data()
   expect_error(
     tab_reg(d, "married", "race", family = "binomial", at = "reference", cleannames = FALSE),
-    "at_reference"
+    "[Uu]nknown argument"
   )
   expect_error(
     tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE),
-    'measure = "log"'
+    "[Uu]nknown argument"
   )
   expect_error(
     tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio"),
-    "marginal"
+    "[Uu]nknown .*effect"
   )
 })
 

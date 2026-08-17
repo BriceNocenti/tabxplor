@@ -171,19 +171,21 @@ test_that("a marginal ratio is available for a count outcome too", {
 
 # --- 4. the retired surface, D25 and D6 -----------------------------------------------------------
 
-test_that("every retired estimand argument aborts naming its replacement", {
+# Phase 20j deleted the retired-name table: a removed argument now aborts as an unknown one (the
+# shared tab_check_dots() guard), a removed `effect` VALUE as an unknown effect value. No silent no-op.
+test_that("a retired estimand argument or effect value aborts (no silent no-op)", {
   d <- est_data()
   expect_error(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE),
-               'measure = "log"')
+               "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", "race", family = "binomial", at = "reference"),
-               "at_reference")
+               "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", "race", family = "binomial", estimate_display = "ci"),
-               "display")
+               "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "ame"),
-               "marginal")
+               "[Uu]nknown .*effect")
   expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio"),
-               'measure = "ratio"')
-  # an unknown measure enumerates the legal ones
+               "[Uu]nknown .*effect")
+  # an unknown measure enumerates the legal ones (measure validation is untouched)
   expect_error(tab_reg(d, "married", "race", family = "binomial", measure = "nonsense"),
                "odds_ratio")
 })

@@ -77,11 +77,11 @@ test_that("the model-comparison keys are refused when they contradict each other
   expect_error(tab_reg(d, "married", M, family = "binomial",
                        stats = c(compare_sequential = "m1")),
                "sequential comparison has none")
-  # the retired spellings abort naming their replacement, they are not silently ignored
+  # the retired spellings abort as unknown arguments (Phase 20j), not silently ignored
   expect_error(tab_reg(d, "married", M, family = "binomial", compare = "baseline"),
-               "compare_baseline")
+               "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", M, family = "binomial", baseline = "m1"),
-               "compare_baseline")
+               "[Uu]nknown argument")
 })
 
 test_that("a comparison key ADDS a row and restricts nothing", {
@@ -208,10 +208,11 @@ test_that("`outcome_level` is refused where the family has no level to single ou
   expect_error(suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                         outcome_level = c(married = "nope"))),
                "not a level")
-  # and an OUTCOME named in `reference` says which argument does work
+  # `reference` was renamed to `ref` (Phase 20c) and its table deleted (Phase 20j): it aborts as an
+  # unknown argument now. (The outcome's level is `outcome_level`; `ref` names what you compare against.)
   expect_error(suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                         reference = c(married = "Married"))),
-               "outcome_level")
+               "[Uu]nknown argument")
 })
 
 # === defect 8: a formula `dependent` is not a vector of three dependents ==========================
@@ -314,9 +315,11 @@ test_that("reg_color_auto_measure() reads the estimand's stored SCALE, not its a
 
 
 # --- Phase 20c (KEY 4): one word per question ------------------------------------------------------
-# `tab_reg()` is unreleased, so each of these is a RENAME: the old spelling lands in `...` and aborts
-# naming its replacement (the reg_retired_args() idiom), rather than living on as a second vocabulary.
-test_that("every retired spelling aborts naming the argument that replaced it", {
+# `tab_reg()` is unreleased, so each of these was a RENAME. Phase 20j deletes the retired-name table:
+# an old spelling now lands in `...` and aborts as an unknown argument through the SHARED
+# tab_check_dots() -- one dots-validator for both producers. The safety property is what this pins:
+# a removed name still ABORTS (never a silent no-op), it just no longer names its replacement.
+test_that("a retired spelling aborts as an unknown argument (no silent no-op)", {
   skip_if_not_installed("broom")
   d <- rr_data()
   retired <- list(
@@ -328,12 +331,9 @@ test_that("every retired spelling aborts naming the argument that replaced it", 
     baseline                  = list(baseline = "m1"),
     inverse_two_level_factors = list(inverse_two_level_factors = FALSE)
   )
-  wants <- c(dependent = "outcome", split_var = "tab_vars", reference = "ref",
-             method = "ci_method", compare = "compare_baseline", baseline = "compare_baseline",
-             inverse_two_level_factors = "outcome_level")
   for (nm in names(retired)) {
     args <- c(list(d, "married", "race", family = "binomial"), retired[[nm]])
-    expect_error(do.call(tab_reg, args), wants[[nm]], info = nm)
+    expect_error(do.call(tab_reg, args), "[Uu]nknown argument", info = nm)
   }
 })
 
