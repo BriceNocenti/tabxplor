@@ -616,26 +616,6 @@ Every cell below is the column header the combination produces. *(default)* mark
 | ordinal     | `"ratio"`                  | —                       | `Model_RR`   | `Model_RR`                |
 | ordinal     | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
 
-<!-- Corrected more readable table: -->
-
-| `family`    | `measure`                  | `"coefficient"`         | `"marginal"` | `"at_reference"`          |
-|-------------|----------------------------|-------------------------|--------------|---------------------------|
-| gaussian    | `"difference"` *(default)* | raw β coefficient       | `Model_AME`  | `Model_MER`               |
-| gaussian    | `"ratio"`                  | `Model_RoM`             | `Model_RoM`  | `Model_RoM`               |
-| gaussian    | `"odds_ratio"`             | not defined             | —            | —                         |
-| binomial    | `"odds_ratio"` *(default)* | `Model_OR`              | —            | —                         |
-| binomial    | `"ratio"`                  | `Model_RR`              | `Model_RR`   | `Model_RR`                |
-| binomial    | `"difference"`             | `Model_RD`              | `Model_AME`  | `Model_MER`               |
-| poisson     | `"ratio"` *(default)*      | `Model_IRR`             | `Model_RoM`  | `Model_RoM`               |
-| poisson     | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
-| poisson     | `"odds_ratio"`             | not defined             | —            | —                         |
-| multinomial | `"odds_ratio"` *(default)* | `Model_OR`              | —            | `Model_OR` (vs. the rest) |
-| multinomial | `"ratio"`                  | —                       | `Model_RR`   | `Model_RR`                |
-| multinomial | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
-| ordinal     | `"odds_ratio"` *(default)* | `Model_OR` (cumulative) | —            | —                         |
-| ordinal     | `"ratio"`                  | —                       | `Model_RR`   | `Model_RR`                |
-| ordinal     | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
-
 The three states are the ones `reg_measures()` prints, and they are not the same refusal:
 
 - a header — **available**: the call builds it;
