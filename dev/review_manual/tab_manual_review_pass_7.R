@@ -9,7 +9,7 @@ options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "
 gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
 
 data("tea", package = "FactoMineR")
-tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+tea_when_vars  <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
 tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
 
 tea <- tea |> 
@@ -20,6 +20,21 @@ tea <- tea |>
       forcats::fct_relabel(~ stringr::str_replace_all(., "\\.", " "))
   ))
 # tea |> dplyr::select(all_of(tea_where_vars)) |> purrr::map(levels)
+tea <- tea |> 
+  score_from_lv1("tea_when" , vars_list = tea_when_vars) |> 
+  score_from_lv1("tea_where", vars_list = tea_where_vars)
+
+
+data("tea", package = "FactoMineR")
+tea_when_vars  <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+
+tea <- tea |> 
+  tibble::as_tibble() |> 
+  dplyr::mutate(across(
+    all_of(tea_when_vars), 
+    ~ (if (stringr::str_detect(levels(.)[1], "^Not")) {forcats::fct_rev(.)} else {.}) |> 
+      forcats::fct_relabel(~ stringr::str_replace_all(., "\\.", " "))
+  ))
 tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars)
 
 
@@ -66,12 +81,16 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
         family = "binomial", effect = "marginal", measure = "ratio" , color ="between_groups"
 )
 
+
 #### the different families × effects × measure displays
 
 # binomial
 ## effect = "coeff"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, display = "ame"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "log"
@@ -81,42 +100,87 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "difference"
-)
+) # what do this one do ? Statistically sound ?
 
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, effect = "marginal"
+        family = "binomial", empirical = TRUE, effect = "marginal" #, measure = "difference"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, effect = "marginal", measure = "ratio"
 )
 
+
 ## effect = "at_reference"
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", effect = "at_reference" #, measure = "difference"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", effect = "at_reference", measure = "ratio"
+)
 
 # gaussian
+## effect = "coeff"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE
 )
 
+## effect = "marginal"
+
+## effect = "at_reference"
+
+
 # poisson
+## effect = "coeff"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE
 )
+## effect = "marginal"
+
+## effect = "at_reference"
+
 
 # summed-score binomial
-tab_reg(tea, outcome = "tea_when", predictors = c("sex", "SPC", "Sport", "age"),
-        family = "binomial", empirical = TRUE, trials = length(tea_when_vars)
+## effect = "coeff"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE,
+)
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
+)
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
+)
+
+## effect = "marginal"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", # measure = "difference"
+)
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
 )
 
 
+## effect = "at_reference"
 
-# multinomial
+
+# multinomiale
+## effect = "coeff"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE
 )
+## effect = "marginal"
+
+## effect = "at_reference"
 
 # ordinal
+## effect = "coeff"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "binomial", empirical = TRUE
 )
+## effect = "marginal"
 
+## effect = "at_reference"
 
 
 

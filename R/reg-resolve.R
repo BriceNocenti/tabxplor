@@ -516,7 +516,7 @@ reg_resolve_output <- function(display = "value", color = TRUE, color_signif = N
   # and two said nothing at all. It runs LAST so that the `empirical` and `color_signif` it describes
   # are the ones the table is built with (H20 / H21).
   for (note in reg_color_notes(color_arg, color_signif, stats::setNames(ests, deps$outcome), tab_vars,
-                               na, na_explicit, families = families, empirical = empirical)) {
+                               na, na_explicit, empirical = empirical)) {
     # `{note}` substitutes the already-interpolated string as a VALUE -- passing it as the template
     # would glue it a second time, and one of these notes legitimately prints a literal "{obs}".
     cli::cli_inform(c("i" = "{note}"))

@@ -106,13 +106,44 @@ Il est possible de passer **plusieurs variables en ligne et en colonne à la foi
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-`levels = "first"` ne garde que la première modalité de chaque facteur en colonne, pratique pour afficher de façon compacte de nombreuses variables catégorielles binaires, comme un questionnaire d’enquête avec multiples réponses possibles :
+Quelques autres arguments du quotidien : `na = "drop"` pour retirer les valeurs manquantes de la base, `digits =` pour le nombre de décimales, et `cleannames = TRUE` pour retirer des préfixes comme `"1-"` des noms de catégories. Voir `?tab` pour la liste complète.
+
+### Questions à réponses multiples : une colonne par item
+
+Les **questions à réponses multiples** — « parmi ces situations, lesquelles vous concernent ? » — arrivent dans les données sous la forme d'une *batterie* de variables binaires oui/non, une par item. `levels = "first"` ne garde que la première modalité de chaque facteur en colonne : toute la batterie tient alors dans un tableau compact, une colonne par item.
+
+Les données `tea` (300 buveurs de thé, issues du paquet `FactoMineR`) contiennent une telle batterie : *quand buvez-vous du thé ?*, posée sous la forme de six items oui/non. Tout ce qui suit dépend d'une seule chose : la réponse « oui » doit être la **première** modalité de chaque facteur.
 
 ```{r, echo = TRUE}
-tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", na = "drop", cleannames = TRUE)
+data("tea", package = "FactoMineR")
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+
+# Mettre la modalité « oui » en premier — c'est celle que les tableaux gardent
+tea <- tea |>
+  tibble::as_tibble() |>
+  dplyr::mutate(dplyr::across(
+    dplyr::all_of(c(tea_when_vars, "Sport")),
+    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
+      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
+  ))
 ```
 
-Quelques autres arguments du quotidien : `na = "drop"` pour retirer les valeurs manquantes de la base, `digits =` pour le nombre de décimales, et `cleannames = TRUE` pour retirer des préfixes comme `"1-"` des noms de catégories. Voir `?tab` pour la liste complète.
+`score_from_lv1()` réduit cette même batterie à un **score** unique : pour chaque individu, il compte les facteurs qui se trouvent à leur première modalité — ici, à combien des six moments la personne boit du thé (les valeurs manquantes ne comptent jamais). Le score est une variable numérique ordinaire : il prend donc sa place dans le même tableau, sous forme de moyenne.
+
+```{r, echo = TRUE}
+tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
+tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", na = "drop")
+```
+
+Chaque pourcentage se lit dans sa propre colonne : 63 % des cadres supérieurs (`senior`) boivent du thé au petit-déjeuner, contre 25 % des ouvriers (`workman`). Il n'y a pas de colonne Total, et c'est justifié : les six items ne totalisent pas 100 %, puisqu'une même personne peut en cocher plusieurs. C'est le score qui joue ce rôle : 2,1 moments par jour en moyenne pour les cadres supérieurs, 1,5 pour les ouvriers.
+
+`levels = "auto"` fait ce choix **variable par variable** : il ne garde que la première modalité des facteurs à deux modalités, et toutes les modalités des autres. C'est ce qu'il faut quand une batterie d'items oui/non voisine avec un facteur ordinaire — ici deux moments de consommation et la catégorie socioprofessionnelle, dans un seul tableau :
+
+```{r, echo = TRUE}
+tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
+```
+
+Un score sommé est aussi exactement ce que modélise une régression **binomiale groupée** — voir `trials` dans `vignette("tabxplor-reg")`.
 
 ## Pondération
 

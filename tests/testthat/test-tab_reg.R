@@ -384,6 +384,44 @@ test_that("trials=TRUE uses the observed max score; measure = log gives the coef
   expect_identical(get_scale(b), "log_coef")
 })
 
+test_that("trials= reaches the rr / rd links too (measure = ratio / difference)", {
+  skip_if_not_installed("broom")
+  # The regression this guards: `measure = "ratio"` / `"difference"` resolve the fit to the internal
+  # links `rr` / `rd`, which reg_is_grouped_binomial() used to miss (it tested the FIT key against
+  # "binomial"), so both dropped `trials` and met the raw 0..q score -- an abort on an estimand
+  # reg_measures() reports as available.
+  d  <- gb_data()
+  dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
+  dm$race <- forcats::fct_drop(factor(dm$race))
+  dm$fail <- 10L - dm$score
+  dm$tr   <- 10
+
+  # rr: the modified Poisson models the success COUNT with log(trials) as offset, so exp(coef) is a
+  # PER-ITEM risk ratio (and the intercept a per-item risk, not an expected count).
+  rr <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
+                                 measure = "ratio", cleannames = FALSE))[["Model_RR"]]
+  g_rr <- stats::glm(score ~ race + offset(log(tr)), data = dm, family = stats::quasipoisson("log"))
+  # the Constant row is kept in the comparison: exp(intercept) is the per-item risk at the reference
+  # profile, and it is the value that proves the offset was applied (without it the intercept would
+  # be an expected count out of 10).
+  expect_identical(get_scale(rr), "odds_ratio")
+  expect_equal(sort(get_or(rr)[!is.na(get_pvalue(rr))]),
+               sort(exp(unname(stats::coef(g_rr)))), tolerance = 1e-6)
+
+  # rd: the identity link takes the two-column response directly.
+  rd <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
+                                 measure = "difference", cleannames = FALSE))[["Model_RD"]]
+  g_rd <- stats::glm(cbind(score, fail) ~ race, data = dm, family = stats::binomial("identity"),
+                     start = stats::coef(stats::lm(I(score / 10) ~ race, data = dm)))
+  expect_identical(get_scale(rd), "points")
+  expect_equal(sort(get_diff(rd)[!is.na(get_pvalue(rd))]),
+               sort(unname(stats::coef(g_rd))), tolerance = 1e-6)
+
+  # the two links, fitted independently, agree on that reference-profile risk
+  expect_equal(get_or(rr)[[1]], get_diff(rd)[[1]], tolerance = 1e-6)
+})
+
+
 test_that("trials errors outside the binomial family; ordinary >2-level binomial still aborts", {
   skip_if_not_installed("broom")
   d <- gb_data()

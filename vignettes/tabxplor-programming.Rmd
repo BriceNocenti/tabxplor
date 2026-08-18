@@ -251,18 +251,6 @@ tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row")
 
 `tab(..., spread_vars = year)` does the same in one call. The regression vignette's `split_var` produces a grouped table you can spread the same way — see `vignette("tabxplor-reg")`.
 
-## A score from several factors
-
-`score_from_lv1()` turns a battery of yes/no (or agree/disagree) factors into a single **summed score**: for each row it counts how many of the listed factors sit at their **first level**. Here we score how many of two markers — being married, and being in the higher income bracket — each respondent has:
-
-```{r}
-gss_simple |>
-  score_from_lv1("score", vars_list = c("married", "income25k")) |>
-  tab(relig, score)
-```
-
-The score ranges from 0 to the number of factors (missing values never count). Such a summed score is exactly the input a **grouped-binomial** regression models — see `trials` in `vignette("tabxplor-reg")`.
-
 ## Building many tables at once
 
 `tab()` accepts **vectors of arguments** to build several differently-shaped tables in one call (`output_list = TRUE` keeps them as a list rather than merging them). For a fully data-driven batch, `purrr::pmap()` over a small specification table is the idiom — one row per table, one column per argument:

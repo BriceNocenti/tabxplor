@@ -45,6 +45,6 @@ data |>
 }
 \seealso{
 \code{\link[=tab_reg]{tab_reg()}} and its \code{trials} argument for modelling a summed score
-as a grouped binomial; \code{vignette("tabxplor-programming")} for a worked
-example.
+as a grouped binomial; \code{vignette("tabxplor")}, section "Multiple-answer
+questions", for a worked example.
 }

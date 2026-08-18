@@ -60,13 +60,15 @@ gss_simple <- gss_cat_data_formatting()
 
 Pour les variables catégorielles, `tab_reg()` détecte automatiquement la famille de modèle utilisée (`family`). Pour les variables numériques, il est nécessaire de préciser manuellement, car il peut s’agir d’une regression linéaire pour une distribution normale (`family = "gaussian"`), aussi bien que d’une regression de poisson pour un "nombre de x" (`family = "poisson"`), ou d’une regression logistique pour un pourcentage (`family = "binomial"`) : 
 
-| Variable expliquée | Modèle détecté | Mesure d'effet |
+| Variable expliquée | Modèle détecté | Mesure d'effet par défaut |
 |:--------|:---------------|:---------------|
 | facteur à 2 modalités | `"binomial"` (logistique) | rapport de cotes (OR) |
 | numérique (continue) | `"gaussian"` (linéaire) | coefficient β |
 | comptage | "poisson" | rapport de taux d'incidence (IRR) |
 | facteur non ordonné à 3 modalités ou plus | `"multinomial"` | une colonne OR par catégorie vs la référence |
 | facteur ordonné (`ordered`) à 3 modalités ou plus | `"ordinal"` (cotes proportionnelles) | OR cumulé |
+
+Cette dernière colonne n'est que le **défaut** : chaque famille peut rapporter plusieurs mesures, et sur plusieurs contrastes. La grille complète, et comment en demander une autre, sont dans [Ce que rapporte une colonne de modèle](#ce-que-rapporte-une-colonne-de-modèle-family-effect-measure) plus bas.
 
 Avec `empirical = TRUE`, chaque colonne de modèle est accompagnée d'une colonne brute/observée montrant l'effet *observé, non ajusté (à un seul prédicteur)* — l'effet que l’on verrait sans aucun contrôle, « toutes choses étant inégales par ailleurs », pour ce prédicteur (cette variable explicative).
 
@@ -397,13 +399,31 @@ tout. (Par défaut elle l'est toujours — voir plus bas.)
 
 ## Variables expliquées binomiales groupées (un score sommé)
 
-Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*. `score_from_lv1()` (voir `vignette("tabxplor-programming")`) construit un tel score en comptant le nombre de variables catégorielles choisies d’après leur première modalité :
+Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*.
+
+C'est le modèle naturel d'une **question d'enquête à réponses multiples**. Nous reprenons les données `tea` et leurs six items « où buvez-vous du thé ? », sommés en un score par `score_from_lv1()` — voir *Questions à réponses multiples* dans `vignette("tabxplor")` pour cette préparation :
 
 ```{r}
-gss_simple |>
-  score_from_lv1("score", vars_list = c("married", "income25k")) |>   # a 0–2 score
-  tab_reg("score", c("race", "age"), family = "binomial", trials = 2)
+data("tea", package = "FactoMineR")
+tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
+
+tea <- tea |>
+  tibble::as_tibble() |>
+  dplyr::mutate(dplyr::across(   # la réponse « oui » doit être la première modalité de chaque facteur
+    dplyr::all_of(c(tea_where_vars, "Sport")),
+    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
+      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
+  )) |>
+  score_from_lv1("tea_where", vars_list = tea_where_vars)
 ```
+
+```{r}
+tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
+        family = "binomial", trials = length(tea_where_vars))
+```
+
+
+Chaque rapport de cotes se lit désormais *pour un lieu quelconque* : `1/1,44` pour les hommes signifie que, pour chacun des six lieux, les hommes ont environ 1,44 fois moins de chances que les femmes d'y boire du thé. Le modèle traite les six items comme des tirages interchangeables, si bien qu'un seul rapport de cotes les couvre tous — c'est précisément l'hypothèse à garder en tête avant de s'en servir.
 
 Les modèles binomiaux groupés, comme les regressions de Poisson, rapportent un contrôle de **dispersion** de Pearson dans le bas de tableau pour signaler les comptages surdispersés.
 
@@ -470,13 +490,12 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
 
 ### Un score sommé
 
-Avec `trials =`, les colonnes observées donnent la part moyenne de réponses « oui » de deux façons : `Obs_mean` est le **score moyen** brut, et `Obs_OR` le rapport de cotes des items sommés.
+Avec `trials =`, les colonnes observées donnent la part moyenne de réponses « oui » de deux façons : `Obs_mean` est le **score moyen** brut — ici le nombre moyen de lieux sur six — et `Obs_OR` le rapport de cotes des items sommés.
 
 ```{r}
-gss_simple |>
-  score_from_lv1("score", vars_list = c("married", "income25k")) |>
-  tab_reg("score", c("race", "age"), family = "binomial", trials = 2,
-          empirical = TRUE, color = c(TRUE, "adjustment"))
+tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
+        family = "binomial", trials = length(tea_where_vars),
+        empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
 ### Comment le lire — et comment ne pas le lire
@@ -503,7 +522,8 @@ La couleur `"adjustment"` montre toujours la **taille** de l'écart. Qu'elle le 
 
 | ce que vous avez demandé | effet observé | écart testé ? |
 |---|---|---|
-| `effect = "marginal"`, toute famille et toute mesure | oui | **oui** |
+| `effect = "marginal"` — binomial, gaussian, multinomial, ordinal | oui | **oui** |
+| `effect = "marginal"` sur une variable de Poisson | non apparié (l'effet brut est un rapport de taux) | non |
 | `measure = "ratio"` sur une variable binaire (rapports de risques) | oui | **oui** |
 | rapports de taux d'incidence de Poisson, bêta linéaire | oui | **oui** |
 | rapports de cotes — binomial, multinomial, ordinal cumulé | oui | non (non collapsible) |
@@ -575,6 +595,126 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 #   par la regression quasi-poisson
 #   (hypothese : la variance est proportionnelle a la moyenne).
 ```
+
+## Ce que rapporte une colonne de modèle : `family` × `effect` × `measure`
+
+Cette section est la référence derrière tous les tableaux ci-dessus. Trois arguments déterminent le contenu d'une colonne de modèle, et ils répondent à trois questions distinctes : **`family`** — quel modèle est ajusté ; **`effect`** — quel contraste est rapporté ; **`measure`** — sur quelle échelle il est exprimé.
+
+Deux d'entre eux se tapent rarement. `family` est détectée à partir de la variable expliquée, et `measure` retombe sur la mesure avec laquelle cette famille se lit habituellement — un rapport de cotes pour un modèle logistique, un rapport de taux d'incidence pour un modèle de Poisson, un simple coefficient pour un modèle linéaire. Ce qui reste à choisir, c'est `effect`, et c'est le choix qui mérite d'être compris.
+
+**Une règle sous-tend les trois, et c'est ce qui diffère de `tab()`.** `effect` et `measure` changent le **modèle qui est ajusté** ; `display` ne change que ce que la case **affiche**. Dans un tableau croisé, toutes les mesures viennent des mêmes effectifs : demander un rapport plutôt qu'une différence est un choix d'affichage. Dans une régression, non : un rapport de risques est un autre ajustement qu'un rapport de cotes. Changer `display` ne change donc jamais un chiffre, alors que changer `effect` ou `measure` peut changer tous les chiffres de la colonne.
+
+### Les trois valeurs d'`effect`, en mots simples
+
+| `effect` | la question à laquelle il répond | son nom dans la littérature |
+|---|---|---|
+| `"coefficient"` | deux personnes semblables sur les autres prédicteurs : que fait celui-ci ? | effet conditionnel |
+| `"marginal"` | si tout le monde le changeait, de combien bougerait le résultat ? | effet marginal moyen (AME) |
+| `"at_reference"` | la même chose, pour une personne au profil de référence | effet marginal à la référence (MER) |
+
+À la main, on les obtiendrait avec `coef(glm(...))` (exponentié quand la mesure est un rapport), avec `marginaleffects::avg_comparisons(model)`, et avec le même appel sur un profil d'une seule ligne où chacun des autres prédicteurs est à sa modalité de référence ou à sa moyenne. `"coefficient"` est la valeur par défaut, et celle que tous les manuels impriment.
+
+**Quand les trois diffèrent-ils ?** Dans un modèle linéaire, jamais : le coefficient, l'effet marginal moyen et l'effet au profil de référence sont le même nombre (sauf si le prédicteur a été ajusté avec une courbe — voir `shape =` plus bas). Dans un modèle logistique, de Poisson, multinomial ou ordinal, le lien est courbe : l'effet d'un prédicteur dépend donc de l'endroit où l'on se trouve sur la courbe. Un coefficient répond alors « pour une personne comme celle-ci », et un effet marginal moyen répond « pour cette population, telle qu'elle est réellement » — c'est pourquoi l'AME est en général le nombre le plus parlant à rapporter, et le coefficient le plus comparable d'une étude à l'autre.
+
+**`effect = "at_reference"`** évalue l'effet au profil de référence — l'individu abstrait qui combine la modalité de référence de chaque prédicteur — au lieu de le moyenner sur l'échantillon. Pour un modèle multinomial, il donne en outre accès à un contraste que les deux autres n'ont pas : le rapport de cotes de chaque catégorie de la variable expliquée *contre toutes les autres*, à ce profil.
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
+```
+
+### La grille : ce que construit chaque combinaison
+
+Chaque case ci-dessous est l'en-tête de colonne que produit la combinaison. *(défaut)* marque la mesure sur laquelle la famille retombe quand vous ne dites rien.
+
+| `family` | `measure` | `"coefficient"` | `"marginal"` | `"at_reference"` |
+|---|---|---|---|---|
+| gaussian | `"difference"` *(défaut)* | `Model_β` | `Model_AME` | `Model_MER` |
+| gaussian | `"ratio"` | `Model_RoM` | `Model_RoM` | `Model_RoM` |
+| gaussian | `"odds_ratio"` | non défini | — | — |
+| binomial | `"odds_ratio"` *(défaut)* | `Model_OR` | — | — |
+| binomial | `"ratio"` | `Model_RR` | `Model_RR` | `Model_RR` |
+| binomial | `"difference"` | `Model_RD` | `Model_AME` | `Model_MER` |
+| poisson | `"ratio"` *(défaut)* | `Model_IRR` | `Model_RoM` | `Model_RoM` |
+| poisson | `"difference"` | — | `Model_AME` | `Model_MER` |
+| poisson | `"odds_ratio"` | non défini | — | — |
+| multinomial | `"odds_ratio"` *(défaut)* | `Model_OR` | — | `Model_OR` (vs le reste) |
+| multinomial | `"ratio"` | — | `Model_RR` | `Model_RR` |
+| multinomial | `"difference"` | — | `Model_AME` | `Model_MER` |
+| ordinal | `"odds_ratio"` *(défaut)* | `Model_OR` (cumulé) | — | — |
+| ordinal | `"ratio"` | — | `Model_RR` | `Model_RR` |
+| ordinal | `"difference"` | — | `Model_AME` | `Model_MER` |
+
+Les trois états sont ceux qu'affiche `reg_measures()`, et ce ne sont pas les mêmes refus :
+
+- un en-tête — **available** (disponible) : l'appel le construit ;
+- **not defined** (non défini) — la quantité n'existe pas pour cette variable expliquée, quoi que l'on implémente (un rapport de cotes a besoin d'une probabilité dont prendre la cote, et un comptage n'en a pas) ;
+- `—` — **not offered** (non proposé) : tabxplor ne le construit pas, et le message d'erreur énumère ce que cette variable expliquée propose.
+
+Un quatrième état n'existe qu'à l'exécution : un lien qui ne converge pas sur *vos* données. L'appel le dit, et pour la différence de risques il retombe sur le modèle de probabilité linéaire.
+
+`family = "quasipoisson"` a exactement la grille de `poisson` — elle change l'hypothèse de variance, pas ce qui est estimé. Et `measure = "log"` n'est pas une cinquième colonne : c'est la mesure par défaut de la famille montrée non exponentiée, sur l'échelle du lien du modèle (`Model_β`).
+
+### Ce que veulent dire les en-têtes
+
+| en-tête | la quantité | comment l'obtenir à la main |
+|---|---|---|
+| `Model_β` | un coefficient sur l'échelle du modèle | `coef(glm(...))` |
+| `Model_OR` | rapport de cotes | `exp(coef(glm(y ~ ., binomial)))` |
+| `Model_RR` | rapport de risques | Poisson modifiée, erreurs-types robustes (Zou 2004) |
+| `Model_IRR` | rapport de taux d'incidence | `exp(coef(glm(y ~ ., poisson)))` |
+| `Model_RoM` | rapport de moyennes | pseudo-Poisson log, erreurs-types robustes (Santos Silva & Tenreyro 2006) |
+| `Model_RD` | différence de risques, en points | `glm(y ~ ., binomial("identity"))`, erreurs-types robustes |
+| `Model_AME` | effet marginal moyen | `marginaleffects::avg_comparisons(model)` |
+| `Model_MER` | le même, au profil de référence | le même appel sur un profil de référence d'une ligne |
+
+Les deux voies « rapport » méritent d'être nommées, car toutes deux sont standard et aucune n'est un défaut de `glm()` : `measure = "ratio"` sur une variable **binaire**, c'est la Poisson modifiée (une vraisemblance de Poisson sur des données 0/1, rendue honnête par une variance sandwich — Zou 2004), ce que les épidémiologistes utilisent pour obtenir un rapport de risques sans les ennuis de convergence d'un ajustement log-binomial ; `measure = "ratio"` sur une variable **numérique**, c'est la même astuce une famille plus loin, une pseudo-vraisemblance de Poisson à lien log avec erreurs-types robustes (Santos Silva & Tenreyro 2006), qui donne un rapport de moyennes.
+
+### Avec `effect = "coefficient"`, la mesure choisit le modèle
+
+C'est une propriété de la ligne **coefficient** seule, et cela mérite d'être dit précisément. Avec `effect = "marginal"` ou `"at_reference"`, chaque mesure est calculée à partir du modèle propre à la famille — le logit pour une variable binaire, le lien log pour un comptage — et seule la dernière étape, la moyenne, change. Avec `effect = "coefficient"`, la mesure *est* le coefficient : en demander une que la famille ne rapporte pas par défaut **change donc le lien, et avec lui l'ajustement**. Exactement trois combinaisons le font ; tout le reste de la ligne « coefficient » est le même ajustement, lu sur une autre échelle. Chacune achète un nombre directement lisible au prix d'une hypothèse :
+
+| `family` et `measure` | ce qui est ajusté | ce que le coefficient suppose |
+|---|---|---|
+| binomial · `"odds_ratio"` *(défaut)* | régression logistique | un rapport de cotes constant selon les profils |
+| binomial · `"ratio"` | Poisson modifiée, erreurs-types robustes | un rapport de risques constant |
+| binomial · `"difference"` | binomiale à lien identité, erreurs-types robustes | une différence de risques constante |
+| gaussian · `"difference"` *(défaut)* | régression linéaire | une différence de moyennes constante |
+| gaussian · `"ratio"` | pseudo-Poisson à lien log, erreurs-types robustes | E(y) = exp(xβ) : rapport constant |
+| poisson · `"ratio"` *(défaut)* | Poisson, erreurs-types quasi-Poisson | un rapport de taux constant |
+| ordinal · `"odds_ratio"` *(défaut)* | modèle à cotes proportionnelles | un seul rapport de cotes, à chaque seuil |
+| multinomial · `"odds_ratio"` *(défaut)* | logit multinomial | un rapport de cotes constant par catégorie |
+
+Ce que dit la littérature sur les trois qui changent le lien :
+
+- **Le rapport de risques est une voie bien établie, pas un bricolage.** `measure = "ratio"` sur une variable binaire ajuste la Poisson modifiée de Zou, qui existe précisément pour éviter les échecs de convergence d'un ajustement log-binomial, et qui est une pratique standard en épidémiologie. Ses limites propres sont d'une autre nature que celles de la différence de risques : les risques ajustés ne sont pas bornés par 1, et sur de petits effectifs ou des données creuses l'estimation comme l'erreur-type sandwich sont biaisées — des variantes pénalisées existent pour ce cas.
+- **La différence de risques est la voie fragile.** Un lien identité n'est borné d'aucun côté : il peut donc prédire des risques impossibles, et simplement ne pas converger. Quand cela arrive, tabxplor ajuste le modèle de probabilité linéaire à la place et le pied de tableau le dit — les deux visent la même quantité, mais ce sont des estimateurs différents, qui ne coïncident que si le modèle est juste.
+- **Le rapport de moyennes est convergent dès que la fonction de moyenne est juste.** La pseudo-vraisemblance de Poisson ne prétend pas que votre variable expliquée est un comptage : c'est un moyen d'obtenir le lien log, et son erreur-type robuste n'exige pas que la variance de Poisson soit correcte. Rien, en revanche, ne rattrape une fonction de moyenne fausse — et la variable expliquée doit être non négative.
+- **Le défaut n'est pas non plus sans hypothèse.** Un coefficient logistique suppose un rapport de cotes constant, un coefficient ordinal le même rapport de cotes à chaque seuil (le test de Brant du pied de tableau le vérifie), et le rapport de cotes n'est pas collapsible : il bouge quand on ajoute une variable de contrôle, même là où il n'y a rien à confondre.
+
+**Quelle voie choisir.** Si c'est un rapport de risques ou une différence de risques que vous voulez *rapporter*, le choix le plus sûr est de laisser le modèle sur l'échelle propre à sa famille et de demander la mesure par `effect = "marginal"`. Trois raisons, dont aucune n'est affaire de goût : le logit converge toujours et ne peut jamais prédire une probabilité hors de 0–100 %, alors que les liens log et identité peuvent faire l'un et l'autre ; un effet marginal n'impose aucune hypothèse de constance sur l'échelle que vous rapportez, puisqu'il moyenne l'effet que le modèle ajusté implique réellement au profil de chaque répondant ; et les lignes marginales tournent toutes sur le modèle propre à la famille, si bien que changer la mesure montrée ne change jamais ce qui a été estimé.
+
+Cela dit, ce sont deux questions différentes, et non deux écritures d'une seule. Un coefficient est un effet **conditionnel** — « deux personnes semblables sur tous les autres prédicteurs » — et un effet marginal une **moyenne de population**. Prenez la voie du coefficient quand c'est la quantité conditionnelle que vous voulez : pour vous aligner sur une estimation conditionnelle publiée, ou quand « l'effet a la même taille partout sur cette échelle » est précisément ce que vous entendez affirmer.
+
+### Précautions à connaître
+
+- **Une variable binaire avec `family = "poisson"` n'est pas un modèle de comptage.** tabxplor le réécrit en `family = "binomial", measure = "ratio"` — la Poisson modifiée, dont `exp(coef)` est un rapport de *risques*, pas un rapport de taux d'incidence — et le dit. Nommer la mesure plutôt que la distribution est l'écriture la plus claire.
+- **`measure = "ratio"` sur une variable numérique s'arrête sur une variable négative.** Un rapport de moyennes n'y est pas défini ; l'appel suggère de modéliser le `log()` d'une variable positive, ou d'utiliser `measure = "difference"`.
+- **`Model_RD` et `Model_AME` sont tous deux en points de pourcentage, et ne sont pas le même nombre.** `Model_RD` est une différence de risques conditionnelle issue d'un ajustement à lien identité, `Model_AME` une différence marginale standardisée sur l'ajustement logistique (voir ci-dessus).
+- **`measure = "log"` a besoin de quelque chose dont prendre le log.** Il logarithmise la mesure par défaut de la famille, donc il est refusé là où cette mesure est déjà additive (un coefficient linéaire, un effet marginal moyen). Écrivez `"log_odds"`, `"log_risk"` ou `"log_rate"` pour logarithmiser une mesure choisie.
+- **Les rapports de cotes ne sont pas collapsibles** : `color = "adjustment"` colore donc l'écart sur une colonne OR mais ne le teste jamais (voir *Comment le lire — et comment ne pas le lire*, plus haut). Demandez `measure = "ratio"` ou `effect = "marginal"` si vous voulez un écart que le test puisse lire.
+- **Deux combinaisons n'ont pas de contrepartie observée.** Avec `effect = "at_reference"`, le modèle est conditionnel à un profil alors que les colonnes observées restent marginales sur tout l'échantillon : les deux sont montrées mais pas comparées — `color = "adjustment"` et `{obs}` restent vides. Et un `effect = "marginal"` **de Poisson** est additif alors que sa contrepartie brute est un rapport de taux : les deux ne sont pas sur la même échelle, donc elles ne sont pas appariées. Utilisez `effect = "coefficient"` pour les comparer.
+- **Ce qui demande un paquet en plus, et ce qui n'a pas de méthode.** `effect = "at_reference"` passe par **marginaleffects** ; un modèle multinomial ou ordinal *pondéré* n'a aucune méthode d'effets marginaux, il faut donc y garder `effect = "coefficient"`. Et `display` est ignoré sur une colonne d'effets marginaux, qui replie déjà la prédiction ajustée dans la case.
+
+### Interroger votre propre variable expliquée
+
+`reg_measures()` affiche cette grille pour une variable expliquée de vos propres données, avec son statut case par case — elle lit la table même contre laquelle `tab_reg()` se résout, donc ce qu'elle affiche est ce que la fonction fait :
+
+```{r}
+reg_measures(gss_simple, "married")
+```
+
+La même liste est dans `?tab_reg`, section *« Which estimands each outcome offers »*, générée depuis la même source.
+
 
 ## Données pondérées et *survey-design*
 
@@ -721,12 +861,6 @@ tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 ```
 
 Tout est mis à l'échelle ensemble — l'estimation, son intervalle, la colonne observée `Obs_*` et la comparaison modèle/observé — et la p-value ne change jamais. Deux points à connaître : comme la valeur par défaut n'est pas 1, le `Model_OR` d'un prédicteur continu ne correspondra **pas** à `exp(coef(glm(...)))` tant que vous ne demandez pas `multiplier = 1` ; et l'écart-type est mesuré une seule fois, sur les cas complets des prédicteurs, de sorte qu'une même variable garde la même unité entre plusieurs variables expliquées, entre modèles comparés et entre groupes de `split_var`.
-
-**`effect = "at_reference"`** évalue l'effet au profil de référence (la population, abstraite, qui combine la modalité de référence de chacune des variables explicatives/prédicteurs) au lieu de le moyenner sur l'échantillon — un effet marginal *à la référence* pour `effect = "marginal"`, ou, pour un modèle multinomial, un rapport de cotes « chaque catégorie vs toutes les autres » à ce profil de réference. 
-
-```{r, eval = FALSE}
-tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
-```
 
 
 ## Lire le résumé statistique du modèle

@@ -158,8 +158,8 @@ cleannames_condition <- function()
 #'   level and contributes 0.
 #'
 #' @seealso [tab_reg()] and its `trials` argument for modelling a summed score
-#'   as a grouped binomial; `vignette("tabxplor-programming")` for a worked
-#'   example.
+#'   as a grouped binomial; `vignette("tabxplor")`, section "Multiple-answer
+#'   questions", for a worked example.
 #'
 #' @export
 #'

@@ -156,13 +156,16 @@ reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
 reg_fam_percategory <- function(f) reg_fam_prob(f) & !f %in% "binomial"
 # the count families: a Poisson likelihood, with or without an estimated dispersion.
 reg_fam_count    <- function(f) f %in% c("poisson", "quasipoisson")
-# Is this fit a GROUPED binomial -- a summed-score outcome fit as cbind(score, trials - score)?
-# Phase 19l: THREE sites asked it. Two were the same three-clause test written twice; the third
-# (reg_crude_key) also named "rd", which was DEAD -- that function returns on `rd` one line earlier.
+# Is this fit a GROUPED binomial -- a summed-score outcome fit from (successes, trials)?
+# WARNING: the question is about the OUTCOME family, never the fit key. `measure = "ratio"` and
+# `"difference"` resolve a binary outcome to the internal links `rr` / `rd`, which are binomial fits
+# under another link; testing `family == "binomial"` therefore dropped `trials` on both, and their
+# arms then met the raw 0..q score instead of a 2-level factor. reg_fam_binary() is the declared
+# reader of that fact (REG_FIT_FAMILY), so the three call sites keep one answer.
 # The compound-formula clause is part of the fact: a compound formula controls its own LHS, so
 # `trials` does not apply to it.
 reg_is_grouped_binomial <- function(family, trials, compound = FALSE)
-  identical(family, "binomial") && !is.null(trials) && !isTRUE(compound)
+  reg_fam_binary(family) && !is.null(trials) && !isTRUE(compound)
 # (no reg_fam_logscale(): Phase 19l deleted it. Its WARNING claimed fmt_class.R's colour engine and
 #  legend read it -- they do not, and had not since 19b: both reach the fact through the column's
 #  STORED `scale`. Its one live caller picked "log_coef", which REG_ESTIMANDS declares per row.)
@@ -222,7 +225,7 @@ reg_estimand_collapsible <- function(family, effect)
 # the first is an empty feature, the second a deliberate one.
 #' @keywords internal
 reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit,
-                            families, empirical = FALSE) {
+                            empirical = FALSE) {
   notes <- character(0)
   # Phase 19e: the four facts these notes need are read off the resolved ESTIMAND rows, not
   # re-derived from (effect, at, do_exp) -- so a note cannot describe a different estimand from the
@@ -269,8 +272,14 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
             "to compare them.")
       }
     }
+    # WARNING: asked of each resolved estimand's FIT, never of the outcome family -- the same key
+    # reg_gap_se_columns() gates the real test on (R/reg-empirical.R). Only a conditional odds ratio
+    # is non-collapsible; `measure = "ratio"` / `"difference"` change the link (to `rr` / `rd`) and
+    # with it the estimand, so reading the outcome family made this note fire on a risk ratio and a
+    # risk difference -- advising the very `measure = "ratio"` that had just been asked for, and
+    # contradicting the gap SE the build had already computed.
     if (!is.null(color_signif) && !identical(color_signif, "ignore") &&
-        !any(vapply(families, reg_estimand_collapsible, logical(1), effect = effect))) {
+        !any(vapply(ests, function(e) reg_estimand_collapsible(e$fit, e$effect), logical(1)))) {
       add("{.arg color_signif} does not apply to an odds-ratio {.val adjustment} gap: part of it is ",
           "non-collapsibility, not confounding. Use {.code effect = \"marginal\"} or ",
           "{.code measure = \"ratio\"} (risk ratios), for a gap the test can read.")
@@ -298,11 +307,15 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
 reg_crude_key <- function(family, trials = NULL, compound = FALSE) {
   if (isTRUE(compound))                                 return(NA_character_)
   if (identical(family, "quasipoisson"))                return("poisson")
-  # Phase 19e: the identity-link risk-difference fit shares the binomial's crude block outright --
-  # its base is the same risk and its effect the same Wald risk difference (REG_EMPIRICAL$binomial's
-  # `base` / `ame` rows), which is why "rd" needed no block of its own.
-  if (identical(family, "rd"))                          return("binomial")
+  # WARNING: the grouped test comes FIRST, and must stay there. `rd` (and `rr`) are binomial fits, so
+  # a summed-score outcome under either is a grouped binomial like any other -- its crude base is the
+  # mean SCORE, not a share of respondents. Short-circuiting on the link key ahead of it would hand
+  # them the individual-level block.
   if (reg_is_grouped_binomial(family, trials, compound)) return("grouped_binomial")
+  # The identity-link risk-difference fit shares the binomial's crude block outright -- its base is
+  # the same risk and its effect the same Wald risk difference (REG_EMPIRICAL$binomial's `base` /
+  # `ame` rows), which is why "rd" needs no block of its own.
+  if (identical(family, "rd"))                          return("binomial")
   if (is.null(REG_EMPIRICAL[[family]]))                 return(NA_character_)
   family
 }
@@ -762,9 +775,10 @@ reg_prep_binary <- function(data, outcome, outcome_level = NULL) {
       cli::cli_abort(c(
         "The outcome variable {.val {outcome}} must be binary (2 levels).",
         "x" = "It has {nlevels(y)} level{?s}: {.val {levels(y)}}.",
-        "i" = paste0("For a summed-score outcome (0..q items), pass {.arg trials} to fit a grouped ",
-                     "binomial."),
-        "i" = "Multinomial / 3+ level outcomes are planned for a later phase (12d)."
+        "i" = paste0("For a summed score -- how many of q yes/no items each person chose -- pass ",
+                     "{.arg trials} to fit a grouped binomial."),
+        "i" = paste0("For an outcome with 3 or more categories, use {.code family = \"multinomial\"} ",
+                     "(unordered) or {.code family = \"ordinal\"} (ordered).")
       ))
     }
     # glm models levels(y)[2], so the chosen level goes LAST.
@@ -1309,6 +1323,11 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     }
     mdata[[".gb_succ"]] <- s
     mdata[[".gb_fail"]] <- trials - s
+    # Two derived columns the non-logit links need, because neither can take a two-column response:
+    # `.gb_trials` is the modified Poisson's offset (so exp(coef) stays a PER-ITEM ratio), `.gb_prop`
+    # the observed per-item risk the identity link's start values and its LPM fallback are fitted on.
+    mdata[[".gb_trials"]] <- trials
+    mdata[[".gb_prop"]]   <- s / trials
   }
 
   fam_obj <- switch(
@@ -1329,9 +1348,13 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     # goes through svyglm either way (see the dispatch below), and it also makes AIC/BIC return NA, which
     # is the honest answer for a quasi-likelihood.
     "rr" = {
-      mdata <- reg_prep_binary(mdata, outcome, outcome_level)
-      positive_level <- attr(mdata, "positive_level")
-      mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
+      # On the grouped path the outcome is already a success COUNT, so there is nothing to recode:
+      # the response is that count with log(trials) as offset (built with the formula below).
+      if (!grouped) {
+        mdata <- reg_prep_binary(mdata, outcome, outcome_level)
+        positive_level <- attr(mdata, "positive_level")
+        mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
+      }
       stats::quasipoisson("log")
     },
     # Phase 19e -- the ADDITIVE-RISK model: the same binary prep, an IDENTITY link, and the same
@@ -1343,9 +1366,13 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     # linear probability model (gaussian identity, same sandwich) with a message -- the runtime third
     # state of the capability table.
     "rd" = {
-      mdata <- reg_prep_binary(mdata, outcome, outcome_level)
-      positive_level <- attr(mdata, "positive_level")
-      mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
+      # Grouped: the two-column response is already the per-item risk the identity link estimates, so
+      # the recode is skipped and cbind(successes, failures) is fitted as it is.
+      if (!grouped) {
+        mdata <- reg_prep_binary(mdata, outcome, outcome_level)
+        positive_level <- attr(mdata, "positive_level")
+        mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
+      }
       stats::binomial("identity")
     },
     # Phase 19e -- the RATIO OF MEANS: Poisson pseudo-maximum-likelihood with robust standard errors
@@ -1369,16 +1396,30 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     ))
   }
 
+  # `fml_lpm` is fml's linear-probability twin: the same right-hand side over a SINGLE-column
+  # response. Only the identity link uses it (start values, and the fallback fit), and only on the
+  # grouped path does it differ from fml -- cbind(successes, failures) is not a linear model, while
+  # the observed proportion estimates the very same per-item risk difference.
+  fml_lpm <- NULL
   fml <- if (!is.null(formula)) {
     formula                                            # compound escape-hatch: fit verbatim
   } else {
-    resp <- if (grouped) "cbind(`.gb_succ`, `.gb_fail`)" else paste0("`", outcome, "`")
+    resp <- if (!grouped) paste0("`", outcome, "`") else if (identical(family, "rr"))
+      "`.gb_succ`" else "cbind(`.gb_succ`, `.gb_fail`)"
     rhs  <- paste0("`", predictors, "`", collapse = " + ")
     if (!is.null(cross)) rhs <- paste0("(", rhs, ") * `", cross, "`")   # z8: the pooled interaction fit
     # z15: extra terms LAST, so the fit's own term.labels end with them (the Linearity scope).
     if (length(add_terms)) rhs <- paste(c(rhs, add_terms), collapse = " + ")
+    fml_lpm <- stats::as.formula(
+      paste0(if (grouped) "`.gb_prop`" else resp, " ~ ", rhs))
+    # A Poisson likelihood has no two-column response: the grouped modified Poisson models the
+    # success count with log(trials) as OFFSET, which is what keeps exp(coef) a per-item risk ratio
+    # and the intercept a per-item risk rather than an expected count. An offset() is not a
+    # term.label, so it does not disturb the ordering the line above protects.
+    if (grouped && identical(family, "rr")) rhs <- paste0(rhs, " + offset(log(`.gb_trials`))")
     stats::as.formula(paste0(resp, " ~ ", rhs))
   }
+  if (is.null(fml_lpm)) fml_lpm <- fml
 
   # Phase 18z3: "rr" ALWAYS fits through svyglm, weighted or not. A Poisson likelihood on a 0/1
   # outcome is deliberately misspecified (Var = mu, truth = mu(1-mu)), so the naive SEs are too large
@@ -1395,22 +1436,23 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   } else if (!use_svy) {
     stats::glm(fml, data = mdata, family = fam_obj)
   } else if (family == "rd") {
-    # Phase 19e: the identity link needs sensible starting values (the default eta = 0 puts a fitted
-    # probability outside the parameter space at once), and can still fail. Start from the OLS fit,
-    # and on failure BE the OLS fit -- the linear probability model, whose sandwich SEs are the same
-    # estimator of the same risk difference. The message names which of the two ran, because the
-    # footer must not claim an identity-link GLM when a fallback produced the numbers.
+    # The identity link needs sensible starting values (the default eta = 0 puts a fitted probability
+    # outside the parameter space at once), and can still fail. Start from the OLS fit, and on
+    # failure BE the OLS fit -- the linear probability model.
+    # WARNING: the fallback TARGETS the same risk difference; it is not the same ESTIMATOR. The two
+    # coincide only where the model holds, so the message must name which one ran -- the footer would
+    # otherwise credit an identity-link GLM for numbers OLS produced.
     des0  <- make_design(mdata)
-    start <- tryCatch(stats::coef(stats::lm(fml, data = mdata)), error = function(e) NULL)
+    start <- tryCatch(stats::coef(stats::lm(fml_lpm, data = mdata)), error = function(e) NULL)
     fit   <- tryCatch(
       do.call(survey::svyglm, list(fml, design = des0, family = fam_obj, start = start)),
       error = function(e) NULL, warning = function(w) NULL)
     if (is.null(fit) || !isTRUE(fit$converged)) {
       cli::cli_inform(c("!" = paste0(
         "The identity-link risk-difference model did not converge for {.val {outcome}}; ",
-        "fitting the {.strong linear probability model} instead (same estimand, robust ",
-        "standard errors).")))
-      fit <- do.call(survey::svyglm, list(fml, design = des0, family = stats::gaussian()))
+        "fitting the {.strong linear probability model} instead. It estimates the same risk ",
+        "difference, but is a different estimator: the two agree only where the model holds.")))
+      fit <- do.call(survey::svyglm, list(fml_lpm, design = des0, family = stats::gaussian()))
     }
     fit
   } else {

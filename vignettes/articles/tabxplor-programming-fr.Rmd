@@ -244,18 +244,6 @@ tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row")
 ```
 
 
-## Un score à partir de plusieurs facteurs
-
-`score_from_lv1()` transforme une batterie de variables catégorielles binaires Oui/Non (ou D'accord/Pas d'accord) en un unique **score** : pour chaque individu : il compte combien des variables listés se trouvent à leur **première modalité**. Ici, nous comptons combien de deux marqueurs — être marié, et se situer dans la tranche de revenu supérieure — possède chaque répondant :
-
-```{r}
-gss_simple |>
-  score_from_lv1("score", vars_list = c("married", "income25k")) |>
-  tab(relig, score)
-```
-
-Le score va de 0 au nombre de facteurs (les valeurs manquantes ne comptent jamais). Un tel score sommé est exactement l'entrée que modélise une régression **binomiale groupée** — voir `trials` dans `vignette("tabxplor-reg")`.
-
 ## Construire plusieurs tableaux d'un coup
 
 `tab()` accepte des **listes d'arguments** pour construire plusieurs tableaux de formes différentes en un seul appel. Pour un lot entièrement piloté par les données, `purrr::pmap()` sur une petite table de spécifications est l'idiome — une ligne par tableau, une colonne par argument :

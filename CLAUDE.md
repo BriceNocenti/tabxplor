@@ -583,7 +583,7 @@ I want you to **drastically** rewrite and simplify R scripts comments (including
 - The roxygen documentation part should also be reduced with the same logic (maybe not divided by 5, but divided as much as possible while staying clear and keeping enough explanation for beginners and literary students) : user-friendly = focused, hierarchy of documentation with references.
 
 
-**Method for every 21b-ii … -vii sub-phase** (do not repeat it per phase): re-read the `## tabxplor architecture` section (this file) for the big picture; then, per file — (1) rewrite the header into a clean current-state subsystem description (keep the `# PURPOSE / ROLE / KEY CONSTRAINTS` skeleton, history-free; a longer subsystem essay is fine where warranted); (2) cut inline comments **≥5×** — delete ALL dev-history (phase tags, "was/now", post-mortems, "measured …", `dev/*.md` pointers) AND compress the surviving design/"why" prose to one-liners; (3) tighten the **roxygen** — a user-facing function's man page is about **USAGE, written with the main real-world use cases in mind; it never speaks of the build, the internals, or dev history**. Dedupe across pages and vs the code, defer detail/pedagogy DOWN to the vignettes and reference SIDEWAYS to `?tabxplor-vctrs` / `?tabxplor-options` / `?tabxplor-data.table`, but keep it clear for beginners/non-technical users (not a 5× target; preserve the CRAN arg/return contract; reduce generated `@eval` blocks via their fact-table `doc` fields, never the output); (4) run `devtools::document()` **unsandboxed** and confirm `man/` + `NAMESPACE` build. ⚠ Do NOT hard-wire vignette anchors — the roxygen→vignette pointers are finalized in Phase 23b, after 23a reorganizes the vignettes. Every `R/*.R` is covered exactly once; the two generated `jmvtab*.h.R` are untouched.
+**Method for every 21b-ii … -vii sub-phase** (do not repeat it per phase): re-read the `## tabxplor architecture` section (this file) for the big picture; then, per file — (1) rewrite the header into a clean current-state subsystem description (keep the `# PURPOSE / ROLE / KEY CONSTRAINTS` skeleton, history-free; a longer subsystem essay is fine where warranted); (2) cut inline comments **≥5×** — delete ALL dev-history (phase tags, "was/now", post-mortems, "measured …", `dev/*.md` pointers) AND compress the surviving design/"why" prose to one-liners; (3) tighten the **roxygen** — a user-facing function's man page is about **USAGE, written with the main real-world use cases in mind; it never speaks of the build, the internals, or dev history**. Dedupe across pages and vs the code, defer detail/pedagogy DOWN to the vignettes and reference SIDEWAYS to `?tabxplor-vctrs` / `?tabxplor-options` / `?tabxplor-data.table`, but keep it clear for beginners/non-technical users (not a 5× target; preserve the CRAN arg/return contract; reduce generated `@eval` blocks via their fact-table `doc` fields, never the output); (4) run `devtools::document()` **unsandboxed** and confirm `man/` + `NAMESPACE` build. ⚠ Do NOT hard-wire vignette anchors — the roxygen→vignette pointers are finalized in Phase 23b, after 23a reorganizes the vignettes. Every `R/*.R` is covered exactly once; the two generated `jmvtab*.h.R` are untouched. **Before delegating anything, read rule 11 (execution economics) below** -- it sets the agent count, model, effort and turn discipline, and exists because 21b-iii cost ~2.0M subagent tokens.
 
 **How to hit the /5 cut on the FIRST pass (Phase 21b-ii lessons — read before starting any 21b sub-phase).** The failure mode is *summarising* (shortening each existing comment, which under-cuts and keeps the old focus); the target is *rewriting* (deleting most, keeping a small load-bearing subset written from the final design):
 
@@ -592,11 +592,17 @@ I want you to **drastically** rewrite and simplify R scripts comments (including
 3. **Write the header essay first.** It carries the file's design load, so most inline "why" then becomes redundant and deletable.
 4. **Mechanical regions → near-zero comments.** Accessor stubs, the `vec_ptype2`/`vec_cast`/`vec_arith`/`vec_math` and dplyr coercion walls: ONE orienting line for the whole wall; delete the per-item/per-method comments.
 5. **Delete ALL dev-history unconditionally:** phase tags / `KEY N` / `§N` / `D-`/`W-` items; "was / used to / no longer / replaced / renamed / deleted"; "measured …" + benchmark numbers; bug post-mortems; `dev/*.md` decision-log pointers; commented-out dead code and inert commented-out roxygen stubs.
-6. **/5 is a GLOBAL aggregate, not a per-file quota.** It is met by the archaeology-heavy and the mechanical files. A foundation/dictionary-heavy file (e.g. `fmt_class.R` — the type contract + 3 fact-table dictionaries + the colour engine + the vctrs/legend invariants) floors genuinely higher; do NOT gut its dictionaries or design rationale to reach a number — clarity/usefulness overrides the ratio. Measure each file's archaeology fraction first: a late-written file may already be near its floor (expect ~25–40 %); the history-heavy ones carry the ×5.
+6. **Measure the target on the BODY, not the whole file.** The `/5` is a GLOBAL aggregate over bodies. `grep -c "^\s*#[^']"` also counts the 15-28 line header essay this method mandates, so on a small file the header alone can be half the surviving lines and the whole-file ratio is unreachable BY CONSTRUCTION. State the target to an agent as *body* comments (whole-file count minus the header block) or it will burn its budget on impossible re-cuts. Measured 21b-iii: bodies cut 2.8-4.5x while the whole-file ratios read 1.6-5.5x. A dictionary-heavy file (fact tables = schema) and a trap-heavy file (the parallel seam, where nearly every WARNING records a real failure) floor genuinely higher -- clarity overrides the ratio; never gut a dictionary to reach a number.
 7. **Roxygen is contract-bound — a separate rule, not a /5 target.** NEVER drop/rename/reorder `@param`/`@return`/`@export`/`@rdname`/`@describeIn`/`@eval`/`@method`/`\usage`; every argument stays documented. Reduce by de-archaeologising prose, compressing verbose params, MODERNISING wording (repoint superseded `tab_pct`/`tab_ci`/`tab_chi2` cross-refs to `tab()`/the accessor; foreground the current vocabulary), and deferring pedagogy to the vignettes / sideways to `?tabxplor-vctrs`.
 8. **Respect the hierarchy.** The header NAMES and POINTS (down to the arch doc / vignettes, sideways to reference pages); it never re-tabulates the field/attribute tables that already live in the arch doc + roxygen.
-9. **Delegation that works.** Hand-do the highest-judgment blocks yourself (a user-decision rewrite, the header essays, the fact-table dictionaries, the colour engine); delegate the mechanical bulk to ONE agent PER FILE (different files = no write conflict), giving it the WHAT/WHY test, explicit KEEP/DELETE lists, and a survey map. Agents anchor conservative — state the aggressive standard + a hard target number up front, and expect one re-engagement.
-10. **Verify cheaply — no full test suite needed for comment-only edits.** Prove code identity: parse each file at HEAD vs working, `deparse()`, compare (the parser drops comments) — TRUE means behaviour cannot change. Then `devtools::document()` **unsandboxed**; confirm NAMESPACE is unchanged and `man/` diffs are prose-only (no `\usage` / `\item{arg}` name changes). Run the suite only when explicitly asked.
+9. **Delegation that works.** Hand-do the highest-judgment blocks yourself: a user-decision rewrite, the header essays, the fact-table dictionaries, the colour engine, and the primary man page. Delegate the mechanical bulk. Give every agent the WHAT/WHY test, an explicit KEEP list stated **by CONTENT, not by line number** (the file shifts under the agent's own edits), an explicit DELETE list, and a hard target number. Agents anchor conservative -- state the aggressive standard up front. Write the header essays FIRST and hand them to the agent: the header carries the file's design load, which is exactly what makes most inline "why" deletable.
+10. **Verify cheaply -- no full test suite needed for comment-only edits.** Prove code identity by PARSING, since the parser drops comments: compare HEAD vs working **keyed on the name each top-level assignment binds** (`deparse()` each value, compare the name sets and every body). That form stays valid even if functions were reordered, which the whole-file `deparse` comparison does not -- and it names the offending function when it fails. TRUE means behaviour cannot have changed. Then `devtools::document()` **unsandboxed**; confirm NAMESPACE is unchanged and that every changed `man/*.Rd` keeps identical `\usage` and `\item{arg}` NAME SETS (prose inside an `\item{}` may change freely). ⚠ A `\usage` diff is not automatically yours: HEAD's `man/` can be stale against HEAD's `R/` (21b-iii found `tab_reg.R` declaring `outcome_level, ref` while the committed Rd documented `ref, outcome_level`) -- check the committed source order before assuming you caused it. Run the suite only when explicitly asked, or when code actually moved.
+
+11. **Execution economics -- the delegation budget.** Measured on 21b-iii: ~2.0M subagent tokens (212K survey + 1.79M rewrite). Agent cost fits `= 75K fixed + 90 x file_lines`, so **a small file delegated alone is the worst value in the method** (318 tokens per file line on a 320-line file, against 107 on a 3,700-line one). At that method the four remaining sub-phases would cost ~4.2M; the four rules below bring it to ~1.3M. In leverage order:
+    - **Batch by size, ~3 agents per sub-phase.** Group the small and medium files into one agent each (one brief, one context, files edited one at a time -- different files, so no write conflict); give any file over ~1,500 lines its own agent. On an 11-file sub-phase this alone saves ~600K of pure fixed overhead.
+    - **One pass, `effort: "low"`, `model: "sonnet"`.** The brief carries the standard and the target; the agent does read -> rewrite -> verify ONCE and stops. **Forbid self-directed re-cutting**: the two priciest agents of 21b-iii spent ~750K between them on "two hard re-cuts" chasing a target that rule 6 shows was unreachable. Review the output yourself and re-engage only the files that genuinely missed, with a specific instruction. Sonnet is right because the judgment is front-loaded into the KEEP/DELETE list -- the agent applies a spec, it does not decide one.
+    - **ONE survey agent per sub-phase** (not one per file or per group), at `effort: "low"` with a hard output cap: a structural map plus a KEEP list, no code excerpts. You still write the briefs from its map. The survey earns its keep -- in 21b-iii it is what surfaced the five documentation defects.
+    - **Defects are REPORTED, never silently fixed.** A contradiction between two files, a dangling pointer, stranded roxygen, a comment describing the wrong function: the agent reports, the maintainer-facing decision stays yours. 21b-iii found five this way, including a comment asserting the chi2 was unweighted when the code passes it weighted counts.
 
 ##### Phase 21b-i — comments rewrite roadmap
 
@@ -634,6 +640,8 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 **Verified.** All **198 top-level definitions across the ten files are byte-identical to HEAD** (parse -> per-name `deparse` comparison, which stays valid under reordering), so behaviour cannot have changed. Full suite: **FAIL 0 | WARN 1 | SKIP 4 | PASS 7284**. `devtools::document()` clean, **NAMESPACE unchanged**, all ten changed `man/*.Rd` keep identical `\item{}` argument-name sets. ⚠ `man/tab.Rd` and `man/tab_reg.Rd` show `\usage` REORDERINGS that are **pre-existing drift, not from this phase**: at HEAD `R/tab_reg.R` declares `outcome_level, ref` while the committed `man/tab_reg.Rd` documented `ref, outcome_level` - formals were reordered without re-running `document()`. Regenerating corrects it; `R/tab_reg.R` is untouched here.
 
+**Cost, and what it changed in the method.** This phase spent **~2.0M subagent tokens** (212K survey + 1.79M rewrite) across 13 agents, all on Opus at inherited effort -- about 6 % of a weekly limit for one sub-phase. Per-agent cost fits `= 75K fixed + 90 x file_lines`, so delegating a small file alone was the worst value in the run (318 tok/line on `tab-deprecate.R` vs 107 on `tab.R`), and the two largest agents spent ~750K between them on self-directed re-cuts chasing a whole-file ratio that the mandated header makes unreachable. The four remaining sub-phases would have cost ~4.2M unchanged. **Rules 6, 9, 10 and 11 of the method block above were rewritten from these measurements** (target measured on the body, batch ~3 agents per sub-phase, one pass at low effort on Sonnet, one cheap survey per sub-phase, defects reported not silently fixed), projecting ~1.3M for the remaining four.
+
 ##### Phase 21b-iv — Regression
 
 `tab_reg.R` · `reg-resolve.R` · `reg-estimand.R` · `reg-empirical.R` · `reg-influence.R` · `reg-assumptions.R` · `reg-spec-build.R`. `tab_reg()` + the estimand / empirical-companion / influence / model-check machinery; `?tab_reg`, `reg_measures`. (`reg-estimand`'s `measure` vocabulary IS `fmt_class`'s `EST_SCALES` — note the bridge.)
@@ -659,7 +667,35 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 Below are the results of the maintainer’s manual reviews of different features, stating the problems and what still needs to be changed before 2.0.0 release.
 - Avoid *ad hoc* solutions, think about how to integrate the requested changes in the package ecosystem cleanly in a future-proof way. When framework changes are needed, state it clearly and plan for them. If you think they are too big and better done in their own Claude Code session, state it clearly and write a new phase in the @CLAUDE.md roadmap ("Phase 22x-ii", "Phase 22x-iii", etc.), but avoid to create too many different phases and regroup what is better done together (same context needed, or not big enough to get it’s own session).
 
-#### Phase 22a — `tab_reg()` manual review
+#### Phase 22a — `tab_reg()` crude/adjusted comparison, family × effect × measure and display integration ?
+
+I have some hints about how we could improve the consistency of the whole regression framework, which is a potential further statistical and display integration step. I want you to study this thoroughly, assess possible improvements, and flag misunderstandings and ideas that won’t work. This is a research and design task: write a new detailed and structured .md file in `dev/`.
+
+1. regression model columns simplification ?
+```r
+gss_simple <- gss_cat_data_formatting()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "ratio", empirical = TRUE
+)
+```
+
+- I think I’ve found a design flaw, please study this and correct me if I’m wrong. Having a different color measure for Obs_% (difference) and Obs_RR (ratio) is misleading (it’s also true with Obs_% and Obs_OR with `measure="odds_ratio"`), , but here they are colored with different measures.The Obs_% could color="ratio" to match the Obs_RR and the model one, but there’s a better solution. The right way to do it is to **only use one color measure for both empirical and modelised columns**: that way, there would be **only one legend block for everything**, which means everything is comparable and the field of comparison is homogeneous. Anything more is confusing.
+  + The way to be even more clear, symmetric, and reduce the discrepancy between Obs_% and Obs_RR, is to **only have one empirical column and one model column** : same measure, same display and the "display" argument works on both, one legend block/only one consistent CI type, etc. (So if he wants, the user can still since duplicate the same column with a different display.) It would be further integration and simplification for readability.
+  + after it’s done, we should review `tab_reg()` html tooltips, both in the empirical column and the model column. Which ones would be useful and are missing ? Which ones are useless (info already printed elsewhere on the table = noise, with some exceptions when it helps the user make the meaningful links in his mind) ?
+
+2. family × effect × measure combinations
+- "AME" name is not very clear. Or maybe, with `effect = "marginal"`, am I not sure how to *name* `measure = "difference"` versus `measure = "ratio"`. On sign that the confusion is on the current vocabulary, is that RR is used for both "ratio" coefficient and "ratio" AME, while the "difference" path differenciate betwenn "RD" and "AME". Average marginal effects *of the* difference, or something else ? versus average marginal effect *of the* ratio, average marginal effect ratio ? What are the standard names ? If the standard names are a bit misleading, what would be the most readable and precise names ?
+- Adjusted percentages are currently treated as if they were outside of the whole `measure` thing: but statistically aren’t they the "base" "identity" `measure` (only working for "marginal" and "at_reference", not the model coefficients) ? Should we add them a proper `measure`, that would work for both proportions and means, or is it useless because it gives no confidence intervals and colors (useful to color the adjustement between observed proportion and adjusted proportion, or useless since this comparison would be done relative to each predictor’s reference level, so with the "difference" or "ratio" colors ?) ? If it’s a good idea, which I doubt a bit, would be the more readable and the best to teach the framework ( `measure = "value"`, `measure = "base"`, `measure = "identity"`, something else ? ; `measure = "pct"` and `measure = "mean"` would be too specific to the chosen family, so I’m looking for a readable generalisation) ? Is adjusted proportions or means only a display thing (that we them color with "difference" or "ratio" ?) ? Is it only available on the "marginal" or "at reference" paths, because "coefficient" doesn’t compute them at all ?
+- The family × effect × measure combinations messages are not very clear. 'ℹ A "binomial" outcome offers:\nℹ `effect = "marginal", measure = "difference"` -> "AME"\nℹ `effect = "marginal", measure = "ratio"` -> "RR"' The choice should be clearer : '-> "AME"' should also give the full expression, average marginal effect of the difference ; '-> "RR"' should make clear that this is an AME ratio
+
+3. `display` tokens and `display` presets
+We now use the same display argument in `tab_reg()` than in `tab()`, taken both `{}` display tokens, and build-in presets, so **we shall think about the best built-in presets for the regressions use cases**.
+- First, I want to be sure I understand well, correct me if I’m wrong. Let’s take binary binomial for example. With `effect = "coefficient"` and `display="ame"`, the SE and significance stars and colors are based on the OR, and the AME is just displayed to help interpretation ; but with `effect = "marginal"` (with a default `measure` to `"difference"`) the SE and significance stars and colors are recalculated for the AME itself in the `marginaleffects::` way (which is more robust if there AME are used to interpret the model).
+- When effect is "coefficient" and "ame" is chosen in the `display` (preset or display token), it should be pre-calculated and it’s vctrd field populated not to print voids/NA, but since it does not need it’s own SE/CI/stars it’s very cheap to compute, right ? So the same way tab always populate "diff" and "ratio", we could just cheaply always populate the "diff" AME, the "ratio" AME and the adjusted p"ct or adjusted "mean", and they would always be available for "display" argument, manual change in "display" without new calculations needed, etc. ? And we could always print them in the tooltips (both in the crude side and the model side in mirror) when they are meaningful for the family ? That way, `display = "ame"` won’t be adequate since the choice isn’t marginal or not, but {value}. Study that and correct me where I’m wrong.
+- `display = "value"` is the default, but is `display = "{value}"` working ? This display token would be important to do customisation but have a way to auto select the main modelised column, which can be diff, ratio, OR, or coeff (stored where ?), depending on the family and effect (and dependinng on the measure if the effect is "coefficient" ?) ?
+- The crude proportion (or mean) versus model proportion (or mean) comparison is a relevant display, that needs to be thought about. The current `display= "prob"` works for proportions but not for means, which should be corrected. The related `tab` display token is "{num}", which is not very clear, and "value" won’t be much clearer and is already the default for the plain estimate of the model (both are a bit confusing anyway). There should be both a built-in preset (to only get the crude versus models proportions or mean displayed, with the colors/CI/stars of the `effect` and `measure`) and a {} display token (to be able to easily compose it with other fields ; instead of "{or} ({pct})", something like "{value} ({num})" ?). Can you think about other more readable names for this (make me propositions) ?
+
+#### Phase 22b — `tab_reg()` manual review 2
 
 Below are the maintainer’s manual reviews.
 
@@ -669,11 +705,7 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
         family = "binomial", empirical = TRUE
 )
 ```
-- Having a different color measure for Obs_% (difference) and Obs_RR (ratio) is misleading, since they should really be the same column with a different display, but here they are colored with different measures.
-  The Obs_% could color="ratio" to match the Obs_RR and the model one, but there’s a better solution.
-  The right way to do it is to only use one color measure for both empirical and modelised columns: that way, there would be only one legend block for everything, which means everything is comparable and the field of comparison is homogeneous. Anything more is confusing.
-  + The way to be even more clear, symmetric, and reduce the discrepancy between Obs_% and Obs_RR, is to **only have one empirical column and one model column** : same measure, same display and the "display" argument works on both, one legend block/only one consistent CI type, etc. It would be further integration and simplification for readability.
-  + after it’s done, you should review `tab_reg()` html tooltips, both in the empirical column and the model column. Which ones would be useful and are missing ? Which ones are useless (info already printed elsewhere on the table = noise, generally, ) ? Is there a way to print tooltip regarding of what’s 
+
 - is’t actually good that "age", being one line, have it’s variable name written horizontally, but it should be in bold to match the vertical ones.
 - age numeric variable "levels" column is written in html "age(per 1 SD\n (13.5)) <curve>" : it shouldn’t wrap after SD if there are other "levels" with longer names, like in "Model fit" (here the would be space for it to fit on 1 line) ; I want a bit more concise display : "per SD/13.5" (age do not need to be repeated here, it’s already in the variable name column ; only print the number of SD when it’s not 1)
 - Would it be possible to put the numeric predictors linearity check sparklines in the `n` column, that is always empty for numeric variables by design ? On html, put the sparkline in a small frame (with a smaller linewidth than the sparkline itself) for readability (otherwise, to the uninformed user, it looks more like stray pixels noise than plot).
@@ -683,16 +715,19 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE
 )
 ```
-- "Obs_RR" use the 1/x.xx display for < 1, but "Model_RR" does not and print raw "0.xx" : rule should be, always display the inverse for OR, RR, and more generally multiplicative scale ; add an opt-in global option to print "0.xx" instead for people who don’t love it `family = "binomial"` is ok, `family = "binomial", measure = "ratio"` is ok, but adding `effect = "marginal"` breaks it
+
+- "Obs_RR" use the 1/x.xx display for < 1, but "Model_RR" does not and print raw "0.xx" : rule should be, always display the inverse for OR, RR, and more generally multiplicative scale ; add an opt-in global option to print "0.xx" instead for people who don’t love it `family = "binomial"` is ok, `family = "binomial", measure = "ratio"` is ok, but adding `effect = "marginal"` breaks it (`display = "ame"` breaks it too)
 - even with only `family = "binomial"` the Model_OR "obs" field use "0.xx" : with multiplicative scale  and with option default it should print 1/x.xx instead for consistency (otherwise it’s confusing)
 - `family = "binomial"` have a "Reference population" OR, and so does the same with `measure = "ratio"`, but with `effect = "marginal"` it gets an empty field : is there a statistically sound way to compute something here, use by other common regression packages or apps ?  `effect = "at_reference"` also have empty Reference population.
 
 adjustment
+
 ```R
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
 )
 ```
+
 - with color = "adjustment", the colors seem quite off. I’m not sure if it’s errors or bad design
   + race "other" have Obs_RR 1/1.06* and Model_RR 1.05 but the color is orange :
   + relig "Jewish" have Obs_RR 1.04 and Model_RR 0.89 but the color is blue :
@@ -702,15 +737,18 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 
 
 several outcomes
+
 ```R
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 )
 ```
+
 - in the html export, the outcomes names [married] and [tvhours] are repeated on each column : they should never appear here since the name of the col_var is already written above in the first headers rows of the exports (if it’s the same in tab(), it needs be corrected here too). They only stay in console because column names can’t be duplicated there.
 
 
 predictor’s list
+
 ```R
 tab_reg(gss_simple, outcome = "married", 
         predictors = list(race  = "race", 
@@ -720,9 +758,11 @@ tab_reg(gss_simple, outcome = "married",
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
 )
 ```
+
 - the "overall association" lines do not follow the order of the predictors
 
 tab_vars
+
 ```R
 tab_reg(gss_simple, outcome = "married", tab_vars = "race",
         predictors = c("rincome", "relig", "age", "tvhours"),
@@ -736,17 +776,10 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 - when I add `empirical=TRUE` here, the stats footer appear in the Obs_%_* part rather than on the model columns.
 - here too, the "Overall association (LR)" lines are not in the order of the predictors, which is a bit confusing.
 
-renames
-- "Model_β" is not easily understandable: change it do "Model_coeff" everywhere.
-
-
-`display` presets
-- We now use the same display argument in `tab_reg()` than in `tab()`, taken both `{}` display tokens, and build-in presets, we shall think about the best build-in presets for the regressions use cases.
-- Currently OR does’nt give. 
-- When effect is coefficient and "ame" is chosen in the display (preset or display token), it should be pre-calculated and vctrd field populto not print voids/NA (which is a volentary different behaviour than in `tab()` )
-- "ame" difference and "ame" ratio as calculated depending on the `measure` chosen : once the measure is chosen, 
 
 Additional features requests
+- "Model_β" is not easily understandable: change it do "Model_coeff" everywhere.
+- In the model legend, I want you to explicitly state the equivalence between the full name and the OR/RR/IRR/etc. abreviation for clarity. For example, with `family = "binomial", measure = "ratio"`, the legend says "Model: modified Poisson regression; risk ratio (vs the refrence category)": I would want something like "Model: modified Poisson regression; RR = risk ratio (vs the refrence category)".
 - handle the tidyselect in `tab_reg`, while preserving predictor’s list behaviour: otherwise the two main user-facing functions have different syntaxes for variables selection, which is confusing.
 - Add table metadata and accessor, teached in reg vignette and used by experts to check when they have a doubt, to get the different models formulas that were finally passed to the base model function (`glm()` etc.).
 
@@ -757,6 +790,8 @@ Open-questions about possible additional features requests
 
 Arguments reviews
 - in `tab_reg()` and in `tab()`, would it be possible to put the `parallel` argument in a `...` subfunction (if it’s needed at all and the option isn’t enough) ?
+
+weigths and survey-design
 
 
 ### Phase 22b-i — write the phase roadmap
@@ -771,13 +806,13 @@ Looking at `tab_reg()` n columns, I think the right way is to finish the dormant
 - The Total column of tab and the n column of tab_reg, which are structurally equivalent, have a different behaviour because Total is the last column and n is the first column: it’s a wanted behaviour (the 100% is after the columns because they sum-up, the n column without 100% of tab_reg is near the predictors levels names because it does not depend on the outcomes and is not part of the model). With `"each"`, it becomes part of each col_var block even in `tab_reg`, at display time : it means we should now store the `n` of each factor predictor level in the population in the `n` field (printing it in tooltips even with `"range"` or `"min_n"`).
 - In tab(), with `levels="first"` (or `levels="auto"` with all factors having 2 levels or less), the `100%` is misleading since it does not sum up to 100%, so in this case we only want the "(9 828)" or "(6 712-9 838)" but without the "100%". With `levels="first"` plus a `tab_vars` that is a `spread_vars`, we want to match the current `tab_reg` with tab_vars and spread behaviour : one `n` column for each level of the `spread_vars`.
 
-#### Phase 22b — tab manual review
+#### Phase 22c — tab manual review
 
  is the `tot = c("row", "col")` argument still needed at all, if the totals are always printed ? If it’s only soft-deprecation, would it be possible to put it in `...` with the other soft-deprecated arguments ? Also, document in roxygen and link where to find the soft-deprecated arguments documentation.
 
  Rewrite the short versions of legends ?
 
-##### Phase 22b-ii — tab_spread reworking
+##### Phase 22c-ii — tab_spread reworking
 
 There’s a bit work remaining for tab_spread to behave as a very compact yet readable table.
 
@@ -798,6 +833,7 @@ tab(gss_simple, rincome, party3, tab_vars = race, spread_vars = race,
     pct = "row", na = "drop", color = TRUE, color_signif = "grey_non_signif", ref = "tot"
 ) # it should still be quite readable with 3+ levels factors, but anyway it won’t be the most readable one.
 ```
+
 - totals are not well managed yet. without `totaltab = "table"` the near empty Ensemble column is not so bad, but a "Total Ensemble" row is created above the "TOTAL" row : the "49%" cell should be in the `TOTAL` row.
 - colors are ok with `totaltab = "table"` and `comp = "tab"`. But with `comp = "all"`, which is the real comparison interest here, it’s quite misleading, because the basis of comparison is Married_Ensemble for every cell (good behaviour), but it’s not readable: the non-colored cells of the "TOTAL" row are in bold as if they where the reference, but the reference is a cell and is Married_Ensemble "49%" (it should be the only one to be both not-colored and bold). If you can manage to use/extend the current reference management and detection system without adding to much ad hoc stuff and clutter in it, it’s even better (otherwise, you can maybe find a good workaround). Legends should also state clearly what is the reference in these different use cases.
 - The 4 totals columns are useless (four 100% columns) and misleading (it does sum up to 100% anymore). Here, I want near the same behaviour than the current `tab_reg` with `tab_vars` and spread behaviour: no total columns, but one `n` column per level of the `spread_vars` (all at the end / at the right, so that visual comparisons stay possible because they are regrouped together). Also ensure the same is working not too bad for `pct="col"`.
@@ -809,22 +845,28 @@ tab(gss_simple, rincome, party3, tab_vars = race, spread_vars = race,
 
 
 
-#### Phase 22c — Black and white publication print manual review
+#### Phase 22d — Black and white publication print manual review
 The grey fill carries no direction, and cannot. o1..o4 and u1..u4 are the same four greys; direction is only readable from the cell's own bold/italic. That's forced by the ruling and by Bertin, and it only bites for a table coloured on the background channel alone. The legend names it ("Grey fill" both sides).
 The legend now collapses repeated break-words — print shows +5 and +20, not +5 +10 +20 +30, because slots 1–2 render identically. That is honest, but it does mean the print legend lists fewer thresholds than the colour one.
 
-#### Phase 22d — assumptions plots manual review
+#### Phase 22e — assumptions plots manual review
 
-#### Phase 22e — `forest_plot` manual review
+#### Phase 22f — `forest_plot` manual review
 D6 has a limit I could not design away. ggplot has one scale per aesthetic, so a key list describes one ladder. legend_guide_spec() returns NULL when the plotted columns form several legend_group_by_body() groups and the caption prints the prose legend instead — the same grouping the footer uses, so they can't disagree about how many ladders exist.
 theme = "print" forced the one deviation from the table palettes — its text slots are all black (the table separates directions by bold vs italic, which a point can't be), so a mark borrows the print palette's grey ramp. Nothing is lost: in a forest plot direction is the position relative to the null line.
 `or_plot()` was deleted with its inert `point_size`. Reimplement `point_size` in `forest_plot`, since the model columns now store the factor predictors levels `n` in `n` field.
 
-#### Phase 22f — Jamovi UIs manual reviews and final modifications
+#### Phase 22g — Jamovi UIs manual reviews and final modifications
 
-#### Phase 22g — documentation reviews
+#### Phase 22h — documentation reviews
 
 In the introduction vignette: teach levels = "first" and levels = "auto" with the FactoMineR:: tea dataset; also teach to use tab_vars + spread_vars to make a very condensed table of on the tea dataset.
+
+**PARTLY DONE (2) — the assumptions behind a non-default `measure` are now written down.** Both regression vignettes gained `### With `effect = "coefficient"`, the measure chooses the model`, before the caveats list. The heading is scoped on purpose: only the COEFFICIENT row lets a measure change the fit — verified against the table, exactly three rows do (gaussian ratio -> `mr`, binomial ratio -> `rr`, binomial difference -> `rd`), while every `marginal` / `at_reference` row runs on the family's own model and differs only in the averaging step. The section holds: a table of every `(family, measure)` at `effect = "coefficient"` with what it fits and what the coefficient assumes, then what the literature says about the three that change the LINK (binomial ratio / difference, gaussian ratio) — and about the defaults, which are not assumption-free either. The recommendation is stated with its reasons rather than as a preference: keep the model on the family's own scale and get the reported measure through `effect = "marginal"`, because the logit always converges and cannot predict a probability outside 0–100 %, a marginal effect imposes no constant-effect assumption on the reported scale, and one fit answers every measure. With the counterweight: conditional and marginal are different ESTIMANDS, not two spellings, so the coefficient route is right when the conditional quantity is what is wanted. The three link-changing routes are graded rather than lumped — the modified Poisson is standard practice (its limits are small/sparse samples and unbounded risks), the identity link is the fragile one, PPML is consistent under a correct mean function only. Also corrected: the LPM fallback message claimed "same estimand, robust standard errors"; it targets the same risk difference but is a different ESTIMATOR, and now says so.
+
+**PARTLY DONE — `levels` and the summed score now run on the `tea` data.** `gss_cat` has no real multiple-answer question, so every place that taught a *battery of binary items* was faking one out of unrelated variables (`married` + `black` + `income25k`, and a 0–2 "score" from `married` + `income25k`). Both moved to `FactoMineR::tea`, which carries two real six-item batteries: the intro uses *when do you drink tea?* (`breakfast` … `always`), the regression vignette *where do you drink tea?* (`home` … `pub`) — the "where" battery because it actually separates groups (men `1/1.44***` per place, `senior` `1.44**`), while "when" produced a table with nothing significant to read. `score_from_lv1()` moved with them: its section LEFT the programming vignette (where it was taught in the abstract, away from any use case) and is now three sentences inside the intro vignette's new `### Multiple-answer questions: one column per item` subsection, where the battery it sums is already on screen — the score joins the six item columns of the same `levels = "first"` table as a mean. The regression vignette just uses it now and points there. **`levels = "auto"` was undocumented**; it now has the example that shows what it actually decides — a battery of binary items beside a 3+ level factor, where it collapses the first and keeps the second (`tot = "row"` drops the Total column, which would read a misleading 100 % there until Phase 22b-ii lands). `FactoMineR (>= 2.0)` added to Suggests; the shared prep chunk is inline and identical in all six files (a `tea_data_formatting()` twin of `gss_cat_data_formatting()` was considered and rejected — no new public API before CRAN).
+
+Two details worth keeping. The prep puts the "yes" level FIRST (`fct_rev()` on the items whose level 1 starts with "Not"), because that is both what `levels = "first"` keeps and what `score_from_lv1()` counts — the one thing a reader must get right. `Sport` gets the same cleanup, since it is a predictor in the regression example. `?score_from_lv1`'s `@seealso` was repointed from the programming vignette to the intro one. ⚠ Still open from this phase: the `tab_vars` + `spread_vars` condensed table on `tea`, which waits on Phase 22b-ii.
 
 
 #### Phase 22x — very last features before release
@@ -838,7 +880,7 @@ In the introduction vignette: teach levels = "first" and levels = "auto" with th
 #### Phase 23a — vignettes simplification and integration
 - Document undocumented stuff. `spread_vars` in `tab()` ?
 - Vignettes should not be neverending. If some aspects, either expert, or on the contrary pedagogical and near useless to experts, need to be placed in new vignettes, make me propositions. Point to `tab_shape()` · `tab_supports()` · `reg_measures()` · `tab_columns()` · `fmt_attr()`, etc., when relevant.
-- Document the family x effect x measure stuff in regression vignettes, in an expert section, adding a clear, very concise and user-friendly markdown table (like for color x type x color_signif in the introduction vignette) stating what combination does what in terms broadly understandable by experts/in glm() terms. It should also be usable for teaching the framework. Look at `REG_ESTIMANDS` and `reg_measures_rd()`.
+
 
 #### Phase 23b — roxygen2 documentation simplication
 - Point to the right vignette for more details and pedagogy. Point to the introduction vignette in `?tab` description and the regression vignette in `?tab_reg` description. Start the english vignettes with a link to the French vignette to say it exists, if not already done.

@@ -120,13 +120,44 @@ You can pass **several row and column variables at once**.
 tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-`levels = "first"` keeps only the first level of each column factor, which is handy to display many binary factors, like survey questions with multiple answers, all at once, in a compact way :
+A few other everyday arguments: `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
+
+### Multiple-answer questions: one column per item
+
+**Multiple-answer questions** — "which of these apply to you?" — reach the data as a *battery* of yes/no factors, one per item. `levels = "first"` keeps only the first level of each column factor, so a whole battery fits in one compact table, one column per item.
+
+The `tea` data (300 tea drinkers, from the `FactoMineR` package) has such a battery: *when do you drink tea?*, asked as six yes/no items. Everything below depends on one thing — the "yes" answer has to be each factor's **first** level:
 
 ```{r, echo = TRUE}
-tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", na = "drop", cleannames = TRUE)
+data("tea", package = "FactoMineR")
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+
+# Put the "yes" level first — it is the one the tables keep
+tea <- tea |>
+  tibble::as_tibble() |>
+  dplyr::mutate(dplyr::across(
+    dplyr::all_of(c(tea_when_vars, "Sport")),
+    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
+      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
+  ))
 ```
 
-A few other everyday arguments: `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
+`score_from_lv1()` reduces that same battery to a single **summed score**: for each person it counts the factors sitting at their first level — here, at how many of the six moments they drink tea (missing values never count). The score is an ordinary numeric variable, so it takes its place in the same table, as a mean:
+
+```{r, echo = TRUE}
+tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
+tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", na = "drop", color = TRUE)
+```
+
+Each percentage reads down its own column: 63 % of senior managers drink tea at breakfast, against 25 % of manual workers. There is no Total column, and rightly so — the six items do not add up to 100 %, since one person can tick several. The score plays that role instead: 2.1 moments a day on average for senior managers, 1.5 for manual workers.
+
+`levels = "auto"` makes that choice **per variable**: it keeps the first level only of two-level factors, and every level of the others. It is what you want when a battery of yes/no items sits beside an ordinary factor — here two tea moments and the social category, in one table:
+
+```{r, echo = TRUE}
+tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
+```
+
+A summed score is also exactly what a **grouped-binomial** regression models — see `trials` in `vignette("tabxplor-reg")`.
 
 ## Weights
 
